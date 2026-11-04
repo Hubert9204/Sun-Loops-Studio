@@ -1,0 +1,7 @@
+build/
+unsloth-tmp/
+.unsloth_sandbox
+.directory
+.DS_Store
+*.swp
+*.swo
