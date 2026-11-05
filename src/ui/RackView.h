@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <vector>
 
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -17,7 +18,20 @@ public:
     {
         setViewedComponent (&inner, false);
         setScrollBarsShown (true, false);
+
+        addButton.setMouseClickGrabsKeyboardFocus (false);
+        addButton.onClick = [this] { if (onAddChannel) onAddChannel(); };
+        inner.addAndMakeVisible (addButton);
     }
+
+    // The "+" row below the strips; hidden when no more channels can be added.
+    void setAddChannelEnabled (bool shouldShow)
+    {
+        addButton.setVisible (shouldShow);
+        layoutInner();
+    }
+
+    std::function<void()> onAddChannel;
 
     void setStrips (std::vector<ChannelStrip*> newStrips)
     {
@@ -31,7 +45,10 @@ public:
         layoutInner();
     }
 
-    int getContentHeight() const noexcept { return static_cast<int> (strips.size()) * (kRowHeight + kGap); }
+    int getContentHeight() const noexcept
+    {
+        return static_cast<int> (strips.size()) * (kRowHeight + kGap) + (addButton.isVisible() ? kAddRowHeight : 0);
+    }
 
     void resized() override
     {
@@ -41,6 +58,7 @@ public:
 
     static constexpr int kRowHeight = 52;
     static constexpr int kGap = 2;
+    static constexpr int kAddRowHeight = 30;
 
 private:
     struct Inner : juce::Component {};
@@ -56,9 +74,11 @@ private:
             s->setBounds (0, y, width, kRowHeight);
             y += kRowHeight + kGap;
         }
+        addButton.setBounds (6, y + 2, 130, kAddRowHeight - 6);
     }
 
     Inner inner;
+    juce::TextButton addButton { "+ Add channel" };
     std::vector<ChannelStrip*> strips;
 };
 } // namespace sls

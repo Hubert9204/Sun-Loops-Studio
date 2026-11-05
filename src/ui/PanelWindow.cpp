@@ -68,6 +68,15 @@ void PanelWindow::setMinimumSize (int w, int h)
     constrainer.setMinimumSize (w, h);
 }
 
+void PanelWindow::setTitle (const juce::String& newTitle)
+{
+    if (title != newTitle)
+    {
+        title = newTitle;
+        repaint();
+    }
+}
+
 PanelLayout PanelWindow::currentLayout() const
 {
     PanelLayout l;

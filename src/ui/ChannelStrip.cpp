@@ -87,8 +87,23 @@ void StepGrid::paint (juce::Graphics& g)
     }
 }
 
+void StepGrid::mouseDoubleClick (const juce::MouseEvent& e)
+{
+    // Synth channels show a read-only note preview: double-clicking it opens the piano roll.
+    // Sampler channels toggle steps on every click, so a double click must not be interpreted here.
+    if (channel.instrument != Instrument::Sampler && ! e.mods.isPopupMenu() && onDoubleClicked)
+        onDoubleClicked();
+}
+
 void StepGrid::mouseDown (const juce::MouseEvent& e)
 {
+    if (e.mods.isPopupMenu())
+    {
+        if (onContextMenu)
+            onContextMenu();
+        return;
+    }
+
     if (channel.instrument != Instrument::Sampler)
     {
         if (onClickedPreview)
@@ -166,6 +181,8 @@ ChannelStrip::ChannelStrip (Channel& channelToControl, int channelIndex)
 
     grid.onStepsEdited = [this] { if (onChanged) onChanged (index); };
     grid.onClickedPreview = [this] { if (onSelect) onSelect (index); };
+    grid.onDoubleClicked = [this] { if (onOpenPianoRoll) onOpenPianoRoll (index); };
+    grid.onContextMenu = [this] { showContextMenu(); };
 
     for (auto* c : std::initializer_list<juce::Component*> { &nameLabel, &muteButton, &soloButton, &volumeSlider,
                                                               &panSlider, &loadButton, &meter, &grid })
@@ -225,9 +242,54 @@ void ChannelStrip::resized()
     grid.setBounds (area);
 }
 
-void ChannelStrip::mouseDown (const juce::MouseEvent&)
+void ChannelStrip::mouseDown (const juce::MouseEvent& e)
 {
     if (onSelect)
         onSelect (index);
+
+    if (e.mods.isPopupMenu())
+        showContextMenu();
+}
+
+void ChannelStrip::mouseDoubleClick (const juce::MouseEvent& e)
+{
+    if (! e.mods.isPopupMenu() && onOpenPianoRoll)
+        onOpenPianoRoll (index);
+}
+
+// Right click on a channel, like FL Studio: open its piano roll, choose what makes the sound, rename.
+void ChannelStrip::showContextMenu()
+{
+    if (onSelect)
+        onSelect (index);
+
+    juce::PopupMenu instrument;
+    instrument.addItem (2, "Synth", true, channel.instrument == Instrument::Synth);
+    instrument.addItem (3, "Sampler (WAV / FLAC / OGG / AIFF)", true, channel.instrument == Instrument::Sampler);
+
+    juce::PopupMenu menu;
+    menu.addItem (1, "Piano roll");
+    menu.addSeparator();
+    menu.addSubMenu ("Instrument", instrument);
+    menu.addItem (4, "Load sample...", channel.instrument == Instrument::Sampler);
+    menu.addItem (5, "Rename...");
+
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
+                        [safe = juce::Component::SafePointer<ChannelStrip> (this)] (int result)
+                        {
+                            if (safe == nullptr || result == 0)
+                                return;
+
+                            const int i = safe->index;
+                            switch (result)
+                            {
+                                case 1: if (safe->onOpenPianoRoll) safe->onOpenPianoRoll (i); break;
+                                case 2: if (safe->onInstrumentChosen) safe->onInstrumentChosen (i, Instrument::Synth); break;
+                                case 3: if (safe->onInstrumentChosen) safe->onInstrumentChosen (i, Instrument::Sampler); break;
+                                case 4: if (safe->onLoadSample) safe->onLoadSample (i); break;
+                                case 5: if (safe->onRename) safe->onRename (i); break;
+                                default: break;
+                            }
+                        });
 }
 } // namespace sls

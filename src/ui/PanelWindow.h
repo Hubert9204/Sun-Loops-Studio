@@ -21,6 +21,7 @@ public:
     // The content is not owned; it must outlive the panel or be removed first.
     void setContent (juce::Component* newContent);
     void setMinimumSize (int w, int h);
+    void setTitle (const juce::String& newTitle);
 
     PanelLayout currentLayout() const;
     void applyLayout (const PanelLayout& layout); // clamps into the parent; does not notify

@@ -22,6 +22,9 @@ public:
     void setNotes (std::vector<Note> newNotes);
     const std::vector<Note>& getNotes() const noexcept { return notes; }
 
+    // Scroll vertically so the current notes are centred (a channel just opened may sit far from middle C).
+    void scrollToNotes();
+
     void setLoopLengthTicks (int ticks);
     int getLoopLengthTicks() const noexcept { return loopLengthTicks; }
 

@@ -119,27 +119,44 @@ MainComponent::MainComponent()
     settingsOptions.osxLibrarySubFolder = "Application Support";
     settings = std::make_unique<juce::PropertiesFile> (settingsOptions);
 
+    // The strips and the mixer hold references into this vector, so it must never reallocate:
+    // reserve the maximum up front and never grow past it.
     channels = demoChannels();
-    channels.shrink_to_fit(); // fixed size from here on: strips keep references into this vector
+    channels.reserve (static_cast<size_t> (kMaxChannels));
+
+    // Demo song: "Pattern 1" is the full groove, "Drums" is the same beat without the melodic channels.
+    arrangement.patternTicks = kLoopTicks;
+    arrangement.patterns.resize (2);
+    arrangement.patterns[0].name = "Pattern 1";
+    arrangement.patterns[1].name = "Drums";
+    arrangement.ensureChannelCount (channels.size());
+    commitCurrentPattern();
+    for (size_t c = 0; c < channels.size(); ++c)
+        if (channels[c].instrument == Instrument::Sampler)
+            arrangement.patterns[1].notes[c] = channels[c].notes;
+    arrangement.clips = { { 1, 0, 0, 1 }, { 0, 0, 1, 2 } };
+
+    for (size_t i = 0; i < channels.size(); ++i)
+        createStrip (i);
 
     std::vector<ChannelStrip*> stripPointers;
-    for (size_t i = 0; i < channels.size(); ++i)
-    {
-        auto strip = std::make_unique<ChannelStrip> (channels[i], static_cast<int> (i));
-        strip->setLoopLengthTicks (kLoopTicks);
-        strip->onSelect = [this] (int idx) { selectChannel (idx); };
-        strip->onChanged = [this] (int idx)
-        {
-            if (idx == selected)
-                pianoRoll.setNotes (channels[static_cast<size_t> (idx)].notes);
-            mixerPanel.refreshStrip (idx);
-            publishProject();
-        };
-        strip->onLoadSample = [this] (int idx) { chooseSampleFor (idx); };
-        stripPointers.push_back (strip.get());
-        strips.push_back (std::move (strip));
-    }
+    for (auto& s : strips)
+        stripPointers.push_back (s.get());
     rackView.setStrips (std::move (stripPointers));
+    rackView.setAddChannelEnabled (channels.size() < static_cast<size_t> (kMaxChannels));
+    rackView.onAddChannel = [this]
+    {
+        juce::PopupMenu menu;
+        menu.addItem (1, "Synth channel");
+        menu.addItem (2, "Sampler channel (load a sample)");
+        menu.showMenuAsync (juce::PopupMenu::Options(),
+                            [safe = juce::Component::SafePointer<MainComponent> (this)] (int result)
+                            {
+                                if (safe == nullptr || result == 0)
+                                    return;
+                                safe->addChannel (result == 1 ? Instrument::Synth : Instrument::Sampler);
+                            });
+    };
 
     mixerPanel.setChannels (channels);
     mixerPanel.onSelect = [this] (int idx) { selectChannel (idx); };
@@ -151,6 +168,28 @@ MainComponent::MainComponent()
 
     playButton.setClickingTogglesState (true);
     playButton.onClick = [this] { setPlaying (playButton.getToggleState()); };
+
+    modeButton.setClickingTogglesState (true);
+    modeButton.setTooltip ("Pattern: loop the selected pattern. Song: play the playlist.");
+    modeButton.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xffe8943a));
+    modeButton.onClick = [this] { setSongMode (modeButton.getToggleState()); };
+
+    patternBox.setTooltip ("Current pattern");
+    patternBox.onChange = [this] { selectPattern (patternBox.getSelectedId() - 1); };
+
+    patternAddButton.setTooltip ("New pattern");
+    patternAddButton.onClick = [this]
+    {
+        juce::PopupMenu menu;
+        menu.addItem (1, "New empty pattern");
+        menu.addItem (2, "Clone current pattern");
+        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&patternAddButton),
+                            [safe = juce::Component::SafePointer<MainComponent> (this)] (int result)
+                            {
+                                if (safe != nullptr && result != 0)
+                                    safe->addPattern (result == 2);
+                            });
+    };
 
     clearButton.onClick = [this]
     {
@@ -178,6 +217,13 @@ MainComponent::MainComponent()
         publishProject();
     };
 
+    playlistView.onChanged = [this]
+    {
+        if (songMode)
+            publishProject();
+    };
+    playlistView.onPatternPicked = [this] (int pattern) { selectPattern (pattern); };
+
     // Panels
     rackPanel.setContent (&rackView);
     rackPanel.setMinimumSize (420, 130);
@@ -185,8 +231,10 @@ MainComponent::MainComponent()
     pianoPanel.setMinimumSize (360, 220);
     mixerPanelWindow.setContent (&mixerPanel);
     mixerPanelWindow.setMinimumSize (200, 240);
+    playlistPanel.setContent (&playlistView);
+    playlistPanel.setMinimumSize (380, 200);
 
-    for (auto* panel : { &rackPanel, &pianoPanel, &mixerPanelWindow })
+    for (auto* panel : allPanels())
     {
         workspace.addPanel (*panel);
         panel->onLayoutChanged = [this] (PanelWindow&)
@@ -197,12 +245,13 @@ MainComponent::MainComponent()
     }
 
     rackToggle.onClick = [this] { togglePanel (rackPanel); };
+    playlistToggle.onClick = [this] { togglePanel (playlistPanel); };
     pianoToggle.onClick = [this] { togglePanel (pianoPanel); };
     mixerToggle.onClick = [this] { togglePanel (mixerPanelWindow); };
     resetButton.onClick = [this] { resetLayout(); };
     resetButton.setTooltip ("Restore the default panel layout");
 
-    for (auto* t : { &rackToggle, &pianoToggle, &mixerToggle })
+    for (auto* t : { &rackToggle, &playlistToggle, &pianoToggle, &mixerToggle })
         t->setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xffe8943a));
 
     deviceLabel.setJustificationType (juce::Justification::centredLeft);
@@ -210,20 +259,26 @@ MainComponent::MainComponent()
     statusLabel.setJustificationType (juce::Justification::centredRight);
     statusLabel.setFont (juce::FontOptions (12.0f));
 
-    // Space and F6/F7/F9 are handled by this component, so buttons must not steal keyboard focus.
-    for (auto* b : { &playButton, &clearButton, &exportButton, &deviceButton, &rackToggle, &pianoToggle,
-                     &mixerToggle, &resetButton })
+    // Space and F5/F6/F7/F9 are handled by this component, so these controls must not steal keyboard focus.
+    for (auto* b : { &playButton, &clearButton, &modeButton, &patternAddButton, &exportButton, &deviceButton,
+                     &rackToggle, &playlistToggle, &pianoToggle, &mixerToggle, &resetButton })
         b->setMouseClickGrabsKeyboardFocus (false);
+    patternBox.setMouseClickGrabsKeyboardFocus (false);
+    patternBox.setWantsKeyboardFocus (false);
 
-    for (auto* c : std::initializer_list<juce::Component*> { &playButton, &clearButton, &exportButton, &deviceButton,
-                                                              &rackToggle, &pianoToggle, &mixerToggle, &resetButton,
-                                                              &bpmSlider, &volumeSlider, &bpmLabel, &volumeLabel,
-                                                              &deviceLabel, &statusLabel, &meter, &workspace })
+    for (auto* c : std::initializer_list<juce::Component*> { &playButton, &modeButton, &patternBox, &patternAddButton,
+                                                              &clearButton, &exportButton, &deviceButton,
+                                                              &rackToggle, &playlistToggle, &pianoToggle, &mixerToggle,
+                                                              &resetButton, &bpmSlider, &volumeSlider, &bpmLabel,
+                                                              &volumeLabel, &deviceLabel, &statusLabel, &meter,
+                                                              &workspace })
         addAndMakeVisible (c);
 
     setWantsKeyboardFocus (true);
-    setSize (1200, 800);
+    setSize (1280, 860);
 
+    refreshPatternBox();
+    playlistView.setSelectedPattern (currentPattern);
     selectChannel (0);
     restoreLayout();
     publishProject(); // before the device starts, so the first callback already has the project
@@ -234,7 +289,7 @@ MainComponent::MainComponent()
 
     startTimerHz (30);
 
-    // Space and F6/F7/F9 work from the start, without needing a click first.
+    // Space and F5/F6/F7/F9 work from the start, without needing a click first.
     juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<MainComponent> (this)]
                                      { if (safe != nullptr) safe->grabKeyboardFocus(); });
 }
@@ -257,27 +312,37 @@ void MainComponent::resized()
     auto top = area.removeFromTop (30);
     playButton.setBounds (top.removeFromLeft (70));
     top.removeFromLeft (8);
-    clearButton.setBounds (top.removeFromLeft (80));
+    modeButton.setBounds (top.removeFromLeft (76));
     top.removeFromLeft (12);
+    patternBox.setBounds (top.removeFromLeft (140));
+    top.removeFromLeft (4);
+    patternAddButton.setBounds (top.removeFromLeft (30));
+    top.removeFromLeft (16);
     bpmLabel.setBounds (top.removeFromLeft (34));
     bpmSlider.setBounds (top.removeFromLeft (150));
     top.removeFromLeft (12);
     volumeLabel.setBounds (top.removeFromLeft (50));
     volumeSlider.setBounds (top.removeFromLeft (120));
-    top.removeFromLeft (16);
-    rackToggle.setBounds (top.removeFromLeft (78));
-    top.removeFromLeft (4);
-    pianoToggle.setBounds (top.removeFromLeft (78));
-    top.removeFromLeft (4);
-    mixerToggle.setBounds (top.removeFromLeft (78));
-    top.removeFromLeft (8);
-    resetButton.setBounds (top.removeFromLeft (60));
 
     meter.setBounds (top.removeFromRight (14));
     top.removeFromRight (10);
     deviceButton.setBounds (top.removeFromRight (80));
     top.removeFromRight (8);
     exportButton.setBounds (top.removeFromRight (110));
+
+    area.removeFromTop (6);
+    auto views = area.removeFromTop (30);
+    rackToggle.setBounds (views.removeFromLeft (84));
+    views.removeFromLeft (4);
+    playlistToggle.setBounds (views.removeFromLeft (96));
+    views.removeFromLeft (4);
+    pianoToggle.setBounds (views.removeFromLeft (84));
+    views.removeFromLeft (4);
+    mixerToggle.setBounds (views.removeFromLeft (84));
+    views.removeFromLeft (12);
+    resetButton.setBounds (views.removeFromLeft (60));
+    views.removeFromLeft (16);
+    clearButton.setBounds (views.removeFromLeft (90));
 
     area.removeFromTop (6);
     auto info = area.removeFromTop (20);
@@ -295,6 +360,7 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
         setPlaying (! engine.isPlaying());
         return true;
     }
+    if (key == juce::KeyPress::F5Key) { togglePanel (playlistPanel); return true; }
     if (key == juce::KeyPress::F6Key) { togglePanel (rackPanel); return true; }
     if (key == juce::KeyPress::F7Key) { togglePanel (pianoPanel); return true; }
     if (key == juce::KeyPress::F9Key) { togglePanel (mixerPanelWindow); return true; }
@@ -305,21 +371,26 @@ void MainComponent::timerCallback()
 {
     meter.setLevel (engine.consumePeak());
 
+    // In pattern mode the playhead is a position inside the pattern (piano roll, rack); in song mode it is
+    // a position in the song, shown on the playlist only.
     const int playhead = engine.isPlaying() ? engine.getPlayheadTick() : -1;
-    pianoRoll.setPlayheadTick (playhead);
+    const int patternPlayhead = songMode ? -1 : playhead;
+    pianoRoll.setPlayheadTick (patternPlayhead);
+    playlistView.setPlayheadTick (songMode ? playhead : -1);
+
     for (auto& strip : strips)
     {
         // consumeChannelPeak resets the peak, so read it once and hand it to both views of the channel.
         const float peak = engine.consumeChannelPeak (strip->getIndex());
         strip->setMeterLevel (peak);
         mixerPanel.setMeterLevel (strip->getIndex(), peak);
-        strip->setPlayheadTick (playhead);
+        strip->setPlayheadTick (patternPlayhead);
     }
 
     deviceLabel.setText (engine.describeDevice(), juce::dontSendNotification);
 
     // When the window is active but keyboard focus is outside this component (e.g. on the window
-    // itself), take it so Space and F6/F7/F9 work without a click first.
+    // itself), take it so Space and F5/F6/F7/F9 work without a click first.
     if (auto* peer = getPeer(); peer != nullptr && peer->isFocused() && ! hasKeyboardFocus (true))
         grabKeyboardFocus();
 }
@@ -328,20 +399,29 @@ void MainComponent::timerCallback()
 
 namespace
 {
-constexpr const char* kPanelKeys[] = { "panel.rack", "panel.piano", "panel.mixer" };
+constexpr const char* kPanelKeys[] = { "panel.rack", "panel.piano", "panel.mixer", "panel.playlist" };
 
-// Rack on top, piano roll below it, mixer closed (it opens on the right and overlaps the others).
+constexpr int kTopRowHeight = 340;
+
+// Rack and playlist side by side on top; the piano roll (closed, as in FL Studio: it opens from a channel)
+// below them; the mixer closed too (it opens on the right and overlaps the others).
 PanelLayout defaultLayoutFor (int panelIndex, int workW, int workH)
 {
-    constexpr int kRackHeight = 5 * (52 + 2) + 24 + 8 + 4;
+    const int rackW = std::max (480, workW / 2 - 12);
     switch (panelIndex)
     {
-        case 0:  return { 8, 8, std::min (900, workW - 16), kRackHeight, true };
-        case 1:  return { 8, kRackHeight + 16, workW - 16, workH - kRackHeight - 24, true };
-        default: return { workW - 440 - 8, 40, 440, 360, false };
+        case 0:  return { 8, 8, rackW, kTopRowHeight, true };
+        case 1:  return { 8, kTopRowHeight + 16, workW - 16, workH - kTopRowHeight - 24, false };
+        case 2:  return { workW - 440 - 8, 40, 440, 360, false };
+        default: return { rackW + 16, 8, workW - rackW - 24, kTopRowHeight, true };
     }
 }
 } // namespace
+
+std::array<PanelWindow*, 4> MainComponent::allPanels()
+{
+    return { &rackPanel, &pianoPanel, &mixerPanelWindow, &playlistPanel }; // same order as kPanelKeys
+}
 
 void MainComponent::togglePanel (PanelWindow& panel)
 {
@@ -366,6 +446,7 @@ void MainComponent::showPanel (PanelWindow& panel)
 void MainComponent::updateToggleButtons()
 {
     rackToggle.setToggleState (rackPanel.isOpen(), juce::dontSendNotification);
+    playlistToggle.setToggleState (playlistPanel.isOpen(), juce::dontSendNotification);
     pianoToggle.setToggleState (pianoPanel.isOpen(), juce::dontSendNotification);
     mixerToggle.setToggleState (mixerPanelWindow.isOpen(), juce::dontSendNotification);
 }
@@ -374,13 +455,14 @@ void MainComponent::restoreLayout()
 {
     restoringLayout = true;
 
-    PanelWindow* panels[] = { &rackPanel, &pianoPanel, &mixerPanelWindow };
-    for (int i = 0; i < 3; ++i)
+    const auto panels = allPanels();
+    for (size_t i = 0; i < panels.size(); ++i)
     {
         const auto stored = settings != nullptr
                                 ? PanelLayout::parse (settings->getValue (kPanelKeys[i]).toStdString())
                                 : std::nullopt;
-        panels[i]->applyLayout (stored.value_or (defaultLayoutFor (i, workspace.getWidth(), workspace.getHeight())));
+        panels[i]->applyLayout (stored.value_or (defaultLayoutFor (static_cast<int> (i), workspace.getWidth(),
+                                                                   workspace.getHeight())));
     }
 
     restoringLayout = false;
@@ -392,9 +474,9 @@ void MainComponent::resetLayout()
 {
     restoringLayout = true;
 
-    PanelWindow* panels[] = { &rackPanel, &pianoPanel, &mixerPanelWindow };
-    for (int i = 0; i < 3; ++i)
-        panels[i]->applyLayout (defaultLayoutFor (i, workspace.getWidth(), workspace.getHeight()));
+    const auto panels = allPanels();
+    for (size_t i = 0; i < panels.size(); ++i)
+        panels[i]->applyLayout (defaultLayoutFor (static_cast<int> (i), workspace.getWidth(), workspace.getHeight()));
 
     restoringLayout = false;
     workspace.activate (&rackPanel);
@@ -407,16 +489,191 @@ void MainComponent::saveLayout()
     if (restoringLayout || settings == nullptr)
         return;
 
-    const PanelWindow* panels[] = { &rackPanel, &pianoPanel, &mixerPanelWindow };
-    for (int i = 0; i < 3; ++i)
+    const auto panels = allPanels();
+    for (size_t i = 0; i < panels.size(); ++i)
         settings->setValue (kPanelKeys[i], juce::String (panels[i]->currentLayout().toString()));
 
     settings->saveIfNeeded();
 }
 
+// ------------------------------------------------------------------------- Channels
+
+void MainComponent::createStrip (size_t channelIndex)
+{
+    auto strip = std::make_unique<ChannelStrip> (channels[channelIndex], static_cast<int> (channelIndex));
+    strip->setLoopLengthTicks (kLoopTicks);
+    strip->onSelect = [this] (int idx) { selectChannel (idx); };
+    strip->onChanged = [this] (int idx)
+    {
+        if (idx == selected)
+            pianoRoll.setNotes (channels[static_cast<size_t> (idx)].notes);
+        mixerPanel.refreshStrip (idx);
+        publishProject();
+    };
+    strip->onLoadSample = [this] (int idx) { chooseSampleFor (idx); };
+    strip->onOpenPianoRoll = [this] (int idx) { openPianoRoll (idx); };
+    strip->onInstrumentChosen = [this] (int idx, Instrument instrument) { setInstrument (idx, instrument); };
+    strip->onRename = [this] (int idx) { renameChannel (idx); };
+    strips.push_back (std::move (strip));
+}
+
+void MainComponent::addChannel (Instrument instrument)
+{
+    if (channels.size() >= static_cast<size_t> (kMaxChannels))
+        return;
+
+    commitCurrentPattern();
+
+    Channel c;
+    c.instrument = instrument;
+    c.name = (instrument == Instrument::Synth ? "Synth " : "Sampler ") + std::to_string (channels.size() + 1);
+    jassert (channels.size() < channels.capacity()); // push_back must not reallocate (strips hold references)
+    channels.push_back (std::move (c));
+    arrangement.ensureChannelCount (channels.size());
+
+    createStrip (channels.size() - 1);
+
+    std::vector<ChannelStrip*> stripPointers;
+    for (auto& s : strips)
+        stripPointers.push_back (s.get());
+    rackView.setStrips (std::move (stripPointers));
+    rackView.setAddChannelEnabled (channels.size() < static_cast<size_t> (kMaxChannels));
+
+    mixerPanel.setChannels (channels);
+    selectChannel (static_cast<int> (channels.size()) - 1);
+    publishProject();
+
+    if (instrument == Instrument::Sampler)
+        chooseSampleFor (static_cast<int> (channels.size()) - 1);
+}
+
+void MainComponent::setInstrument (int channelIndex, Instrument instrument)
+{
+    auto& channel = channels[static_cast<size_t> (channelIndex)];
+    channel.instrument = instrument;
+
+    strips[static_cast<size_t> (channelIndex)]->refreshFromChannel();
+    mixerPanel.refreshStrip (channelIndex);
+    publishProject();
+
+    if (instrument == Instrument::Sampler && channel.sample == nullptr)
+        chooseSampleFor (channelIndex); // a sampler without a sample is silent: ask for one right away
+}
+
+void MainComponent::renameChannel (int channelIndex)
+{
+    auto* window = new juce::AlertWindow ("Rename channel", "Name:", juce::MessageBoxIconType::NoIcon);
+    window->addTextEditor ("name", juce::String (channels[static_cast<size_t> (channelIndex)].name));
+    window->addButton ("OK", 1, juce::KeyPress (juce::KeyPress::returnKey));
+    window->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+
+    window->enterModalState (true,
+                             juce::ModalCallbackFunction::create (
+                                 [safe = juce::Component::SafePointer<MainComponent> (this), window, channelIndex] (int result)
+                                 {
+                                     if (safe == nullptr || result != 1)
+                                         return;
+
+                                     const auto name = window->getTextEditorContents ("name").trim().substring (0, 16);
+                                     if (name.isEmpty())
+                                         return;
+
+                                     safe->channels[static_cast<size_t> (channelIndex)].name = name.toStdString();
+                                     safe->strips[static_cast<size_t> (channelIndex)]->refreshFromChannel();
+                                     safe->mixerPanel.refreshStrip (channelIndex);
+                                     if (channelIndex == safe->selected)
+                                         safe->selectChannel (channelIndex);
+                                     safe->publishProject();
+                                 }),
+                             true);
+}
+
+void MainComponent::openPianoRoll (int channelIndex)
+{
+    selectChannel (channelIndex);
+    showPanel (pianoPanel);
+    saveLayout();
+    updateToggleButtons();
+}
+
+// ------------------------------------------------------------------------- Patterns and playlist
+
+void MainComponent::commitCurrentPattern()
+{
+    arrangement.ensureChannelCount (channels.size());
+    auto& pattern = arrangement.patterns[static_cast<size_t> (currentPattern)];
+    for (size_t c = 0; c < channels.size(); ++c)
+        pattern.notes[c] = channels[c].notes;
+}
+
+void MainComponent::selectPattern (int index)
+{
+    index = std::clamp (index, 0, static_cast<int> (arrangement.patterns.size()) - 1);
+    commitCurrentPattern();
+    currentPattern = index;
+
+    const auto& notes = arrangement.patterns[static_cast<size_t> (index)].notes;
+    for (size_t c = 0; c < channels.size(); ++c)
+    {
+        channels[c].notes = notes[c];
+        strips[c]->refreshFromChannel();
+    }
+
+    pianoRoll.setNotes (channels[static_cast<size_t> (selected)].notes);
+    playlistView.setSelectedPattern (index);
+    patternBox.setSelectedId (index + 1, juce::dontSendNotification);
+    statusLabel.setText ("Pattern: " + juce::String (arrangement.patterns[static_cast<size_t> (index)].name),
+                         juce::dontSendNotification);
+    publishProject();
+}
+
+void MainComponent::addPattern (bool cloneCurrent)
+{
+    if (arrangement.patterns.size() >= static_cast<size_t> (kMaxPatterns))
+        return;
+
+    commitCurrentPattern();
+
+    Pattern pattern;
+    pattern.name = "Pattern " + std::to_string (arrangement.patterns.size() + 1);
+    if (cloneCurrent)
+        pattern.notes = arrangement.patterns[static_cast<size_t> (currentPattern)].notes;
+    arrangement.patterns.push_back (std::move (pattern));
+    arrangement.ensureChannelCount (channels.size());
+
+    refreshPatternBox();
+    selectPattern (static_cast<int> (arrangement.patterns.size()) - 1);
+}
+
+void MainComponent::refreshPatternBox()
+{
+    patternBox.clear (juce::dontSendNotification);
+    for (size_t i = 0; i < arrangement.patterns.size(); ++i)
+        patternBox.addItem (juce::String (arrangement.patterns[i].name), static_cast<int> (i) + 1);
+    patternBox.setSelectedId (currentPattern + 1, juce::dontSendNotification);
+}
+
+void MainComponent::setSongMode (bool shouldPlaySong)
+{
+    songMode = shouldPlaySong;
+    modeButton.setToggleState (songMode, juce::dontSendNotification);
+    modeButton.setButtonText (songMode ? "Song" : "Pattern");
+    statusLabel.setText (songMode ? "Playing the playlist" : "Looping the selected pattern", juce::dontSendNotification);
+    publishProject();
+}
+
+Project MainComponent::compileCurrent()
+{
+    commitCurrentPattern();
+    return songMode ? compileSong (channels, arrangement)
+                    : compilePattern (channels, arrangement, currentPattern);
+}
+
+// ------------------------------------------------------------------------- Project
+
 void MainComponent::publishProject()
 {
-    engine.publishProject (std::make_unique<Project> (Project::make (channels, kLoopTicks)));
+    engine.publishProject (std::make_unique<Project> (compileCurrent()));
 }
 
 void MainComponent::selectChannel (int index)
@@ -426,9 +683,11 @@ void MainComponent::selectChannel (int index)
         strip->setSelected (strip->getIndex() == selected);
     mixerPanel.setSelected (selected);
 
+    const auto name = juce::String (channels[static_cast<size_t> (selected)].name);
     pianoRoll.setNotes (channels[static_cast<size_t> (selected)].notes);
-    statusLabel.setText ("Piano roll: " + juce::String (channels[static_cast<size_t> (selected)].name),
-                         juce::dontSendNotification);
+    pianoRoll.scrollToNotes();
+    pianoPanel.setTitle ("Piano Roll - " + name);
+    statusLabel.setText ("Piano roll: " + name, juce::dontSendNotification);
 }
 
 void MainComponent::setPlaying (bool shouldPlay)
@@ -482,6 +741,7 @@ void MainComponent::chooseSampleFor (int channelIndex)
         channel.name = file.getFileNameWithoutExtension().substring (0, 12).toStdString();
 
         strips[static_cast<size_t> (channelIndex)]->refreshFromChannel();
+        mixerPanel.refreshStrip (channelIndex);
         statusLabel.setText ("Loaded " + file.getFileName(), juce::dontSendNotification);
         publishProject();
     });
@@ -490,8 +750,9 @@ void MainComponent::chooseSampleFor (int channelIndex)
 void MainComponent::exportWav()
 {
     fileChooser = std::make_unique<juce::FileChooser> (
-        "Export pattern as WAV",
-        juce::File::getSpecialLocation (juce::File::userMusicDirectory).getChildFile ("sun-loops-pattern.wav"),
+        songMode ? "Export song as WAV" : "Export pattern as WAV",
+        juce::File::getSpecialLocation (juce::File::userMusicDirectory)
+            .getChildFile (songMode ? "sun-loops-song.wav" : "sun-loops-pattern.wav"),
         "*.wav");
 
     fileChooser->launchAsync (juce::FileBrowserComponent::saveMode
@@ -508,7 +769,7 @@ void MainComponent::exportWav()
         RenderOptions options;
         options.bpm = bpmSlider.getValue();
 
-        const auto result = renderToWavFile (Project::make (channels, kLoopTicks), options, file);
+        const auto result = renderToWavFile (compileCurrent(), options, file);
 
         statusLabel.setText (result.wasOk() ? "Exported " + file.getFileName()
                                             : "Export failed: " + result.getErrorMessage(),

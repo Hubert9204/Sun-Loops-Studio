@@ -40,6 +40,26 @@ void PianoRoll::setNotes (std::vector<Note> newNotes)
     repaint();
 }
 
+void PianoRoll::scrollToNotes()
+{
+    if (notes.empty() || getHeight() <= 0)
+        return;
+
+    int lo = kHighPitch, hi = kLowPitch;
+    for (const auto& n : notes)
+    {
+        lo = std::min (lo, n.pitch);
+        hi = std::max (hi, n.pitch);
+    }
+
+    const double centrePitch = 0.5 * (lo + hi);
+    const double visibleRows = static_cast<double> (gridArea().getHeight()) / kRowHeight;
+    const double topPitch = centrePitch + visibleRows / 2.0;
+    scrollY = (kHighPitch - topPitch) * kRowHeight;
+    clampScroll();
+    repaint();
+}
+
 void PianoRoll::setLoopLengthTicks (int ticks)
 {
     loopLengthTicks = std::max (kGridTicks, ticks);

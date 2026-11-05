@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Sun Loops Studio
+GenericName=Digital Audio Workstation
+Comment=Loop-based music production: channel rack, piano roll, playlist and mixer
+Exec=sun-loops-studio
+Icon=sun-loops-studio
+Terminal=false
+Categories=AudioVideo;Audio;Midi;Sequencer;Music;
+Keywords=music;daw;sequencer;piano roll;beat;
+StartupWMClass=Sun Loops Studio

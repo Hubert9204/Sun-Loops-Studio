@@ -12,6 +12,7 @@
 
 #include <juce_audio_formats/juce_audio_formats.h>
 
+#include "audio/Arrangement.h"
 #include "audio/BuiltinSamples.h"
 #include "audio/OfflineRenderer.h"
 #include "audio/Player.h"
@@ -618,6 +619,103 @@ void testPanelLayout()
             }
     check (allInside, "clamped panels are always inside the workspace and not below the minimum size");
 }
+
+void testArrangement()
+{
+    std::cout << "Patterns and playlist\n";
+    using sls::Arrangement;
+    using sls::Clip;
+
+    Arrangement a;
+    a.patternTicks = 4 * kBeat; // one bar = 2 s at 120 BPM
+    a.patterns.resize (3);
+    a.patterns[0].name = "Tone";
+    a.patterns[0].notes = { { { 69, 0, kBeat, 0.8f } } };            // A4 on beat 1
+    a.patterns[1].name = "Empty";
+    a.patterns[1].notes = { {} };
+    a.patterns[2].name = "Late";
+    a.patterns[2].notes = { { { 60, 3 * kBeat, 4 * kBeat, 0.8f } } }; // longer than what is left of the pattern
+
+    const std::vector<sls::Channel> channels { synthChannel ({}) };
+
+    // compilePattern
+    const auto pat = sls::compilePattern (channels, a, 0);
+    check (pat.lengthTicks == 4 * kBeat && pat.channels[0].notes.size() == 1, "pattern mode loops one pattern");
+    check (sls::compilePattern (channels, a, 7).channels[0].notes.empty(), "an unknown pattern compiles to silence");
+    check (channels[0].notes.empty(), "compiling does not modify the channel settings");
+
+    // canPlace
+    check (a.canPlace ({ 0, 0, 0, 1 }), "a clip on an empty playlist can be placed");
+    check (! a.canPlace ({ 5, 0, 0, 1 }), "a clip of an unknown pattern is refused");
+    check (! a.canPlace ({ 0, sls::kPlaylistTracks, 0, 1 }), "a clip below the last track is refused");
+    check (! a.canPlace ({ 0, 0, -1, 1 }), "a clip before the start is refused");
+    check (! a.canPlace ({ 0, 0, 0, 0 }), "a zero-length clip is refused");
+    check (! a.canPlace ({ 0, 0, sls::kPlaylistUnits - 1, 2 }), "a clip past the end of the timeline is refused");
+    check (a.canPlace ({ 0, 0, sls::kPlaylistUnits - 2, 2 }), "a clip ending exactly at the end is accepted");
+
+    // song with two clips on one track, a gap between them
+    a.clips = { { 0, 0, 0, 1 }, { 0, 0, 2, 1 } };
+    check (a.songLengthUnits() == 3, "song length is the end of the last clip");
+    check (! a.canPlace ({ 1, 0, 1, 2 }), "overlapping a clip on the same track is refused");
+    check (a.canPlace ({ 1, 0, 1, 1 }), "filling the gap exactly is accepted");
+    check (a.canPlace ({ 1, 1, 0, 3 }), "the same time on another track is accepted");
+    check (a.canPlace (a.clips[0], 0), "a clip does not collide with itself when moved");
+    check (a.clipAt (0, 2) == 1 && a.clipAt (0, 1) == -1 && a.clipAt (1, 0) == -1, "clipAt finds the clip under a cell");
+
+    const auto song = sls::compileSong (channels, a);
+    check (song.lengthTicks == 3 * 4 * kBeat, "song mode loops the whole arrangement");
+    check (song.channels[0].notes.size() == 2 && song.channels[0].notes[0].startTick == 0
+               && song.channels[0].notes[1].startTick == 2 * 4 * kBeat,
+           "clips place the pattern's notes at their position");
+
+    // sound: tone in unit 0, silence in unit 1, tone in unit 2
+    const auto buf = sls::renderToBuffer (song, {});
+    const float* l = buf.getReadPointer (0);
+    const int unit = 96000; // 2 s
+    check (toneEnergy (l, 4800, 21600, 440.0) > 0.05, "the first clip is audible");
+    check (peakOf (l, 30000, 2 * unit) == 0.0f, "the gap between the clips is silent");
+    check (toneEnergy (l, 2 * unit + 4800, 2 * unit + 21600, 440.0) > 0.05, "the second clip is audible");
+
+    // repeats
+    a.clips = { { 0, 0, 1, 3 } };
+    const auto rep = sls::compileSong (channels, a);
+    check (rep.lengthTicks == 4 * 4 * kBeat && rep.channels[0].notes.size() == 3
+               && rep.channels[0].notes[0].startTick == 4 * kBeat && rep.channels[0].notes[2].startTick == 3 * 4 * kBeat,
+           "a long clip repeats its pattern once per unit");
+
+    // notes are cut at their pattern's end so they cannot leak into the next unit
+    a.clips = { { 2, 0, 0, 2 } };
+    const auto cut = sls::compileSong (channels, a);
+    check (cut.channels[0].notes.size() == 2 && cut.channels[0].notes[0].lengthTicks == kBeat
+               && cut.channels[0].notes[1].startTick == 4 * kBeat + 3 * kBeat,
+           "notes are clipped at the end of their pattern");
+
+    // overlapping clips on different tracks play together
+    a.clips = { { 0, 0, 0, 1 }, { 2, 1, 0, 1 } };
+    check (sls::compileSong (channels, a).channels[0].notes.size() == 2, "clips on different tracks are mixed");
+
+    // empty playlist
+    a.clips.clear();
+    const auto empty = sls::compileSong (channels, a);
+    check (empty.lengthTicks == 4 * kBeat && empty.channels[0].notes.empty(), "an empty playlist is one silent pattern length");
+
+    // robustness
+    a.clips = { { 9, 0, 0, 1 }, { 0, 0, 0, 1 } };
+    check (sls::compileSong (channels, a).channels[0].notes.size() == 1, "clips of unknown patterns are skipped");
+    a.dropInvalidClips();
+    check (a.clips.size() == 1, "dropInvalidClips removes them");
+
+    a.patterns[0].notes.clear(); // pattern with fewer channel lists than channels
+    const std::vector<sls::Channel> two { synthChannel ({}), synthChannel ({}) };
+    check (sls::compileSong (two, a).channels.size() == 2, "a pattern missing a channel's notes does not break compilation");
+    a.ensureChannelCount (2);
+    check (a.patterns[0].notes.size() == 2 && a.patterns[2].notes.size() == 2, "ensureChannelCount resizes every pattern");
+
+    // the samplers keep their sample object (needed for voices to survive a snapshot change)
+    auto sample = sineSample (440.0, 0.1, 44100.0);
+    const std::vector<sls::Channel> sampler { samplerChannel (sample, {}) };
+    check (sls::compileSong (sampler, a).channels[0].sample == sample, "compiling keeps the same sample object");
+}
 } // namespace
 
 int main()
@@ -635,6 +733,7 @@ int main()
     testWavRoundTrip();
     testPluginScanner();
     testPanelLayout();
+    testArrangement();
 
     std::cout << "\n" << (failures == 0 ? "ALL TESTS PASSED" : "SOME TESTS FAILED") << " (" << failures << " failures)\n";
     return failures == 0 ? 0 : 1;

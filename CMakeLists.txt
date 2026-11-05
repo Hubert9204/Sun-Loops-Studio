@@ -7,11 +7,18 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # JUCE is downloaded at configure time (needs network once). Pin the tag so builds are reproducible.
 include(FetchContent)
+# JUCE ships install rules for itself (headers, cmake files, tools). EXCLUDE_FROM_ALL (CMake >= 3.28) keeps
+# them out of `cmake --install`, so only this application is installed.
+set(SLS_JUCE_FETCH_OPTIONS "")
+if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.28)
+    set(SLS_JUCE_FETCH_OPTIONS EXCLUDE_FROM_ALL)
+endif()
 FetchContent_Declare(
     JUCE
     GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
     GIT_TAG 8.0.4
     GIT_SHALLOW ON
+    ${SLS_JUCE_FETCH_OPTIONS}
 )
 FetchContent_MakeAvailable(JUCE)
 
@@ -43,6 +50,7 @@ target_sources(SunLoopsStudio PRIVATE
     src/ui/ChannelStrip.cpp
     src/ui/PanelWindow.cpp
     src/ui/MixerPanel.cpp
+    src/ui/PlaylistView.cpp
     src/ui/MainComponent.cpp
     ${SLS_CORE_SOURCES})
 
@@ -59,6 +67,21 @@ target_link_libraries(SunLoopsStudio PRIVATE
     juce::juce_gui_extra
     juce::juce_recommended_config_flags
     juce::juce_recommended_warning_flags)
+
+# --- Installation (cmake --install build --prefix ~/.local) -------------------
+include(GNUInstallDirs)
+# The product name contains spaces, so the installed command is called sun-loops-studio.
+install(PROGRAMS "$<TARGET_FILE:SunLoopsStudio>"
+        DESTINATION ${CMAKE_INSTALL_BINDIR}
+        RENAME sun-loops-studio)
+install(FILES resources/linux/sun-loops-studio.desktop
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+install(FILES resources/icons/app_icon_256.png
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/256x256/apps
+        RENAME sun-loops-studio.png)
+install(FILES resources/icons/app_icon_16.png
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/16x16/apps
+        RENAME sun-loops-studio.png)
 
 # --- Headless tests ----------------------------------------------------------
 juce_add_console_app(SunLoopsStudioTests

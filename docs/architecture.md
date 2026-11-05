@@ -35,6 +35,19 @@ tracks per-channel peaks and soft-limits the master with `tanh`.
 The offline renderer uses the same `Player`, so an exported file sounds like what you hear. It renders
 one pass of the loop plus a tail so releases and drum tails are not cut.
 
+## Patterns and the playlist
+
+`Arrangement` (audio/Arrangement.h, no JUCE) is the song as the user edits it: patterns (notes per channel) and
+clips that place a pattern on one of 8 playlist tracks for a number of pattern lengths. It is *compiled* into an
+ordinary `Project`: `compilePattern` loops one pattern, `compileSong` lays every clip's notes on one timeline and
+loops at the end of the last clip (notes are cut at their pattern's end so they cannot leak into the next unit).
+The audio engine, the `Player` and the offline renderer therefore know nothing about patterns; the verified
+real-time core is unchanged. The UI keeps the current pattern's notes in the channels and copies them back into the
+arrangement before every compile (`commitCurrentPattern`). Clip placement rules (`canPlace`: inside the timeline,
+known pattern, no overlap on a track) are in the model and unit-tested.
+
+Not done yet: seeking by clicking the ruler, pattern deletion/renaming, clips with their own copy of a pattern.
+
 ## Panels
 
 The main window is a toolbar plus a `Workspace`; the Channel Rack, Piano Roll and Mixer are `PanelWindow`

@@ -21,9 +21,12 @@ public:
 
     std::function<void()> onStepsEdited;   // a step was toggled
     std::function<void()> onClickedPreview; // the preview of a synth channel was clicked
+    std::function<void()> onDoubleClicked;  // the preview of a synth channel was double-clicked
+    std::function<void()> onContextMenu;    // right click
 
     void paint (juce::Graphics&) override;
     void mouseDown (const juce::MouseEvent&) override;
+    void mouseDoubleClick (const juce::MouseEvent&) override;
 
 private:
     static constexpr int kStepTicks = kTicksPerBeat / 4;
@@ -53,12 +56,18 @@ public:
     std::function<void (int)> onSelect;        // the strip was clicked
     std::function<void (int)> onChanged;       // anything that changes the sound
     std::function<void (int)> onLoadSample;    // "Load" pressed (sampler channels)
+    std::function<void (int)> onOpenPianoRoll; // context menu "Piano roll", or double click on the name / note preview
+    std::function<void (int, Instrument)> onInstrumentChosen; // context menu "Instrument"
+    std::function<void (int)> onRename;        // context menu "Rename..."
 
     void paint (juce::Graphics&) override;
     void resized() override;
     void mouseDown (const juce::MouseEvent&) override;
+    void mouseDoubleClick (const juce::MouseEvent&) override;
 
 private:
+    void showContextMenu();
+
     Channel& channel;
     int index;
     bool selected = false;
