@@ -125,13 +125,25 @@ chiuso all'avvio e si apre da un canale, come sopra.
 
 | Azione | Come |
 | --- | --- |
-| Aggiungere una nota | Clic su una cella vuota; tieni premuto e trascina a destra per scegliere la lunghezza. |
+| Suonare una nota | Pulsante sinistro su un tasto della tastiera (tenuto premuto = suona). |
+| Aggiungere una nota | Clic su una cella vuota; tieni premuto e trascina a destra per scegliere la lunghezza. Suona finché tieni premuto. |
 | Spostare una nota | Trascinala. |
 | Cambiare la lunghezza | Trascina il bordo destro. |
 | Eliminare una nota | Tasto destro sulla nota. |
 | Scorrere in altezza | Rotella del mouse. |
 | Scorrere nel tempo | Maiusc + rotella. |
 | Zoom nel tempo | Ctrl + rotella. Finché non zoomi, tutto il pattern entra nella larghezza del pannello. |
+
+**Suonare le note.** La tastiera a sinistra e le note che disegni si possono suonare:
+
+- Premi il pulsante sinistro su un **tasto** e la nota suona finché tieni premuto; il tasto si illumina. Tenendo
+  premuto, muoviti in su o in giù per suonare i tasti uno dopo l'altro (glissando).
+- Quando **crei** una nota (clic su una cella vuota), la **sposti** o la **ridimensioni**, suona finché il pulsante è
+  premuto. Spostandola su un'altra riga cambia la nota che senti. Il tasto destro non suona niente.
+- Il suono è quello del canale selezionato: strumento o sample, volume, pan, **Pitch**, traccia del mixer ed effetti.
+  Funziona sia con la riproduzione in corso sia ferma. Su un canale sampler ogni pressione suona il sample una volta,
+  all'altezza del tasto.
+- Se non senti nulla, controlla il pulsante **M** del canale, quello della traccia e il volume master.
 
 Le note si agganciano ai sedicesimi. Un pattern dura due battute. Una nota synth termina alla sua lunghezza o alla
 fine del pattern, quale viene prima. Quando apri un canale la vista scorre fino alle sue note.
@@ -239,7 +251,7 @@ il programma non la misura.
 - Un pattern dura sempre due battute, 4/4, griglia di sedicesimi.
 - I sample sono mono o stereo, al massimo 30 secondi, suonati una volta sola (niente loop né editing
   dell'inviluppo).
-- Non ancora disponibili: salvare e aprire progetti (impostazioni del mixer ed effetti si perdono all'uscita come tutto
+- Non ancora disponibili: suonare le note con la tastiera del computer o con una tastiera MIDI, salvare e aprire progetti (impostazioni del mixer ed effetti si perdono all'uscita come tutto
   il resto), annulla, plugin VST come strumenti o effetti, send ed effetti sul master, automazione, ingresso e
   registrazione MIDI, eliminare o rinominare i pattern, spostare il cursore con un clic sul righello, trascinare file
   dal desktop sul programma. Vedi [roadmap.md](roadmap.md) (in inglese).

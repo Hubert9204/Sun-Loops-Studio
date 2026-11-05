@@ -17,6 +17,7 @@ class Player
 public:
     static constexpr int kMaxVoices = 32;
     static constexpr int kChunk = 64; // samples processed per mixer/effects pass
+    static constexpr double kMaxLiveSeconds = 20.0; // a held live note is ended after this long, whatever happens
 
     void prepare (double sampleRate) noexcept;
 
@@ -29,6 +30,13 @@ public:
                  float* const* out, int numChannels, int numSamples) noexcept;
 
     double getPositionTicks() const noexcept { return tickPos; }
+
+    // Notes played by hand (piano roll keyboard). They go through the channel's own volume, pan, pitch, mixer track
+    // and effects, work with the transport stopped or running, and are not affected by the loop boundary.
+    // A synth note sounds until liveNoteOff; a sampler note plays its sample once. `project` must be the snapshot
+    // that the next render() call will use. Both calls are real-time safe and ignore a channel that does not exist.
+    void liveNoteOn (const Project& project, int channel, int pitch, float velocity) noexcept;
+    void liveNoteOff (int channel, int pitch) noexcept;
 
     // Peak (after volume and pan) of mixer channel `channel` in the last rendered block.
     float getChannelPeak (int channel) const noexcept
@@ -61,13 +69,16 @@ private:
         float velocity = 0.0f;
         float env = 0.0f;
         float attackStep = 0.01f;
+        bool live = false;                  // played by hand: ends on liveNoteOff, not by the sequencer
+        int livePitch = 0;
+        std::uint64_t liveSamples = 0;
         const SampleData* sample = nullptr; // owned by the current Project snapshot
         double pos = 0.0;
         double step = 1.0;
         std::uint64_t age = 0;
     };
 
-    void noteOn (const Channel& channel, int channelIndex, const Note& n, int loopLength) noexcept;
+    void noteOn (const Channel& channel, int channelIndex, const Note& n, int loopLength, bool live = false) noexcept;
     void releaseVoices (bool includeSamplers) noexcept;
     void onProjectChanged (const Project& project) noexcept;
 
@@ -91,5 +102,6 @@ private:
     bool wasPlaying = false;
     bool releaseSamplesOnStop = true;
     float releaseStep = 0.001f;
+    std::uint64_t liveLimitSamples = 20 * 48000;
 };
 } // namespace sls

@@ -95,6 +95,28 @@ It works in chunks of 64 samples so that note starts stay sample-accurate while 
 `OfflineRenderer` runs the same `Player` over one pass of the project plus a tail (default 1 s), with sample tails
 allowed to ring out, and writes 16- or 24-bit WAV. An exported file therefore sounds like the live engine.
 
+## Live notes (playing by hand)
+
+The piano roll can sound a note while a mouse button is held. This path is separate from the pattern, so it works with
+the transport stopped.
+
+```
+PianoRoll (message thread)  --onNoteStarted/Stopped-->  MainComponent  --AudioEngine::liveNoteOn/Off-->
+LiveNoteQueue (wait-free SPSC, 64 events)  -->  audio callback  -->  Player::liveNoteOn/Off  -->  voices
+```
+
+- `LiveNoteQueue` (`audio/LiveNotes.h`, plain C++) has one producer (the message thread) and one consumer (the audio
+  thread). `push` returns false when full instead of overwriting; it never allocates or blocks.
+- The audio callback drains the queue before `render`, using the snapshot it just acquired, so the voice sees the same
+  channel, sample and mixer routing as the block that follows.
+- A live synth voice has `live = true`: no end tick, and `releaseVoices` (loop boundary, transport stop) skips it. Only
+  `liveNoteOff(channel, pitch)` or the safety limit (`Player::kMaxLiveSeconds`, 20 s of audio) releases it, so a lost
+  "off" cannot leave a note sounding for ever. A sampler voice is an ordinary one-shot.
+- It goes through the channel (pitch, volume, pan, mute) and the track (effects, fader, mute), like any other note.
+- `PianoRoll::sound(pitch)` keeps at most one note sounding and pairs every start with one stop (also when the panel
+  is hidden or its notes are replaced). `MainComponent` remembers which channel got the "on" so the "off" goes to the
+  same one even if the selection changes in between.
+
 ## Mixer tracks and effects
 
 Signal path, per block:
@@ -208,6 +230,9 @@ failed. It covers:
 - the project model (validation, sorting, clamping);
 - synth pitch (single-bin DFT), sample-exact note timing, looping and stop, polyphony and voice stealing;
 - channel mixing: volume, pan, mute, solo;
+- live notes: the queue (order, overflow, two threads), held notes with the transport stopped, across the loop wrap
+  and stop/start, two keys at once, pitch / mute / track mute, sampler, invalid channels, the 20 s limit, and no
+  allocation;
 - pitch (synth frequency by DFT, sampler step) and swing (which notes move, by how much, the loop-edge rule);
 - mixer tracks: routing, fader, balance, track mute/solo, peak and RMS values, padding of short track lists;
 - the four effects (equalizer gain at known frequencies, reverb tail and mix, delay time and feedback, compressor

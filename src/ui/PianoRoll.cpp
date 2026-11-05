@@ -35,6 +35,8 @@ bool PianoRoll::isBlackKey (int pitch) noexcept
 void PianoRoll::setNotes (std::vector<Note> newNotes)
 {
     notes = std::move (newNotes);
+    sound (-1);
+    keyboardHeld = false;
     dragMode = Drag::None;
     dragIndex = -1;
     repaint();
@@ -152,6 +154,31 @@ void PianoRoll::resized()
     clampScroll();
 }
 
+void PianoRoll::sound (int pitch)
+{
+    if (pitch == soundingPitch)
+        return;
+
+    const int previous = soundingPitch;
+    soundingPitch = pitch;
+    if (previous >= 0 && onNoteStopped)
+        onNoteStopped (previous);
+    if (pitch >= 0 && onNoteStarted)
+        onNoteStarted (pitch);
+    repaint (0, 0, kKeyboardWidth, getHeight());
+}
+
+bool PianoRoll::isOnKeyboard (juce::Point<int> p) const noexcept
+{
+    return p.x >= 0 && p.x < kKeyboardWidth && p.y >= kRulerHeight && p.y < getHeight();
+}
+
+void PianoRoll::visibilityChanged()
+{
+    if (! isShowing())
+        sound (-1); // never leave a note hanging when the panel is closed under the mouse
+}
+
 void PianoRoll::notifyChanged()
 {
     if (onNotesChanged)
@@ -249,7 +276,8 @@ void PianoRoll::paint (juce::Graphics& g)
             if (y + kRowHeight < keys.getY() || y > keys.getBottom())
                 continue;
             const bool black = isBlackKey (p);
-            g.setColour (black ? juce::Colour (0xff15171b) : juce::Colour (0xffe8e8ea));
+            g.setColour (p == soundingPitch ? kNoteSelected
+                                            : (black ? juce::Colour (0xff15171b) : juce::Colour (0xffe8e8ea)));
             g.fillRect (0.0f, y, black ? kKeyboardWidth * 0.62f : static_cast<float> (kKeyboardWidth), static_cast<float> (kRowHeight));
             g.setColour (juce::Colour (0xff15171b));
             g.drawHorizontalLine (static_cast<int> (y), 0.0f, static_cast<float> (kKeyboardWidth));
@@ -270,6 +298,16 @@ void PianoRoll::paint (juce::Graphics& g)
 
 void PianoRoll::mouseDown (const juce::MouseEvent& e)
 {
+    if (isOnKeyboard (e.getPosition()))
+    {
+        if (! (e.mods.isRightButtonDown() || e.mods.isPopupMenu()))
+        {
+            keyboardHeld = true;
+            sound (yToPitch (e.position.y));
+        }
+        return;
+    }
+
     if (! gridArea().contains (e.getPosition()))
         return;
 
@@ -296,6 +334,7 @@ void PianoRoll::mouseDown (const juce::MouseEvent& e)
         const bool nearRightEdge = pos.x > noteRect (n).getRight() - 6.0f;
         dragMode = nearRightEdge ? Drag::Resize : Drag::Move;
         grabOffsetTicks = static_cast<int> (xToTick (pos.x)) - n.startTick;
+        sound (n.pitch);
         repaint();
         return;
     }
@@ -314,11 +353,18 @@ void PianoRoll::mouseDown (const juce::MouseEvent& e)
     dragIndex = static_cast<int> (notes.size()) - 1;
     dragMode = Drag::Resize;
     dragChanged = true; // creation is a change even without dragging
+    sound (n.pitch);
     repaint();
 }
 
 void PianoRoll::mouseDrag (const juce::MouseEvent& e)
 {
+    if (keyboardHeld)
+    {
+        sound (yToPitch (e.position.y)); // sliding over the keys plays each one in turn
+        return;
+    }
+
     if (dragMode == Drag::None || dragIndex < 0 || dragIndex >= static_cast<int> (notes.size()))
         return;
 
@@ -333,6 +379,7 @@ void PianoRoll::mouseDrag (const juce::MouseEvent& e)
             n.startTick = start;
             n.pitch = pitch;
             dragChanged = true;
+            sound (pitch);
         }
     }
     else
@@ -351,6 +398,8 @@ void PianoRoll::mouseDrag (const juce::MouseEvent& e)
 
 void PianoRoll::mouseUp (const juce::MouseEvent&)
 {
+    sound (-1);
+    keyboardHeld = false;
     const bool changed = dragChanged;
     dragMode = Drag::None;
     dragIndex = -1;

@@ -1,6 +1,6 @@
 # Status and roadmap
 
-Version 0.5.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
+Version 0.5.1 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
 what is missing. If something here disagrees with the program, the program is right: please fix the page.
 
 ## What has been verified, and how
@@ -14,6 +14,8 @@ what is missing. If something here disagrees with the program, the program is ri
 | Channel menu, double-click to open the piano roll, add channel, new/cloned pattern, pattern isolation (clearing a channel in one pattern leaves the other intact), playlist place / move / resize / delete / refused overlap, Pattern/Song button | Same virtual display | Worked |
 | `cmake --install` into a staging directory | `DESTDIR` install | Installs only the command, `.desktop` file and icons |
 | Pitch, swing, mixer tracks (routing, fader, balance, mute/solo, meters), the four built-in effects (response of each, bypass, state reset, silence in = silence out, no allocation in `Player::render` with effects running), browser tree, search filter, directory scan, channel presets | Automated headless tests (194 checks) and mutation checks | All pass |
+| Live notes in the Piano Roll: held notes with the transport stopped or running, across the loop wrap, pitch/mute/track mute, sampler, safety limit, queue order and overflow, no allocation | Automated headless tests (216 checks in total) and mutation checks (transport releasing live notes, no safety limit, "off" ignored: each made tests fail) | All pass |
+| Piano Roll mouse: pressing a key lights it and the channel meter moves while the button is held and falls to zero on release; sliding changes the key; drawing a note sounds while dragging and the note stays after release; right-click on a key is silent | Manual, in a virtual display with simulated mouse (meter and screenshots; the note's sound itself was not heard) | Worked |
 | Browser (tree, search, fold with F8), drag from the browser onto a channel and onto the empty rack area, double-click to load, Pitch/Swing knobs, Track display, expanded mixer with live Peak/RMS, effect chain editing, bypass | Manual, in a virtual display with simulated mouse and a silent (ALSA `null`) audio device; a compressor at -60 dB / 20:1 lowered the track meter and bypass restored it | Worked |
 | A use-after-free when clicking an item that rebuilds the browser tree (crash on *Scan for VST3 plugins...*) | Found in that manual session | Fixed (item actions are deferred); the same click was repeated afterwards |
 
@@ -24,6 +26,10 @@ what is missing. If something here disagrees with the program, the program is ri
   by offline-renderer tests and by meters in a virtual display. How the effects *sound* (EQ curve taste, reverb
   quality, compressor behaviour) has not been judged by ears. The playhead moving across the playlist during
   playback has not been seen.
+- **How live notes sound on real hardware** (attack click, latency between click and sound, behaviour of a note held
+  across a device restart). The virtual display's silent ALSA device runs faster than real time, so the 20-second limit
+  ended a held note after about a second there; with the limit raised for the check the meter stayed lit for as long as
+  the button was held.
 - **Dragging files from the desktop file manager** onto the program: not implemented (drags from the in-app browser
   were verified only with simulated mouse events).
 - **Typing in the "Save as preset" name box** was not tested (the virtual display had no window manager, so dialogs
@@ -46,7 +52,7 @@ what is missing. If something here disagrees with the program, the program is ri
 | Undo / redo | Not implemented. |
 | VST3 effects in the mixer | The four slots per track hold built-in effects only. No third-party plugin can be loaded. |
 | Sends, groups, master effects, more than 8 mixer tracks | A channel goes to one of 8 tracks; the master strip has a fader and a meter only. No sends or sidechain, no effect on the master, no per-slot wet/dry beyond what each effect offers, no effect-chain presets. |
-| Automation, MIDI input and recording | Not implemented. |
+| Automation, MIDI input and recording | Not implemented. Notes can be played with the mouse on the piano roll keyboard only (not from the computer keyboard). |
 | Playlist seeking | Clicking the ruler does not move the playhead. |
 | Pattern deletion and renaming | Patterns are created and cloned only; clips cannot be re-pointed to another pattern. |
 | Channel deletion and reordering | Channels can be added (up to 8) but not removed or moved. |

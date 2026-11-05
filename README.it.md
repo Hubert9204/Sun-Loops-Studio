@@ -14,7 +14,7 @@ strumento sta in un pannello mobile che puoi spostare, ridimensionare, sovrappor
 Sun Loops Studio si ispira al modo di lavorare dei DAW a loop come FL Studio. È un progetto indipendente: non usa
 codice, nomi, grafica o risorse di altri prodotti e non è affiliato né approvato dai loro produttori.
 
-**Stato: alpha (0.5.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
+**Stato: alpha (0.5.1).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
 La riproduzione è stata confermata su un vero PC Nobara per la versione 0.3; tutto ciò che è stato aggiunto dopo
 (pannelli, pattern, playlist, browser, pitch/swing, mixer espanso ed effetti) è stato provato con test automatici e
 in un display virtuale con un dispositivo audio muto, non ancora con audio reale. **L'hosting di plugin VST3 non è

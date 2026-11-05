@@ -27,6 +27,7 @@ void Player::prepare (double newSampleRate) noexcept
 {
     sampleRate = newSampleRate > 0.0 ? newSampleRate : 48000.0;
     releaseStep = static_cast<float> (1.0 / (0.080 * sampleRate)); // 80 ms release
+    liveLimitSamples = static_cast<std::uint64_t> (kMaxLiveSeconds * sampleRate);
 
     for (auto& v : voices)
         v = Voice {};
@@ -52,8 +53,8 @@ void Player::prepare (double newSampleRate) noexcept
 void Player::releaseVoices (bool includeSamplers) noexcept
 {
     for (auto& v : voices)
-        if ((v.state == State::Attack || v.state == State::Sustain) && (includeSamplers || ! v.sampler))
-            v.state = State::Release;
+        if ((v.state == State::Attack || v.state == State::Sustain) && (includeSamplers || ! v.sampler) && ! v.live)
+            v.state = State::Release; // notes held by hand are ended by liveNoteOff, not by the transport
 }
 
 void Player::onProjectChanged (const Project& project) noexcept
@@ -81,7 +82,28 @@ void Player::onProjectChanged (const Project& project) noexcept
     }
 }
 
-void Player::noteOn (const Channel& channel, int channelIndex, const Note& n, int loopLength) noexcept
+void Player::liveNoteOn (const Project& project, int channel, int pitch, float velocity) noexcept
+{
+    if (channel < 0 || channel >= kMaxChannels || static_cast<size_t> (channel) >= project.channels.size())
+        return;
+
+    Note n;
+    n.pitch = std::clamp (pitch, 0, 127);
+    n.startTick = 0;
+    n.lengthTicks = 0;
+    n.velocity = std::isfinite (velocity) ? std::clamp (velocity, 0.0f, 1.0f) : 0.8f;
+    noteOn (project.channels[static_cast<size_t> (channel)], channel, n, 1, true);
+}
+
+void Player::liveNoteOff (int channel, int pitch) noexcept
+{
+    for (auto& v : voices)
+        if (v.live && v.channel == channel && v.livePitch == pitch
+            && (v.state == State::Attack || v.state == State::Sustain))
+            v.state = State::Release;
+}
+
+void Player::noteOn (const Channel& channel, int channelIndex, const Note& n, int loopLength, bool live) noexcept
 {
     const bool isSampler = channel.instrument == Instrument::Sampler;
     if (isSampler && (channel.sample == nullptr || channel.sample->numFrames() < 2))
@@ -111,6 +133,8 @@ void Player::noteOn (const Channel& channel, int channelIndex, const Note& n, in
     v.state = State::Attack;
     v.sampler = isSampler;
     v.channel = channelIndex;
+    v.live = live && ! isSampler; // a sampler note is a one-shot either way
+    v.livePitch = n.pitch;
     v.velocity = n.velocity;
     v.env = 0.0f;
     v.age = ++ageCounter;
@@ -126,7 +150,7 @@ void Player::noteOn (const Channel& channel, int channelIndex, const Note& n, in
     }
     else
     {
-        v.endTick = std::min (n.startTick + n.lengthTicks, loopLength);
+        v.endTick = live ? INT_MAX : std::min (n.startTick + n.lengthTicks, loopLength);
         v.phase = 0.0;
         v.increment = kTwoPi * pitchToHz (n.pitch + static_cast<double> (channel.pitch)) / sampleRate;
         v.attackStep = static_cast<float> (1.0 / (0.005 * sampleRate)); // 5 ms
@@ -254,6 +278,10 @@ void Player::render (const Project& project, double bpm, bool playing,
                     continue;
 
                 float l = 0.0f, r = 0.0f;
+
+                // Safety net: a held note whose "off" never arrived does not sound for ever.
+                if (v.live && ! v.sampler && v.state != State::Release && ++v.liveSamples >= liveLimitSamples)
+                    v.state = State::Release;
 
                 if (v.sampler)
                 {

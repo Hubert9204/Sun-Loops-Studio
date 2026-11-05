@@ -61,6 +61,15 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const*, int,
     const Project* project = exchange.acquire();
     const bool isPlaying = playing.load (std::memory_order_relaxed);
 
+    LiveNoteEvent live;
+    while (liveNotes.pop (live))
+    {
+        if (live.on)
+            player.liveNoteOn (*project, live.channel, live.pitch, live.velocity);
+        else
+            player.liveNoteOff (live.channel, live.pitch);
+    }
+
     player.render (*project, bpm.load (std::memory_order_relaxed), isPlaying, out, numOut, numSamples);
     playheadTick.store (static_cast<int> (player.getPositionTicks()), std::memory_order_relaxed);
 

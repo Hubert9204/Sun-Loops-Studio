@@ -98,6 +98,7 @@ private:
     // Members are destroyed in reverse order, so a panel never outlives the content it points to.
     RackView rackView;
     PianoRoll pianoRoll;
+    int liveChannel = 0; // the channel that is sounding a note played by hand
     MixerPanel mixerPanel;
     PlaylistView playlistView { arrangement };
 

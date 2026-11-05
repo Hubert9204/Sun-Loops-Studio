@@ -15,6 +15,7 @@
 #include "audio/Arrangement.h"
 #include "audio/BuiltinSamples.h"
 #include "audio/Effects.h"
+#include "audio/LiveNotes.h"
 #include "audio/OfflineRenderer.h"
 #include "audio/Player.h"
 #include "audio/Project.h"
@@ -1439,6 +1440,227 @@ void testLibraryScan()
 
     tmp.deleteRecursively();
 }
+
+// ---------------------------------------------------------------------------------------- live notes
+
+// Renders `seconds` of audio in blocks of 256 (like a real device) and returns the left channel.
+std::vector<float> renderBlocks (sls::Player& player, const sls::Project& project, bool playing, double seconds,
+                                 std::vector<float>* rightOut = nullptr)
+{
+    const int total = static_cast<int> (seconds * kSr);
+    std::vector<float> left (static_cast<size_t> (total)), right (static_cast<size_t> (total));
+    for (int done = 0; done < total; done += 256)
+    {
+        const int n = std::min (256, total - done);
+        float* ch[2] = { left.data() + done, right.data() + done };
+        player.render (project, 120.0, playing, ch, 2, n);
+    }
+    if (rightOut != nullptr)
+        *rightOut = std::move(right);
+    return left;
+}
+
+void testLiveNoteQueue()
+{
+    std::cout << "Live note queue\n";
+    sls::LiveNoteQueue q;
+    sls::LiveNoteEvent e;
+
+    check (! q.pop (e), "an empty queue gives nothing");
+
+    bool ordered = true;
+    for (int i = 0; i < 10; ++i)
+        ordered = ordered && q.push ({ i % 2 == 0, static_cast<std::uint8_t> (i % 8), static_cast<std::uint8_t> (40 + i), 0.5f });
+    for (int i = 0; i < 10; ++i)
+    {
+        const bool got = q.pop (e);
+        ordered = ordered && got && e.pitch == 40 + i && e.on == (i % 2 == 0) && e.channel == i % 8;
+    }
+    check (ordered && ! q.pop (e), "events come out in the order they went in, once");
+
+    int accepted = 0;
+    for (int i = 0; i < 200; ++i)
+        accepted += q.push ({ true, 0, 60, 0.8f }) ? 1 : 0;
+    check (accepted == static_cast<int> (sls::LiveNoteQueue::kCapacity), "a full queue refuses events instead of overwriting");
+    check (q.pop (e) && q.push ({ false, 0, 60, 0.0f }), "after one pop there is room again");
+
+    // One producer thread, one consumer thread, 200000 events: nothing lost, nothing reordered, nothing duplicated.
+    sls::LiveNoteQueue shared;
+    constexpr int kEvents = 200000;
+    std::atomic<bool> inOrder { true };
+    std::thread consumer ([&]
+    {
+        sls::LiveNoteEvent ev;
+        int expected = 0;
+        while (expected < kEvents)
+        {
+            if (shared.pop (ev))
+            {
+                const int value = ev.pitch | (ev.channel << 7);
+                if (value != (expected & 0x3ff))
+                    inOrder = false;
+                ++expected;
+            }
+        }
+    });
+    for (int i = 0; i < kEvents; ++i)
+    {
+        const int value = i & 0x3ff;
+        while (! shared.push ({ true, static_cast<std::uint8_t> (value >> 7), static_cast<std::uint8_t> (value & 0x7f), 0.5f }))
+            std::this_thread::yield();
+    }
+    consumer.join();
+    check (inOrder.load(), "two threads: 200000 events arrive complete and in order");
+}
+
+void testLiveNotes()
+{
+    std::cout << "Live notes (played by hand)\n";
+    const auto rms = [] (const std::vector<float>& x, double fromS, double toS)
+    {
+        return rmsOf (x, static_cast<int> (fromS * kSr), static_cast<int> (toS * kSr));
+    };
+
+    {
+        // Transport stopped: the note sounds as long as it is held, then dies away within the release.
+        const auto project = oneBar ({ synthChannel ({}) });
+        sls::Player player;
+        player.prepare (kSr);
+
+        player.liveNoteOn (project, 0, 69, 0.8f);
+        const auto held = renderBlocks (player, project, false, 1.0);
+        check (rms (held, 0.1, 1.0) > 0.03, "a held note sounds with the transport stopped");
+        check (toneEnergy (held.data(), 4800, 40000, 440.0) > 4.0 * toneEnergy (held.data(), 4800, 40000, 415.0)
+              && toneEnergy (held.data(), 4800, 40000, 440.0) > 4.0 * toneEnergy (held.data(), 4800, 40000, 466.2),
+              "its pitch is the pressed key (A4 = 440 Hz)");
+
+        player.liveNoteOff (0, 69);
+        const auto tail = renderBlocks (player, project, false, 0.5);
+        check (rms (tail, 0.0, 0.03) > 0.01 && peakOf (tail.data(), static_cast<int> (0.2 * kSr), static_cast<int> (0.5 * kSr)) == 0.0f,
+               "after the release it is silent again");
+    }
+    {
+        // It lasts through the loop boundary and through the transport starting and stopping.
+        const auto project = oneBar ({ synthChannel ({}) }); // 2 s loop at 120 BPM
+        sls::Player player;
+        player.prepare (kSr);
+        player.liveNoteOn (project, 0, 60, 0.8f);
+        const auto a = renderBlocks (player, project, true, 3.0);  // crosses the loop end at 2 s
+        const auto b = renderBlocks (player, project, false, 0.5); // transport stops: rewinds
+        const auto c = renderBlocks (player, project, true, 0.5);  // and starts again
+        check (rms (a, 2.0, 3.0) > 0.03, "a held note keeps sounding when the loop wraps");
+        check (rms (b, 0.2, 0.5) > 0.03 && rms (c, 0.2, 0.5) > 0.03, "and when the transport stops and starts");
+        player.liveNoteOff (0, 60);
+        const auto d = renderBlocks (player, project, true, 0.4);
+        check (peakOf (d.data(), static_cast<int> (0.25 * kSr), static_cast<int> (0.4 * kSr)) == 0.0f, "and it ends on release");
+    }
+    {
+        // Two keys at once, released independently.
+        const auto project = oneBar ({ synthChannel ({}) });
+        sls::Player player;
+        player.prepare (kSr);
+        player.liveNoteOn (project, 0, 60, 0.8f);
+        player.liveNoteOn (project, 0, 72, 0.8f);
+        const auto both = renderBlocks (player, project, false, 0.5);
+        player.liveNoteOff (0, 60);
+        const auto one = renderBlocks (player, project, false, 0.5);
+        const double c4 = 261.626, c5 = 523.251;
+        check (toneEnergy (both.data(), 4800, 24000, c4) > 0.02 && toneEnergy (both.data(), 4800, 24000, c5) > 0.02,
+               "two held keys sound together");
+        check (toneEnergy (one.data(), 9600, 24000, c5) > 0.02 && toneEnergy (one.data(), 9600, 24000, c4) < 0.005,
+               "releasing one key leaves the other");
+    }
+    {
+        // It goes through the channel (pitch, volume, mute) and the mixer track (mute).
+        auto c = synthChannel ({});
+        c.pitch = 12.0f;
+        sls::Player player;
+        player.prepare (kSr);
+        auto project = oneBar ({ c });
+        player.liveNoteOn (project, 0, 69, 0.8f);
+        const auto up = renderBlocks (player, project, false, 0.5);
+        player.liveNoteOff (0, 69);
+        check (toneEnergy (up.data(), 4800, 24000, 880.0) > 4.0 * toneEnergy (up.data(), 4800, 24000, 440.0),
+               "the channel's Pitch knob applies to a live note");
+
+        sls::Player p2;
+        p2.prepare (kSr);
+        auto muted = synthChannel ({});
+        muted.mute = true;
+        const auto mutedProject = oneBar ({ muted });
+        p2.liveNoteOn (mutedProject, 0, 69, 0.8f);
+        const auto m = renderBlocks (p2, mutedProject, false, 0.5);
+        check (peakOf (m.data(), static_cast<int> (0.2 * kSr), static_cast<int> (0.5 * kSr)) < 1.0e-3f, "a muted channel is silent");
+
+        sls::Player p3;
+        p3.prepare (kSr);
+        auto tracks = sls::Project::defaultTracks();
+        tracks[0].mute = true;
+        const auto trackMuted = sls::Project::make ({ synthChannel ({}) }, 4 * kBeat, tracks);
+        p3.liveNoteOn (trackMuted, 0, 69, 0.8f);
+        const auto t = renderBlocks (p3, trackMuted, false, 0.5);
+        check (peakOf (t.data(), static_cast<int> (0.2 * kSr), static_cast<int> (0.5 * kSr)) < 1.0e-3f, "a muted mixer track is silent");
+    }
+    {
+        // Sampler channel: the sample plays once at the pitch of the key.
+        auto sample = sineSample (440.0, 1.0, kSr);
+        const auto project = oneBar ({ samplerChannel (sample, {}) });
+        sls::Player player;
+        player.prepare (kSr);
+        player.liveNoteOn (project, 0, 72, 1.0f); // an octave above the root (60)
+        const auto out = renderBlocks (player, project, false, 0.6);
+        check (toneEnergy (out.data(), 4800, 24000, 880.0) > 4.0 * toneEnergy (out.data(), 4800, 24000, 440.0),
+               "a sampler channel plays its sample at the key's pitch");
+    }
+    {
+        // Bad input is ignored.
+        const auto project = oneBar ({ synthChannel ({}) });
+        sls::Player player;
+        player.prepare (kSr);
+        player.liveNoteOn (project, 3, 60, 0.8f);   // no such channel
+        player.liveNoteOn (project, -1, 60, 0.8f);
+        player.liveNoteOn (project, 99, 60, 0.8f);
+        player.liveNoteOff (5, 60);                 // nothing to release
+        const auto out = renderBlocks (player, project, false, 0.3);
+        check (peakOf (out.data(), 0, static_cast<int> (0.3 * kSr)) == 0.0f, "a channel that does not exist makes no sound");
+
+        player.liveNoteOn (project, 0, 60, std::nanf (""));
+        const auto nan = renderBlocks (player, project, false, 0.2);
+        check (peakOf (nan.data(), 4800, 9600) > 0.01f && peakOf (nan.data(), 4800, 9600) < 1.0f, "a NaN velocity falls back to a normal level");
+        player.liveNoteOff (0, 60);
+    }
+    {
+        // A note whose "off" was lost ends by itself (20 s).
+        const auto project = oneBar ({ synthChannel ({}) });
+        sls::Player player;
+        player.prepare (kSr);
+        player.liveNoteOn (project, 0, 60, 0.8f);
+        const auto out = renderBlocks (player, project, false, 21.0);
+        check (rms (out, 18.0, 19.0) > 0.03, "a held note is still sounding after 19 s");
+        check (peakOf (out.data(), static_cast<int> (20.2 * kSr), static_cast<int> (21.0 * kSr)) == 0.0f,
+               "a note that was never released is ended after 20 s");
+    }
+    {
+        // Real-time safety: starting and stopping live notes between blocks does not allocate.
+        auto project = oneBar ({ synthChannel ({}), samplerChannel (sls::makeKickSample(), {}) });
+        sls::Player player;
+        player.prepare (kSr);
+        std::vector<float> l (256), r (256);
+        float* ch[2] = { l.data(), r.data() };
+
+        gAllocs = 0;
+        gCounting = true;
+        for (int i = 0; i < 500; ++i)
+        {
+            player.liveNoteOn (project, i % 2, 48 + i % 24, 0.8f);
+            player.render (project, 120.0, i % 3 == 0, ch, 2, 256);
+            player.liveNoteOff (i % 2, 48 + i % 24);
+        }
+        gCounting = false;
+        check (gAllocs.load() == 0, "live notes on and off allocate nothing (500 blocks)");
+    }
+}
+
 } // namespace
 
 int main()
@@ -1465,6 +1687,8 @@ int main()
     testBrowserModel();
     testChannelPresets();
     testLibraryScan();
+    testLiveNoteQueue();
+    testLiveNotes();
 
     std::cout << "\n" << (failures == 0 ? "ALL TESTS PASSED" : "SOME TESTS FAILED") << " (" << failures << " failures)\n";
     return failures == 0 ? 0 : 1;

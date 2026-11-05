@@ -13,6 +13,8 @@ namespace sls
 //   Left click on empty grid   : create a note (drag right to set its length)
 //   Left drag on a note        : move it (drag its right edge to resize)
 //   Right click on a note      : delete it
+//   Left button on a key       : plays that note for as long as the button is down (slide to change the note)
+//   Left button on the grid    : the note being created, moved or resized sounds while the button is down
 //   Mouse wheel                : scroll pitch   | Shift+wheel: scroll time | Ctrl+wheel: zoom time
 class PianoRoll : public juce::Component
 {
@@ -34,12 +36,18 @@ public:
     // Called on the message thread whenever the set of notes has changed.
     std::function<void()> onNotesChanged;
 
+    // Notes played by hand: onNoteStarted(pitch) when a key or a note is pressed, onNoteStopped(pitch) when it is
+    // released or replaced by another pitch. Every start is followed by exactly one stop.
+    std::function<void (int)> onNoteStarted;
+    std::function<void (int)> onNoteStopped;
+
     void paint (juce::Graphics&) override;
     void resized() override;
     void mouseDown (const juce::MouseEvent&) override;
     void mouseDrag (const juce::MouseEvent&) override;
     void mouseUp (const juce::MouseEvent&) override;
     void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
+    void visibilityChanged() override;
 
 private:
     enum class Drag { None, Move, Resize };
@@ -62,6 +70,8 @@ private:
     int noteIndexAt (juce::Point<float> p) const noexcept;
     void clampScroll();
     void notifyChanged();
+    void sound (int pitch); // -1 stops; a different pitch stops the previous one and starts the new one
+    bool isOnKeyboard (juce::Point<int> p) const noexcept;
     static bool isBlackKey (int pitch) noexcept;
 
     std::vector<Note> notes;
@@ -74,6 +84,8 @@ private:
     bool userZoomed = false; // until the user zooms, the loop keeps fitting the width when the panel is resized
 
     int playheadTick = -1;
+    int soundingPitch = -1;      // the note currently played by hand, -1 if none
+    bool keyboardHeld = false;   // the button went down on the keyboard (not on the grid)
 
     Drag dragMode = Drag::None;
     int dragIndex = -1;

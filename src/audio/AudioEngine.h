@@ -6,6 +6,7 @@
 
 #include <juce_audio_devices/juce_audio_devices.h>
 
+#include "audio/LiveNotes.h"
 #include "audio/Player.h"
 #include "audio/Project.h"
 #include "audio/SnapshotExchange.h"
@@ -26,6 +27,17 @@ public:
     juce::String describeDevice() const;
 
     void publishProject (std::unique_ptr<Project> project) { exchange.publish (std::move (project)); }
+
+    // Message thread only (one producer). Plays a note by hand through channel `channel` until the matching
+    // off, even when the transport is stopped. Returns false if the event could not be queued.
+    bool liveNoteOn (int channel, int pitch, float velocity = 0.8f) noexcept
+    {
+        return liveNotes.push ({ true, static_cast<std::uint8_t> (channel), static_cast<std::uint8_t> (pitch), velocity });
+    }
+    bool liveNoteOff (int channel, int pitch) noexcept
+    {
+        return liveNotes.push ({ false, static_cast<std::uint8_t> (channel), static_cast<std::uint8_t> (pitch), 0.0f });
+    }
 
     // Any thread.
     void setPlaying (bool shouldPlay) noexcept { playing.store (shouldPlay, std::memory_order_relaxed); }
@@ -81,6 +93,7 @@ private:
     juce::AudioDeviceManager deviceManager;
     SnapshotExchange<Project> exchange;
     Player player;
+    LiveNoteQueue liveNotes;
 
     std::atomic<bool> playing { false };
     std::atomic<double> bpm { 120.0 };

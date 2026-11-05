@@ -218,6 +218,15 @@ MainComponent::MainComponent()
     };
     mixerPanel.setMasterVolume (volumeSlider.getValue());
 
+    // Notes played by hand with the mouse in the piano roll sound through the selected channel. The channel is
+    // remembered so the matching "off" goes to the channel that got the "on", even if the selection changes.
+    pianoRoll.onNoteStarted = [this] (int pitch)
+    {
+        liveChannel = selected;
+        engine.liveNoteOn (liveChannel, pitch);
+    };
+    pianoRoll.onNoteStopped = [this] (int pitch) { engine.liveNoteOff (liveChannel, pitch); };
+
     pianoRoll.setLoopLengthTicks (kLoopTicks);
     pianoRoll.onNotesChanged = [this]
     {

@@ -121,13 +121,25 @@ It is closed at start and opens from a channel, as above.
 
 | Action | How |
 | --- | --- |
-| Add a note | Click an empty cell; keep the button down and drag to the right to set its length. |
+| Play a note | Left button on a key of the keyboard (held = sounds). |
+| Add a note | Click an empty cell; keep the button down and drag to the right to set its length. It sounds while you hold. |
 | Move a note | Drag it. |
 | Change its length | Drag its right edge. |
 | Delete a note | Right-click it. |
 | Scroll pitch | Mouse wheel. |
 | Scroll time | Shift + wheel. |
 | Zoom time | Ctrl + wheel. Until you zoom, the whole pattern fits the panel width. |
+
+**Playing the notes.** The keyboard on the left and the notes you draw are playable:
+
+- Press the left button on a **key** and the note sounds for as long as you hold the button; the key lights up.
+  Keep the button down and move up or down to play the keys in turn (a glissando).
+- When you **create** a note (click on an empty cell), **move** it or **resize** it, it sounds while the button is down.
+  Moving it to another row changes the note you hear. Right-click does not play anything.
+- The sound is that of the selected channel: its instrument or sample, volume, pan, **Pitch**, mixer track and effects. It
+  works whether the transport is playing or stopped. On a sampler channel each press plays the sample once, at the
+  pitch of the key.
+- If the sound seems missing, check the channel's **M** button, the track's **M** and the master volume.
 
 Notes snap to 16th notes. A pattern is two bars long. A synth note ends at its length or at the end of the pattern,
 whichever comes first. When you open a channel the view scrolls to its notes.
@@ -230,7 +242,7 @@ system has an output available. Latency is what the device reports; it is not me
 - The effects use about 16 MB of memory at 48 kHz (more at higher sample rates).
 - A pattern is always two bars long, 4/4, 16th-note grid.
 - Samples are mono or stereo, at most 30 seconds, played one-shot (no looping, no envelope editing).
-- Not available yet: saving and opening projects (mixer settings and effects are lost on exit like everything
+- Not available yet: playing notes from the computer keyboard or a MIDI keyboard, saving and opening projects (mixer settings and effects are lost on exit like everything
   else), undo, VST plugins as instruments or effects, sends and master effects, automation, MIDI input and
   recording, deleting or renaming patterns, seeking by clicking the ruler, dropping files from the desktop onto
   the program. See [roadmap.md](roadmap.md).

@@ -15,7 +15,7 @@ Sun Loops Studio is inspired by the workflow of loop-based DAWs such as FL Studi
 that uses no code, names, graphics or assets from other products, and it is not affiliated with or endorsed by
 their makers.
 
-**Status: alpha (0.5.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
+**Status: alpha (0.5.1).** It builds, the automated tests pass and the interface has been exercised in a virtual
 display. Playback was confirmed on a real Nobara machine for version 0.3; everything added since (panels, patterns,
 playlist, browser, pitch/swing, the expanded mixer and its effects) was tested headless and in a virtual display
 with a silent audio device, not yet with real audio. **Hosting VST3 plugins is not implemented**: the mixer's effect

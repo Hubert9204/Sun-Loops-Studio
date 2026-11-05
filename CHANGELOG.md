@@ -2,6 +2,23 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.5.1 - 2026-11-05
+
+### Added
+- **Playable Piano Roll.** Press the left button on a key of the on-screen keyboard and that note sounds for as long as
+  you hold the button; slide up or down to play the keys in turn. The note you are drawing, moving or resizing on the
+  grid sounds too while the button is down. Notes go through the selected channel (its instrument or sample, volume,
+  pan, Pitch, mixer track and effects) and work with the transport stopped or running. The key being played lights up.
+- Engine: live notes (`LiveNotes.h`: a wait-free single-producer/single-consumer queue from the interface to the audio
+  thread; `Player::liveNoteOn` / `liveNoteOff`). A held note ignores the loop boundary and the transport; as a safety
+  net a held synth note ends by itself after 20 seconds.
+- Tests: 22 new checks (queue order, overflow and a two-thread test; held notes with the transport stopped, across the
+  loop wrap and stop/start; two keys; Pitch, mute and track mute; sampler; bad input; the 20 s limit; no allocation).
+
+### Notes
+- Sampler channels play their sample once per key press (release does not cut it short).
+- The computer keyboard does not play notes yet.
+
 ## 0.5.0 - 2026-11-05
 
 ### Added
