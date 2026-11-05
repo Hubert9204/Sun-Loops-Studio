@@ -31,6 +31,7 @@ set(SLS_COMMON_DEFINITIONS
 juce_add_gui_app(SunLoopsStudio
     PRODUCT_NAME "Sun Loops Studio"
     COMPANY_NAME "Sun Loops"
+    BUNDLE_ID "com.sunloops.sunloopsstudio"
     ICON_BIG   "${CMAKE_CURRENT_SOURCE_DIR}/resources/icons/app_icon_256.png"
     ICON_SMALL "${CMAKE_CURRENT_SOURCE_DIR}/resources/icons/app_icon_16.png")
 
