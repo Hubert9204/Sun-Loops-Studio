@@ -13,6 +13,7 @@
 #include <juce_audio_formats/juce_audio_formats.h>
 
 #include "audio/Arrangement.h"
+#include "audio/AudioExport.h"
 #include "audio/BufferTuning.h"
 #include "audio/BuiltinSamples.h"
 #include "audio/Effects.h"
@@ -22,6 +23,7 @@
 #include "audio/Player.h"
 #include "audio/Project.h"
 #include "audio/SnapshotExchange.h"
+#include "audio/TapTempo.h"
 #include "library/BrowserModel.h"
 #include "library/ChannelPreset.h"
 #include "library/Library.h"
@@ -1984,20 +1986,20 @@ void testProjectFile()
                    && dir.getNumberOfChildFiles (juce::File::findFiles) == 1,
                "saving again replaces the file");
 
-        const auto nested = dir.getChildFile ("a").getChildFile ("b").getChildFile ("deep.slsproj");
+        const auto nested = dir.getChildFile ("a").getChildFile ("b").getChildFile ("deep.slp");
         check (sls::writeProjectFile (nested, doc).isEmpty() && nested.existsAsFile(), "missing folders are created");
 
-        check (! sls::readProjectFile (dir.getChildFile ("nope.slsproj")).error.empty(), "reading a missing file reports an error");
-        const auto junk = dir.getChildFile ("junk.slsproj");
+        check (! sls::readProjectFile (dir.getChildFile ("nope.slp")).error.empty(), "reading a missing file reports an error");
+        const auto junk = dir.getChildFile ("junk.slp");
         junk.replaceWithText ("{\"format\": \"sun-loops-studio-project\", \"version\": 1, \"channels\": [");
         check (! sls::readProjectFile (junk).error.empty() && ! sls::readProjectFile (junk).document.has_value(), "a truncated file is refused");
         check (! sls::readProjectFile (dir).error.empty(), "a folder is not a project");
 
         // A failed save must not destroy the existing file.
-        const auto blocked = dir.getChildFile ("blocked.slsproj");
+        const auto blocked = dir.getChildFile ("blocked.slp");
         sls::writeProjectFile (blocked, doc);
         const auto before = blocked.loadFileAsString();
-        const auto notAFolder = dir.getChildFile ("song.slsproj").getChildFile ("child.slsproj"); // parent is a file
+        const auto notAFolder = dir.getChildFile ("song.slp").getChildFile ("child.slp"); // parent is a file
         check (! sls::writeProjectFile (notAFolder, doc).isEmpty() && blocked.loadFileAsString() == before,
                "writing to an impossible location fails with a message and changes nothing");
 
@@ -2007,19 +2009,26 @@ void testProjectFile()
     // --- names
     {
         const auto base = juce::File ("/tmp/x");
-        check (sls::withProjectExtension (base.getChildFile ("a")).getFileName() == "a.slsproj"
-                   && sls::withProjectExtension (base.getChildFile ("a.slsproj")).getFileName() == "a.slsproj"
-                   && sls::withProjectExtension (base.getChildFile ("A.SLSPROJ")).getFileName() == "A.SLSPROJ"
-                   && sls::withProjectExtension (base.getChildFile ("My.Song")).getFileName() == "My.Song.slsproj",
-               "the .slsproj extension is added when missing and never doubled");
+        check (sls::withProjectExtension (base.getChildFile ("a")).getFileName() == "a.slp"
+                   && sls::withProjectExtension (base.getChildFile ("a.slp")).getFileName() == "a.slp"
+                   && sls::withProjectExtension (base.getChildFile ("A.SLP")).getFileName() == "A.SLP"
+                   && sls::withProjectExtension (base.getChildFile ("My.Song")).getFileName() == "My.Song.slp",
+               "the .slp extension is added when missing and never doubled");
+        check (sls::withProjectExtension (base.getChildFile ("old.slsproj")).getFileName() == "old.slsproj"
+                   && sls::hasProjectExtension (base.getChildFile ("old.slsproj")) && sls::hasProjectExtension (base.getChildFile ("x.SLP"))
+                   && ! sls::hasProjectExtension (base.getChildFile ("x.wav")) && ! sls::hasProjectExtension (base.getChildFile ("slp")),
+               "files with the older .slsproj extension are still recognised and left alone");
+        check (sls::projectFileForSaveAs (base.getChildFile ("old.slsproj")).getFileName() == "old.slp"
+                   && sls::projectFileForSaveAs (base.getChildFile ("new.slp")).getFileName() == "new.slp",
+               "Save as offers an old .slsproj project under the new .slp name");
 
         const auto dir = freshTempDir ("sls-project-names");
         const auto when = juce::Time (2026, 10, 5, 21, 54, 7); // month is 0-based: 5 November
         const auto first = sls::automaticProjectFile (dir, when);
-        check (first.getFileName() == "Untitled 2026-11-05 21-54-07.slsproj", "an automatic name is 'Untitled' plus the date and time");
+        check (first.getFileName() == "Untitled 2026-11-05 21-54-07.slp", "an automatic name is 'Untitled' plus the date and time");
         first.replaceWithText ("x");
         const auto second = sls::automaticProjectFile (dir, when);
-        check (second != first && second.getFileName() == "Untitled 2026-11-05 21-54-07 (2).slsproj", "an automatic name never overwrites an existing file");
+        check (second != first && second.getFileName() == "Untitled 2026-11-05 21-54-07 (2).slp", "an automatic name never overwrites an existing file");
         dir.deleteRecursively();
     }
 }
@@ -2223,6 +2232,235 @@ void testMasterEffectsAndRouting()
     }
 }
 
+void testAudioExport()
+{
+    std::cout << "Audio export\n";
+    const std::vector<sls::Note> notes { { 69, 0, 960, 0.8f }, { 72, 960, 960, 0.8f } };
+    const auto project = sls::Project::make ({ synthChannel (notes) }, 4 * kBeat);
+    sls::RenderOptions options;
+    options.bpm = 120.0;
+    options.tailSeconds = 0.5;
+    const double expectedSeconds = 4 * 0.5 + 0.5; // 4 beats at 120 bpm plus the tail
+
+    const auto dir = freshTempDir ("sls-export");
+    juce::AudioFormatManager manager;
+    manager.registerBasicFormats();
+
+    // what a file contains: length in seconds and loudest sample, or -1 when it cannot be read
+    const auto inspect = [&] (const juce::File& f, double& seconds, float& loudest)
+    {
+        seconds = -1.0;
+        loudest = 0.0f;
+        std::unique_ptr<juce::AudioFormatReader> reader;
+        if (f.hasFileExtension ("oga")) // the format manager only knows .ogg; the content is the same
+        {
+            juce::OggVorbisAudioFormat ogg;
+            reader.reset (ogg.createReaderFor (f.createInputStream().release(), true));
+        }
+        else
+            reader.reset (manager.createReaderFor (f));
+        if (reader == nullptr || reader->lengthInSamples <= 0)
+            return false;
+        seconds = static_cast<double> (reader->lengthInSamples) / reader->sampleRate;
+        juce::AudioBuffer<float> b (static_cast<int> (reader->numChannels), static_cast<int> (std::min<juce::int64> (reader->lengthInSamples, 400000)));
+        reader->read (&b, 0, b.getNumSamples(), 0, true, true);
+        for (int c = 0; c < b.getNumChannels(); ++c)
+            loudest = std::max (loudest, b.getMagnitude (c, 0, b.getNumSamples()));
+        return true;
+    };
+
+    for (const auto fmt : { sls::ExportFormat::Wav, sls::ExportFormat::Aiff, sls::ExportFormat::Flac, sls::ExportFormat::Ogg,
+                            sls::ExportFormat::Oga })
+    {
+        const auto& info = sls::exportFormatInfo (fmt);
+        const auto file = dir.getChildFile ("song" + juce::String (info.extension));
+        const auto result = sls::exportAudio (project, options, file, fmt);
+        double seconds;
+        float loudest;
+        const bool readable = result.wasOk() && inspect (file, seconds, loudest);
+        const auto label = juce::String (info.extension).substring (1).toUpperCase() + " export is written, read back with the right length and not silent";
+        check (readable && std::abs (seconds - expectedSeconds) < 0.1 && loudest > 0.05f, label.toRawUTF8());
+    }
+    check (dir.getNumberOfChildFiles (juce::File::findFiles) == 5, "no temporary files are left behind");
+
+    const auto ffmpeg = sls::findFfmpeg();
+    if (ffmpeg.existsAsFile())
+    {
+        const auto mp3 = dir.getChildFile ("song.mp3");
+        const auto aac = dir.getChildFile ("song.aac");
+        check (sls::exportAudio (project, options, mp3, sls::ExportFormat::Mp3).wasOk(), "MP3 export through ffmpeg succeeds");
+        check (sls::exportAudio (project, options, aac, sls::ExportFormat::Aac).wasOk(), "AAC export through ffmpeg succeeds");
+
+        // decode both again with ffmpeg and check what comes out
+        for (const auto& f : { mp3, aac })
+        {
+            const auto wav = dir.getChildFile ("decoded-" + f.getFileNameWithoutExtension() + juce::String (f.getFileExtension().substring (1)) + ".wav");
+            juce::ChildProcess p;
+            p.start ({ ffmpeg.getFullPathName(), "-loglevel", "error", "-nostdin", "-y", "-i", f.getFullPathName(), wav.getFullPathName() });
+            p.waitForProcessToFinish (60000);
+            double seconds;
+            float loudest;
+            const bool ok = inspect (wav, seconds, loudest);
+            const auto label = f.getFileExtension().substring (1).toUpperCase() + " file decodes with about the right length and is not silent";
+            check (ok && std::abs (seconds - expectedSeconds) < 0.25 && loudest > 0.05f, label.toRawUTF8());
+        }
+    }
+    else
+        std::cout << "  SKIP  MP3 and AAC export (ffmpeg is not installed here)\n";
+
+    // without ffmpeg the lossy formats that need it fail with a clear message and leave nothing behind
+    {
+        const auto target = dir.getChildFile ("never.mp3");
+        const auto r = sls::exportAudio (project, options, target, sls::ExportFormat::Mp3, dir.getChildFile ("no-such-ffmpeg"));
+        check (r.failed() && r.getErrorMessage().contains ("ffmpeg") && ! target.exists(), "MP3 export without ffmpeg fails with a message and writes nothing");
+        const auto r2 = sls::exportAudio (project, options, dir.getChildFile ("never.aac"), sls::ExportFormat::Aac, dir.getChildFile ("no-such-ffmpeg"));
+        check (r2.failed() && ! dir.getChildFile ("never.aac").exists(), "the same for AAC");
+        // a program that is not ffmpeg: failure is reported, an existing good file is not damaged
+        const auto good = dir.getChildFile ("keep.mp3");
+        good.replaceWithText ("precious");
+        const auto fake = dir.getChildFile ("fake-ffmpeg.sh");
+        fake.replaceWithText ("#!/bin/sh\necho boom >&2\nexit 3\n");
+        fake.setExecutePermission (true);
+        const auto r3 = sls::exportAudio (project, options, good, sls::ExportFormat::Mp3, fake);
+        check (r3.failed() && good.loadFileAsString() == "precious", "a failing encoder is reported and never damages an existing file");
+    }
+
+    {
+        sls::ExportFormat f;
+        check (sls::exportFormatForFile (juce::File ("/x/Song.MP3"), f) && f == sls::ExportFormat::Mp3
+                   && sls::exportFormatForFile (juce::File ("/x/a.oga"), f) && f == sls::ExportFormat::Oga
+                   && sls::exportFormatForFile (juce::File ("/x/a.aif"), f) && f == sls::ExportFormat::Aiff
+                   && ! sls::exportFormatForFile (juce::File ("/x/a.txt"), f) && sls::exportFormats().size() == 7,
+               "export formats are recognised by extension (seven of them)");
+    }
+}
+
+void testTapTempo()
+{
+    std::cout << "[tap tempo]\n";
+    sls::TapTempo t;
+    check (t.tap (10.0) == 0.0, "a single tap gives no tempo yet");
+    check (std::abs (t.tap (10.5) - 120.0) < 0.01, "two taps half a second apart are 120 BPM");
+    t.tap (11.0); t.tap (11.5);
+    check (std::abs (t.tap (12.0) - 120.0) < 0.01, "a steady series stays at 120 BPM");
+    check (t.tap (20.0) == 0.0, "a long pause starts a new series");
+    check (std::abs (t.tap (20.6) - 100.0) < 0.01, "0.6 s between taps is 100 BPM");
+    sls::TapTempo fast;
+    fast.tap (0.0);
+    check (fast.tap (0.1) == 240.0, "absurdly fast taps are clamped to 240 BPM");
+    t.reset();
+    check (t.tap (30.0) == 0.0 && std::abs (t.tap (30.5) - 120.0) < 0.01, "reset forgets the earlier taps");
+    sls::TapTempo slow;
+    slow.tap (0.0);
+    check (slow.tap (1.9) == 40.0, "very slow taps are clamped to 40 BPM");
+}
+
+void testMetronome()
+{
+    std::cout << "Metronome\n";
+    const auto empty = sls::Project::make ({ synthChannel ({}) }, 8 * kBeat);
+
+    // renders `blocks` blocks of 256 samples; transport playing or not
+    const auto run = [&] (sls::Player& player, const sls::Project& project, bool playing, int blocks, double bpm = 120.0)
+    {
+        std::vector<float> all;
+        std::vector<float> l (256), r (256);
+        float* ch[2] = { l.data(), r.data() };
+        for (int b = 0; b < blocks; ++b)
+        {
+            std::fill (l.begin(), l.end(), 0.0f);
+            std::fill (r.begin(), r.end(), 0.0f);
+            player.render (project, bpm, playing, ch, 2, 256);
+            all.insert (all.end(), l.begin(), l.end());
+        }
+        return all;
+    };
+    constexpr int kBeatSamples = 24000; // 120 bpm at 48 kHz
+
+    {   // playing: a click on the beat, silence between
+        sls::Player p;
+        p.prepare (kSr);
+        p.setMetronome (true, 0.8f);
+        const auto x = run (p, empty, true, 400); // 102400 samples: beats at 0, 24000, 48000, 72000, 96000
+        bool clicks = true, quiet = true;
+        for (int beat = 0; beat < 5; ++beat)
+            clicks = clicks && peakOf (x.data(), beat * kBeatSamples, beat * kBeatSamples + 1500) > 0.05f;
+        for (int beat = 0; beat < 4; ++beat)
+            quiet = quiet && peakOf (x.data(), beat * kBeatSamples + 2500, (beat + 1) * kBeatSamples - 5) == 0.0f;
+        check (clicks, "the metronome clicks on every beat while the transport plays, starting at once");
+        check (quiet, "and is silent between the clicks");
+        const float accent = peakOf (x.data(), 0, 1500), normal = peakOf (x.data(), kBeatSamples, kBeatSamples + 1500);
+        check (accent > normal * 1.2f && std::abs (peakOf (x.data(), 4 * kBeatSamples, 4 * kBeatSamples + 1500) - normal) > 0.0f,
+               "the first beat of a bar is louder than the others");
+    }
+    {   // off: nothing at all
+        sls::Player p;
+        p.prepare (kSr);
+        const auto x = run (p, empty, true, 200);
+        check (peakOf (x.data(), 0, static_cast<int> (x.size())) == 0.0f, "no click when the metronome is off");
+        p.setMetronome (true, 0.8f);
+        const auto y = run (p, empty, true, 700);
+        p.setMetronome (false, 0.8f);
+        const auto z = run (p, empty, true, 200);
+        check (peakOf (y.data(), 0, static_cast<int> (y.size())) > 0.05f && peakOf (z.data(), 3000, static_cast<int> (z.size())) == 0.0f, "switching it off stops the clicks");
+    }
+    {   // stopped: free running at the tempo, first click at once
+        sls::Player p;
+        p.prepare (kSr);
+        p.setMetronome (true, 0.8f);
+        const auto x = run (p, empty, false, 400);
+        bool clicks = true;
+        for (int beat = 0; beat < 4; ++beat)
+            clicks = clicks && peakOf (x.data(), beat * kBeatSamples, beat * kBeatSamples + 1500) > 0.05f;
+        check (clicks && peakOf (x.data(), 3000, kBeatSamples - 5) == 0.0f, "with the transport stopped it clicks at the tempo on its own");
+
+        sls::Player q;
+        q.prepare (kSr);
+        q.setMetronome (true, 0.8f);
+        const auto fast = run (q, empty, false, 400, 240.0); // 12000 samples per beat
+        check (peakOf (fast.data(), 12000, 13500) > 0.05f && peakOf (fast.data(), 24000, 25500) > 0.05f, "the click spacing follows the BPM");
+    }
+    {   // joining in the middle of a beat waits for the next beat
+        sls::Player p;
+        p.prepare (kSr);
+        const auto before = run (p, empty, true, 50); // 12800 samples, metronome off
+        (void) before;
+        p.setMetronome (true, 0.8f);
+        const auto x = run (p, empty, true, 50); // 12800..25600: the next beat is at 24000
+        check (peakOf (x.data(), 0, 10000) == 0.0f && peakOf (x.data(), 24000 - 12800, 24000 - 12800 + 1500) > 0.05f,
+               "switched on mid-beat, it does not click until the next beat");
+    }
+    {   // the loop wrap is a downbeat again; volume scales; it is not part of an offline render
+        sls::Player p;
+        p.prepare (kSr);
+        p.setMetronome (true, 1.0f);
+        const auto short4 = sls::Project::make ({ synthChannel ({}) }, 4 * kBeat);
+        const auto x = run (p, short4, true, 400); // two passes of a 4-beat loop
+        check (peakOf (x.data(), 4 * kBeatSamples, 4 * kBeatSamples + 1500) > peakOf (x.data(), 5 * kBeatSamples, 5 * kBeatSamples + 1500) * 1.2f,
+               "the start of the loop is a downbeat again");
+        sls::Player quiet;
+        quiet.prepare (kSr);
+        quiet.setMetronome (true, 0.25f);
+        const auto y = run (quiet, empty, true, 20);
+        check (peakOf (y.data(), 0, 1500) < 0.5f * peakOf (x.data(), 0, 1500), "the volume setting scales the click");
+        const auto rendered = sls::renderToBuffer (empty, {});
+        check (peakOf (rendered.getReadPointer (0), 0, rendered.getNumSamples()) == 0.0f, "an offline render (export) never contains the metronome");
+    }
+    {   // real-time safety
+        sls::Player p;
+        p.prepare (kSr);
+        p.setMetronome (true, 0.8f);
+        std::vector<float> l (256), r (256);
+        float* ch[2] = { l.data(), r.data() };
+        gAllocs = 0;
+        gCounting = true;
+        for (int i = 0; i < 2000; ++i)
+            p.render (empty, 120.0, (i / 500) % 2 == 0, ch, 2, 256);
+        gCounting = false;
+        check (gAllocs.load() == 0, "Player::render performs no heap allocation with the metronome running (2000 blocks, playing and stopped)");
+    }
+}
+
 int main()
 {
     testProjectModel();
@@ -2252,6 +2490,9 @@ int main()
     testProjectFile();
     testBufferTuning();
     testMasterEffectsAndRouting();
+    testAudioExport();
+    testMetronome();
+    testTapTempo();
 
     std::cout << "\n" << (failures == 0 ? "ALL TESTS PASSED" : "SOME TESTS FAILED") << " (" << failures << " failures)\n";
     return failures == 0 ? 0 : 1;

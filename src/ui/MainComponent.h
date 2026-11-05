@@ -17,8 +17,10 @@
 #include "library/ProjectFile.h"
 #include "ui/ChannelStrip.h"
 #include "ui/FileBrowser.h"
+#include "audio/AudioExport.h"
 #include "ui/MixerPanel.h"
 #include "ui/PanelWindow.h"
+#include "ui/RightClickButton.h"
 #include "ui/PianoRoll.h"
 #include "ui/PlaylistView.h"
 #include "ui/RackView.h"
@@ -42,7 +44,7 @@ public:
 
     // Projects. A project is "untitled" until it is saved with a name or opened from a file.
     //   saveProject():   writes to the current file; an untitled project is written at once, without asking, as
-    //                    "Untitled <date time>.slsproj" in the Projects folder.
+    //                    "Untitled <date time>.slp" in the Projects folder.
     //   saveProjectAs(): asks for a name (and folder).
     bool saveProject();
     void saveProjectAs (std::function<void (bool)> whenDone = {});
@@ -61,9 +63,11 @@ private:
     void selectChannel (int index);
     void setPlaying (bool shouldPlay);
     void openAudioSettings();
+    void openMetronomePanel();
+    void applyMetronome();                                  // button state, engine and saved settings
     void openAssignTrack (int channelIndex);                 // the "Assign free mixer track" window
     void assignChannelToTrack (int channelIndex, int track); // puts the instrument on that mixer track
-    void exportWav();
+    void exportAs (ExportFormat format);                    // File > Export
     void chooseSampleFor (int channelIndex);
     bool loadSampleFile (int channelIndex, const juce::File& file);
     void updateTrackRouting();
@@ -155,6 +159,8 @@ private:
     std::unique_ptr<juce::PropertiesFile> settings;
     juce::Component::SafePointer<juce::DialogWindow> audioDialog;
     juce::Component::SafePointer<juce::DialogWindow> assignDialog;
+    bool metronomeOn = false;
+    float metronomeVolume = 0.5f;
     bool restoringLayout = false;
 
     juce::TextButton fileButton { "File" };
@@ -170,7 +176,7 @@ private:
     juce::TextButton pianoToggle { "Piano F7" };
     juce::TextButton mixerToggle { "Mixer F9" };
     juce::TextButton resetButton { "Reset" };
-    juce::TextButton exportButton { "Export WAV..." };
+    RightClickButton metronomeButton { "Metronome" };
     juce::TextButton deviceButton { "Audio..." };
     juce::Slider bpmSlider { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
     juce::Slider volumeSlider { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };

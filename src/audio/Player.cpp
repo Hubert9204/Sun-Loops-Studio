@@ -33,6 +33,10 @@ void Player::prepare (double newSampleRate) noexcept
         v = Voice {};
 
     nextEvent.fill (0);
+    lastClickBeat = -1;
+    freeBeatSamples = 1.0e18; // due at once
+    freeBeatCount = 0;
+    clickPos = -1;
     smoothedGain.fill (kUnsetGain);
     trackGain.fill (kUnsetGain);
     peaks.fill (0.0f);
@@ -57,6 +61,26 @@ void Player::releaseVoices (bool includeSamplers) noexcept
     for (auto& v : voices)
         if ((v.state == State::Attack || v.state == State::Sustain) && (includeSamplers || ! v.sampler) && ! v.live)
             v.state = State::Release; // notes held by hand are ended by liveNoteOff, not by the transport
+}
+
+float Player::nextClickSample() noexcept
+{
+    if (clickPos < 0)
+        return 0.0f;
+
+    const double seconds = clickPos / sampleRate;
+    constexpr double kLength = 0.045;
+    if (seconds >= kLength)
+    {
+        clickPos = -1;
+        return 0.0f;
+    }
+
+    const double frequency = clickAccent ? 1800.0 : 1100.0;
+    const double envelope = std::exp (-seconds * 90.0); // about 11 ms time constant
+    const float amplitude = clickAccent ? 1.0f : 0.65f;
+    ++clickPos;
+    return static_cast<float> (std::sin (kTwoPi * frequency * seconds) * envelope) * amplitude;
 }
 
 void Player::onProjectChanged (const Project& project) noexcept
@@ -250,8 +274,48 @@ void Player::render (const Project& project, double bpm, bool playing,
         }
 
         // 1. Sequencer, voices and channel strips: everything lands on the mixer tracks.
+        std::array<float, kChunk> click {};
+        const double samplesPerBeat = 60.0 * sampleRate / std::max (bpm, 1.0);
+
         for (int i = 0; i < n; ++i)
         {
+            if (metronomeOn)
+            {
+                if (playing)
+                {
+                    const int beat = static_cast<int> (tickPos / kTicksPerBeat);
+                    if (beat != lastClickBeat)
+                    {
+                        // switched on in the middle of a beat: wait for the next one instead of clicking off the beat
+                        const bool joinedMidBeat = lastClickBeat < 0 && tickPos > 0.5;
+                        lastClickBeat = beat;
+                        if (! joinedMidBeat)
+                            startClick (beat % 4 == 0);
+                    }
+                    freeBeatSamples = 1.0e18; // when it stops, the free-running click starts at once
+                    freeBeatCount = 0;
+                }
+                else
+                {
+                    lastClickBeat = -1;
+                    if (freeBeatSamples >= samplesPerBeat)
+                    {
+                        freeBeatSamples -= freeBeatSamples > 1.0e17 ? freeBeatSamples : samplesPerBeat;
+                        startClick (freeBeatCount % 4 == 0);
+                        ++freeBeatCount;
+                    }
+                    freeBeatSamples += 1.0;
+                }
+                click[static_cast<size_t> (i)] = nextClickSample() * metronomeVolume * 0.6f;
+            }
+            else
+            {
+                lastClickBeat = -1;
+                freeBeatSamples = 1.0e18;
+                freeBeatCount = 0;
+                clickPos = -1;
+            }
+
             if (playing)
             {
                 for (size_t ch = 0; ch < numMixerChannels; ++ch)
@@ -385,9 +449,10 @@ void Player::render (const Project& project, double bpm, bool playing,
         {
             const float outL = std::tanh (mixL[static_cast<size_t> (i)]);
             const float outR = std::tanh (mixR[static_cast<size_t> (i)]);
+            const float clickSample = click[static_cast<size_t> (i)];
             for (int ch = 0; ch < numChannels; ++ch)
                 if (out[ch] != nullptr)
-                    out[ch][done + i] += (ch & 1) == 0 ? outL : outR;
+                    out[ch][done + i] += ((ch & 1) == 0 ? outL : outR) + clickSample;
         }
     }
 }

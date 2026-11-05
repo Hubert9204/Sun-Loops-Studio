@@ -46,6 +46,11 @@ public:
     bool isPlaying() const noexcept            { return playing.load (std::memory_order_relaxed); }
     void setBpm (double newBpm) noexcept       { bpm.store (newBpm, std::memory_order_relaxed); }
     void setGain (float newGain) noexcept      { gain.store (newGain, std::memory_order_relaxed); }
+    void setMetronome (bool on, float volume) noexcept
+    {
+        metronomeOn.store (on, std::memory_order_relaxed);
+        metronomeVolume.store (volume, std::memory_order_relaxed);
+    }
     int getPlayheadTick() const noexcept       { return playheadTick.load (std::memory_order_relaxed); }
 
     // Peak since the last call (master, and per mixer channel).
@@ -119,6 +124,8 @@ private:
     std::atomic<float> masterRms { 0.0f };
     std::atomic<float> peakLoad { 0.0f };
     std::atomic<float> loadTest { 0.0f };
+    std::atomic<bool> metronomeOn { false };
+    std::atomic<float> metronomeVolume { 0.5f };
     float masterMeanSquare = 0.0f; // audio thread only
     double sampleRateHz = 48000.0; // set in audioDeviceAboutToStart
     std::array<std::atomic<float>, kMaxChannels> channelPeaks {};

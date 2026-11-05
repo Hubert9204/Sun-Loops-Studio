@@ -2,6 +2,7 @@
 
 #include "ui/AssignTrackDialog.h"
 #include "ui/AudioSettings.h"
+#include "ui/MetronomePanel.h"
 
 #include <functional>
 #include <optional>
@@ -215,8 +216,18 @@ MainComponent::MainComponent()
         strips[static_cast<size_t> (selected)]->repaint();
         publishProject();
     };
-    exportButton.onClick = [this] { exportWav(); };
     deviceButton.onClick = [this] { openAudioSettings(); };
+
+    // Metronome: click toggles it; right-click opens tempo, volume and tap tempo.
+    metronomeButton.setClickingTogglesState (false);
+    metronomeButton.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xffe8913a));
+    metronomeButton.setTooltip ("Metronome on/off (right-click: tempo, volume, tap tempo)");
+    metronomeButton.onClick = [this]
+    {
+        metronomeOn = ! metronomeOn;
+        applyMetronome();
+    };
+    metronomeButton.onRightClick = [this] { openMetronomePanel(); };
 
     bpmSlider.setRange (40.0, 240.0, 1.0);
     bpmSlider.setValue (120.0, juce::dontSendNotification);
@@ -303,14 +314,14 @@ MainComponent::MainComponent()
     statusLabel.setFont (juce::FontOptions (12.0f));
 
     // Space and F5/F6/F7/F9 are handled by this component, so these controls must not steal keyboard focus.
-    for (auto* b : { &fileButton, &playButton, &clearButton, &modeButton, &patternAddButton, &exportButton, &deviceButton,
+    for (juce::Button* b : std::initializer_list<juce::Button*> { &fileButton, &playButton, &clearButton, &modeButton, &patternAddButton, &deviceButton, &metronomeButton,
                      &browserToggle, &browserTab, &rackToggle, &playlistToggle, &pianoToggle, &mixerToggle, &resetButton })
         b->setMouseClickGrabsKeyboardFocus (false);
     patternBox.setMouseClickGrabsKeyboardFocus (false);
     patternBox.setWantsKeyboardFocus (false);
 
     for (auto* c : std::initializer_list<juce::Component*> { &fileButton, &playButton, &modeButton, &patternBox, &patternAddButton,
-                                                              &clearButton, &exportButton, &deviceButton,
+                                                              &clearButton, &deviceButton, &metronomeButton,
                                                               &browserToggle, &rackToggle, &playlistToggle, &pianoToggle,
                                                               &mixerToggle, &resetButton, &bpmSlider, &volumeSlider,
                                                               &bpmLabel, &volumeLabel, &deviceLabel, &statusLabel, &meter,
@@ -334,6 +345,12 @@ MainComponent::MainComponent()
     std::unique_ptr<juce::XmlElement> savedAudio;
     if (settings != nullptr)
         savedAudio = settings->getXmlValue (kAudioStateKey);
+    if (settings != nullptr)
+    {
+        metronomeOn = settings->getBoolValue ("metronome.on", false);
+        metronomeVolume = static_cast<float> (settings->getDoubleValue ("metronome.volume", 0.5));
+    }
+    applyMetronome();
     const auto error = engine.initialise (savedAudio.get());
     engine.getDeviceManager().addChangeListener (this); // from now on the device and buffer size are remembered
     deviceLabel.setText (error.isEmpty() ? engine.describeDevice() : "Audio error: " + error,
@@ -382,12 +399,12 @@ void MainComponent::resized()
     top.removeFromLeft (12);
     volumeLabel.setBounds (top.removeFromLeft (50));
     volumeSlider.setBounds (top.removeFromLeft (120));
+    top.removeFromLeft (16);
+    metronomeButton.setBounds (top.removeFromLeft (96));
 
     meter.setBounds (top.removeFromRight (14));
     top.removeFromRight (10);
     deviceButton.setBounds (top.removeFromRight (80));
-    top.removeFromRight (8);
-    exportButton.setBounds (top.removeFromRight (110));
 
     area.removeFromTop (6);
     auto views = area.removeFromTop (30);
@@ -861,6 +878,38 @@ void MainComponent::assignChannelToTrack (int channelIndex, int track)
     publishProject();
 }
 
+void MainComponent::applyMetronome()
+{
+    metronomeVolume = std::clamp (metronomeVolume, 0.0f, 1.0f);
+    metronomeButton.setToggleState (metronomeOn, juce::dontSendNotification);
+    engine.setMetronome (metronomeOn, metronomeVolume);
+    if (settings != nullptr)
+    {
+        settings->setValue ("metronome.on", metronomeOn);
+        settings->setValue ("metronome.volume", static_cast<double> (metronomeVolume));
+        settings->saveIfNeeded();
+    }
+}
+
+void MainComponent::openMetronomePanel()
+{
+    auto* panel = new MetronomePanel (bpmSlider.getValue(), metronomeVolume,
+                                      [safe = juce::Component::SafePointer<MainComponent> (this)] (double bpm)
+                                      {
+                                          if (safe != nullptr)
+                                              safe->bpmSlider.setValue (bpm); // the toolbar slider drives the engine
+                                      },
+                                      [safe = juce::Component::SafePointer<MainComponent> (this)] (float volume)
+                                      {
+                                          if (safe != nullptr)
+                                          {
+                                              safe->metronomeVolume = volume;
+                                              safe->applyMetronome();
+                                          }
+                                      });
+    juce::CallOutBox::launchAsynchronously (std::unique_ptr<juce::Component> (panel), metronomeButton.getScreenBounds(), nullptr);
+}
+
 void MainComponent::changeListenerCallback (juce::ChangeBroadcaster*)
 {
     if (settings == nullptr)
@@ -1125,33 +1174,47 @@ void MainComponent::savePresetFor (int channelIndex)
                              true);
 }
 
-void MainComponent::exportWav()
+void MainComponent::exportAs (ExportFormat format)
 {
+    const auto& info = exportFormatInfo (format);
+    const juce::String extension (info.extension);
+    const auto label = juce::String (info.label).upToFirstOccurrenceOf ("  (", false, false);
+
     fileChooser = std::make_unique<juce::FileChooser> (
-        songMode ? "Export song as WAV" : "Export pattern as WAV",
+        juce::String (songMode ? "Export song as " : "Export pattern as ") + label,
         juce::File::getSpecialLocation (juce::File::userMusicDirectory)
-            .getChildFile (songMode ? "sun-loops-song.wav" : "sun-loops-pattern.wav"),
-        "*.wav");
+            .getChildFile (juce::String (songMode ? "sun-loops-song" : "sun-loops-pattern") + extension),
+        "*" + extension);
 
     fileChooser->launchAsync (juce::FileBrowserComponent::saveMode
                                   | juce::FileBrowserComponent::canSelectFiles
                                   | juce::FileBrowserComponent::warnAboutOverwriting,
-                              [this] (const juce::FileChooser& chooser)
+                              [safe = juce::Component::SafePointer<MainComponent> (this), format, extension] (const juce::FileChooser& chooser)
     {
+        if (safe == nullptr)
+            return;
         auto file = chooser.getResult();
         if (file == juce::File())
             return; // cancelled
 
-        file = file.withFileExtension ("wav");
+        // "My.Song" -> "My.Song.mp3": append unless the name already ends with the extension.
+        if (! file.getFileName().endsWithIgnoreCase (extension))
+            file = file.getParentDirectory().getChildFile (file.getFileName() + extension);
+
+        safe->statusLabel.setText ("Exporting " + file.getFileName() + " ...", juce::dontSendNotification);
+        safe->statusLabel.repaint();
 
         RenderOptions options;
-        options.bpm = bpmSlider.getValue();
+        options.bpm = safe->bpmSlider.getValue();
 
-        const auto result = renderToWavFile (compileCurrent(), options, file);
+        const auto result = exportAudio (safe->compileCurrent(), options, file, format);
 
-        statusLabel.setText (result.wasOk() ? "Exported " + file.getFileName()
-                                            : "Export failed: " + result.getErrorMessage(),
-                             juce::dontSendNotification);
+        safe->statusLabel.setText (result.wasOk() ? "Exported " + file.getFileName()
+                                                  : "Export failed: " + result.getErrorMessage(),
+                                   juce::dontSendNotification);
+        if (result.failed())
+            juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Export failed",
+                                                    result.getErrorMessage(), "OK", safe.getComponent());
     });
 }
 
@@ -1345,7 +1408,7 @@ bool MainComponent::saveProject()
 void MainComponent::saveProjectAs (std::function<void (bool)> whenDone)
 {
     library.ensureExists();
-    const auto suggested = currentProjectFile != juce::File() ? currentProjectFile
+    const auto suggested = currentProjectFile != juce::File() ? projectFileForSaveAs (currentProjectFile)
                                                               : library.projects.getChildFile ("My Project" + juce::String (kProjectExtension));
 
     fileChooser = std::make_unique<juce::FileChooser> ("Save project as", suggested, juce::String ("*") + kProjectExtension);
@@ -1384,7 +1447,8 @@ void MainComponent::openProject()
 
         safe->library.ensureExists();
         const auto start = safe->currentProjectFile != juce::File() ? safe->currentProjectFile.getParentDirectory() : safe->library.projects;
-        safe->fileChooser = std::make_unique<juce::FileChooser> ("Open a project", start, juce::String ("*") + kProjectExtension);
+        safe->fileChooser = std::make_unique<juce::FileChooser> ("Open a project", start,
+                                                                         juce::String ("*") + kProjectExtension + ";*" + kLegacyProjectExtension);
         safe->fileChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
                                         [safe] (const juce::FileChooser& chooser)
         {
@@ -1494,6 +1558,20 @@ void MainComponent::showFileMenu()
     menu.addItem (item (3, "Save", "Ctrl+S"));
     menu.addItem (item (4, "Save As...", "Ctrl+Shift+S"));
     menu.addSeparator();
+
+    // Export: the same render the engine plays, written as the chosen file type. MP3 and AAC are encoded by ffmpeg.
+    const bool haveFfmpeg = findFfmpeg().existsAsFile();
+    juce::PopupMenu exportMenu;
+    exportMenu.addSectionHeader (songMode ? "Export the song as..." : "Export the pattern as...");
+    const auto& exportTypes = exportFormats();
+    for (size_t i = 0; i < exportTypes.size(); ++i)
+    {
+        const bool available = haveFfmpeg || ! exportTypes[i].needsFfmpeg;
+        exportMenu.addItem (200 + static_cast<int> (i), juce::String (exportTypes[i].label) + (available ? "" : "  - needs ffmpeg"), available);
+    }
+    menu.addSubMenu ("Export audio", exportMenu);
+
+    menu.addSeparator();
     menu.addItem (item (5, "Show the projects folder", ""));
 
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&fileButton),
@@ -1509,6 +1587,11 @@ void MainComponent::showFileMenu()
                                 case 4: safe->saveProjectAs(); break;
                                 case 5: safe->library.ensureExists(); safe->library.projects.revealToUser(); break;
                                 default:
+                                    if (result >= 200 && result - 200 < static_cast<int> (exportFormats().size()))
+                                    {
+                                        safe->exportAs (exportFormats()[static_cast<size_t> (result - 200)].format);
+                                        break;
+                                    }
                                     if (result >= 100 && result - 100 < recentList.size())
                                     {
                                         const juce::File file (recentList[result - 100]);

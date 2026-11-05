@@ -76,6 +76,7 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const*, int,
             player.liveNoteOff (live.channel, live.pitch);
     }
 
+    player.setMetronome (metronomeOn.load (std::memory_order_relaxed), metronomeVolume.load (std::memory_order_relaxed));
     player.render (*project, bpm.load (std::memory_order_relaxed), isPlaying, out, numOut, numSamples);
     playheadTick.store (static_cast<int> (player.getPositionTicks()), std::memory_order_relaxed);
 

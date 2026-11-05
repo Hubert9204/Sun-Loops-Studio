@@ -31,6 +31,16 @@ public:
 
     double getPositionTicks() const noexcept { return tickPos; }
 
+    // Metronome: a short click on every beat (a higher, louder one on the first beat of each bar), added to the
+    // output after the master effects and the limiter. While the transport plays the clicks follow it (beat 1 of the
+    // loop is a downbeat); while it is stopped they run freely at `bpm`, starting at once. Off by default, so exports
+    // and offline renders never contain it. Audio thread only (the engine calls it before every render).
+    void setMetronome (bool on, float volume) noexcept
+    {
+        metronomeOn = on;
+        metronomeVolume = std::clamp (volume, 0.0f, 1.0f);
+    }
+
     // Notes played by hand (piano roll keyboard). They go through the channel's own volume, pan, pitch, mixer track
     // and effects, work with the transport stopped or running, and are not affected by the loop boundary.
     // A synth note sounds until liveNoteOff; a sampler note plays its sample once. `project` must be the snapshot
@@ -104,5 +114,16 @@ private:
     bool releaseSamplesOnStop = true;
     float releaseStep = 0.001f;
     std::uint64_t liveLimitSamples = 20 * 48000;
+
+    // Metronome state.
+    bool metronomeOn = false;
+    float metronomeVolume = 0.5f;
+    int lastClickBeat = -1;        // while playing: the beat that last clicked
+    double freeBeatSamples = 0.0;  // while stopped: samples since the last click (starts "due")
+    int freeBeatCount = 0;
+    int clickPos = -1;             // samples into the current click, -1 when none
+    bool clickAccent = false;
+    void startClick (bool accent) noexcept { clickPos = 0; clickAccent = accent; }
+    float nextClickSample() noexcept;
 };
 } // namespace sls

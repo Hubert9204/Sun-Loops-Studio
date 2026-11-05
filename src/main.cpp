@@ -13,11 +13,11 @@ public:
     {
         mainWindow = std::make_unique<MainWindow> (getApplicationName());
 
-        // "sun-loops-studio song.slsproj" (or a double-click on a project file) opens that project.
+        // "sun-loops-studio song.slp" (or a double-click on a project file) opens that project.
         for (const auto& argument : getCommandLineParameterArray())
         {
             const auto file = juce::File::getCurrentWorkingDirectory().getChildFile (argument.unquoted());
-            if (file.existsAsFile() && file.getFileName().endsWithIgnoreCase (sls::kProjectExtension))
+            if (file.existsAsFile() && sls::hasProjectExtension (file))
             {
                 if (auto* main = mainWindow->getMainComponent())
                     main->openProjectFile (file);

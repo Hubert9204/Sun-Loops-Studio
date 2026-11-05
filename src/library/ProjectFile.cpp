@@ -474,12 +474,26 @@ juce::String writeProjectFile (const juce::File& file, const ProjectDocument& do
     return {};
 }
 
+bool hasProjectExtension (const juce::File& file)
+{
+    return file.getFileName().endsWithIgnoreCase (kProjectExtension)
+        || file.getFileName().endsWithIgnoreCase (kLegacyProjectExtension);
+}
+
 juce::File withProjectExtension (const juce::File& file)
 {
-    // Not withFileExtension(): "My.Song" must become "My.Song.slsproj", not "My.slsproj".
-    return file.getFileName().endsWithIgnoreCase (kProjectExtension)
+    // Not withFileExtension(): "My.Song" must become "My.Song.slp", not "My.slp".
+    return hasProjectExtension (file)
                ? file
                : file.getParentDirectory().getChildFile (file.getFileName() + kProjectExtension);
+}
+
+juce::File projectFileForSaveAs (const juce::File& file)
+{
+    if (file.getFileName().endsWithIgnoreCase (kLegacyProjectExtension))
+        return file.getParentDirectory().getChildFile (file.getFileName().dropLastCharacters (juce::String (kLegacyProjectExtension).length())
+                                                       + kProjectExtension);
+    return file;
 }
 
 juce::File automaticProjectFile (const juce::File& folder, juce::Time now)

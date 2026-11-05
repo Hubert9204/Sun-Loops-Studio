@@ -28,6 +28,7 @@ set(SLS_CORE_SOURCES
     src/audio/Effects.cpp
     src/audio/BuiltinSamples.cpp
     src/audio/OfflineRenderer.cpp
+    src/audio/AudioExport.cpp
     src/library/ChannelPreset.cpp
     src/library/Library.cpp
     src/library/ProjectFile.cpp
@@ -36,6 +37,7 @@ set(SLS_CORE_SOURCES
 set(SLS_COMMON_DEFINITIONS
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
+    JUCE_USE_MP3AUDIOFORMAT=1
     JUCE_PLUGINHOST_VST3=1)
 
 # --- Application -------------------------------------------------------------
@@ -51,6 +53,7 @@ target_sources(SunLoopsStudio PRIVATE
     src/audio/AudioEngine.cpp
     src/ui/AudioMeter.cpp
     src/ui/AudioSettings.cpp
+    src/ui/MetronomePanel.cpp
     src/ui/AssignTrackDialog.cpp
     src/ui/VuMeter.cpp
     src/ui/Knob.cpp
