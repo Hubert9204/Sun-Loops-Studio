@@ -1,6 +1,8 @@
 #pragma once
 
 #include <memory>
+#include <string>
+#include <vector>
 
 #include "audio/Project.h"
 
@@ -10,4 +12,8 @@ namespace sls
 std::shared_ptr<const SampleData> makeKickSample();
 std::shared_ptr<const SampleData> makeSnareSample();
 std::shared_ptr<const SampleData> makeHatSample();
+
+// The ids "kick", "snare" and "hat"; nullptr for anything else.
+std::shared_ptr<const SampleData> makeBuiltinSample (const std::string& id);
+const std::vector<std::string>& builtinSampleIds();
 } // namespace sls

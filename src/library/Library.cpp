@@ -1,0 +1,221 @@
+#include "library/Library.h"
+
+#include <algorithm>
+
+#include "audio/BuiltinSamples.h"
+#include "library/ChannelPreset.h"
+
+namespace sls
+{
+namespace
+{
+bool matches (const juce::String& fileName, NodeKind kind, const juce::String& extension)
+{
+    if (kind == NodeKind::AudioFile)
+        return isAudioFileName (fileName);
+    return fileName.endsWithIgnoreCase (extension);
+}
+
+std::string displayName (const juce::File& file, NodeKind kind)
+{
+    // Presets show without their extension; audio keeps its extension so the format is visible.
+    return (kind == NodeKind::Preset ? file.getFileNameWithoutExtension() : file.getFileName()).toStdString();
+}
+
+BrowserNode folder (std::string name)
+{
+    BrowserNode n;
+    n.name = std::move (name);
+    n.kind = NodeKind::Folder;
+    return n;
+}
+
+BrowserNode leaf (std::string name, NodeKind kind, std::string payload)
+{
+    BrowserNode n;
+    n.name = std::move (name);
+    n.kind = kind;
+    n.payload = std::move (payload);
+    return n;
+}
+
+BrowserNode builtinSamples (const char* title)
+{
+    auto f = folder (title);
+    for (const auto& id : builtinSampleIds())
+    {
+        const auto sample = makeBuiltinSample (id);
+        f.children.push_back (leaf (sample != nullptr ? sample->name : id, NodeKind::BuiltinSample, id));
+    }
+    return f;
+}
+
+BrowserNode userContent (const char* title, const juce::File& directory, NodeKind kind, const juce::String& extension,
+                         int& budget)
+{
+    auto n = scanDirectory (directory, kind, extension, kMaxBrowserDepth, budget);
+    n.name = title;
+    return n;
+}
+} // namespace
+
+LibraryPaths LibraryPaths::forRoot (const juce::File& root)
+{
+    LibraryPaths p;
+    p.root = root;
+    p.samples = root.getChildFile ("Samples");
+    p.drumKits = root.getChildFile ("Drum Kits");
+    p.presets = root.getChildFile ("Presets");
+    return p;
+}
+
+LibraryPaths LibraryPaths::defaults()
+{
+    return forRoot (juce::File::getSpecialLocation (juce::File::userMusicDirectory).getChildFile ("Sun Loops Studio"));
+}
+
+bool LibraryPaths::ensureExists() const
+{
+    bool ok = true;
+    for (const auto& dir : { samples, drumKits, presets })
+        ok = ok && (dir.isDirectory() || dir.createDirectory().wasOk());
+    return ok;
+}
+
+bool isAudioFileName (const juce::String& fileName)
+{
+    for (const char* ext : { ".wav", ".flac", ".ogg", ".aif", ".aiff" })
+        if (fileName.endsWithIgnoreCase (ext))
+            return true;
+    return false;
+}
+
+BrowserNode scanDirectory (const juce::File& directory, NodeKind leafKind, const juce::String& extension,
+                           int maxDepth, int& budget)
+{
+    auto result = folder (directory.getFileName().toStdString());
+    if (! directory.isDirectory() || maxDepth < 0)
+        return result;
+
+    auto entries = directory.findChildFiles (juce::File::findFilesAndDirectories | juce::File::ignoreHiddenFiles, false);
+
+    // Folders first, then files, each sorted by name without regard to case.
+    std::sort (entries.begin(), entries.end(), [] (const juce::File& a, const juce::File& b)
+    {
+        if (a.isDirectory() != b.isDirectory())
+            return a.isDirectory();
+        return a.getFileName().compareIgnoreCase (b.getFileName()) < 0;
+    });
+
+    bool truncated = false;
+    for (const auto& entry : entries)
+    {
+        if (budget <= 0)
+        {
+            truncated = true;
+            break;
+        }
+
+        if (entry.isDirectory())
+        {
+            if (entry.isSymbolicLink())
+                continue; // never follow links: they can loop back
+            auto sub = scanDirectory (entry, leafKind, extension, maxDepth - 1, budget);
+            if (! sub.children.empty())
+            {
+                --budget;
+                result.children.push_back (std::move (sub));
+            }
+        }
+        else if (matches (entry.getFileName(), leafKind, extension))
+        {
+            --budget;
+            result.children.push_back (leaf (displayName (entry, leafKind), leafKind, entry.getFullPathName().toStdString()));
+        }
+    }
+
+    if (truncated)
+        result.children.push_back (leaf ("... more files not shown", NodeKind::Note, {}));
+
+    return result;
+}
+
+BrowserNode buildBrowserTree (const LibraryPaths& paths, const std::vector<PluginInfo>& plugins, PluginScanState scanState)
+{
+    int budget = kMaxBrowserNodes;
+    auto root = folder ("Browser");
+
+    // Samples: the built-in sounds, then whatever is in the user's Samples folder.
+    {
+        auto samples = folder ("Samples");
+        samples.children.push_back (builtinSamples ("Built-in"));
+        auto user = userContent ("My samples", paths.samples, NodeKind::AudioFile, {}, budget);
+        if (user.children.empty())
+            user.children.push_back (leaf ("Put audio files in " + paths.samples.getFullPathName().toStdString(), NodeKind::Note, {}));
+        samples.children.push_back (std::move (user));
+        root.children.push_back (std::move (samples));
+    }
+
+    // Drum kits: a built-in kit, then one entry per sub-folder of the user's Drum Kits folder.
+    {
+        auto kits = folder ("Drum Kits");
+        kits.children.push_back (builtinSamples ("Sun Loops Basic Kit"));
+        auto user = scanDirectory (paths.drumKits, NodeKind::AudioFile, {}, kMaxBrowserDepth, budget);
+        for (auto& child : user.children)
+            kits.children.push_back (std::move (child));
+        if (user.children.empty())
+            kits.children.push_back (leaf ("Make a folder per kit in " + paths.drumKits.getFullPathName().toStdString(),
+                                           NodeKind::Note, {}));
+        root.children.push_back (std::move (kits));
+    }
+
+    // Instruments: what can make the sound of a channel.
+    {
+        auto instruments = folder ("Instruments");
+        instruments.children.push_back (leaf ("Synth", NodeKind::Instrument, "synth"));
+        instruments.children.push_back (leaf ("Sampler", NodeKind::Instrument, "sampler"));
+        root.children.push_back (std::move (instruments));
+    }
+
+    // Presets: factory ones, then the user's own (saved from a channel's right-click menu).
+    {
+        auto presets = folder ("Presets");
+        auto factory = folder ("Factory");
+        for (const auto& p : factoryPresets())
+            factory.children.push_back (leaf (p.name, NodeKind::Preset, "builtin:" + p.id));
+        presets.children.push_back (std::move (factory));
+
+        auto user = userContent ("My presets", paths.presets, NodeKind::Preset, kPresetExtension, budget);
+        if (user.children.empty())
+            user.children.push_back (leaf ("Right-click a channel > Save as preset...", NodeKind::Note, {}));
+        presets.children.push_back (std::move (user));
+        root.children.push_back (std::move (presets));
+    }
+
+    // Plugin: VST3 plugins found on disk. They are listed so you can see what is installed; hosting is not implemented.
+    {
+        auto plugin = folder ("Plugin");
+        switch (scanState)
+        {
+            case PluginScanState::NotScanned:
+                plugin.children.push_back (leaf ("Scan for VST3 plugins...", NodeKind::Action, "scan-plugins"));
+                break;
+            case PluginScanState::Scanning:
+                plugin.children.push_back (leaf ("Scanning... (this can take a while)", NodeKind::Note, {}));
+                break;
+            case PluginScanState::Done:
+                plugin.children.push_back (leaf ("Scan again...", NodeKind::Action, "scan-plugins"));
+                if (plugins.empty())
+                    plugin.children.push_back (leaf ("No VST3 plugins found", NodeKind::Note, {}));
+                for (const auto& p : plugins)
+                    plugin.children.push_back (leaf ((p.name + (p.manufacturer.isNotEmpty() ? "  -  " + p.manufacturer : juce::String())).toStdString(),
+                                                     NodeKind::Plugin, p.path.toStdString()));
+                break;
+        }
+        plugin.children.push_back (leaf ("VST3 hosting: not implemented yet", NodeKind::Note, {}));
+        root.children.push_back (std::move (plugin));
+    }
+
+    return root;
+}
+} // namespace sls

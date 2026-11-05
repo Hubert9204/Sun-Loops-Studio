@@ -14,10 +14,14 @@
 
 #include "audio/Arrangement.h"
 #include "audio/BuiltinSamples.h"
+#include "audio/Effects.h"
 #include "audio/OfflineRenderer.h"
 #include "audio/Player.h"
 #include "audio/Project.h"
 #include "audio/SnapshotExchange.h"
+#include "library/BrowserModel.h"
+#include "library/ChannelPreset.h"
+#include "library/Library.h"
 #include "plugins/PluginScanner.h"
 #include "ui/PanelLayout.h"
 
@@ -716,6 +720,725 @@ void testArrangement()
     const std::vector<sls::Channel> sampler { samplerChannel (sample, {}) };
     check (sls::compileSong (sampler, a).channels[0].sample == sample, "compiling keeps the same sample object");
 }
+
+// --- helpers for the mixer / effects tests ------------------------------------------------
+
+std::vector<float> sineWave (double hz, double amp, int n)
+{
+    std::vector<float> x (static_cast<size_t> (n));
+    for (int i = 0; i < n; ++i)
+        x[static_cast<size_t> (i)] = static_cast<float> (amp * std::sin (6.283185307179586 * hz * i / kSr));
+    return x;
+}
+
+// Runs a signal through one effect in blocks of 64 (the size the Player uses). Both channels carry the same input.
+std::vector<float> runEffect (const sls::EffectSlot& slot, const std::vector<float>& in)
+{
+    sls::EffectUnit unit;
+    unit.prepare (kSr);
+    std::vector<float> l = in, r = in;
+    for (size_t i = 0; i < l.size(); i += 64)
+    {
+        const int n = static_cast<int> (std::min<size_t> (64, l.size() - i));
+        unit.process (slot, l.data() + i, r.data() + i, n);
+    }
+    return l;
+}
+
+double rmsOf (const std::vector<float>& x, int begin, int end)
+{
+    double sum = 0.0;
+    for (int i = begin; i < end; ++i)
+        sum += static_cast<double> (x[static_cast<size_t> (i)]) * x[static_cast<size_t> (i)];
+    return std::sqrt (sum / (end - begin));
+}
+
+double energyOf (const std::vector<float>& x, int begin, int end)
+{
+    double sum = 0.0;
+    for (int i = begin; i < end; ++i)
+        sum += static_cast<double> (x[static_cast<size_t> (i)]) * x[static_cast<size_t> (i)];
+    return sum;
+}
+
+sls::EffectSlot slotWith (sls::EffectType type, std::initializer_list<float> params)
+{
+    auto s = sls::EffectSlot::make (type);
+    size_t i = 0;
+    for (float v : params)
+        s.params[i++] = v;
+    return s;
+}
+
+// Index of the first sample whose magnitude exceeds `threshold`, or -1.
+int firstOnset (const float* x, int n, float threshold)
+{
+    for (int i = 0; i < n; ++i)
+        if (std::abs (x[i]) > threshold)
+            return i;
+    return -1;
+}
+
+void testChannelPitch()
+{
+    std::cout << "Channel pitch\n";
+    const std::vector<sls::Note> a4 { { 69, 0, 2 * kBeat, 0.8f } };
+
+    auto render = [&] (float pitch)
+    {
+        auto c = synthChannel (a4);
+        c.pitch = pitch;
+        return sls::renderToBuffer (oneBar ({ c }), {});
+    };
+
+    {
+        const auto b = render (12.0f);
+        const float* l = b.getReadPointer (0);
+        const double e880 = toneEnergy (l, 4800, 40000, 880.0);
+        // the synth adds a 2nd harmonic at 30 %, so the fundamental wins by about 3.3x over it
+        check (e880 > 2.5 * toneEnergy (l, 4800, 40000, 1760.0) && e880 > 20.0 * toneEnergy (l, 4800, 40000, 440.0),
+               "synth: +12 semitones sounds an octave higher (880 Hz)");
+    }
+    {
+        const auto b = render (-12.0f);
+        const float* l = b.getReadPointer (0);
+        check (toneEnergy (l, 4800, 40000, 220.0) > 2.5 * toneEnergy (l, 4800, 40000, 440.0),
+               "synth: -12 semitones sounds an octave lower (220 Hz)");
+    }
+    {
+        const auto b = render (1.0f);
+        const float* l = b.getReadPointer (0);
+        check (toneEnergy (l, 4800, 40000, 466.164) > 4.0 * toneEnergy (l, 4800, 40000, 440.0),
+               "synth: +1 semitone gives 466.16 Hz");
+    }
+    {
+        // a 440 Hz sample at its root pitch, retuned
+        auto sample = sineSample (440.0, 1.0, kSr);
+        auto up = samplerChannel (sample, { { 60, 0, kBeat, 1.0f } });
+        up.pitch = 12.0f;
+        auto down = up;
+        down.pitch = -12.0f;
+        const auto bu = sls::renderToBuffer (oneBar ({ up }), {});
+        const auto bd = sls::renderToBuffer (oneBar ({ down }), {});
+        check (toneEnergy (bu.getReadPointer (0), 4800, 30000, 880.0) > 4.0 * toneEnergy (bu.getReadPointer (0), 4800, 30000, 440.0),
+               "sampler: +12 semitones plays the sample an octave higher");
+        check (toneEnergy (bd.getReadPointer (0), 4800, 30000, 220.0) > 4.0 * toneEnergy (bd.getReadPointer (0), 4800, 30000, 440.0),
+               "sampler: -12 semitones plays the sample an octave lower");
+    }
+    {
+        auto c = synthChannel (a4);
+        c.pitch = 100.0f;
+        check (sls::Project::make ({ c }, 1920).channels[0].pitch == 24.0f, "pitch is clamped to +-24 semitones");
+        c.pitch = std::nanf ("");
+        check (sls::Project::make ({ c }, 1920).channels[0].pitch == 0.0f, "a NaN pitch becomes 0");
+    }
+}
+
+void testSwing()
+{
+    std::cout << "Swing\n";
+    std::vector<sls::Note> grid;
+    for (int i = 0; i < 8; ++i)
+        grid.push_back ({ 60, i * 120, 60, 0.8f }); // eight 16th notes
+
+    auto starts = [&] (float swing)
+    {
+        auto c = synthChannel (grid);
+        c.swing = swing;
+        const auto project = sls::Project::make ({ c }, 4 * kBeat);
+        std::vector<int> v;
+        for (const auto& n : project.channels[0].notes)
+            v.push_back (n.startTick);
+        return v;
+    };
+
+    check (starts (0.0f) == std::vector<int> { 0, 120, 240, 360, 480, 600, 720, 840 }, "swing 0 leaves the grid untouched");
+    check (starts (1.0f) == std::vector<int> { 0, 180, 240, 420, 480, 660, 720, 900 },
+           "swing 100 % delays every off-beat 16th by 60 ticks and keeps the on-beat ones");
+    check (starts (0.5f) == std::vector<int> { 0, 150, 240, 390, 480, 630, 720, 870 }, "swing 50 % delays them by 30 ticks");
+
+    {
+        auto c = synthChannel ({ { 60, 4 * kBeat - 50, 30, 0.8f }, { 60, 4 * kBeat - 120, 60, 0.8f } });
+        c.swing = 1.0f;
+        const auto edge = sls::Project::make ({ c }, 4 * kBeat);
+        check (edge.channels[0].notes.size() == 2 && edge.channels[0].notes[0].startTick == 4 * kBeat - 60
+                   && edge.channels[0].notes[1].startTick == 4 * kBeat - 50,
+               "a note that would be pushed past the loop end stays in place, the others still move");
+        c.swing = std::nanf ("");
+        check (sls::Project::make ({ c }, 4 * kBeat).channels[0].swing == 0.0f, "a NaN swing becomes 0");
+    }
+
+    // audible: the onset really moves (a single off-beat sample hit)
+    {
+        auto sample = sineSample (440.0, 0.2, kSr);
+        auto c = samplerChannel (sample, { { 60, 120, 60, 1.0f } });
+        const auto straight = sls::renderToBuffer (oneBar ({ c }), {});
+        c.swing = 1.0f;
+        const auto swung = sls::renderToBuffer (oneBar ({ c }), {});
+        const int a = firstOnset (straight.getReadPointer (0), 48000, 0.002f);
+        const int b = firstOnset (swung.getReadPointer (0), 48000, 0.002f);
+        check (a > 5800 && a < 6300 && b - a > 2800 && b - a < 3200,
+               "off-beat hit starts 60 ticks (3000 samples at 120 BPM) later with full swing");
+    }
+
+    // swing is also applied to compiled songs
+    {
+        sls::Arrangement a;
+        a.patterns.resize (1);
+        a.patterns[0].notes = { { { 60, 120, 60, 0.8f } } };
+        a.clips = { { 0, 0, 1, 1 } };
+        auto c = synthChannel ({});
+        c.swing = 1.0f;
+        const auto song = sls::compileSong ({ c }, a);
+        check (song.channels[0].notes.size() == 1 && song.channels[0].notes[0].startTick == a.patternTicks + 180,
+               "compileSong applies swing to the placed notes");
+    }
+}
+
+void testMixerTracks()
+{
+    std::cout << "Mixer tracks (routing, fader, balance, mute, solo, metering)\n";
+    const std::vector<sls::Note> a4 { { 69, 0, kBeat, 0.8f } };
+
+    auto build = [&] (std::vector<sls::Channel> channels, auto&& editTracks)
+    {
+        auto tracks = sls::Project::defaultTracks();
+        editTracks (tracks);
+        return sls::Project::make (std::move (channels), 4 * kBeat, std::move (tracks));
+    };
+    auto peakL = [] (const juce::AudioBuffer<float>& b) { return peakOf (b.getReadPointer (0), 0, 24000); };
+    auto peakR = [] (const juce::AudioBuffer<float>& b) { return peakOf (b.getReadPointer (1), 0, 24000); };
+
+    const auto reference = sls::renderToBuffer (build ({ synthChannel (a4) }, [] (auto&) {}), {});
+    const float refPeak = peakL (reference);
+
+    {
+        auto c = synthChannel (a4);
+        c.mixerTrack = 5;
+        const auto b = sls::renderToBuffer (build ({ c }, [] (auto&) {}), {});
+        check (std::abs (peakL (b) - refPeak) < 1.0e-6f, "routing to another track does not change the level (unity track)");
+    }
+    {
+        const auto b = sls::renderToBuffer (build ({ synthChannel (a4) }, [] (auto& t) { t[0].volume = 0.5f; }), {});
+        check (std::abs (peakL (b) / refPeak - 0.5f) < 0.02f, "track fader 0.5 halves the level");
+    }
+    {
+        auto c = synthChannel (a4);
+        c.mixerTrack = 2;
+        const auto b = sls::renderToBuffer (build ({ c }, [] (auto& t) { t[2].mute = true; }), {});
+        check (peakOf (b.getReadPointer (0), 0, 144000) == 0.0f, "a muted track is silent (and its channel is not heard elsewhere)");
+    }
+    {
+        auto a = synthChannel (a4), b2 = synthChannel (a4);
+        b2.mixerTrack = 1;
+        const auto soloed = sls::renderToBuffer (build ({ a, b2 }, [] (auto& t) { t[1].solo = true; }), {});
+        const auto plain = sls::renderToBuffer (build ({ b2 }, [] (auto&) {}), {});
+        check (std::abs (peakL (soloed) - peakL (plain)) < 1.0e-5f, "soloing a track silences the other tracks");
+    }
+    {
+        const auto left = sls::renderToBuffer (build ({ synthChannel (a4) }, [] (auto& t) { t[0].pan = -1.0f; }), {});
+        const auto right = sls::renderToBuffer (build ({ synthChannel (a4) }, [] (auto& t) { t[0].pan = 1.0f; }), {});
+        check (peakR (left) == 0.0f && std::abs (peakL (left) - refPeak) < 1.0e-6f,
+               "balance hard left: right side silent, left side stays at unity");
+        check (peakL (right) == 0.0f && std::abs (peakR (right) - refPeak) < 1.0e-6f, "balance hard right: mirror image");
+    }
+    {
+        auto a = synthChannel (a4), b2 = synthChannel (a4);
+        b2.mixerTrack = 3;
+        const auto two = sls::renderToBuffer (build ({ a, b2 }, [] (auto&) {}), {});
+        const auto one = sls::renderToBuffer (oneBar ({ a, b2 }), {}); // default tracks, default routing
+        check (std::abs (peakL (two) - peakL (one)) < 1.0e-6f, "same project via both construction paths renders identically");
+    }
+    {
+        const auto missing = sls::renderToBuffer (sls::Project {}, {});
+        check (missing.getNumSamples() > 0, "a project without track data (manual construction) still renders");
+        auto p = oneBar ({ synthChannel (a4) });
+        p.tracks.clear();
+        check (std::abs (peakL (sls::renderToBuffer (p, {})) - refPeak) < 1.0e-6f, "missing tracks behave as unity tracks");
+    }
+    {
+        auto c = synthChannel (a4);
+        c.mixerTrack = 99;
+        check (sls::Project::make ({ c }, 1920).channels[0].mixerTrack == sls::kMaxTracks - 1, "a track index out of range is clamped");
+        auto t = sls::Project::defaultTracks();
+        t[0].volume = 9.0f;
+        t[1].pan = std::nanf ("");
+        const auto p = sls::Project::make ({}, 1920, t);
+        check (p.tracks.size() == static_cast<size_t> (sls::kMaxTracks) && p.tracks[0].volume == 1.5f && p.tracks[1].pan == 0.0f,
+               "track values are clamped and always kMaxTracks tracks exist");
+    }
+
+    // metering
+    {
+        auto c = synthChannel ({ { 69, 0, 4 * kBeat, 0.8f } });
+        c.mixerTrack = 4;
+        const auto project = oneBar ({ c });
+        sls::Player player;
+        player.prepare (kSr);
+        std::vector<float> l (512), r (512);
+        float* ch[2] = { l.data(), r.data() };
+        for (int i = 0; i < 100; ++i)
+        {
+            std::fill (l.begin(), l.end(), 0.0f);
+            std::fill (r.begin(), r.end(), 0.0f);
+            player.render (project, 120.0, true, ch, 2, 512);
+        }
+        const float peak = player.getTrackPeak (4), rms = player.getTrackRms (4);
+        check (peak > 0.05f && rms > 0.02f && rms < peak, "track meter: peak above RMS for a sine-like signal");
+        check (player.getTrackPeak (0) == 0.0f && player.getTrackRms (0) == 0.0f, "track meter: untouched tracks read zero");
+        check (player.getTrackPeak (-1) == 0.0f && player.getTrackRms (99) == 0.0f, "track meter: out-of-range index reads zero");
+    }
+}
+
+void testEffects()
+{
+    std::cout << "Effects\n";
+    const auto sine1k = sineWave (1000.0, 0.5, 48000);
+
+    // slot model
+    {
+        sls::EffectSlot s = sls::EffectSlot::make (sls::EffectType::Compressor);
+        s.params[1] = std::nanf ("");
+        s.params[0] = -500.0f;
+        s.params[4] = 99.0f;
+        const auto c = s.sanitised();
+        check (c.params[1] == 4.0f && c.params[0] == -60.0f && c.params[4] == 24.0f, "slot parameters: NaN -> default, out of range -> clamped");
+        s.type = static_cast<sls::EffectType> (77);
+        check (s.sanitised().type == sls::EffectType::None, "an unknown effect type becomes empty");
+        check (sls::effectParamCount (sls::EffectType::None) == 0 && sls::effectParamCount (sls::EffectType::Compressor) == 5,
+               "parameter counts");
+    }
+
+    // pass-through cases
+    {
+        check (runEffect (sls::EffectSlot {}, sine1k) == sine1k, "empty slot passes the signal through untouched");
+        auto bypassed = sls::EffectSlot::make (sls::EffectType::Reverb);
+        bypassed.bypass = true;
+        check (runEffect (bypassed, sine1k) == sine1k, "bypassed effect passes the signal through untouched");
+        check (runEffect (sls::EffectSlot::make (sls::EffectType::Equalizer), sine1k) == sine1k, "flat equalizer is bit-exact");
+        check (runEffect (slotWith (sls::EffectType::Reverb, { 0.5f, 0.5f, 1.0f, 0.0f }), sine1k) == sine1k, "reverb mix 0 is bit-exact");
+        check (runEffect (slotWith (sls::EffectType::Delay, { 100.0f, 0.5f, 0.7f, 0.0f }), sine1k) == sine1k, "delay mix 0 is bit-exact");
+        check (runEffect (slotWith (sls::EffectType::Compressor, { -20.0f, 1.0f, 5.0f, 100.0f, 0.0f }), sine1k) == sine1k,
+               "compressor ratio 1 with no makeup is bit-exact");
+    }
+
+    // equalizer
+    {
+        const double base = rmsOf (sine1k, 4800, 48000);
+        const auto boost = runEffect (slotWith (sls::EffectType::Equalizer, { 0.0f, 12.0f, 1000.0f, 0.0f }), sine1k);
+        const double gainDb = 20.0 * std::log10 (rmsOf (boost, 4800, 48000) / base);
+        check (std::abs (gainDb - 12.0) < 0.5, "mid band +12 dB at its centre frequency gives +12 dB");
+
+        const auto cut = runEffect (slotWith (sls::EffectType::Equalizer, { 0.0f, -12.0f, 1000.0f, 0.0f }), sine1k);
+        check (std::abs (20.0 * std::log10 (rmsOf (cut, 4800, 48000) / base) + 12.0) < 0.5, "mid band -12 dB gives -12 dB");
+
+        const auto moved = runEffect (slotWith (sls::EffectType::Equalizer, { 0.0f, 12.0f, 4000.0f, 0.0f }), sine1k);
+        check (std::abs (20.0 * std::log10 (rmsOf (moved, 4800, 48000) / base)) < 3.0, "moving the mid band away leaves 1 kHz mostly alone");
+
+        const auto lowSine = sineWave (60.0, 0.5, 48000);
+        const auto lowBoost = runEffect (slotWith (sls::EffectType::Equalizer, { 12.0f, 0.0f, 1000.0f, 0.0f }), lowSine);
+        check (20.0 * std::log10 (rmsOf (lowBoost, 9600, 48000) / rmsOf (lowSine, 9600, 48000)) > 9.0, "low shelf +12 dB lifts 60 Hz by more than 9 dB");
+
+        const auto highSine = sineWave (12000.0, 0.5, 48000);
+        const auto highBoost = runEffect (slotWith (sls::EffectType::Equalizer, { 0.0f, 0.0f, 1000.0f, 12.0f }), highSine);
+        check (20.0 * std::log10 (rmsOf (highBoost, 9600, 48000) / rmsOf (highSine, 9600, 48000)) > 9.0, "high shelf +12 dB lifts 12 kHz by more than 9 dB");
+
+        const auto shelvesOnly = runEffect (slotWith (sls::EffectType::Equalizer, { 12.0f, 0.0f, 1000.0f, 12.0f }), sine1k);
+        check (std::abs (20.0 * std::log10 (rmsOf (shelvesOnly, 4800, 48000) / base)) < 1.5, "shelves leave the middle (1 kHz) nearly untouched");
+    }
+
+    // delay
+    {
+        std::vector<float> impulse (48000, 0.0f);
+        impulse[0] = 1.0f;
+        const auto echo = runEffect (slotWith (sls::EffectType::Delay, { 100.0f, 0.5f, 1.0f, 1.0f }), impulse);
+        check (std::abs (echo[4800] - 1.0f) < 0.01f && peakOf (echo.data(), 0, 4700) == 0.0f, "delay: first echo arrives exactly after the set time");
+        check (peakOf (echo.data(), 9500, 9700) > 0.3f && peakOf (echo.data(), 9500, 9700) < 0.55f, "delay: feedback 0.5 gives a second, quieter echo");
+
+        const auto single = runEffect (slotWith (sls::EffectType::Delay, { 100.0f, 0.0f, 1.0f, 1.0f }), impulse);
+        check (peakOf (single.data(), 9500, 48000) == 0.0f, "delay: feedback 0 gives exactly one echo");
+
+        const auto mixed = runEffect (slotWith (sls::EffectType::Delay, { 100.0f, 0.0f, 1.0f, 0.4f }), impulse);
+        check (std::abs (mixed[0] - 0.6f) < 1.0e-6f && std::abs (mixed[4800] - 0.4f) < 0.01f, "delay: mix crossfades dry and echo");
+
+        // stale audio must not come back after a bypass
+        sls::EffectUnit unit;
+        unit.prepare (kSr);
+        std::vector<float> l (64, 0.0f), r (64, 0.0f);
+        l[0] = r[0] = 1.0f;
+        auto slot = slotWith (sls::EffectType::Delay, { 20.0f, 0.9f, 1.0f, 1.0f });
+        unit.process (slot, l.data(), r.data(), 64);
+        slot.bypass = true;
+        std::fill (l.begin(), l.end(), 0.0f);
+        unit.process (slot, l.data(), r.data(), 64);
+        slot.bypass = false;
+        float worst = 0.0f;
+        for (int block = 0; block < 40; ++block)
+        {
+            std::fill (l.begin(), l.end(), 0.0f);
+            std::fill (r.begin(), r.end(), 0.0f);
+            unit.process (slot, l.data(), r.data(), 64);
+            worst = std::max (worst, peakOf (l.data(), 0, 64));
+        }
+        check (worst == 0.0f, "bypassing clears the effect's memory (no stale echoes on re-enable)");
+    }
+
+    // reverb
+    {
+        std::vector<float> impulse (48000 * 6, 0.0f);
+        impulse[0] = 1.0f;
+        const auto small = runEffect (slotWith (sls::EffectType::Reverb, { 0.1f, 0.5f, 1.0f, 1.0f }), impulse);
+        const auto large = runEffect (slotWith (sls::EffectType::Reverb, { 1.0f, 0.2f, 1.0f, 1.0f }), impulse);
+        const double early = energyOf (large, 2400, 24000);
+        check (early > 1.0e-6, "reverb: an impulse produces a tail");
+        check (energyOf (large, 24000, 48000) < early && energyOf (large, 48000 * 4, 48000 * 5) < energyOf (large, 24000, 48000),
+               "reverb: the tail decays");
+        check (energyOf (large, 48000, 48000 * 2) > 5.0 * energyOf (small, 48000, 48000 * 2), "reverb: a bigger room rings longer");
+
+        auto narrow = slotWith (sls::EffectType::Reverb, { 0.5f, 0.5f, 0.0f, 1.0f });
+        const auto n = runEffect (narrow, impulse);
+        bool mono = true;
+        for (int i = 0; i < 48000; ++i)
+            mono = mono && std::isfinite (n[static_cast<size_t> (i)]);
+        check (mono, "reverb: output stays finite");
+    }
+
+    // compressor
+    {
+        auto loud = sineWave (1000.0, 1.0, 48000);
+        const auto out = runEffect (slotWith (sls::EffectType::Compressor, { -20.0f, 4.0f, 1.0f, 100.0f, 0.0f }), loud);
+        const float p = peakOf (out.data(), 24000, 48000);
+        check (p > 0.15f && p < 0.21f, "compressor: 0 dBFS over a -20 dB threshold at 4:1 comes out at about -15 dB");
+
+        const auto madeUp = runEffect (slotWith (sls::EffectType::Compressor, { -20.0f, 4.0f, 1.0f, 100.0f, 6.0f }), loud);
+        check (std::abs (peakOf (madeUp.data(), 24000, 48000) / p - 1.995f) < 0.1f, "compressor: makeup gain +6 dB doubles the level");
+
+        const auto quiet = sineWave (1000.0, 0.01, 48000);
+        const auto q = runEffect (slotWith (sls::EffectType::Compressor, { -20.0f, 4.0f, 1.0f, 100.0f, 0.0f }), quiet);
+        check (std::abs (peakOf (q.data(), 24000, 48000) / 0.01f - 1.0f) < 0.03f, "compressor: a signal below the threshold is not touched");
+    }
+
+    // every effect, extreme settings, loud input: finite and bounded
+    {
+        std::vector<float> noise (48000 * 2);
+        unsigned seed = 12345;
+        for (auto& v : noise)
+        {
+            seed = seed * 1664525u + 1013904223u;
+            v = (static_cast<float> (seed >> 8) / 8388608.0f - 1.0f) * 2.0f;
+        }
+        bool ok = true;
+        for (int t = 1; t < sls::kEffectTypeCount; ++t)
+        {
+            const auto type = static_cast<sls::EffectType> (t);
+            for (int extreme = 0; extreme < 2; ++extreme)
+            {
+                auto slot = sls::EffectSlot::make (type);
+                for (int i = 0; i < sls::effectParamCount (type); ++i)
+                {
+                    const auto info = sls::effectParamInfo (type, i);
+                    slot.params[static_cast<size_t> (i)] = extreme == 0 ? info.min : info.max;
+                }
+                const auto out = runEffect (slot, noise);
+                for (float v : out)
+                    ok = ok && std::isfinite (v) && std::abs (v) < 100.0f;
+            }
+        }
+        check (ok, "all effects stay finite and bounded at their minimum and maximum settings");
+    }
+}
+
+void testEffectsInPlayer()
+{
+    std::cout << "Effects in the mixer\n";
+    const std::vector<sls::Note> a4 { { 69, 0, kBeat, 0.8f } };
+
+    auto withSlot = [&] (const sls::EffectSlot& slot)
+    {
+        auto tracks = sls::Project::defaultTracks();
+        tracks[0].slots[1] = slot;
+        return sls::renderToBuffer (sls::Project::make ({ synthChannel (a4) }, 4 * kBeat, tracks), {});
+    };
+
+    const auto dry = withSlot (sls::EffectSlot {});
+    const auto wet = withSlot (slotWith (sls::EffectType::Delay, { 250.0f, 0.7f, 1.0f, 0.5f }));
+    check (peakOf (dry.getReadPointer (0), 40000, 144000) == 0.0f, "reference: the dry note is silent after its release");
+    check (peakOf (wet.getReadPointer (0), 48000, 70000) > 0.003f, "a delay in a track slot keeps sounding after the note has ended");
+
+    auto bypassed = slotWith (sls::EffectType::Delay, { 250.0f, 0.7f, 1.0f, 0.5f });
+    bypassed.bypass = true;
+    const auto byp = withSlot (bypassed);
+    bool same = true;
+    for (int i = 0; i < dry.getNumSamples(); ++i)
+        same = same && dry.getReadPointer (0)[i] == byp.getReadPointer (0)[i];
+    check (same, "a bypassed slot leaves the track untouched");
+
+    const auto comp = withSlot (slotWith (sls::EffectType::Compressor, { -30.0f, 20.0f, 1.0f, 100.0f, 0.0f }));
+    check (peakOf (comp.getReadPointer (0), 4800, 24000) < 0.6f * peakOf (dry.getReadPointer (0), 4800, 24000),
+           "a compressor in a track slot reduces the track's level");
+
+    // real-time safety with the full effect chains active
+    {
+        std::vector<sls::Note> notes;
+        for (int i = 0; i < 64; ++i)
+            notes.push_back ({ 48 + i % 24, i * 100, 300, 0.7f });
+        auto tracks = sls::Project::defaultTracks();
+        for (size_t t = 0; t < 2; ++t)
+        {
+            tracks[t].slots[0] = sls::EffectSlot::make (sls::EffectType::Equalizer);
+            tracks[t].slots[0].params[1] = 6.0f;
+            tracks[t].slots[1] = sls::EffectSlot::make (sls::EffectType::Reverb);
+            tracks[t].slots[2] = sls::EffectSlot::make (sls::EffectType::Delay);
+            tracks[t].slots[3] = sls::EffectSlot::make (sls::EffectType::Compressor);
+        }
+        auto a = synthChannel (notes), b = synthChannel (notes);
+        b.mixerTrack = 1;
+        const auto project = sls::Project::make ({ a, b }, 4 * kBeat, tracks);
+
+        sls::Player player;
+        player.prepare (kSr);
+        std::vector<float> l (256), r (256);
+        float* ch[2] = { l.data(), r.data() };
+
+        gAllocs = 0;
+        gCounting = true;
+        for (int i = 0; i < 2000; ++i)
+            player.render (project, 140.0, true, ch, 2, 256);
+        gCounting = false;
+        check (gAllocs.load() == 0, "Player::render performs no heap allocation with 8 active effects (2000 blocks)");
+        check (std::isfinite (l[10]) && std::isfinite (r[10]), "output stays finite with all effects running");
+    }
+
+    // removing an effect while its tail rings: the tail stops at once, the dry signal is unaffected
+    {
+        auto tracks = sls::Project::defaultTracks();
+        tracks[0].slots[0] = sls::EffectSlot::make (sls::EffectType::Reverb);
+        auto project = sls::Project::make ({ synthChannel (a4) }, 4 * kBeat, tracks);
+        sls::Player player;
+        player.prepare (kSr);
+        std::vector<float> l (480), r (480);
+        float* ch[2] = { l.data(), r.data() };
+        for (int i = 0; i < 20; ++i)
+            player.render (project, 120.0, true, ch, 2, 480);
+        for (int i = 0; i < 30; ++i) // transport stopped: the 80 ms release is over after this
+        {
+            std::fill (l.begin(), l.end(), 0.0f);
+            std::fill (r.begin(), r.end(), 0.0f);
+            player.render (project, 120.0, false, ch, 2, 480);
+        }
+        const float tail = peakOf (l.data(), 0, 480);
+        check (tail > 1.0e-4f, "precondition: the reverb tail rings on after the note and the release are over");
+
+        project.tracks[0].slots[0] = sls::EffectSlot::make (sls::EffectType::None);
+        project.revision = 99;
+        std::fill (l.begin(), l.end(), 0.0f);
+        std::fill (r.begin(), r.end(), 0.0f);
+        player.render (project, 120.0, false, ch, 2, 480);
+        check (peakOf (l.data(), 0, 480) == 0.0f, "removing an effect from a slot stops its tail at once");
+    }
+}
+
+sls::BrowserNode node (const char* name, sls::NodeKind kind, std::vector<sls::BrowserNode> children = {}, const char* payload = "")
+{
+    sls::BrowserNode n;
+    n.name = name;
+    n.kind = kind;
+    n.payload = payload;
+    n.children = std::move (children);
+    return n;
+}
+
+const sls::BrowserNode* findChild (const sls::BrowserNode& parent, const std::string& name)
+{
+    for (const auto& c : parent.children)
+        if (c.name == name)
+            return &c;
+    return nullptr;
+}
+
+void testBrowserModel()
+{
+    std::cout << "File browser: tree, search, drag rules\n";
+    using sls::NodeKind;
+
+    const auto tree = node ("Browser", NodeKind::Folder, {
+        node ("Samples", NodeKind::Folder, {
+            node ("Kicks", NodeKind::Folder, {
+                node ("Deep Kick.wav", NodeKind::AudioFile, {}, "/m/Deep Kick.wav"),
+                node ("Punchy.wav", NodeKind::AudioFile, {}, "/m/Punchy.wav") }),
+            node ("Snare 01.wav", NodeKind::AudioFile, {}, "/m/Snare 01.wav") }),
+        node ("Plugin", NodeKind::Folder, {
+            node ("Scan for VST3 plugins...", NodeKind::Action, {}, "scan-plugins"),
+            node ("Surge XT", NodeKind::Plugin, {}, "/usr/lib/vst3/Surge XT.vst3") }) });
+
+    check (sls::filterTree (tree, "").children.size() == 2 && sls::countLeaves (tree) == 5, "an empty query keeps the whole tree");
+
+    {
+        const auto r = sls::filterTree (tree, "KICK");
+        check (r.children.size() == 1 && sls::countLeaves (r) == 2 && findChild (r, "Samples") != nullptr,
+               "search is case-insensitive; a folder whose name matches keeps its contents");
+    }
+    {
+        const auto r = sls::filterTree (tree, "punch");
+        const auto* samples = findChild (r, "Samples");
+        const auto* kicks = samples != nullptr ? findChild (*samples, "Kicks") : nullptr;
+        check (kicks != nullptr && kicks->children.size() == 1 && kicks->children[0].name == "Punchy.wav" && samples->children.size() == 1,
+               "a match deep in the tree keeps its folders and drops the siblings");
+    }
+    check (sls::filterTree (tree, "zzz").children.empty(), "no match: nothing is left");
+    {
+        const auto r = sls::filterTree (tree, "scan");
+        check (r.children.empty(), "actions and notes are hidden while searching");
+        check (sls::filterTree (tree, "surge").children.size() == 1, "plugins are searchable");
+    }
+
+    check (node ("a", NodeKind::AudioFile).isDraggable() && node ("a", NodeKind::BuiltinSample).isDraggable()
+               && node ("a", NodeKind::Instrument).isDraggable() && node ("a", NodeKind::Preset).isDraggable(),
+           "audio, built-in samples, instruments and presets can be dragged");
+    check (! node ("a", NodeKind::Plugin).isDraggable() && ! node ("a", NodeKind::Folder).isDraggable()
+               && ! node ("a", NodeKind::Action).isDraggable() && ! node ("a", NodeKind::Note).isDraggable(),
+           "plugins, folders, actions and notes cannot be dragged");
+}
+
+void testChannelPresets()
+{
+    std::cout << "Channel presets\n";
+
+    auto channel = synthChannel ({});
+    channel.instrument = sls::Instrument::Sampler;
+    channel.sample = sls::makeKickSample();
+    channel.volume = 0.6f;
+    channel.pan = -0.25f;
+    channel.pitch = 3.5f;
+    channel.swing = 0.4f;
+    channel.rootPitch = 62;
+
+    const auto preset = sls::ChannelPreset::fromChannel (channel, "My Kick");
+    const auto back = sls::ChannelPreset::fromJson (preset.toJson());
+    check (back.has_value() && back->name == "My Kick" && back->instrument == sls::Instrument::Sampler
+               && std::abs (back->volume - 0.6f) < 1.0e-6f && std::abs (back->pan + 0.25f) < 1.0e-6f
+               && std::abs (back->pitch - 3.5f) < 1.0e-6f && std::abs (back->swing - 0.4f) < 1.0e-6f
+               && back->rootPitch == 62 && back->sampleSource == "builtin:kick",
+           "a preset survives the JSON round trip");
+
+    auto target = synthChannel ({ { 60, 0, 100, 0.5f } });
+    target.mixerTrack = 4;
+    target.mute = true;
+    back->applyTo (target);
+    check (target.name == "My Kick" && target.instrument == sls::Instrument::Sampler && target.pitch == 3.5f && target.notes.size() == 1
+               && target.mixerTrack == 4 && target.mute,
+           "applying a preset sets the sound and leaves notes, routing and mute alone");
+
+    check (! sls::ChannelPreset::fromJson ("not json at all").has_value(), "garbage is rejected");
+    check (! sls::ChannelPreset::fromJson ("{\"format\":\"something-else\"}").has_value(), "a foreign JSON file is rejected");
+    check (! sls::ChannelPreset::fromJson ("{\"format\":\"sun-loops-studio-channel-preset\",\"instrument\":\"theremin\"}").has_value(),
+           "an unknown instrument is rejected");
+    check (! sls::ChannelPreset::fromJson ("[1,2,3]").has_value(), "a JSON array is rejected");
+
+    const auto wild = sls::ChannelPreset::fromJson (
+        "{\"format\":\"sun-loops-studio-channel-preset\",\"instrument\":\"synth\",\"volume\":99,\"pan\":-7,\"pitch\":1e9,"
+        "\"swing\":\"x\",\"rootPitch\":500,\"name\":\"  \"}");
+    check (wild.has_value() && wild->volume == 1.5f && wild->pan == -1.0f && wild->pitch == 24.0f && wild->swing == 0.0f
+               && wild->rootPitch == 127 && wild->name == "Preset",
+           "out-of-range numbers are clamped, wrong types fall back to defaults, a blank name becomes 'Preset'");
+
+    bool factoryOk = ! sls::factoryPresets().empty();
+    for (const auto& p : sls::factoryPresets())
+    {
+        bool sourceOk = true;
+        if (p.instrument == sls::Instrument::Sampler)
+            sourceOk = p.sampleSource.rfind ("builtin:", 0) == 0 && sls::makeBuiltinSample (p.sampleSource.substr (8)) != nullptr;
+        factoryOk = factoryOk && ! p.id.empty() && sourceOk && sls::ChannelPreset::fromJson (p.toJson()).has_value();
+    }
+    check (factoryOk, "every factory preset is valid, round-trips and points at an existing built-in sample");
+
+    check (sls::makeBuiltinSample ("kick") != nullptr && sls::makeBuiltinSample ("kick")->source == "builtin:kick"
+               && sls::makeBuiltinSample ("nope") == nullptr && sls::builtinSampleIds().size() == 3,
+           "built-in samples are looked up by id and remember their source");
+}
+
+void testLibraryScan()
+{
+    std::cout << "File browser: scanning folders\n";
+    using sls::NodeKind;
+
+    auto tmp = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("sls-test-library-" + juce::String (juce::Random::getSystemRandom().nextInt64()));
+    tmp.createDirectory();
+    auto touch = [&] (const juce::String& rel) { auto f = tmp.getChildFile (rel); f.getParentDirectory().createDirectory(); f.replaceWithText ("x"); };
+
+    touch ("b.wav");
+    touch ("A.FLAC");
+    touch ("notes.txt");
+    touch (".hidden.wav");
+    touch ("kit/hat.ogg");
+    touch ("kit/deep/clap.aiff");
+    touch ("emptyish/readme.md");
+    touch ("c.aif");
+
+    int budget = 1000;
+    const auto scanned = sls::scanDirectory (tmp, NodeKind::AudioFile, {}, 6, budget);
+    std::vector<std::string> names;
+    for (const auto& c : scanned.children)
+        names.push_back (c.name);
+    check (names == std::vector<std::string> { "kit", "A.FLAC", "b.wav", "c.aif" },
+           "folders first, then audio files sorted without regard to case; text and hidden files and empty folders are skipped");
+
+    const auto* kit = findChild (scanned, "kit");
+    const auto* deep = kit != nullptr ? findChild (*kit, "deep") : nullptr;
+    check (kit != nullptr && deep != nullptr && deep->children.size() == 1 && deep->children[0].payload == tmp.getChildFile ("kit/deep/clap.aiff").getFullPathName().toStdString(),
+           "sub-folders are scanned and leaves carry the absolute path");
+
+    int tiny = 3;
+    const auto cut = sls::scanDirectory (tmp, NodeKind::AudioFile, {}, 6, tiny);
+    check (sls::countLeaves (cut) <= 4 && cut.children.back().kind == NodeKind::Note, "a node budget stops huge folders and says so");
+
+    int shallowBudget = 1000;
+    const auto shallow = sls::scanDirectory (tmp, NodeKind::AudioFile, {}, 0, shallowBudget);
+    check (findChild (shallow, "kit") == nullptr && findChild (shallow, "b.wav") != nullptr, "the depth limit is respected");
+
+    // the whole tree
+    const auto paths = sls::LibraryPaths::forRoot (tmp.getChildFile ("lib"));
+    check (paths.ensureExists() && paths.samples.isDirectory() && paths.drumKits.isDirectory() && paths.presets.isDirectory(),
+           "the library folders are created on demand");
+    paths.drumKits.getChildFile ("My Kit").createDirectory();
+    paths.drumKits.getChildFile ("My Kit/snare.wav").replaceWithText ("x");
+    paths.presets.getChildFile ("bass.slspreset").replaceWithText ("{}");
+    paths.presets.getChildFile ("ignored.txt").replaceWithText ("x");
+
+    const auto tree = sls::buildBrowserTree (paths, {}, sls::PluginScanState::NotScanned);
+    std::vector<std::string> roots;
+    for (const auto& c : tree.children)
+        roots.push_back (c.name);
+    check (roots == std::vector<std::string> { "Samples", "Drum Kits", "Instruments", "Presets", "Plugin" }, "the five top-level folders, in order");
+
+    const auto* kits = findChild (tree, "Drum Kits");
+    check (kits != nullptr && findChild (*kits, "Sun Loops Basic Kit") != nullptr && findChild (*kits, "My Kit") != nullptr,
+           "drum kits: the built-in kit plus one entry per user folder");
+    const auto* presets = findChild (tree, "Presets");
+    const auto* mine = presets != nullptr ? findChild (*presets, "My presets") : nullptr;
+    check (mine != nullptr && mine->children.size() == 1 && mine->children[0].name == "bass" && mine->children[0].kind == NodeKind::Preset,
+           "user presets are listed without their extension; other files are ignored");
+    const auto* factory = presets != nullptr ? findChild (*presets, "Factory") : nullptr;
+    check (factory != nullptr && factory->children.size() == sls::factoryPresets().size() && factory->children[0].payload.rfind ("builtin:", 0) == 0,
+           "factory presets are listed");
+    const auto* instruments = findChild (tree, "Instruments");
+    check (instruments != nullptr && instruments->children.size() == 2 && instruments->children[0].payload == "synth",
+           "instruments: Synth and Sampler");
+
+    const auto* plugin = findChild (tree, "Plugin");
+    check (plugin != nullptr && plugin->children[0].kind == NodeKind::Action && plugin->children[0].payload == "scan-plugins",
+           "plugins: the scan action comes first");
+    sls::PluginInfo info;
+    info.name = "Fake Synth";
+    info.manufacturer = "Acme";
+    info.path = "/x/Fake.vst3";
+    const auto scannedTree = sls::buildBrowserTree (paths, { info }, sls::PluginScanState::Done);
+    const auto* scannedPlugin = findChild (scannedTree, "Plugin");
+    const auto* entry = scannedPlugin != nullptr ? findChild (*scannedPlugin, "Fake Synth  -  Acme") : nullptr;
+    check (entry != nullptr && entry->kind == NodeKind::Plugin && ! entry->isDraggable(), "scanned plugins are listed but cannot be dragged");
+
+    tmp.deleteRecursively();
+}
 } // namespace
 
 int main()
@@ -734,6 +1457,14 @@ int main()
     testPluginScanner();
     testPanelLayout();
     testArrangement();
+    testChannelPitch();
+    testSwing();
+    testMixerTracks();
+    testEffects();
+    testEffectsInPlayer();
+    testBrowserModel();
+    testChannelPresets();
+    testLibraryScan();
 
     std::cout << "\n" << (failures == 0 ? "ALL TESTS PASSED" : "SOME TESTS FAILED") << " (" << failures << " failures)\n";
     return failures == 0 ? 0 : 1;

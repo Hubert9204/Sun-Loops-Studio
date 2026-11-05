@@ -12,7 +12,10 @@
 #include "audio/AudioEngine.h"
 #include "audio/Project.h"
 #include "ui/AudioMeter.h"
+#include "library/ChannelPreset.h"
+#include "library/Library.h"
 #include "ui/ChannelStrip.h"
+#include "ui/FileBrowser.h"
 #include "ui/MixerPanel.h"
 #include "ui/PanelWindow.h"
 #include "ui/PianoRoll.h"
@@ -21,11 +24,14 @@
 
 namespace sls
 {
-class MainComponent : public juce::Component, private juce::Timer
+class MainComponent : public juce::Component, public juce::DragAndDropContainer, private juce::Timer
 {
 public:
     MainComponent();
     ~MainComponent() override;
+
+    static constexpr int kBrowserWidth = 250;
+    static constexpr int kBrowserTabWidth = 28;
 
     void paint (juce::Graphics&) override;
     void resized() override;
@@ -39,9 +45,19 @@ private:
     void openAudioSettings();
     void exportWav();
     void chooseSampleFor (int channelIndex);
+    bool loadSampleFile (int channelIndex, const juce::File& file);
+    void updateTrackRouting();
+
+    // Browser sidebar: sounds dragged (or double-clicked) onto channels. channelIndex -1 = a new channel.
+    void setBrowserOpen (bool shouldBeOpen);
+    void rebuildBrowser();
+    void startPluginScan();
+    void applyBrowserItem (int channelIndex, const drag::Item& item);
+    bool applyPreset (int channelIndex, const ChannelPreset& preset);
+    void savePresetFor (int channelIndex);
 
     // Channels
-    void addChannel (Instrument instrument);
+    int addChannel (Instrument instrument, bool askForSample = true); // returns the new channel's index, or -1
     void createStrip (size_t channelIndex);
     void setInstrument (int channelIndex, Instrument instrument);
     void renameChannel (int channelIndex);
@@ -70,6 +86,7 @@ private:
 
     // Source of truth for the UI. Never resized after construction, so the strips can hold references.
     std::vector<Channel> channels;
+    std::vector<MixerTrack> tracks = Project::defaultTracks(); // the mixer: kMaxTracks tracks with their effect chains
     std::vector<std::unique_ptr<ChannelStrip>> strips;
     int selected = 0;
 
@@ -83,6 +100,13 @@ private:
     PianoRoll pianoRoll;
     MixerPanel mixerPanel;
     PlaylistView playlistView { arrangement };
+
+    FileBrowser browser;
+    LibraryPaths library = LibraryPaths::defaults();
+    std::vector<PluginInfo> foundPlugins;
+    PluginScanState pluginScanState = PluginScanState::NotScanned;
+    std::unique_ptr<juce::Thread> pluginScanThread;
+    bool browserOpen = true;
 
     PanelWindow rackPanel { "Channel Rack" };
     PanelWindow pianoPanel { "Piano Roll" };
@@ -98,6 +122,8 @@ private:
     juce::TextButton modeButton { "Pattern" };
     juce::ComboBox patternBox;
     juce::TextButton patternAddButton { "+" };
+    juce::TextButton browserToggle { "Browser F8" };
+    juce::TextButton browserTab { juce::String::fromUTF8 ("\xe2\x96\xb6") };
     juce::TextButton rackToggle { "Rack F6" };
     juce::TextButton playlistToggle { "Playlist F5" };
     juce::TextButton pianoToggle { "Piano F7" };

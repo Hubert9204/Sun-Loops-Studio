@@ -2,18 +2,18 @@
 
 *[English](user-guide.md)*
 
-Questa guida descrive cosa fa oggi Sun Loops Studio 0.4. Limiti e funzioni mancanti sono elencati alla fine.
+Questa guida descrive cosa fa oggi Sun Loops Studio 0.5. Limiti e funzioni mancanti sono elencati alla fine.
 
 ## La finestra
 
-Una **barra degli strumenti** su due righe, una riga di stato e sotto l'**area di lavoro**, dove i pannelli
-fluttuano.
+Una **barra degli strumenti** su due righe, una riga di stato e sotto il **browser** (barra laterale a sinistra) e
+l'**area di lavoro**, dove i pannelli fluttuano.
 
 Barra, prima riga: **Play / Stop**, pulsante **Pattern / Song**, il **menu dei pattern** con **+**, **BPM**
 (40-240), volume **Master** con il suo indicatore, **Audio...** (impostazioni del dispositivo) ed **Export WAV...**.
 
-Barra, seconda riga: i pulsanti che mostrano o nascondono i pannelli (**Rack F6**, **Playlist F5**, **Piano F7**,
-**Mixer F9**), **Reset** (disposizione predefinita dei pannelli) e **Clear notes** (svuota il canale selezionato nel
+Barra, seconda riga: i pulsanti che mostrano o nascondono il browser (**Browser F8**) e i pannelli (**Rack F6**,
+**Playlist F5**, **Piano F7**, **Mixer F9**), **Reset** (disposizione predefinita dei pannelli) e **Clear notes** (svuota il canale selezionato nel
 pattern corrente).
 
 La riga di stato mostra il dispositivo audio (frequenza, buffer, latenza dichiarata) e l'ultimo messaggio.
@@ -37,7 +37,11 @@ serve. Posizioni, dimensioni e stato aperto/chiuso vengono salvati a ogni modifi
 successivo (file: `~/.config/SunLoopsStudio/SunLoopsStudio.settings`; cancellalo per tornare alla disposizione
 predefinita).
 
-Disposizione predefinita: Channel Rack e Playlist aperti in alto, Piano Roll e Mixer chiusi.
+Disposizione predefinita: browser aperto a sinistra; Channel Rack lungo tutto il lato alto dell'area di lavoro con la
+Playlist sotto; Piano Roll e Mixer chiusi. Il Mixer si apre grande, sopra tutto il resto.
+
+Le disposizioni salvate da versioni precedenti alla 0.5 vengono ignorate una volta (le impostazioni dei pannelli sono
+state rinominate); **Reset**, o semplicemente spostare i pannelli, salva quelle nuove.
 
 ## Tastiera
 
@@ -47,18 +51,53 @@ Disposizione predefinita: Channel Rack e Playlist aperti in alto, Piano Roll e M
 | F5 | Playlist |
 | F6 | Channel Rack |
 | F7 | Piano Roll |
+| F8 | Browser (ripiega / apri) |
 | F9 | Mixer |
 
 I tasti funzionano quando la finestra principale è attiva. Mentre scrivi in un campo di testo (per esempio per
 rinominare un canale) la tastiera è del campo.
 
+## Browser
+
+La barra laterale a sinistra elenca i tuoi suoni come un albero. Clic sulla freccia di una cartella per aprirla.
+
+| Cartella | Contenuto |
+| --- | --- |
+| Samples | I suoni incorporati (cassa, rullante, hi-hat), poi i file audio (WAV, FLAC, OGG, AIFF) trovati in `~/Music/Sun Loops Studio/Samples` e nelle sue sottocartelle. |
+| Drum Kits | Un kit incorporato, poi una voce per ogni sottocartella di `~/Music/Sun Loops Studio/Drum Kits`. |
+| Instruments | *Synth* e *Sampler*. |
+| Presets | Sei preset di canale di fabbrica, poi i tuoi file `.slspreset` da `~/Music/Sun Loops Studio/Presets`. |
+| Plugin | All'inizio è vuota. *Scan for VST3 plugins...* cerca nelle cartelle VST3 abituali in background ed elenca ciò che trova. **I plugin non si possono ancora usare** (l'hosting non è implementato): sono mostrati solo a titolo informativo. |
+
+Le tre cartelle in `~/Music/Sun Loops Studio` vengono create all'avvio del programma. **Folder** apre quella posizione
+nel file manager; **Refresh** cerca file nuovi (il browser non controlla il disco in continuazione).
+
+- **Ricerca**: scrivi nella casella in alto per filtrare tutte le cartelle insieme; le cartelle con risultati si
+  aprono da sole e la riga sotto l'albero conta i risultati. **Esc** cancella la ricerca.
+- **Trascinamento**: trascina un suono su un canale del Channel Rack (la riga si evidenzia con un contorno verde) per
+  caricarlo lì; rilascialo nello spazio vuoto sotto le righe per creare un nuovo canale. Un preset imposta strumento,
+  sample, volume, pan, pitch e swing del canale; una voce di *Instruments* cambia lo strumento del canale.
+- **Doppio clic** su una voce: la applica al canale selezionato.
+- **Ripiegare**: il pulsante con la freccia nel titolo del browser, **F8** o il pulsante **Browser** della barra. Resta
+  una linguetta sottile sul bordo sinistro per riaprirlo. Lo stato viene ricordato.
+
+Sono supportati solo i trascinamenti che partono dal browser; trascinare file dal file manager del desktop sul programma
+non è ancora implementato (copiali nella cartella Samples e premi Refresh).
+
 ## Channel Rack
 
-Una riga per canale: nome, **M** (mute), **S** (solo), volume, pan, indicatore di livello e, a destra, l'area degli
-step.
+Una riga per canale: un display **Track N** e il nome, **M** (mute), **S** (solo), volume, pan, le manopole **Pitch** e
+**Swing**, un indicatore di livello e, a destra, l'area degli step.
 
 - **Volume** da 0 a 1,5 (predefinito 0,8) e **pan** da sinistra a destra; doppio clic su un cursore per
   riportarlo al valore predefinito.
+- **Pitch** intona tutte le note del canale da -12 a +12 semitoni a passi di 0,1 (su un canale sampler cambia la
+  velocità del sample, quindi anche la sua durata). Trascina la manopola su o giù; doppio clic per 0.
+- **Swing** da 0 a 100 %: i sedicesimi in levare (il 2°, 4°, 6°... di ogni quarto) vengono ritardati, fino a mezzo
+  sedicesimo al 100 %. Le note che verrebbero spinte oltre la fine del pattern restano dove sono.
+- **Track N** è la traccia del mixer attraverso cui suona il canale. Clic per un menu delle 8 tracce, oppure
+  trascinalo su e giù, o usa la rotella sopra di esso. All'inizio il canale 1 va alla Track 1, il canale 2 alla
+  Track 2 e così via.
 - I **canali sampler** mostrano 32 pulsanti step (due battute di sedicesimi). Clic su uno step per accenderlo o
   spegnerlo. Il pulsante **Load** sceglie un file audio.
 - I **canali synth** mostrano un'anteprima delle note. Le note si modificano nel Piano Roll.
@@ -73,6 +112,7 @@ step.
 | Instrument > Synth / Sampler | Sceglie cosa produce il suono. Passando a Sampler su un canale senza sample ne viene chiesto uno. Il sample resta se torni a Synth. |
 | Load sample... | Scegli un file WAV, FLAC, OGG o AIFF (si usano i primi 30 secondi). Il canale prende il nome del file. |
 | Rename... | Fino a 16 caratteri. |
+| Save as preset... | Chiede un nome e scrive un file `.slspreset` (strumento, sample, volume, pan, pitch, swing; non le note) in `~/Music/Sun Loops Studio/Presets`; compare subito nella cartella Presets del browser. |
 
 Anche il doppio clic sull'anteprima delle note di un canale synth, o sul nome di un qualsiasi canale, apre il suo
 Piano Roll. Sui canali sampler il doppio clic sugli step non ha un significato speciale: ogni clic attiva o
@@ -103,8 +143,9 @@ Channel Rack e il Piano Roll mostrano e modificano quello. Il pulsante **+** acc
 **Clone current pattern**. Il progetto dimostrativo parte con "Pattern 1" (il groove completo) e "Drums" (solo la
 batteria).
 
-Le impostazioni di mixer (volume, pan, mute, solo, strumento, sample) appartengono al canale, non al pattern: sono le
-stesse in ogni pattern.
+Le impostazioni del canale (volume, pan, mute, solo, pitch, swing, strumento, sample, traccia del mixer) appartengono
+al canale, non al pattern: sono le stesse in ogni pattern. Le tracce del mixer e i loro effetti non appartengono né
+all'uno né all'altro.
 
 ## Playlist
 
@@ -137,10 +178,45 @@ In entrambe le modalità puoi modificare mentre suona; il cambiamento si sente s
 
 ## Mixer
 
-Una strip verticale per canale: nome, pan, mute / solo, un fader con la lettura in dB sotto (dal silenzio fino a
-+3,5 dB; il valore predefinito 0,8 vale circa -1,9 dB; doppio clic per ripristinarlo) e un indicatore di livello. Le
-strip sono collegate alle righe del rack: cambi una, l'altra segue. Clic su una strip per selezionare il canale. Il
-volume master e il suo indicatore sono nella barra degli strumenti.
+Premi **F9** o il pulsante **Mixer F9**. Il Mixer si apre grande sopra gli altri pannelli; F9 di nuovo lo chiude. Ha
+8 **tracce** verticali, la strip **master** a destra e il **pannello effetti** della traccia selezionata.
+
+Percorso del suono: ogni canale va alla traccia scelta con il suo display **Track N** (più canali possono condividerne
+una), poi attraversa i quattro slot effetti della traccia, poi fader e bilanciamento della traccia, poi il master.
+
+Ogni traccia, dall'alto in basso:
+
+- il nome (Track 1...) e i canali che le sono assegnati;
+- **quattro slot effetti**, uno sopra l'altro (vedi sotto);
+- **bilanciamento** (stereo) - doppio clic per centrarlo. È un bilanciamento: al centro il suono non cambia;
+- **M** (mute) e **S** (solo) - appartengono alla traccia e sono indipendenti dai pulsanti del canale nel rack. Se
+  una traccia è in solo, si sentono solo quelle in solo;
+- un **fader** verticale con la lettura in dB (dal silenzio a +3,5 dB, 1,0 = 0 dB; doppio clic per tornare a 0 dB);
+- un **indicatore di livello**: la barra larga è il livello RMS (media su circa 300 ms), la barra stretta è il picco,
+  con una linea di tenuta e una spia in alto che si accende se il segnale ha raggiunto o superato 0 dB. Clic
+  sull'indicatore per spegnere la spia. La scala va da -60 a +6 dB.
+
+Clic su una traccia per selezionarla: il pannello effetti mostra allora i suoi slot.
+
+### Effetti
+
+Clic su uno slot vuoto (o tasto destro su uno slot qualsiasi) per il menu: **Equalizer**, **Reverb**, **Delay**,
+**Compressor**, **Bypass**, **Remove effect**. Gli effetti agiscono in ordine, dall'alto in basso, prima del fader
+della traccia. Il pannello effetti ha un pulsante di accensione per slot (bypass) e un cursore per ogni parametro dello
+slot selezionato.
+
+| Effetto | Parametri |
+| --- | --- |
+| Equalizer | Shelf basso (120 Hz), Mid (una campana con frequenza propria, 200-5000 Hz), shelf alto (6 kHz); ciascuno da -15 a +15 dB |
+| Reverb | Size, Damping, Width, Mix |
+| Delay | Time (10-1000 ms), Feedback, Tone, Mix |
+| Compressor | Threshold (da -60 a 0 dB), Ratio (1-20:1), Attack, Release, Makeup |
+
+Sono effetti propri di Sun Loops Studio. **I plugin VST3 non si possono ancora caricare negli slot**: il menu dello slot
+mostra una voce "VST3 plugin..." in grigio come promemoria.
+
+Il volume master è il cursore della barra degli strumenti e il fader master è lo stesso controllo. La strip master ha un
+indicatore e nessun effetto.
 
 ## Esportazione
 
@@ -157,10 +233,13 @@ il programma non la misura.
 
 ## Limiti
 
-- Fino a 8 canali, 64 pattern, 8 tracce di playlist, una linea del tempo lunga 32 pattern, 32 voci simultanee.
+- Fino a 8 canali, 8 tracce del mixer con 4 slot effetti ciascuna, 64 pattern, 8 tracce di playlist, una linea del
+  tempo lunga 32 pattern, 32 voci simultanee.
+- Gli effetti usano circa 16 MB di memoria a 48 kHz (di più a frequenze di campionamento maggiori).
 - Un pattern dura sempre due battute, 4/4, griglia di sedicesimi.
 - I sample sono mono o stereo, al massimo 30 secondi, suonati una volta sola (niente loop né editing
   dell'inviluppo).
-- Non ancora disponibili: salvare e aprire progetti, annulla, plugin VST come strumenti o effetti, effetti di
-  qualsiasi tipo, automazione, ingresso e registrazione MIDI, eliminare o rinominare i pattern, spostare il cursore
-  con un clic sul righello. Vedi [roadmap.md](roadmap.md) (in inglese).
+- Non ancora disponibili: salvare e aprire progetti (impostazioni del mixer ed effetti si perdono all'uscita come tutto
+  il resto), annulla, plugin VST come strumenti o effetti, send ed effetti sul master, automazione, ingresso e
+  registrazione MIDI, eliminare o rinominare i pattern, spostare il cursore con un clic sul righello, trascinare file
+  dal desktop sul programma. Vedi [roadmap.md](roadmap.md) (in inglese).

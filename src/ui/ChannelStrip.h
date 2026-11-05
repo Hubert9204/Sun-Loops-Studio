@@ -6,6 +6,9 @@
 
 #include "audio/Project.h"
 #include "ui/AudioMeter.h"
+#include "ui/DragItems.h"
+#include "ui/Knob.h"
+#include "ui/TrackSelector.h"
 
 namespace sls
 {
@@ -40,7 +43,7 @@ private:
 };
 
 // One row of the channel rack, doubling as the channel's mixer strip.
-class ChannelStrip : public juce::Component
+class ChannelStrip : public juce::Component, public juce::DragAndDropTarget
 {
 public:
     ChannelStrip (Channel& channelToControl, int channelIndex);
@@ -59,14 +62,24 @@ public:
     std::function<void (int)> onOpenPianoRoll; // context menu "Piano roll", or double click on the name / note preview
     std::function<void (int, Instrument)> onInstrumentChosen; // context menu "Instrument"
     std::function<void (int)> onRename;        // context menu "Rename..."
+    std::function<void (int)> onSavePreset;    // context menu "Save as preset..."
+    std::function<void (int, const drag::Item&)> onItemDropped; // something was dropped from the browser
 
     void paint (juce::Graphics&) override;
     void resized() override;
     void mouseDown (const juce::MouseEvent&) override;
     void mouseDoubleClick (const juce::MouseEvent&) override;
+    void paintOverChildren (juce::Graphics&) override;
+
+    // juce::DragAndDropTarget
+    bool isInterestedInDragSource (const SourceDetails&) override;
+    void itemDragEnter (const SourceDetails&) override { setDropHighlight (true); }
+    void itemDragExit (const SourceDetails&) override { setDropHighlight (false); }
+    void itemDropped (const SourceDetails&) override;
 
 private:
     void showContextMenu();
+    void setDropHighlight (bool on);
 
     Channel& channel;
     int index;
@@ -77,6 +90,10 @@ private:
     juce::TextButton soloButton { "S" };
     juce::Slider volumeSlider { juce::Slider::LinearHorizontal, juce::Slider::NoTextBox };
     juce::Slider panSlider { juce::Slider::LinearHorizontal, juce::Slider::NoTextBox };
+    TrackSelector trackSelector { kMaxTracks };
+    Knob pitchKnob;
+    Knob swingKnob;
+    bool dropHighlight = false;
     juce::TextButton loadButton { "Load" };
     AudioMeter meter;
     StepGrid grid;

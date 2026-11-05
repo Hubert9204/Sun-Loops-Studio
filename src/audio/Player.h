@@ -3,17 +3,20 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cmath>
 
+#include "audio/Effects.h"
 #include "audio/Project.h"
 
 namespace sls
 {
-// Sequencer + synth + sampler + per-channel mixer. Single-threaded: the caller (audio
+// Sequencer + synth + sampler + mixer (channels -> mixer tracks -> insert effects -> fader -> master). Single-threaded: the caller (audio
 // callback or offline renderer) owns it. render() never allocates, locks or does I/O.
 class Player
 {
 public:
     static constexpr int kMaxVoices = 32;
+    static constexpr int kChunk = 64; // samples processed per mixer/effects pass
 
     void prepare (double sampleRate) noexcept;
 
@@ -31,6 +34,17 @@ public:
     float getChannelPeak (int channel) const noexcept
     {
         return channel >= 0 && channel < kMaxChannels ? peaks[static_cast<size_t> (channel)] : 0.0f;
+    }
+
+    // Level of mixer track `track` in the last rendered block, measured after its effects and fader
+    // (before the master volume): peak, and RMS over a sliding ~300 ms window.
+    float getTrackPeak (int track) const noexcept
+    {
+        return track >= 0 && track < kMaxTracks ? trackPeaks[static_cast<size_t> (track)] : 0.0f;
+    }
+    float getTrackRms (int track) const noexcept
+    {
+        return track >= 0 && track < kMaxTracks ? std::sqrt (trackMeanSquare[static_cast<size_t> (track)]) : 0.0f;
     }
 
 private:
@@ -61,6 +75,14 @@ private:
     std::array<std::size_t, kMaxChannels> nextEvent {};
     std::array<float, kMaxChannels> smoothedGain {};
     std::array<float, kMaxChannels> peaks {};
+
+    // Mixer tracks.
+    std::array<std::array<float, kChunk>, kMaxTracks> trackL {}, trackR {};
+    std::array<float, kMaxTracks> trackGain {};
+    std::array<float, kMaxTracks> trackPeaks {};
+    std::array<float, kMaxTracks> trackMeanSquare {};
+    std::array<std::array<EffectUnit, kSlotsPerTrack>, kMaxTracks> effects;
+    float rmsCoef = 0.0001f;
 
     double sampleRate = 48000.0;
     double tickPos = 0.0;

@@ -100,6 +100,7 @@ std::shared_ptr<const SampleData> decodeSample (juce::AudioFormatManager& format
     data->right.assign (buffer.getReadPointer (1), buffer.getReadPointer (1) + frames);
     data->sampleRate = reader->sampleRate;
     data->name = file.getFileNameWithoutExtension().toStdString();
+    data->source = file.getFullPathName().toStdString();
     return data;
 }
 } // namespace
@@ -123,6 +124,10 @@ MainComponent::MainComponent()
     // reserve the maximum up front and never grow past it.
     channels = demoChannels();
     channels.reserve (static_cast<size_t> (kMaxChannels));
+    for (size_t i = 0; i < channels.size(); ++i)
+        channels[i].mixerTrack = static_cast<int> (i); // every channel on its own mixer track to start with
+
+    library.ensureExists(); // ~/Music/Sun Loops Studio/{Samples,Drum Kits,Presets}: where the browser looks
 
     // Demo song: "Pattern 1" is the full groove, "Drums" is the same beat without the melodic channels.
     arrangement.patternTicks = kLoopTicks;
@@ -158,13 +163,12 @@ MainComponent::MainComponent()
                             });
     };
 
-    mixerPanel.setChannels (channels);
-    mixerPanel.onSelect = [this] (int idx) { selectChannel (idx); };
-    mixerPanel.onChanged = [this] (int idx)
-    {
-        strips[static_cast<size_t> (idx)]->refreshFromChannel();
-        publishProject();
-    };
+    rackView.onItemDroppedOnEmptyArea = [this] (const drag::Item& item) { applyBrowserItem (-1, item); };
+
+    mixerPanel.setTracks (tracks);
+    mixerPanel.onTrackChanged = [this] (int) { publishProject(); };
+    mixerPanel.onMasterVolumeChanged = [this] (double v) { volumeSlider.setValue (v); }; // the slider drives the engine
+    updateTrackRouting();
 
     playButton.setClickingTogglesState (true);
     playButton.onClick = [this] { setPlaying (playButton.getToggleState()); };
@@ -207,7 +211,12 @@ MainComponent::MainComponent()
 
     volumeSlider.setRange (0.0, 1.0, 0.01);
     volumeSlider.setValue (0.8, juce::dontSendNotification);
-    volumeSlider.onValueChange = [this] { engine.setGain (static_cast<float> (volumeSlider.getValue())); };
+    volumeSlider.onValueChange = [this]
+    {
+        engine.setGain (static_cast<float> (volumeSlider.getValue()));
+        mixerPanel.setMasterVolume (volumeSlider.getValue());
+    };
+    mixerPanel.setMasterVolume (volumeSlider.getValue());
 
     pianoRoll.setLoopLengthTicks (kLoopTicks);
     pianoRoll.onNotesChanged = [this]
@@ -230,7 +239,7 @@ MainComponent::MainComponent()
     pianoPanel.setContent (&pianoRoll);
     pianoPanel.setMinimumSize (360, 220);
     mixerPanelWindow.setContent (&mixerPanel);
-    mixerPanelWindow.setMinimumSize (200, 240);
+    mixerPanelWindow.setMinimumSize (720, 440);
     playlistPanel.setContent (&playlistView);
     playlistPanel.setMinimumSize (380, 200);
 
@@ -243,6 +252,16 @@ MainComponent::MainComponent()
             updateToggleButtons();
         };
     }
+
+    browser.onItemActivated = [this] (const drag::Item& item) { applyBrowserItem (selected, item); };
+    browser.onAction = [this] (const juce::String& action) { if (action == "scan-plugins") startPluginScan(); };
+    browser.onRefresh = [this] { rebuildBrowser(); };
+    browser.onOpenFolder = [this] { library.ensureExists(); library.root.revealToUser(); };
+    browser.onCollapse = [this] { setBrowserOpen (false); };
+    browserTab.setTooltip ("Show the browser (F8)");
+    browserTab.onClick = [this] { setBrowserOpen (true); };
+    browserToggle.onClick = [this] { setBrowserOpen (! browserOpen); };
+    browserToggle.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xffe8943a));
 
     rackToggle.onClick = [this] { togglePanel (rackPanel); };
     playlistToggle.onClick = [this] { togglePanel (playlistPanel); };
@@ -261,21 +280,24 @@ MainComponent::MainComponent()
 
     // Space and F5/F6/F7/F9 are handled by this component, so these controls must not steal keyboard focus.
     for (auto* b : { &playButton, &clearButton, &modeButton, &patternAddButton, &exportButton, &deviceButton,
-                     &rackToggle, &playlistToggle, &pianoToggle, &mixerToggle, &resetButton })
+                     &browserToggle, &browserTab, &rackToggle, &playlistToggle, &pianoToggle, &mixerToggle, &resetButton })
         b->setMouseClickGrabsKeyboardFocus (false);
     patternBox.setMouseClickGrabsKeyboardFocus (false);
     patternBox.setWantsKeyboardFocus (false);
 
     for (auto* c : std::initializer_list<juce::Component*> { &playButton, &modeButton, &patternBox, &patternAddButton,
                                                               &clearButton, &exportButton, &deviceButton,
-                                                              &rackToggle, &playlistToggle, &pianoToggle, &mixerToggle,
-                                                              &resetButton, &bpmSlider, &volumeSlider, &bpmLabel,
-                                                              &volumeLabel, &deviceLabel, &statusLabel, &meter,
-                                                              &workspace })
+                                                              &browserToggle, &rackToggle, &playlistToggle, &pianoToggle,
+                                                              &mixerToggle, &resetButton, &bpmSlider, &volumeSlider,
+                                                              &bpmLabel, &volumeLabel, &deviceLabel, &statusLabel, &meter,
+                                                              &browser, &browserTab, &workspace })
         addAndMakeVisible (c);
 
     setWantsKeyboardFocus (true);
+    browserOpen = settings == nullptr || settings->getBoolValue ("browser.open", true);
     setSize (1280, 860);
+    setBrowserOpen (browserOpen);
+    rebuildBrowser();
 
     refreshPatternBox();
     playlistView.setSelectedPattern (currentPattern);
@@ -298,6 +320,8 @@ MainComponent::~MainComponent()
 {
     stopTimer();
     saveLayout();
+    if (pluginScanThread != nullptr)
+        pluginScanThread->stopThread (5000);
 }
 
 void MainComponent::paint (juce::Graphics& g)
@@ -332,6 +356,8 @@ void MainComponent::resized()
 
     area.removeFromTop (6);
     auto views = area.removeFromTop (30);
+    browserToggle.setBounds (views.removeFromLeft (96));
+    views.removeFromLeft (4);
     rackToggle.setBounds (views.removeFromLeft (84));
     views.removeFromLeft (4);
     playlistToggle.setBounds (views.removeFromLeft (96));
@@ -350,6 +376,16 @@ void MainComponent::resized()
     deviceLabel.setBounds (info);
 
     area.removeFromTop (6);
+    if (browserOpen)
+    {
+        browser.setBounds (area.removeFromLeft (kBrowserWidth));
+        area.removeFromLeft (6);
+    }
+    else
+    {
+        browserTab.setBounds (area.removeFromLeft (kBrowserTabWidth));
+        area.removeFromLeft (6);
+    }
     workspace.setBounds (area);
 }
 
@@ -363,13 +399,25 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
     if (key == juce::KeyPress::F5Key) { togglePanel (playlistPanel); return true; }
     if (key == juce::KeyPress::F6Key) { togglePanel (rackPanel); return true; }
     if (key == juce::KeyPress::F7Key) { togglePanel (pianoPanel); return true; }
+    if (key == juce::KeyPress::F8Key) { setBrowserOpen (! browserOpen); return true; }
     if (key == juce::KeyPress::F9Key) { togglePanel (mixerPanelWindow); return true; }
     return false;
 }
 
 void MainComponent::timerCallback()
 {
-    meter.setLevel (engine.consumePeak());
+    const float masterPeak = engine.consumePeak();
+    meter.setLevel (masterPeak);
+
+    // Mixer tracks: peak since the last tick, plus RMS. Only drawn while the mixer is open.
+    const bool mixerShown = mixerPanelWindow.isOpen();
+    mixerPanel.setMasterLevels (mixerShown ? masterPeak : 0.0f, mixerShown ? engine.getMasterRms() : 0.0f);
+    for (int t = 0; t < kMaxTracks; ++t)
+    {
+        const float trackPeak = engine.consumeTrackPeak (t);
+        if (mixerShown)
+            mixerPanel.setTrackLevels (t, trackPeak, engine.getTrackRms (t));
+    }
 
     // In pattern mode the playhead is a position inside the pattern (piano roll, rack); in song mode it is
     // a position in the song, shown on the playlist only.
@@ -381,9 +429,7 @@ void MainComponent::timerCallback()
     for (auto& strip : strips)
     {
         // consumeChannelPeak resets the peak, so read it once and hand it to both views of the channel.
-        const float peak = engine.consumeChannelPeak (strip->getIndex());
-        strip->setMeterLevel (peak);
-        mixerPanel.setMeterLevel (strip->getIndex(), peak);
+        strip->setMeterLevel (engine.consumeChannelPeak (strip->getIndex()));
         strip->setPlayheadTick (patternPlayhead);
     }
 
@@ -399,21 +445,24 @@ void MainComponent::timerCallback()
 
 namespace
 {
-constexpr const char* kPanelKeys[] = { "panel.rack", "panel.piano", "panel.mixer", "panel.playlist" };
+// "panel2": the layout changed with the browser and the expanded mixer, so layouts stored by older versions are ignored.
+constexpr const char* kPanelKeys[] = { "panel2.rack", "panel2.piano", "panel2.mixer", "panel2.playlist" };
 
-constexpr int kTopRowHeight = 340;
+constexpr int kRackHeight = 336;
 
-// Rack and playlist side by side on top; the piano roll (closed, as in FL Studio: it opens from a channel)
-// below them; the mixer closed too (it opens on the right and overlaps the others).
+// The channel rack across the top with the playlist below it. The piano roll (closed, as in FL Studio: it opens
+// from a channel) takes the playlist's place; the mixer opens as an expanded view over everything (F9).
 PanelLayout defaultLayoutFor (int panelIndex, int workW, int workH)
 {
-    const int rackW = std::max (480, workW / 2 - 12);
+    const int fullW = workW - 16;
+    const int lowerY = kRackHeight + 16;
+    const int lowerH = std::max (200, workH - lowerY - 8);
     switch (panelIndex)
     {
-        case 0:  return { 8, 8, rackW, kTopRowHeight, true };
-        case 1:  return { 8, kTopRowHeight + 16, workW - 16, workH - kTopRowHeight - 24, false };
-        case 2:  return { workW - 440 - 8, 40, 440, 360, false };
-        default: return { rackW + 16, 8, workW - rackW - 24, kTopRowHeight, true };
+        case 0:  return { 8, 8, fullW, kRackHeight, true };
+        case 1:  return { 8, lowerY, fullW, lowerH, false };
+        case 2:  return { 8, 8, fullW, std::max (440, workH - 16), false };
+        default: return { 8, lowerY, fullW, lowerH, true };
     }
 }
 } // namespace
@@ -507,9 +556,11 @@ void MainComponent::createStrip (size_t channelIndex)
     {
         if (idx == selected)
             pianoRoll.setNotes (channels[static_cast<size_t> (idx)].notes);
-        mixerPanel.refreshStrip (idx);
+        updateTrackRouting();
         publishProject();
     };
+    strip->onSavePreset = [this] (int idx) { savePresetFor (idx); };
+    strip->onItemDropped = [this] (int idx, const drag::Item& item) { applyBrowserItem (idx, item); };
     strip->onLoadSample = [this] (int idx) { chooseSampleFor (idx); };
     strip->onOpenPianoRoll = [this] (int idx) { openPianoRoll (idx); };
     strip->onInstrumentChosen = [this] (int idx, Instrument instrument) { setInstrument (idx, instrument); };
@@ -517,16 +568,17 @@ void MainComponent::createStrip (size_t channelIndex)
     strips.push_back (std::move (strip));
 }
 
-void MainComponent::addChannel (Instrument instrument)
+int MainComponent::addChannel (Instrument instrument, bool askForSample)
 {
     if (channels.size() >= static_cast<size_t> (kMaxChannels))
-        return;
+        return -1;
 
     commitCurrentPattern();
 
     Channel c;
     c.instrument = instrument;
     c.name = (instrument == Instrument::Synth ? "Synth " : "Sampler ") + std::to_string (channels.size() + 1);
+    c.mixerTrack = std::min (static_cast<int> (channels.size()), kMaxTracks - 1); // next free track
     jassert (channels.size() < channels.capacity()); // push_back must not reallocate (strips hold references)
     channels.push_back (std::move (c));
     arrangement.ensureChannelCount (channels.size());
@@ -539,12 +591,15 @@ void MainComponent::addChannel (Instrument instrument)
     rackView.setStrips (std::move (stripPointers));
     rackView.setAddChannelEnabled (channels.size() < static_cast<size_t> (kMaxChannels));
 
-    mixerPanel.setChannels (channels);
-    selectChannel (static_cast<int> (channels.size()) - 1);
+    const int index = static_cast<int> (channels.size()) - 1;
+    updateTrackRouting();
+    selectChannel (index);
     publishProject();
 
-    if (instrument == Instrument::Sampler)
-        chooseSampleFor (static_cast<int> (channels.size()) - 1);
+    if (instrument == Instrument::Sampler && askForSample)
+        chooseSampleFor (index);
+
+    return index;
 }
 
 void MainComponent::setInstrument (int channelIndex, Instrument instrument)
@@ -553,7 +608,7 @@ void MainComponent::setInstrument (int channelIndex, Instrument instrument)
     channel.instrument = instrument;
 
     strips[static_cast<size_t> (channelIndex)]->refreshFromChannel();
-    mixerPanel.refreshStrip (channelIndex);
+    updateTrackRouting();
     publishProject();
 
     if (instrument == Instrument::Sampler && channel.sample == nullptr)
@@ -580,7 +635,7 @@ void MainComponent::renameChannel (int channelIndex)
 
                                      safe->channels[static_cast<size_t> (channelIndex)].name = name.toStdString();
                                      safe->strips[static_cast<size_t> (channelIndex)]->refreshFromChannel();
-                                     safe->mixerPanel.refreshStrip (channelIndex);
+                                     safe->updateTrackRouting();
                                      if (channelIndex == safe->selected)
                                          safe->selectChannel (channelIndex);
                                      safe->publishProject();
@@ -665,8 +720,8 @@ void MainComponent::setSongMode (bool shouldPlaySong)
 Project MainComponent::compileCurrent()
 {
     commitCurrentPattern();
-    return songMode ? compileSong (channels, arrangement)
-                    : compilePattern (channels, arrangement, currentPattern);
+    return songMode ? compileSong (channels, arrangement, tracks)
+                    : compilePattern (channels, arrangement, currentPattern, tracks);
 }
 
 // ------------------------------------------------------------------------- Project
@@ -681,7 +736,7 @@ void MainComponent::selectChannel (int index)
     selected = std::clamp (index, 0, static_cast<int> (channels.size()) - 1);
     for (auto& strip : strips)
         strip->setSelected (strip->getIndex() == selected);
-    mixerPanel.setSelected (selected);
+    mixerPanel.setSelectedTrack (channels[static_cast<size_t> (selected)].mixerTrack);
 
     const auto name = juce::String (channels[static_cast<size_t> (selected)].name);
     pianoRoll.setNotes (channels[static_cast<size_t> (selected)].notes);
@@ -724,27 +779,245 @@ void MainComponent::chooseSampleFor (int channelIndex)
                               [this, channelIndex] (const juce::FileChooser& chooser)
     {
         const auto file = chooser.getResult();
-        if (file == juce::File())
-            return; // cancelled
+        if (file != juce::File()) // not cancelled
+            loadSampleFile (channelIndex, file);
+    });
+}
 
-        juce::String error;
-        auto sample = decodeSample (formats, file, error);
-        if (sample == nullptr)
-        {
-            statusLabel.setText (error, juce::dontSendNotification);
+bool MainComponent::loadSampleFile (int channelIndex, const juce::File& file)
+{
+    juce::String error;
+    auto sample = decodeSample (formats, file, error);
+    if (sample == nullptr)
+    {
+        statusLabel.setText (error, juce::dontSendNotification);
+        return false;
+    }
+
+    auto& channel = channels[static_cast<size_t> (channelIndex)];
+    channel.instrument = Instrument::Sampler;
+    channel.sample = std::move (sample);
+    channel.name = file.getFileNameWithoutExtension().substring (0, 12).toStdString();
+
+    strips[static_cast<size_t> (channelIndex)]->refreshFromChannel();
+    updateTrackRouting();
+    statusLabel.setText ("Loaded " + file.getFileName(), juce::dontSendNotification);
+    publishProject();
+    return true;
+}
+
+// Tells every mixer strip which channels play through it.
+void MainComponent::updateTrackRouting()
+{
+    std::array<juce::String, kMaxTracks> names;
+    for (const auto& c : channels)
+    {
+        auto& text = names[static_cast<size_t> (std::clamp (c.mixerTrack, 0, kMaxTracks - 1))];
+        text += (text.isEmpty() ? "" : ", ") + juce::String (c.name);
+    }
+    for (int t = 0; t < kMaxTracks; ++t)
+        mixerPanel.setTrackChannels (t, names[static_cast<size_t> (t)]);
+}
+
+// ------------------------------------------------------------------------- Browser
+
+void MainComponent::setBrowserOpen (bool shouldBeOpen)
+{
+    browserOpen = shouldBeOpen;
+    browser.setVisible (browserOpen);
+    browserTab.setVisible (! browserOpen);
+    browserToggle.setToggleState (browserOpen, juce::dontSendNotification);
+
+    if (settings != nullptr)
+    {
+        settings->setValue ("browser.open", browserOpen);
+        settings->saveIfNeeded();
+    }
+    resized();
+}
+
+void MainComponent::rebuildBrowser()
+{
+    library.ensureExists();
+    browser.setTree (buildBrowserTree (library, foundPlugins, pluginScanState));
+}
+
+namespace
+{
+// Scans for VST3 plugins off the message thread. It loads each candidate in-process to read its description,
+// so it is only started when the user asks for it.
+class PluginScanThread : public juce::Thread
+{
+public:
+    explicit PluginScanThread (std::function<void (std::vector<PluginInfo>)> whenDone)
+        : juce::Thread ("VST3 scan"), done (std::move (whenDone))
+    {
+    }
+
+    void run() override
+    {
+        PluginScanner scanner;
+        auto found = scanner.scan (PluginScanner::defaultSearchPaths(), true);
+        if (threadShouldExit())
             return;
+
+        juce::MessageManager::callAsync ([callback = done, result = std::move (found)]() mutable { callback (std::move (result)); });
+    }
+
+private:
+    std::function<void (std::vector<PluginInfo>)> done;
+};
+} // namespace
+
+void MainComponent::startPluginScan()
+{
+    if (pluginScanState == PluginScanState::Scanning)
+        return;
+
+    pluginScanState = PluginScanState::Scanning;
+    rebuildBrowser();
+    statusLabel.setText ("Scanning for VST3 plugins...", juce::dontSendNotification);
+
+    pluginScanThread = std::make_unique<PluginScanThread> (
+        [safe = juce::Component::SafePointer<MainComponent> (this)] (std::vector<PluginInfo> found)
+        {
+            if (safe == nullptr)
+                return;
+            safe->foundPlugins = std::move (found);
+            safe->pluginScanState = PluginScanState::Done;
+            safe->rebuildBrowser();
+            safe->statusLabel.setText (juce::String (safe->foundPlugins.size()) + " VST3 plugin(s) found (listed only: plugin hosting is not implemented yet)",
+                                       juce::dontSendNotification);
+        });
+    pluginScanThread->startThread();
+}
+
+bool MainComponent::applyPreset (int channelIndex, const ChannelPreset& preset)
+{
+    auto& channel = channels[static_cast<size_t> (channelIndex)];
+    preset.applyTo (channel);
+
+    bool sampleOk = true;
+    if (preset.instrument == Instrument::Sampler && ! preset.sampleSource.empty())
+    {
+        std::shared_ptr<const SampleData> sample;
+        if (preset.sampleSource.rfind ("builtin:", 0) == 0)
+            sample = makeBuiltinSample (preset.sampleSource.substr (8));
+        else
+        {
+            juce::String error;
+            sample = decodeSample (formats, juce::File (juce::String (preset.sampleSource)), error);
         }
 
-        auto& channel = channels[static_cast<size_t> (channelIndex)];
-        channel.instrument = Instrument::Sampler;
-        channel.sample = std::move (sample);
-        channel.name = file.getFileNameWithoutExtension().substring (0, 12).toStdString();
+        if (sample != nullptr)
+            channel.sample = std::move (sample);
+        else
+            sampleOk = false; // keep whatever sample the channel had
+    }
 
-        strips[static_cast<size_t> (channelIndex)]->refreshFromChannel();
-        mixerPanel.refreshStrip (channelIndex);
-        statusLabel.setText ("Loaded " + file.getFileName(), juce::dontSendNotification);
-        publishProject();
-    });
+    strips[static_cast<size_t> (channelIndex)]->refreshFromChannel();
+    updateTrackRouting();
+    publishProject();
+    return sampleOk;
+}
+
+void MainComponent::applyBrowserItem (int channelIndex, const drag::Item& item)
+{
+    if (channelIndex < 0)
+    {
+        if (channels.size() >= static_cast<size_t> (kMaxChannels))
+        {
+            statusLabel.setText ("All " + juce::String (kMaxChannels) + " channels are in use", juce::dontSendNotification);
+            return;
+        }
+        const bool wantsSynth = (item.kind == "instrument" && item.payload == "synth")
+                             || (item.kind == "preset" && item.payload == "builtin:lead");
+        channelIndex = addChannel (wantsSynth ? Instrument::Synth : Instrument::Sampler, false);
+        if (channelIndex < 0)
+            return;
+    }
+
+    if (channelIndex >= static_cast<int> (channels.size()))
+        return;
+
+    selectChannel (channelIndex);
+    auto& channel = channels[static_cast<size_t> (channelIndex)];
+
+    if (item.kind == "file")
+    {
+        loadSampleFile (channelIndex, juce::File (item.payload));
+    }
+    else if (item.kind == "builtin")
+    {
+        if (auto sample = makeBuiltinSample (item.payload.toStdString()))
+        {
+            channel.instrument = Instrument::Sampler;
+            channel.name = sample->name;
+            channel.sample = std::move (sample);
+            strips[static_cast<size_t> (channelIndex)]->refreshFromChannel();
+            updateTrackRouting();
+            publishProject();
+            statusLabel.setText ("Loaded " + juce::String (channel.name), juce::dontSendNotification);
+        }
+    }
+    else if (item.kind == "instrument")
+    {
+        setInstrument (channelIndex, item.payload == "sampler" ? Instrument::Sampler : Instrument::Synth);
+    }
+    else if (item.kind == "preset")
+    {
+        std::optional<ChannelPreset> preset;
+        if (item.payload.startsWith ("builtin:"))
+        {
+            const auto id = item.payload.substring (8).toStdString();
+            for (const auto& p : factoryPresets())
+                if (p.id == id)
+                    preset = p;
+        }
+        else
+        {
+            preset = ChannelPreset::fromJson (juce::File (item.payload).loadFileAsString());
+        }
+
+        if (! preset.has_value())
+            statusLabel.setText ("Cannot read preset " + juce::File (item.payload).getFileName(), juce::dontSendNotification);
+        else if (applyPreset (channelIndex, *preset))
+            statusLabel.setText ("Applied preset " + juce::String (preset->name), juce::dontSendNotification);
+        else
+            statusLabel.setText ("Applied preset " + juce::String (preset->name) + " (its sample file was not found)",
+                                 juce::dontSendNotification);
+    }
+}
+
+void MainComponent::savePresetFor (int channelIndex)
+{
+    auto* window = new juce::AlertWindow ("Save channel preset", "Preset name:", juce::MessageBoxIconType::NoIcon);
+    window->addTextEditor ("name", juce::String (channels[static_cast<size_t> (channelIndex)].name));
+    window->addButton ("Save", 1, juce::KeyPress (juce::KeyPress::returnKey));
+    window->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+
+    window->enterModalState (true,
+                             juce::ModalCallbackFunction::create (
+                                 [safe = juce::Component::SafePointer<MainComponent> (this), window, channelIndex] (int result)
+                                 {
+                                     if (safe == nullptr || result != 1)
+                                         return;
+
+                                     const auto name = window->getTextEditorContents ("name").trim().substring (0, 16);
+                                     const auto fileName = juce::File::createLegalFileName (name);
+                                     if (name.isEmpty() || fileName.isEmpty())
+                                         return;
+
+                                     const auto preset = ChannelPreset::fromChannel (safe->channels[static_cast<size_t> (channelIndex)],
+                                                                                     name.toStdString());
+                                     safe->library.ensureExists();
+                                     const auto file = safe->library.presets.getChildFile (fileName + kPresetExtension);
+                                     const bool ok = file.replaceWithText (preset.toJson());
+                                     safe->rebuildBrowser();
+                                     safe->statusLabel.setText (ok ? "Saved preset " + name : "Could not write " + file.getFullPathName(),
+                                                                juce::dontSendNotification);
+                                 }),
+                             true);
 }
 
 void MainComponent::exportWav()

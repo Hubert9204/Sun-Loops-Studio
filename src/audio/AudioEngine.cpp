@@ -41,7 +41,9 @@ juce::String AudioEngine::describeDevice() const
 
 void AudioEngine::audioDeviceAboutToStart (juce::AudioIODevice* device)
 {
-    player.prepare (device != nullptr ? device->getCurrentSampleRate() : 48000.0);
+    sampleRateHz = device != nullptr ? device->getCurrentSampleRate() : 48000.0;
+    masterMeanSquare = 0.0f;
+    player.prepare (sampleRateHz);
 }
 
 void AudioEngine::audioDeviceStopped() {}
@@ -51,6 +53,7 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const*, int,
                                                     int numSamples,
                                                     const juce::AudioIODeviceCallbackContext&)
 {
+    const juce::ScopedNoDenormals noDenormals; // reverb/delay tails decay through the denormal range
     for (int ch = 0; ch < numOut; ++ch)
         if (out[ch] != nullptr)
             juce::FloatVectorOperations::clear (out[ch], numSamples);
@@ -66,16 +69,39 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const*, int,
     for (int ch = 0; ch < kMaxChannels; ++ch)
         raiseTo (channelPeaks[static_cast<size_t> (ch)], player.getChannelPeak (ch) * g);
 
+    for (int t = 0; t < kMaxTracks; ++t)
+    {
+        raiseTo (trackPeaks[static_cast<size_t> (t)], player.getTrackPeak (t) * g);
+        trackRms[static_cast<size_t> (t)].store (player.getTrackRms (t) * g, std::memory_order_relaxed);
+    }
+
     float localPeak = 0.0f;
+    double sumSquares = 0.0;
+    int measuredChannels = 0;
     for (int ch = 0; ch < numOut; ++ch)
     {
         if (out[ch] == nullptr)
             continue;
         juce::FloatVectorOperations::multiply (out[ch], g, numSamples);
         for (int i = 0; i < numSamples; ++i)
+        {
             localPeak = std::fmax (localPeak, std::fabs (out[ch][i]));
+            sumSquares += static_cast<double> (out[ch][i]) * out[ch][i];
+        }
+        ++measuredChannels;
     }
 
     raiseTo (peak, localPeak);
+
+    // RMS over a sliding ~300 ms window, like the mixer tracks.
+    if (measuredChannels > 0 && numSamples > 0)
+    {
+        const float blockMs = static_cast<float> (sumSquares / (static_cast<double> (numSamples) * measuredChannels));
+        const float k = static_cast<float> (1.0 - std::exp (-static_cast<double> (numSamples) / (0.3 * sampleRateHz)));
+        masterMeanSquare += (blockMs - masterMeanSquare) * k;
+        if (masterMeanSquare < 1.0e-20f)
+            masterMeanSquare = 0.0f;
+        masterRms.store (std::sqrt (masterMeanSquare), std::memory_order_relaxed);
+    }
 }
 } // namespace sls

@@ -15,10 +15,12 @@ constexpr float kWaveNorm = 1.0f / 1.35f;
 constexpr float kGainSmoothing = 0.002f; // per sample, about 10 ms at 48 kHz
 constexpr float kUnsetGain = -1.0f;
 
-double pitchToHz (int pitch) noexcept
+double pitchToHz (double pitch) noexcept
 {
-    return 440.0 * std::pow (2.0, (pitch - 69) / 12.0);
+    return 440.0 * std::pow (2.0, (pitch - 69.0) / 12.0);
 }
+
+const MixerTrack kDefaultTrack {};
 } // namespace
 
 void Player::prepare (double newSampleRate) noexcept
@@ -31,7 +33,15 @@ void Player::prepare (double newSampleRate) noexcept
 
     nextEvent.fill (0);
     smoothedGain.fill (kUnsetGain);
+    trackGain.fill (kUnsetGain);
     peaks.fill (0.0f);
+    trackPeaks.fill (0.0f);
+    trackMeanSquare.fill (0.0f);
+    rmsCoef = static_cast<float> (1.0 - std::exp (-1.0 / (0.3 * sampleRate))); // ~300 ms window
+
+    for (auto& chain : effects)
+        for (auto& unit : chain)
+            unit.prepare (sampleRate);
 
     tickPos = 0.0;
     projectRevision = ~std::uint64_t { 0 };
@@ -110,14 +120,15 @@ void Player::noteOn (const Channel& channel, int channelIndex, const Note& n, in
         v.endTick = INT_MAX; // one-shot: plays to the end of the sample
         v.sample = channel.sample.get();
         v.pos = 0.0;
-        v.step = std::pow (2.0, (n.pitch - channel.rootPitch) / 12.0) * v.sample->sampleRate / sampleRate;
+        v.step = std::pow (2.0, (n.pitch - channel.rootPitch + static_cast<double> (channel.pitch)) / 12.0)
+               * v.sample->sampleRate / sampleRate;
         v.attackStep = static_cast<float> (1.0 / (0.0005 * sampleRate)); // 0.5 ms
     }
     else
     {
         v.endTick = std::min (n.startTick + n.lengthTicks, loopLength);
         v.phase = 0.0;
-        v.increment = kTwoPi * pitchToHz (n.pitch) / sampleRate;
+        v.increment = kTwoPi * pitchToHz (n.pitch + static_cast<double> (channel.pitch)) / sampleRate;
         v.attackStep = static_cast<float> (1.0 / (0.005 * sampleRate)); // 5 ms
     }
 
@@ -146,7 +157,7 @@ void Player::render (const Project& project, double bpm, bool playing,
     }
     wasPlaying = playing;
 
-    // Per-block mixer state: target gain and pan gains for every channel.
+    // Per-block channel state: target gain and pan gains for every channel.
     bool anySolo = false;
     for (size_t ch = 0; ch < numMixerChannels; ++ch)
         anySolo = anySolo || project.channels[ch].solo;
@@ -154,12 +165,14 @@ void Player::render (const Project& project, double bpm, bool playing,
     std::array<float, kMaxChannels> targetGain {};
     std::array<float, kMaxChannels> panLeft {};
     std::array<float, kMaxChannels> panRight {};
+    std::array<size_t, kMaxChannels> routedTo {};
 
     for (size_t ch = 0; ch < numMixerChannels; ++ch)
     {
         const auto& c = project.channels[ch];
         const bool audible = anySolo ? c.solo : ! c.mute;
         targetGain[ch] = audible ? c.volume : 0.0f;
+        routedTo[ch] = static_cast<size_t> (std::clamp (c.mixerTrack, 0, kMaxTracks - 1));
 
         const double angle = (static_cast<double> (c.pan) + 1.0) * kTwoPi / 8.0; // 0..pi/2
         panLeft[ch] = static_cast<float> (std::cos (angle));
@@ -169,107 +182,179 @@ void Player::render (const Project& project, double bpm, bool playing,
             smoothedGain[ch] = targetGain[ch]; // no fade-in on the very first block
     }
 
-    peaks.fill (0.0f);
-
-    for (int i = 0; i < numSamples; ++i)
+    // Per-block track state. Track pan is a balance control: the centre is unity, the far side fades out.
+    const auto trackAt = [&project] (size_t t) -> const MixerTrack&
     {
-        if (playing)
+        return t < project.tracks.size() ? project.tracks[t] : kDefaultTrack;
+    };
+
+    bool anyTrackSolo = false;
+    for (size_t t = 0; t < static_cast<size_t> (kMaxTracks); ++t)
+        anyTrackSolo = anyTrackSolo || trackAt (t).solo;
+
+    std::array<float, kMaxTracks> trackTarget {};
+    std::array<float, kMaxTracks> balanceLeft {};
+    std::array<float, kMaxTracks> balanceRight {};
+
+    for (size_t t = 0; t < static_cast<size_t> (kMaxTracks); ++t)
+    {
+        const auto& tr = trackAt (t);
+        const bool audible = anyTrackSolo ? tr.solo : ! tr.mute;
+        trackTarget[t] = audible ? std::clamp (tr.volume, 0.0f, 1.5f) : 0.0f;
+
+        const float pan = std::clamp (tr.pan, -1.0f, 1.0f);
+        balanceLeft[t] = pan > 0.0f ? 1.0f - pan : 1.0f;
+        balanceRight[t] = pan < 0.0f ? 1.0f + pan : 1.0f;
+
+        if (trackGain[t] < 0.0f)
+            trackGain[t] = trackTarget[t];
+    }
+
+    peaks.fill (0.0f);
+    trackPeaks.fill (0.0f);
+
+    for (int done = 0; done < numSamples; done += kChunk)
+    {
+        const int n = std::min (kChunk, numSamples - done);
+
+        for (size_t t = 0; t < static_cast<size_t> (kMaxTracks); ++t)
         {
-            for (size_t ch = 0; ch < numMixerChannels; ++ch)
+            std::fill_n (trackL[t].begin(), n, 0.0f);
+            std::fill_n (trackR[t].begin(), n, 0.0f);
+        }
+
+        // 1. Sequencer, voices and channel strips: everything lands on the mixer tracks.
+        for (int i = 0; i < n; ++i)
+        {
+            if (playing)
             {
-                const auto& notes = project.channels[ch].notes;
-                auto& next = nextEvent[ch];
-                while (next < notes.size() && static_cast<double> (notes[next].startTick) <= tickPos)
+                for (size_t ch = 0; ch < numMixerChannels; ++ch)
                 {
-                    noteOn (project.channels[ch], static_cast<int> (ch), notes[next], loopLength);
-                    ++next;
+                    const auto& notes = project.channels[ch].notes;
+                    auto& next = nextEvent[ch];
+                    while (next < notes.size() && static_cast<double> (notes[next].startTick) <= tickPos)
+                    {
+                        noteOn (project.channels[ch], static_cast<int> (ch), notes[next], loopLength);
+                        ++next;
+                    }
                 }
+
+                for (auto& v : voices)
+                    if ((v.state == State::Attack || v.state == State::Sustain)
+                        && tickPos >= static_cast<double> (v.endTick))
+                        v.state = State::Release;
             }
+
+            std::array<float, kMaxChannels> busL {};
+            std::array<float, kMaxChannels> busR {};
 
             for (auto& v : voices)
-                if ((v.state == State::Attack || v.state == State::Sustain)
-                    && tickPos >= static_cast<double> (v.endTick))
-                    v.state = State::Release;
-        }
-
-        std::array<float, kMaxChannels> busL {};
-        std::array<float, kMaxChannels> busR {};
-
-        for (auto& v : voices)
-        {
-            if (v.state == State::Idle)
-                continue;
-
-            float l = 0.0f, r = 0.0f;
-
-            if (v.sampler)
             {
-                const int idx = static_cast<int> (v.pos);
-                if (idx + 1 >= v.sample->numFrames())
-                {
-                    v = Voice {};
+                if (v.state == State::Idle)
                     continue;
+
+                float l = 0.0f, r = 0.0f;
+
+                if (v.sampler)
+                {
+                    const int idx = static_cast<int> (v.pos);
+                    if (idx + 1 >= v.sample->numFrames())
+                    {
+                        v = Voice {};
+                        continue;
+                    }
+                    const float frac = static_cast<float> (v.pos - idx);
+                    const float* sl = v.sample->left.data();
+                    const float* sr = v.sample->right.data();
+                    const float gain = v.env * v.velocity * kSampleGain;
+                    l = (sl[idx] + frac * (sl[idx + 1] - sl[idx])) * gain;
+                    r = (sr[idx] + frac * (sr[idx + 1] - sr[idx])) * gain;
+                    v.pos += v.step;
                 }
-                const float frac = static_cast<float> (v.pos - idx);
-                const float* sl = v.sample->left.data();
-                const float* sr = v.sample->right.data();
-                const float gain = v.env * v.velocity * kSampleGain;
-                l = (sl[idx] + frac * (sl[idx + 1] - sl[idx])) * gain;
-                r = (sr[idx] + frac * (sr[idx + 1] - sr[idx])) * gain;
-                v.pos += v.step;
-            }
-            else
-            {
-                const double p = v.phase;
-                const float wave = static_cast<float> (std::sin (p) + 0.3 * std::sin (2.0 * p) + 0.12 * std::sin (3.0 * p));
-                l = r = wave * kWaveNorm * v.env * v.velocity * kSynthGain;
-                v.phase += v.increment;
-                if (v.phase >= kTwoPi)
-                    v.phase -= kTwoPi;
+                else
+                {
+                    const double p = v.phase;
+                    const float wave = static_cast<float> (std::sin (p) + 0.3 * std::sin (2.0 * p) + 0.12 * std::sin (3.0 * p));
+                    l = r = wave * kWaveNorm * v.env * v.velocity * kSynthGain;
+                    v.phase += v.increment;
+                    if (v.phase >= kTwoPi)
+                        v.phase -= kTwoPi;
+                }
+
+                busL[static_cast<size_t> (v.channel)] += l;
+                busR[static_cast<size_t> (v.channel)] += r;
+
+                if (v.state == State::Attack)
+                {
+                    v.env += v.attackStep;
+                    if (v.env >= 1.0f) { v.env = 1.0f; v.state = State::Sustain; }
+                }
+                else if (v.state == State::Release)
+                {
+                    v.env -= releaseStep;
+                    if (v.env <= 0.0f)
+                        v = Voice {};
+                }
             }
 
-            busL[static_cast<size_t> (v.channel)] += l;
-            busR[static_cast<size_t> (v.channel)] += r;
-
-            if (v.state == State::Attack)
+            for (size_t ch = 0; ch < numMixerChannels; ++ch)
             {
-                v.env += v.attackStep;
-                if (v.env >= 1.0f) { v.env = 1.0f; v.state = State::Sustain; }
+                smoothedGain[ch] += (targetGain[ch] - smoothedGain[ch]) * kGainSmoothing;
+                const float l = busL[ch] * smoothedGain[ch] * panLeft[ch];
+                const float r = busR[ch] * smoothedGain[ch] * panRight[ch];
+                peaks[ch] = std::max ({ peaks[ch], std::fabs (l), std::fabs (r) });
+                trackL[routedTo[ch]][static_cast<size_t> (i)] += l;
+                trackR[routedTo[ch]][static_cast<size_t> (i)] += r;
             }
-            else if (v.state == State::Release)
+
+            if (playing)
             {
-                v.env -= releaseStep;
-                if (v.env <= 0.0f)
-                    v = Voice {};
+                tickPos += ticksPerSample;
+                if (tickPos >= static_cast<double> (loopLength))
+                {
+                    tickPos = std::fmod (tickPos, static_cast<double> (loopLength));
+                    nextEvent.fill (0);
+                    releaseVoices (false); // synth notes end at the loop boundary, samples ring on
+                }
             }
         }
 
-        float mixL = 0.0f, mixR = 0.0f;
-        for (size_t ch = 0; ch < numMixerChannels; ++ch)
+        // 2. Each track: insert effects (pre-fader), then fader, balance, mute/solo, metering, master bus.
+        std::array<float, kChunk> mixL {}, mixR {};
+
+        for (size_t t = 0; t < static_cast<size_t> (kMaxTracks); ++t)
         {
-            smoothedGain[ch] += (targetGain[ch] - smoothedGain[ch]) * kGainSmoothing;
-            const float l = busL[ch] * smoothedGain[ch] * panLeft[ch];
-            const float r = busR[ch] * smoothedGain[ch] * panRight[ch];
-            peaks[ch] = std::max ({ peaks[ch], std::fabs (l), std::fabs (r) });
-            mixL += l;
-            mixR += r;
+            float* l = trackL[t].data();
+            float* r = trackR[t].data();
+            const auto& tr = trackAt (t);
+
+            for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
+                effects[t][s].process (tr.slots[s], l, r, n);
+
+            for (int i = 0; i < n; ++i)
+            {
+                trackGain[t] += (trackTarget[t] - trackGain[t]) * kGainSmoothing;
+                const float outL = l[i] * trackGain[t] * balanceLeft[t];
+                const float outR = r[i] * trackGain[t] * balanceRight[t];
+
+                trackPeaks[t] = std::max ({ trackPeaks[t], std::fabs (outL), std::fabs (outR) });
+                trackMeanSquare[t] += (0.5f * (outL * outL + outR * outR) - trackMeanSquare[t]) * rmsCoef;
+
+                mixL[static_cast<size_t> (i)] += outL;
+                mixR[static_cast<size_t> (i)] += outR;
+            }
+            if (trackMeanSquare[t] < 1.0e-20f)
+                trackMeanSquare[t] = 0.0f;
         }
 
-        const float outL = std::tanh (mixL);
-        const float outR = std::tanh (mixR);
-        for (int ch = 0; ch < numChannels; ++ch)
-            if (out[ch] != nullptr)
-                out[ch][i] += (ch & 1) == 0 ? outL : outR;
-
-        if (playing)
+        // 3. Master bus: soft limiter, added to the output.
+        for (int i = 0; i < n; ++i)
         {
-            tickPos += ticksPerSample;
-            if (tickPos >= static_cast<double> (loopLength))
-            {
-                tickPos = std::fmod (tickPos, static_cast<double> (loopLength));
-                nextEvent.fill (0);
-                releaseVoices (false); // synth notes end at the loop boundary, samples ring on
-            }
+            const float outL = std::tanh (mixL[static_cast<size_t> (i)]);
+            const float outR = std::tanh (mixR[static_cast<size_t> (i)]);
+            for (int ch = 0; ch < numChannels; ++ch)
+                if (out[ch] != nullptr)
+                    out[ch][done + i] += (ch & 1) == 0 ? outL : outR;
         }
     }
 }

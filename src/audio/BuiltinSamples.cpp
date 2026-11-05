@@ -21,7 +21,7 @@ struct Noise
     }
 };
 
-std::shared_ptr<const SampleData> finish (std::vector<float> mono, const char* name)
+std::shared_ptr<const SampleData> finish (std::vector<float> mono, const char* name, const char* id)
 {
     float peak = 0.0f;
     for (float s : mono)
@@ -35,6 +35,7 @@ std::shared_ptr<const SampleData> finish (std::vector<float> mono, const char* n
     data->right = std::move (mono);
     data->sampleRate = kSr;
     data->name = name;
+    data->source = std::string ("builtin:") + id;
     return data;
 }
 } // namespace
@@ -51,7 +52,7 @@ std::shared_ptr<const SampleData> makeKickSample()
         phase += kTwoPi * freq / kSr;
         s[static_cast<size_t> (i)] = static_cast<float> (std::sin (phase) * std::exp (-t * 7.5));
     }
-    return finish (std::move (s), "Kick");
+    return finish (std::move (s), "Kick", "kick");
 }
 
 std::shared_ptr<const SampleData> makeSnareSample()
@@ -68,7 +69,7 @@ std::shared_ptr<const SampleData> makeSnareSample()
         const double hiss = noise.next() * std::exp (-t * 18.0);
         s[static_cast<size_t> (i)] = static_cast<float> (body + hiss);
     }
-    return finish (std::move (s), "Snare");
+    return finish (std::move (s), "Snare", "snare");
 }
 
 std::shared_ptr<const SampleData> makeHatSample()
@@ -85,6 +86,20 @@ std::shared_ptr<const SampleData> makeHatSample()
         previous = white;
         s[static_cast<size_t> (i)] = static_cast<float> (highPassed * std::exp (-t * 55.0));
     }
-    return finish (std::move (s), "Hat");
+    return finish (std::move (s), "Hat", "hat");
+}
+
+const std::vector<std::string>& builtinSampleIds()
+{
+    static const std::vector<std::string> ids { "kick", "snare", "hat" };
+    return ids;
+}
+
+std::shared_ptr<const SampleData> makeBuiltinSample (const std::string& id)
+{
+    if (id == "kick")  return makeKickSample();
+    if (id == "snare") return makeSnareSample();
+    if (id == "hat")   return makeHatSample();
+    return nullptr;
 }
 } // namespace sls

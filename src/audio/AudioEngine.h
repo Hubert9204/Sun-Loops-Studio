@@ -43,6 +43,22 @@ public:
                    : 0.0f;
     }
 
+    // Mixer track levels (after effects and fader, scaled by the master volume): peak since the last call,
+    // and the latest RMS.
+    float getMasterRms() const noexcept { return masterRms.load (std::memory_order_relaxed); }
+    float consumeTrackPeak (int track) noexcept
+    {
+        return track >= 0 && track < kMaxTracks
+                   ? trackPeaks[static_cast<size_t> (track)].exchange (0.0f, std::memory_order_relaxed)
+                   : 0.0f;
+    }
+    float getTrackRms (int track) const noexcept
+    {
+        return track >= 0 && track < kMaxTracks
+                   ? trackRms[static_cast<size_t> (track)].load (std::memory_order_relaxed)
+                   : 0.0f;
+    }
+
     // juce::AudioIODeviceCallback
     void audioDeviceIOCallbackWithContext (const float* const* inputChannelData, int numInputChannels,
                                            float* const* outputChannelData, int numOutputChannels,
@@ -70,7 +86,12 @@ private:
     std::atomic<double> bpm { 120.0 };
     std::atomic<float> gain { 0.8f };
     std::atomic<float> peak { 0.0f };
+    std::atomic<float> masterRms { 0.0f };
+    float masterMeanSquare = 0.0f; // audio thread only
+    double sampleRateHz = 48000.0; // set in audioDeviceAboutToStart
     std::array<std::atomic<float>, kMaxChannels> channelPeaks {};
+    std::array<std::atomic<float>, kMaxTracks> trackPeaks {};
+    std::array<std::atomic<float>, kMaxTracks> trackRms {};
     std::atomic<int> playheadTick { 0 };
 };
 } // namespace sls

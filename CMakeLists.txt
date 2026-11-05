@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(SunLoopsStudio VERSION 0.4.0 LANGUAGES C CXX)
+project(SunLoopsStudio VERSION 0.5.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -25,8 +25,11 @@ FetchContent_MakeAvailable(JUCE)
 # Code shared by the app and the tests (no GUI dependencies).
 set(SLS_CORE_SOURCES
     src/audio/Player.cpp
+    src/audio/Effects.cpp
     src/audio/BuiltinSamples.cpp
     src/audio/OfflineRenderer.cpp
+    src/library/ChannelPreset.cpp
+    src/library/Library.cpp
     src/plugins/PluginScanner.cpp)
 
 set(SLS_COMMON_DEFINITIONS
@@ -46,6 +49,10 @@ target_sources(SunLoopsStudio PRIVATE
     src/main.cpp
     src/audio/AudioEngine.cpp
     src/ui/AudioMeter.cpp
+    src/ui/VuMeter.cpp
+    src/ui/Knob.cpp
+    src/ui/FileBrowser.cpp
+    src/ui/TrackSelector.cpp
     src/ui/PianoRoll.cpp
     src/ui/ChannelStrip.cpp
     src/ui/PanelWindow.cpp

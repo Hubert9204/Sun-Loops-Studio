@@ -136,8 +136,24 @@ void StepGrid::mouseDown (const juce::MouseEvent& e)
 
 // ------------------------------------------------------------------------- ChannelStrip
 
+namespace
+{
+juce::String pitchText (double semitones)
+{
+    return (semitones > 0.0 ? "+" : "") + juce::String (semitones, 1) + " st";
+}
+
+juce::String swingText (double swing)
+{
+    return juce::String (juce::roundToInt (swing * 100.0)) + " %";
+}
+} // namespace
+
 ChannelStrip::ChannelStrip (Channel& channelToControl, int channelIndex)
-    : channel (channelToControl), index (channelIndex), grid (channelToControl)
+    : channel (channelToControl), index (channelIndex),
+      pitchKnob ("PITCH", -12.0, 12.0, 0.1, 0.0, pitchText),
+      swingKnob ("SWING", 0.0, 1.0, 0.01, 0.0, swingText),
+      grid (channelToControl)
 {
     nameLabel.setFont (juce::FontOptions (13.0f));
     nameLabel.setJustificationType (juce::Justification::centredLeft);
@@ -177,6 +193,26 @@ ChannelStrip::ChannelStrip (Channel& channelToControl, int channelIndex)
         if (onChanged) onChanged (index);
     };
 
+    trackSelector.onChange = [this] (int track)
+    {
+        channel.mixerTrack = track;
+        if (onChanged) onChanged (index);
+    };
+
+    pitchKnob.setTooltipText ("Pitch: tunes every note of this channel, in semitones (double-click: 0)");
+    pitchKnob.onValueChange = [this] (double v)
+    {
+        channel.pitch = static_cast<float> (v);
+        if (onChanged) onChanged (index);
+    };
+
+    swingKnob.setTooltipText ("Swing: delays the off-beat 16th notes (double-click: 0)");
+    swingKnob.onValueChange = [this] (double v)
+    {
+        channel.swing = static_cast<float> (v);
+        if (onChanged) onChanged (index);
+    };
+
     loadButton.onClick = [this] { if (onLoadSample) onLoadSample (index); };
 
     grid.onStepsEdited = [this] { if (onChanged) onChanged (index); };
@@ -184,8 +220,9 @@ ChannelStrip::ChannelStrip (Channel& channelToControl, int channelIndex)
     grid.onDoubleClicked = [this] { if (onOpenPianoRoll) onOpenPianoRoll (index); };
     grid.onContextMenu = [this] { showContextMenu(); };
 
-    for (auto* c : std::initializer_list<juce::Component*> { &nameLabel, &muteButton, &soloButton, &volumeSlider,
-                                                              &panSlider, &loadButton, &meter, &grid })
+    for (auto* c : std::initializer_list<juce::Component*> { &nameLabel, &trackSelector, &muteButton, &soloButton,
+                                                              &volumeSlider, &panSlider, &pitchKnob, &swingKnob,
+                                                              &loadButton, &meter, &grid })
         addAndMakeVisible (c);
 
     refreshFromChannel();
@@ -198,6 +235,9 @@ void ChannelStrip::refreshFromChannel()
     soloButton.setToggleState (channel.solo, juce::dontSendNotification);
     volumeSlider.setValue (channel.volume, juce::dontSendNotification);
     panSlider.setValue (channel.pan, juce::dontSendNotification);
+    trackSelector.setTrack (channel.mixerTrack);
+    pitchKnob.setValue (channel.pitch);
+    swingKnob.setValue (channel.swing);
     loadButton.setVisible (channel.instrument == Instrument::Sampler);
     grid.repaint();
 }
@@ -227,19 +267,63 @@ void ChannelStrip::resized()
 {
     auto area = getLocalBounds().reduced (8, 6);
 
-    nameLabel.setBounds (area.removeFromLeft (92));
+    nameLabel.setBounds (area.removeFromLeft (80));
+    area.removeFromLeft (2);
+    trackSelector.setBounds (area.removeFromLeft (62).withSizeKeepingCentre (62, 22));
+    area.removeFromLeft (6);
     muteButton.setBounds (area.removeFromLeft (26).withSizeKeepingCentre (26, 24));
     area.removeFromLeft (4);
     soloButton.setBounds (area.removeFromLeft (26).withSizeKeepingCentre (26, 24));
     area.removeFromLeft (8);
-    volumeSlider.setBounds (area.removeFromLeft (84));
-    panSlider.setBounds (area.removeFromLeft (60));
+    volumeSlider.setBounds (area.removeFromLeft (72));
+    panSlider.setBounds (area.removeFromLeft (54));
+    area.removeFromLeft (6);
+    pitchKnob.setBounds (area.removeFromLeft (38));
+    area.removeFromLeft (2);
+    swingKnob.setBounds (area.removeFromLeft (38));
     area.removeFromLeft (6);
     meter.setBounds (area.removeFromLeft (10));
     area.removeFromLeft (8);
     loadButton.setBounds (area.removeFromLeft (46).withSizeKeepingCentre (46, 24));
     area.removeFromLeft (8);
     grid.setBounds (area);
+}
+
+// ------------------------------------------------------------------ drag and drop from the browser
+
+bool ChannelStrip::isInterestedInDragSource (const SourceDetails& details)
+{
+    drag::Item item;
+    return drag::Item::parse (details.description, item);
+}
+
+void ChannelStrip::setDropHighlight (bool on)
+{
+    if (dropHighlight != on)
+    {
+        dropHighlight = on;
+        repaint();
+    }
+}
+
+void ChannelStrip::itemDropped (const SourceDetails& details)
+{
+    setDropHighlight (false);
+
+    drag::Item item;
+    if (drag::Item::parse (details.description, item) && onItemDropped)
+        onItemDropped (index, item);
+}
+
+void ChannelStrip::paintOverChildren (juce::Graphics& g)
+{
+    if (! dropHighlight)
+        return;
+
+    g.setColour (kPreview.withAlpha (0.18f));
+    g.fillRoundedRectangle (getLocalBounds().toFloat().reduced (1.0f), 4.0f);
+    g.setColour (kPreview);
+    g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (1.5f), 4.0f, 2.0f);
 }
 
 void ChannelStrip::mouseDown (const juce::MouseEvent& e)
@@ -273,6 +357,8 @@ void ChannelStrip::showContextMenu()
     menu.addSubMenu ("Instrument", instrument);
     menu.addItem (4, "Load sample...", channel.instrument == Instrument::Sampler);
     menu.addItem (5, "Rename...");
+    menu.addSeparator();
+    menu.addItem (6, "Save as preset...");
 
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
                         [safe = juce::Component::SafePointer<ChannelStrip> (this)] (int result)
@@ -288,6 +374,7 @@ void ChannelStrip::showContextMenu()
                                 case 3: if (safe->onInstrumentChosen) safe->onInstrumentChosen (i, Instrument::Sampler); break;
                                 case 4: if (safe->onLoadSample) safe->onLoadSample (i); break;
                                 case 5: if (safe->onRename) safe->onRename (i); break;
+                                case 6: if (safe->onSavePreset) safe->onSavePreset (i); break;
                                 default: break;
                             }
                         });

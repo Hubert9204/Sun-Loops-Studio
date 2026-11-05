@@ -2,16 +2,18 @@
 
 *[Italiano](user-guide.it.md)*
 
-This guide describes what Sun Loops Studio 0.4 does today. Limits and missing features are listed at the end.
+This guide describes what Sun Loops Studio 0.5 does today. Limits and missing features are listed at the end.
 
 ## The window
 
-A **toolbar** on two rows, a status line, and below it the **workspace** where the panels float.
+A **toolbar** on two rows, a status line, and below it the **browser** (left sidebar) and the **workspace** where
+the panels float.
 
 Toolbar, first row: **Play / Stop**, **Pattern / Song** switch, the **pattern box** with **+**, **BPM** (40-240),
 **Master** volume with its meter, **Audio...** (device settings) and **Export WAV...**.
 
-Toolbar, second row: buttons that show or hide the panels (**Rack F6**, **Playlist F5**, **Piano F7**, **Mixer F9**),
+Toolbar, second row: buttons that show or hide the browser (**Browser F8**) and the panels (**Rack F6**,
+**Playlist F5**, **Piano F7**, **Mixer F9**),
 **Reset** (default panel layout) and **Clear notes** (empties the selected channel in the current pattern).
 
 The status line shows the audio device (sample rate, buffer size, reported latency) and the last message.
@@ -34,7 +36,11 @@ Panels may overlap, so you can keep the piano roll over the rack while you write
 it. Positions, sizes and open/closed state are saved when you change them and restored at the next start (file:
 `~/.config/SunLoopsStudio/SunLoopsStudio.settings`; delete it to start from the default layout).
 
-Default layout: Channel Rack and Playlist open at the top, Piano Roll and Mixer closed.
+Default layout: the browser open on the left; the Channel Rack across the top of the workspace with the Playlist
+below it; Piano Roll and Mixer closed. The Mixer opens large, over everything else.
+
+Layouts saved by versions before 0.5 are ignored once (the panel settings were renamed); **Reset** or just moving
+the panels saves the new ones.
 
 ## Keyboard
 
@@ -44,16 +50,51 @@ Default layout: Channel Rack and Playlist open at the top, Piano Roll and Mixer 
 | F5 | Playlist |
 | F6 | Channel Rack |
 | F7 | Piano Roll |
+| F8 | Browser (fold / unfold) |
 | F9 | Mixer |
 
 The keys work when the main window is active. Typing into a text field (for example renaming a channel) takes the
 keyboard for that field.
 
+## Browser
+
+The sidebar on the left lists your sounds as a tree. Click the arrow of a folder to open it.
+
+| Folder | Contents |
+| --- | --- |
+| Samples | The built-in sounds (kick, snare, hat), then the audio files (WAV, FLAC, OGG, AIFF) found in `~/Music/Sun Loops Studio/Samples`, with its sub-folders. |
+| Drum Kits | A built-in kit, then one entry per sub-folder of `~/Music/Sun Loops Studio/Drum Kits`. |
+| Instruments | *Synth* and *Sampler*. |
+| Presets | Six factory channel presets, then your own `.slspreset` files from `~/Music/Sun Loops Studio/Presets`. |
+| Plugin | Starts empty. *Scan for VST3 plugins...* searches the usual VST3 folders in the background and lists what it finds. **The plugins cannot be used yet** (hosting is not implemented); they are shown for information only. |
+
+The three folders under `~/Music/Sun Loops Studio` are created when the program starts. **Folder** opens that
+location in your file manager; **Refresh** looks for new files (the browser does not watch the disk).
+
+- **Search**: type in the box at the top to filter every folder at once; matching folders open by themselves and the
+  line under the tree counts the results. **Esc** clears the search.
+- **Drag and drop**: drag a sound onto a channel of the Channel Rack (the row is outlined in green) to load it
+  there; drop it on the empty space below the rows to create a new channel for it. A preset sets the channel's
+  instrument, sample, volume, pan, pitch and swing; an instrument item switches the channel's instrument.
+- **Double-click** an item to apply it to the selected channel.
+- **Fold away**: the arrow button in the browser's title, **F8** or the **Browser** toolbar button. A thin tab stays
+  on the left edge to bring it back. The state is remembered.
+
+Only drags that start in the browser are supported; dropping files from the desktop file manager onto the program is
+not implemented yet (copy them into the Samples folder and press Refresh).
+
 ## Channel Rack
 
-One row per channel: name, **M** (mute), **S** (solo), volume, pan, level meter and, on the right, the step area.
+One row per channel: a **Track N** display and the name, **M** (mute), **S** (solo), volume, pan, the **Pitch** and
+**Swing** knobs, a level meter and, on the right, the step area.
 
 - **Volume** goes from 0 to 1.5 (default 0.8) and **pan** from left to right; double-click a slider to reset it.
+- **Pitch** tunes every note of the channel from -12 to +12 semitones in steps of 0.1 (on a sampler channel it
+  changes the speed of the sample, so it also changes its length). Drag the knob up or down; double-click for 0.
+- **Swing** from 0 to 100 %: the off-beat 16th notes (the 2nd, 4th, 6th... of each beat) are delayed, by up to half
+  a 16th step at 100 %. Notes that would be pushed past the end of the pattern stay where they are.
+- **Track N** is the mixer track the channel plays through. Click it for a menu of the 8 tracks, or drag it up or
+  down, or scroll over it. By default channel 1 goes to Track 1, channel 2 to Track 2, and so on.
 - **Sampler channels** show 32 step buttons (two bars of 16th notes). Click a step to turn it on or off. The
   **Load** button picks a sample file.
 - **Synth channels** show a small preview of their notes. Edit the notes in the Piano Roll.
@@ -68,6 +109,7 @@ One row per channel: name, **M** (mute), **S** (solo), volume, pan, level meter 
 | Instrument > Synth / Sampler | Chooses what makes the sound. Switching to Sampler on a channel without a sample asks for one. The sample is kept if you switch back to Synth. |
 | Load sample... | Pick a WAV, FLAC, OGG or AIFF file (the first 30 seconds are used). The channel is renamed after the file. |
 | Rename... | Up to 16 characters. |
+| Save as preset... | Asks for a name and writes a `.slspreset` file (instrument, sample, volume, pan, pitch, swing; not the notes) into `~/Music/Sun Loops Studio/Presets`; it appears in the browser's Presets folder at once. |
 
 Double-clicking a synth channel's note preview, or the name of any channel, also opens its Piano Roll. On sampler
 channels double-clicking the steps is not special: every click toggles a step.
@@ -96,8 +138,8 @@ A **pattern** holds the notes of every channel. The pattern box in the toolbar s
 Channel Rack and the Piano Roll show and edit that pattern. The **+** button next to it offers **New empty pattern**
 and **Clone current pattern**. The demo project starts with "Pattern 1" (the full groove) and "Drums" (the drums only).
 
-Mixer settings (volume, pan, mute, solo, instrument, sample) belong to the channel, not to the pattern: they are the
-same in every pattern.
+Channel settings (volume, pan, mute, solo, pitch, swing, instrument, sample, mixer track) belong to the channel, not
+to the pattern: they are the same in every pattern. Mixer tracks and their effects belong to neither.
 
 ## Playlist
 
@@ -130,9 +172,44 @@ You can edit while playing in either mode; the change is heard immediately.
 
 ## Mixer
 
-One vertical strip per channel: name, pan, mute / solo, a fader with a dB read-out below it (from silence up to
-+3.5 dB; the default 0.8 is about -1.9 dB; double-click resets it), and a level meter. The strips are linked to the rack rows: change one, the other follows. Click a
-strip to select the channel. The master volume and its meter are in the toolbar.
+Press **F9** or the **Mixer F9** button. The Mixer opens large over the other panels; press F9 again to close it.
+It has 8 vertical **tracks**, a **master** strip on the right and the **effects panel** of the selected track.
+
+Sound path: each channel goes to the mixer track chosen with its **Track N** display (several channels can share
+one), then through the track's four effect slots, then the track fader and balance, then the master.
+
+Each track, from top to bottom:
+
+- its name (Track 1...) and the channels routed to it;
+- **four effect slots**, one above the other (see below);
+- **balance** (stereo) - double-click to centre. It is a balance control: at the centre the sound is untouched;
+- **M** (mute) and **S** (solo) - these belong to the track and are independent of the channel buttons in the rack.
+  If any track is soloed, only soloed tracks are heard;
+- a vertical **fader** with its dB read-out (silence up to +3.5 dB, 1.0 = 0 dB; double-click returns to 0 dB);
+- a **meter**: the wide bar is the RMS level (an average over about 300 ms), the narrow bar is the peak, with a hold
+  line and a lamp at the top that lights if the signal reached or passed 0 dB. Click the meter to clear the lamp.
+  The scale runs from -60 to +6 dB.
+
+Click a track to select it; the effects panel then shows its slots.
+
+### Effects
+
+Click an empty slot (or right-click any slot) for the menu: **Equalizer**, **Reverb**, **Delay**, **Compressor**,
+**Bypass**, **Remove effect**. The effects run in order, top to bottom, before the track fader. The effects panel has
+a power button per slot (bypass) and a slider per parameter of the selected slot.
+
+| Effect | Parameters |
+| --- | --- |
+| Equalizer | Low shelf (120 Hz), Mid (a bell with its own frequency, 200-5000 Hz), High shelf (6 kHz); each -15 to +15 dB |
+| Reverb | Size, Damping, Width, Mix |
+| Delay | Time (10-1000 ms), Feedback, Tone, Mix |
+| Compressor | Threshold (-60 to 0 dB), Ratio (1-20:1), Attack, Release, Makeup gain |
+
+These are Sun Loops Studio's own effects. **VST3 plugins cannot be loaded into the slots yet**: the slot menu shows
+a greyed-out "VST3 plugin..." entry as a reminder.
+
+The master volume is the toolbar slider and the master fader is the same control. The master strip has a meter and
+no effects.
 
 ## Export
 
@@ -148,9 +225,12 @@ system has an output available. Latency is what the device reports; it is not me
 
 ## Limits
 
-- Up to 8 channels, 64 patterns, 8 playlist tracks, a 32-pattern-long timeline, 32 simultaneous voices.
+- Up to 8 channels, 8 mixer tracks with 4 effect slots each, 64 patterns, 8 playlist tracks, a 32-pattern-long
+  timeline, 32 simultaneous voices.
+- The effects use about 16 MB of memory at 48 kHz (more at higher sample rates).
 - A pattern is always two bars long, 4/4, 16th-note grid.
 - Samples are mono or stereo, at most 30 seconds, played one-shot (no looping, no envelope editing).
-- Not available yet: saving and opening projects, undo, VST plugins as instruments or effects, effects of any
-  kind, automation, MIDI input and recording, deleting or renaming patterns, seeking by clicking the ruler.
-  See [roadmap.md](roadmap.md).
+- Not available yet: saving and opening projects (mixer settings and effects are lost on exit like everything
+  else), undo, VST plugins as instruments or effects, sends and master effects, automation, MIDI input and
+  recording, deleting or renaming patterns, seeking by clicking the ruler, dropping files from the desktop onto
+  the program. See [roadmap.md](roadmap.md).

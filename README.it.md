@@ -4,19 +4,23 @@
 
 Un programma open source per produrre musica a loop su Linux, scritto in C++20 con JUCE 8. Costruisci ritmi e
 melodie nel **Channel Rack**, scrivi le note nel **Piano Roll**, disponi i pattern nella **Playlist**, bilanciali nel
-**Mixer** ed esporti il risultato in WAV. Ogni strumento sta in un pannello mobile che puoi spostare,
-ridimensionare, sovrapporre, aprire e chiudere.
+**Mixer** con effetti ed esporti il risultato in WAV. Un **Browser** a sinistra raccoglie i tuoi suoni; ogni altro
+strumento sta in un pannello mobile che puoi spostare, ridimensionare, sovrapporre, aprire e chiudere.
 
-![Sun Loops Studio: channel rack, playlist e piano roll](docs/images/overview.png)
+![Sun Loops Studio: browser, channel rack e playlist](docs/images/overview.png)
+
+![Il mixer espanso con una catena di effetti](docs/images/mixer.png)
 
 Sun Loops Studio si ispira al modo di lavorare dei DAW a loop come FL Studio. È un progetto indipendente: non usa
 codice, nomi, grafica o risorse di altri prodotti e non è affiliato né approvato dai loro produttori.
 
-**Stato: alpha (0.4.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
-La riproduzione è stata confermata su un vero PC Nobara per la versione 0.3; pannelli, pattern e playlist aggiunti
-dopo sono stati provati senza interfaccia audio reale (test automatici e display virtuale). Vedi
-[docs/roadmap.md](docs/roadmap.md) per sapere con precisione cosa è verificato, cosa no e cosa manca (salvataggio dei
-progetti e plugin VST sono le mancanze principali).
+**Stato: alpha (0.5.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
+La riproduzione è stata confermata su un vero PC Nobara per la versione 0.3; tutto ciò che è stato aggiunto dopo
+(pannelli, pattern, playlist, browser, pitch/swing, mixer espanso ed effetti) è stato provato con test automatici e
+in un display virtuale con un dispositivo audio muto, non ancora con audio reale. **L'hosting di plugin VST3 non è
+implementato**: gli slot effetti del mixer contengono gli effetti propri di Sun Loops Studio (Equalizer, Reverb,
+Delay, Compressor). Vedi [docs/roadmap.md](docs/roadmap.md) per sapere con precisione cosa è verificato, cosa no e
+cosa manca (salvataggio dei progetti e hosting VST3 sono le mancanze principali).
 
 ## Funzioni
 
@@ -24,15 +28,21 @@ progetti e plugin VST sono le mancanze principali).
   ridimensionano dai bordi, si chiudono con la ×, il doppio clic sul titolo li massimizza. I pannelli si
   sovrappongono; un clic su uno lo porta davanti. `F5` / `F6` / `F7` / `F9` aprono, portano davanti o chiudono
   Playlist / Rack / Piano Roll / Mixer. La disposizione viene ricordata.
+- **Browser** (barra laterale a sinistra, `F8` la ripiega) - un albero con *Samples*, *Drum Kits*, *Instruments*,
+  *Presets* e *Plugin*, una casella di ricerca rapida e il trascinamento (o il doppio clic) dei suoni su un canale
+  del Channel Rack. I tuoi file stanno in `~/Music/Sun Loops Studio/`.
 - **Channel Rack** - fino a 8 canali, ognuno synth o sampler. Sequencer a step da 16esimi sui canali sampler,
-  anteprima delle note sui canali synth. Tasto destro su un canale: *Piano roll*, *Instrument*, *Load sample...*,
-  *Rename...*.
+  anteprima delle note sui canali synth. Per canale: volume, pan, manopola **Pitch** (semitoni), manopola **Swing** e
+  un display **Track N** che manda il canale a una traccia del mixer. Tasto destro su un canale: *Piano roll*,
+  *Instrument*, *Load sample...*, *Rename...*, *Save as preset...*.
 - **Piano Roll** - per il canale selezionato: clic per aggiungere una nota, trascina per spostarla, trascina il bordo
   destro per ridimensionarla, tasto destro per eliminarla, scorrimento e zoom. Si apre da un canale (menu o doppio
   clic), come in FL Studio.
 - **Pattern e Playlist** - più pattern (nuovi o copiati) disposti come clip su 8 tracce. Il pulsante *Pattern / Song*
   sceglie se ripetere il pattern selezionato o suonare tutta la playlist.
-- **Mixer** - una strip verticale per canale: fader con dB, pan, mute, solo, indicatore di picco.
+- **Mixer** (`F9`) - 8 tracce verticali, ognuna con fader e dB, bilanciamento stereo, mute, solo, indicatore
+  Peak/RMS e 4 slot per effetti in serie (Equalizer, Reverb, Delay, Compressor, con bypass). A destra c'è la strip
+  master. Più canali possono usare la stessa traccia.
 - **Sampler** - carica file WAV, FLAC, OGG e AIFF (fino a 30 s), li suona una volta sola, ritonati in base alla nota.
   Cassa, rullante e hi-hat sono sintetizzati: non servono file per iniziare.
 - **Esportazione** - pattern o brano in WAV a 24 bit / 48 kHz, generato dallo stesso motore che lo suona.
@@ -53,7 +63,7 @@ Alla prima configurazione CMake scarica JUCE 8.0.4 (serve la rete una volta). Pe
 applicazioni: `cmake --install build --prefix ~/.local`. Altri dettagli e risoluzione dei problemi:
 [docs/building.md](docs/building.md) (in inglese).
 
-**Spazio** per suonare, **F5 / F6 / F7 / F9** per i pannelli. Una guida all'uso è in
+**Spazio** per suonare, **F5 / F6 / F7 / F9** per i pannelli e **F8** per il browser. Una guida all'uso è in
 [docs/user-guide.it.md](docs/user-guide.it.md).
 
 ## Documentazione
@@ -73,9 +83,10 @@ applicazioni: `cmake --install build --prefix ~/.local`. Altri dettagli e risolu
 ```
 
 Non servono dispositivo audio né display. Controllano, tra l'altro, intonazione del synth e tempi esatti al
-campione, loop, polifonia, mixer, sampler, che `Player::render` non allochi mai memoria, uno stress test concorrente
-del passaggio dati interfaccia→audio, andata e ritorno WAV, lo scanner dei plugin, le regole dei pannelli e la
-playlist.
+campione, loop, polifonia, tracce del mixer, pitch e swing, i quattro effetti, sampler, che `Player::render` non
+allochi mai memoria (effetti compresi), uno stress test concorrente del passaggio dati interfaccia→audio, andata e
+ritorno WAV, lo scanner dei plugin, l'albero e la scansione del browser, i preset dei canali, le regole dei pannelli e
+la playlist.
 
 ## Licenza
 
