@@ -18,6 +18,8 @@
 #include "audio/BufferTuning.h"
 #include "audio/BuiltinSamples.h"
 #include "audio/Effects.h"
+#include "audio/InputRecorder.h"
+#include "audio/MidiNotes.h"
 #include "audio/MixerRouting.h"
 #include "audio/LiveNotes.h"
 #include "audio/OfflineRenderer.h"
@@ -39,11 +41,15 @@
 // --- allocation counter, used to prove that Player::render never allocates ---------
 static std::atomic<long> gAllocs { 0 };
 static std::atomic<bool> gCounting { false };
+static thread_local bool tCounting = false; // counts only the allocations of the calling thread (see gThreadAllocs)
+static thread_local long tAllocs = 0;
 
 void* operator new (std::size_t n)
 {
     if (gCounting.load (std::memory_order_relaxed))
         gAllocs.fetch_add (1, std::memory_order_relaxed);
+    if (tCounting)
+        ++tAllocs;
     if (void* p = std::malloc (n != 0 ? n : 1))
         return p;
     throw std::bad_alloc();
@@ -2708,6 +2714,281 @@ void testAudioImport()
     check (library.getNumberOfChildFiles (juce::File::findFiles) == 2, "and leaves no partial files behind");
 }
 
+void testInputRecorder()
+{
+    std::cout << "Recording the audio input\n";
+    const auto dir = freshTempDir ("sls-record");
+    constexpr int kBlock = 256;
+
+    // blocks of a sine on input 0 (and a different one on input 1); returns nothing, feeds the recorder
+    const auto feed = [] (sls::InputRecorder& rec, int blocks, int numInputs, long long& position)
+    {
+        std::vector<float> a (kBlock), b (kBlock);
+        const float* in[2] = { a.data(), b.data() };
+        for (int blk = 0; blk < blocks; ++blk)
+        {
+            for (int i = 0; i < kBlock; ++i, ++position)
+            {
+                a[static_cast<size_t> (i)] = 0.5f * std::sin (0.05f * static_cast<float> (position));
+                b[static_cast<size_t> (i)] = 0.25f * std::sin (0.11f * static_cast<float> (position));
+            }
+            rec.process (in, numInputs, kBlock);
+        }
+    };
+    juce::AudioFormatManager manager;
+    manager.registerBasicFormats();
+    const auto readBack = [&] (const juce::File& f, int& channels, std::vector<float>& left, std::vector<float>& right)
+    {
+        std::unique_ptr<juce::AudioFormatReader> reader (manager.createReaderFor (f));
+        if (reader == nullptr)
+            return false;
+        channels = static_cast<int> (reader->numChannels);
+        juce::AudioBuffer<float> buf (channels, static_cast<int> (reader->lengthInSamples));
+        reader->read (&buf, 0, buf.getNumSamples(), 0, true, true);
+        left.assign (buf.getReadPointer (0), buf.getReadPointer (0) + buf.getNumSamples());
+        right.assign (buf.getReadPointer (channels - 1), buf.getReadPointer (channels - 1) + buf.getNumSamples());
+        return true;
+    };
+
+    {   // stereo from two inputs
+        sls::InputRecorder rec;
+        const auto file = dir.getChildFile ("stereo.wav");
+        check (rec.start (file, 48000.0, sls::InputRecorder::Channels::Stereo, 0).isEmpty() && rec.isActive(), "recording starts");
+        long long pos = 0;
+        feed (rec, 100, 2, pos);
+        check (rec.getFramesRecorded() == 100 * kBlock && std::abs (rec.getSecondsRecorded() - 100.0 * kBlock / 48000.0) < 1e-9,
+               "the recorder counts the frames it has taken");
+        check (rec.consumePeak() > 0.45f && rec.consumePeak() == 0.0f, "it reports the input peak since the last look");
+        const auto take = rec.stop();
+        check (! rec.isActive() && take.frames == 100 * kBlock && take.droppedBlocks == 0 && take.file == file
+                   && std::abs (take.sampleRate - 48000.0) < 1e-9,
+               "stopping gives the file and the number of frames");
+        int ch = 0;
+        std::vector<float> l, r;
+        check (readBack (file, ch, l, r) && ch == 2 && static_cast<long long> (l.size()) == take.frames, "the file is a complete stereo WAV with every frame");
+        bool exact = ! l.empty();
+        for (size_t i = 0; i < l.size() && exact; ++i)
+            exact = std::abs (l[i] - 0.5f * std::sin (0.05f * static_cast<float> (i))) < 2e-6f
+                 && std::abs (r[i] - 0.25f * std::sin (0.11f * static_cast<float> (i))) < 2e-6f;
+        check (exact, "and it holds exactly what came in (24 bit)");
+        const auto again = rec.stop();
+        check (again.file == juce::File() && again.frames == 0, "stopping when nothing is recorded gives an empty result");
+        check (rec.getFramesRecorded() == take.frames, "a stopped recorder keeps its last count");
+    }
+    {   // mono: the first input only
+        sls::InputRecorder rec;
+        const auto file = dir.getChildFile ("mono.wav");
+        rec.start (file, 44100.0, sls::InputRecorder::Channels::Mono, 0);
+        long long pos = 0;
+        feed (rec, 20, 2, pos);
+        rec.stop();
+        int ch = 0;
+        std::vector<float> l, r;
+        check (readBack (file, ch, l, r) && ch == 1 && l.size() == 20 * kBlock && std::abs (l[100] - 0.5f * std::sin (5.0f)) < 2e-6f,
+               "mono mode writes a one-channel file with the first input");
+    }
+    {   // stereo asked, one input available: both sides get it
+        sls::InputRecorder rec;
+        const auto file = dir.getChildFile ("one.wav");
+        rec.start (file, 48000.0, sls::InputRecorder::Channels::Stereo, 0);
+        long long pos = 0;
+        feed (rec, 10, 1, pos);
+        rec.stop();
+        int ch = 0;
+        std::vector<float> l, r;
+        check (readBack (file, ch, l, r) && ch == 2 && l == r && l.size() == 10 * kBlock, "with one input, stereo mode copies it to both sides");
+    }
+    {   // the delay between sound and input is skipped, also across blocks
+        sls::InputRecorder rec;
+        const auto file = dir.getChildFile ("skip.wav");
+        rec.start (file, 48000.0, sls::InputRecorder::Channels::Mono, 600);
+        long long pos = 0;
+        feed (rec, 10, 1, pos);
+        const auto take = rec.stop();
+        int ch = 0;
+        std::vector<float> l, r;
+        check (take.frames == 10 * kBlock - 600 && readBack (file, ch, l, r) && l.size() == static_cast<size_t> (take.frames)
+                   && std::abs (l[0] - 0.5f * std::sin (0.05f * 600.0f)) < 2e-6f,
+               "the first frames (the round-trip delay) are left out, so the take lines up");
+    }
+    {   // no input at all still gives a file of the right length
+        sls::InputRecorder rec;
+        const auto file = dir.getChildFile ("none.wav");
+        rec.start (file, 48000.0, sls::InputRecorder::Channels::Stereo, 0);
+        for (int i = 0; i < 10; ++i)
+            rec.process (nullptr, 0, kBlock);
+        const auto take = rec.stop();
+        int ch = 0;
+        std::vector<float> l, r;
+        float loudest = 0.0f;
+        for (float v : l)
+            loudest = std::max (loudest, std::abs (v));
+        check (take.frames == 10 * kBlock && readBack (file, ch, l, r) && l.size() == 10 * kBlock, "without an input the take is silence of the right length");
+    }
+    {   // not recording: nothing happens
+        sls::InputRecorder rec;
+        long long pos = 0;
+        feed (rec, 5, 2, pos);
+        check (rec.getFramesRecorded() == 0 && ! rec.isActive(), "process() does nothing while no recording is running");
+    }
+    {   // failures leave nothing behind
+        sls::InputRecorder rec;
+        const auto bad = juce::File ("/proc/no-such-folder/take.wav");
+        check (rec.start (bad, 48000.0, sls::InputRecorder::Channels::Mono, 0).isNotEmpty() && ! rec.isActive(), "an impossible location is reported");
+        check (rec.start (dir.getChildFile ("x.wav"), 0.0, sls::InputRecorder::Channels::Mono, 0).isNotEmpty(), "no sample rate (no device) is reported");
+        check (rec.start (dir.getChildFile ("a.wav"), 48000.0, sls::InputRecorder::Channels::Mono, 0).isEmpty()
+                   && rec.start (dir.getChildFile ("b.wav"), 48000.0, sls::InputRecorder::Channels::Mono, 0).isNotEmpty(),
+               "a second recording cannot start while one is running");
+        rec.stop();
+        check (! dir.getChildFile ("b.wav").exists() && ! dir.getChildFile ("x.wav").exists(), "and a refused recording creates no file");
+    }
+    {   // real-time safety
+        sls::InputRecorder rec;
+        rec.start (dir.getChildFile ("rt.wav"), 48000.0, sls::InputRecorder::Channels::Stereo, 100);
+        std::vector<float> a (kBlock, 0.3f), b (kBlock, 0.2f);
+        const float* in[2] = { a.data(), b.data() };
+        rec.process (in, 2, kBlock); // first call settles any lazy initialisation
+        tAllocs = 0;
+        tCounting = true; // this thread only: the writer thread in the background allocates, and may
+        for (int i = 0; i < 200; ++i)
+            rec.process (in, 2, kBlock);
+        tCounting = false;
+        check (tAllocs == 0, "process() allocates nothing");
+        rec.stop();
+    }
+    {   // stopping while the audio thread is busy: the file stays consistent
+        sls::InputRecorder rec;
+        const auto file = dir.getChildFile ("busy.wav");
+        rec.start (file, 48000.0, sls::InputRecorder::Channels::Stereo, 0);
+        std::atomic<bool> stopFlag { false };
+        std::thread audio ([&]
+        {
+            std::vector<float> a (kBlock, 0.3f), b (kBlock, 0.2f);
+            const float* in[2] = { a.data(), b.data() };
+            while (! stopFlag.load())
+                rec.process (in, 2, kBlock);
+        });
+        std::this_thread::sleep_for (std::chrono::milliseconds (150));
+        const auto take = rec.stop();
+        std::this_thread::sleep_for (std::chrono::milliseconds (30)); // the thread keeps calling process() on a stopped recorder
+        stopFlag = true;
+        audio.join();
+        int ch = 0;
+        std::vector<float> l, r;
+        check (take.frames > 0 && readBack (file, ch, l, r) && static_cast<long long> (l.size()) == take.frames,
+               "stopping while audio is arriving gives a complete file whose length matches the count");
+    }
+    check (dir.getNumberOfChildFiles (juce::File::findFiles) == 8, "no stray files are left in the recordings folder");
+}
+
+void testMidiNotes()
+{
+    std::cout << "MIDI keyboards\n";
+    using sls::LiveNoteEvent;
+    sls::MidiNoteMapper mapper;
+    std::vector<LiveNoteEvent> out;
+    const auto feed = [&] (const juce::MidiMessage& m, int channel)
+    {
+        out.clear();
+        mapper.map (m, channel, [&] (const LiveNoteEvent& e) { out.push_back (e); });
+    };
+
+    feed (juce::MidiMessage::noteOn (1, 60, static_cast<juce::uint8> (100)), 3);
+    check (out.size() == 1 && out[0].on && out[0].channel == 3 && out[0].pitch == 60 && std::abs (out[0].velocity - 100.0f / 127.0f) < 1e-6f,
+           "a note on becomes a live note on the target channel with its velocity");
+    feed (juce::MidiMessage::noteOff (1, 60), 3);
+    check (out.size() == 1 && ! out[0].on && out[0].channel == 3 && out[0].pitch == 60 && mapper.heldCount() == 0, "a note off ends it");
+
+    feed (juce::MidiMessage::noteOn (2, 64, static_cast<juce::uint8> (90)), 1);
+    feed (juce::MidiMessage::noteOn (2, 64, static_cast<juce::uint8> (0)), 4);
+    check (out.size() == 1 && ! out[0].on && out[0].channel == 1, "a note on with velocity 0 is a note off, sent to the channel that got the note on");
+
+    feed (juce::MidiMessage::noteOn (1, 67, static_cast<juce::uint8> (80)), 2);
+    feed (juce::MidiMessage::noteOff (1, 67), 5); // the target channel changed while the key was down
+    check (out.size() == 1 && ! out[0].on && out[0].channel == 2, "a note off goes to the channel that played the note even if the target changed");
+
+    feed (juce::MidiMessage::noteOn (1, 72, static_cast<juce::uint8> (80)), 0);
+    feed (juce::MidiMessage::noteOn (1, 72, static_cast<juce::uint8> (70)), 0);
+    check (out.size() == 2 && ! out[0].on && out[1].on, "a repeated note on first ends the note that is still held");
+    feed (juce::MidiMessage::noteOff (1, 72), 0);
+    feed (juce::MidiMessage::noteOff (1, 72), 0);
+    check (out.empty(), "a note off for a note that is not held is ignored");
+
+    feed (juce::MidiMessage::controllerEvent (1, 64, 127), 0);
+    check (out.empty(), "controllers (sustain pedal) are ignored");
+    feed (juce::MidiMessage::pitchWheel (1, 9000), 0);
+    check (out.empty(), "pitch bend is ignored");
+    feed (juce::MidiMessage::programChange (1, 5), 0);
+    check (out.empty(), "program changes are ignored");
+    feed (juce::MidiMessage::channelPressureChange (1, 40), 0);
+    check (out.empty(), "channel pressure is ignored");
+
+    for (int p : { 60, 64, 67 })
+        feed (juce::MidiMessage::noteOn (10, p, static_cast<juce::uint8> (100)), 6);
+    check (mapper.heldCount() == 3, "chords are tracked key by key");
+    feed (juce::MidiMessage::allNotesOff (1), 0);
+    check (out.size() == 3 && ! out[0].on && ! out[1].on && ! out[2].on && mapper.heldCount() == 0 && out[0].channel == 6,
+           "\"all notes off\" ends every held note");
+    feed (juce::MidiMessage::noteOn (1, 50, static_cast<juce::uint8> (100)), 0);
+    feed (juce::MidiMessage::allSoundOff (1), 0);
+    check (out.size() == 1 && ! out[0].on, "\"all sound off\" does too");
+
+    // through the real queue into the Player: the note sounds and stops
+    {
+        const auto project = sls::Project::make ({ synthChannel ({}) }, 8 * kBeat);
+        sls::LiveNoteQueue queue;
+        sls::Player p;
+        p.prepare (kSr);
+        sls::MidiNoteMapper m;
+        m.map (juce::MidiMessage::noteOn (1, 69, static_cast<juce::uint8> (110)), 0, [&] (const LiveNoteEvent& e) { queue.push (e); });
+        LiveNoteEvent e;
+        while (queue.pop (e))
+            p.liveNoteOn (project, e.channel, e.pitch, e.velocity);
+        std::vector<float> l (4096), r (4096);
+        float* ch[2] = { l.data(), r.data() };
+        p.render (project, 120.0, false, ch, 2, 4096);
+        float held = 0.0f;
+        for (float v : l)
+            held = std::max (held, std::abs (v));
+        m.map (juce::MidiMessage::noteOff (1, 69), 0, [&] (const LiveNoteEvent& ev) { queue.push (ev); });
+        while (queue.pop (e))
+            p.liveNoteOff (e.channel, e.pitch);
+        std::fill (l.begin(), l.end(), 0.0f);
+        std::fill (r.begin(), r.end(), 0.0f);
+        for (int i = 0; i < 4; ++i)
+            p.render (project, 120.0, false, ch, 2, 4096);
+        std::fill (l.begin(), l.end(), 0.0f);
+        std::fill (r.begin(), r.end(), 0.0f);
+        p.render (project, 120.0, false, ch, 2, 4096);
+        float after = 0.0f;
+        for (float v : l)
+            after = std::max (after, std::abs (v));
+        check (held > 0.05f && after == 0.0f, "a MIDI note plays through the song's channel and is silent after the key is released");
+    }
+}
+
+void testPlayerRewind()
+{
+    std::cout << "Rewind\n";
+    const auto project = sls::Project::make ({ synthChannel ({ { 69, 0, 3840, 1.0f } }) }, 8 * kBeat);
+    sls::Player p;
+    p.prepare (kSr);
+    std::vector<float> l (4800), r (4800);
+    float* ch[2] = { l.data(), r.data() };
+    for (int i = 0; i < 5; ++i)
+        p.render (project, 120.0, true, ch, 2, 4800);
+    check (p.getPositionTicks() > 400.0, "the song has moved on");
+    p.rewind();
+    check (p.getPositionTicks() == 0.0, "rewind() goes back to the start");
+    std::fill (l.begin(), l.end(), 0.0f);
+    std::fill (r.begin(), r.end(), 0.0f);
+    p.render (project, 120.0, true, ch, 2, 4800);
+    float m = 0.0f;
+    for (int i = 0; i < 200; ++i)
+        m = std::max (m, std::abs (l[static_cast<size_t> (i)]));
+    check (p.getPositionTicks() < 500.0 && m > 0.01f, "and the first note plays again from the beginning");
+}
+
 void testTapTempo()
 {
     std::cout << "[tap tempo]\n";
@@ -2868,6 +3149,9 @@ int main()
     testTapTempo();
     testAudioClips();
     testAudioImport();
+    testInputRecorder();
+    testMidiNotes();
+    testPlayerRewind();
 
     std::cout << "\n" << (failures == 0 ? "ALL TESTS PASSED" : "SOME TESTS FAILED") << " (" << failures << " failures)\n";
     return failures == 0 ? 0 : 1;

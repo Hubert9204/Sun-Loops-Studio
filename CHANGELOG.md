@@ -2,6 +2,55 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.8.0 - 2026-11-06
+
+### Added
+- **Audio clips in the Playlist.** Recordings and audio files sit on the playlist tracks next to the pattern clips:
+  drawn with their waveform, moved on the beat grid (also to another track), shortened or lengthened from the right
+  edge, deleted with a right click, never overlapping another clip. They play in Song mode through the mixer track
+  with the same number as their playlist track (so mute, solo, the fader and the effects of that track apply) and are
+  part of exports. Saved in the project (`"audioClips"`: the path of each file, its position, length and gain; older
+  files open without them).
+- **Drag and drop into the Playlist** from the file manager: `.wav`, `.aiff`, `.flac`, `.ogg`, `.oga`, `.mp3`, `.aac`
+  (and `.m4a`) and the **sound track of video files** (`.mp4`, `.mkv`, `.mov`, `.avi`, `.webm` and more). Several
+  files at once go on consecutive tracks. The files are decoded on a background thread. WAV, AIFF, FLAC, Ogg Vorbis and
+  MP3 are read by the program; **AAC and the sound of videos need `ffmpeg`** (`sudo dnf install ffmpeg`), which extracts
+  a WAV into `~/Music/Sun Loops Studio/Samples/From videos/`. A file longer than 5 minutes is cut there, with a message.
+  *File > Import audio or video into the playlist...* does the same through a file chooser.
+- **Recording.** A **Record** button (with an options arrow) records the audio input - microphone, guitar into an audio
+  interface - into the playlist track marked with the red dot (click a track's name to choose it). The song plays from
+  the start while you record; **Stop** (or the Record button again) ends the take, which appears as a clip at the start
+  of the track. The take is a 24-bit WAV in `~/Music/Sun Loops Studio/Samples/Recordings/`, delayed-corrected by the
+  device's reported round-trip latency. Options: mono (first input) or stereo (inputs 1+2), and *hear the input while
+  recording*. The input is only opened when you press Record (or choose one in **Audio...**). A take stops by itself at
+  the end of the playlist.
+- **MIDI keyboards.** The **Audio...** dialog lists the MIDI inputs and the input channels; every enabled MIDI keyboard
+  plays the selected channel (notes, velocity; note off always reaches the channel that got the note on). Keyboards are
+  switched on the first time and when plugged in while the program runs; the choice is remembered. The toolbar's status
+  line names the active MIDI inputs. MIDI is for playing live: it does not record notes into the piano roll yet.
+- **Input level** bar in the **Audio...** dialog, to check that a microphone or guitar arrives.
+- **Metronome** button in the toolbar: click for on/off; right-click for tempo (the BPM of the song), volume and
+  **Tap tempo**. A short click on every beat with a higher, louder one on the first beat of each bar; it follows the
+  song while it plays and runs by itself at the song's BPM while stopped. It is never part of an export. The setting is
+  remembered.
+- **Export to more formats** from *File > Export audio*: WAV, MP3, Ogg Vorbis (`.ogg`), Ogg (`.oga`), AAC (`.aac`),
+  FLAC and AIFF. WAV, AIFF, FLAC and Ogg are written by the program; MP3 and AAC need `ffmpeg` (the menu says so when it
+  is missing). Files are written under a temporary name and moved into place, so a failed export never damages an
+  existing file.
+- Engine: `Project::audioEvents` and `AudioClip` in the arrangement; `Player` clip voices and `rewind()`;
+  `InputRecorder` (wait-free hand-over to a writer thread), `MidiNoteMapper`, `AudioImport`, `AudioExport`, `TapTempo`.
+- Tests: 134 new checks (414 in total).
+
+### Changed
+- **Projects are now saved as `.slp`** (`.slsproj` before). Old `.slsproj` files still open (and *Save as* offers the
+  new ending); the file-type association covers both.
+- **Export and save are in the File menu** (the toolbar's Export WAV button is gone).
+- The audio device is opened with two input channels *available* (none switched on), so inputs can be chosen.
+
+### Not verified
+- Real microphones, audio interfaces and MIDI keyboards (the test machine has none), the real timing of a take
+  (the virtual audio device runs faster than real time) and the alignment of a take with its backing track.
+
 ## 0.7.0 - 2026-11-05
 
 ### Added

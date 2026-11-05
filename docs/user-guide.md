@@ -10,7 +10,8 @@ A **toolbar** on two rows, a status line, and below it the **browser** (left sid
 the panels float.
 
 Toolbar, first row: **File** (projects, see below), **Play / Stop**, **Pattern / Song** switch, the **pattern box** with **+**, **BPM** (40-240),
-**Master** volume with its meter, **Audio...** (device settings) and **Export WAV...**.
+**Master** volume with its meter, the **Metronome** button, **Record** (with an options arrow) and **Audio...**
+(device settings). Exporting is in the **File** menu.
 
 Toolbar, second row: buttons that show or hide the browser (**Browser F8**) and the panels (**Rack F6**,
 **Playlist F5**, **Piano F7**, **Mixer F9**),
@@ -20,21 +21,24 @@ The status line shows the audio device (sample rate, buffer size, reported laten
 
 ## Projects
 
-Everything in the song is saved in one `.slsproj` file: channels (instrument, sample, volume, pan, pitch, swing,
+Everything in the song is saved in one `.slp` file (versions before 0.8 wrote `.slsproj`; those files still open): channels (instrument, sample, volume, pan, pitch, swing,
 mixer track), all patterns and their notes, the playlist, the mixer (faders, balance, mute/solo, effect chains and
-their settings), BPM, master volume and whether Song mode is on. The window title shows the project name, with a
+their settings), the audio clips of the playlist (as paths of their files), BPM, master volume and whether Song mode is on. The window title shows the project name, with a
 `*` after it while there are changes that are not saved.
 
 | Command | Key | What it does |
 | --- | --- | --- |
 | **New** | `Ctrl+N` | Starts an empty project (one synth channel, one empty pattern). |
-| **Open...** | `Ctrl+O` | Chooses a `.slsproj` file. |
+| **Open...** | `Ctrl+O` | Chooses a `.slp` (or older `.slsproj`) file. |
 | **Open recent** | | The last eight projects that still exist. |
 | **Save** | `Ctrl+S` | Writes the project. |
-| **Save as...** | `Ctrl+Shift+S` | Asks for a name (the `.slsproj` ending is added if you leave it out) and writes the project there. |
+| **Save as...** | `Ctrl+Shift+S` | Asks for a name (the `.slp` ending is added if you leave it out) and writes the project there. An old `.slsproj` is offered as `.slp`. |
+| **Import audio or video into the playlist...** | | Chooses audio or video files and puts them on the playlist (see *Audio clips*). |
+| **Export audio** | | A submenu with the formats (see *Export*). |
+| **Show the projects folder** | | Opens `~/Music/Sun Loops Studio/Projects`. |
 
 **Saving without a name.** A project you have not named yet is called *Untitled*. **Save** (or `Ctrl+S`) does not
-stop to ask: it writes the project at once as `Untitled <date> <time>.slsproj` in
+stop to ask: it writes the project at once as `Untitled <date> <time>.slp` in
 `~/Music/Sun Loops Studio/Projects`, and from then on that is the project's file, so the next **Save** updates the
 same file. Use **Save as...** whenever you want a proper name. Saving a named project writes the file next to its
 old copy safely: the new text goes to a temporary file that then replaces the old one, so a failed save leaves the
@@ -42,12 +46,12 @@ previous file intact.
 
 **Unsaved work.** **New**, **Open...** and closing the window ask first when there are unsaved changes: *Save*,
 *Don't save* or *Cancel*. Pressing Escape cancels. Selecting a pattern or switching Pattern/Song is not counted as a
-change. You can also start the program with a project as argument (`sun-loops-studio song.slsproj`); a `.slsproj`
+change. You can also start the program with a project as argument (`sun-loops-studio song.slp`); a `.slp`
 file opened from the file manager does the same once the desktop knows the type (installed with
 `cmake --install`).
 
-**Samples are not copied into the file.** A sampler channel stores where its sample came from: a built-in sound or
-the full path of your file. If you move or delete the file, the project still opens: that channel is silent, a
+**Samples and audio clips are not copied into the file.** A sampler channel or an audio clip stores where its audio came
+from: a built-in sound or the full path of your file. If you move or delete the file, the project still opens: that channel is silent, a
 message lists the missing files and the reference is kept, so putting the file back (or loading another with
 *Load sample...*) fixes it. Keep your samples where they are, or in `~/Music/Sun Loops Studio/Samples`.
 
@@ -210,7 +214,61 @@ in Song mode playback loops there.
 | Zoom | Ctrl + wheel. |
 
 Clips cannot overlap on the same track; a move or resize that would overlap is simply not applied. Clips on
-different tracks play together.
+different tracks play together. Clicking a track's **name** chooses the track that **Record** writes to (marked with a
+red dot).
+
+### Audio clips
+
+Audio clips are recordings and audio files placed on the playlist. They are drawn in teal with their waveform.
+
+| Action | How |
+| --- | --- |
+| Add an audio or video file | Drag it from your file manager onto the Playlist (it lands on the track and beat under the mouse, which is highlighted), or use *File > Import audio or video into the playlist...*. Several files go on consecutive tracks. |
+| Move | Drag the clip (it snaps to the beat and can change track). |
+| Shorten / lengthen | Drag its right edge: at least one beat, at most the length of the audio. |
+| Delete | Right-click it. |
+
+Supported files: `.wav`, `.aiff` / `.aif`, `.flac`, `.ogg`, `.oga` and `.mp3` are read by the program itself. `.aac` /
+`.m4a` and the **sound track of a video** (`.mp4`, `.m4v`, `.mkv`, `.mov`, `.avi`, `.webm`, `.wmv`, `.flv`, `.mpg`, `.mpeg`,
+`.ogv`, `.3gp`) need the **ffmpeg** program: Nobara normally has it; otherwise install it with `sudo dnf install ffmpeg` (on stock
+Fedora that is the RPM Fusion package; the `ffmpeg-free` package may lack the MP3 encoder). The sound of a video is extracted into
+`~/Music/Sun Loops Studio/Samples/From videos/<name>.wav` (never replacing a file) and that WAV is what the clip uses.
+Decoding runs in the background; the status line says when the clips are in. A file longer than 5 minutes is cut at 5
+minutes (with a message), and a clip longer than the free space is cut to fit.
+
+An audio clip plays in **Song mode** (the program switches to it when you add the first clip) through the mixer track
+with the same number as its playlist track: **Track 3** of the playlist plays through **mixer track 3**, so its fader,
+mute, solo and effects apply, and it is part of every export. A clip lasts as many beats as the audio lasts at the
+tempo it was added at; if you change the BPM later the sound still plays at its original speed, so the clip may end
+before or after the audio does (the waveform shows where the sound really ends). If the file is later moved or deleted,
+the project opens with a silent clip marked *(file not found)* that keeps the path.
+
+### Recording
+
+**Record** (toolbar) records the **audio input**: a microphone, a guitar into an audio interface, a line input.
+
+1. In **Audio...** choose the input device and switch on its input channels; speak or play and watch the **Input level**
+   bar. (If you skip this, pressing Record switches on the device's first input channels for you.)
+2. In the Playlist click the **name of an empty track**: it gets a red dot. The arrow next to Record offers the same
+   choice, plus the input type: **Mono** (the first input, written as a one-channel file: use this for a microphone or
+   a guitar) or **Stereo** (inputs 1 and 2), and *Hear the input while recording* (use headphones: with speakers and a
+   microphone it feeds back; this monitoring adds the device's latency).
+3. Press **Record**. The song plays from the start, in Song mode, and the status line shows the time and the input
+   level (it warns about clipping). Press **Record** again or **Stop** to finish; the take appears as an audio clip at
+   the start of the track and is also kept as a 24-bit WAV in `~/Music/Sun Loops Studio/Samples/Recordings/`.
+
+The recording is shifted by the round-trip latency that the audio device reports so that it lines up with what was
+playing. The track must be free at the start of the playlist (otherwise Record says so); a take stops by itself at the
+end of the playlist or after 5 minutes. Takes always start at the beginning of the song: there is no punch-in or
+count-in yet (switch the **Metronome** on to play in time).
+
+### MIDI keyboards and other devices
+
+**Audio...** also lists the **MIDI inputs**. Tick the keyboards you want: they play the **selected channel** of the
+Channel Rack (click a channel to select it) with the velocity of the keys, whether the song is playing or not. A keyboard
+that is plugged in while the program runs is switched on automatically; your choice is remembered. The status line names
+the active MIDI inputs and says which channel is playing. Only notes are used (no pitch bend, pedals or knobs), and MIDI is
+for playing: it does not record into the piano roll.
 
 ## Pattern mode and Song mode
 
@@ -273,11 +331,32 @@ on a track, and the chain is saved in the project.
 
 The master volume is the toolbar slider and the master fader is the same control. The master strip has a meter.
 
+## Metronome
+
+The **Metronome** button turns a click on or off. Right-click it for a small panel with the **tempo** (the same BPM as
+the toolbar), the **volume** and a **Tap tempo** button: tap it in time with a song (four or more taps) and the BPM
+follows. The click is a higher, louder one on the first beat of every bar and a lower one on the other three. While the
+song plays it follows the song; while it is stopped it keeps time by itself at the BPM, so you can practise or record.
+The metronome is never part of an export. It is remembered between runs.
+
 ## Export
 
-**Export WAV...** writes the current mode: the pattern (two bars) or the song (up to the end of the last clip), plus
-one second of tail so releases and drum tails are not cut. Format: 24-bit, 48 kHz stereo WAV, at the BPM set in the
-toolbar. The file is produced by the same engine that plays, so it sounds like what you hear.
+**File > Export audio** writes the current mode: the pattern (two bars) or the song (up to the end of the last clip, audio
+clips included), plus one second of tail so releases and drum tails are not cut. It is rendered at 48 kHz stereo, at the
+BPM set in the toolbar, by the same engine that plays, so it sounds like what you hear. Choose the format in the submenu:
+
+| Format | Kind | Notes |
+| --- | --- | --- |
+| WAV `.wav` | uncompressed | 24 bit |
+| AIFF `.aiff` | uncompressed | 24 bit |
+| FLAC `.flac` | lossless | 24 bit |
+| MP3 `.mp3` | lossy | 192 kbit/s, needs `ffmpeg` |
+| Ogg Vorbis `.ogg` | lossy | about 192 kbit/s |
+| Ogg audio `.oga` | lossy | the same Vorbis audio under the `.oga` name |
+| AAC `.aac` | lossy | 192 kbit/s, a plain AAC stream, needs `ffmpeg` |
+
+Entries that need `ffmpeg` say so in the menu when it is not installed. The file is written under a temporary name and
+moved into place at the end, so a failed export never damages a file that was already there.
 
 ## Audio setup
 
@@ -317,7 +396,9 @@ a heavier song or a plugin-heavy mixer can still need a bigger size.
   timeline, 32 simultaneous voices.
 - The effects use about 18 MB of memory at 48 kHz (more at higher sample rates).
 - A pattern is always two bars long, 4/4, 16th-note grid.
-- Samples are mono or stereo, at most 30 seconds, played one-shot (no looping, no envelope editing).
-- Not available yet: playing notes from the computer keyboard or a MIDI keyboard, undo, embedding samples in the project, automatic saving and crash recovery, VST plugins as instruments or effects, sends and master effects, automation, MIDI input and
-  recording, deleting or renaming patterns, seeking by clicking the ruler, dropping files from the desktop onto
-  the program. See [roadmap.md](roadmap.md).
+- Samples are mono or stereo, at most 30 seconds, played one-shot (no looping, no envelope editing). Audio clips: up to
+  5 minutes per file, 64 clips.
+- Not available yet: playing notes from the computer keyboard, undo, embedding samples in the project, automatic saving
+  and crash recovery, VST plugins as instruments or effects, sends, automation, recording MIDI notes, punch-in and
+  count-in for recording, trimming or splitting audio clips, deleting or renaming patterns, seeking by clicking the
+  ruler. See [roadmap.md](roadmap.md).

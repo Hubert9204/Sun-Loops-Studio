@@ -31,6 +31,10 @@ public:
 
     double getPositionTicks() const noexcept { return tickPos; }
 
+    // Back to the start of the song, as if the transport had been stopped and started again: the position goes to
+    // zero and the sound that was playing fades out. Audio thread only (the engine calls it at the start of a recording).
+    void rewind() noexcept;
+
     // Metronome: a short click on every beat (a higher, louder one on the first beat of each bar), added to the
     // output after the master effects and the limiter. While the transport plays the clicks follow it (beat 1 of the
     // loop is a downbeat); while it is stopped they run freely at `bpm`, starting at once. Off by default, so exports

@@ -4,7 +4,8 @@
 
 An open source, loop-based music production program for Linux, written in C++20 with JUCE 8. You build
 beats and melodies in a **Channel Rack**, write notes in a **Piano Roll**, arrange patterns on a
-**Playlist**, balance them in a **Mixer** with effects and export the result to WAV. A **Browser** on the left
+**Playlist** (together with audio files and recordings), balance them in a **Mixer** with effects and export the result
+to WAV, MP3, Ogg, AAC, FLAC or AIFF. A **Browser** on the left
 holds your sounds; every other tool lives in a floating panel that you can move, resize, overlap, open and close.
 
 ![Sun Loops Studio: browser, channel rack and playlist](docs/images/overview.png)
@@ -15,10 +16,11 @@ Sun Loops Studio is inspired by the workflow of loop-based DAWs such as FL Studi
 that uses no code, names, graphics or assets from other products, and it is not affiliated with or endorsed by
 their makers.
 
-**Status: alpha (0.7.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
+**Status: alpha (0.8.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
 display. Playback was confirmed on a real Nobara machine for version 0.3; everything added since (panels, patterns,
-playlist, browser, pitch/swing, the expanded mixer and its effects, saving projects, the AppImage) was tested
-headless and in a virtual display with a silent audio device, not yet with real audio. **Hosting VST3 plugins is not implemented**: the mixer's effect
+playlist, browser, pitch/swing, the expanded mixer and its effects, saving projects, the AppImage, audio clips, drag and
+drop, recording, MIDI, the metronome and the export formats) was tested headless and in a virtual display with a silent
+audio device, not yet with real audio, microphones or MIDI hardware. **Hosting VST3 plugins is not implemented**: the mixer's effect
 slots hold Sun Loops Studio's own Equalizer, Reverb, Delay and Compressor. See [docs/roadmap.md](docs/roadmap.md) for
 exactly what is and is not verified and what is missing (VST3 hosting and undo are the big ones).
 
@@ -38,17 +40,24 @@ exactly what is and is not verified and what is missing (VST3 hosting and undo a
   right-click to delete, scroll and zoom. Opens from a channel (menu or double-click), as in FL Studio.
 - **Patterns and Playlist** - several patterns (new or cloned), arranged as clips on 8 tracks. A *Pattern / Song*
   switch chooses between looping the selected pattern and playing the whole playlist.
+- **Audio in the Playlist** - drag audio files (`.wav .aiff .flac .ogg .oga .mp3 .aac`) or video files (their sound
+  track) from the file manager onto the Playlist: they become clips with a waveform that you can move, shorten and
+  delete. AAC and video sound need `ffmpeg` installed.
+- **Recording** - the **Record** button records a microphone or an instrument into the playlist track you choose, in
+  time with the song. **MIDI keyboards** play the selected channel. Both are set up in **Audio...**.
+- **Metronome** - a click with adjustable tempo (and tap tempo) and volume, on its own button.
 - **Mixer** (`F9`) - 8 vertical tracks, each with a fader and dB read-out, stereo balance, mute, solo, a Peak/RMS
   meter and 4 insert-effect slots (Equalizer, Reverb, Delay, Compressor, each with bypass). The master strip on the
   right has the same 4 effect slots, applied to the whole mix. Several channels can share a track.
 - **Sampler** - loads WAV, FLAC, OGG and AIFF files (up to 30 s), plays them one-shot, repitched by note.
   Kick, snare and hat are synthesised, so you need no sample files to start.
 - **Projects** - `File` menu and `Ctrl+N` / `Ctrl+O` / `Ctrl+S` / `Ctrl+Shift+S`: *Save* writes a named project;
-  a project that has no name yet is saved at once under an automatic name (`Untitled <date time>.slsproj`) in
+  a project that has no name yet is saved at once under an automatic name (`Untitled <date time>.slp`) in
   `~/Music/Sun Loops Studio/Projects`, so nothing is lost; *Save as...* asks for a name. Open recent, a title bar
   that shows the name and `*` for unsaved changes, and a prompt before closing with unsaved work. Samples are
   referenced by path, not copied into the file.
-- **Export** - the pattern or the song to a 24-bit / 48 kHz WAV file, rendered by the same engine that plays it.
+- **Export** - *File > Export audio*: the pattern or the song as WAV, AIFF, FLAC (lossless) or MP3, Ogg Vorbis
+  (`.ogg` / `.oga`), AAC (lossy), rendered by the same engine that plays it. MP3 and AAC need `ffmpeg`.
 - **Audio** - device selection, an adjustable **buffer size** (default 1024 samples) and an **Auto** button that tests
   your computer and picks a size that does not crackle, plus a read-out of load and dropped blocks. The choice is
   remembered.
@@ -92,7 +101,8 @@ Headless (no audio device or display needed). They check, among other things, sy
 looping, polyphony, mixer tracks, pitch and swing, the four effects, sampler, that `Player::render` never allocates
 (effects included), a concurrent stress test of the UI-to-audio hand-over, WAV round trip, the plugin scanner, the
 browser tree and file scan, channel presets, panel layout rules, the playlist, live notes and the project file
-(save/load round trip, damaged and hostile files, missing samples, atomic writing).
+(save/load round trip, damaged and hostile files, missing samples, atomic writing), export to every format,
+importing audio and video, audio clips, the recorder, MIDI note handling and the metronome.
 
 ## License
 

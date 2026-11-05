@@ -27,7 +27,7 @@ public:
     void paint (juce::Graphics&) override;
 
     static constexpr int kWidth = 520;
-    static constexpr int kHeight = 570;
+    static constexpr int kHeight = 640;
 
 private:
     enum class Phase { idle, settling, measuring };
@@ -49,6 +49,9 @@ private:
     std::function<void (bool)> setPlaying;
 
     juce::AudioDeviceSelectorComponent selector;
+    juce::Label inputLabel { {}, "Input level" };
+    juce::Rectangle<int> inputBar;
+    float inputLevel = 0.0f;
     juce::Label bufferLabel { {}, "Buffer size" };
     juce::ComboBox sizeBox;
     juce::Label delayLabel;

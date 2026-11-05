@@ -6,6 +6,8 @@
   Nobara 44 (GCC 16).
 - CMake 3.22 or newer (3.28 or newer for a clean `cmake --install`, see below) and Ninja.
 - Development files for ALSA, JACK, FreeType, Fontconfig, X11 and OpenGL.
+- Optional, at run time: **ffmpeg** (`sudo dnf install ffmpeg` on Nobara / Fedora) for exporting MP3 and AAC and for
+  importing AAC and the sound of video files. Everything else works without it.
 - Network access the first time you configure: CMake downloads JUCE 8.0.4 from GitHub (shallow clone, pinned tag).
 
 ### Nobara / Fedora
@@ -49,7 +51,7 @@ cmake --install build --prefix ~/.local
 
 Installs, under the prefix: the `sun-loops-studio` command (`bin/`), the application-menu entry
 (`share/applications/sun-loops-studio.desktop`), the icons (`share/icons/hicolor/{16x16,256x256}/apps/`) and the
-file type of `.slsproj` projects (`share/mime/packages/sun-loops-studio.xml`).
+file type of `.slp` (and the older `.slsproj`) projects (`share/mime/packages/sun-loops-studio.xml`).
 Make sure `~/.local/bin` is in your `PATH`. KDE normally picks the menu entry up within moments; if not, log out and
 in again or run `kbuildsycoca6`.
 
@@ -62,7 +64,7 @@ file listed above.
 ```bash
 ./scripts/build_appimage.sh        # writes dist/Sun-Loops-Studio-<version>-x86_64.AppImage
 chmod +x dist/Sun-Loops-Studio-*.AppImage
-./dist/Sun-Loops-Studio-*.AppImage [project.slsproj]
+./dist/Sun-Loops-Studio-*.AppImage [project.slp]
 ```
 
 The script configures a Release build in `build-appimage/`, installs it into an `AppDir`, lets linuxdeploy copy in
@@ -110,6 +112,9 @@ not part of the repository.
 | Panels are in strange places | Click **Reset**, or delete `~/.config/SunLoopsStudio/SunLoopsStudio.settings`. |
 | Keyboard shortcuts do nothing | Click the window once so it is active; shortcuts do not work while a dialog is open. |
 | `cmake --install` copies a lot of JUCE files | CMake older than 3.28, see above. |
+| MP3 / AAC export is greyed out ("needs ffmpeg"), or importing a video or `.aac` fails | `ffmpeg` is not installed or not on the `PATH`. Install it, or set `SLS_FFMPEG=/path/to/ffmpeg`. |
+| Record says no audio input could be opened | No microphone or audio interface is available to the audio system. Plug one in and choose it in **Audio...** (on PipeWire check `wpctl status`). |
+| A MIDI keyboard is not listed in **Audio...** | ALSA exposes it through `/dev/snd/seq`; check `aconnect -l`. Tick it in the dialog. |
 
 JUCE has no native PipeWire backend: on Linux it uses ALSA and JACK, and PipeWire serves both through
 `pipewire-alsa` and `pipewire-jack`, which Nobara installs by default. JUCE draws through X11; on a Wayland session

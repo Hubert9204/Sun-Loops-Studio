@@ -6,7 +6,9 @@
 
 #include <juce_audio_devices/juce_audio_devices.h>
 
+#include "audio/InputRecorder.h"
 #include "audio/LiveNotes.h"
+#include "audio/MidiNotes.h"
 #include "audio/Player.h"
 #include "audio/Project.h"
 #include "audio/SnapshotExchange.h"
@@ -30,16 +32,44 @@ public:
 
     void publishProject (std::unique_ptr<Project> project) { exchange.publish (std::move (project)); }
 
-    // Message thread only (one producer). Plays a note by hand through channel `channel` until the matching
-    // off, even when the transport is stopped. Returns false if the event could not be queued.
+    // Plays a note by hand through channel `channel` until the matching off, even when the transport is stopped.
+    // Returns false if the event could not be queued. Callable from any non-real-time thread (the piano roll on the
+    // message thread, MIDI keyboards on their own threads): the callers take turns on a tiny spin lock that the audio
+    // thread never touches.
     bool liveNoteOn (int channel, int pitch, float velocity = 0.8f) noexcept
     {
-        return liveNotes.push ({ true, static_cast<std::uint8_t> (channel), static_cast<std::uint8_t> (pitch), velocity });
+        return pushLive ({ true, static_cast<std::uint8_t> (channel), static_cast<std::uint8_t> (pitch), velocity });
     }
     bool liveNoteOff (int channel, int pitch) noexcept
     {
-        return liveNotes.push ({ false, static_cast<std::uint8_t> (channel), static_cast<std::uint8_t> (pitch), 0.0f });
+        return pushLive ({ false, static_cast<std::uint8_t> (channel), static_cast<std::uint8_t> (pitch), 0.0f });
     }
+
+    // MIDI keyboards: notes arriving from the enabled MIDI inputs (chosen in the Audio dialog) play through this
+    // channel of the song. The matching note off always goes to the channel that got the note on.
+    void setMidiTargetChannel (int channel) noexcept { midiTarget.store (channel, std::memory_order_relaxed); }
+    // The names of the MIDI inputs that are switched on, "" if none.
+    juce::String describeMidiInputs() const;
+    // True once if a MIDI note has arrived since the last call (for an activity light).
+    bool consumeMidiActivity() noexcept { return midiActivity.exchange (false, std::memory_order_relaxed); }
+    // Feed a MIDI message as if it had come from a keyboard (also used by the tests).
+    void handleMidi (const juce::MidiMessage& message);
+
+    // Audio input. The input is only opened when the user chooses one in the Audio dialog or presses Record.
+    int getNumActiveInputChannels() const;
+    // Switches on the device's first input channels (up to two) if none is on. Returns an error message, empty on success.
+    juce::String enableDefaultInput();
+    // Records the audio input to `file` from the start of the song: rewinds the song, starts it and writes what comes
+    // in, delayed by the round-trip latency so that it lines up with what was playing. Returns an error message,
+    // empty on success.
+    juce::String startRecording (const juce::File& file, InputRecorder::Channels channels);
+    InputRecorder::Take stopRecording(); // the transport keeps running; the caller stops it
+    bool isRecording() const noexcept { return recorder.isActive(); }
+    double getRecordedSeconds() const noexcept { return recorder.getSecondsRecorded(); }
+    // Hear the input through the speakers (adds its latency; keep off with speakers and a microphone: feedback).
+    void setInputMonitoring (bool on) noexcept { monitorInput.store (on, std::memory_order_relaxed); }
+    // Loudest input sample since the last call (0 without input).
+    float consumeInputPeak() noexcept { return inputPeak.exchange (0.0f, std::memory_order_relaxed); }
 
     // Any thread.
     void setPlaying (bool shouldPlay) noexcept { playing.store (shouldPlay, std::memory_order_relaxed); }
@@ -112,10 +142,38 @@ private:
         }
     }
 
+    class MidiReceiver : public juce::MidiInputCallback
+    {
+    public:
+        explicit MidiReceiver (AudioEngine& e) : engine (e) {}
+        void handleIncomingMidiMessage (juce::MidiInput*, const juce::MidiMessage& message) override { engine.handleMidi (message); }
+
+    private:
+        AudioEngine& engine;
+    };
+
+    bool pushLive (const LiveNoteEvent& e) noexcept
+    {
+        const juce::SpinLock::ScopedLockType lock (producerLock);
+        return liveNotes.push (e);
+    }
+    void watchMidiDevices();
+
     juce::AudioDeviceManager deviceManager;
     SnapshotExchange<Project> exchange;
     Player player;
     LiveNoteQueue liveNotes;
+    juce::SpinLock producerLock; // serialises the threads that produce live notes; never taken by the audio thread
+    MidiNoteMapper midiMapper;   // guarded by producerLock
+    MidiReceiver midiReceiver { *this };
+    juce::MidiDeviceListConnection midiDeviceWatch;
+    juce::StringArray knownMidiInputs;
+    InputRecorder recorder;
+    bool captureStarted = false; // audio thread only: the recorder is armed and the song was rewound for it
+    std::atomic<int> midiTarget { 0 };
+    std::atomic<bool> midiActivity { false };
+    std::atomic<bool> monitorInput { false };
+    std::atomic<float> inputPeak { 0.0f };
 
     std::atomic<bool> playing { false };
     std::atomic<double> bpm { 120.0 };

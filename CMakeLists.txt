@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(SunLoopsStudio VERSION 0.7.0 LANGUAGES C CXX)
+project(SunLoopsStudio VERSION 0.8.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -30,6 +30,7 @@ set(SLS_CORE_SOURCES
     src/audio/OfflineRenderer.cpp
     src/audio/AudioExport.cpp
     src/audio/AudioImport.cpp
+    src/audio/InputRecorder.cpp
     src/library/ChannelPreset.cpp
     src/library/Library.cpp
     src/library/ProjectFile.cpp

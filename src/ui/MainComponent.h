@@ -81,6 +81,15 @@ private:
     bool addAudioClip (const std::shared_ptr<const SampleData>& data, int track, int tick, juce::String& note);
     void loadAudioClipFiles (juce::StringArray& problems); // after a project was opened: read the audio its clips refer to
 
+    // Recording the audio input into the playlist
+    void toggleRecording();
+    void startRecording();
+    void finishRecording (const juce::String& why);
+    void openRecordMenu();
+    void setRecordTrack (int track);
+    void updateRecordButton();
+    void showRecordProgress();
+
     // Project files
     ProjectDocument makeDocument();
     void applyDocument (ProjectDocument document, const juce::File& file, juce::StringArray& problems);
@@ -168,6 +177,11 @@ private:
     std::unique_ptr<juce::PropertiesFile> settings;
     juce::Component::SafePointer<juce::DialogWindow> audioDialog;
     juce::Component::SafePointer<juce::DialogWindow> assignDialog;
+    bool recording = false;
+    int recordTrack = 0;                                             // playlist track the take goes to
+    InputRecorder::Channels recordChannels = InputRecorder::Channels::Mono;
+    bool monitorInput = false;
+    juce::String midiNote;                                           // last status text set for MIDI activity
     bool metronomeOn = false;
     float metronomeVolume = 0.5f;
     bool restoringLayout = false;
@@ -186,6 +200,8 @@ private:
     juce::TextButton mixerToggle { "Mixer F9" };
     juce::TextButton resetButton { "Reset" };
     RightClickButton metronomeButton { "Metronome" };
+    RightClickButton recordButton { "Record" };
+    juce::TextButton recordMenuButton { juce::String::fromUTF8 ("\xe2\x96\xbe") };
     juce::TextButton deviceButton { "Audio..." };
     juce::Slider bpmSlider { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
     juce::Slider volumeSlider { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };

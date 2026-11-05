@@ -66,6 +66,16 @@ void Player::releaseVoices (bool includeSamplers) noexcept
             v.state = State::Release; // notes held by hand are ended by liveNoteOff, not by the transport
 }
 
+void Player::rewind() noexcept
+{
+    releaseVoices (releaseSamplesOnStop);
+    releaseClips();
+    tickPos = 0.0;
+    nextEvent.fill (0);
+    nextClip = 0;
+    lastClickBeat = -1;
+}
+
 void Player::startClip (const AudioEvent& e) noexcept
 {
     if (e.data == nullptr || e.data->numFrames() < 2)

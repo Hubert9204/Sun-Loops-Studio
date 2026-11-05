@@ -3,8 +3,8 @@
 *[English](README.md)*
 
 Un programma open source per produrre musica a loop su Linux, scritto in C++20 con JUCE 8. Costruisci ritmi e
-melodie nel **Channel Rack**, scrivi le note nel **Piano Roll**, disponi i pattern nella **Playlist**, bilanciali nel
-**Mixer** con effetti ed esporti il risultato in WAV. Un **Browser** a sinistra raccoglie i tuoi suoni; ogni altro
+melodie nel **Channel Rack**, scrivi le note nel **Piano Roll**, disponi i pattern nella **Playlist** (insieme a file audio e registrazioni), bilanciali nel
+**Mixer** con effetti ed esporti il risultato in WAV, MP3, Ogg, AAC, FLAC o AIFF. Un **Browser** a sinistra raccoglie i tuoi suoni; ogni altro
 strumento sta in un pannello mobile che puoi spostare, ridimensionare, sovrapporre, aprire e chiudere.
 
 ![Sun Loops Studio: browser, channel rack e playlist](docs/images/overview.png)
@@ -14,10 +14,11 @@ strumento sta in un pannello mobile che puoi spostare, ridimensionare, sovrappor
 Sun Loops Studio si ispira al modo di lavorare dei DAW a loop come FL Studio. È un progetto indipendente: non usa
 codice, nomi, grafica o risorse di altri prodotti e non è affiliato né approvato dai loro produttori.
 
-**Stato: alpha (0.7.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
+**Stato: alpha (0.8.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
 La riproduzione è stata confermata su un vero PC Nobara per la versione 0.3; tutto ciò che è stato aggiunto dopo
-(pannelli, pattern, playlist, browser, pitch/swing, mixer espanso ed effetti, salvataggio dei progetti, AppImage) è stato provato con test automatici e
-in un display virtuale con un dispositivo audio muto, non ancora con audio reale. **L'hosting di plugin VST3 non è
+(pannelli, pattern, playlist, browser, pitch/swing, mixer espanso ed effetti, salvataggio dei progetti, AppImage, clip audio, trascinamento
+dei file, registrazione, MIDI, metronomo e formati di esportazione) è stato provato con test automatici e in un display virtuale con un
+dispositivo audio muto, non ancora con audio reale, microfoni o hardware MIDI. **L'hosting di plugin VST3 non è
 implementato**: gli slot effetti del mixer contengono gli effetti propri di Sun Loops Studio (Equalizer, Reverb,
 Delay, Compressor). Vedi [docs/roadmap.md](docs/roadmap.md) per sapere con precisione cosa è verificato, cosa no e
 cosa manca (hosting VST3 e annulla/ripristina sono le mancanze principali).
@@ -40,17 +41,24 @@ cosa manca (hosting VST3 e annulla/ripristina sono le mancanze principali).
   clic), come in FL Studio.
 - **Pattern e Playlist** - più pattern (nuovi o copiati) disposti come clip su 8 tracce. Il pulsante *Pattern / Song*
   sceglie se ripetere il pattern selezionato o suonare tutta la playlist.
+- **Audio nella Playlist** - trascina file audio (`.wav .aiff .flac .ogg .oga .mp3 .aac`) o video (ne viene presa la
+  traccia audio) dal file manager sulla Playlist: diventano clip con la forma d'onda, che puoi spostare, accorciare ed
+  eliminare. AAC e l'audio dei video richiedono `ffmpeg` installato.
+- **Registrazione** - il pulsante **Record** registra un microfono o uno strumento nella traccia di playlist che scegli,
+  a tempo con il brano. Le **tastiere MIDI** suonano il canale selezionato. Entrambi si impostano in **Audio...**.
+- **Metronomo** - un click con tempo (anche tap tempo) e volume regolabili, su un pulsante a parte.
 - **Mixer** (`F9`) - 8 tracce verticali, ognuna con fader e dB, bilanciamento stereo, mute, solo, indicatore
   Peak/RMS e 4 slot per effetti in serie (Equalizer, Reverb, Delay, Compressor, con bypass). La strip master a destra
   ha gli stessi 4 slot, applicati a tutto il mix. Più canali possono usare la stessa traccia.
 - **Sampler** - carica file WAV, FLAC, OGG e AIFF (fino a 30 s), li suona una volta sola, ritonati in base alla nota.
   Cassa, rullante e hi-hat sono sintetizzati: non servono file per iniziare.
 - **Progetti** - menu `File` e `Ctrl+N` / `Ctrl+O` / `Ctrl+S` / `Ctrl+Maiusc+S`: *Save* scrive un progetto con nome;
-  un progetto che non ha ancora un nome viene salvato subito con un nome automatico (`Untitled <data ora>.slsproj`)
+  un progetto che non ha ancora un nome viene salvato subito con un nome automatico (`Untitled <data ora>.slp`)
   in `~/Music/Sun Loops Studio/Projects`, così non si perde nulla; *Save as...* chiede il nome. Progetti recenti,
   barra del titolo con il nome e `*` per le modifiche non salvate, avviso prima di chiudere con lavoro non
   salvato. I sample sono referenziati con il percorso, non copiati nel file.
-- **Esportazione** - pattern o brano in WAV a 24 bit / 48 kHz, generato dallo stesso motore che lo suona.
+- **Esportazione** - *File > Export audio*: pattern o brano in WAV, AIFF, FLAC (senza perdita) oppure MP3, Ogg Vorbis
+  (`.ogg` / `.oga`), AAC (con perdita), generato dallo stesso motore che lo suona. MP3 e AAC richiedono `ffmpeg`.
 - **Audio** - scelta del dispositivo, **buffer** regolabile (predefinito 1024 campioni) e un tasto **Auto** che prova
   il tuo computer e sceglie una dimensione che non gracchia, più la lettura di carico e blocchi persi. La scelta viene
   ricordata.
@@ -95,7 +103,8 @@ campione, loop, polifonia, tracce del mixer, pitch e swing, i quattro effetti, s
 allochi mai memoria (effetti compresi), uno stress test concorrente del passaggio dati interfaccia→audio, andata e
 ritorno WAV, lo scanner dei plugin, l'albero e la scansione del browser, i preset dei canali, le regole dei pannelli, la
 playlist, le note dal vivo e il file di progetto (andata e ritorno, file danneggiati o ostili, sample mancanti,
-scrittura atomica).
+scrittura atomica), l'esportazione in ogni formato, l'importazione di audio e video, le clip audio, il registratore,
+la gestione delle note MIDI e il metronomo.
 
 ## Licenza
 

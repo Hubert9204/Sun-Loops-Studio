@@ -27,13 +27,15 @@ void styleLabel (juce::Label& label, juce::Colour colour, float fontHeight = 14.
 AudioSettingsComponent::AudioSettingsComponent (AudioEngine& e, std::function<void (bool)> playing)
     : engine (e),
       setPlaying (std::move (playing)),
-      selector (e.getDeviceManager(), 0, 0, 2, 2, false, false, true, true)
+      selector (e.getDeviceManager(), 0, 2, 2, 2, true, false, false, true)
 {
     addAndMakeVisible (selector);
 
-    for (auto* l : { &bufferLabel, &delayLabel, &autoStatus, &loadLabel, &helpLabel })
+    for (auto* l : { &inputLabel, &bufferLabel, &delayLabel, &autoStatus, &loadLabel, &helpLabel })
         addAndMakeVisible (l);
 
+    styleLabel (inputLabel, kText, 15.0f);
+    inputLabel.setTooltip ("Play or speak into the input: the bar moves when sound arrives. Choose the input and its channels above.");
     styleLabel (bufferLabel, kText, 15.0f);
     styleLabel (delayLabel, kMuted);
     styleLabel (autoStatus, kText);
@@ -95,15 +97,28 @@ void AudioSettingsComponent::paint (juce::Graphics& g)
     g.fillAll (kBackground);
     g.setColour (juce::Colour (0xff3d424d));
     g.drawHorizontalLine (selector.getBottom() + 6, 12.0f, static_cast<float> (getWidth() - 12));
+
+    // Input level bar: green, then amber and red near the top.
+    g.setColour (juce::Colour (0xff1c1f24));
+    g.fillRoundedRectangle (inputBar.toFloat(), 3.0f);
+    const float shown = std::clamp (inputLevel, 0.0f, 1.0f);
+    const auto filled = inputBar.toFloat().withWidth (inputBar.getWidth() * std::pow (shown, 0.5f));
+    g.setColour (shown > 0.98f ? juce::Colour (0xffd9433b) : shown > 0.7f ? juce::Colour (0xffe8b13a) : juce::Colour (0xff4fbf7a));
+    g.fillRoundedRectangle (filled, 3.0f);
 }
 
 void AudioSettingsComponent::resized()
 {
     auto area = getLocalBounds().reduced (14);
-    auto lower = area.removeFromBottom (250);
+    auto lower = area.removeFromBottom (290);
     selector.setBounds (area.withTrimmedBottom (12));
 
-    lower.removeFromTop (12);
+    lower.removeFromTop (10);
+    auto inputRow = lower.removeFromTop (22);
+    inputLabel.setBounds (inputRow.removeFromLeft (100));
+    inputBar = inputRow.reduced (0, 5).withTrimmedRight (6);
+
+    lower.removeFromTop (10);
     auto row = lower.removeFromTop (28);
     bufferLabel.setBounds (row.removeFromLeft (100));
     sizeBox.setBounds (row.removeFromLeft (230));
@@ -273,6 +288,14 @@ void AudioSettingsComponent::stopAuto (bool restore)
 
 void AudioSettingsComponent::timerCallback()
 {
+    const float inputNow = engine.consumeInputPeak();
+    const float newLevel = juce::jmax (inputNow, inputLevel * 0.8f);
+    if (std::abs (newLevel - inputLevel) > 0.002f)
+    {
+        inputLevel = newLevel < 0.002f ? 0.0f : newLevel;
+        repaint (inputBar.expanded (2));
+    }
+
     const float p = engine.consumePeakLoad();
     shownPeak = juce::jmax (shownPeak, p);
 

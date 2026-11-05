@@ -98,6 +98,16 @@ juce::Rectangle<int> PlaylistView::audioClipRect (const AudioClip& c) const noex
     return { x0, kRulerHeight + c.track * trackHeight(), x1 - x0, trackHeight() };
 }
 
+void PlaylistView::setArmedTrack (int track)
+{
+    track = std::clamp (track, 0, kPlaylistTracks - 1);
+    if (track != armedTrack)
+    {
+        armedTrack = track;
+        repaint();
+    }
+}
+
 void PlaylistView::setBpm (double newBpm)
 {
     if (newBpm > 0.0 && std::abs (newBpm - bpm) > 1.0e-9)
@@ -309,7 +319,18 @@ void PlaylistView::paint (juce::Graphics& g)
     g.setColour (kText);
     g.setFont (juce::FontOptions (12.0f));
     for (int t = 0; t < kPlaylistTracks; ++t)
-        g.drawText ("Track " + juce::String (t + 1), 6, kRulerHeight + t * th, kNameWidth - 6, th, juce::Justification::centredLeft);
+    {
+        if (t == armedTrack)
+        {
+            // the track Record writes to
+            g.setColour (juce::Colour (0xffd9433b));
+            g.fillEllipse (static_cast<float> (kNameWidth - 14), static_cast<float> (kRulerHeight + t * th + th / 2 - 4), 8.0f, 8.0f);
+            g.setColour (juce::Colours::white);
+        }
+        else
+            g.setColour (kText);
+        g.drawText ("Track " + juce::String (t + 1), 6, kRulerHeight + t * th, kNameWidth - 20, th, juce::Justification::centredLeft);
+    }
 }
 
 void PlaylistView::mouseDown (const juce::MouseEvent& e)
@@ -317,6 +338,14 @@ void PlaylistView::mouseDown (const juce::MouseEvent& e)
     drag = Drag::None;
     dragClip = -1;
 
+    if (e.x < kNameWidth && e.y >= kRulerHeight)
+    {
+        const int track = yToTrack (e.y);
+        setArmedTrack (track);
+        if (onTrackSelected)
+            onTrackSelected (track);
+        return;
+    }
     if (e.x < kNameWidth || e.y < kRulerHeight)
         return;
 

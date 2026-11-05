@@ -20,13 +20,18 @@ src/audio/                      No UI dependencies except JUCE audio types
   MixerRouting.h                Which mixer tracks have channels on them / are free (plain C++)
   BufferTuning.h                Buffer size logic: clean-trial rule and the BufferTuner search (plain C++)
   OfflineRenderer.*             Renders a Project to a buffer or WAV file with the same Player
+  AudioExport.*                 Export to WAV, AIFF, FLAC, Ogg (.ogg/.oga) natively; MP3 and AAC through ffmpeg
+  AudioImport.*                 Decoding audio files and extracting the sound of videos (ffmpeg) into SampleData
+  InputRecorder.*               Audio input to a WAV file: wait-free hand-over to a writer thread
+  MidiNotes.h                   MidiNoteMapper: MIDI messages -> live note events (plain C++ over juce::MidiMessage)
+  TapTempo.h                    Tap tempo (plain C++)
   BuiltinSamples.*              Synthesised kick, snare and hat
 
 src/library/                    No JUCE GUI; JUCE core only (files, JSON)
   BrowserModel.h                Browser tree nodes, which are draggable, search filter (plain C++)
   ChannelPreset.*               Channel presets as JSON (.slspreset) and the factory presets
   Library.*                     ~/Music/Sun Loops Studio folders, directory scan, building the browser tree
-  ProjectFile.*                 The .slsproj project file: ProjectDocument <-> JSON, safe read and write
+  ProjectFile.*                 The .slp project file (older .slsproj still read): ProjectDocument <-> JSON, safe read and write
 
 src/plugins/PluginScanner.*     VST3 discovery. Only feeds the browser's Plugin folder; no hosting
 
@@ -38,7 +43,8 @@ src/ui/
   Knob.*  TrackSelector.*       Rotary knob with caption; the "Track N" display
   FileBrowser.*  DragItems.h    The browser sidebar; the text format of dragged items
   PianoRoll.*                   Note editor
-  PlaylistView.*                Playlist panel body
+  PlaylistView.*                Playlist panel body: pattern clips, audio clips with waveforms, file drops, track arming
+  MetronomePanel.*  RightClickButton.h   The metronome pop-up (tempo, volume, tap); a button with a right-click action
   AudioSettings.*               The Audio... dialog: device selector, buffer size menu, Auto, load read-out
   MixerPanel.*                  Mixer panel body: track strips, master strip (with its effect slots), effects panel
   AssignTrackDialog.*           The "Assign free mixer track" window
@@ -49,7 +55,7 @@ tests/test_core.cpp             Headless tests (no audio device, no display)
 ```
 
 `CMakeLists.txt` builds two targets from the same core sources (`SLS_CORE_SOURCES`: Player, Effects, BuiltinSamples,
-OfflineRenderer, ChannelPreset, Library, ProjectFile, PluginScanner): the application `SunLoopsStudio` and the console test program
+OfflineRenderer, AudioExport, AudioImport, InputRecorder, ChannelPreset, Library, ProjectFile, PluginScanner): the application `SunLoopsStudio` and the console test program
 `SunLoopsStudioTests`.
 
 ## Threads and real-time rules
@@ -58,6 +64,9 @@ OfflineRenderer, ChannelPreset, Library, ProjectFile, PluginScanner): the applic
 | --- | --- | --- |
 | Message (UI) thread | Windows, editing, file dialogs, decoding samples, building a new `Project` | May allocate and block briefly |
 | Audio thread | `AudioEngine::audioDeviceIOCallbackWithContext` -> `Player::render` | No allocation, no locks, no I/O, no logging |
+| Import thread | A one-thread pool in `MainComponent`: decodes dropped audio, runs ffmpeg for AAC and video sound | Hands each result to the message thread with `callAsync` (guarded by a `SafePointer`) |
+| Recorder thread | A `TimeSliceThread` in `InputRecorder`: writes the recorded blocks to the WAV file | Fed by a lock-free FIFO (`ThreadedWriter`) |
+| MIDI threads | One per enabled MIDI input; call `AudioEngine::handleMidi` | Take a tiny spin lock shared with the message thread's live notes, then push to the wait-free queue; the audio thread never takes that lock |
 
 The audio thread shares state with the rest of the program in two ways only: lock-free atomics for scalar controls
 (play state, BPM, master gain; peaks flow the other way) and `SnapshotExchange` for the project itself.
@@ -121,6 +130,60 @@ LiveNoteQueue (wait-free SPSC, 64 events)  -->  audio callback  -->  Player::liv
 - `PianoRoll::sound(pitch)` keeps at most one note sounding and pairs every start with one stop (also when the panel
   is hidden or its notes are replaced). `MainComponent` remembers which channel got the "on" so the "off" goes to the
   same one even if the selection changes in between.
+
+## Audio clips
+
+An `AudioClip` (in `Arrangement`) holds the decoded `SampleData` (whose `source` is the file path), a name, a playlist
+track, a start in ticks (always on a beat), a length in ticks and a gain. `canPlaceAudio` enforces the timeline limits and
+no overlap with other audio clips *or* pattern clips on the same track (and `canPlace` for pattern clips now checks the
+audio clips). `compileSong` turns each clip into an `AudioEvent` (start, end, mixer track = playlist track, gain, shared
+pointer to the audio) in `Project::audioEvents`, sorted by start; `compilePattern` has none, so audio only plays in Song
+mode and in exports of the song.
+
+`Player` keeps 16 clip voices, separate from the synth/sampler voices. Like notes, events start when `tickPos` reaches
+`startTick` (`nextClip` is the cursor, reset on loop wrap, stop and `rewind()`); a voice reads the audio with linear
+interpolation at `sampleRate / deviceRate`, is faded in over 2 ms, fades out over 80 ms when its end tick, a loop wrap or
+a stop is reached, and adds to the mixer track's bus before the track's effects and fader. When a new snapshot arrives a
+playing voice survives only if the new snapshot still holds the same audio (the data belongs to the snapshot).
+`Player::rewind()` (audio thread) restarts the song, used by the engine when a recording begins.
+
+The clip's *length* is stored (it was the audio's length at the tempo in force when it was added), but the sound always
+plays at its real speed, so a tempo change can leave the clip shorter or longer than the sound. In the project file
+(`"audioClips"`) only the path of each file is written; on opening, `ProjectDocument::fromJson` gives each clip a silent
+placeholder (`makeMissingSample`) and `MainComponent::loadAudioClipFiles` decodes the files, keeping the placeholder (and
+the path) for a missing file.
+
+### Importing
+
+`AudioImport` decodes with JUCE's readers (WAV, AIFF, FLAC, Ogg; `.oga` through `OggVorbisAudioFormat` directly; MP3 with
+`JUCE_USE_MP3AUDIOFORMAT=1`), up to `kMaxImportSeconds` (300 s; longer files are cut with a warning). AAC and anything the
+built-in readers refuse go through `ffmpeg -i in -vn -map 0:a:0 -t 301 -ac 2 -c:a pcm_s16le out.wav` and are then read the
+same way. A video's sound is written the same way into `Samples/From videos/` under a unique name (through a `.part` file,
+which is removed on failure) and the clip refers to that WAV. `PlaylistView` is a `FileDragAndDropTarget`: it highlights
+the drop position and reports `(files, track, tick)`; `MainComponent::importMediaFiles` decodes on the import thread and
+`finishImport` places the clips on the message thread (first free beat from the drop position, shortened to the free
+space if needed).
+
+## Recording and MIDI
+
+`InputRecorder::start` opens a 24-bit WAV through a `ThreadedWriter` with a 3-second FIFO. `process()` (audio thread)
+measures the peak, drops the first `skipFrames` (the round-trip latency the device reports, so that the take lines up with
+the song that was playing) and writes the block; a start/stop handshake (`active` and `inProcess`, both sequentially
+consistent) lets `stop()` wait until the audio thread has left `process()` before the writer is destroyed, so the audio
+thread takes no lock. `AudioEngine::startRecording` sets the transport playing *before* arming the recorder; the callback
+checks the recorder first and the transport second, and calls `Player::rewind()` in the first block that sees the recorder
+armed, so the take and the song start in the same block. `AudioEngine::enableDefaultInput` switches on the device's first
+input channels (the engine opens the device with inputs available but none enabled, so no microphone is open until the
+user chooses one or records). Input monitoring adds the input to the output before the master volume is applied.
+
+`MainComponent` finishes a take (also when the transport is stopped or a limit is reached), reads the WAV back, and places
+it at tick 0 of the armed track, cut to the free space.
+
+MIDI: the engine registers one `MidiInputCallback` for all enabled inputs. `MidiNoteMapper` turns note on/off (velocity 0
+included), all-notes-off and all-sound-off into `LiveNoteEvent`s for the selected channel and remembers which channel
+got each note on, so the note off cannot be misrouted when the selection changes. The producers (message thread and MIDI
+threads) share a spin lock in front of the single-producer `LiveNoteQueue`; the audio thread only pops. A
+`MidiDeviceListConnection` switches on keyboards plugged in while the program runs.
 
 ## Mixer tracks and effects
 
@@ -226,8 +289,9 @@ one when the project is applied; a source that cannot be loaded becomes `makeMis
 frames (silent) that still carries the `source` string, so saving again does not lose the reference.
 
 `writeProjectFile()` writes to a `juce::TemporaryFile` next to the target and then replaces the target, so a failed
-write leaves the old file intact; it returns an error string. `withProjectExtension()` adds `.slsproj` to a name that
-lacks it, and `automaticProjectFile()` makes `Untitled <date> <time>.slsproj` in `Library`'s `projects` folder
+write leaves the old file intact; it returns an error string. `withProjectExtension()` adds `.slp` to a name that
+lacks it (names ending in `.slp` or the older `.slsproj` are left alone; `projectFileForSaveAs()` turns an old `.slsproj` into
+`.slp`), and `automaticProjectFile()` makes `Untitled <date> <time>.slp` in `Library`'s `projects` folder
 (`~/Music/Sun Loops Studio/Projects`), never an existing name.
 
 In the interface, `MainComponent` turns its state into a document (`makeDocument`) and back (`applyDocument`, which
@@ -325,9 +389,19 @@ failed. It covers:
   behind) and the automatic file name. The 32 MB size limit has no test of its own;
 - a concurrent stress test of `SnapshotExchange` (a reader on its own thread against a publishing writer);
 - WAV round trip and the VST3 scanner on empty and invalid directories;
+- export to every format (round trip with length and sound; ffmpeg formats decoded again with ffmpeg; no temporary
+  files left; a missing or failing ffmpeg writes nothing and never damages an existing file);
+- importing: every format, mono, the length limit, damaged/missing files, AAC without ffmpeg, the sound of a video (and a
+  video without sound, a second import never replacing a file);
+- audio clips: placement rules against audio and pattern clips, compilation, playing at the right time and speed, cut at
+  the end tick, loop wrap, mixer-track mute and meter, snapshot changes while playing, no allocation, export, project
+  file (round trip, bad clips dropped, older files);
+- the recorder (stereo, mono, one input, skipped frames, no input, refusals, no allocation on the audio thread, stopping
+  while a thread is busy calling `process`), MIDI note mapping (also through the queue into the Player), `rewind()`, the
+  metronome (timing, accent, BPM, volume, never in an export) and tap tempo;
 - `PanelLayout` parsing and clamping;
 - the arrangement: placement rules, compilation of pattern and song, and audible results through the offline
   renderer (the first and second clip sound, the gap between them is silent).
 
-Mutation checks were used while writing tests: deliberately breaking a rule in the code and confirming a test fails.
+Mutation checks were used while writing the earlier tests: deliberately breaking a rule in the code and confirming a test fails.
 The user interface is checked by hand (see [building.md](building.md#tests)).
