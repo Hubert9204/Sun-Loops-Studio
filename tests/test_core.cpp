@@ -2,6 +2,7 @@
 // snapshot exchange, offline renderer and WAV output. No audio device or display needed.
 
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
@@ -18,6 +19,10 @@
 #include "audio/SnapshotExchange.h"
 #include "plugins/PluginScanner.h"
 
+// Several checks below deliberately compare floats with ==: "exactly zero" means silence or
+// "no contribution at all", which is the property being tested.
+#pragma GCC diagnostic ignored "-Wfloat-equal"
+
 // --- allocation counter, used to prove that Player::render never allocates ---------
 static std::atomic<long> gAllocs { 0 };
 static std::atomic<bool> gCounting { false };
@@ -31,8 +36,13 @@ void* operator new (std::size_t n)
     throw std::bad_alloc();
 }
 
+// malloc/free are paired correctly here. GCC 13+ still reports -Wmismatched-new-delete when it
+// inlines std::vector's allocation into the tests, so silence it for these two definitions only.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmismatched-new-delete"
 void operator delete (void* p) noexcept { std::free (p); }
 void operator delete (void* p, std::size_t) noexcept { std::free (p); }
+#pragma GCC diagnostic pop
 
 namespace
 {
@@ -417,12 +427,21 @@ void testExchangeStress()
     std::atomic<bool> stop { false };
     std::atomic<bool> corrupt { false };
     std::atomic<long> reads { 0 };
+    std::atomic<bool> readerStarted { false };
 
     std::thread audio ([&]
     {
+        readerStarted = true;
         while (! stop.load())
         {
             const auto* p = exchange.acquire();
+
+            // The exchange publishes an empty default Project (revision 1) when it is constructed.
+            // If this thread starts before the writer's first publish it will see that one, which
+            // does not follow the invariant below. It is valid, so skip it.
+            if (p->revision == 1)
+                continue;
+
             const size_t n = p->channels.size();
             if (static_cast<int> (n) * kBeat != p->lengthTicks)
                 corrupt = true;
@@ -436,7 +455,8 @@ void testExchangeStress()
     });
 
     const auto shared = sls::makeHatSample();
-    for (int round = 0; round < 3000; ++round)
+
+    auto publishOne = [&] (int round)
     {
         const int k = 1 + round % sls::kMaxChannels;
         std::vector<sls::Channel> chans;
@@ -448,11 +468,27 @@ void testExchangeStress()
             chans.push_back (samplerChannel (shared, std::move (notes)));
         }
         exchange.publish (std::make_unique<sls::Project> (sls::Project::make (std::move (chans), k * kBeat)));
-    }
+    };
+
+    // Make sure the two threads really overlap: wait for the reader to start, and keep publishing
+    // until it has read a good number of snapshots. Without this, a loaded machine can run the whole
+    // writer loop before the reader thread is ever scheduled.
+    using Clock = std::chrono::steady_clock;
+    const auto giveUp = Clock::now() + std::chrono::seconds (10);
+
+    while (! readerStarted.load() && Clock::now() < giveUp)
+        std::this_thread::yield();
+
+    int round = 0;
+    while (round < 3000 || (reads.load() < 1000 && Clock::now() < giveUp))
+        publishOne (round++);
 
     stop = true;
     audio.join();
-    check (! corrupt.load() && reads.load() > 0, "3000 publishes against a concurrent reader: no torn or freed snapshot");
+
+    // Two separate questions: did the reader ever see a broken snapshot, and did it get to read at all?
+    check (! corrupt.load(), "3000+ publishes against a concurrent reader: no torn or freed snapshot");
+    check (reads.load() >= 1000, "the reader really overlapped with the writer (at least 1000 snapshots read)");
 }
 
 void testWavRoundTrip()
