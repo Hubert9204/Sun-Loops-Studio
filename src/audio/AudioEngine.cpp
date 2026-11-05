@@ -2,6 +2,8 @@
 
 #include <cmath>
 
+#include "audio/BufferTuning.h"
+
 namespace sls
 {
 AudioEngine::AudioEngine() = default;
@@ -12,11 +14,14 @@ AudioEngine::~AudioEngine()
     deviceManager.closeAudioDevice();
 }
 
-juce::String AudioEngine::initialise()
+juce::String AudioEngine::initialise (const juce::XmlElement* savedState)
 {
     // 0 inputs, 2 outputs. JUCE picks ALSA or JACK on Linux; PipeWire is reached
-    // through its pipewire-alsa / pipewire-jack compatibility layers.
-    auto error = deviceManager.initialiseWithDefaultDevices (0, 2);
+    // through its pipewire-alsa / pipewire-jack compatibility layers. A saved state brings back the device and
+    // buffer size the user chose; the first time the buffer is a safe 1024 rather than the device's own default.
+    juce::AudioDeviceManager::AudioDeviceSetup preferred;
+    preferred.bufferSize = kDefaultBufferSize;
+    auto error = deviceManager.initialise (0, 2, savedState, true, {}, &preferred);
     if (error.isEmpty())
         deviceManager.addAudioCallback (this);
     return error;
@@ -54,6 +59,7 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const*, int,
                                                     const juce::AudioIODeviceCallbackContext&)
 {
     const juce::ScopedNoDenormals noDenormals; // reverb/delay tails decay through the denormal range
+    const auto startTicks = juce::Time::getHighResolutionTicks();
     for (int ch = 0; ch < numOut; ++ch)
         if (out[ch] != nullptr)
             juce::FloatVectorOperations::clear (out[ch], numSamples);
@@ -111,6 +117,21 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const*, int,
         if (masterMeanSquare < 1.0e-20f)
             masterMeanSquare = 0.0f;
         masterRms.store (std::sqrt (masterMeanSquare), std::memory_order_relaxed);
+    }
+
+    if (numSamples > 0 && sampleRateHz > 0.0)
+    {
+        const double used = juce::Time::highResolutionTicksToSeconds (juce::Time::getHighResolutionTicks() - startTicks);
+        raiseTo (peakLoad, static_cast<float> (used * sampleRateHz / numSamples));
+
+        const float stress = loadTest.load (std::memory_order_relaxed);
+        if (stress > 0.0f)
+        {
+            const double target = stress * numSamples / sampleRateHz; // seconds the block should take in all
+            while (juce::Time::highResolutionTicksToSeconds (juce::Time::getHighResolutionTicks() - startTicks) < target)
+            {
+            }
+        }
     }
 }
 } // namespace sls

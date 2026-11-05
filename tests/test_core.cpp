@@ -13,6 +13,7 @@
 #include <juce_audio_formats/juce_audio_formats.h>
 
 #include "audio/Arrangement.h"
+#include "audio/BufferTuning.h"
 #include "audio/BuiltinSamples.h"
 #include "audio/Effects.h"
 #include "audio/LiveNotes.h"
@@ -2003,6 +2004,63 @@ void testProjectFile()
 
 } // namespace
 
+void testBufferTuning()
+{
+    using sls::BufferTuner;
+
+    check (std::abs (sls::bufferMilliseconds (1024, 48000.0) - 21.333) < 0.01 && sls::bufferMilliseconds (512, 0.0) == 0.0,
+           "a buffer's length in milliseconds");
+    check (sls::isClean ({ 512, 0, 0.5 }) && sls::isClean ({ 512, -1, 0.1 }) && ! sls::isClean ({ 512, 1, 0.1 })
+               && ! sls::isClean ({ 512, 0, 0.51 }),
+           "clean means no dropped block and the worst block under half its time (unknown dropouts count as none)");
+
+    const auto run = [] (std::vector<int> sizes, const std::vector<std::pair<int, double>>& seen)
+    {
+        BufferTuner t (std::move (sizes));
+        for (const auto& [xruns, load] : seen)
+            if (! t.finished())
+                t.addTrial (xruns, load);
+        return t;
+    };
+
+    {   // a fast computer: 256 is clean, and so is 512 -> 512 (the measured step of margin)
+        auto t = run ({ 256, 512, 1024, 2048 }, { { 0, 0.05 }, { 0, 0.04 } });
+        check (t.finished() && t.result() == 512 && ! t.struggling() && t.triedCount() == 2, "two clean sizes in a row: the second is chosen, testing stops");
+    }
+    {   // drops at 256 and 512, clean from 1024 -> 2048
+        auto t = run ({ 256, 512, 1024, 2048 }, { { 3, 0.2 }, { 1, 0.3 }, { 0, 0.2 }, { 0, 0.1 } });
+        check (t.finished() && t.result() == 2048 && ! t.struggling(), "drops at the small sizes: the first clean pair decides");
+    }
+    {   // a size that is clean but whose bigger neighbour drops is not trusted
+        auto t = run ({ 256, 512, 1024, 2048 }, { { 0, 0.1 }, { 2, 0.1 }, { 0, 0.1 }, { 0, 0.1 } });
+        check (t.finished() && t.result() == 2048, "a clean size followed by a dirty one is not trusted");
+    }
+    {   // slow in load rather than dropouts
+        auto t = run ({ 256, 512, 1024 }, { { 0, 0.9 }, { 0, 0.6 }, { 0, 0.3 } });
+        check (t.finished() && t.result() == 1024 && ! t.struggling(), "a block that takes most of its time is not clean even without dropouts");
+    }
+    {   // only the last one is clean
+        auto t = run ({ 256, 512, 1024 }, { { 1, 0.1 }, { 1, 0.1 }, { 0, 0.1 } });
+        check (t.finished() && t.result() == 1024 && ! t.struggling(), "only the largest size clean: it is used");
+    }
+    {   // nothing is clean
+        auto t = run ({ 256, 512, 1024 }, { { 5, 0.9 }, { 4, 0.8 }, { 2, 0.7 } });
+        check (t.finished() && t.result() == 1024 && t.struggling() && t.trials().size() == 3, "nothing clean: the largest is used and the tuner says it is struggling");
+    }
+    {   // odd input
+        BufferTuner empty ({});
+        check (! empty.finished() && empty.sizeToTry() == sls::kDefaultBufferSize, "no candidates: falls back to the default size");
+        BufferTuner messy ({ 1024, 256, 1024, 512 });
+        check (messy.candidateCount() == 3 && messy.sizeToTry() == 256, "candidates are sorted and de-duplicated, smallest first");
+        BufferTuner single ({ 512 });
+        single.addTrial (0, 0.1);
+        check (single.finished() && single.result() == 512, "a single candidate decides at once");
+        const int tried = single.triedCount();
+        single.addTrial (9, 9.0);
+        check (single.triedCount() == tried && single.result() == 512, "results after the end are ignored");
+    }
+}
+
 int main()
 {
     testProjectModel();
@@ -2030,6 +2088,7 @@ int main()
     testLiveNoteQueue();
     testLiveNotes();
     testProjectFile();
+    testBufferTuning();
 
     std::cout << "\n" << (failures == 0 ? "ALL TESTS PASSED" : "SOME TESTS FAILED") << " (" << failures << " failures)\n";
     return failures == 0 ? 0 : 1;

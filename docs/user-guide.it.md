@@ -283,6 +283,34 @@ compatibilità di PipeWire fanno funzionare entrambi. Se la riga di stato dice "
 **Audio...** e controlla che il sistema abbia un'uscita disponibile. La latenza è quella dichiarata dal dispositivo:
 il programma non la misura.
 
+### Dimensione del buffer (gracchiare)
+
+Il buffer audio è quanto suono il programma prepara in anticipo. **Un buffer più grande è più sicuro** (niente
+gracchiare né interruzioni) ma aggiunge ritardo tra la pressione di una nota e il suono; uno più piccolo reagisce
+prima ma richiede un computer più veloce e meno carico. Il programma parte con **1024 campioni** (circa 21-23 ms), una
+scelta sicura per la maggior parte dei computer.
+
+In **Audio...**, sotto *Buffer size*:
+
+- **Il menu** imposta la dimensione che vuoi (da 64 a 8192 campioni, con il ritardo in millisecondi accanto a
+  ciascuna). Si applica subito e la riproduzione continua. Se senti gracchiare, scegli la dimensione successiva. Se le
+  note suonate nel piano roll ti sembrano in ritardo, scegline una più piccola.
+- **Auto: set for this computer** serve quando non vuoi andare a tentativi. Suona il brano corrente (avviandolo se è
+  fermo) a 256, 512, 1024, ... campioni, per circa due secondi e mezzo ciascuno, aggiungendo un carico extra a ogni
+  blocco, così un computer con poco margine lo mostra. Per ogni dimensione guarda il conteggio dei blocchi persi
+  riportato dal sistema audio e il tempo più lungo impiegato da un blocco. Si ferma alla prima dimensione pulita *la
+  cui successiva è pulita a sua volta* e usa quella successiva: un passo di margine di sicurezza, misurato. La
+  finestra elenca cosa è stato provato (per esempio `256 ok  512 ok`). Se anche la dimensione massima perde blocchi lo
+  dice (il computer è molto occupato: chiudi altri programmi). **Cancel** (o la chiusura della finestra) rimette la
+  dimensione precedente.
+- **La lettura** mostra il carico del computer ora, il *busiest block* (quanta parte del suo tempo ha usato il blocco
+  più lento: 1 % è molto comodo, oltre il 50 % è troppo stretto) e il numero di **blocchi persi** dall'ultima modifica
+  del buffer. È un modo dal vivo per vedere se una dimensione funziona: fai suonare il brano e guarda.
+
+Dispositivo e dimensione del buffer vengono ricordati al prossimo avvio. Con JACK il buffer si imposta nel server JACK,
+quindi menu e Auto non sono disponibili. Auto è una misura sul tuo computer in quel momento: un desktop molto
+occupato più tardi, un brano più pesante o un mixer pieno di effetti possono richiedere comunque un buffer più grande.
+
 ## Limiti
 
 - Fino a 8 canali, 8 tracce del mixer con 4 slot effetti ciascuna, 64 pattern, 8 tracce di playlist, una linea del

@@ -105,6 +105,7 @@ not part of the repository.
 | Configure fails while fetching JUCE | No network, or GitHub unreachable. Retry; the download happens once and is cached in `build/_deps`. |
 | `-Wmismatched-new-delete` from `tests/test_core.cpp` | Newer GCC versions warn about the test's allocation counter. The file silences it with pragmas; if you still see it, please report your compiler version. |
 | Window opens but the status line says `No audio device` | Open **Audio...** and choose an output. Check that your system has one (`wpctl status` on PipeWire). |
+| Crackling, clicks or dropouts during playback | The audio buffer is too small for the computer. Open **Audio...** and choose a bigger buffer, or press **Auto: set for this computer**. The default is 1024 samples; see the user guide, *Buffer size*. |
 | No sound although a device is selected | Select the ALSA or JACK device that PipeWire exposes; check the master volume in the toolbar and that no channel is muted or another channel soloed. |
 | Panels are in strange places | Click **Reset**, or delete `~/.config/SunLoopsStudio/SunLoopsStudio.settings`. |
 | Keyboard shortcuts do nothing | Click the window once so it is active; shortcuts do not work while a dialog is open. |

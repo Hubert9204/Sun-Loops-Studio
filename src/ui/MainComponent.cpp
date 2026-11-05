@@ -1,5 +1,7 @@
 #include "ui/MainComponent.h"
 
+#include "ui/AudioSettings.h"
+
 #include <functional>
 #include <optional>
 
@@ -10,6 +12,11 @@
 
 namespace sls
 {
+namespace
+{
+constexpr const char* kAudioStateKey = "audio.device"; // the audio device and buffer size, as JUCE saves them
+}
+
 namespace
 {
 constexpr int kLoopBars = 2;
@@ -322,7 +329,11 @@ MainComponent::MainComponent()
     projectDirty = false; // the demo song counts as untitled and unchanged
     updateWindowTitle();
 
-    const auto error = engine.initialise();
+    std::unique_ptr<juce::XmlElement> savedAudio;
+    if (settings != nullptr)
+        savedAudio = settings->getXmlValue (kAudioStateKey);
+    const auto error = engine.initialise (savedAudio.get());
+    engine.getDeviceManager().addChangeListener (this); // from now on the device and buffer size are remembered
     deviceLabel.setText (error.isEmpty() ? engine.describeDevice() : "Audio error: " + error,
                          juce::dontSendNotification);
 
@@ -336,6 +347,8 @@ MainComponent::MainComponent()
 MainComponent::~MainComponent()
 {
     stopTimer();
+    engine.getDeviceManager().removeChangeListener (this);
+    audioDialog.deleteAndZero(); // it refers to the engine
     saveLayout();
     if (pluginScanThread != nullptr)
         pluginScanThread->stopThread (5000);
@@ -786,18 +799,32 @@ void MainComponent::setPlaying (bool shouldPlay)
 
 void MainComponent::openAudioSettings()
 {
-    auto* selector = new juce::AudioDeviceSelectorComponent (engine.getDeviceManager(),
-                                                             0, 0, 2, 2, false, false, true, false);
-    selector->setSize (480, 360);
+    if (audioDialog != nullptr)
+    {
+        audioDialog->toFront (true);
+        return;
+    }
 
     juce::DialogWindow::LaunchOptions options;
-    options.content.setOwned (selector);
+    options.content.setOwned (new AudioSettingsComponent (engine, [this] (bool play) { setPlaying (play); }));
     options.dialogTitle = "Audio settings";
     options.componentToCentreAround = this;
     options.dialogBackgroundColour = juce::Colour (0xff2a2d34);
     options.useNativeTitleBar = true;
     options.resizable = false;
-    options.launchAsync();
+    audioDialog = options.launchAsync();
+}
+
+void MainComponent::changeListenerCallback (juce::ChangeBroadcaster*)
+{
+    if (settings == nullptr)
+        return;
+    if (const auto state = engine.getDeviceManager().createStateXml())
+    {
+        settings->setValue (kAudioStateKey, state.get());
+        settings->saveIfNeeded();
+    }
+    deviceLabel.setText (engine.describeDevice(), juce::dontSendNotification);
 }
 
 void MainComponent::chooseSampleFor (int channelIndex)

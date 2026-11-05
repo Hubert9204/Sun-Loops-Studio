@@ -274,6 +274,32 @@ toolbar. The file is produced by the same engine that plays, so it sounds like w
 layers make both work. If the status line says "No audio device", pick an output in **Audio...** and check that your
 system has an output available. Latency is what the device reports; it is not measured by the program.
 
+### Buffer size (crackling)
+
+The audio buffer is how much sound the program prepares ahead. **A bigger buffer is safer** (no crackling or
+dropouts) but adds delay between pressing a note and hearing it; a smaller one reacts faster but needs a quicker, less
+busy computer. The program starts with **1024 samples** (about 21-23 ms), a safe choice for most computers.
+
+In **Audio...**, under *Buffer size*:
+
+- **The menu** sets the size you want (64 to 8192 samples, with the delay in milliseconds next to each). It applies
+  at once; playback continues. If you hear crackling, choose the next bigger size. If notes feel late when you play
+  the piano roll, choose a smaller one.
+- **Auto: set for this computer** is for when you do not want to guess. It plays your current song (starting it if it is
+  stopped) at 256, 512, 1024, ... samples, for about two and a half seconds each, with extra load added to every
+  block so that a computer short of headroom shows it. For each size it watches the audio system's count of dropped
+  blocks and the longest time one block took. It stops at the first size that is clean *and* whose next bigger size is
+  clean too, and uses that bigger one: one measured step of safety margin. The dialog lists what was tested
+  (for example `256 ok  512 ok`). If even the biggest size drops blocks it says so (the computer is very busy: close
+  other programs). **Cancel** (or closing the window) puts the previous size back.
+- **The read-out** shows the computer's load now, the *busiest block* (how much of its time the slowest block used;
+  1 % means very comfortable, over 50 % means too tight) and the number of **dropped blocks** since the buffer was
+  last changed. It is a live way to see whether a size works: play the song and watch it.
+
+The device and buffer size are remembered for the next start. With JACK the buffer is set in the JACK server, so the
+menu and Auto are unavailable there. Auto is a measurement on your computer at that moment: a very busy desktop later,
+a heavier song or a plugin-heavy mixer can still need a bigger size.
+
 ## Limits
 
 - Up to 8 channels, 8 mixer tracks with 4 effect slots each, 64 patterns, 8 playlist tracks, a 32-pattern-long

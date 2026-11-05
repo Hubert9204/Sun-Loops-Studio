@@ -1,6 +1,6 @@
 # Status and roadmap
 
-Version 0.6.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
+Version 0.6.1 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
 what is missing. If something here disagrees with the program, the program is right: please fix the page.
 
 ## What has been verified, and how
@@ -20,6 +20,8 @@ what is missing. If something here disagrees with the program, the program is ri
 | Project file: write/read round trip of a rich project (all pattern notes, clips, tracks, effect chains, sample sources), the loaded project rendering the same audio, version/format/type checks, NaN and out-of-range values, impossible notes and clips, size limits, truncated and empty files, missing samples keeping their reference, atomic writing, automatic file names | Automated headless tests (251 checks in total); the 32 MB size limit has no test | All pass |
 | Saving and opening in the interface: title `Untitled` / `Untitled *`, Ctrl+S on an unnamed project writing `Untitled <date> <time>.slsproj` and overwriting the same file on the next Ctrl+S, File menu, New / Open recent with Save / Don't save / Cancel, reopening restoring the saved state and not the unsaved edit, opening from the command line, a corrupt file and a file with a missing sample (messages shown, current project untouched / opened silent), Save as typing a name, the open chooser listing projects and double-click loading one, closing the window with Escape (stays), Return (saves and quits) and Don't save (quits without writing) | Manual, in a virtual display with a window manager (openbox) and simulated mouse and keyboard | Worked |
 | AppImage: `scripts/build_appimage.sh` builds `dist/Sun-Loops-Studio-0.6.0-x86_64.AppImage` (5 MB); started with `--appimage-extract-and-run` in a virtual display, it opened a project given on the command line (title and panels correct) | Built on Ubuntu 24.04 (glibc 2.39), run in a virtual display with a silent audio device | Worked |
+| Buffer size: the `BufferTuner` search and the clean-trial rule (all paths: fast and slow computers, flaky sizes, nothing clean, bad input) | Automated headless tests (263 checks in total) and mutation checks (ignoring dropped blocks, accepting a single clean trial: each made tests fail) | All pass |
+| Buffer size in the interface: default 1024 on a fresh profile; the menu switching to 256 and back (device restarts, status line and delay label follow); the choice still there after a restart; Auto testing 256 then 512 with the song playing and extra load (the load read-out showed 35 % during the test and 0 % after), choosing 512 and listing what it tested; Cancel and closing the window mid-test restoring the old size and stopping the song again; closing the program with the dialog open | Manual, in a virtual display with a window manager and a silent (ALSA `null`) device | Worked |
 | A use-after-free when clicking an item that rebuilds the browser tree (crash on *Scan for VST3 plugins...*) | Found in that manual session | Fixed (item actions are deferred); the same click was repeated afterwards |
 
 ## What has not been verified
@@ -41,6 +43,12 @@ what is missing. If something here disagrees with the program, the program is ri
   file chooser is JUCE's own, not the KDE dialog. Large projects were not timed, and the Save / Save as flow was not
   tried with a read-only folder or a full disk (a failed write is covered by a test that points the target at an
   impossible place and checks that the old file is untouched).
+- **That the new default buffer and Auto stop the crackling on real hardware.** The crackling was reported on a real
+  machine at a 512-sample buffer; here only a silent device was available, which never drops blocks, so Auto's
+  detection of real dropouts (the audio system's count, ALSA/JACK) and the effect of the extra load were not seen
+  with a computer that actually struggles. If 1024 is not enough, try a bigger size and tell us what **Audio...** shows
+  (load, busiest block, dropped blocks). Whether PipeWire's ALSA layer reports every dropout is also unchecked; Auto
+  says so when the count is unavailable.
 - **Dragging files from the desktop file manager** onto the program: not implemented (drags from the in-app browser
   were verified only with simulated mouse events).
 - **Typing in the "Save as preset" name box** was not tested (the virtual display had no window manager, so dialogs

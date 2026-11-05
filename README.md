@@ -15,7 +15,7 @@ Sun Loops Studio is inspired by the workflow of loop-based DAWs such as FL Studi
 that uses no code, names, graphics or assets from other products, and it is not affiliated with or endorsed by
 their makers.
 
-**Status: alpha (0.6.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
+**Status: alpha (0.6.1).** It builds, the automated tests pass and the interface has been exercised in a virtual
 display. Playback was confirmed on a real Nobara machine for version 0.3; everything added since (panels, patterns,
 playlist, browser, pitch/swing, the expanded mixer and its effects, saving projects, the AppImage) was tested
 headless and in a virtual display with a silent audio device, not yet with real audio. **Hosting VST3 plugins is not implemented**: the mixer's effect
@@ -49,7 +49,9 @@ exactly what is and is not verified and what is missing (VST3 hosting and undo a
   that shows the name and `*` for unsaved changes, and a prompt before closing with unsaved work. Samples are
   referenced by path, not copied into the file.
 - **Export** - the pattern or the song to a 24-bit / 48 kHz WAV file, rendered by the same engine that plays it.
-- **Audio** - device selection and a read-out of sample rate, buffer size and reported latency.
+- **Audio** - device selection, an adjustable **buffer size** (default 1024 samples) and an **Auto** button that tests
+  your computer and picks a size that does not crackle, plus a read-out of load and dropped blocks. The choice is
+  remembered.
 
 ## Quick start (Nobara / Fedora)
 

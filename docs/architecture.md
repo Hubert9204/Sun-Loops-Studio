@@ -16,7 +16,8 @@ src/audio/                      No UI dependencies except JUCE audio types
   Arrangement.h                 Patterns, clips, and compilation of pattern / song into a plain Project
   SnapshotExchange.h            Lock-free hand-over of snapshots from the UI thread to the audio thread
   Player.*                      Transport, synth and sampler voices, channels, mixer tracks and effects (real-time safe)
-  AudioEngine.*                 Audio device, atomics (BPM, gain, play state, peaks, RMS), audio callback
+  AudioEngine.*                 Audio device, atomics (BPM, gain, play state, peaks, RMS, load), audio callback
+  BufferTuning.h                Buffer size logic: clean-trial rule and the BufferTuner search (plain C++)
   OfflineRenderer.*             Renders a Project to a buffer or WAV file with the same Player
   BuiltinSamples.*              Synthesised kick, snare and hat
 
@@ -37,6 +38,7 @@ src/ui/
   FileBrowser.*  DragItems.h    The browser sidebar; the text format of dragged items
   PianoRoll.*                   Note editor
   PlaylistView.*                Playlist panel body
+  AudioSettings.*               The Audio... dialog: device selector, buffer size menu, Auto, load read-out
   MixerPanel.*                  Mixer panel body: track strips, master strip, effects panel
   VuMeter.*                     Peak/RMS meter (mixer)
   AudioMeter.*                  Simple level meter (rack rows, toolbar)
@@ -173,6 +175,26 @@ copies them back into the arrangement (`commitCurrentPattern`) before switching 
 Channel settings (instrument, sample, volume, pan, mute, solo, pitch, swing, mixer track) belong to the channel and
 are shared by all patterns. The mixer tracks belong to the project as a whole (`MainComponent::tracks`); the
 arrangement passes them through to `compilePattern` / `compileSong`, which hand them to `Project::make`.
+
+## Audio buffer and Auto
+
+`AudioEngine::initialise()` opens the device from the state saved in the settings file (`audio.device`, JUCE's
+`createStateXml()`, rewritten by `MainComponent` whenever the device manager changes), or, the first time, the default
+device with a 1024-sample buffer (`kDefaultBufferSize`). The audio callback times itself with the high-resolution
+clock (`clock_gettime`, no locks or allocation) and raises an atomic `peakLoad` to the longest block time divided by
+the block's duration; the message thread reads and resets it with `consumePeakLoad()`. `getXRunCount()` forwards the
+audio system's own count of dropped blocks (ALSA and JACK report it; -1 means unknown).
+
+`setLoadTest(f)` makes each block spin until it has taken `f` of its duration, measured *after* `peakLoad` is
+recorded, so the reported load is still the song's own cost. Only the Auto button turns it on (35 %).
+
+`BufferTuner` (`BufferTuning.h`, no JUCE) decides: it is given the candidate sizes, asks for a trial of the smallest,
+is told `(xruns, peakLoad)` for it, and asks for the next. A trial is *clean* when no block was dropped (unknown counts
+as none) and `peakLoad <= 0.5`. It finishes at the first clean trial whose predecessor was clean too and returns that
+trial's size (one step of margin that was itself measured); if only the last candidate is clean it returns that; if
+none is, it returns the largest and `struggling()` is true. `AudioSettingsComponent` drives it from a 100 ms timer:
+set the size, wait 0.5 s for the restarted device, measure for 2 s, record, repeat. Cancelling or destroying the
+dialog mid-test restores the previous size and play state.
 
 ## Project files
 

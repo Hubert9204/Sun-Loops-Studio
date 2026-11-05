@@ -2,6 +2,29 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.6.1 - 2026-11-05
+
+### Added
+- **Buffer size setting.** In **Audio...** a *Buffer size* menu (64 to 8192 samples, with the delay in ms) applies at
+  once, and the choice is remembered between runs (the whole audio device state is now saved).
+- **Auto: set for this computer.** Plays the current song at 256, 512, 1024, ... samples with extra load added,
+  watching dropped blocks and how long the slowest block took, and picks the first size that is clean with one measured
+  step of margin. Cancel / closing the window restores the previous size. If even the largest size drops blocks it
+  says so.
+- A live read-out in the dialog: computer load, busiest block (% of its time) and dropped blocks.
+- Engine: per-callback load measurement (`consumePeakLoad`), dropout count (`getXRunCount`), `setLoadTest`.
+- Tests: `BufferTuner` and the clean-trial rule (12 new checks, 263 in total).
+
+### Changed
+- **The default buffer is now 1024 samples** (it used to be the device's own default, 512 on the maintainer's
+  machine, which crackled when the demo played).
+- The audio dialog hides sample rate and buffer in the selector's "Show advanced settings..." section; the buffer
+  controls are in the dialog itself.
+
+### Notes
+- Whether 1024 or Auto removes the crackling on the maintainer's real hardware has not been confirmed yet: it was
+  only exercised with a silent audio device in a virtual display.
+
 ## 0.6.0 - 2026-11-05
 
 ### Added

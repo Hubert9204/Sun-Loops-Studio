@@ -25,7 +25,8 @@
 
 namespace sls
 {
-class MainComponent : public juce::Component, public juce::DragAndDropContainer, private juce::Timer
+class MainComponent : public juce::Component, public juce::DragAndDropContainer, private juce::Timer,
+                      private juce::ChangeListener
 {
 public:
     MainComponent();
@@ -55,6 +56,7 @@ public:
 
 private:
     void timerCallback() override;
+    void changeListenerCallback (juce::ChangeBroadcaster*) override; // the audio device changed: remember it
     void publishProject();
     void selectChannel (int index);
     void setPlaying (bool shouldPlay);
@@ -148,6 +150,7 @@ private:
     Workspace workspace;
 
     std::unique_ptr<juce::PropertiesFile> settings;
+    juce::Component::SafePointer<juce::DialogWindow> audioDialog;
     bool restoringLayout = false;
 
     juce::TextButton fileButton { "File" };

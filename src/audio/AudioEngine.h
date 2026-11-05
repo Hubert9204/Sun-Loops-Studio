@@ -22,7 +22,9 @@ public:
     ~AudioEngine() override;
 
     // Message thread.
-    juce::String initialise();      // returns an error message, empty on success
+    // Opens the audio device. `savedState` is what createStateXml() returned in an earlier run (or null); without
+    // it the default device is used with a buffer of kDefaultBufferSize. Returns an error message, empty on success.
+    juce::String initialise (const juce::XmlElement* savedState = nullptr);
     juce::AudioDeviceManager& getDeviceManager() noexcept { return deviceManager; }
     juce::String describeDevice() const;
 
@@ -54,6 +56,21 @@ public:
                    ? channelPeaks[static_cast<size_t> (channel)].exchange (0.0f, std::memory_order_relaxed)
                    : 0.0f;
     }
+
+    // Load of the audio callback: the longest time one block took to compute divided by the time that block lasts,
+    // since the last call (1.0 means a block took all of its time: that is a dropout). Message thread.
+    float consumePeakLoad() noexcept { return peakLoad.exchange (0.0f, std::memory_order_relaxed); }
+    // For measuring headroom (the buffer "Auto" button): while set, every audio block is kept busy for this fraction
+    // of its time (0 = off, at most 0.6) by spinning after the real work. The load that consumePeakLoad() reports
+    // does not include the spinning, so it stays the song's own cost; the spinning only makes a computer that is
+    // short of headroom drop blocks sooner, which getXRunCount() then shows.
+    void setLoadTest (float fractionOfBlock) noexcept
+    {
+        loadTest.store (fractionOfBlock > 0.0f ? (fractionOfBlock < 0.6f ? fractionOfBlock : 0.6f) : 0.0f,
+                        std::memory_order_relaxed);
+    }
+    // Blocks the audio system reports as dropped since the device was opened; -1 if it cannot tell.
+    int getXRunCount() const noexcept { return deviceManager.getXRunCount(); }
 
     // Mixer track levels (after effects and fader, scaled by the master volume): peak since the last call,
     // and the latest RMS.
@@ -100,6 +117,8 @@ private:
     std::atomic<float> gain { 0.8f };
     std::atomic<float> peak { 0.0f };
     std::atomic<float> masterRms { 0.0f };
+    std::atomic<float> peakLoad { 0.0f };
+    std::atomic<float> loadTest { 0.0f };
     float masterMeanSquare = 0.0f; // audio thread only
     double sampleRateHz = 48000.0; // set in audioDeviceAboutToStart
     std::array<std::atomic<float>, kMaxChannels> channelPeaks {};
