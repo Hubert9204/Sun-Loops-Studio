@@ -1,6 +1,8 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -33,11 +35,111 @@ struct Clip
     int endUnit() const noexcept { return startUnit + lengthUnits; }
 };
 
+constexpr int kMaxAudioClips = 64;
+
+// A recording or an imported audio file on a playlist track. Unlike a pattern clip it sits on a beat grid
+// (`startTick`, a multiple of one beat) and its length is in ticks: it plays the audio once and is cut at its end.
+// The playlist track number is also the mixer track the audio plays through.
+struct AudioClip
+{
+    std::shared_ptr<const SampleData> data; // decoded audio; holds the file path in `source` (empty frames = file missing)
+    std::string name;
+    int track = 0;
+    int startTick = 0;
+    int lengthTicks = kTicksPerBeat;
+    float gain = 1.0f; // 0..2
+
+    int endTick() const noexcept { return startTick + lengthTicks; }
+
+    // How long the audio really is, in ticks, at `bpm`.
+    int naturalLengthTicks (double bpm) const noexcept
+    {
+        if (data == nullptr || data->sampleRate <= 0.0 || bpm <= 0.0)
+            return kTicksPerBeat;
+        const double seconds = data->numFrames() / data->sampleRate;
+        return std::max (1, static_cast<int> (std::ceil (seconds * bpm / 60.0 * kTicksPerBeat)));
+    }
+};
+
 struct Arrangement
 {
     std::vector<Pattern> patterns;
     std::vector<Clip> clips;
+    std::vector<AudioClip> audioClips;
     int patternTicks = 8 * kTicksPerBeat; // length of one pattern = one playlist unit
+
+    int timelineTicks() const noexcept { return kPlaylistUnits * patternTicks; }
+
+    // Does an audio clip fit: inside the timeline, on a beat, on an existing track, and clear of every other clip
+    // (pattern or audio) on that track? `ignoreIndex` is the audio clip being moved/resized (or -1).
+    bool canPlaceAudio (const AudioClip& c, int ignoreIndex = -1) const
+    {
+        if (c.data == nullptr || c.track < 0 || c.track >= kPlaylistTracks)
+            return false;
+        if (c.startTick < 0 || c.lengthTicks < 1 || c.endTick() > timelineTicks() || c.startTick % kTicksPerBeat != 0)
+            return false;
+
+        for (int i = 0; i < static_cast<int> (audioClips.size()); ++i)
+        {
+            const auto& o = audioClips[static_cast<size_t> (i)];
+            if (i != ignoreIndex && o.track == c.track && c.startTick < o.endTick() && o.startTick < c.endTick())
+                return false;
+        }
+        for (const auto& o : clips)
+            if (o.track == c.track && c.startTick < o.endUnit() * patternTicks && o.startUnit * patternTicks < c.endTick())
+                return false;
+        return true;
+    }
+
+    // Index of the audio clip covering (track, tick), or -1.
+    int audioClipAt (int track, int tick) const
+    {
+        for (int i = 0; i < static_cast<int> (audioClips.size()); ++i)
+        {
+            const auto& c = audioClips[static_cast<size_t> (i)];
+            if (c.track == track && tick >= c.startTick && tick < c.endTick())
+                return i;
+        }
+        return -1;
+    }
+
+    // The longest an audio clip starting at `startTick` on `track` can be (up to `limit` ticks), or 0 if not even a
+    // beat fits there.
+    int maxAudioLengthAt (int track, int startTick, int limit) const
+    {
+        AudioClip probe;
+        probe.data = std::make_shared<SampleData>();
+        probe.track = track;
+        probe.startTick = startTick;
+        int best = 0;
+        for (int length = kTicksPerBeat; length < limit + kTicksPerBeat; length += kTicksPerBeat)
+        {
+            probe.lengthTicks = std::min (length, limit);
+            if (! canPlaceAudio (probe))
+                break;
+            best = probe.lengthTicks;
+            if (length >= limit)
+                break;
+        }
+        return best;
+    }
+
+    // First beat at or after `fromTick` on `track` where an audio clip of `lengthTicks` fits, or -1.
+    int findFreeAudioStart (int track, int fromTick, int lengthTicks) const
+    {
+        AudioClip probe;
+        probe.data = std::make_shared<SampleData>();
+        probe.track = track;
+        probe.lengthTicks = lengthTicks;
+        const int first = (std::max (0, fromTick) / kTicksPerBeat) * kTicksPerBeat;
+        for (int t = first; t + lengthTicks <= timelineTicks(); t += kTicksPerBeat)
+        {
+            probe.startTick = t;
+            if (canPlaceAudio (probe))
+                return t;
+        }
+        return -1;
+    }
 
     // A clip is valid when it lies inside the timeline, refers to an existing pattern and does not
     // overlap another clip on the same track. `ignoreIndex` is the clip being moved/resized (or -1).
@@ -56,6 +158,9 @@ struct Arrangement
             if (i != ignoreIndex && o.track == c.track && c.startUnit < o.endUnit() && o.startUnit < c.endUnit())
                 return false;
         }
+        for (const auto& a : audioClips)
+            if (a.track == c.track && c.startUnit * patternTicks < a.endTick() && a.startTick < c.endUnit() * patternTicks)
+                return false;
         return true;
     }
 
@@ -77,6 +182,8 @@ struct Arrangement
         int end = 0;
         for (const auto& c : clips)
             end = std::max (end, c.endUnit());
+        for (const auto& a : audioClips)
+            end = std::max (end, (a.endTick() + patternTicks - 1) / patternTicks);
         return end;
     }
 
@@ -150,6 +257,19 @@ inline Project compileSong (const std::vector<Channel>& channelSettings, const A
                 }
         }
     }
-    return Project::make (std::move (channels), units * arrangement.patternTicks, std::move (tracks), masterSlots);
+
+    std::vector<AudioEvent> events;
+    for (const auto& a : arrangement.audioClips)
+    {
+        AudioEvent e;
+        e.data = a.data;
+        e.startTick = a.startTick;
+        e.endTick = a.endTick();
+        e.mixerTrack = a.track; // playlist track n plays through mixer track n
+        e.gain = a.gain;
+        events.push_back (std::move (e));
+    }
+    return Project::make (std::move (channels), units * arrangement.patternTicks, std::move (tracks), masterSlots,
+                          std::move (events));
 }
 } // namespace sls

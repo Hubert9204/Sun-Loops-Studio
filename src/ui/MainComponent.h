@@ -19,6 +19,7 @@
 #include "ui/FileBrowser.h"
 #include "audio/AudioExport.h"
 #include "ui/MixerPanel.h"
+#include "audio/AudioImport.h"
 #include "ui/PanelWindow.h"
 #include "ui/RightClickButton.h"
 #include "ui/PianoRoll.h"
@@ -71,6 +72,14 @@ private:
     void chooseSampleFor (int channelIndex);
     bool loadSampleFile (int channelIndex, const juce::File& file);
     void updateTrackRouting();
+
+    // Audio clips in the playlist: files dropped or chosen are decoded on a background thread, then placed.
+    struct ImportBatch;
+    void importMediaFiles (const juce::StringArray& paths, int track, int tick);
+    void chooseMediaToImport();
+    void finishImport (const std::shared_ptr<ImportBatch>& batch, const ImportResult& result, const juce::File& file, int track, int tick);
+    bool addAudioClip (const std::shared_ptr<const SampleData>& data, int track, int tick, juce::String& note);
+    void loadAudioClipFiles (juce::StringArray& problems); // after a project was opened: read the audio its clips refer to
 
     // Project files
     ProjectDocument makeDocument();
@@ -187,6 +196,7 @@ private:
     AudioMeter meter;
 
     std::unique_ptr<juce::FileChooser> fileChooser;
+    juce::ThreadPool importPool { 1 }; // declared last: it is stopped first when the window closes
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)
 };

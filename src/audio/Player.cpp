@@ -31,6 +31,9 @@ void Player::prepare (double newSampleRate) noexcept
 
     for (auto& v : voices)
         v = Voice {};
+    for (auto& v : clipVoices)
+        v = ClipVoice {};
+    nextClip = 0;
 
     nextEvent.fill (0);
     lastClickBeat = -1;
@@ -63,6 +66,40 @@ void Player::releaseVoices (bool includeSamplers) noexcept
             v.state = State::Release; // notes held by hand are ended by liveNoteOff, not by the transport
 }
 
+void Player::startClip (const AudioEvent& e) noexcept
+{
+    if (e.data == nullptr || e.data->numFrames() < 2)
+        return;
+
+    ClipVoice* target = nullptr;
+    for (auto& v : clipVoices)
+        if (! v.active) { target = &v; break; }
+    if (target == nullptr)
+    {
+        target = &clipVoices[0]; // all busy: replace the oldest
+        for (auto& v : clipVoices)
+            if (v.age < target->age)
+                target = &v;
+    }
+
+    ClipVoice v;
+    v.active = true;
+    v.data = e.data.get();
+    v.step = e.data->sampleRate / sampleRate;
+    v.endTick = e.endTick;
+    v.track = std::clamp (e.mixerTrack, 0, kMaxTracks - 1);
+    v.gain = e.gain;
+    v.age = ++ageCounter;
+    *target = v;
+}
+
+void Player::releaseClips() noexcept
+{
+    for (auto& v : clipVoices)
+        if (v.active)
+            v.releasing = true;
+}
+
 float Player::nextClickSample() noexcept
 {
     if (clickPos < 0)
@@ -92,6 +129,25 @@ void Player::onProjectChanged (const Project& project) noexcept
         const auto it = std::lower_bound (notes.begin(), notes.end(), tickPos,
                                           [] (const Note& n, double t) { return static_cast<double> (n.startTick) < t; });
         nextEvent[ch] = static_cast<size_t> (it - notes.begin());
+    }
+
+    // Audio clips: the next one that has not started yet, and a playing clip may only go on if the new
+    // snapshot still owns the very same audio (it belongs to the snapshot and may be freed).
+    {
+        const auto& events = project.audioEvents;
+        const auto it = std::lower_bound (events.begin(), events.end(), tickPos,
+                                          [] (const AudioEvent& e, double t) { return static_cast<double> (e.startTick) < t; });
+        nextClip = static_cast<size_t> (it - events.begin());
+
+        for (auto& v : clipVoices)
+        {
+            if (! v.active)
+                continue;
+            const bool stillValid = std::any_of (events.begin(), events.end(),
+                                                 [&v] (const AudioEvent& e) { return e.data.get() == v.data; });
+            if (! stillValid)
+                v = ClipVoice {};
+        }
     }
 
     // Sample data belongs to the snapshot and may be freed once we have moved on, so a sampler
@@ -202,8 +258,10 @@ void Player::render (const Project& project, double bpm, bool playing,
     if (! playing && wasPlaying)
     {
         releaseVoices (releaseSamplesOnStop);
+        releaseClips();
         tickPos = 0.0;
         nextEvent.fill (0);
+        nextClip = 0;
     }
     wasPlaying = playing;
 
@@ -333,6 +391,45 @@ void Player::render (const Project& project, double bpm, bool playing,
                     if ((v.state == State::Attack || v.state == State::Sustain)
                         && tickPos >= static_cast<double> (v.endTick))
                         v.state = State::Release;
+
+                while (nextClip < project.audioEvents.size()
+                       && static_cast<double> (project.audioEvents[nextClip].startTick) <= tickPos)
+                {
+                    startClip (project.audioEvents[nextClip]);
+                    ++nextClip;
+                }
+                for (auto& v : clipVoices)
+                    if (v.active && ! v.releasing && tickPos >= static_cast<double> (v.endTick))
+                        v.releasing = true;
+            }
+
+            for (auto& v : clipVoices)
+            {
+                if (! v.active)
+                    continue;
+
+                const int idx = static_cast<int> (v.pos);
+                if (idx + 1 >= v.data->numFrames())
+                {
+                    v = ClipVoice {};
+                    continue;
+                }
+                const float frac = static_cast<float> (v.pos - idx);
+                const float* sl = v.data->left.data();
+                const float* sr = v.data->right.data();
+                const float gain = v.env * v.gain;
+                trackL[static_cast<size_t> (v.track)][static_cast<size_t> (i)] += (sl[idx] + frac * (sl[idx + 1] - sl[idx])) * gain;
+                trackR[static_cast<size_t> (v.track)][static_cast<size_t> (i)] += (sr[idx] + frac * (sr[idx + 1] - sr[idx])) * gain;
+                v.pos += v.step;
+
+                if (v.releasing)
+                {
+                    v.env -= releaseStep;
+                    if (v.env <= 0.0f)
+                        v = ClipVoice {};
+                }
+                else if (v.env < 1.0f)
+                    v.env = std::min (1.0f, v.env + static_cast<float> (1.0 / (0.002 * sampleRate))); // 2 ms de-click
             }
 
             std::array<float, kMaxChannels> busL {};
@@ -408,7 +505,9 @@ void Player::render (const Project& project, double bpm, bool playing,
                 {
                     tickPos = std::fmod (tickPos, static_cast<double> (loopLength));
                     nextEvent.fill (0);
+                    nextClip = 0;
                     releaseVoices (false); // synth notes end at the loop boundary, samples ring on
+                    releaseClips();        // audio clips are cut there
                 }
             }
         }

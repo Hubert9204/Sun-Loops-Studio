@@ -5,6 +5,7 @@
 #include "ui/MetronomePanel.h"
 
 #include <functional>
+#include <map>
 #include <optional>
 
 #include <juce_audio_utils/juce_audio_utils.h>
@@ -231,7 +232,7 @@ MainComponent::MainComponent()
 
     bpmSlider.setRange (40.0, 240.0, 1.0);
     bpmSlider.setValue (120.0, juce::dontSendNotification);
-    bpmSlider.onValueChange = [this] { engine.setBpm (bpmSlider.getValue()); markDirty(); };
+    bpmSlider.onValueChange = [this] { engine.setBpm (bpmSlider.getValue()); playlistView.setBpm (bpmSlider.getValue()); markDirty(); };
 
     volumeSlider.setRange (0.0, 1.0, 0.01);
     volumeSlider.setValue (0.8, juce::dontSendNotification);
@@ -267,6 +268,8 @@ MainComponent::MainComponent()
             publishProject();
     };
     playlistView.onPatternPicked = [this] (int pattern) { selectPattern (pattern); };
+    playlistView.onFilesDropped = [this] (const juce::StringArray& files, int track, int tick) { importMediaFiles (files, track, tick); };
+    playlistView.setBpm (bpmSlider.getValue());
 
     // Panels
     rackPanel.setContent (&rackView);
@@ -960,6 +963,168 @@ bool MainComponent::loadSampleFile (int channelIndex, const juce::File& file)
     return true;
 }
 
+// ------------------------------------------------------------------------- Audio clips
+
+struct MainComponent::ImportBatch
+{
+    int remaining = 0;
+    int added = 0;
+    juce::StringArray errors, notes;
+};
+
+void MainComponent::chooseMediaToImport()
+{
+    juce::String wildcard;
+    for (const auto& ext : importableAudioExtensions())
+        wildcard += "*" + ext + ";";
+    for (const auto& ext : importableVideoExtensions())
+        wildcard += "*" + ext + ";";
+
+    fileChooser = std::make_unique<juce::FileChooser> ("Import audio or video into the playlist", library.samples, wildcard);
+    fileChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectMultipleItems
+                                  | juce::FileBrowserComponent::canSelectFiles,
+                              [safe = juce::Component::SafePointer<MainComponent> (this)] (const juce::FileChooser& chooser)
+                              {
+                                  if (safe == nullptr)
+                                      return;
+                                  juce::StringArray paths;
+                                  for (const auto& f : chooser.getResults())
+                                      paths.add (f.getFullPathName());
+                                  if (! paths.isEmpty())
+                                      safe->importMediaFiles (paths, 0, 0);
+                              });
+}
+
+// The files go on consecutive tracks starting at `track`, each at the first free beat from `tick` on.
+void MainComponent::importMediaFiles (const juce::StringArray& paths, int track, int tick)
+{
+    if (paths.isEmpty())
+        return;
+
+    auto batch = std::make_shared<ImportBatch>();
+    batch->remaining = paths.size();
+    statusLabel.setText ("Importing " + (paths.size() == 1 ? juce::File (paths[0]).getFileName() : juce::String (paths.size()) + " files") + "...",
+                         juce::dontSendNotification);
+
+    library.ensureExists();
+    const auto videoFolder = library.samples.getChildFile ("From videos");
+
+    for (int i = 0; i < paths.size(); ++i)
+    {
+        const juce::File file (paths[i]);
+        const int target = (std::clamp (track, 0, kPlaylistTracks - 1) + i) % kPlaylistTracks;
+        importPool.addJob ([safe = juce::Component::SafePointer<MainComponent> (this), batch, file, videoFolder, target, tick]
+                           {
+                               auto result = std::make_shared<ImportResult> (importMediaFile (file, videoFolder));
+                               juce::MessageManager::callAsync ([safe, batch, result, file, target, tick]
+                                                                {
+                                                                    if (safe != nullptr)
+                                                                        safe->finishImport (batch, *result, file, target, tick);
+                                                                });
+                           });
+    }
+}
+
+bool MainComponent::addAudioClip (const std::shared_ptr<const SampleData>& data, int track, int tick, juce::String& note)
+{
+    if (arrangement.audioClips.size() >= static_cast<size_t> (kMaxAudioClips))
+    {
+        note = "The playlist already holds the maximum of " + juce::String (kMaxAudioClips) + " audio clips.";
+        return false;
+    }
+
+    AudioClip clip;
+    clip.data = data;
+    clip.name = data->name;
+    clip.track = std::clamp (track, 0, kPlaylistTracks - 1);
+
+    const int natural = clip.naturalLengthTicks (bpmSlider.getValue());
+    int start = arrangement.findFreeAudioStart (clip.track, tick, natural);
+    int length = natural;
+    if (start < 0)
+    {
+        // Not all of it fits anywhere on the track: use the first free spot and cut the clip to what is free there.
+        start = arrangement.findFreeAudioStart (clip.track, tick, kTicksPerBeat);
+        length = start >= 0 ? arrangement.maxAudioLengthAt (clip.track, start, natural) : 0;
+        if (start < 0 || length < 1)
+        {
+            note = "There is no free room on Track " + juce::String (clip.track + 1) + " for " + juce::String (data->name) + ".";
+            return false;
+        }
+        note = juce::String (data->name) + " does not fit in full and was cut at the end of the free space.";
+    }
+
+    clip.startTick = start;
+    clip.lengthTicks = length;
+    arrangement.audioClips.push_back (std::move (clip));
+    return true;
+}
+
+void MainComponent::finishImport (const std::shared_ptr<ImportBatch>& batch, const ImportResult& result, const juce::File& file,
+                                  int track, int tick)
+{
+    juce::String note;
+    if (result.data == nullptr)
+        batch->errors.add (result.error.isNotEmpty() ? result.error : "Could not import " + file.getFileName());
+    else if (addAudioClip (result.data, track, tick, note))
+    {
+        ++batch->added;
+        if (note.isNotEmpty())
+            batch->notes.add (note);
+        if (result.warning.isNotEmpty())
+            batch->notes.add (result.warning);
+    }
+    else
+        batch->errors.add (note);
+
+    if (--batch->remaining > 0)
+        return;
+
+    if (batch->added > 0)
+    {
+        playlistView.repaint();
+        if (! songMode)
+        {
+            setSongMode (true); // audio clips only play in song mode
+            batch->notes.add ("Switched to Song mode: audio clips play with the whole playlist.");
+        }
+        publishProject();
+    }
+
+    juce::String status = batch->added == 0 ? "Nothing was imported"
+                                            : "Added " + juce::String (batch->added) + (batch->added == 1 ? " audio clip" : " audio clips") + " to the playlist";
+    if (batch->notes.size() > 0)
+        status += " - " + batch->notes.joinIntoString (" ");
+    statusLabel.setText (status, juce::dontSendNotification);
+
+    if (! batch->errors.isEmpty())
+        juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Import",
+                                                batch->errors.joinIntoString ("\n"));
+}
+
+// After a project was opened its audio clips only know the path of their file: read the audio now. A file that is
+// gone leaves a silent clip that keeps the path, so saving the project again does not lose it.
+void MainComponent::loadAudioClipFiles (juce::StringArray& problems)
+{
+    std::map<std::string, std::shared_ptr<const SampleData>> loaded;
+    for (auto& clip : arrangement.audioClips)
+    {
+        if (clip.data == nullptr || clip.data->numFrames() > 0)
+            continue;
+
+        const auto source = clip.data->source;
+        auto found = loaded.find (source);
+        if (found == loaded.end())
+        {
+            auto result = importAudioFile (juce::File (juce::String (source)));
+            if (result.data == nullptr)
+                problems.add ("Audio file not found or unreadable: " + juce::String (source));
+            found = loaded.emplace (source, result.data != nullptr ? result.data : clip.data).first;
+        }
+        clip.data = found->second;
+    }
+}
+
 // Tells every mixer strip which channels play through it.
 void MainComponent::updateTrackRouting()
 {
@@ -1340,6 +1505,7 @@ void MainComponent::applyDocument (ProjectDocument doc, const juce::File& file, 
     arrangement = std::move (doc.arrangement);
     arrangement.patternTicks = kLoopTicks;
     arrangement.ensureChannelCount (channels.size());
+    loadAudioClipFiles (problems);
     currentPattern = std::clamp (doc.currentPattern, 0, static_cast<int> (arrangement.patterns.size()) - 1);
 
     const auto& notes = arrangement.patterns[static_cast<size_t> (currentPattern)].notes;
@@ -1359,6 +1525,7 @@ void MainComponent::applyDocument (ProjectDocument doc, const juce::File& file, 
     mixerPanel.refreshTrack (kMasterIndex);
 
     bpmSlider.setValue (doc.bpm, juce::dontSendNotification);
+    playlistView.setBpm (doc.bpm);
     engine.setBpm (doc.bpm);
     volumeSlider.setValue (doc.masterVolume, juce::dontSendNotification);
     engine.setGain (doc.masterVolume);
@@ -1557,6 +1724,7 @@ void MainComponent::showFileMenu()
     menu.addSeparator();
     menu.addItem (item (3, "Save", "Ctrl+S"));
     menu.addItem (item (4, "Save As...", "Ctrl+Shift+S"));
+    menu.addItem (item (6, "Import audio or video into the playlist...", ""));
     menu.addSeparator();
 
     // Export: the same render the engine plays, written as the chosen file type. MP3 and AAC are encoded by ffmpeg.
@@ -1586,6 +1754,7 @@ void MainComponent::showFileMenu()
                                 case 3: safe->saveProject(); break;
                                 case 4: safe->saveProjectAs(); break;
                                 case 5: safe->library.ensureExists(); safe->library.projects.revealToUser(); break;
+                                case 6: safe->chooseMediaToImport(); break;
                                 default:
                                     if (result >= 200 && result - 200 < static_cast<int> (exportFormats().size()))
                                     {

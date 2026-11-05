@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <vector>
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -15,8 +16,11 @@ namespace sls
 //   Right click on a clip     : delete it
 //   Double click on a clip    : select that clip's pattern
 //   Wheel                     : scroll time | Ctrl+wheel: zoom
+// Audio clips (recordings, imported files) share the tracks: they are drawn with their waveform, move on the beat grid,
+// can be shortened or lengthened from their right edge, and are deleted with a right click. Audio and video files
+// dragged in from the file manager become audio clips (the caller does the importing: see onFilesDropped).
 // The arrangement is owned by the caller; this view edits it in place and reports through onChanged.
-class PlaylistView : public juce::Component
+class PlaylistView : public juce::Component, public juce::FileDragAndDropTarget
 {
 public:
     explicit PlaylistView (Arrangement& arrangementToEdit);
@@ -30,6 +34,18 @@ public:
     std::function<void()> onChanged;                  // clips were added, moved, resized or removed
     std::function<void (int)> onPatternPicked;        // a clip was double-clicked: its pattern index
 
+    // Files were dropped on the timeline: their paths, the track under the mouse and the beat (in ticks) there.
+    std::function<void (const juce::StringArray&, int, int)> onFilesDropped;
+
+    // Tempo, to draw audio at its real length (an audio clip lasts a fixed time, not a fixed number of beats).
+    void setBpm (double newBpm);
+
+    bool isInterestedInFileDrag (const juce::StringArray& files) override;
+    void fileDragEnter (const juce::StringArray& files, int x, int y) override;
+    void fileDragMove (const juce::StringArray& files, int x, int y) override;
+    void fileDragExit (const juce::StringArray& files) override;
+    void filesDropped (const juce::StringArray& files, int x, int y) override;
+
     void paint (juce::Graphics&) override;
     void mouseDown (const juce::MouseEvent&) override;
     void mouseDrag (const juce::MouseEvent&) override;
@@ -41,7 +57,17 @@ public:
     static juce::Colour colourForPattern (int patternIndex);
 
 private:
-    enum class Drag { None, Move, Resize };
+    enum class Drag { None, Move, Resize, MoveAudio, ResizeAudio };
+
+    struct Peaks
+    {
+        std::shared_ptr<const SampleData> data; // keeps the audio alive so the cache key cannot be reused
+        std::vector<float> lows, highs;         // one pair per kFramesPerPeak frames
+    };
+    static constexpr int kFramesPerPeak = 256;
+    const Peaks& peaksFor (const std::shared_ptr<const SampleData>& data);
+    void pruneWaveformCache();
+    void paintAudioClip (juce::Graphics& g, const AudioClip& clip);
 
     static constexpr int kNameWidth = 64;
     static constexpr int kRulerHeight = 22;
@@ -52,6 +78,10 @@ private:
     int xToUnit (int x) const noexcept;       // clamped to the timeline
     int yToTrack (int y) const noexcept;      // clamped to the tracks
     juce::Rectangle<int> clipRect (const Clip& c) const noexcept;
+    int tickToX (int tick) const noexcept;
+    int xToTick (int x) const noexcept;       // not snapped, clamped to the timeline
+    int xToBeatTick (int x) const noexcept;   // snapped down to a beat
+    juce::Rectangle<int> audioClipRect (const AudioClip& c) const noexcept;
     void clampScroll();
     void notifyChanged();
 
@@ -65,6 +95,12 @@ private:
     Drag drag = Drag::None;
     int dragClip = -1;
     int grabOffsetUnits = 0;
+    int grabOffsetTicks = 0;
+
+    double bpm = 120.0;
+    std::vector<Peaks> waveformCache;
+    int dropTrack = -1; // while files are dragged over the timeline: where they would land
+    int dropTick = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PlaylistView)
 };

@@ -88,9 +88,31 @@ private:
         std::uint64_t age = 0;
     };
 
+    // Audio clips of the playlist (recordings, imported files): one voice each, played straight through.
+    struct ClipVoice
+    {
+        bool active = false;
+        bool releasing = false;
+        const SampleData* data = nullptr; // owned by the current Project snapshot
+        double pos = 0.0;
+        double step = 1.0;
+        int endTick = 0;
+        int track = 0;
+        float gain = 1.0f;
+        float env = 0.0f;
+        std::uint64_t age = 0;
+    };
+
+    void startClip (const AudioEvent& e) noexcept;
+    void releaseClips() noexcept;
+
     void noteOn (const Channel& channel, int channelIndex, const Note& n, int loopLength, bool live = false) noexcept;
     void releaseVoices (bool includeSamplers) noexcept;
     void onProjectChanged (const Project& project) noexcept;
+
+    static constexpr int kMaxClipVoices = 16;
+    std::array<ClipVoice, kMaxClipVoices> clipVoices {};
+    size_t nextClip = 0;
 
     std::array<Voice, kMaxVoices> voices {};
     std::array<std::size_t, kMaxChannels> nextEvent {};

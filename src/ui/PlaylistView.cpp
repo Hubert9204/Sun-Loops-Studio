@@ -2,6 +2,8 @@
 
 #include <cmath>
 
+#include "audio/AudioImport.h"
+
 namespace sls
 {
 namespace
@@ -14,6 +16,8 @@ const juce::Colour kRuler { 0xff343841 };
 const juce::Colour kGridLine { 0xff3c414c };
 const juce::Colour kPlayhead { 0xffffb347 };
 const juce::Colour kText { 0xffd5d9e0 };
+const juce::Colour kAudio { 0xff3f9fa6 };
+const juce::Colour kAudioMissing { 0xff8a4a4a };
 } // namespace
 
 PlaylistView::PlaylistView (Arrangement& arrangementToEdit) : arrangement (arrangementToEdit)
@@ -68,6 +72,129 @@ juce::Rectangle<int> PlaylistView::clipRect (const Clip& c) const noexcept
     const int x0 = unitToX (c.startUnit);
     const int x1 = unitToX (c.endUnit());
     return { x0, kRulerHeight + c.track * trackHeight(), x1 - x0, trackHeight() };
+}
+
+int PlaylistView::tickToX (int tick) const noexcept
+{
+    const double unit = arrangement.patternTicks > 0 ? static_cast<double> (tick) / arrangement.patternTicks : 0.0;
+    return kNameWidth + static_cast<int> (std::lround (unit * unitWidth - scrollX));
+}
+
+int PlaylistView::xToTick (int x) const noexcept
+{
+    const double unit = (static_cast<double> (x - kNameWidth) + scrollX) / unitWidth;
+    return std::clamp (static_cast<int> (std::floor (unit * arrangement.patternTicks)), 0, arrangement.timelineTicks() - 1);
+}
+
+int PlaylistView::xToBeatTick (int x) const noexcept
+{
+    return (xToTick (x) / kTicksPerBeat) * kTicksPerBeat;
+}
+
+juce::Rectangle<int> PlaylistView::audioClipRect (const AudioClip& c) const noexcept
+{
+    const int x0 = tickToX (c.startTick);
+    const int x1 = tickToX (c.endTick());
+    return { x0, kRulerHeight + c.track * trackHeight(), x1 - x0, trackHeight() };
+}
+
+void PlaylistView::setBpm (double newBpm)
+{
+    if (newBpm > 0.0 && std::abs (newBpm - bpm) > 1.0e-9)
+    {
+        bpm = newBpm;
+        repaint();
+    }
+}
+
+const PlaylistView::Peaks& PlaylistView::peaksFor (const std::shared_ptr<const SampleData>& data)
+{
+    for (const auto& p : waveformCache)
+        if (p.data == data)
+            return p;
+
+    Peaks p;
+    p.data = data;
+    const int frames = data->numFrames();
+    const int bins = (frames + kFramesPerPeak - 1) / kFramesPerPeak;
+    p.lows.resize (static_cast<size_t> (bins));
+    p.highs.resize (static_cast<size_t> (bins));
+    for (int b = 0; b < bins; ++b)
+    {
+        float lo = 0.0f, hi = 0.0f;
+        const int end = std::min (frames, (b + 1) * kFramesPerPeak);
+        for (int i = b * kFramesPerPeak; i < end; ++i)
+        {
+            const float v = 0.5f * (data->left[static_cast<size_t> (i)] + data->right[static_cast<size_t> (i)]);
+            lo = std::min (lo, v);
+            hi = std::max (hi, v);
+        }
+        p.lows[static_cast<size_t> (b)] = lo;
+        p.highs[static_cast<size_t> (b)] = hi;
+    }
+    waveformCache.push_back (std::move (p));
+    return waveformCache.back();
+}
+
+void PlaylistView::pruneWaveformCache()
+{
+    waveformCache.erase (std::remove_if (waveformCache.begin(), waveformCache.end(),
+                                         [this] (const Peaks& p)
+                                         {
+                                             return std::none_of (arrangement.audioClips.begin(), arrangement.audioClips.end(),
+                                                                  [&p] (const AudioClip& c) { return c.data == p.data; });
+                                         }),
+                         waveformCache.end());
+}
+
+void PlaylistView::paintAudioClip (juce::Graphics& g, const AudioClip& clip)
+{
+    const auto r = audioClipRect (clip).reduced (0, 2).withTrimmedRight (1);
+    const bool missing = clip.data == nullptr || clip.data->numFrames() < 2;
+    const auto colour = missing ? kAudioMissing : kAudio;
+    g.setColour (colour);
+    g.fillRoundedRectangle (r.toFloat(), 3.0f);
+
+    if (! missing)
+    {
+        // The waveform covers the real length of the audio at the current tempo (the clip may be shorter: it is cut).
+        const auto& peaks = peaksFor (clip.data);
+        const double pxPerTick = arrangement.patternTicks > 0 ? unitWidth / arrangement.patternTicks : 0.0;
+        const double framesPerPixel = (bpm > 0.0 && pxPerTick > 0.0)
+                                          ? clip.data->sampleRate * 60.0 / (bpm * kTicksPerBeat * pxPerTick)
+                                          : 1.0;
+        const float mid = static_cast<float> (r.getCentreY());
+        const float half = static_cast<float> (r.getHeight()) * 0.5f - 3.0f;
+
+        g.saveState();
+        g.reduceClipRegion (r);
+        g.setColour (colour.darker (0.65f));
+        const int xFrom = std::max (r.getX(), kNameWidth);
+        const int xTo = std::min (r.getRight(), getWidth());
+        const int nBins = static_cast<int> (peaks.lows.size());
+        for (int x = xFrom; x < xTo; ++x)
+        {
+            const double f0 = (x - r.getX()) * framesPerPixel;
+            const double f1 = f0 + framesPerPixel;
+            if (f0 >= clip.data->numFrames())
+                break;
+            const int b0 = std::clamp (static_cast<int> (f0 / kFramesPerPeak), 0, nBins - 1);
+            const int b1 = std::clamp (static_cast<int> (f1 / kFramesPerPeak), b0, nBins - 1);
+            float lo = 0.0f, hi = 0.0f;
+            for (int b = b0; b <= b1; ++b)
+            {
+                lo = std::min (lo, peaks.lows[static_cast<size_t> (b)]);
+                hi = std::max (hi, peaks.highs[static_cast<size_t> (b)]);
+            }
+            g.drawVerticalLine (x, mid - std::clamp (hi, 0.0f, 1.0f) * half - 0.5f, mid - std::clamp (lo, -1.0f, 0.0f) * half + 0.5f);
+        }
+        g.restoreState();
+    }
+
+    g.setColour (juce::Colours::white.withAlpha (0.92f));
+    g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
+    g.drawText (juce::String (clip.name) + (missing ? "  (file not found)" : ""), r.reduced (5, 0).withHeight (14).translated (0, 1),
+                juce::Justification::centredLeft, true);
 }
 
 void PlaylistView::clampScroll()
@@ -154,6 +281,19 @@ void PlaylistView::paint (juce::Graphics& g)
             }
         }
 
+        pruneWaveformCache();
+        for (const auto& clip : arrangement.audioClips)
+            paintAudioClip (g, clip);
+
+        if (dropTrack >= 0)
+        {
+            const auto r = juce::Rectangle<int> (tickToX (dropTick), kRulerHeight + dropTrack * th, tickToX (dropTick + 4 * kTicksPerBeat) - tickToX (dropTick), th);
+            g.setColour (kAudio.withAlpha (0.35f));
+            g.fillRect (r);
+            g.setColour (kAudio);
+            g.drawRect (r, 2);
+        }
+
         if (playheadTick >= 0 && arrangement.patternTicks > 0)
         {
             const double unit = static_cast<double> (playheadTick) / arrangement.patternTicks;
@@ -183,6 +323,28 @@ void PlaylistView::mouseDown (const juce::MouseEvent& e)
     const int track = yToTrack (e.y);
     const int unit = xToUnit (e.x);
     const int hit = arrangement.clipAt (track, unit);
+    const int audioHit = arrangement.audioClipAt (track, xToTick (e.x));
+
+    if (audioHit >= 0)
+    {
+        if (e.mods.isPopupMenu())
+        {
+            arrangement.audioClips.erase (arrangement.audioClips.begin() + audioHit);
+            notifyChanged();
+            return;
+        }
+
+        dragClip = audioHit;
+        const auto& clip = arrangement.audioClips[static_cast<size_t> (audioHit)];
+        if (e.x >= audioClipRect (clip).getRight() - kEdgeGrab)
+            drag = Drag::ResizeAudio;
+        else
+        {
+            drag = Drag::MoveAudio;
+            grabOffsetTicks = xToBeatTick (e.x) - clip.startTick;
+        }
+        return;
+    }
 
     if (e.mods.isPopupMenu())
     {
@@ -223,6 +385,36 @@ void PlaylistView::mouseDown (const juce::MouseEvent& e)
 
 void PlaylistView::mouseDrag (const juce::MouseEvent& e)
 {
+    if ((drag == Drag::MoveAudio || drag == Drag::ResizeAudio) && dragClip >= 0
+        && dragClip < static_cast<int> (arrangement.audioClips.size()))
+    {
+        auto clip = arrangement.audioClips[static_cast<size_t> (dragClip)];
+        if (drag == Drag::MoveAudio)
+        {
+            clip.startTick = std::clamp (xToBeatTick (e.x) - grabOffsetTicks, 0, arrangement.timelineTicks() - clip.lengthTicks);
+            clip.startTick = (clip.startTick / kTicksPerBeat) * kTicksPerBeat;
+            clip.track = yToTrack (e.y);
+        }
+        else
+        {
+            // As long as the audio really is at most; as short as one beat.
+            const int natural = clip.naturalLengthTicks (bpm);
+            const int end = ((xToTick (e.x) / kTicksPerBeat) + 1) * kTicksPerBeat;
+            clip.lengthTicks = std::clamp (end - clip.startTick, kTicksPerBeat, std::max (kTicksPerBeat, natural));
+        }
+
+        auto& stored = arrangement.audioClips[static_cast<size_t> (dragClip)];
+        if (! (clip.startTick == stored.startTick && clip.track == stored.track && clip.lengthTicks == stored.lengthTicks)
+            && arrangement.canPlaceAudio (clip, dragClip))
+        {
+            stored = clip;
+            repaint();
+            if (onChanged)
+                onChanged();
+        }
+        return;
+    }
+
     if (drag == Drag::None || dragClip < 0 || dragClip >= static_cast<int> (arrangement.clips.size()))
         return;
 
@@ -263,6 +455,56 @@ void PlaylistView::mouseDoubleClick (const juce::MouseEvent& e)
     const int hit = arrangement.clipAt (yToTrack (e.y), xToUnit (e.x));
     if (hit >= 0 && onPatternPicked)
         onPatternPicked (arrangement.clips[static_cast<size_t> (hit)].pattern);
+}
+
+bool PlaylistView::isInterestedInFileDrag (const juce::StringArray& files)
+{
+    for (const auto& f : files)
+        if (classifyMediaFile (juce::File (f)) != FileKind::Unsupported)
+            return true;
+    return false;
+}
+
+void PlaylistView::fileDragEnter (const juce::StringArray& files, int x, int y)
+{
+    fileDragMove (files, x, y);
+}
+
+void PlaylistView::fileDragMove (const juce::StringArray&, int x, int y)
+{
+    const bool onTimeline = x >= kNameWidth && y >= kRulerHeight;
+    const int track = onTimeline ? yToTrack (y) : -1;
+    const int tick = onTimeline ? xToBeatTick (x) : 0;
+    if (track != dropTrack || tick != dropTick)
+    {
+        dropTrack = track;
+        dropTick = tick;
+        repaint();
+    }
+}
+
+void PlaylistView::fileDragExit (const juce::StringArray&)
+{
+    dropTrack = -1;
+    repaint();
+}
+
+void PlaylistView::filesDropped (const juce::StringArray& files, int x, int y)
+{
+    dropTrack = -1;
+    repaint();
+
+    // Dropped on the track names or the ruler counts as the start of the first track / the nearest track.
+    const int track = yToTrack (y);
+    const int tick = x < kNameWidth ? 0 : xToBeatTick (x);
+
+    juce::StringArray usable;
+    for (const auto& f : files)
+        if (classifyMediaFile (juce::File (f)) != FileKind::Unsupported)
+            usable.add (f);
+
+    if (! usable.isEmpty() && onFilesDropped)
+        onFilesDropped (usable, track, tick);
 }
 
 void PlaylistView::mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel)

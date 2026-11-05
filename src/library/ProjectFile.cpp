@@ -239,6 +239,21 @@ juce::String ProjectDocument::toJson() const
     }
     root->setProperty ("clips", clipList);
 
+    // Recordings and imported audio: only the path of the file is stored, never the audio itself.
+    juce::Array<juce::var> audioList;
+    for (const auto& a : arrangement.audioClips)
+    {
+        auto* o = new juce::DynamicObject();
+        o->setProperty ("source", juce::String (a.data != nullptr ? a.data->source : std::string()));
+        o->setProperty ("name", juce::String (a.name));
+        o->setProperty ("track", a.track);
+        o->setProperty ("startTick", a.startTick);
+        o->setProperty ("lengthTicks", a.lengthTicks);
+        o->setProperty ("gain", static_cast<double> (a.gain));
+        audioList.add (juce::var (o));
+    }
+    root->setProperty ("audioClips", audioList);
+
     return juce::JSON::toString (juce::var (root), false);
 }
 
@@ -416,6 +431,33 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
         }
     if (droppedClips > 0)
         r.warnings.push_back (std::to_string (droppedClips) + " playlist clip(s) could not be placed and were left out.");
+
+    // --- audio clips (older files have none). The audio itself is loaded by the caller from `data->source`.
+    int droppedAudio = 0;
+    if (auto* audioList = root->getProperty ("audioClips").getArray())
+        for (const auto& av : *audioList)
+        {
+            auto* o = av.getDynamicObject();
+            AudioClip clip;
+            std::string source;
+            if (o != nullptr)
+            {
+                source = o->getProperty ("source").toString().toStdString();
+                clip.name = readName (o->getProperty ("name"), juce::File (juce::String (source)).getFileNameWithoutExtension().toStdString());
+                clip.track = readInt (o->getProperty ("track"), -1, -1, 1000);
+                clip.startTick = readInt (o->getProperty ("startTick"), -1, -1, 100000000);
+                clip.lengthTicks = readInt (o->getProperty ("lengthTicks"), 0, 0, 100000000);
+                clip.gain = static_cast<float> (readNumber (o->getProperty ("gain"), 1.0, 0.0, 2.0));
+                clip.data = makeMissingSample (source);
+            }
+            if (o != nullptr && ! source.empty() && d.arrangement.audioClips.size() < static_cast<size_t> (kMaxAudioClips)
+                && d.arrangement.canPlaceAudio (clip))
+                d.arrangement.audioClips.push_back (std::move (clip));
+            else
+                ++droppedAudio;
+        }
+    if (droppedAudio > 0)
+        r.warnings.push_back (std::to_string (droppedAudio) + " audio clip(s) could not be placed and were left out.");
 
     d.arrangement.ensureChannelCount (numChannels);
 

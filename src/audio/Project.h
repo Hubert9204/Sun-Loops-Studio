@@ -60,6 +60,17 @@ struct MixerTrack
 
 inline float finiteOr (float v, float fallback) noexcept { return std::isfinite (v) ? v : fallback; }
 
+// A recording or imported audio file placed on the song timeline. It plays once from `startTick`, through mixer
+// track `mixerTrack`, and is cut at `endTick` (so a clip that is shorter than its audio trims it).
+struct AudioEvent
+{
+    std::shared_ptr<const SampleData> data;
+    int startTick = 0;
+    int endTick = 0;
+    int mixerTrack = 0;
+    float gain = 1.0f; // 0..2
+};
+
 // Immutable snapshot of everything the audio thread needs.
 // Build it with Project::make() on the message thread and hand it to a SnapshotExchange.
 struct Project
@@ -67,6 +78,7 @@ struct Project
     std::vector<Channel> channels;
     std::vector<MixerTrack> tracks; // always kMaxTracks entries after make()
     std::array<EffectSlot, kSlotsPerTrack> masterSlots {}; // insert effects on the master bus (after the sum of all tracks)
+    std::vector<AudioEvent> audioEvents; // song mode only; sorted by startTick, validated by make()
     int lengthTicks = 8 * kTicksPerBeat;
     std::uint64_t revision = 0; // assigned by SnapshotExchange
 
@@ -93,7 +105,8 @@ struct Project
     }
 
     static Project make (std::vector<Channel> input, int loopLengthTicks, std::vector<MixerTrack> tracks = {},
-                         std::array<EffectSlot, kSlotsPerTrack> masterSlots = {})
+                         std::array<EffectSlot, kSlotsPerTrack> masterSlots = {},
+                         std::vector<AudioEvent> audioEvents = {})
     {
         Project p;
         p.lengthTicks = std::max (1, loopLengthTicks);
@@ -126,6 +139,19 @@ struct Project
 
         for (auto& slot : masterSlots)
             slot = slot.sanitised();
+
+        audioEvents.erase (std::remove_if (audioEvents.begin(), audioEvents.end(),
+                                           [] (const AudioEvent& e)
+                                           { return e.data == nullptr || e.data->numFrames() < 2 || e.startTick < 0 || e.endTick <= e.startTick; }),
+                           audioEvents.end());
+        for (auto& e : audioEvents)
+        {
+            e.mixerTrack = std::clamp (e.mixerTrack, 0, kMaxTracks - 1);
+            e.gain = std::clamp (finiteOr (e.gain, 1.0f), 0.0f, 2.0f);
+        }
+        std::stable_sort (audioEvents.begin(), audioEvents.end(),
+                          [] (const AudioEvent& a, const AudioEvent& b) { return a.startTick < b.startTick; });
+        p.audioEvents = std::move (audioEvents);
 
         p.channels = std::move (input);
         p.masterSlots = masterSlots;

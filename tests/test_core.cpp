@@ -14,6 +14,7 @@
 
 #include "audio/Arrangement.h"
 #include "audio/AudioExport.h"
+#include "audio/AudioImport.h"
 #include "audio/BufferTuning.h"
 #include "audio/BuiltinSamples.h"
 #include "audio/Effects.h"
@@ -2335,6 +2336,378 @@ void testAudioExport()
     }
 }
 
+std::shared_ptr<const sls::SampleData> sineData (int frames, double sampleRate, double hz, float amplitude, const char* source = "/tmp/sine.wav")
+{
+    auto d = std::make_shared<sls::SampleData>();
+    d->sampleRate = sampleRate;
+    d->name = "sine";
+    d->source = source;
+    d->left.resize (static_cast<size_t> (frames));
+    for (int i = 0; i < frames; ++i)
+        d->left[static_cast<size_t> (i)] = amplitude * static_cast<float> (std::sin (6.283185307179586 * hz * i / sampleRate));
+    d->right = d->left;
+    return d;
+}
+
+void testAudioClips()
+{
+    std::cout << "Audio clips in the playlist\n";
+    const auto sine = sineData (48000, 48000.0, 440.0, 0.5f);
+
+    sls::Arrangement a;
+    a.patterns.resize (1);
+    const auto audio = [&] (int track, int start, int length)
+    {
+        sls::AudioClip c;
+        c.data = sine;
+        c.track = track;
+        c.startTick = start;
+        c.lengthTicks = length;
+        return c;
+    };
+
+    check (a.canPlaceAudio (audio (0, 0, 960)), "an audio clip fits on an empty track");
+    a.audioClips.push_back (audio (0, 0, 960));
+    check (! a.canPlaceAudio (audio (0, 480, 960)), "audio clips on one track cannot overlap");
+    check (a.canPlaceAudio (audio (1, 480, 960)), "but may on another track");
+    check (a.canPlaceAudio (audio (0, 960, 960)), "an audio clip can start where the previous one ends");
+    check (! a.canPlaceAudio (audio (0, 100, 960)), "audio clips sit on the beat grid");
+    check (! a.canPlaceAudio (audio (0, a.timelineTicks() - 480, 960)), "an audio clip cannot run past the end of the timeline");
+    check (! a.canPlaceAudio (audio (sls::kPlaylistTracks, 0, 480)), "or sit on a track that does not exist");
+    check (a.canPlaceAudio (audio (0, 0, 480), 0), "a clip being moved does not collide with itself");
+    check (! a.canPlace ({ 0, 0, 0, 1 }), "a pattern clip cannot cover an audio clip");
+    check (a.canPlace ({ 0, 0, 1, 1 }), "but can sit after it");
+    a.clips.push_back ({ 0, 2, 1, 1 });
+    check (! a.canPlaceAudio (audio (2, a.patternTicks + 480, 480)), "an audio clip cannot cover a pattern clip");
+    check (a.audioClipAt (0, 0) == 0 && a.audioClipAt (0, 959) == 0 && a.audioClipAt (0, 960) == -1, "audioClipAt finds the clip under a tick");
+    check (a.findFreeAudioStart (0, 0, 960) == 960 && a.findFreeAudioStart (1, 100, 480) == 0,
+           "findFreeAudioStart skips occupied beats");
+    check (a.findFreeAudioStart (0, 0, a.timelineTicks()) == -1, "and gives up when nothing fits");
+
+    sls::Arrangement b;
+    b.patterns.resize (1);
+    b.audioClips.push_back (audio (3, 960, 3000));
+    check (b.songLengthUnits() == 2, "the song is as long as its last audio clip (rounded up to whole patterns)");
+
+    // compiling
+    const auto empty = std::vector<sls::Channel> { synthChannel ({}) };
+    const auto song = sls::compileSong (empty, b);
+    check (song.audioEvents.size() == 1 && song.audioEvents[0].startTick == 960 && song.audioEvents[0].endTick == 3960
+                && song.audioEvents[0].mixerTrack == 3,
+           "song mode compiles the audio clips (playlist track n = mixer track n)");
+    check (sls::compilePattern (empty, b, 0).audioEvents.empty(), "pattern mode plays no audio clips");
+
+    // playing
+    const auto run = [] (sls::Player& player, const sls::Project& project, bool playing, int blocks, double bpm = 120.0)
+    {
+        std::vector<float> all;
+        std::vector<float> l (256), r (256);
+        float* ch[2] = { l.data(), r.data() };
+        for (int i = 0; i < blocks; ++i)
+        {
+            std::fill (l.begin(), l.end(), 0.0f);
+            std::fill (r.begin(), r.end(), 0.0f);
+            player.render (project, bpm, playing, ch, 2, 256);
+            all.insert (all.end(), l.begin(), l.end());
+        }
+        return all;
+    };
+    const auto peak = [] (const std::vector<float>& x, int from, int to)
+    {
+        float m = 0.0f;
+        for (int i = from; i < to && i < static_cast<int> (x.size()); ++i)
+            m = std::max (m, std::abs (x[static_cast<size_t> (i)]));
+        return m;
+    };
+
+    sls::Arrangement play;
+    play.patterns.resize (1);
+    play.audioClips.push_back (audio (0, 480, 480)); // 0.5 s .. 1.0 s at 120 bpm (one beat is 480 ticks = 0.5 s)
+    {
+        const auto project = sls::compileSong (empty, play);
+        sls::Player p;
+        p.prepare (kSr);
+        const auto x = run (p, project, true, 300); // 1.6 s
+        check (peak (x, 0, 23900) == 0.0f, "an audio clip is silent before it starts");
+        check (peak (x, 24500, 46000) > 0.3f, "it plays from its start tick");
+        check (peak (x, 52500, 76000) == 0.0f, "and is cut at its end tick");
+        const auto stopped = run (p, project, false, 20);
+        check (peak (stopped, 0, 5000) == 0.0f, "stopping the transport silences it");
+
+        sls::Player q;
+        q.prepare (kSr);
+        const auto y = run (q, project, true, 850); // 4.5 s: the loop (4 s) wraps and the clip plays again at 4.5 s
+        check (peak (y, 216500, 221000) > 0.3f, "the clip plays again when the song loops");
+    }
+    {   // goes through its mixer track: muting the track silences it
+        auto tracks = sls::Project::defaultTracks();
+        tracks[2].mute = true;
+        sls::Arrangement other = play;
+        other.audioClips[0].track = 2;
+        sls::Player p;
+        p.prepare (kSr);
+        const auto muted = run (p, sls::compileSong (empty, other, tracks), true, 200);
+        sls::Player q;
+        q.prepare (kSr);
+        const auto open = run (q, sls::compileSong (empty, other), true, 200);
+        check (peak (muted, 0, 51000) == 0.0f && peak (open, 24500, 46000) > 0.3f, "an audio clip obeys the mute of its mixer track");
+        sls::Player r;
+        r.prepare (kSr);
+        run (r, sls::compileSong (empty, other), true, 150);
+        check (r.getTrackPeak (2) > 0.1f && r.getTrackPeak (0) == 0.0f, "and shows on that track's meter");
+    }
+    {   // gain and resampling
+        sls::Arrangement g = play;
+        g.audioClips[0].gain = 0.0f;
+        sls::Player p;
+        p.prepare (kSr);
+        check (peak (run (p, sls::compileSong (empty, g), true, 200), 0, 51000) == 0.0f, "a clip with gain 0 is silent");
+
+        sls::Arrangement slow;
+        slow.patterns.resize (1);
+        sls::AudioClip c = audio (0, 0, 960);
+        c.data = sineData (24000, 24000.0, 440.0, 0.5f); // 1 s of 24 kHz audio must last 1 s at 48 kHz, not 0.5 s
+        slow.audioClips.push_back (c);
+        c.lengthTicks = 1920;
+        slow.audioClips[0] = c;
+        sls::Player q;
+        q.prepare (kSr);
+        const auto x = run (q, sls::compileSong (empty, slow), true, 250);
+        check (peak (x, 38000, 46000) > 0.3f && peak (x, 52000, 60000) == 0.0f, "audio at another sample rate plays at the right speed");
+    }
+    {   // snapshot changes while playing
+        sls::Arrangement with;
+        with.patterns.resize (1);
+        with.audioClips.push_back (audio (0, 0, 1920));
+        auto p1 = sls::compileSong (empty, with);
+        auto p2 = sls::compileSong (empty, with); // same audio: keeps playing
+        auto p3 = sls::compileSong (empty, sls::Arrangement { { sls::Pattern {} }, {}, {}, 8 * kBeat }); // clip removed
+        p1.revision = 1;
+        p2.revision = 2;
+        p3.revision = 3;
+        sls::Player p;
+        p.prepare (kSr);
+        run (p, p1, true, 20);
+        const auto keeps = run (p, p2, true, 10);
+        const auto gone = run (p, p3, true, 10);
+        check (peak (keeps, 0, 2560) > 0.3f, "an edit that leaves the clip alone does not interrupt it");
+        check (peak (gone, 0, 2560) == 0.0f, "removing the clip stops it");
+    }
+    {   // real-time safety
+        const auto project = sls::compileSong (empty, play);
+        sls::Player p;
+        p.prepare (kSr);
+        std::vector<float> l (256), r (256);
+        float* ch[2] = { l.data(), r.data() };
+        gAllocs = 0;
+        gCounting = true;
+        for (int i = 0; i < 300; ++i)
+            p.render (project, 120.0, true, ch, 2, 256);
+        gCounting = false;
+        check (gAllocs.load() == 0, "rendering audio clips allocates nothing");
+    }
+    {   // export contains the clip
+        sls::RenderOptions options;
+        options.tailSeconds = 0.2;
+        const auto buffer = sls::renderToBuffer (sls::compileSong (empty, play), options);
+        check (buffer.getMagnitude (0, 0, buffer.getNumSamples()) > 0.3f, "exports contain the audio clips");
+    }
+
+    // project file
+    {
+        auto doc = sls::ProjectDocument::blank();
+        auto c1 = audio (1, 960, 1920);
+        c1.name = "Vocals take 1";
+        c1.gain = 0.7f;
+        c1.data = sineData (100, 48000.0, 440.0, 0.1f, "/home/x/take1.wav");
+        auto c2 = audio (1, 3840, 960);
+        c2.data = sineData (100, 48000.0, 440.0, 0.1f, "/home/x/take 2.flac");
+        doc.arrangement.audioClips = { c1, c2 };
+        const auto parsed = sls::ProjectDocument::fromJson (doc.toJson());
+        check (parsed.document.has_value() && parsed.warnings.empty() && parsed.document->arrangement.audioClips.size() == 2, "audio clips survive saving and loading");
+        if (parsed.document)
+        {
+            const auto& r = parsed.document->arrangement.audioClips;
+            check (r[0].name == "Vocals take 1" && r[0].track == 1 && r[0].startTick == 960 && r[0].lengthTicks == 1920
+                       && std::abs (r[0].gain - 0.7f) < 1e-6f && r[0].data->source == "/home/x/take1.wav"
+                       && r[1].data->source == "/home/x/take 2.flac",
+                   "with their position, gain and the path of their file");
+            check (r[0].data->numFrames() == 0, "the audio itself is not stored in the project");
+        }
+
+        // overlapping / out-of-range clips are dropped with a warning
+        auto text = doc.toJson();
+        auto var = juce::JSON::parse (text);
+        auto* list = var.getDynamicObject()->getProperty ("audioClips").getArray();
+        auto* extra = new juce::DynamicObject();
+        extra->setProperty ("source", "/a/b.wav");
+        extra->setProperty ("track", 1);
+        extra->setProperty ("startTick", 960);
+        extra->setProperty ("lengthTicks", 480);
+        list->add (juce::var (extra));
+        auto* bad = new juce::DynamicObject();
+        bad->setProperty ("source", "/a/c.wav");
+        bad->setProperty ("track", 99);
+        list->add (juce::var (bad));
+        const auto repaired = sls::ProjectDocument::fromJson (juce::JSON::toString (var));
+        check (repaired.document.has_value() && repaired.document->arrangement.audioClips.size() == 2 && ! repaired.warnings.empty(),
+               "clips that overlap or have an impossible position are dropped with a warning");
+
+        var.getDynamicObject()->removeProperty ("audioClips"); // a file from before audio clips existed
+        const auto old = sls::ProjectDocument::fromJson (juce::JSON::toString (var));
+        check (old.document.has_value() && old.document->arrangement.audioClips.empty() && old.warnings.empty(),
+               "projects without audio clips still open");
+    }
+}
+
+void testAudioImport()
+{
+    std::cout << "Audio import\n";
+    const auto dir = freshTempDir ("sls-import");
+    const std::vector<sls::Note> notes { { 69, 0, 960, 0.8f } };
+    const auto project = sls::Project::make ({ synthChannel (notes) }, 2 * kBeat);
+    sls::RenderOptions options;
+    options.tailSeconds = 0.25; // 1 s + 0.25 s of audio
+
+    using sls::ExportFormat;
+    check (sls::classifyMediaFile (juce::File ("/x/a.WAV")) == sls::FileKind::Audio
+               && sls::classifyMediaFile (juce::File ("/x/a.oga")) == sls::FileKind::Audio
+               && sls::classifyMediaFile (juce::File ("/x/a.Aac")) == sls::FileKind::Audio
+               && sls::classifyMediaFile (juce::File ("/x/movie.MP4")) == sls::FileKind::Video
+               && sls::classifyMediaFile (juce::File ("/x/movie.mkv")) == sls::FileKind::Video
+               && sls::classifyMediaFile (juce::File ("/x/notes.txt")) == sls::FileKind::Unsupported
+               && sls::classifyMediaFile (juce::File ("/x/noextension")) == sls::FileKind::Unsupported,
+           "files are classified as audio, video or unsupported by their extension");
+    for (const char* ext : { ".wav", ".mp3", ".ogg", ".oga", ".aac", ".flac", ".aiff" })
+        check (sls::importableAudioExtensions().contains (ext), (juce::String ("importable: ") + ext).toRawUTF8());
+
+    for (const auto fmt : { ExportFormat::Wav, ExportFormat::Aiff, ExportFormat::Flac, ExportFormat::Ogg, ExportFormat::Oga })
+    {
+        const auto& info = sls::exportFormatInfo (fmt);
+        const auto file = dir.getChildFile ("clip" + juce::String (info.extension));
+        const bool wrote = sls::exportAudio (project, options, file, fmt).wasOk();
+        const auto r = sls::importAudioFile (file);
+        const auto label = juce::String (info.extension).substring (1).toUpperCase() + " files are imported with the right length and sound";
+        bool good = wrote && r.data != nullptr && std::abs (r.data->numFrames() / r.data->sampleRate - 1.25) < 0.05
+                    && r.data->source == file.getFullPathName().toStdString() && r.data->name == "clip" && r.warning.isEmpty();
+        if (good)
+        {
+            float m = 0.0f;
+            for (float v : r.data->left)
+                m = std::max (m, std::abs (v));
+            good = m > 0.05f && r.data->left.size() == r.data->right.size();
+        }
+        check (good, label.toRawUTF8());
+    }
+
+    {   // mono files are copied to both sides
+        const auto file = dir.getChildFile ("mono.wav");
+        juce::WavAudioFormat wav;
+        std::unique_ptr<juce::AudioFormatWriter> writer (wav.createWriterFor (new juce::FileOutputStream (file), 44100.0, 1, 16, {}, 0));
+        juce::AudioBuffer<float> b (1, 4410);
+        for (int i = 0; i < 4410; ++i)
+            b.setSample (0, i, 0.5f * std::sin (0.05f * static_cast<float> (i)));
+        writer->writeFromAudioSampleBuffer (b, 0, 4410);
+        writer.reset();
+        const auto r = sls::importAudioFile (file);
+        check (r.data != nullptr && r.data->left == r.data->right && r.data->sampleRate == 44100.0 && r.data->numFrames() == 4410,
+               "a mono file becomes the same sound on both sides");
+    }
+    {   // very long files are cut, with a warning
+        const auto file = dir.getChildFile ("long.wav");
+        juce::WavAudioFormat wav;
+        std::unique_ptr<juce::AudioFormatWriter> writer (wav.createWriterFor (new juce::FileOutputStream (file), 8000.0, 1, 16, {}, 0));
+        juce::AudioBuffer<float> b (1, 8000);
+        b.clear();
+        for (int s = 0; s < 310; ++s)
+            writer->writeFromAudioSampleBuffer (b, 0, 8000);
+        writer.reset();
+        const auto r = sls::importAudioFile (file);
+        check (r.data != nullptr && r.data->numFrames() == static_cast<int> (8000 * sls::kMaxImportSeconds) && r.warning.isNotEmpty(),
+               "a file longer than the limit is cut and the result says so");
+    }
+    {   // failures
+        const auto bogus = dir.getChildFile ("bogus.wav");
+        bogus.replaceWithText ("this is not audio");
+        const auto noFfmpeg = dir.getChildFile ("no-such-ffmpeg");
+        const auto r1 = sls::importAudioFile (bogus, noFfmpeg);
+        check (r1.data == nullptr && r1.error.isNotEmpty(), "a damaged file is reported, not imported");
+        const auto r2 = sls::importAudioFile (dir.getChildFile ("missing.flac"));
+        check (r2.data == nullptr && r2.error.contains ("does not exist"), "a missing file is reported");
+        const auto aac = dir.getChildFile ("song.aac");
+        aac.replaceWithText ("x");
+        const auto r3 = sls::importAudioFile (aac, noFfmpeg);
+        check (r3.data == nullptr && r3.error.contains ("ffmpeg"), "AAC without ffmpeg fails with a message that names ffmpeg");
+        const auto r4 = sls::importVideoAudio (dir.getChildFile ("movie.mp4"), dir.getChildFile ("out"), noFfmpeg);
+        check (r4.data == nullptr && r4.error.isNotEmpty() && ! dir.getChildFile ("out").getChildFile ("movie.wav").exists(),
+               "a video that does not exist fails and leaves nothing behind");
+        const auto r5 = sls::importMediaFile (dir.getChildFile ("notes.txt"), dir);
+        check (r5.data == nullptr && r5.error.contains ("not an audio or video"), "other files are refused");
+    }
+
+    const auto ffmpeg = sls::findFfmpeg();
+    if (! ffmpeg.existsAsFile())
+    {
+        std::cout << "  SKIP  AAC, MP3 and video import (ffmpeg is not installed here)\n";
+        return;
+    }
+
+    for (const auto fmt : { ExportFormat::Mp3, ExportFormat::Aac })
+    {
+        const auto& info = sls::exportFormatInfo (fmt);
+        const auto file = dir.getChildFile ("lossy" + juce::String (info.extension));
+        const bool wrote = sls::exportAudio (project, options, file, fmt).wasOk();
+        const auto r = sls::importAudioFile (file);
+        const auto label = juce::String (info.extension).substring (1).toUpperCase() + " files are imported (MP3 by the program, AAC through ffmpeg)";
+        float m = 0.0f;
+        if (r.data != nullptr)
+            for (float v : r.data->left)
+                m = std::max (m, std::abs (v));
+        check (wrote && r.data != nullptr && std::abs (r.data->numFrames() / r.data->sampleRate - 1.25) < 0.25 && m > 0.05f
+                   && r.data->source == file.getFullPathName().toStdString(),
+               label.toRawUTF8());
+    }
+
+    // video: a short clip with a sine tone, and one without a sound track
+    const auto runFfmpeg = [&] (const juce::StringArray& extra)
+    {
+        juce::StringArray args { ffmpeg.getFullPathName(), "-loglevel", "error", "-nostdin", "-y" };
+        args.addArray (extra);
+        juce::ChildProcess p;
+        p.start (args);
+        p.readAllProcessOutput();
+        return p.waitForProcessToFinish (60000) && p.getExitCode() == 0;
+    };
+    const auto video = dir.getChildFile ("clip video.mp4");
+    const auto silentVideo = dir.getChildFile ("mute.mp4");
+    const bool made = runFfmpeg ({ "-f", "lavfi", "-i", "color=c=black:s=64x64:d=1:r=10", "-f", "lavfi", "-i", "sine=frequency=440:duration=1",
+                                   "-shortest", "-c:v", "mpeg4", "-c:a", "aac", video.getFullPathName() })
+                    && runFfmpeg ({ "-f", "lavfi", "-i", "color=c=black:s=64x64:d=1:r=10", "-an", "-c:v", "mpeg4", silentVideo.getFullPathName() });
+    if (! made)
+    {
+        std::cout << "  SKIP  video import (this ffmpeg cannot make a test video)\n";
+        return;
+    }
+
+    const auto library = dir.getChildFile ("library");
+    const auto r1 = sls::importMediaFile (video, library, {});
+    float loudest = 0.0f;
+    if (r1.data != nullptr)
+        for (float v : r1.data->left)
+            loudest = std::max (loudest, std::abs (v));
+    check (r1.data != nullptr && std::abs (r1.data->numFrames() / r1.data->sampleRate - 1.0) < 0.25 && loudest > 0.05f,
+           "the sound track of a video is extracted and imported");
+    check (r1.data != nullptr && library.getChildFile ("clip video.wav").existsAsFile()
+               && r1.data->source == library.getChildFile ("clip video.wav").getFullPathName().toStdString() && r1.data->name == "clip video",
+           "it is kept as a WAV file in the library folder, which the clip then refers to");
+    const auto r2 = sls::importVideoAudio (video, library);
+    check (r2.data != nullptr && r2.file != r1.file && library.getChildFile ("clip video (2).wav").existsAsFile(),
+           "importing the same video again never replaces the earlier file");
+    const auto r3 = sls::importVideoAudio (silentVideo, library);
+    check (r3.data == nullptr && r3.error.contains ("no audio"), "a video without sound is reported");
+    check (library.getNumberOfChildFiles (juce::File::findFiles) == 2, "and leaves no partial files behind");
+}
+
 void testTapTempo()
 {
     std::cout << "[tap tempo]\n";
@@ -2493,6 +2866,8 @@ int main()
     testAudioExport();
     testMetronome();
     testTapTempo();
+    testAudioClips();
+    testAudioImport();
 
     std::cout << "\n" << (failures == 0 ? "ALL TESTS PASSED" : "SOME TESTS FAILED") << " (" << failures << " failures)\n";
     return failures == 0 ? 0 : 1;

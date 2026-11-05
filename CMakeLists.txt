@@ -29,6 +29,7 @@ set(SLS_CORE_SOURCES
     src/audio/BuiltinSamples.cpp
     src/audio/OfflineRenderer.cpp
     src/audio/AudioExport.cpp
+    src/audio/AudioImport.cpp
     src/library/ChannelPreset.cpp
     src/library/Library.cpp
     src/library/ProjectFile.cpp
