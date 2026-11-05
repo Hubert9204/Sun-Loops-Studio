@@ -28,6 +28,7 @@ private:
             setUsingNativeTitleBar (true);
             setContentOwned (new sls::MainComponent(), true);
             setResizable (true, true);
+            setResizeLimits (1080, 600, 8192, 8192); // the toolbar needs about 1050 px
             centreWithSize (getWidth(), getHeight());
             setVisible (true);
         }

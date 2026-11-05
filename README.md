@@ -6,12 +6,19 @@ its own project and uses no names, graphics or assets from other products.
 
 ## What works today
 
+- **Floating panels** (Channel Rack, Piano Roll, Mixer): drag a panel by its title bar, resize it from any
+  edge, close it with the x, double-click the title to maximise/restore. Panels can overlap; clicking one
+  brings it to the front. Open/close from the toolbar or with **F6** (rack), **F7** (piano roll), **F9** (mixer):
+  the key opens a closed panel, raises an open one that is behind, and closes it when it is already on top.
+  **Reset** restores the default layout. Positions, sizes and open/closed state are remembered in
+  `~/.config/SunLoopsStudio/SunLoopsStudio.settings`.
 - **Channel rack** with five demo channels: two synths and three sample players (kick, snare, hat).
 - **Step sequencer** on sampler channels: 16th-note step buttons, 2-bar loop.
 - **Piano roll** for the selected channel: click to add a note (drag to set its length), drag to move,
   drag the right edge to resize, right-click to delete. Wheel scrolls pitch, Shift+wheel scrolls time,
   Ctrl+wheel zooms time.
-- **Mixer** per channel: volume, pan (equal power), mute, solo, peak meter. Master volume and meter.
+- **Mixer** panel with one vertical strip per channel (fader with dB read-out, pan, mute, solo, peak meter),
+  kept in sync with the rack rows. Master volume and meter are in the toolbar.
 - **Sampler**: loads WAV / FLAC / OGG / AIFF files (up to 30 s), plays them one-shot, repitched by note.
   Drum sounds are synthesised, so no sample files are needed to get started.
 - **Transport**: Play/Stop (Space), BPM 40-240.
@@ -53,7 +60,11 @@ src/audio/OfflineRenderer.*    Renders a Project to a buffer or a WAV file with 
 src/audio/BuiltinSamples.*     Synthesised kick, snare and hat
 src/audio/AudioEngine.*        Audio device, atomics for BPM / volume / play state, audio callback
 src/plugins/PluginScanner.*    VST3 discovery
-src/ui/MainComponent.*         Window: transport bar, channel rack, piano roll, export, sample loading
+src/ui/MainComponent.*         Window: toolbar, panel workspace, layout persistence, export, sample loading
+src/ui/PanelWindow.*           Floating panel (drag, resize, close, maximise) and the Workspace holding them
+src/ui/PanelLayout.h           Panel position/size/visibility: parse, serialise, clamp (unit-tested)
+src/ui/RackView.h              Scrollable list of channel strips (Channel Rack panel body)
+src/ui/MixerPanel.*            Vertical mixer strips (Mixer panel body)
 src/ui/ChannelStrip.*          One rack row: name, mute/solo, volume, pan, meter, steps
 src/ui/PianoRoll.*             Note editor
 tests/test_core.cpp            Headless tests

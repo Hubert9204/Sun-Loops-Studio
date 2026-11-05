@@ -41,6 +41,8 @@ target_sources(SunLoopsStudio PRIVATE
     src/ui/AudioMeter.cpp
     src/ui/PianoRoll.cpp
     src/ui/ChannelStrip.cpp
+    src/ui/PanelWindow.cpp
+    src/ui/MixerPanel.cpp
     src/ui/MainComponent.cpp
     ${SLS_CORE_SOURCES})
 

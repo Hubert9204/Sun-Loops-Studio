@@ -68,6 +68,7 @@ private:
     double scrollX = 0.0;
     double scrollY = 0.0;
     bool initialScrollDone = false;
+    bool userZoomed = false; // until the user zooms, the loop keeps fitting the width when the panel is resized
 
     int playheadTick = -1;
 

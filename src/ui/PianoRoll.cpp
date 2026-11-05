@@ -113,13 +113,21 @@ void PianoRoll::clampScroll()
 
 void PianoRoll::resized()
 {
-    if (! initialScrollDone && getHeight() > 0)
+    if (getHeight() > 0)
     {
-        // Start around middle C, zoomed so the whole loop fits the width.
-        scrollY = (kHighPitch - 72) * kRowHeight;
-        const double beats = static_cast<double> (loopLengthTicks) / kTicksPerBeat;
-        pixelsPerBeat = std::clamp (static_cast<double> (gridArea().getWidth()) / beats, 16.0, 240.0);
-        initialScrollDone = true;
+        if (! initialScrollDone)
+        {
+            // Start around middle C.
+            scrollY = (kHighPitch - 72) * kRowHeight;
+            initialScrollDone = true;
+        }
+
+        if (! userZoomed)
+        {
+            // Zoom so the whole loop fits the width; follows the panel while it is being resized.
+            const double beats = static_cast<double> (loopLengthTicks) / kTicksPerBeat;
+            pixelsPerBeat = std::clamp (static_cast<double> (gridArea().getWidth()) / beats, 16.0, 240.0);
+        }
     }
     clampScroll();
 }
@@ -337,6 +345,7 @@ void PianoRoll::mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWhee
     if (e.mods.isCtrlDown() || e.mods.isCommandDown())
     {
         const double anchorTick = xToTick (e.position.x);
+        userZoomed = true;
         pixelsPerBeat = std::clamp (pixelsPerBeat * std::pow (1.25, wheel.deltaY * 4.0), 16.0, 240.0);
         scrollX += tickToX (anchorTick) - e.position.x; // keep the tick under the cursor
     }

@@ -35,6 +35,18 @@ tracks per-channel peaks and soft-limits the master with `tanh`.
 The offline renderer uses the same `Player`, so an exported file sounds like what you hear. It renders
 one pass of the loop plus a tail so releases and drum tails are not cut.
 
+## Panels
+
+The main window is a toolbar plus a `Workspace`; the Channel Rack, Piano Roll and Mixer are `PanelWindow`
+children of it, so they float inside the program, can overlap and are z-ordered by clicking. A panel does
+not own its content (`RackView`, `PianoRoll`, `MixerPanel` are members of `MainComponent`, declared before
+the panels so they outlive them).
+
+`PanelLayout` (x, y, width, height, visible) has no JUCE dependency: it serialises to `"x y w h v"` for the
+settings file, rejects malformed text so a corrupted file falls back to the defaults, and `clampedTo()` keeps
+a panel inside the workspace and above its minimum size. The workspace re-clamps every panel when the window
+is resized. The rack rows and the mixer strips edit the same `Channel` objects and refresh each other.
+
 ## Testing
 
 `tests/test_core.cpp` drives `Player` and the renderer without an audio device and checks the result with

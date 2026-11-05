@@ -18,6 +18,7 @@
 #include "audio/Project.h"
 #include "audio/SnapshotExchange.h"
 #include "plugins/PluginScanner.h"
+#include "ui/PanelLayout.h"
 
 // Several checks below deliberately compare floats with ==: "exactly zero" means silence or
 // "no contribution at all", which is the property being tested.
@@ -560,6 +561,63 @@ void testPluginScanner()
 
     check (sls::PluginScanner::defaultSearchPaths().getNumPaths() > 0, "default search paths are defined for this platform");
 }
+
+void testPanelLayout()
+{
+    std::cout << "Panel layout\n";
+    using sls::PanelLayout;
+
+    const PanelLayout original { 40, 25, 600, 300, true };
+    const auto back = PanelLayout::parse (original.toString());
+    check (back.has_value() && *back == original, "a layout survives toString/parse");
+
+    const PanelLayout hidden { 10, 20, 300, 200, false };
+    const auto hiddenBack = PanelLayout::parse (hidden.toString());
+    check (hiddenBack.has_value() && ! hiddenBack->visible && *hiddenBack == hidden, "a closed panel stays closed after parse");
+
+    check (! PanelLayout::parse ("").has_value(), "empty text is rejected");
+    check (! PanelLayout::parse ("1 2 3 4").has_value(), "too few values are rejected");
+    check (! PanelLayout::parse ("1 2 3 4 1 9").has_value(), "trailing values are rejected");
+    check (! PanelLayout::parse ("1 2 abc 4 1").has_value(), "non-numbers are rejected");
+    check (! PanelLayout::parse ("1 2 0 4 1").has_value(), "zero width is rejected");
+    check (! PanelLayout::parse ("1 2 3 -4 1").has_value(), "negative height is rejected");
+    check (! PanelLayout::parse ("1 2 3 4 2").has_value(), "visible other than 0/1 is rejected");
+    check (! PanelLayout::parse ("1 2 3 4 1 junk").has_value(), "trailing garbage is rejected");
+    check (! PanelLayout::parse ("99999999999 2 3 4 1").has_value(), "integer overflow is rejected");
+
+    const auto inside = PanelLayout { 100, 50, 400, 300, true }.clampedTo (1000, 700, 200, 150);
+    check (inside == PanelLayout { 100, 50, 400, 300, true }, "a panel already inside the workspace is unchanged");
+
+    const auto off = PanelLayout { 900, 600, 400, 300, true }.clampedTo (1000, 700, 200, 150);
+    check (off.x == 600 && off.y == 400 && off.width == 400 && off.height == 300, "a panel sticking out is pulled back inside");
+
+    const auto negative = PanelLayout { -50, -80, 400, 300, true }.clampedTo (1000, 700, 200, 150);
+    check (negative.x == 0 && negative.y == 0, "negative positions are clamped to the origin");
+
+    const auto huge = PanelLayout { 0, 0, 5000, 4000, true }.clampedTo (1000, 700, 200, 150);
+    check (huge.width == 1000 && huge.height == 700, "an oversized panel is shrunk to the workspace");
+
+    const auto tiny = PanelLayout { 0, 0, 20, 10, true }.clampedTo (1000, 700, 200, 150);
+    check (tiny.width == 200 && tiny.height == 150, "a too-small panel grows to its minimum size");
+
+    const auto cramped = PanelLayout { 30, 30, 400, 300, true }.clampedTo (150, 100, 200, 150);
+    check (cramped.x == 0 && cramped.y == 0 && cramped.width == 150 && cramped.height == 100,
+           "when the workspace is smaller than the minimum, the workspace wins");
+
+    const auto keep = PanelLayout { 900, 900, 400, 300, false }.clampedTo (1000, 700, 200, 150);
+    check (! keep.visible, "clamping does not change visibility");
+
+    bool allInside = true;
+    for (int x = -300; x <= 1400; x += 97)
+        for (int y = -300; y <= 1000; y += 89)
+            for (int w : { 1, 150, 400, 2000 })
+            {
+                const auto c = PanelLayout { x, y, w, w, true }.clampedTo (1000, 700, 200, 150);
+                allInside = allInside && c.x >= 0 && c.y >= 0 && c.x + c.width <= 1000 && c.y + c.height <= 700
+                            && c.width >= 200 && c.height >= 150;
+            }
+    check (allInside, "clamped panels are always inside the workspace and not below the minimum size");
+}
 } // namespace
 
 int main()
@@ -576,6 +634,7 @@ int main()
     testExchangeStress();
     testWavRoundTrip();
     testPluginScanner();
+    testPanelLayout();
 
     std::cout << "\n" << (failures == 0 ? "ALL TESTS PASSED" : "SOME TESTS FAILED") << " (" << failures << " failures)\n";
     return failures == 0 ? 0 : 1;
