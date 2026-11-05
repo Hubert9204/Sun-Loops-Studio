@@ -9,15 +9,15 @@
 
 namespace sls
 {
-// Where the browser looks for the user's own sounds: ~/Music/Sun Loops Studio/{Samples, Drum Kits, Presets}.
+// Where the browser looks for the user's own sounds: ~/Music/Sun Loops Studio/{Samples, Drum Kits, Presets, Projects}.
 struct LibraryPaths
 {
-    juce::File root, samples, drumKits, presets;
+    juce::File root, samples, drumKits, presets, projects;
 
     static LibraryPaths forRoot (const juce::File& root);
     static LibraryPaths defaults(); // ~/Music/Sun Loops Studio
 
-    // Creates the three folders if they are missing. Returns false if that was not possible.
+    // Creates the four folders if they are missing. Returns false if that was not possible.
     bool ensureExists() const;
 };
 

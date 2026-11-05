@@ -1,0 +1,478 @@
+#include "library/ProjectFile.h"
+
+#include <algorithm>
+#include <cmath>
+
+namespace sls
+{
+namespace
+{
+constexpr size_t kMaxNotesPerChannelPattern = 20000;
+constexpr size_t kMaxNameLength = 16;
+
+const char* effectKey (EffectType t)
+{
+    switch (t)
+    {
+        case EffectType::Equalizer:  return "equalizer";
+        case EffectType::Reverb:     return "reverb";
+        case EffectType::Delay:      return "delay";
+        case EffectType::Compressor: return "compressor";
+        case EffectType::None:       break;
+    }
+    return "none";
+}
+
+EffectType effectFromKey (const juce::String& key)
+{
+    for (int t = 0; t < kEffectTypeCount; ++t)
+        if (key == effectKey (static_cast<EffectType> (t)))
+            return static_cast<EffectType> (t);
+    return EffectType::None; // unknown effects (from a future version) become an empty slot
+}
+
+// ------------------------------------------------------------------------- writing
+
+juce::var number (double v) { return juce::var (std::isfinite (v) ? v : 0.0); }
+
+juce::var noteToVar (const Note& n)
+{
+    juce::Array<juce::var> a;
+    a.add (n.pitch);
+    a.add (n.startTick);
+    a.add (n.lengthTicks);
+    a.add (number (static_cast<double> (n.velocity)));
+    return a;
+}
+
+juce::var slotToVar (const EffectSlot& slot)
+{
+    const auto s = slot.sanitised();
+    auto* o = new juce::DynamicObject();
+    o->setProperty ("type", effectKey (s.type));
+    o->setProperty ("bypass", s.bypass);
+    juce::Array<juce::var> params;
+    for (int i = 0; i < effectParamCount (s.type); ++i)
+        params.add (number (static_cast<double> (s.params[static_cast<size_t> (i)])));
+    o->setProperty ("params", params);
+    return juce::var (o);
+}
+
+// ------------------------------------------------------------------------- reading
+
+struct Reader
+{
+    std::string error;
+    std::vector<std::string> warnings;
+    bool failed() const { return ! error.empty(); }
+    void fail (const std::string& message) { if (error.empty()) error = message; }
+};
+
+double readNumber (const juce::var& v, double fallback, double lo, double hi)
+{
+    if (! (v.isDouble() || v.isInt() || v.isInt64()))
+        return fallback;
+    const double d = static_cast<double> (v);
+    return std::isfinite (d) ? std::clamp (d, lo, hi) : fallback;
+}
+
+int readInt (const juce::var& v, int fallback, int lo, int hi)
+{
+    return static_cast<int> (std::lround (readNumber (v, fallback, lo, hi)));
+}
+
+bool readBool (const juce::var& v, bool fallback)
+{
+    return v.isBool() ? static_cast<bool> (v) : fallback;
+}
+
+std::string readName (const juce::var& v, const std::string& fallback)
+{
+    if (! v.isString())
+        return fallback;
+    const auto s = v.toString().trim().substring (0, static_cast<int> (kMaxNameLength));
+    return s.isEmpty() ? fallback : s.toStdString();
+}
+
+EffectSlot readSlot (const juce::var& v)
+{
+    auto* o = v.getDynamicObject();
+    if (o == nullptr)
+        return {};
+
+    EffectSlot slot = EffectSlot::make (effectFromKey (o->getProperty ("type").toString()));
+    slot.bypass = readBool (o->getProperty ("bypass"), false);
+
+    if (auto* params = o->getProperty ("params").getArray())
+        for (int i = 0; i < std::min (params->size(), effectParamCount (slot.type)); ++i)
+        {
+            const auto info = effectParamInfo (slot.type, i);
+            slot.params[static_cast<size_t> (i)] = static_cast<float> (readNumber ((*params)[i], info.def, info.min, info.max));
+        }
+    return slot.sanitised();
+}
+
+bool readNote (const juce::var& v, int patternTicks, Note& out)
+{
+    auto* a = v.getArray();
+    if (a == nullptr || a->size() < 3)
+        return false;
+
+    const double pitch = readNumber ((*a)[0], -1, -1, 1000);
+    const double start = readNumber ((*a)[1], -1, -1, 1.0e9);
+    const double length = readNumber ((*a)[2], 0, 0, 1.0e9);
+    if (pitch < 0 || pitch > 127 || start < 0 || start >= patternTicks || length < 1)
+        return false;
+
+    out.pitch = static_cast<int> (std::lround (pitch));
+    out.startTick = static_cast<int> (std::lround (start));
+    out.lengthTicks = std::min (static_cast<int> (std::lround (length)), patternTicks - out.startTick);
+    out.velocity = static_cast<float> (readNumber (a->size() > 3 ? (*a)[3] : juce::var (0.8), 0.8, 0.0, 1.0));
+    return true;
+}
+} // namespace
+
+// ------------------------------------------------------------------------- ProjectDocument
+
+ProjectDocument ProjectDocument::blank()
+{
+    ProjectDocument d;
+
+    Channel c;
+    c.name = "Synth 1";
+    c.volume = 0.8f;
+    d.channels.push_back (c);
+    d.sampleSources.emplace_back();
+
+    d.tracks = Project::defaultTracks();
+
+    d.arrangement.patterns.resize (1);
+    d.arrangement.patterns[0].name = "Pattern 1";
+    d.arrangement.ensureChannelCount (d.channels.size());
+    return d;
+}
+
+juce::String ProjectDocument::toJson() const
+{
+    auto* root = new juce::DynamicObject();
+    root->setProperty ("format", kProjectFormatName);
+    root->setProperty ("version", kProjectFormatVersion);
+    root->setProperty ("bpm", number (bpm));
+    root->setProperty ("masterVolume", number (static_cast<double> (masterVolume)));
+    root->setProperty ("songMode", songMode);
+    root->setProperty ("currentPattern", currentPattern);
+
+    juce::Array<juce::var> channelList;
+    for (size_t i = 0; i < channels.size(); ++i)
+    {
+        const auto& c = channels[i];
+        auto* o = new juce::DynamicObject();
+        o->setProperty ("name", juce::String (c.name));
+        o->setProperty ("instrument", c.instrument == Instrument::Sampler ? "sampler" : "synth");
+        o->setProperty ("sample", juce::String (i < sampleSources.size() ? sampleSources[i] : std::string()));
+        o->setProperty ("rootPitch", c.rootPitch);
+        o->setProperty ("volume", number (static_cast<double> (c.volume)));
+        o->setProperty ("pan", number (static_cast<double> (c.pan)));
+        o->setProperty ("mute", c.mute);
+        o->setProperty ("solo", c.solo);
+        o->setProperty ("pitch", number (static_cast<double> (c.pitch)));
+        o->setProperty ("swing", number (static_cast<double> (c.swing)));
+        o->setProperty ("mixerTrack", c.mixerTrack);
+        channelList.add (juce::var (o));
+    }
+    root->setProperty ("channels", channelList);
+
+    juce::Array<juce::var> trackList;
+    for (const auto& t : tracks)
+    {
+        auto* o = new juce::DynamicObject();
+        o->setProperty ("name", juce::String (t.name));
+        o->setProperty ("volume", number (static_cast<double> (t.volume)));
+        o->setProperty ("pan", number (static_cast<double> (t.pan)));
+        o->setProperty ("mute", t.mute);
+        o->setProperty ("solo", t.solo);
+        juce::Array<juce::var> slots;
+        for (const auto& s : t.slots)
+            slots.add (slotToVar (s));
+        o->setProperty ("effects", slots);
+        trackList.add (juce::var (o));
+    }
+    root->setProperty ("tracks", trackList);
+
+    juce::Array<juce::var> patternList;
+    for (const auto& p : arrangement.patterns)
+    {
+        auto* o = new juce::DynamicObject();
+        o->setProperty ("name", juce::String (p.name));
+        juce::Array<juce::var> perChannel;
+        for (size_t c = 0; c < channels.size(); ++c)
+        {
+            juce::Array<juce::var> notes;
+            if (c < p.notes.size())
+                for (const auto& n : p.notes[c])
+                    notes.add (noteToVar (n));
+            perChannel.add (notes);
+        }
+        o->setProperty ("notes", perChannel);
+        patternList.add (juce::var (o));
+    }
+    root->setProperty ("patterns", patternList);
+
+    juce::Array<juce::var> clipList;
+    for (const auto& c : arrangement.clips)
+    {
+        auto* o = new juce::DynamicObject();
+        o->setProperty ("pattern", c.pattern);
+        o->setProperty ("track", c.track);
+        o->setProperty ("start", c.startUnit);
+        o->setProperty ("length", c.lengthUnits);
+        clipList.add (juce::var (o));
+    }
+    root->setProperty ("clips", clipList);
+
+    return juce::JSON::toString (juce::var (root), false);
+}
+
+ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
+{
+    ProjectParseResult result;
+    Reader r;
+
+    const auto parsed = juce::JSON::parse (text);
+    auto* root = parsed.getDynamicObject();
+    if (root == nullptr || root->getProperty ("format").toString() != kProjectFormatName)
+    {
+        result.error = "This is not a Sun Loops Studio project file.";
+        return result;
+    }
+
+    const auto version = root->getProperty ("version");
+    if (! (version.isInt() || version.isInt64() || version.isDouble()) || static_cast<int> (version) < 1)
+    {
+        result.error = "The project file has no valid version number.";
+        return result;
+    }
+    if (static_cast<int> (version) > kProjectFormatVersion)
+    {
+        result.error = "This project was saved by a newer version of Sun Loops Studio (file format "
+                     + std::to_string (static_cast<int> (version)) + "). Please update the program.";
+        return result;
+    }
+
+    ProjectDocument d;
+    d.bpm = readNumber (root->getProperty ("bpm"), 120.0, 40.0, 240.0);
+    d.masterVolume = static_cast<float> (readNumber (root->getProperty ("masterVolume"), 0.8, 0.0, 1.0));
+    d.songMode = readBool (root->getProperty ("songMode"), false);
+
+    // --- channels
+    auto* channelList = root->getProperty ("channels").getArray();
+    if (channelList == nullptr || channelList->isEmpty() || channelList->size() > kMaxChannels)
+    {
+        result.error = "The project must have between 1 and " + std::to_string (kMaxChannels) + " channels.";
+        return result;
+    }
+
+    for (int i = 0; i < channelList->size(); ++i)
+    {
+        auto* o = (*channelList)[i].getDynamicObject();
+        if (o == nullptr)
+        {
+            result.error = "Channel " + std::to_string (i + 1) + " is damaged.";
+            return result;
+        }
+
+        Channel c;
+        c.name = readName (o->getProperty ("name"), "Channel " + std::to_string (i + 1));
+        const auto instrument = o->getProperty ("instrument").toString();
+        if (instrument == "sampler")
+            c.instrument = Instrument::Sampler;
+        else if (instrument == "synth")
+            c.instrument = Instrument::Synth;
+        else
+        {
+            result.error = "Channel " + std::to_string (i + 1) + " has an unknown instrument.";
+            return result;
+        }
+
+        c.rootPitch = readInt (o->getProperty ("rootPitch"), 60, 0, 127);
+        c.volume = static_cast<float> (readNumber (o->getProperty ("volume"), 0.8, 0.0, 1.5));
+        c.pan = static_cast<float> (readNumber (o->getProperty ("pan"), 0.0, -1.0, 1.0));
+        c.mute = readBool (o->getProperty ("mute"), false);
+        c.solo = readBool (o->getProperty ("solo"), false);
+        c.pitch = static_cast<float> (readNumber (o->getProperty ("pitch"), 0.0, -24.0, 24.0));
+        c.swing = static_cast<float> (readNumber (o->getProperty ("swing"), 0.0, 0.0, 1.0));
+        c.mixerTrack = readInt (o->getProperty ("mixerTrack"), std::min (i, kMaxTracks - 1), 0, kMaxTracks - 1);
+
+        d.channels.push_back (std::move (c));
+        d.sampleSources.push_back (o->getProperty ("sample").toString().toStdString());
+    }
+
+    // --- mixer tracks (missing ones keep their defaults)
+    d.tracks = Project::defaultTracks();
+    if (auto* trackList = root->getProperty ("tracks").getArray())
+        for (int i = 0; i < std::min (trackList->size(), kMaxTracks); ++i)
+        {
+            auto* o = (*trackList)[i].getDynamicObject();
+            if (o == nullptr)
+                continue;
+
+            auto& t = d.tracks[static_cast<size_t> (i)];
+            t.name = readName (o->getProperty ("name"), t.name);
+            t.volume = static_cast<float> (readNumber (o->getProperty ("volume"), 1.0, 0.0, 1.5));
+            t.pan = static_cast<float> (readNumber (o->getProperty ("pan"), 0.0, -1.0, 1.0));
+            t.mute = readBool (o->getProperty ("mute"), false);
+            t.solo = readBool (o->getProperty ("solo"), false);
+
+            if (auto* slots = o->getProperty ("effects").getArray())
+                for (int s = 0; s < std::min (slots->size(), kSlotsPerTrack); ++s)
+                    t.slots[static_cast<size_t> (s)] = readSlot ((*slots)[s]);
+        }
+
+    // --- patterns
+    auto* patternList = root->getProperty ("patterns").getArray();
+    if (patternList == nullptr || patternList->isEmpty() || patternList->size() > kMaxPatterns)
+    {
+        result.error = "The project must have between 1 and " + std::to_string (kMaxPatterns) + " patterns.";
+        return result;
+    }
+
+    const size_t numChannels = d.channels.size();
+    int droppedNotes = 0;
+    for (int p = 0; p < patternList->size(); ++p)
+    {
+        auto* o = (*patternList)[p].getDynamicObject();
+        if (o == nullptr)
+        {
+            result.error = "Pattern " + std::to_string (p + 1) + " is damaged.";
+            return result;
+        }
+
+        Pattern pattern;
+        pattern.name = readName (o->getProperty ("name"), "Pattern " + std::to_string (p + 1));
+        pattern.notes.resize (numChannels);
+
+        if (auto* perChannel = o->getProperty ("notes").getArray())
+            for (int c = 0; c < std::min (perChannel->size(), static_cast<int> (numChannels)); ++c)
+                if (auto* notes = (*perChannel)[c].getArray())
+                {
+                    if (static_cast<size_t> (notes->size()) > kMaxNotesPerChannelPattern)
+                    {
+                        result.error = "Pattern " + std::to_string (p + 1) + " has too many notes.";
+                        return result;
+                    }
+                    for (const auto& nv : *notes)
+                    {
+                        Note n;
+                        if (readNote (nv, d.arrangement.patternTicks, n))
+                            pattern.notes[static_cast<size_t> (c)].push_back (n);
+                        else
+                            ++droppedNotes;
+                    }
+                    std::stable_sort (pattern.notes[static_cast<size_t> (c)].begin(), pattern.notes[static_cast<size_t> (c)].end(),
+                                      [] (const Note& a, const Note& b)
+                                      { return a.startTick != b.startTick ? a.startTick < b.startTick : a.pitch < b.pitch; });
+                }
+
+        d.arrangement.patterns.push_back (std::move (pattern));
+    }
+    if (droppedNotes > 0)
+        r.warnings.push_back (std::to_string (droppedNotes) + " note(s) were outside their pattern and were left out.");
+
+    d.currentPattern = readInt (root->getProperty ("currentPattern"), 0, 0, static_cast<int> (d.arrangement.patterns.size()) - 1);
+
+    // --- clips (each must fit, in order; the rest are dropped)
+    int droppedClips = 0;
+    if (auto* clipList = root->getProperty ("clips").getArray())
+        for (const auto& cv : *clipList)
+        {
+            auto* o = cv.getDynamicObject();
+            Clip clip;
+            if (o != nullptr)
+            {
+                clip.pattern = readInt (o->getProperty ("pattern"), -1, -1, 1000);
+                clip.track = readInt (o->getProperty ("track"), -1, -1, 1000);
+                clip.startUnit = readInt (o->getProperty ("start"), -1, -1, 100000);
+                clip.lengthUnits = readInt (o->getProperty ("length"), 0, 0, 100000);
+            }
+            if (o != nullptr && d.arrangement.canPlace (clip))
+                d.arrangement.clips.push_back (clip);
+            else
+                ++droppedClips;
+        }
+    if (droppedClips > 0)
+        r.warnings.push_back (std::to_string (droppedClips) + " playlist clip(s) could not be placed and were left out.");
+
+    d.arrangement.ensureChannelCount (numChannels);
+
+    result.document = std::move (d);
+    result.warnings = std::move (r.warnings);
+    return result;
+}
+
+// ------------------------------------------------------------------------- files
+
+std::shared_ptr<const SampleData> makeMissingSample (const std::string& source)
+{
+    auto s = std::make_shared<SampleData>();
+    s->source = source;
+    s->name = juce::File (juce::String (source)).getFileNameWithoutExtension().toStdString();
+    return s; // no frames: Player ignores a sampler voice without audio
+}
+
+ProjectParseResult readProjectFile (const juce::File& file)
+{
+    ProjectParseResult result;
+
+    if (! file.existsAsFile())
+    {
+        result.error = "The file " + file.getFileName().toStdString() + " does not exist.";
+        return result;
+    }
+    if (file.getSize() > kMaxProjectFileBytes)
+    {
+        result.error = file.getFileName().toStdString() + " is too large to be a project file.";
+        return result;
+    }
+
+    juce::FileInputStream in (file);
+    if (in.failedToOpen())
+    {
+        result.error = "Cannot read " + file.getFileName().toStdString() + ".";
+        return result;
+    }
+    return ProjectDocument::fromJson (in.readEntireStreamAsString());
+}
+
+juce::String writeProjectFile (const juce::File& file, const ProjectDocument& document)
+{
+    const auto parent = file.getParentDirectory();
+    if (! parent.isDirectory() && ! parent.createDirectory().wasOk())
+        return "Cannot create the folder " + parent.getFullPathName();
+
+    const auto text = document.toJson();
+
+    juce::TemporaryFile temp (file);
+    if (! temp.getFile().replaceWithText (text))
+        return "Cannot write to " + parent.getFullPathName();
+    if (! temp.overwriteTargetFileWithTemporary())
+        return "Cannot replace " + file.getFileName();
+    return {};
+}
+
+juce::File withProjectExtension (const juce::File& file)
+{
+    // Not withFileExtension(): "My.Song" must become "My.Song.slsproj", not "My.slsproj".
+    return file.getFileName().endsWithIgnoreCase (kProjectExtension)
+               ? file
+               : file.getParentDirectory().getChildFile (file.getFileName() + kProjectExtension);
+}
+
+juce::File automaticProjectFile (const juce::File& folder, juce::Time now)
+{
+    const auto stamp = now.formatted ("%Y-%m-%d %H-%M-%S");
+    auto file = folder.getChildFile ("Untitled " + stamp + kProjectExtension);
+    for (int n = 2; file.exists(); ++n)
+        file = folder.getChildFile ("Untitled " + stamp + " (" + juce::String (n) + ")" + kProjectExtension);
+    return file;
+}
+} // namespace sls

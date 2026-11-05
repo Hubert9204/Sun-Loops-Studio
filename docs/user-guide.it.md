@@ -2,14 +2,14 @@
 
 *[English](user-guide.md)*
 
-Questa guida descrive cosa fa oggi Sun Loops Studio 0.5. Limiti e funzioni mancanti sono elencati alla fine.
+Questa guida descrive cosa fa oggi Sun Loops Studio 0.6. Limiti e funzioni mancanti sono elencati alla fine.
 
 ## La finestra
 
 Una **barra degli strumenti** su due righe, una riga di stato e sotto il **browser** (barra laterale a sinistra) e
 l'**area di lavoro**, dove i pannelli fluttuano.
 
-Barra, prima riga: **Play / Stop**, pulsante **Pattern / Song**, il **menu dei pattern** con **+**, **BPM**
+Barra, prima riga: **File** (progetti, vedi sotto), **Play / Stop**, pulsante **Pattern / Song**, il **menu dei pattern** con **+**, **BPM**
 (40-240), volume **Master** con il suo indicatore, **Audio...** (impostazioni del dispositivo) ed **Export WAV...**.
 
 Barra, seconda riga: i pulsanti che mostrano o nascondono il browser (**Browser F8**) e i pannelli (**Rack F6**,
@@ -17,6 +17,44 @@ Barra, seconda riga: i pulsanti che mostrano o nascondono il browser (**Browser 
 pattern corrente).
 
 La riga di stato mostra il dispositivo audio (frequenza, buffer, latenza dichiarata) e l'ultimo messaggio.
+
+## Progetti
+
+Tutto il brano è salvato in un unico file `.slsproj`: canali (strumento, sample, volume, pan, pitch, swing, traccia
+del mixer), tutti i pattern con le loro note, la playlist, il mixer (fader, bilanciamento, mute/solo, catene di
+effetti e loro impostazioni), BPM, volume master e se la modalità Song è attiva. Il titolo della finestra mostra il
+nome del progetto, seguito da `*` quando ci sono modifiche non salvate.
+
+| Comando | Tasto | Cosa fa |
+| --- | --- | --- |
+| **New** | `Ctrl+N` | Parte con un progetto vuoto (un canale synth, un pattern vuoto). |
+| **Open...** | `Ctrl+O` | Sceglie un file `.slsproj`. |
+| **Open recent** | | Gli ultimi otto progetti che esistono ancora. |
+| **Save** | `Ctrl+S` | Scrive il progetto. |
+| **Save as...** | `Ctrl+Maiusc+S` | Chiede un nome (se manca, aggiunge `.slsproj`) e scrive il progetto lì. |
+
+**Salvare senza nome.** Un progetto a cui non hai ancora dato un nome si chiama *Untitled*. **Save** (o `Ctrl+S`)
+non si ferma a chiedere: scrive subito il progetto come `Untitled <data> <ora>.slsproj` in
+`~/Music/Sun Loops Studio/Projects`, e da quel momento quello è il file del progetto, quindi il **Save** successivo
+aggiorna lo stesso file. Usa **Save as...** quando vuoi un nome vero. Salvare un progetto con nome è sicuro: il
+nuovo testo va in un file temporaneo che poi sostituisce il vecchio, quindi un salvataggio fallito lascia intatto il
+file precedente.
+
+**Lavoro non salvato.** **New**, **Open...** e la chiusura della finestra chiedono conferma se ci sono modifiche
+non salvate: *Save*, *Don't save* o *Cancel*. Il tasto Esc annulla. Scegliere un pattern o passare da Pattern a Song
+non conta come modifica. Puoi anche avviare il programma con un progetto come argomento
+(`sun-loops-studio brano.slsproj`); aprire un file `.slsproj` dal file manager fa lo stesso quando il desktop
+conosce il tipo (installato da `cmake --install`).
+
+**I sample non sono copiati nel file.** Un canale sampler ricorda da dove viene il suo sample: un suono incluso o il
+percorso completo del tuo file. Se sposti o cancelli il file il progetto si apre lo stesso: quel canale resta muto,
+un messaggio elenca i file mancanti e il riferimento viene conservato, quindi rimettere il file al suo posto (o
+caricarne un altro con *Load sample...*) risolve. Tieni i sample dove sono, oppure in
+`~/Music/Sun Loops Studio/Samples`.
+
+**File danneggiati.** Un file che non è un progetto di Sun Loops Studio, è rovinato o è stato scritto da una versione
+più recente viene rifiutato con un messaggio e il progetto corrente resta intatto. I valori fuori limite vengono
+riportati nei limiti e le note o clip che non si possono collocare vengono scartate, con un messaggio.
 
 ## Pannelli
 
@@ -48,6 +86,8 @@ state rinominate); **Reset**, o semplicemente spostare i pannelli, salva quelle 
 | Tasto | Azione |
 | --- | --- |
 | Spazio | Play / Stop |
+| Ctrl+N / Ctrl+O | Nuovo progetto / Apri progetto |
+| Ctrl+S / Ctrl+Maiusc+S | Salva / Salva con nome |
 | F5 | Playlist |
 | F6 | Channel Rack |
 | F7 | Piano Roll |
@@ -251,7 +291,6 @@ il programma non la misura.
 - Un pattern dura sempre due battute, 4/4, griglia di sedicesimi.
 - I sample sono mono o stereo, al massimo 30 secondi, suonati una volta sola (niente loop né editing
   dell'inviluppo).
-- Non ancora disponibili: suonare le note con la tastiera del computer o con una tastiera MIDI, salvare e aprire progetti (impostazioni del mixer ed effetti si perdono all'uscita come tutto
-  il resto), annulla, plugin VST come strumenti o effetti, send ed effetti sul master, automazione, ingresso e
+- Non ancora disponibili: suonare le note con la tastiera del computer o con una tastiera MIDI, annulla, incorporare i sample nel progetto, salvataggio automatico e recupero dopo un crash, plugin VST come strumenti o effetti, send ed effetti sul master, automazione, ingresso e
   registrazione MIDI, eliminare o rinominare i pattern, spostare il cursore con un clic sul righello, trascinare file
   dal desktop sul programma. Vedi [roadmap.md](roadmap.md) (in inglese).

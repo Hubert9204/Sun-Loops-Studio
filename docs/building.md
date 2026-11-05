@@ -48,13 +48,38 @@ cmake --install build --prefix ~/.local
 ```
 
 Installs, under the prefix: the `sun-loops-studio` command (`bin/`), the application-menu entry
-(`share/applications/sun-loops-studio.desktop`) and the icons (`share/icons/hicolor/{16x16,256x256}/apps/`).
+(`share/applications/sun-loops-studio.desktop`), the icons (`share/icons/hicolor/{16x16,256x256}/apps/`) and the
+file type of `.slsproj` projects (`share/mime/packages/sun-loops-studio.xml`).
 Make sure `~/.local/bin` is in your `PATH`. KDE normally picks the menu entry up within moments; if not, log out and
 in again or run `kbuildsycoca6`.
 
 JUCE ships install rules of its own (headers, CMake files). `CMakeLists.txt` excludes them with `EXCLUDE_FROM_ALL`,
 which needs CMake 3.28; on an older CMake `cmake --install` also copies JUCE. To uninstall, delete the four kinds of
 file listed above.
+
+## AppImage
+
+```bash
+./scripts/build_appimage.sh        # writes dist/Sun-Loops-Studio-<version>-x86_64.AppImage
+chmod +x dist/Sun-Loops-Studio-*.AppImage
+./dist/Sun-Loops-Studio-*.AppImage [project.slsproj]
+```
+
+The script configures a Release build in `build-appimage/`, installs it into an `AppDir`, lets linuxdeploy copy in
+the libraries the program needs and packs the result with appimagetool. It downloads those two tools from GitHub
+once, at pinned versions, and refuses them if their SHA-256 does not match (`build-appimage/tools/`). Set
+`FETCHCONTENT_SOURCE_DIR_JUCE` to a local JUCE checkout to avoid downloading JUCE again. `desktop-file-utils` makes the
+script check the `.desktop` file; without it the check is skipped with a warning.
+
+What is inside and what is not: the program and the few libraries that are not everywhere (libpng, bzip2, brotli).
+Like every AppImage it relies on the system for glibc, ALSA, FreeType, Fontconfig, X11 and OpenGL, which any desktop
+Linux, Nobara included, provides. Because glibc is not bundled, **build on the oldest system you want to support**; an
+AppImage built on Ubuntu 24.04 (glibc 2.39) runs on newer systems, not on older ones.
+
+AppImages normally mount themselves through FUSE 2. Fedora and Nobara may not have it installed: either
+`sudo dnf install fuse-libs`, or run with `--appimage-extract-and-run` (slower start, no FUSE needed).
+The AppImage does not add a menu entry by itself; tools such as AppImageLauncher or Gear Lever do that, or use
+`cmake --install` instead.
 
 ## Tests
 

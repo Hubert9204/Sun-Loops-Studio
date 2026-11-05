@@ -12,11 +12,30 @@ public:
     void initialise (const juce::String&) override
     {
         mainWindow = std::make_unique<MainWindow> (getApplicationName());
+
+        // "sun-loops-studio song.slsproj" (or a double-click on a project file) opens that project.
+        for (const auto& argument : getCommandLineParameterArray())
+        {
+            const auto file = juce::File::getCurrentWorkingDirectory().getChildFile (argument.unquoted());
+            if (file.existsAsFile() && file.getFileName().endsWithIgnoreCase (sls::kProjectExtension))
+            {
+                if (auto* main = mainWindow->getMainComponent())
+                    main->openProjectFile (file);
+                break;
+            }
+        }
     }
 
     void shutdown() override { mainWindow = nullptr; }
 
-    void systemRequestedQuit() override { quit(); }
+    // Closing the window (or the session ending) first asks about unsaved changes.
+    void systemRequestedQuit() override
+    {
+        if (auto* main = mainWindow != nullptr ? mainWindow->getMainComponent() : nullptr)
+            main->confirmDiscardChanges ([] { juce::JUCEApplication::quit(); });
+        else
+            quit();
+    }
 
 private:
     class MainWindow : public juce::DocumentWindow
@@ -32,6 +51,8 @@ private:
             centreWithSize (getWidth(), getHeight());
             setVisible (true);
         }
+
+        sls::MainComponent* getMainComponent() { return dynamic_cast<sls::MainComponent*> (getContentComponent()); }
 
         void closeButtonPressed() override
         {

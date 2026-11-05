@@ -2,14 +2,14 @@
 
 *[Italiano](user-guide.it.md)*
 
-This guide describes what Sun Loops Studio 0.5 does today. Limits and missing features are listed at the end.
+This guide describes what Sun Loops Studio 0.6 does today. Limits and missing features are listed at the end.
 
 ## The window
 
 A **toolbar** on two rows, a status line, and below it the **browser** (left sidebar) and the **workspace** where
 the panels float.
 
-Toolbar, first row: **Play / Stop**, **Pattern / Song** switch, the **pattern box** with **+**, **BPM** (40-240),
+Toolbar, first row: **File** (projects, see below), **Play / Stop**, **Pattern / Song** switch, the **pattern box** with **+**, **BPM** (40-240),
 **Master** volume with its meter, **Audio...** (device settings) and **Export WAV...**.
 
 Toolbar, second row: buttons that show or hide the browser (**Browser F8**) and the panels (**Rack F6**,
@@ -17,6 +17,43 @@ Toolbar, second row: buttons that show or hide the browser (**Browser F8**) and 
 **Reset** (default panel layout) and **Clear notes** (empties the selected channel in the current pattern).
 
 The status line shows the audio device (sample rate, buffer size, reported latency) and the last message.
+
+## Projects
+
+Everything in the song is saved in one `.slsproj` file: channels (instrument, sample, volume, pan, pitch, swing,
+mixer track), all patterns and their notes, the playlist, the mixer (faders, balance, mute/solo, effect chains and
+their settings), BPM, master volume and whether Song mode is on. The window title shows the project name, with a
+`*` after it while there are changes that are not saved.
+
+| Command | Key | What it does |
+| --- | --- | --- |
+| **New** | `Ctrl+N` | Starts an empty project (one synth channel, one empty pattern). |
+| **Open...** | `Ctrl+O` | Chooses a `.slsproj` file. |
+| **Open recent** | | The last eight projects that still exist. |
+| **Save** | `Ctrl+S` | Writes the project. |
+| **Save as...** | `Ctrl+Shift+S` | Asks for a name (the `.slsproj` ending is added if you leave it out) and writes the project there. |
+
+**Saving without a name.** A project you have not named yet is called *Untitled*. **Save** (or `Ctrl+S`) does not
+stop to ask: it writes the project at once as `Untitled <date> <time>.slsproj` in
+`~/Music/Sun Loops Studio/Projects`, and from then on that is the project's file, so the next **Save** updates the
+same file. Use **Save as...** whenever you want a proper name. Saving a named project writes the file next to its
+old copy safely: the new text goes to a temporary file that then replaces the old one, so a failed save leaves the
+previous file intact.
+
+**Unsaved work.** **New**, **Open...** and closing the window ask first when there are unsaved changes: *Save*,
+*Don't save* or *Cancel*. Pressing Escape cancels. Selecting a pattern or switching Pattern/Song is not counted as a
+change. You can also start the program with a project as argument (`sun-loops-studio song.slsproj`); a `.slsproj`
+file opened from the file manager does the same once the desktop knows the type (installed with
+`cmake --install`).
+
+**Samples are not copied into the file.** A sampler channel stores where its sample came from: a built-in sound or
+the full path of your file. If you move or delete the file, the project still opens: that channel is silent, a
+message lists the missing files and the reference is kept, so putting the file back (or loading another with
+*Load sample...*) fixes it. Keep your samples where they are, or in `~/Music/Sun Loops Studio/Samples`.
+
+**Damaged files.** A file that is not a Sun Loops Studio project, is damaged or was written by a newer version is
+refused with a message and your current project is left untouched. Values that are out of range are clamped and notes
+or clips that cannot be placed are dropped, with a message saying so.
 
 ## Panels
 
@@ -47,6 +84,8 @@ the panels saves the new ones.
 | Key | Action |
 | --- | --- |
 | Space | Play / Stop |
+| Ctrl+N / Ctrl+O | New project / Open project |
+| Ctrl+S / Ctrl+Shift+S | Save / Save as |
 | F5 | Playlist |
 | F6 | Channel Rack |
 | F7 | Piano Roll |
@@ -242,7 +281,6 @@ system has an output available. Latency is what the device reports; it is not me
 - The effects use about 16 MB of memory at 48 kHz (more at higher sample rates).
 - A pattern is always two bars long, 4/4, 16th-note grid.
 - Samples are mono or stereo, at most 30 seconds, played one-shot (no looping, no envelope editing).
-- Not available yet: playing notes from the computer keyboard or a MIDI keyboard, saving and opening projects (mixer settings and effects are lost on exit like everything
-  else), undo, VST plugins as instruments or effects, sends and master effects, automation, MIDI input and
+- Not available yet: playing notes from the computer keyboard or a MIDI keyboard, undo, embedding samples in the project, automatic saving and crash recovery, VST plugins as instruments or effects, sends and master effects, automation, MIDI input and
   recording, deleting or renaming patterns, seeking by clicking the ruler, dropping files from the desktop onto
   the program. See [roadmap.md](roadmap.md).

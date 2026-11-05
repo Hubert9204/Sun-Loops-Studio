@@ -23,6 +23,7 @@
 #include "library/BrowserModel.h"
 #include "library/ChannelPreset.h"
 #include "library/Library.h"
+#include "library/ProjectFile.h"
 #include "plugins/PluginScanner.h"
 #include "ui/PanelLayout.h"
 
@@ -1399,7 +1400,7 @@ void testLibraryScan()
 
     // the whole tree
     const auto paths = sls::LibraryPaths::forRoot (tmp.getChildFile ("lib"));
-    check (paths.ensureExists() && paths.samples.isDirectory() && paths.drumKits.isDirectory() && paths.presets.isDirectory(),
+    check (paths.ensureExists() && paths.samples.isDirectory() && paths.drumKits.isDirectory() && paths.presets.isDirectory() && paths.projects.isDirectory(),
            "the library folders are created on demand");
     paths.drumKits.getChildFile ("My Kit").createDirectory();
     paths.drumKits.getChildFile ("My Kit/snare.wav").replaceWithText ("x");
@@ -1661,6 +1662,345 @@ void testLiveNotes()
     }
 }
 
+
+// ---------------------------------------------------------------------------------------- project files
+
+bool sameNotes (const std::vector<sls::Note>& a, const std::vector<sls::Note>& b)
+{
+    if (a.size() != b.size())
+        return false;
+    for (size_t i = 0; i < a.size(); ++i)
+        if (a[i].pitch != b[i].pitch || a[i].startTick != b[i].startTick || a[i].lengthTicks != b[i].lengthTicks
+            || a[i].velocity != b[i].velocity)
+            return false;
+    return true;
+}
+
+bool sameDocument (const sls::ProjectDocument& a, const sls::ProjectDocument& b)
+{
+    if (a.channels.size() != b.channels.size() || a.tracks.size() != b.tracks.size()
+        || a.sampleSources != b.sampleSources || a.currentPattern != b.currentPattern || a.songMode != b.songMode
+        || a.bpm != b.bpm || a.masterVolume != b.masterVolume
+        || a.arrangement.patterns.size() != b.arrangement.patterns.size()
+        || a.arrangement.clips.size() != b.arrangement.clips.size())
+        return false;
+
+    for (size_t i = 0; i < a.channels.size(); ++i)
+    {
+        const auto &x = a.channels[i], &y = b.channels[i];
+        if (x.name != y.name || x.instrument != y.instrument || x.rootPitch != y.rootPitch || x.volume != y.volume
+            || x.pan != y.pan || x.mute != y.mute || x.solo != y.solo || x.pitch != y.pitch || x.swing != y.swing
+            || x.mixerTrack != y.mixerTrack)
+            return false;
+    }
+    for (size_t i = 0; i < a.tracks.size(); ++i)
+    {
+        const auto &x = a.tracks[i], &y = b.tracks[i];
+        if (x.name != y.name || x.volume != y.volume || x.pan != y.pan || x.mute != y.mute || x.solo != y.solo)
+            return false;
+        for (size_t s = 0; s < x.slots.size(); ++s)
+            if (! (x.slots[s].sanitised() == y.slots[s].sanitised()))
+                return false;
+    }
+    for (size_t p = 0; p < a.arrangement.patterns.size(); ++p)
+    {
+        const auto &x = a.arrangement.patterns[p], &y = b.arrangement.patterns[p];
+        if (x.name != y.name || x.notes.size() != y.notes.size())
+            return false;
+        for (size_t c = 0; c < x.notes.size(); ++c)
+            if (! sameNotes (x.notes[c], y.notes[c]))
+                return false;
+    }
+    for (size_t i = 0; i < a.arrangement.clips.size(); ++i)
+    {
+        const auto &x = a.arrangement.clips[i], &y = b.arrangement.clips[i];
+        if (x.pattern != y.pattern || x.track != y.track || x.startUnit != y.startUnit || x.lengthUnits != y.lengthUnits)
+            return false;
+    }
+    return true;
+}
+
+sls::ProjectDocument richDocument()
+{
+    sls::ProjectDocument d;
+    d.bpm = 133.0;
+    d.masterVolume = 0.37f;
+    d.songMode = true;
+    d.currentPattern = 1;
+
+    sls::Channel lead;
+    lead.name = "Lead";
+    lead.volume = 0.55f;
+    lead.pan = -0.3f;
+    lead.pitch = 0.1f;
+    lead.swing = 0.25f;
+    lead.mixerTrack = 2;
+    sls::Channel kick;
+    kick.name = "Kick";
+    kick.instrument = sls::Instrument::Sampler;
+    kick.rootPitch = 64;
+    kick.mute = true;
+    kick.solo = true;
+    kick.volume = 1.25f;
+    d.channels = { lead, kick };
+    d.sampleSources = { "", "builtin:kick" };
+
+    d.tracks = sls::Project::defaultTracks();
+    d.tracks[2].name = "Leads";
+    d.tracks[2].volume = 0.8f;
+    d.tracks[2].pan = 0.4f;
+    d.tracks[2].mute = true;
+    d.tracks[2].slots[0] = sls::EffectSlot::make (sls::EffectType::Reverb);
+    d.tracks[2].slots[0].params[3] = 0.61f;
+    d.tracks[2].slots[2] = sls::EffectSlot::make (sls::EffectType::Compressor);
+    d.tracks[2].slots[2].bypass = true;
+    d.tracks[2].slots[2].params[0] = -33.5f;
+    d.tracks[5].solo = true;
+
+    d.arrangement.patterns.resize (2);
+    d.arrangement.patterns[0].name = "Intro";
+    d.arrangement.patterns[1].name = "Verse";
+    d.arrangement.ensureChannelCount (2);
+    d.arrangement.patterns[0].notes[0] = { { 60, 0, 240, 0.8f }, { 64, 480, 480, 0.5f }, { 67, 960, 120, 1.0f } };
+    d.arrangement.patterns[1].notes[1] = { { 60, 0, 120, 0.9f }, { 60, 1920, 120, 0.7f } };
+    d.arrangement.clips = { { 0, 0, 0, 2 }, { 1, 1, 1, 3 } };
+    return d;
+}
+
+juce::File freshTempDir (const char* name)
+{
+    auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getNonexistentChildFile (name, "", false);
+    dir.createDirectory();
+    return dir;
+}
+
+std::string errorOf (const juce::String& text)
+{
+    return sls::ProjectDocument::fromJson (text).error;
+}
+
+void testProjectFile()
+{
+    std::cout << "Project files\n";
+
+    {
+        const auto doc = richDocument();
+        const auto back = sls::ProjectDocument::fromJson (doc.toJson());
+        check (back.document.has_value() && back.error.empty() && back.warnings.empty(), "a saved project reads back without errors or warnings");
+        check (back.document.has_value() && sameDocument (doc, *back.document),
+               "every field survives a round trip (channels, tracks, effects, patterns, notes, clips, tempo)");
+        check (back.document.has_value() && back.document->channels[0].pitch == 0.1f && back.document->masterVolume == 0.37f
+                   && back.document->tracks[2].slots[2].params[0] == -33.5f,
+               "floating-point values come back bit for bit");
+    }
+    {
+        const auto blank = sls::ProjectDocument::blank();
+        const auto back = sls::ProjectDocument::fromJson (blank.toJson());
+        check (back.document.has_value() && sameDocument (blank, *back.document) && blank.channels.size() == 1
+                   && blank.tracks.size() == static_cast<size_t> (sls::kMaxTracks) && blank.arrangement.patterns.size() == 1
+                   && blank.arrangement.clips.empty(),
+               "a blank project is valid and round-trips");
+    }
+    {
+        // What is heard is the same: compile the original and the reloaded document and render both.
+        auto doc = richDocument();
+        doc.channels[1].sample = sls::makeKickSample();
+        auto build = [] (const sls::ProjectDocument& d)
+        {
+            auto channels = d.channels;
+            for (size_t c = 0; c < channels.size(); ++c)
+                channels[c].notes = d.arrangement.patterns[0].notes[c];
+            channels[1].mute = false;
+            channels[1].solo = false;
+            auto tracks = d.tracks;
+            tracks[2].mute = false;
+            tracks[5].solo = false;
+            return sls::compilePattern (channels, d.arrangement, 0, tracks);
+        };
+        auto reloaded = *sls::ProjectDocument::fromJson (doc.toJson()).document;
+        reloaded.channels[1].sample = sls::makeKickSample();
+        const auto a = sls::renderToBuffer (build (doc), {});
+        const auto b = sls::renderToBuffer (build (reloaded), {});
+        bool identical = a.getNumSamples() == b.getNumSamples() && peakOf (a.getReadPointer (0), 0, a.getNumSamples()) > 0.02f; // audible, not silence==silence
+        for (int i = 0; identical && i < a.getNumSamples(); ++i)
+            identical = a.getReadPointer (0)[i] == b.getReadPointer (0)[i] && a.getReadPointer (1)[i] == b.getReadPointer (1)[i];
+        check (identical, "a reloaded project renders to exactly the same audio (reverb, pitch, swing, pan included)");
+    }
+
+    {
+        // A sample that was not found stays referenced, is silent, and does not upset the engine.
+        auto doc = richDocument();
+        const auto missing = sls::makeMissingSample ("/music/gone/kick808.wav");
+        check (missing != nullptr && missing->numFrames() == 0 && missing->source == "/music/gone/kick808.wav" && missing->name == "kick808",
+               "a missing sample keeps its path and name and holds no audio");
+
+        auto channel = samplerChannel (missing, { { 60, 0, 120, 1.0f }, { 60, 480, 120, 1.0f } });
+        const auto project = oneBar ({ channel });
+        sls::Player player;
+        player.prepare (kSr);
+        player.liveNoteOn (project, 0, 60, 1.0f);
+        const auto out = renderBlocks (player, project, true, 1.0);
+        check (peakOf (out.data(), 0, static_cast<int> (kSr)) == 0.0f, "a channel with a missing sample plays silence (notes and live notes)");
+
+        doc.channels[1].instrument = sls::Instrument::Sampler;
+        doc.sampleSources[1] = missing->source;
+        const auto back = sls::ProjectDocument::fromJson (doc.toJson());
+        check (back.document.has_value() && back.document->sampleSources[1] == "/music/gone/kick808.wav",
+               "the path of a missing sample survives saving and loading again");
+    }
+
+    // --- rejected files
+    check (! errorOf ("").empty() && ! errorOf ("not json at all").empty() && ! errorOf ("[1,2,3]").empty(), "empty, garbage and non-object files are refused");
+    check (! errorOf ("{\"format\":\"something-else\",\"version\":1}").empty(), "a different file format is refused");
+    {
+        auto text = richDocument().toJson();
+        check (errorOf (text.replace ("\"version\": 1", "\"version\": 7")).find ("newer version") != std::string::npos
+                   || errorOf (text.replace ("\"version\":1", "\"version\":7")).find ("newer version") != std::string::npos,
+               "a project from a newer version is refused with a clear message");
+        check (! errorOf (text.replace ("\"version\": 1", "\"version\": 0").replace ("\"version\":1", "\"version\":0")).empty(),
+               "version 0 is refused");
+    }
+    {
+        auto doc = richDocument();
+        doc.channels.clear();
+        doc.sampleSources.clear();
+        check (! errorOf (doc.toJson()).empty(), "a project without channels is refused");
+
+        doc = richDocument();
+        while (doc.channels.size() < 9)
+        {
+            doc.channels.push_back (doc.channels[0]);
+            doc.sampleSources.emplace_back();
+        }
+        check (! errorOf (doc.toJson()).empty(), "a project with 9 channels is refused");
+
+        doc = richDocument();
+        doc.arrangement.patterns.clear();
+        check (! errorOf (doc.toJson()).empty(), "a project without patterns is refused");
+
+        auto text = richDocument().toJson();
+        check (! errorOf (text.replace ("\"synth\"", "\"theremin\"")).empty(), "an unknown instrument is refused");
+    }
+
+    // --- repairs
+    {
+        const auto parsedDoc = juce::JSON::parse (richDocument().toJson());
+        auto* root = parsedDoc.getDynamicObject();
+        root->setProperty ("bpm", 9999.0);
+        root->setProperty ("masterVolume", "loud");
+        const auto text = juce::JSON::toString (parsedDoc, false);
+        const auto r = sls::ProjectDocument::fromJson (text);
+        check (r.document.has_value() && r.document->bpm == 240.0 && r.document->masterVolume == 0.8f,
+               "an out-of-range tempo is clamped and a non-number volume falls back to its default");
+    }
+    {
+        auto doc = richDocument();
+        doc.channels[0].volume = 40.0f;
+        doc.channels[0].pan = -9.0f;
+        doc.channels[0].pitch = 500.0f;
+        doc.channels[0].swing = 7.0f;
+        doc.channels[0].mixerTrack = 99;
+        doc.currentPattern = 50;
+        doc.tracks[0].volume = 5.0f;
+        doc.arrangement.patterns[0].notes[0].push_back ({ 200, 0, 100, 0.5f });      // pitch out of range
+        doc.arrangement.patterns[0].notes[0].push_back ({ 60, 99999, 100, 0.5f });   // starts after the pattern
+        doc.arrangement.patterns[0].notes[0].push_back ({ 60, 3800, 9999, 5.0f });   // too long, too loud: kept, trimmed
+        doc.arrangement.clips.push_back ({ 0, 0, 1, 1 });                            // overlaps the first clip
+        doc.arrangement.clips.push_back ({ 9, 0, 20, 1 });                           // no such pattern
+        const auto r = sls::ProjectDocument::fromJson (doc.toJson());
+        check (r.document.has_value(), "a file with out-of-range values still opens");
+        if (r.document.has_value())
+        {
+            const auto& d = *r.document;
+            check (d.channels[0].volume == 1.5f && d.channels[0].pan == -1.0f && d.channels[0].pitch == 24.0f
+                       && d.channels[0].swing == 1.0f && d.channels[0].mixerTrack == sls::kMaxTracks - 1
+                       && d.currentPattern == 1 && d.tracks[0].volume == 1.5f,
+                   "channel, track and pattern values are clamped into range");
+            const auto& notes = d.arrangement.patterns[0].notes[0];
+            check (notes.size() == 4 && notes.back().startTick == 3800 && notes.back().lengthTicks == 40 && notes.back().velocity == 1.0f,
+                   "bad notes are dropped; a note that is too long is trimmed to its pattern");
+            check (d.arrangement.clips.size() == 2 && r.warnings.size() == 2, "clips that cannot be placed are dropped, and both repairs are reported");
+        }
+    }
+    {
+        auto text = richDocument().toJson();
+        text = text.replace ("\"reverb\"", "\"quantum-flanger\"");
+        const auto r = sls::ProjectDocument::fromJson (text);
+        check (r.document.has_value() && r.document->tracks[2].slots[0].type == sls::EffectType::None
+                   && r.document->tracks[2].slots[2].type == sls::EffectType::Compressor,
+               "an effect this version does not know becomes an empty slot");
+    }
+    {
+        // Only the first 3 tracks present: the others keep their defaults.
+        const auto parsedDoc = juce::JSON::parse (richDocument().toJson()); // keeps the object alive
+        auto* root = parsedDoc.getDynamicObject();
+        auto* tracks = root->getProperty ("tracks").getArray();
+        while (tracks->size() > 3)
+            tracks->remove (tracks->size() - 1);
+        const auto r = sls::ProjectDocument::fromJson (juce::JSON::toString (juce::var (root), false));
+        check (r.document.has_value() && r.document->tracks.size() == static_cast<size_t> (sls::kMaxTracks)
+                   && r.document->tracks[7].name == "Track 8" && r.document->tracks[2].name == "Leads",
+               "a short list of mixer tracks is padded with defaults");
+    }
+
+    // --- files on disk
+    {
+        const auto dir = freshTempDir ("sls-project-test");
+        const auto file = dir.getChildFile ("song" + juce::String (sls::kProjectExtension));
+        const auto doc = richDocument();
+
+        check (sls::writeProjectFile (file, doc).isEmpty() && file.existsAsFile(), "a project is written to disk");
+        const auto back = sls::readProjectFile (file);
+        check (back.document.has_value() && sameDocument (doc, *back.document), "and read back from disk");
+        check (dir.getNumberOfChildFiles (juce::File::findFiles) == 1, "no temporary file is left behind");
+
+        auto changed = doc;
+        changed.bpm = 90.0;
+        check (sls::writeProjectFile (file, changed).isEmpty()
+                   && sls::readProjectFile (file).document.has_value() && sls::readProjectFile (file).document->bpm == 90.0
+                   && dir.getNumberOfChildFiles (juce::File::findFiles) == 1,
+               "saving again replaces the file");
+
+        const auto nested = dir.getChildFile ("a").getChildFile ("b").getChildFile ("deep.slsproj");
+        check (sls::writeProjectFile (nested, doc).isEmpty() && nested.existsAsFile(), "missing folders are created");
+
+        check (! sls::readProjectFile (dir.getChildFile ("nope.slsproj")).error.empty(), "reading a missing file reports an error");
+        const auto junk = dir.getChildFile ("junk.slsproj");
+        junk.replaceWithText ("{\"format\": \"sun-loops-studio-project\", \"version\": 1, \"channels\": [");
+        check (! sls::readProjectFile (junk).error.empty() && ! sls::readProjectFile (junk).document.has_value(), "a truncated file is refused");
+        check (! sls::readProjectFile (dir).error.empty(), "a folder is not a project");
+
+        // A failed save must not destroy the existing file.
+        const auto blocked = dir.getChildFile ("blocked.slsproj");
+        sls::writeProjectFile (blocked, doc);
+        const auto before = blocked.loadFileAsString();
+        const auto notAFolder = dir.getChildFile ("song.slsproj").getChildFile ("child.slsproj"); // parent is a file
+        check (! sls::writeProjectFile (notAFolder, doc).isEmpty() && blocked.loadFileAsString() == before,
+               "writing to an impossible location fails with a message and changes nothing");
+
+        dir.deleteRecursively();
+    }
+
+    // --- names
+    {
+        const auto base = juce::File ("/tmp/x");
+        check (sls::withProjectExtension (base.getChildFile ("a")).getFileName() == "a.slsproj"
+                   && sls::withProjectExtension (base.getChildFile ("a.slsproj")).getFileName() == "a.slsproj"
+                   && sls::withProjectExtension (base.getChildFile ("A.SLSPROJ")).getFileName() == "A.SLSPROJ"
+                   && sls::withProjectExtension (base.getChildFile ("My.Song")).getFileName() == "My.Song.slsproj",
+               "the .slsproj extension is added when missing and never doubled");
+
+        const auto dir = freshTempDir ("sls-project-names");
+        const auto when = juce::Time (2026, 10, 5, 21, 54, 7); // month is 0-based: 5 November
+        const auto first = sls::automaticProjectFile (dir, when);
+        check (first.getFileName() == "Untitled 2026-11-05 21-54-07.slsproj", "an automatic name is 'Untitled' plus the date and time");
+        first.replaceWithText ("x");
+        const auto second = sls::automaticProjectFile (dir, when);
+        check (second != first && second.getFileName() == "Untitled 2026-11-05 21-54-07 (2).slsproj", "an automatic name never overwrites an existing file");
+        dir.deleteRecursively();
+    }
+}
+
 } // namespace
 
 int main()
@@ -1689,6 +2029,7 @@ int main()
     testLibraryScan();
     testLiveNoteQueue();
     testLiveNotes();
+    testProjectFile();
 
     std::cout << "\n" << (failures == 0 ? "ALL TESTS PASSED" : "SOME TESTS FAILED") << " (" << failures << " failures)\n";
     return failures == 0 ? 0 : 1;

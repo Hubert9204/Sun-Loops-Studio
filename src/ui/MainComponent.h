@@ -14,6 +14,7 @@
 #include "ui/AudioMeter.h"
 #include "library/ChannelPreset.h"
 #include "library/Library.h"
+#include "library/ProjectFile.h"
 #include "ui/ChannelStrip.h"
 #include "ui/FileBrowser.h"
 #include "ui/MixerPanel.h"
@@ -36,6 +37,21 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
     bool keyPressed (const juce::KeyPress&) override;
+    void parentHierarchyChanged() override { updateWindowTitle(); } // the title can be set once there is a window
+
+    // Projects. A project is "untitled" until it is saved with a name or opened from a file.
+    //   saveProject():   writes to the current file; an untitled project is written at once, without asking, as
+    //                    "Untitled <date time>.slsproj" in the Projects folder.
+    //   saveProjectAs(): asks for a name (and folder).
+    bool saveProject();
+    void saveProjectAs (std::function<void (bool)> whenDone = {});
+    void newProject();
+    void openProject();                          // asks for a file
+    bool openProjectFile (const juce::File& file); // returns false (after telling the user) if it cannot be opened
+    bool hasUnsavedChanges() const noexcept { return projectDirty; }
+
+    // Runs `proceed` straight away if there is nothing to lose; otherwise asks "Save / Don't save / Cancel" first.
+    void confirmDiscardChanges (std::function<void()> proceed);
 
 private:
     void timerCallback() override;
@@ -47,6 +63,17 @@ private:
     void chooseSampleFor (int channelIndex);
     bool loadSampleFile (int channelIndex, const juce::File& file);
     void updateTrackRouting();
+
+    // Project files
+    ProjectDocument makeDocument();
+    void applyDocument (ProjectDocument document, const juce::File& file, juce::StringArray& problems);
+    bool saveProjectTo (const juce::File& file);
+    void showFileMenu();
+    void markDirty();
+    void updateWindowTitle();
+    juce::StringArray recentProjects() const;
+    void addRecentProject (const juce::File& file);
+    juce::String projectName() const;
 
     // Browser sidebar: sounds dragged (or double-clicked) onto channels. channelIndex -1 = a new channel.
     void setBrowserOpen (bool shouldBeOpen);
@@ -94,6 +121,11 @@ private:
     int currentPattern = 0;
     bool songMode = false;
 
+    juce::File currentProjectFile;  // empty while the project is untitled
+    bool projectDirty = false;      // changed since it was last saved or opened
+    bool ignoreDirty = false;       // set while loading, and for view-only changes such as picking a pattern
+    bool discardDialogOpen = false;
+
     // Panel contents first, then the panels that show them, then the workspace holding the panels.
     // Members are destroyed in reverse order, so a panel never outlives the content it points to.
     RackView rackView;
@@ -118,6 +150,7 @@ private:
     std::unique_ptr<juce::PropertiesFile> settings;
     bool restoringLayout = false;
 
+    juce::TextButton fileButton { "File" };
     juce::TextButton playButton { "Play" };
     juce::TextButton clearButton { "Clear notes" };
     juce::TextButton modeButton { "Pattern" };

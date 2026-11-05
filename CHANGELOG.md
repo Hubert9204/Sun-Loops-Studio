@@ -2,6 +2,32 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.6.0 - 2026-11-05
+
+### Added
+- **Saving and opening projects.** A `File` button in the toolbar (and `Ctrl+N`, `Ctrl+O`, `Ctrl+S`,
+  `Ctrl+Shift+S`) with *New*, *Open...*, *Open recent*, *Save* and *Save as...*. The project is one JSON `.slsproj`
+  file with channels, patterns and notes, the playlist, the mixer and its effects, BPM, master volume and Song mode.
+- **Saving without a name.** *Save* on a project that has no name writes it straight away as
+  `Untitled <date> <time>.slsproj` in `~/Music/Sun Loops Studio/Projects` and keeps using that file; *Save as...*
+  asks for a name.
+- The window title shows the project name and `*` for unsaved changes; *New*, *Open...* and closing the window ask
+  *Save / Don't save / Cancel* when there is unsaved work. A `.slsproj` given on the command line is opened.
+- Reading is strict about structure and lenient about values (clamping, dropping notes and clips that cannot be
+  placed, with a message); files from a newer version, damaged files and files over 32 MB are refused without
+  touching the current project. Writing is atomic (temporary file, then replace).
+- Samples are stored as references (`builtin:<id>` or a path). A sample that cannot be found opens as silent and
+  keeps its reference, so saving again does not lose it.
+- **AppImage.** `scripts/build_appimage.sh` builds `Sun-Loops-Studio-<version>-x86_64.AppImage` with pinned,
+  checksum-verified linuxdeploy and appimagetool. The `.desktop` file now takes a file (`%f`) and `cmake --install`
+  installs a MIME type for `.slsproj`.
+- Tests: `ProjectFile` round trip, bad input, missing samples, atomic write, automatic file name (251 checks in total).
+
+### Notes
+- Samples are not copied into the project file: moving a project to another computer needs its samples as well.
+- No autosave, crash recovery or undo yet.
+- The AppImage was built and started on Ubuntu 24.04 in a virtual display; it has not yet been run on Nobara.
+
 ## 0.5.1 - 2026-11-05
 
 ### Added

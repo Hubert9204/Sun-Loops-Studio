@@ -24,6 +24,7 @@ src/library/                    No JUCE GUI; JUCE core only (files, JSON)
   BrowserModel.h                Browser tree nodes, which are draggable, search filter (plain C++)
   ChannelPreset.*               Channel presets as JSON (.slspreset) and the factory presets
   Library.*                     ~/Music/Sun Loops Studio folders, directory scan, building the browser tree
+  ProjectFile.*                 The .slsproj project file: ProjectDocument <-> JSON, safe read and write
 
 src/plugins/PluginScanner.*     VST3 discovery. Only feeds the browser's Plugin folder; no hosting
 
@@ -44,7 +45,7 @@ tests/test_core.cpp             Headless tests (no audio device, no display)
 ```
 
 `CMakeLists.txt` builds two targets from the same core sources (`SLS_CORE_SOURCES`: Player, Effects, BuiltinSamples,
-OfflineRenderer, ChannelPreset, Library, PluginScanner): the application `SunLoopsStudio` and the console test program
+OfflineRenderer, ChannelPreset, Library, ProjectFile, PluginScanner): the application `SunLoopsStudio` and the console test program
 `SunLoopsStudioTests`.
 
 ## Threads and real-time rules
@@ -173,6 +174,38 @@ Channel settings (instrument, sample, volume, pan, mute, solo, pitch, swing, mix
 are shared by all patterns. The mixer tracks belong to the project as a whole (`MainComponent::tracks`); the
 arrangement passes them through to `compilePattern` / `compileSong`, which hand them to `Project::make`.
 
+## Project files
+
+`ProjectDocument` (`src/library/ProjectFile.h`) is everything that makes up a song: the channels without their notes,
+the sample source of each channel, the 8 mixer tracks with their effect chains, the `Arrangement` (patterns and
+playlist clips; the notes live in the patterns), the current pattern, Song mode, BPM and master volume. It has no
+audio data and no JUCE GUI types, so it is tested headless.
+
+`toJson()` writes `{"format":"sun-loops-studio-project","version":1, ...}`; effect types are written as strings, notes
+as `[pitch, start, length, velocity]`. `fromJson()` is strict about structure (format name, a version this program
+understands, expected types, 1-8 channels, 1-64 patterns, at most 20000 notes per channel and pattern) and lenient
+about values: numbers are clamped into their valid range, NaN becomes the default, notes that do not fit the
+pattern and clips that cannot be placed are dropped and reported in `warnings`. A file over 32 MB is refused without
+being read. A version newer than 1 is refused ("written by a newer version"). The file is treated as untrusted input: every
+value goes through the limits the engine expects before it becomes a `Project`.
+
+Samples are not embedded. A channel stores `builtin:<id>`, or the absolute path of its file. `MainComponent` loads each
+one when the project is applied; a source that cannot be loaded becomes `makeMissingSample()`: a `SampleData` with no
+frames (silent) that still carries the `source` string, so saving again does not lose the reference.
+
+`writeProjectFile()` writes to a `juce::TemporaryFile` next to the target and then replaces the target, so a failed
+write leaves the old file intact; it returns an error string. `withProjectExtension()` adds `.slsproj` to a name that
+lacks it, and `automaticProjectFile()` makes `Untitled <date> <time>.slsproj` in `Library`'s `projects` folder
+(`~/Music/Sun Loops Studio/Projects`), never an existing name.
+
+In the interface, `MainComponent` turns its state into a document (`makeDocument`) and back (`applyDocument`, which
+stops playback, rebuilds channels, tracks and views and publishes one new `Project`). A project with no file is
+saved by `saveProject()` straight to an automatic name; `saveProjectAs()` asks. `projectDirty` is set by `markDirty()`,
+which `publishProject()`, the sliders and the playlist call; it is not set while a project is being loaded
+(`ignoreDirty`) nor for view-only changes (selecting a pattern, Pattern/Song). `confirmDiscardChanges()` is the single
+gate used by New, Open and closing the window (`main.cpp` asks it from `systemRequestedQuit`). The window title is
+`<name>[ *] - Sun Loops Studio`. The recent list is kept in the settings file.
+
 ## User interface
 
 The main window is a toolbar plus a `Workspace`; the Channel Rack, Playlist, Piano Roll and Mixer are `PanelWindow`
@@ -187,8 +220,8 @@ the workspace and above its minimum size. The workspace re-clamps every panel wh
 
 Settings live in `~/.config/SunLoopsStudio/SunLoopsStudio.settings` (a JUCE `PropertiesFile`), one key per panel
 (`panel2.rack`, `panel2.piano`, `panel2.mixer`, `panel2.playlist`) and `browser.open`. The keys were renamed from
-`panel.*` in 0.5 because the default layout changed; old values are simply not read. Only layout is stored; there is
-no project file yet.
+`panel.*` in 0.5 because the default layout changed; old values are simply not read. The settings file holds only layout and the
+recent-projects list; songs are saved as project files (see above).
 
 Keyboard focus: Space and F5/F6/F7/F8/F9 are handled by `MainComponent`. Toolbar buttons and the pattern box do not take
 keyboard focus, and the component reclaims it when the window is active and focus is elsewhere.
@@ -244,6 +277,12 @@ failed. It covers:
 - the browser model (tree building, leaf kinds, which items are draggable, search filtering), channel presets (JSON
   round trip, rejection of bad input, factory presets) and the library scan (a temporary directory tree, hidden
   files, depth and node limits);
+- the project file: a rich document survives write and read unchanged; the loaded project renders exactly
+  the same audio as the original; sample sources (built-in, path, missing) and effect chains are kept; and every kind
+  of bad input is rejected or repaired as described above (wrong format name or version, unknown instrument, NaN, out-of-range
+  values, impossible notes and clips, no or too many channels, no patterns, empty, garbage and truncated files, a folder
+  instead of a file), plus atomic writing (a failed write leaves the old file untouched, no temporary file is left
+  behind) and the automatic file name. The 32 MB size limit has no test of its own;
 - a concurrent stress test of `SnapshotExchange` (a reader on its own thread against a publishing writer);
 - WAV round trip and the VST3 scanner on empty and invalid directories;
 - `PanelLayout` parsing and clamping;

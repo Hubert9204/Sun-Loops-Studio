@@ -1,6 +1,6 @@
 # Status and roadmap
 
-Version 0.5.1 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
+Version 0.6.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
 what is missing. If something here disagrees with the program, the program is right: please fix the page.
 
 ## What has been verified, and how
@@ -17,6 +17,9 @@ what is missing. If something here disagrees with the program, the program is ri
 | Live notes in the Piano Roll: held notes with the transport stopped or running, across the loop wrap, pitch/mute/track mute, sampler, safety limit, queue order and overflow, no allocation | Automated headless tests (216 checks in total) and mutation checks (transport releasing live notes, no safety limit, "off" ignored: each made tests fail) | All pass |
 | Piano Roll mouse: pressing a key lights it and the channel meter moves while the button is held and falls to zero on release; sliding changes the key; drawing a note sounds while dragging and the note stays after release; right-click on a key is silent | Manual, in a virtual display with simulated mouse (meter and screenshots; the note's sound itself was not heard) | Worked |
 | Browser (tree, search, fold with F8), drag from the browser onto a channel and onto the empty rack area, double-click to load, Pitch/Swing knobs, Track display, expanded mixer with live Peak/RMS, effect chain editing, bypass | Manual, in a virtual display with simulated mouse and a silent (ALSA `null`) audio device; a compressor at -60 dB / 20:1 lowered the track meter and bypass restored it | Worked |
+| Project file: write/read round trip of a rich project (all pattern notes, clips, tracks, effect chains, sample sources), the loaded project rendering the same audio, version/format/type checks, NaN and out-of-range values, impossible notes and clips, size limits, truncated and empty files, missing samples keeping their reference, atomic writing, automatic file names | Automated headless tests (251 checks in total); the 32 MB size limit has no test | All pass |
+| Saving and opening in the interface: title `Untitled` / `Untitled *`, Ctrl+S on an unnamed project writing `Untitled <date> <time>.slsproj` and overwriting the same file on the next Ctrl+S, File menu, New / Open recent with Save / Don't save / Cancel, reopening restoring the saved state and not the unsaved edit, opening from the command line, a corrupt file and a file with a missing sample (messages shown, current project untouched / opened silent), Save as typing a name, the open chooser listing projects and double-click loading one, closing the window with Escape (stays), Return (saves and quits) and Don't save (quits without writing) | Manual, in a virtual display with a window manager (openbox) and simulated mouse and keyboard | Worked |
+| AppImage: `scripts/build_appimage.sh` builds `dist/Sun-Loops-Studio-0.6.0-x86_64.AppImage` (5 MB); started with `--appimage-extract-and-run` in a virtual display, it opened a project given on the command line (title and panels correct) | Built on Ubuntu 24.04 (glibc 2.39), run in a virtual display with a silent audio device | Worked |
 | A use-after-free when clicking an item that rebuilds the browser tree (crash on *Scan for VST3 plugins...*) | Found in that manual session | Fixed (item actions are deferred); the same click was repeated afterwards |
 
 ## What has not been verified
@@ -30,6 +33,14 @@ what is missing. If something here disagrees with the program, the program is ri
   across a device restart). The virtual display's silent ALSA device runs faster than real time, so the 20-second limit
   ended a held note after about a second there; with the limit raised for the check the meter stayed lit for as long as
   the button was held.
+- **The AppImage on a real Nobara machine.** It was built and run only on the build host (Ubuntu 24.04) in a virtual
+  display. Not checked: FUSE mounting (the build host has no FUSE, so only `--appimage-extract-and-run` was used),
+  the real audio device, the desktop's own file-type association for `.slsproj`, and the menu entry (AppImages do not
+  create one without a helper such as AppImageLauncher).
+- **Saving and opening on real data.** Only projects made in the tests and in the virtual display were used. The
+  file chooser is JUCE's own, not the KDE dialog. Large projects were not timed, and the Save / Save as flow was not
+  tried with a read-only folder or a full disk (a failed write is covered by a test that points the target at an
+  impossible place and checks that the old file is untouched).
 - **Dragging files from the desktop file manager** onto the program: not implemented (drags from the in-app browser
   were verified only with simulated mouse events).
 - **Typing in the "Save as preset" name box** was not tested (the virtual display had no window manager, so dialogs
@@ -47,7 +58,7 @@ what is missing. If something here disagrees with the program, the program is ri
 
 | Feature | Notes |
 | --- | --- |
-| Save and open projects | There is no project file. Closing the program loses the song. Only the panel layout is saved. |
+| Project file extras | Samples are referenced by path, not embedded, so a project moved to another computer needs its samples copied too. No autosave, no crash recovery, no backup of the previous version, no "export project with its samples". |
 | VST3 plugins | Plugins can be *scanned* (library code, no UI). Playing them as instruments or effects is not implemented: it needs plugin processing inside the audio thread, state saving, parameter handling and plugin editor windows. |
 | Undo / redo | Not implemented. |
 | VST3 effects in the mixer | The four slots per track hold built-in effects only. No third-party plugin can be loaded. |
@@ -59,13 +70,12 @@ what is missing. If something here disagrees with the program, the program is ri
 | Pattern length, time signature, tempo changes | A pattern is always two bars of 4/4 with a 16th grid; one BPM for the whole song. Swing exists per channel (off-beat 16ths only). |
 | Sample editing | Samples play once from the start: no loop points, envelope, trim or time-stretch. |
 | Export formats | WAV (16/24 bit in the library, 24 bit in the UI). No MP3/FLAC export, no stems. |
-| Packaging | No Flatpak or RPM; install is `cmake --install`. |
+| Packaging | An AppImage can be built (`scripts/build_appimage.sh`, not yet tested on a real Nobara machine); no Flatpak or RPM; install can also be `cmake --install`. |
 
 ## Proposed order of work
 
-1. **Save / open projects** (so work survives closing the program): a versioned file holding channels, patterns and
-   clips, with samples referenced by path (or embedded), and a test that a round trip gives an identical project.
-2. **Undo / redo** over the edits the arrangement and channels already funnel through one place.
+1. **Undo / redo** over the edits the arrangement and channels already funnel through one place.
+2. **Project extras**: autosave and recovery, embedding samples, a project folder with its samples.
 3. **Playlist and pattern polish**: seeking from the ruler, pattern rename and delete, pattern length.
 4. **Continuous integration**: build and run the tests on every push (GitHub Actions on a Fedora container).
 5. **Mixer**: sends, master effects, effect-chain presets, a spectrum display.

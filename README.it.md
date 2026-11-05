@@ -14,13 +14,13 @@ strumento sta in un pannello mobile che puoi spostare, ridimensionare, sovrappor
 Sun Loops Studio si ispira al modo di lavorare dei DAW a loop come FL Studio. È un progetto indipendente: non usa
 codice, nomi, grafica o risorse di altri prodotti e non è affiliato né approvato dai loro produttori.
 
-**Stato: alpha (0.5.1).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
+**Stato: alpha (0.6.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
 La riproduzione è stata confermata su un vero PC Nobara per la versione 0.3; tutto ciò che è stato aggiunto dopo
-(pannelli, pattern, playlist, browser, pitch/swing, mixer espanso ed effetti) è stato provato con test automatici e
+(pannelli, pattern, playlist, browser, pitch/swing, mixer espanso ed effetti, salvataggio dei progetti, AppImage) è stato provato con test automatici e
 in un display virtuale con un dispositivo audio muto, non ancora con audio reale. **L'hosting di plugin VST3 non è
 implementato**: gli slot effetti del mixer contengono gli effetti propri di Sun Loops Studio (Equalizer, Reverb,
 Delay, Compressor). Vedi [docs/roadmap.md](docs/roadmap.md) per sapere con precisione cosa è verificato, cosa no e
-cosa manca (salvataggio dei progetti e hosting VST3 sono le mancanze principali).
+cosa manca (hosting VST3 e annulla/ripristina sono le mancanze principali).
 
 ## Funzioni
 
@@ -45,6 +45,11 @@ cosa manca (salvataggio dei progetti e hosting VST3 sono le mancanze principali)
   master. Più canali possono usare la stessa traccia.
 - **Sampler** - carica file WAV, FLAC, OGG e AIFF (fino a 30 s), li suona una volta sola, ritonati in base alla nota.
   Cassa, rullante e hi-hat sono sintetizzati: non servono file per iniziare.
+- **Progetti** - menu `File` e `Ctrl+N` / `Ctrl+O` / `Ctrl+S` / `Ctrl+Maiusc+S`: *Save* scrive un progetto con nome;
+  un progetto che non ha ancora un nome viene salvato subito con un nome automatico (`Untitled <data ora>.slsproj`)
+  in `~/Music/Sun Loops Studio/Projects`, così non si perde nulla; *Save as...* chiede il nome. Progetti recenti,
+  barra del titolo con il nome e `*` per le modifiche non salvate, avviso prima di chiudere con lavoro non
+  salvato. I sample sono referenziati con il percorso, non copiati nel file.
 - **Esportazione** - pattern o brano in WAV a 24 bit / 48 kHz, generato dallo stesso motore che lo suona.
 - **Audio** - scelta del dispositivo e lettura di frequenza di campionamento, buffer e latenza dichiarata.
 
@@ -60,7 +65,8 @@ cmake --build build
 ```
 
 Alla prima configurazione CMake scarica JUCE 8.0.4 (serve la rete una volta). Per metterlo nel menu delle
-applicazioni: `cmake --install build --prefix ~/.local`. Altri dettagli e risoluzione dei problemi:
+applicazioni: `cmake --install build --prefix ~/.local`. Per creare un'unica **AppImage**
+(`dist/Sun-Loops-Studio-<versione>-x86_64.AppImage`): `./scripts/build_appimage.sh`. Altri dettagli e risoluzione dei problemi:
 [docs/building.md](docs/building.md) (in inglese).
 
 **Spazio** per suonare, **F5 / F6 / F7 / F9** per i pannelli e **F8** per il browser. Una guida all'uso è in
@@ -85,8 +91,9 @@ applicazioni: `cmake --install build --prefix ~/.local`. Altri dettagli e risolu
 Non servono dispositivo audio né display. Controllano, tra l'altro, intonazione del synth e tempi esatti al
 campione, loop, polifonia, tracce del mixer, pitch e swing, i quattro effetti, sampler, che `Player::render` non
 allochi mai memoria (effetti compresi), uno stress test concorrente del passaggio dati interfaccia→audio, andata e
-ritorno WAV, lo scanner dei plugin, l'albero e la scansione del browser, i preset dei canali, le regole dei pannelli e
-la playlist.
+ritorno WAV, lo scanner dei plugin, l'albero e la scansione del browser, i preset dei canali, le regole dei pannelli, la
+playlist, le note dal vivo e il file di progetto (andata e ritorno, file danneggiati o ostili, sample mancanti,
+scrittura atomica).
 
 ## Licenza
 

@@ -66,6 +66,7 @@ LibraryPaths LibraryPaths::forRoot (const juce::File& root)
     p.samples = root.getChildFile ("Samples");
     p.drumKits = root.getChildFile ("Drum Kits");
     p.presets = root.getChildFile ("Presets");
+    p.projects = root.getChildFile ("Projects");
     return p;
 }
 
@@ -77,7 +78,7 @@ LibraryPaths LibraryPaths::defaults()
 bool LibraryPaths::ensureExists() const
 {
     bool ok = true;
-    for (const auto& dir : { samples, drumKits, presets })
+    for (const auto& dir : { samples, drumKits, presets, projects })
         ok = ok && (dir.isDirectory() || dir.createDirectory().wasOk());
     return ok;
 }

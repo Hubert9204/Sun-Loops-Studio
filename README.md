@@ -15,12 +15,12 @@ Sun Loops Studio is inspired by the workflow of loop-based DAWs such as FL Studi
 that uses no code, names, graphics or assets from other products, and it is not affiliated with or endorsed by
 their makers.
 
-**Status: alpha (0.5.1).** It builds, the automated tests pass and the interface has been exercised in a virtual
+**Status: alpha (0.6.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
 display. Playback was confirmed on a real Nobara machine for version 0.3; everything added since (panels, patterns,
-playlist, browser, pitch/swing, the expanded mixer and its effects) was tested headless and in a virtual display
-with a silent audio device, not yet with real audio. **Hosting VST3 plugins is not implemented**: the mixer's effect
+playlist, browser, pitch/swing, the expanded mixer and its effects, saving projects, the AppImage) was tested
+headless and in a virtual display with a silent audio device, not yet with real audio. **Hosting VST3 plugins is not implemented**: the mixer's effect
 slots hold Sun Loops Studio's own Equalizer, Reverb, Delay and Compressor. See [docs/roadmap.md](docs/roadmap.md) for
-exactly what is and is not verified and what is missing (saving projects and VST3 hosting are the big ones).
+exactly what is and is not verified and what is missing (VST3 hosting and undo are the big ones).
 
 ## Features
 
@@ -43,6 +43,11 @@ exactly what is and is not verified and what is missing (saving projects and VST
   the right. Several channels can share a track.
 - **Sampler** - loads WAV, FLAC, OGG and AIFF files (up to 30 s), plays them one-shot, repitched by note.
   Kick, snare and hat are synthesised, so you need no sample files to start.
+- **Projects** - `File` menu and `Ctrl+N` / `Ctrl+O` / `Ctrl+S` / `Ctrl+Shift+S`: *Save* writes a named project;
+  a project that has no name yet is saved at once under an automatic name (`Untitled <date time>.slsproj`) in
+  `~/Music/Sun Loops Studio/Projects`, so nothing is lost; *Save as...* asks for a name. Open recent, a title bar
+  that shows the name and `*` for unsaved changes, and a prompt before closing with unsaved work. Samples are
+  referenced by path, not copied into the file.
 - **Export** - the pattern or the song to a 24-bit / 48 kHz WAV file, rendered by the same engine that plays it.
 - **Audio** - device selection and a read-out of sample rate, buffer size and reported latency.
 
@@ -58,7 +63,8 @@ cmake --build build
 ```
 
 The first configure downloads JUCE 8.0.4 (needs network once). To install into your menu:
-`cmake --install build --prefix ~/.local`. More detail, other distributions and troubleshooting:
+`cmake --install build --prefix ~/.local`. To make a single-file **AppImage** (`dist/Sun-Loops-Studio-<version>-x86_64.AppImage`):
+`./scripts/build_appimage.sh`. More detail, other distributions and troubleshooting:
 [docs/building.md](docs/building.md).
 
 Press **Space** to play, **F5 / F6 / F7 / F9** to show panels and **F8** for the browser. A guided tour is in
@@ -83,7 +89,8 @@ Press **Space** to play, **F5 / F6 / F7 / F9** to show panels and **F8** for the
 Headless (no audio device or display needed). They check, among other things, synth pitch and sample-exact timing,
 looping, polyphony, mixer tracks, pitch and swing, the four effects, sampler, that `Player::render` never allocates
 (effects included), a concurrent stress test of the UI-to-audio hand-over, WAV round trip, the plugin scanner, the
-browser tree and file scan, channel presets, panel layout rules and the playlist.
+browser tree and file scan, channel presets, panel layout rules, the playlist, live notes and the project file
+(save/load round trip, damaged and hostile files, missing samples, atomic writing).
 
 ## License
 

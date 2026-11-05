@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(SunLoopsStudio VERSION 0.5.1 LANGUAGES C CXX)
+project(SunLoopsStudio VERSION 0.6.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -30,6 +30,7 @@ set(SLS_CORE_SOURCES
     src/audio/OfflineRenderer.cpp
     src/library/ChannelPreset.cpp
     src/library/Library.cpp
+    src/library/ProjectFile.cpp
     src/plugins/PluginScanner.cpp)
 
 set(SLS_COMMON_DEFINITIONS
@@ -83,6 +84,8 @@ install(PROGRAMS "$<TARGET_FILE:SunLoopsStudio>"
         RENAME sun-loops-studio)
 install(FILES resources/linux/sun-loops-studio.desktop
         DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+install(FILES resources/linux/sun-loops-studio.xml
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/mime/packages)
 install(FILES resources/icons/app_icon_256.png
         DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/256x256/apps
         RENAME sun-loops-studio.png)
