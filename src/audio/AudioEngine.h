@@ -1,177 +1,76 @@
 #pragma once
 
+#include <array>
 #include <atomic>
 #include <memory>
-#include <vector>
+
 #include <juce_audio_devices/juce_audio_devices.h>
-#include <juce_audio_processors/juce_audio_processors.h>
-#include "Oscillator.h"
-#include "RingBuffer.h"
-#include "common/AtomicFloat.h"
-#include "common/Constants.h"
 
-// =============================================================================
-// PluginHost: gestore plugin VST3 (base).
-// Carica e configura un plugin VST3 per l'uso in una DAW.
-// Usa JUCE AudioProcessor wrapper per compatibilità cross-platform.
-// =============================================================================
+#include "audio/Player.h"
+#include "audio/Project.h"
+#include "audio/SnapshotExchange.h"
 
-class PluginHost {
-public:
-    PluginHost();
-    ~PluginHost();
-
-    // Non copiabile
-    PluginHost(const PluginHost&) = delete;
-    PluginHost& operator=(const PluginHost&) = delete;
-
-    /**
-     * Carica un plugin VST3 da file.
-     * @param pluginPath Percorso al file .vst3
-     * @return true se caricato correttamente
-     */
-    bool loadPlugin(const juce::File& pluginPath);
-
-    /**
-     * Avvia il plugin (se disponibile)
-     * @param sampleRate Frequenza campionamento
-     * @param bufferSize Dimensione buffer
-     * @return true se avviato correttamente
-     */
-    bool initialize(int sampleRate, int bufferSize);
-
-    /**
-     * Processa un blocco di campioni.
-     * @param inputs Buffer input (array di puntatori)
-     * @param outputs Buffer output (array di puntatori)
-     * @param numSamples Numero di campioni
-     */
-    void processBlock(float* const* inputs,
-                      float* const* outputs,
-                      size_t numSamples) noexcept;
-
-    /**
-     * @return true se il plugin è stato caricato e inizializzato
-     */
-    bool isInitialized() const noexcept { return processor_ != nullptr; }
-
-    /**
-     * @return nome del plugin caricato
-     */
-    juce::String getPluginName() const noexcept;
-
-private:
-    std::unique_ptr<juce::AudioProcessor> processor_;
-    std::unique_ptr<juce::AudioProcessorEditor> editor_;
-    std::unique_ptr<juce::AudioProcessorGraph::Node> node_;
-    juce::AudioProcessor::BusesLayout busesLayout_;
-    int sampleRate_ = 0;
-    int bufferSize_ = 0;
-};
-
-// =============================================================================
-// AudioEngine: coordinatore centrale del motore audio.
-// Gestisce:
-//   - Inizializzazione e lifecycle del dispositivo audio
-//   - Generazione del segnale (oscillatore → buffer circolare → output)
-//   - Esportazione del livello per il VU meter UI
-//   - Plugin host VST3 base
-//
-// Thread safety:
-//   - Audio thread: generateAudio() chiamato dal callback JUCE
-//   - UI thread: readPeakLevel(), setFrequency()
-// =============================================================================
-
-class AudioEngine {
+namespace sls
+{
+// Owns the audio device, the transport state and the Player.
+// The audio callback is real-time safe: no allocation, no locks, no I/O.
+class AudioEngine : public juce::AudioIODeviceCallback
+{
 public:
     AudioEngine();
-    ~AudioEngine();
+    ~AudioEngine() override;
 
-    // Non copiabile
-    AudioEngine(const AudioEngine&) = delete;
-    AudioEngine& operator=(const AudioEngine&) = delete;
+    // Message thread.
+    juce::String initialise();      // returns an error message, empty on success
+    juce::AudioDeviceManager& getDeviceManager() noexcept { return deviceManager; }
+    juce::String describeDevice() const;
 
-    /**
-     * Inizializza il motore audio.
-     * @param sampleRate Hz (default 48000)
-     * @param bufferSize samples (default 128)
-     * @return true se tutto OK
-     */
-    bool initialize(int sampleRate = FLStudioClone::kDefaultSampleRate,
-                    int bufferSize = FLStudioClone::kDefaultBufferSize);
+    void publishProject (std::unique_ptr<Project> project) { exchange.publish (std::move (project)); }
 
-    /** Avvia la riproduzione */
-    void start();
+    // Any thread.
+    void setPlaying (bool shouldPlay) noexcept { playing.store (shouldPlay, std::memory_order_relaxed); }
+    bool isPlaying() const noexcept            { return playing.load (std::memory_order_relaxed); }
+    void setBpm (double newBpm) noexcept       { bpm.store (newBpm, std::memory_order_relaxed); }
+    void setGain (float newGain) noexcept      { gain.store (newGain, std::memory_order_relaxed); }
+    int getPlayheadTick() const noexcept       { return playheadTick.load (std::memory_order_relaxed); }
 
-    /** Ferma la riproduzione */
-    void stop();
+    // Peak since the last call (master, and per mixer channel).
+    float consumePeak() noexcept { return peak.exchange (0.0f, std::memory_order_relaxed); }
+    float consumeChannelPeak (int channel) noexcept
+    {
+        return channel >= 0 && channel < kMaxChannels
+                   ? channelPeaks[static_cast<size_t> (channel)].exchange (0.0f, std::memory_order_relaxed)
+                   : 0.0f;
+    }
 
-    /** @return true se in esecuzione */
-    bool isRunning() const noexcept { return running_.load(std::memory_order_relaxed); }
-
-    // --- Controllo oscillatore (chiamabile da UI thread) ---
-
-    /** Imposta frequenza oscillatore (thread-safe via atomic) */
-    void setFrequency(float frequency) noexcept;
-
-    /** @return frequenza corrente */
-    float getFrequency() const noexcept { return freq_.load(std::memory_order_relaxed); }
-
-    /** Imposta volume master (0.0 = mute, 1.0 = max) */
-    void setMasterVolume(float volume) noexcept;
-
-    /** @return volume master corrente */
-    float getMasterVolume() const noexcept { return vol_.load(std::memory_order_relaxed); }
-
-    // --- Plugin VST3 ---
-
-    /** Carica un plugin VST3 da file */
-    bool loadPlugin(const juce::File& pluginPath);
-
-    /** @return true se il plugin è caricato */
-    bool hasPlugin() const noexcept { return pluginHost_.isInitialized(); }
-
-    /** @return nome del plugin caricato */
-    juce::String getPluginName() const noexcept;
-
-    // --- Dati per UI (VU meter) ---
-
-    /**
-     * Legge il livello di picco del buffer circolare.
-     * Calcolato nel thread audio, esportato come AtomicFloat.
-     */
-    float readPeakLevel() const noexcept;
-
-    /** @return numero di campioni persi (buffer overflow) */
-    size_t getDroppedSamples() const noexcept { return dropped_.load(std::memory_order_relaxed); }
+    // juce::AudioIODeviceCallback
+    void audioDeviceIOCallbackWithContext (const float* const* inputChannelData, int numInputChannels,
+                                           float* const* outputChannelData, int numOutputChannels,
+                                           int numSamples,
+                                           const juce::AudioIODeviceCallbackContext& context) override;
+    void audioDeviceAboutToStart (juce::AudioIODevice* device) override;
+    void audioDeviceStopped() override;
 
 private:
-    // Callback chiamato dal thread audio JUCE (real-time-safe)
-    void onAudioReady(float* const* inputs,
-                      float* const* outputs,
-                      size_t numSamples) noexcept;
+    static_assert (std::atomic<double>::is_always_lock_free, "bpm must be lock-free");
 
-    // Oscillatore: allocato una volta, mai deallocato nel callback
-    Oscillator oscillator_;
+    static void raiseTo (std::atomic<float>& target, float value) noexcept
+    {
+        float current = target.load (std::memory_order_relaxed);
+        while (value > current && ! target.compare_exchange_weak (current, value, std::memory_order_relaxed))
+        {
+        }
+    }
 
-    // Plugin host VST3
-    PluginHost pluginHost_;
+    juce::AudioDeviceManager deviceManager;
+    SnapshotExchange<Project> exchange;
+    Player player;
 
-    // Dispositivo audio
-    juce::AudioDeviceManager device_;
-
-    // Buffer circolare: audio thread scrive, UI thread legge
-    RingBuffer<float, FLStudioClone::kRingBufferCapacity> ringBuffer_;
-
-    // Valori thread-safe per UI
-    std::atomic<float> freq_{440.0f};
-    std::atomic<float> vol_{0.5f};
-    AtomicFloat peakLevel_{0.0f};
-    std::atomic<size_t> dropped_{0};
-
-    // Stato esecuzione
-    std::atomic<bool> running_{false};
-
-    // Sample rate corrente (letto da device)
-    int sampleRate_ = 0;
+    std::atomic<bool> playing { false };
+    std::atomic<double> bpm { 120.0 };
+    std::atomic<float> gain { 0.8f };
+    std::atomic<float> peak { 0.0f };
+    std::array<std::atomic<float>, kMaxChannels> channelPeaks {};
+    std::atomic<int> playheadTick { 0 };
 };
+} // namespace sls

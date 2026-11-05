@@ -1,60 +1,42 @@
-# Documentazione Architetturale
+# Architecture
 
-## Flusso dati audio
+## Threads
 
-```
-┌──────────────┐     ┌───────────────┐     ┌────────────────┐
-│ Oscillator   │────▶│ RingBuffer    │────▶│ AudioDevice    │
-│ (UI thread)  │     │ (lock-free)   │     │ (PipeWire)     │
-│              │     │               │     │                │
-│ • Lookup tab │     │ • push()      │     │ • outputs[]    │
-│ • phase incr │     │ • capacity:   │     │ • stereo out   │
-│ • zero cosf  │     │   65536       │     │ • 48kHz/128s   │
-└──────────────┘     │ samples       │     └────────────────┘
-                     └───────▲───────┘
-                             │ pop()
-                     ┌───────┴────────┐
-                     │ AudioMeter (UI)│
-                     │ • smoothed peak│
-                     │ • dBFS display │
-                     └────────────────┘
+| Thread | What it does | Rules |
+| --- | --- | --- |
+| Message (UI) thread | Windows, editing, file dialogs, decoding samples, building a new `Project` | Free to allocate |
+| Audio thread | `AudioEngine::audioDeviceIOCallbackWithContext` -> `Player::render` | No allocation, no locks, no I/O, no logging |
 
-┌─────────────────────────▼───────────────────────────┐
-│                  PluginHost (VST3)                   │
-│  ┌──────────────────────────────────────────────┐   │
-│  │ juce::AudioProcessor                         │   │
-│  └──────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────┘
-```
+## Moving data from the UI to the audio thread
 
-## Thread safety
+The UI owns a `std::vector<Channel>`. On every edit it calls `Project::make`, which validates and sorts
+the notes and clamps volume and pan, then hands the result to `SnapshotExchange<Project>::publish`.
 
-### RingBuffer<T, Capacity>
-- **Producer**: thread audio (solo push)
-- **Consumer**: thread UI (solo pop)
-- **Single producer, single consumer** = lock-free senza atomics complessi
-- **Memory order**: `relaxed` per lettura/scrittura, `acquire/release` per visibilità
-- **Cache-line alignment**: 64 byte per evitare false sharing
+The audio thread calls `acquire()` once per block. It announces which snapshot it is reading (a hazard
+pointer), and `publish()` never frees that one. Everything else is freed on the UI thread, so the audio
+thread never frees memory.
 
-### AtomicFloat
-- Reinterpret cast `float ↔ uint32_t` su `std::atomic<uint32_t>`
-- Garantisce che la lettura sia atomicamente consistente (non il calcolo)
-- Perfetto per valori scalari che cambiano raramente (frequenza, volume, peak)
+Because a snapshot owns its sample data through `shared_ptr`, the audio thread may only keep a pointer
+into a snapshot across blocks if the next snapshot still owns the same object. `Player` enforces this:
+when a new snapshot arrives, any sampler voice whose sample is no longer the channel's current sample is
+dropped before it can read freed memory (covered by a test).
 
-## Scelte di design
+## Player
 
-### Perché lookup table invece di sinf()?
-`sinf()` è una funzione costosa (~100+ cicli CPU). La lookup table:
-- Occupa solo 16 KB (4096 × 4 byte) — sta nella L1 cache
-- Accesso array: ~1 ciclo CPU
-- Precisione sufficiente per audio musicale (< 0.01% errore)
+`Player::render` does everything for one block: it advances the transport, starts notes sample-accurately,
+runs up to 32 voices (synth or sampler), mixes them per channel with smoothed gain and equal-power pan,
+tracks per-channel peaks and soft-limits the master with `tanh`.
 
-### Perché buffer circolare invece di mutex?
-- Il mutex introduce jitter non deterministico
-- Lock-free = latenza massima garantita (worst-case = accesso memoria)
-- Single-producer/single-consumer = implementazione più semplice
+- Resolution is 480 ticks per beat; the grid of the editors is a 16th note (120 ticks).
+- Synth notes end at their length and at the loop boundary. Sampler voices are one-shot and keep ringing
+  across the loop boundary.
+- When playback stops, voices fade out over 80 ms and the transport rewinds.
 
-### Perché AtomicFloat invece di std::atomic<float>?
-- C++20 ha `std::atomic<float>` ma su alcune architetture usa lock interno
-- Reinterpret cast a uint32_t è sempre lock-free su x86_64
-- Compatibilità garantita con tutte le piattaforme JUCE supportate
+The offline renderer uses the same `Player`, so an exported file sounds like what you hear. It renders
+one pass of the loop plus a tail so releases and drum tails are not cut.
+
+## Testing
+
+`tests/test_core.cpp` drives `Player` and the renderer without an audio device and checks the result with
+single-bin DFTs (pitch), sample-exact timing, peak levels, silence and a replaced `operator new` that counts
+allocations inside `Player::render`.

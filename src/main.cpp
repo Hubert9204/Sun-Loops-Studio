@@ -1,29 +1,44 @@
 #include <juce_gui_basics/juce_gui_basics.h>
-#include "ui/MainWindow.h"
 
-// =============================================================================
-// Entry point — JUCE Application
-// Su Nobara Linux 44 (Fedora-based), PipeWire è il backend audio default.
-// JUCE rileva automaticamente PipeWire quando disponibile.
-// =============================================================================
+#include "ui/MainComponent.h"
 
-int main(int /*argc*/, char* /*argv*/[]) {
-    // Info di avvio
-    std::cout << "========================================\n"
-              << " FL Studio Clone DAW v0.1.0\n"
-              << " Platform: Nobara Linux 44 (Fedora)\n"
-              << " Audio Backend: PipeWire (via JUCE)\n"
-              << " GUI: JUCE 8 / KDE Plasma compatible\n"
-              << "========================================\n";
+class SunLoopsStudioApplication : public juce::JUCEApplication
+{
+public:
+    const juce::String getApplicationName() override    { return JUCE_APPLICATION_NAME_STRING; }
+    const juce::String getApplicationVersion() override { return JUCE_APPLICATION_VERSION_STRING; }
+    bool moreThanOneInstanceAllowed() override          { return true; }
 
-    // Init JUCE (registra plugins, font, ecc.)
-    juce:: initialiseJuce_GUI();
+    void initialise (const juce::String&) override
+    {
+        mainWindow = std::make_unique<MainWindow> (getApplicationName());
+    }
 
-    // Crea e mostra la finestra principale
-    auto mainWindow = std::make_unique<MainWindow>();
+    void shutdown() override { mainWindow = nullptr; }
 
-    // Esegui il message loop JUCE
-    juce::MessageManager::getInstance()->runDispatchLoop();
+    void systemRequestedQuit() override { quit(); }
 
-    return 0;
-}
+private:
+    class MainWindow : public juce::DocumentWindow
+    {
+    public:
+        explicit MainWindow (const juce::String& name)
+            : DocumentWindow (name, juce::Colour (0xff2a2d34), DocumentWindow::allButtons)
+        {
+            setUsingNativeTitleBar (true);
+            setContentOwned (new sls::MainComponent(), true);
+            setResizable (true, true);
+            centreWithSize (getWidth(), getHeight());
+            setVisible (true);
+        }
+
+        void closeButtonPressed() override
+        {
+            juce::JUCEApplication::getInstance()->systemRequestedQuit();
+        }
+    };
+
+    std::unique_ptr<MainWindow> mainWindow;
+};
+
+START_JUCE_APPLICATION (SunLoopsStudioApplication)

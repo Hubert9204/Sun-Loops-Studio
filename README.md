@@ -1,225 +1,85 @@
-# FL Studio Clone DAW
+# Sun Loops Studio
 
-**Motore audio real-time-safe per Nobara Linux 44** (Fedora-based, PipeWire, KDE Plasma)
+An open source music production program for Linux, written in C++20 with JUCE 8. It is inspired by
+the way loop-based DAWs work (a channel rack with step sequencer, a piano roll, a mixer) but it is
+its own project and uses no names, graphics or assets from other products.
 
-## 📋 Panoramica
+## What works today
 
-DAW open source con architettura modulare in C++20 + JUCE 8. La Fase 1 implementa:
+- **Channel rack** with five demo channels: two synths and three sample players (kick, snare, hat).
+- **Step sequencer** on sampler channels: 16th-note step buttons, 2-bar loop.
+- **Piano roll** for the selected channel: click to add a note (drag to set its length), drag to move,
+  drag the right edge to resize, right-click to delete. Wheel scrolls pitch, Shift+wheel scrolls time,
+  Ctrl+wheel zooms time.
+- **Mixer** per channel: volume, pan (equal power), mute, solo, peak meter. Master volume and meter.
+- **Sampler**: loads WAV / FLAC / OGG / AIFF files (up to 30 s), plays them one-shot, repitched by note.
+  Drum sounds are synthesised, so no sample files are needed to get started.
+- **Transport**: Play/Stop (Space), BPM 40-240.
+- **Export** of the pattern to WAV (24 bit, 48 kHz), rendered by the same engine used for playback.
+- **VST3 scanning** (library only, not yet connected to the UI or the audio path).
+- Audio device selection and a readout of sample rate, buffer and reported output latency.
 
-- ✅ Finestra principale stile FL Studio (tema scuro)
-- ✅ Motore audio con callback real-time-safe (zero allocazioni/lock)
-- ✅ Dispositivo audio PipeWire/JACK via JUCE AudioDeviceManager
-- ✅ Oscillatore sinusoidale con lookup table (4096 punti)
-- ✅ Buffer circolare lock-free per comunicazione audio↔UI
-- ✅ VU Meter con gradazioni verde/giallo/rosso
-- ✅ Controllo frequenza (20 Hz — 20 kHz) e volume master
-
-La Fase 2 aggiunge:
-
-- ✅ Plugin host VST3 base
-- ✅ Caricamento plugin da file .vst3
-- ✅ Processo audio con plugin attivo
-
-## 🏗️ Architettura
-
-```
-┌─────────────────────────────────────────────────────┐
-│                   MainWindow (UI)                    │
-│  ┌──────────┬──────────────┬─────────────────────┐  │
-│  │ Transport│ Frequency    │ Volume              │  │
-│  │ Play/Stop│ Slider       │ Slider              │  │
-│  ├──────────┴──────────────┴─────────────────────┤  │
-│  │  AudioMeter (L)    │    AudioMeter (R)        │  │
-│  └───────────────────────────────────────────────┘  │
-└─────────────────────────┬───────────────────────────┘
-                          │ AtomicFloat (30fps UI thread)
-┌─────────────────────────▼───────────────────────────┐
-│                   AudioEngine                        │
-│  ┌──────────────┐    ┌──────────────────────────┐   │
-│  │ Oscillator   │───▶│ RingBuffer (lock-free)   │   │
-│  │ (lookup tab.)│    │ audio thread → UI thread │   │
-│  └──────────────┘    └──────────────────────────┘   │
-│                                                      │
-│  ┌──────────────────────────────────────────────┐   │
-│  │ AudioDevice (JUCE → PipeWire/JACK backend)   │   │
-│  └──────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────┘
-
-┌─────────────────────────▼───────────────────────────┐
-│                  PluginHost (VST3)                   │
-│  ┌──────────────────────────────────────────────┐   │
-│  │ juce::AudioProcessor                         │   │
-│  └──────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────┘
-```
-
-### Scelte architetturali
-
-| Componente | Tecnologia | Motivazione |
-|---|---|---|
-| **Framework GUI** | JUCE 8 | PipeWire nativo su Fedora, tema scuro, cross-platform |
-| **Backend audio** | PipeWire (via JUCE) | Default su Nobara/Fedora |
-| **Buffer circolare** | RingBuffer lock-free | Zero lock, zero allocazioni nel thread audio |
-| **Oscillatore** | Lookup table 4096 punti | Evita `sinf()` nel callback real-time |
-| **Comunicazione UI↔Audio** | AtomicFloat + RingBuffer | Lock-free, cache-line aligned |
-| **Plugin VST3** | JUCE AudioProcessor | Cross-platform plugin support |
-
-## 🚀 Installazione su Nobara Linux 44
-
-### Requisiti di sistema
-
-- Nobara Linux 44 (o Fedora 40+)
-- KDE Plasma desktop
-- PipeWire con supporto JACK (già incluso in Nobara)
-- GPU con driver Vulkan/Mesa (per JUCE OpenGL)
-
-### Script di setup
+## Build on Nobara / Fedora
 
 ```bash
-git clone https://github.com/youruser/flstudio-clone.git
-cd flstudio-clone
-chmod +x scripts/setup_nobara.sh
 ./scripts/setup_nobara.sh
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+./build/SunLoopsStudio_artefacts/Release/"Sun Loops Studio"
 ```
 
-### Compilazione manuale
+CMake downloads JUCE 8.0.4 the first time it is configured, so it needs network access once.
+
+## Tests
 
 ```bash
-# 1. Clona il progetto
-git clone https://github.com/youruser/flstudio-clone.git
-cd flstudio-clone
-
-# 2. Installa dipendenze (se lo script non è stato usato)
-sudo dnf install -y gcc-c++ cmake git ninja-build \
-    pipewire-devel libjack2-devel alsa-lib-devel fontconfig-devel freetype-devel vulkan-devel vulkan-tools
-
-# 3. Configura e compila
-mkdir build && cd build
-cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release
-ninja
-
-# 4. Esegui
-./FLStudioClone
+./build/SunLoopsStudioTests_artefacts/Release/SunLoopsStudioTests
 ```
 
-## 🔧 Configurazioni avanzate
+The tests are headless (no audio device, no display). They cover the project model, synth pitch and
+timing, looping and stop, polyphony and voice stealing, volume / pan / mute / solo, the sampler
+(pitch, sample-rate conversion, one-shot behaviour), safe replacement of a sample while it plays,
+that `Player::render` never allocates, a concurrent stress test of the snapshot exchange, a WAV
+round trip and the VST3 scanner on empty and invalid directories.
 
-### Buffer size e latenza
-
-| Buffer Size | Latenza teorica | Stabilità | Uso consigliato |
-|---|---|---|---|
-| 32 samples | ~0.67 ms | Bassa | Monitoring in tempo reale |
-| 64 samples | ~1.33 ms | Media-Bassa | Registrazione live |
-| **128 samples** | **~2.67 ms** | **Media** | **Default (bilanciato)** |
-| 256 samples | ~5.33 ms | Alta | Mixing / produzione |
-| 512+ samples | >10 ms | Molto alta | CPU limitata |
-
-### Flag CMake
-
-```bash
-# Abilita JACK nativo (oltre a PipeWire)
-cmake .. -DENABLE_JACK=ON
-
-# Log timing nel callback audio (solo debug)
-cmake .. -DDEBUG_AUDIO_TIMING=ON
-```
-
-## 📊 Thread Model
-
-### Thread Audio (callback JUCE)
-```
-onAudioReady() {
-    oscillator_.setFrequency(freq_);   // atomic load
-    oscillator_.generate(tempBuffer);  // lookup table, zero cosf
-    applyVolume(tempBuffer, vol_);     // atomic load
-    ringBuffer_.push(tempBuffer);      // lock-free push
-    copyToOutput(tempBuffer);          // memcpy
-}
-```
-**Regole real-time-safe:**
-- ✅ Stack allocation solo (`float[2048]`)
-- ✅ Atomic loads per frequenza/volume
-- ✅ Lock-free RingBuffer push
-- ❌ No `new`/`delete`/`malloc`/`free`
-- ❌ No `std::mutex`/`std::lock_guard`
-- ❌ No `cout`/`cerr`/`printf`
-- ❌ No syscall (tranne read/write del dispositivo)
-
-### Thread UI (JUCE MessageManager)
-```
-timerCallback() {
-    peak = audioEngine_.readPeakLevel();  // AtomicFloat load
-    meter_->setPeakLevel(peak);           // repaint()
-}
-```
-- Aggiornamento a ~30fps (non real-time)
-- Smoothing esponenziale per evitare flickering
-
-## ⚠️ Punti critici di latenza
-
-1. **Buffer size PipeWire**: il parametro più influente. Su Nobara, il default è spesso 256.
-   ```bash
-   # Verifica buffer corrente
-   pw-cli info all | grep -A5 "node" | grep "latency"
-   
-   # Riduci con pipewire.conf personalizzato
-   ```
-
-2. **Periodicità del callback**: PipeWire chiama il callback ogni `buffer_size / sample_rate` secondi.
-   Con 128 samples a 48kHz = 2.67ms per callback.
-
-3. **Lock-free RingBuffer**: se l'UI non legge abbastanza veloce, i campioni vengono scartati.
-   Monitora `dropped_samples` nella status bar.
-
-4. **Schedulazione thread**: su KDE Plasma con PipeWire, il thread audio dovrebbe avere
-   priorità alta. Verifica con:
-   ```bash
-   ps -eLo pid,pri,class,rtprio,comm | grep pipewire
-   ```
-
-5. **Power saving**: su laptop, CPU scaling governor può causare jitter.
-   ```bash
-   # Imposta performance governor
-   sudo cpupower frequency-set -g performance
-   ```
-
-## 📁 Struttura del progetto
+## Architecture
 
 ```
-flstudio-clone/
-├── CMakeLists.txt                    # Build system CMake
-├── README.md                         # Questo file
-├── src/
-│   ├── main.cpp                      # Entry point JUCE
-│   ├── audio/
-│   │   ├── AudioEngine.h/cpp         # Motore audio centrale (aggiunto PluginHost)
-│   │   ├── Oscillator.h/cpp          # Generatore onda sinusoidale
-│   │   └── RingBuffer.h              # Buffer circolare lock-free
-│   ├── ui/
-│   │   ├── MainWindow.h/cpp          # Finestra principale (aggiunta plugin UI)
-│   │   └── AudioMeter.h/cpp          # VU Meter real-time
-│   └── common/
-│       ├── AtomicFloat.h             # Float thread-safe
-│       └── Constants.h               # Costanti globali
-├── resources/icons/                  # Icone applicazione
-├── scripts/setup_nobara.sh           # Setup automatico Nobara
-└── docs/
-    └── architecture.md               # Documentazione architetturale
+src/audio/Project.h            Channel, SampleData and the immutable Project snapshot
+src/audio/NoteSequence.h       Note, tick resolution (480 ticks per beat), note validation
+src/audio/SnapshotExchange.h   Hands snapshots from the UI thread to the audio thread, lock-free
+src/audio/Player.*             Transport, synth and sampler voices, per-channel mixer
+src/audio/OfflineRenderer.*    Renders a Project to a buffer or a WAV file with the same Player
+src/audio/BuiltinSamples.*     Synthesised kick, snare and hat
+src/audio/AudioEngine.*        Audio device, atomics for BPM / volume / play state, audio callback
+src/plugins/PluginScanner.*    VST3 discovery
+src/ui/MainComponent.*         Window: transport bar, channel rack, piano roll, export, sample loading
+src/ui/ChannelStrip.*          One rack row: name, mute/solo, volume, pan, meter, steps
+src/ui/PianoRoll.*             Note editor
+tests/test_core.cpp            Headless tests
 ```
 
-## 🔮 Roadmap
+The audio callback does no allocation, no locking and no I/O. The UI builds a new `Project` on every
+edit and publishes it; the audio thread only reads it. See `docs/architecture.md` for details.
 
-- [x] **Fase 1**: Scheletro progetto + oscillatore sinusoidale
-- [x] **Fase 2**: Plugin host VST3 base (JUCE PluginHost)
-- [ ] **Fase 3**: Piano roll editor (stile FL Studio)
-- [ ] **Fase 4**: Mixer con canali, EQ, effects
-- [ ] **Fase 5**: Arranger/Sequencer multi-track
-- [ ] **Fase 6**: Renderizzazione audio offline
+## Audio backends
 
-## 📄 Licenza
+On Linux JUCE uses ALSA and JACK. PipeWire is reached through its compatibility layers
+(`pipewire-alsa`, `pipewire-jack`), which Nobara installs by default. JUCE has no native PipeWire
+backend. Latency is whatever the device reports; measure it instead of assuming it.
 
-MIT License — vedi `LICENSE` per dettagli.
+## Status and roadmap
 
-## 🤝 Contributi
+Verified in a headless environment: clean build, all tests, the application starting under a virtual
+display and mouse editing. **Not verified:** actual sound output, the playhead moving during playback
+and real latency, because that environment has no audio device. Please try those on a real machine.
 
-PRs benvenuti! Per favore apri un issue prima di lavorare su feature grandi.
+Not done yet: adding and removing channels, more than one pattern, a playlist / arranger, effects,
+hosting VST3 plugins inside the audio path, automation, saving and loading projects, MP3 export.
+
+## License
+
+The repository carries an MIT `LICENSE`. JUCE, however, is available only under GPLv3/AGPLv3 or a
+paid commercial license. A program that links JUCE under its free license must itself be distributed
+under the GPL. Before distributing binaries, either switch this project to GPLv3 or obtain a JUCE
+commercial license.

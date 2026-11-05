@@ -1,34 +1,82 @@
 #pragma once
 
+#include <functional>
+#include <vector>
+
 #include <juce_gui_basics/juce_gui_basics.h>
-#include "ui/Sequencer.h"
 
-// =============================================================================
-// PianoRoll: editor piano roll stile FL Studio.
-// Componente principale per creare sequenze musicali.
-// =============================================================================
+#include "audio/NoteSequence.h"
 
-class PianoRoll : public juce::Component {
+namespace sls
+{
+// Note editor.
+//   Left click on empty grid   : create a note (drag right to set its length)
+//   Left drag on a note        : move it (drag its right edge to resize)
+//   Right click on a note      : delete it
+//   Mouse wheel                : scroll pitch   | Shift+wheel: scroll time | Ctrl+wheel: zoom time
+class PianoRoll : public juce::Component
+{
 public:
     PianoRoll();
-    ~PianoRoll() override;
+
+    void setNotes (std::vector<Note> newNotes);
+    const std::vector<Note>& getNotes() const noexcept { return notes; }
+
+    void setLoopLengthTicks (int ticks);
+    int getLoopLengthTicks() const noexcept { return loopLengthTicks; }
+
+    // tick < 0 hides the playhead.
+    void setPlayheadTick (int tick);
+
+    // Called on the message thread whenever the set of notes has changed.
+    std::function<void()> onNotesChanged;
+
+    void paint (juce::Graphics&) override;
+    void resized() override;
+    void mouseDown (const juce::MouseEvent&) override;
+    void mouseDrag (const juce::MouseEvent&) override;
+    void mouseUp (const juce::MouseEvent&) override;
+    void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
 
 private:
-    void paint(juce::Graphics& g) override;
-    void resized() override;
+    enum class Drag { None, Move, Resize };
 
-    // --- UI Components ---
-    std::unique_ptr<juce::Label> titleLabel_;
-    std::unique_ptr<Sequencer> sequencer_;
-    
-    // --- Timeline ---
-    class Timeline : public juce::Component {
-    public:
-        Timeline() = default;
-        ~Timeline() override = default;
+    static constexpr int kLowPitch = 36;   // C2
+    static constexpr int kHighPitch = 96;  // C7
+    static constexpr int kKeyboardWidth = 64;
+    static constexpr int kRulerHeight = 22;
+    static constexpr int kRowHeight = 16;
+    static constexpr int kGridTicks = kTicksPerBeat / 4; // 16th notes
 
-    private:
-        void paint(juce::Graphics& g) override;
-        void resized() override;
-    } timeline_;
+    juce::Rectangle<int> gridArea() const;
+    double pixelsPerTick() const noexcept { return pixelsPerBeat / kTicksPerBeat; }
+    float tickToX (double tick) const noexcept;
+    double xToTick (float x) const noexcept;
+    float pitchToY (int pitch) const noexcept;
+    int yToPitch (float y) const noexcept;
+    int snap (double tick) const noexcept;
+    juce::Rectangle<float> noteRect (const Note& n) const noexcept;
+    int noteIndexAt (juce::Point<float> p) const noexcept;
+    void clampScroll();
+    void notifyChanged();
+    static bool isBlackKey (int pitch) noexcept;
+
+    std::vector<Note> notes;
+    int loopLengthTicks = 16 * kTicksPerBeat;
+
+    double pixelsPerBeat = 56.0;
+    double scrollX = 0.0;
+    double scrollY = 0.0;
+    bool initialScrollDone = false;
+
+    int playheadTick = -1;
+
+    Drag dragMode = Drag::None;
+    int dragIndex = -1;
+    int grabOffsetTicks = 0;
+    bool dragChanged = false;
+    int lastLengthTicks = kTicksPerBeat / 2;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PianoRoll)
 };
+} // namespace sls

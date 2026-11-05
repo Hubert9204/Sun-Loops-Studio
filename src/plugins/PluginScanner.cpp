@@ -1,36 +1,44 @@
-#include "PluginScanner.h"
-#include <juce_audio_processors/format_types/juce_VST3PluginFormat.h>
+#include "plugins/PluginScanner.h"
 
-// =============================================================================
-// PluginScanner implementation
-// Scansione plugin VST3 con JUCE (non real-time)
-// =============================================================================
-
-std::vector<juce::PluginDescription> PluginScanner::scanDirectory(const std::string& path) {
-    plugins_.clear();
-
-    // Usa JUCE per scansionare una directory
-    juce::File dir(path.c_str());
-    if (!dir.isDirectory()) {
-        return plugins_;
-    }
-
-    juce::AudioPluginFormatManager formatManager;
-    auto* vst3Format = formatManager.addFormat(new juce::VST3PluginFormat());
-    if (vst3Format == nullptr) {
-        return plugins_;
-    }
-
-    // Scansione ricorsiva
-    juce::StringArray foundFiles;
-    dir.findChildFiles(foundFiles, juce::File::findFiles, true);
-
-    for (const auto& file : foundFiles) {
-        auto pluginDescs = vst3Format->findAllPluginTypes(file.toStdString());
-        for (auto& desc : pluginDescs) {
-            plugins_.push_back(desc);
-        }
-    }
-
-    return plugins_;
+namespace sls
+{
+juce::FileSearchPath PluginScanner::defaultSearchPaths()
+{
+    juce::VST3PluginFormat format;
+    return format.getDefaultLocationsToSearch();
 }
+
+std::vector<PluginInfo> PluginScanner::scan (const juce::FileSearchPath& searchPaths, bool recursive)
+{
+    std::vector<PluginInfo> result;
+
+    juce::VST3PluginFormat format;
+    juce::KnownPluginList knownPlugins;
+
+    const auto deadMansPedal = juce::File::getSpecialLocation (juce::File::tempDirectory)
+                                   .getChildFile ("sun-loops-studio-plugin-scan.txt");
+
+    juce::PluginDirectoryScanner scanner (knownPlugins, format, searchPaths, recursive, deadMansPedal, false);
+
+    juce::String currentFile;
+    while (scanner.scanNextFile (true, currentFile))
+    {
+    }
+
+    deadMansPedal.deleteFile();
+
+    for (const auto& description : knownPlugins.getTypes())
+    {
+        PluginInfo info;
+        info.name = description.name;
+        info.manufacturer = description.manufacturerName;
+        info.path = description.fileOrIdentifier;
+        info.isInstrument = description.isInstrument;
+        info.numInputChannels = description.numInputChannels;
+        info.numOutputChannels = description.numOutputChannels;
+        result.push_back (std::move (info));
+    }
+
+    return result;
+}
+} // namespace sls
