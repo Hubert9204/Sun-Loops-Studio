@@ -15,7 +15,7 @@ Sun Loops Studio is inspired by the workflow of loop-based DAWs such as FL Studi
 that uses no code, names, graphics or assets from other products, and it is not affiliated with or endorsed by
 their makers.
 
-**Status: alpha (0.6.1).** It builds, the automated tests pass and the interface has been exercised in a virtual
+**Status: alpha (0.7.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
 display. Playback was confirmed on a real Nobara machine for version 0.3; everything added since (panels, patterns,
 playlist, browser, pitch/swing, the expanded mixer and its effects, saving projects, the AppImage) was tested
 headless and in a virtual display with a silent audio device, not yet with real audio. **Hosting VST3 plugins is not implemented**: the mixer's effect
@@ -33,14 +33,14 @@ exactly what is and is not verified and what is missing (VST3 hosting and undo a
 - **Channel Rack** - up to 8 channels, each a synth or a sampler. 16th-note step sequencer on sampler channels,
   note preview on synth channels. Per channel: volume, pan, a **Pitch** knob (semitones) and a **Swing** knob, and a
   **Track N** display that sends the channel to a mixer track. Right-click a channel for *Piano roll*, *Instrument*,
-  *Load sample...*, *Rename...*, *Save as preset...*.
+  *Load sample...*, *Rename...*, *Assign free mixer track*, *Save as preset...*.
 - **Piano Roll** - for the selected channel: click to add a note, drag to move, drag the right edge to resize,
   right-click to delete, scroll and zoom. Opens from a channel (menu or double-click), as in FL Studio.
 - **Patterns and Playlist** - several patterns (new or cloned), arranged as clips on 8 tracks. A *Pattern / Song*
   switch chooses between looping the selected pattern and playing the whole playlist.
 - **Mixer** (`F9`) - 8 vertical tracks, each with a fader and dB read-out, stereo balance, mute, solo, a Peak/RMS
-  meter and 4 insert-effect slots (Equalizer, Reverb, Delay, Compressor, each with bypass). A master strip sits on
-  the right. Several channels can share a track.
+  meter and 4 insert-effect slots (Equalizer, Reverb, Delay, Compressor, each with bypass). The master strip on the
+  right has the same 4 effect slots, applied to the whole mix. Several channels can share a track.
 - **Sampler** - loads WAV, FLAC, OGG and AIFF files (up to 30 s), plays them one-shot, repitched by note.
   Kick, snare and hat are synthesised, so you need no sample files to start.
 - **Projects** - `File` menu and `Ctrl+N` / `Ctrl+O` / `Ctrl+S` / `Ctrl+Shift+S`: *Save* writes a named project;

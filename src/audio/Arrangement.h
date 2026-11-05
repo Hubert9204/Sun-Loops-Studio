@@ -99,7 +99,8 @@ struct Arrangement
 
 // Loop of a single pattern: what "pattern mode" plays.
 inline Project compilePattern (const std::vector<Channel>& channelSettings, const Arrangement& arrangement,
-                               int patternIndex, std::vector<MixerTrack> tracks = {})
+                               int patternIndex, std::vector<MixerTrack> tracks = {},
+                               std::array<EffectSlot, kSlotsPerTrack> masterSlots = {})
 {
     auto channels = channelSettings;
     const bool valid = patternIndex >= 0 && patternIndex < static_cast<int> (arrangement.patterns.size());
@@ -114,13 +115,14 @@ inline Project compilePattern (const std::vector<Channel>& channelSettings, cons
                 channels[c].notes = notes[c];
         }
     }
-    return Project::make (std::move (channels), arrangement.patternTicks, std::move (tracks));
+    return Project::make (std::move (channels), arrangement.patternTicks, std::move (tracks), masterSlots);
 }
 
 // The whole playlist laid out on one timeline: what "song mode" plays. Loops over the end of the last clip
 // (an empty playlist is a silent loop of one pattern length).
 inline Project compileSong (const std::vector<Channel>& channelSettings, const Arrangement& arrangement,
-                            std::vector<MixerTrack> tracks = {})
+                            std::vector<MixerTrack> tracks = {},
+                            std::array<EffectSlot, kSlotsPerTrack> masterSlots = {})
 {
     auto channels = channelSettings;
     for (auto& c : channels)
@@ -148,6 +150,6 @@ inline Project compileSong (const std::vector<Channel>& channelSettings, const A
                 }
         }
     }
-    return Project::make (std::move (channels), units * arrangement.patternTicks, std::move (tracks));
+    return Project::make (std::move (channels), units * arrangement.patternTicks, std::move (tracks), masterSlots);
 }
 } // namespace sls

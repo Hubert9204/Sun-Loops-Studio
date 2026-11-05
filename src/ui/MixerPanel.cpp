@@ -248,6 +248,13 @@ MasterStrip::MasterStrip()
     nameLabel.setText ("Master", juce::dontSendNotification);
     styleSmallLabel (dbLabel, 11.0f, false, juce::Justification::centred);
 
+    for (size_t s = 0; s < slotButtons.size(); ++s)
+    {
+        slotButtons[s].onClick = [this, s] { if (onSlotClicked) onSlotClicked (static_cast<int> (s)); };
+        slotButtons[s].onMenu = [this, s] { if (onSlotMenu) onSlotMenu (static_cast<int> (s)); };
+        addAndMakeVisible (slotButtons[s]);
+    }
+
     fader.setRange (0.0, 1.0, 0.01);
     fader.setDoubleClickReturnValue (true, 0.8);
     fader.setTooltip ("Master volume (same control as in the toolbar)");
@@ -264,6 +271,28 @@ MasterStrip::MasterStrip()
     setVolume (0.8);
 }
 
+void MasterStrip::setMasterTrack (MixerTrack& masterTrack)
+{
+    master = &masterTrack;
+    refreshSlots();
+}
+
+void MasterStrip::refreshSlots()
+{
+    for (size_t s = 0; s < slotButtons.size(); ++s)
+        slotButtons[s].set (master != nullptr ? master->slots[s] : EffectSlot {}, selected && selectedSlot == static_cast<int> (s), false);
+}
+
+void MasterStrip::setSelected (bool shouldBeSelected)
+{
+    if (selected != shouldBeSelected)
+    {
+        selected = shouldBeSelected;
+        refreshSlots();
+        repaint();
+    }
+}
+
 void MasterStrip::setVolume (double volume)
 {
     fader.setValue (volume, juce::dontSendNotification);
@@ -272,7 +301,7 @@ void MasterStrip::setVolume (double volume)
 
 void MasterStrip::paint (juce::Graphics& g)
 {
-    g.setColour (juce::Colour (0xff3a3f4a));
+    g.setColour (selected ? kStripSelectedBg : juce::Colour (0xff3a3f4a));
     g.fillRoundedRectangle (getLocalBounds().toFloat().reduced (1.0f), 4.0f);
     g.setColour (kAccent);
     g.fillRoundedRectangle (4.0f, 1.0f, static_cast<float> (getWidth()) - 8.0f, 3.0f, 1.5f);
@@ -282,7 +311,15 @@ void MasterStrip::resized()
 {
     auto area = getLocalBounds().reduced (5, 6);
     nameLabel.setBounds (area.removeFromTop (18));
+    area.removeFromTop (14 + 4); // the height of a track's "routed channels" line, so the slots line up
+
+    for (auto& b : slotButtons)
+    {
+        b.setBounds (area.removeFromTop (18));
+        area.removeFromTop (2);
+    }
     area.removeFromTop (4);
+
     dbLabel.setBounds (area.removeFromBottom (16));
     area.removeFromBottom (2);
 
@@ -290,6 +327,12 @@ void MasterStrip::resized()
     meter.setBounds (faderArea.removeFromRight (18));
     faderArea.removeFromRight (4);
     fader.setBounds (faderArea);
+}
+
+void MasterStrip::mouseDown (const juce::MouseEvent&)
+{
+    if (onSelect)
+        onSelect();
 }
 
 // ------------------------------------------------------------------------- FxPanel
@@ -371,7 +414,17 @@ void FxPanel::setSelectedSlot (int slot)
 
 void FxPanel::refresh()
 {
-    titleLabel.setText ("Effects - Track " + juce::String (trackIndex + 1), juce::dontSendNotification);
+    const bool isMaster = trackIndex == kMasterIndex;
+    titleLabel.setText (isMaster ? juce::String ("Effects - Master") : "Effects - Track " + juce::String (trackIndex + 1),
+                        juce::dontSendNotification);
+    notePlaceholder.setText (isMaster
+        ? "Click a slot to add an effect to the master chain (Equalizer, Reverb, Delay, Compressor). "
+          "These effects process the sum of all tracks, in order, before the master fader.\n\n"
+          "VST3 plugin hosting is not implemented yet: the slots hold Sun Loops Studio's built-in effects."
+        : "Click a slot to add an effect to this track's chain "
+          "(Equalizer, Reverb, Delay, Compressor). Effects run in order, before the fader.\n\n"
+          "VST3 plugin hosting is not implemented yet: the slots hold Sun Loops Studio's built-in effects.",
+        juce::dontSendNotification);
 
     for (size_t s = 0; s < slotButtons.size(); ++s)
     {
@@ -537,9 +590,49 @@ MixerPanel::MixerPanel()
     fxPanel.onSlotsChanged = [this] (int track) { refreshTrack (track); };
     fxPanel.onSelectedSlotChanged = [this] (int slot)
     {
-        if (selectedTrack >= 0 && selectedTrack < static_cast<int> (strips.size()))
+        if (selectedTrack == kMasterIndex)
+            masterStrip.setSelectedSlot (slot);
+        else if (selectedTrack >= 0 && selectedTrack < static_cast<int> (strips.size()))
             strips[static_cast<size_t> (selectedTrack)]->setSelectedSlot (slot);
     };
+
+    masterStrip.onSelect = [this] { selectMaster(); };
+    masterStrip.onSlotClicked = [this] (int slot)
+    {
+        selectMaster();
+        fxPanel.setSelectedSlot (slot);
+        masterStrip.setSelectedSlot (slot);
+        if (masterData != nullptr && masterData->slots[static_cast<size_t> (slot)].type == EffectType::None)
+            fxPanel.showSlotMenu (slot);
+    };
+    masterStrip.onSlotMenu = [this] (int slot)
+    {
+        selectMaster();
+        fxPanel.setSelectedSlot (slot);
+        masterStrip.setSelectedSlot (slot);
+        fxPanel.showSlotMenu (slot);
+    };
+}
+
+void MixerPanel::setMaster (MixerTrack& masterTrack)
+{
+    masterData = &masterTrack;
+    masterStrip.setMasterTrack (masterTrack);
+    if (selectedTrack == kMasterIndex)
+        selectMaster();
+}
+
+void MixerPanel::selectMaster()
+{
+    if (masterData == nullptr)
+        return;
+
+    selectedTrack = kMasterIndex;
+    for (auto& s : strips)
+        s->setSelected (false);
+    masterStrip.setSelected (true);
+    fxPanel.setTrack (masterData, kMasterIndex);
+    masterStrip.setSelectedSlot (fxPanel.getSelectedSlot());
 }
 
 void MixerPanel::setTracks (std::vector<MixerTrack>& tracks)
@@ -578,6 +671,13 @@ void MixerPanel::setTracks (std::vector<MixerTrack>& tracks)
 
 void MixerPanel::refreshTrack (int index)
 {
+    if (index == kMasterIndex)
+    {
+        masterStrip.refreshSlots();
+        if (selectedTrack == kMasterIndex)
+            fxPanel.refresh();
+        return;
+    }
     if (index >= 0 && index < static_cast<int> (strips.size()))
         strips[static_cast<size_t> (index)]->refreshFromTrack();
     if (index == selectedTrack)
@@ -589,6 +689,13 @@ void MixerPanel::setSelectedTrack (int index)
     if (trackData == nullptr || trackData->empty())
         return;
 
+    if (index == kMasterIndex)
+    {
+        selectMaster();
+        return;
+    }
+
+    masterStrip.setSelected (false);
     selectedTrack = std::clamp (index, 0, static_cast<int> (trackData->size()) - 1);
     for (auto& s : strips)
         s->setSelected (s->getIndex() == selectedTrack);

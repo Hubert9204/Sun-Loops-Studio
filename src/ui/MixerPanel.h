@@ -80,21 +80,38 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MixerStrip)
 };
 
-// The master fader, linked to the toolbar's master volume.
+// Index that stands for the master bus where a mixer track index is expected (the tracks are 0 .. kMaxTracks - 1).
+constexpr int kMasterIndex = kMaxTracks;
+
+// The master strip: the master fader (linked to the toolbar's master volume) and four insert-effect slots that
+// process the sum of all tracks, before the master fader and the soft limiter.
 class MasterStrip : public juce::Component
 {
 public:
     MasterStrip();
 
+    // The master bus's effect slots live in `masterTrack.slots`; the object is not owned.
+    void setMasterTrack (MixerTrack& masterTrack);
+    void refreshSlots();
+    void setSelected (bool shouldBeSelected);
+    void setSelectedSlot (int slot) { selectedSlot = slot; refreshSlots(); }
     void setVolume (double volume);
     void setLevels (float peak, float rms) { meter.setLevels (peak, rms); }
 
     std::function<void (double)> onVolumeChanged;
+    std::function<void()> onSelect;               // the strip was clicked
+    std::function<void (int)> onSlotClicked;      // slot index
+    std::function<void (int)> onSlotMenu;         // right click on a slot
 
     void paint (juce::Graphics&) override;
     void resized() override;
+    void mouseDown (const juce::MouseEvent&) override;
 
 private:
+    MixerTrack* master = nullptr;
+    bool selected = false;
+    int selectedSlot = -1;
+    std::array<SlotButton, kSlotsPerTrack> slotButtons;
     juce::Label nameLabel;
     juce::Slider fader { juce::Slider::LinearVertical, juce::Slider::NoTextBox };
     juce::Label dbLabel;
@@ -108,6 +125,7 @@ class FxPanel : public juce::Component
 public:
     FxPanel();
 
+    // `trackIndex` == kMasterIndex shows the master bus (its title and help text change).
     void setTrack (MixerTrack* track, int trackIndex);
     void setSelectedSlot (int slot);
     int getSelectedSlot() const noexcept { return selectedSlot; }
@@ -153,7 +171,10 @@ public:
 
     // The tracks are not owned and must not be reallocated while the panel exists.
     void setTracks (std::vector<MixerTrack>& tracks);
+    // The master bus's effect chain (its `slots`); not owned. Call once, after setTracks().
+    void setMaster (MixerTrack& masterTrack);
 
+    // `index` is a track (0 .. kMaxTracks - 1) or kMasterIndex for the master bus, here and in the callbacks.
     void refreshTrack (int index);
     void setSelectedTrack (int index);
     int getSelectedTrack() const noexcept { return selectedTrack; }
@@ -162,7 +183,7 @@ public:
     void setMasterLevels (float peak, float rms) { masterStrip.setLevels (peak, rms); }
     void setMasterVolume (double volume) { masterStrip.setVolume (volume); }
 
-    std::function<void (int)> onTrackChanged;       // anything that changes the sound
+    std::function<void (int)> onTrackChanged;       // anything that changes the sound (track index, or kMasterIndex)
     std::function<void (double)> onMasterVolumeChanged;
 
     void paint (juce::Graphics&) override;
@@ -174,9 +195,11 @@ private:
     struct Inner : juce::Component {};
 
     void layoutInner();
+    void selectMaster();
 
     int selectedTrack = 0;
     std::vector<MixerTrack>* trackData = nullptr;
+    MixerTrack* masterData = nullptr;
     juce::Viewport viewport;
     Inner inner;
     std::vector<std::unique_ptr<MixerStrip>> strips;

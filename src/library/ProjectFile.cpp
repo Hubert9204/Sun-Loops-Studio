@@ -199,6 +199,15 @@ juce::String ProjectDocument::toJson() const
     }
     root->setProperty ("tracks", trackList);
 
+    {
+        auto* master = new juce::DynamicObject();
+        juce::Array<juce::var> slots;
+        for (const auto& s : masterSlots)
+            slots.add (slotToVar (s));
+        master->setProperty ("effects", slots);
+        root->setProperty ("master", juce::var (master));
+    }
+
     juce::Array<juce::var> patternList;
     for (const auto& p : arrangement.patterns)
     {
@@ -327,6 +336,12 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
                 for (int s = 0; s < std::min (slots->size(), kSlotsPerTrack); ++s)
                     t.slots[static_cast<size_t> (s)] = readSlot ((*slots)[s]);
         }
+
+    // --- master bus effects (older files have none)
+    if (auto* master = root->getProperty ("master").getDynamicObject())
+        if (auto* slots = master->getProperty ("effects").getArray())
+            for (int s = 0; s < std::min (slots->size(), kSlotsPerTrack); ++s)
+                d.masterSlots[static_cast<size_t> (s)] = readSlot ((*slots)[s]);
 
     // --- patterns
     auto* patternList = root->getProperty ("patterns").getArray();

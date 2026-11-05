@@ -66,6 +66,7 @@ struct Project
 {
     std::vector<Channel> channels;
     std::vector<MixerTrack> tracks; // always kMaxTracks entries after make()
+    std::array<EffectSlot, kSlotsPerTrack> masterSlots {}; // insert effects on the master bus (after the sum of all tracks)
     int lengthTicks = 8 * kTicksPerBeat;
     std::uint64_t revision = 0; // assigned by SnapshotExchange
 
@@ -91,7 +92,8 @@ struct Project
                 n.startTick += shift;
     }
 
-    static Project make (std::vector<Channel> input, int loopLengthTicks, std::vector<MixerTrack> tracks = {})
+    static Project make (std::vector<Channel> input, int loopLengthTicks, std::vector<MixerTrack> tracks = {},
+                         std::array<EffectSlot, kSlotsPerTrack> masterSlots = {})
     {
         Project p;
         p.lengthTicks = std::max (1, loopLengthTicks);
@@ -122,7 +124,11 @@ struct Project
                 slot = slot.sanitised();
         }
 
+        for (auto& slot : masterSlots)
+            slot = slot.sanitised();
+
         p.channels = std::move (input);
+        p.masterSlots = masterSlots;
         p.tracks = std::move (tracks);
         return p;
     }

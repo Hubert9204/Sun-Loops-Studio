@@ -16,6 +16,7 @@
 #include "audio/BufferTuning.h"
 #include "audio/BuiltinSamples.h"
 #include "audio/Effects.h"
+#include "audio/MixerRouting.h"
 #include "audio/LiveNotes.h"
 #include "audio/OfflineRenderer.h"
 #include "audio/Player.h"
@@ -1703,6 +1704,9 @@ bool sameDocument (const sls::ProjectDocument& a, const sls::ProjectDocument& b)
             if (! (x.slots[s].sanitised() == y.slots[s].sanitised()))
                 return false;
     }
+    for (size_t s = 0; s < a.masterSlots.size(); ++s)
+        if (! (a.masterSlots[s].sanitised() == b.masterSlots[s].sanitised()))
+            return false;
     for (size_t p = 0; p < a.arrangement.patterns.size(); ++p)
     {
         const auto &x = a.arrangement.patterns[p], &y = b.arrangement.patterns[p];
@@ -1757,6 +1761,10 @@ sls::ProjectDocument richDocument()
     d.tracks[2].slots[2].bypass = true;
     d.tracks[2].slots[2].params[0] = -33.5f;
     d.tracks[5].solo = true;
+    d.masterSlots[1] = sls::EffectSlot::make (sls::EffectType::Equalizer);
+    d.masterSlots[1].params[1] = 4.5f;
+    d.masterSlots[3] = sls::EffectSlot::make (sls::EffectType::Compressor);
+    d.masterSlots[3].bypass = true;
 
     d.arrangement.patterns.resize (2);
     d.arrangement.patterns[0].name = "Intro";
@@ -1793,6 +1801,20 @@ void testProjectFile()
         check (back.document.has_value() && back.document->channels[0].pitch == 0.1f && back.document->masterVolume == 0.37f
                    && back.document->tracks[2].slots[2].params[0] == -33.5f,
                "floating-point values come back bit for bit");
+    }
+    {
+        const auto doc = richDocument();
+        const auto back = sls::ProjectDocument::fromJson (doc.toJson());
+        check (back.document.has_value() && back.document->masterSlots[1].type == sls::EffectType::Equalizer
+                   && back.document->masterSlots[1].params[1] == 4.5f && back.document->masterSlots[3].bypass
+                   && back.document->masterSlots[0].type == sls::EffectType::None,
+               "the master bus effects survive a round trip");
+
+        auto v = juce::JSON::parse (doc.toJson());
+        v.getDynamicObject()->removeProperty ("master");
+        const auto old = sls::ProjectDocument::fromJson (juce::JSON::toString (v));
+        check (old.document.has_value() && old.warnings.empty() && old.document->masterSlots[1].type == sls::EffectType::None,
+               "a project from before master effects opens, with an empty master chain");
     }
     {
         const auto blank = sls::ProjectDocument::blank();
@@ -2061,6 +2083,146 @@ void testBufferTuning()
     }
 }
 
+void testMasterEffectsAndRouting()
+{
+    std::cout << "Master effects and track assignment\n";
+    const std::vector<sls::Note> a4 { { 69, 0, kBeat, 0.8f } };
+
+    auto withMaster = [&] (const sls::EffectSlot& slot, size_t index = 1)
+    {
+        std::array<sls::EffectSlot, sls::kSlotsPerTrack> master {};
+        master[index] = slot;
+        return sls::renderToBuffer (sls::Project::make ({ synthChannel (a4) }, 4 * kBeat, {}, master), {});
+    };
+
+    const auto dry = withMaster (sls::EffectSlot {});
+    const auto wet = withMaster (slotWith (sls::EffectType::Delay, { 250.0f, 0.7f, 1.0f, 0.5f }));
+    check (peakOf (dry.getReadPointer (0), 40000, 144000) == 0.0f, "reference: without master effects the note ends in silence");
+    check (peakOf (wet.getReadPointer (0), 48000, 70000) > 0.003f, "a delay in a master slot keeps sounding after the note has ended");
+
+    auto bypassed = slotWith (sls::EffectType::Delay, { 250.0f, 0.7f, 1.0f, 0.5f });
+    bypassed.bypass = true;
+    const auto byp = withMaster (bypassed);
+    bool same = true;
+    for (int i = 0; i < dry.getNumSamples(); ++i)
+        same = same && dry.getReadPointer (0)[i] == byp.getReadPointer (0)[i] && dry.getReadPointer (1)[i] == byp.getReadPointer (1)[i];
+    check (same, "a bypassed master slot leaves the sound untouched");
+
+    const auto comp = withMaster (slotWith (sls::EffectType::Compressor, { -30.0f, 20.0f, 1.0f, 100.0f, 0.0f }));
+    check (peakOf (comp.getReadPointer (0), 4800, 24000) < 0.6f * peakOf (dry.getReadPointer (0), 4800, 24000),
+           "a compressor on the master reduces the level of the whole mix");
+
+    // the master chain acts on the sum: two channels on different tracks are compressed together
+    {
+        auto a = synthChannel (a4), b = synthChannel (a4);
+        b.mixerTrack = 3;
+        std::array<sls::EffectSlot, sls::kSlotsPerTrack> master {};
+        master[0] = slotWith (sls::EffectType::Compressor, { -30.0f, 20.0f, 1.0f, 100.0f, 0.0f });
+        const auto two = sls::renderToBuffer (sls::Project::make ({ a, b }, 4 * kBeat, {}, master), {});
+        const auto twoDry = sls::renderToBuffer (sls::Project::make ({ a, b }, 4 * kBeat), {});
+        check (peakOf (two.getReadPointer (0), 4800, 24000) < 0.6f * peakOf (twoDry.getReadPointer (0), 4800, 24000),
+               "the master chain processes the sum of every track");
+    }
+
+    // hostile slots are sanitised like track slots
+    {
+        sls::EffectSlot bad;
+        bad.type = sls::EffectType::Reverb;
+        bad.params[0] = std::nanf ("");
+        bad.params[1] = 1.0e30f;
+        const auto out = withMaster (bad, 3);
+        bool finite = true;
+        for (int i = 0; i < out.getNumSamples(); ++i)
+            finite = finite && std::isfinite (out.getReadPointer (0)[i]);
+        check (finite, "NaN and out-of-range parameters in a master slot give finite output");
+    }
+
+    // real-time safety with a full master chain
+    {
+        std::vector<sls::Note> notes;
+        for (int i = 0; i < 64; ++i)
+            notes.push_back ({ 48 + i % 24, i * 100, 300, 0.7f });
+        std::array<sls::EffectSlot, sls::kSlotsPerTrack> master {};
+        master[0] = sls::EffectSlot::make (sls::EffectType::Equalizer);
+        master[1] = sls::EffectSlot::make (sls::EffectType::Reverb);
+        master[2] = sls::EffectSlot::make (sls::EffectType::Delay);
+        master[3] = sls::EffectSlot::make (sls::EffectType::Compressor);
+        const auto project = sls::Project::make ({ synthChannel (notes) }, 4 * kBeat, {}, master);
+
+        sls::Player player;
+        player.prepare (kSr);
+        std::vector<float> l (256), r (256);
+        float* ch[2] = { l.data(), r.data() };
+        gAllocs = 0;
+        gCounting = true;
+        for (int i = 0; i < 2000; ++i)
+            player.render (project, 140.0, true, ch, 2, 256);
+        gCounting = false;
+        check (gAllocs.load() == 0, "Player::render performs no heap allocation with a full master chain (2000 blocks)");
+    }
+
+    // removing a master effect while its tail rings stops the tail at once
+    {
+        std::array<sls::EffectSlot, sls::kSlotsPerTrack> master {};
+        master[0] = sls::EffectSlot::make (sls::EffectType::Reverb);
+        auto project = sls::Project::make ({ synthChannel (a4) }, 4 * kBeat, {}, master);
+        sls::Player player;
+        player.prepare (kSr);
+        std::vector<float> l (480), r (480);
+        float* ch[2] = { l.data(), r.data() };
+        for (int i = 0; i < 20; ++i)
+            player.render (project, 120.0, true, ch, 2, 480);
+        for (int i = 0; i < 30; ++i)
+        {
+            std::fill (l.begin(), l.end(), 0.0f);
+            std::fill (r.begin(), r.end(), 0.0f);
+            player.render (project, 120.0, false, ch, 2, 480);
+        }
+        check (peakOf (l.data(), 0, 480) > 1.0e-4f, "precondition: the master reverb tail rings on");
+        project.masterSlots[0] = sls::EffectSlot {};
+        project.revision = 99;
+        std::fill (l.begin(), l.end(), 0.0f);
+        std::fill (r.begin(), r.end(), 0.0f);
+        player.render (project, 120.0, false, ch, 2, 480);
+        check (peakOf (l.data(), 0, 480) == 0.0f, "removing a master effect stops its tail at once");
+    }
+
+    // pattern and song compilation carry the master chain
+    {
+        sls::Arrangement arrangement;
+        arrangement.ensureChannelCount (1);
+        std::array<sls::EffectSlot, sls::kSlotsPerTrack> master {};
+        master[2] = sls::EffectSlot::make (sls::EffectType::Delay);
+        const auto pat = sls::compilePattern ({ synthChannel (a4) }, arrangement, 0, {}, master);
+        const auto song = sls::compileSong ({ synthChannel (a4) }, arrangement, {}, master);
+        check (pat.masterSlots[2].type == sls::EffectType::Delay && song.masterSlots[2].type == sls::EffectType::Delay
+                   && pat.masterSlots[0].type == sls::EffectType::None,
+               "pattern and song projects carry the master effects");
+    }
+
+    // track assignment
+    {
+        std::vector<sls::Channel> ch (4);
+        for (size_t i = 0; i < ch.size(); ++i)
+            ch[i].mixerTrack = static_cast<int> (i);
+        check (sls::firstFreeTrack (ch) == 4 && sls::isTrackFree (ch, 4) && ! sls::isTrackFree (ch, 2),
+               "four channels on tracks 1-4: the first free track is 5");
+        check (sls::isTrackFree (ch, 2, 2) && sls::firstFreeTrack (ch, 2) == 2,
+               "a channel's own track counts as free for that channel");
+        ch[1].mixerTrack = 0;
+        check (sls::firstFreeTrack (ch) == 1 && sls::channelsPerTrack (ch)[0] == 2, "two channels can share a track; the vacated one is free");
+        ch.resize (8);
+        for (size_t i = 0; i < ch.size(); ++i)
+            ch[i].mixerTrack = static_cast<int> (i);
+        check (sls::firstFreeTrack (ch) == -1 && sls::firstFreeTrack (ch, 5) == 5, "no free track when all eight are used (unless one channel is ignored)");
+        ch[0].mixerTrack = 99;
+        ch[1].mixerTrack = -4;
+        const auto count = sls::channelsPerTrack (ch);
+        check (count[7] == 2 && count[0] == 1 && ! sls::isTrackFree (ch, -1) && ! sls::isTrackFree (ch, 8),
+               "out-of-range track numbers are clamped; asking about a track that does not exist is not 'free'");
+    }
+}
+
 int main()
 {
     testProjectModel();
@@ -2089,6 +2251,7 @@ int main()
     testLiveNotes();
     testProjectFile();
     testBufferTuning();
+    testMasterEffectsAndRouting();
 
     std::cout << "\n" << (failures == 0 ? "ALL TESTS PASSED" : "SOME TESTS FAILED") << " (" << failures << " failures)\n";
     return failures == 0 ? 0 : 1;

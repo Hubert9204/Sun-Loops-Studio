@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <optional>
 #include <string>
 #include <vector>
@@ -25,6 +26,7 @@ struct ProjectDocument
     std::vector<Channel> channels;           // 1..kMaxChannels; `notes` and `sample` are empty (see below)
     std::vector<std::string> sampleSources;  // one per channel: "builtin:<id>", an absolute path, or empty
     std::vector<MixerTrack> tracks;          // exactly kMaxTracks
+    std::array<EffectSlot, kSlotsPerTrack> masterSlots {}; // effects on the master bus
     Arrangement arrangement;                 // the notes of every pattern live here
     int currentPattern = 0;
     bool songMode = false;

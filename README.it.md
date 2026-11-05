@@ -14,7 +14,7 @@ strumento sta in un pannello mobile che puoi spostare, ridimensionare, sovrappor
 Sun Loops Studio si ispira al modo di lavorare dei DAW a loop come FL Studio. È un progetto indipendente: non usa
 codice, nomi, grafica o risorse di altri prodotti e non è affiliato né approvato dai loro produttori.
 
-**Stato: alpha (0.6.1).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
+**Stato: alpha (0.7.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
 La riproduzione è stata confermata su un vero PC Nobara per la versione 0.3; tutto ciò che è stato aggiunto dopo
 (pannelli, pattern, playlist, browser, pitch/swing, mixer espanso ed effetti, salvataggio dei progetti, AppImage) è stato provato con test automatici e
 in un display virtuale con un dispositivo audio muto, non ancora con audio reale. **L'hosting di plugin VST3 non è
@@ -34,15 +34,15 @@ cosa manca (hosting VST3 e annulla/ripristina sono le mancanze principali).
 - **Channel Rack** - fino a 8 canali, ognuno synth o sampler. Sequencer a step da 16esimi sui canali sampler,
   anteprima delle note sui canali synth. Per canale: volume, pan, manopola **Pitch** (semitoni), manopola **Swing** e
   un display **Track N** che manda il canale a una traccia del mixer. Tasto destro su un canale: *Piano roll*,
-  *Instrument*, *Load sample...*, *Rename...*, *Save as preset...*.
+  *Instrument*, *Load sample...*, *Rename...*, *Assign free mixer track*, *Save as preset...*.
 - **Piano Roll** - per il canale selezionato: clic per aggiungere una nota, trascina per spostarla, trascina il bordo
   destro per ridimensionarla, tasto destro per eliminarla, scorrimento e zoom. Si apre da un canale (menu o doppio
   clic), come in FL Studio.
 - **Pattern e Playlist** - più pattern (nuovi o copiati) disposti come clip su 8 tracce. Il pulsante *Pattern / Song*
   sceglie se ripetere il pattern selezionato o suonare tutta la playlist.
 - **Mixer** (`F9`) - 8 tracce verticali, ognuna con fader e dB, bilanciamento stereo, mute, solo, indicatore
-  Peak/RMS e 4 slot per effetti in serie (Equalizer, Reverb, Delay, Compressor, con bypass). A destra c'è la strip
-  master. Più canali possono usare la stessa traccia.
+  Peak/RMS e 4 slot per effetti in serie (Equalizer, Reverb, Delay, Compressor, con bypass). La strip master a destra
+  ha gli stessi 4 slot, applicati a tutto il mix. Più canali possono usare la stessa traccia.
 - **Sampler** - carica file WAV, FLAC, OGG e AIFF (fino a 30 s), li suona una volta sola, ritonati in base alla nota.
   Cassa, rullante e hi-hat sono sintetizzati: non servono file per iniziare.
 - **Progetti** - menu `File` e `Ctrl+N` / `Ctrl+O` / `Ctrl+S` / `Ctrl+Maiusc+S`: *Save* scrive un progetto con nome;

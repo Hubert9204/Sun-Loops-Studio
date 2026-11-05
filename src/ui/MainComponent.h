@@ -61,6 +61,8 @@ private:
     void selectChannel (int index);
     void setPlaying (bool shouldPlay);
     void openAudioSettings();
+    void openAssignTrack (int channelIndex);                 // the "Assign free mixer track" window
+    void assignChannelToTrack (int channelIndex, int track); // puts the instrument on that mixer track
     void exportWav();
     void chooseSampleFor (int channelIndex);
     bool loadSampleFile (int channelIndex, const juce::File& file);
@@ -116,6 +118,7 @@ private:
     // Source of truth for the UI. Never resized after construction, so the strips can hold references.
     std::vector<Channel> channels;
     std::vector<MixerTrack> tracks = Project::defaultTracks(); // the mixer: kMaxTracks tracks with their effect chains
+    MixerTrack masterTrack;                                    // only its `slots` are used: the master bus's effect chain
     std::vector<std::unique_ptr<ChannelStrip>> strips;
     int selected = 0;
 
@@ -151,6 +154,7 @@ private:
 
     std::unique_ptr<juce::PropertiesFile> settings;
     juce::Component::SafePointer<juce::DialogWindow> audioDialog;
+    juce::Component::SafePointer<juce::DialogWindow> assignDialog;
     bool restoringLayout = false;
 
     juce::TextButton fileButton { "File" };

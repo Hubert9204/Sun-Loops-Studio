@@ -152,6 +152,7 @@ Una riga per canale: un display **Track N** e il nome, **M** (mute), **S** (solo
 | Instrument > Synth / Sampler | Sceglie cosa produce il suono. Passando a Sampler su un canale senza sample ne viene chiesto uno. Il sample resta se torni a Synth. |
 | Load sample... | Scegli un file WAV, FLAC, OGG o AIFF (si usano i primi 30 secondi). Il canale prende il nome del file. |
 | Rename... | Fino a 16 caratteri. |
+| Assign free mixer track | Apre una finestra con le 8 tracce del mixer: quelle libere (senza strumenti) in verde, le altre con gli strumenti che ci sono sopra, e quella attuale segnata. La prima traccia libera è già selezionata; **Select first free track** la riseleziona, oppure scegli una traccia qualsiasi (condividerla è permesso), poi **Assign** (o Invio; Esc annulla). Il display **Track N** del canale e il mixer si aggiornano, e il mixer seleziona quella traccia. |
 | Save as preset... | Chiede un nome e scrive un file `.slspreset` (strumento, sample, volume, pan, pitch, swing; non le note) in `~/Music/Sun Loops Studio/Presets`; compare subito nella cartella Presets del browser. |
 
 Anche il doppio clic sull'anteprima delle note di un canale synth, o sul nome di un qualsiasi canale, apre il suo
@@ -234,7 +235,9 @@ Premi **F9** o il pulsante **Mixer F9**. Il Mixer si apre grande sopra gli altri
 8 **tracce** verticali, la strip **master** a destra e il **pannello effetti** della traccia selezionata.
 
 Percorso del suono: ogni canale va alla traccia scelta con il suo display **Track N** (più canali possono condividerne
-una), poi attraversa i quattro slot effetti della traccia, poi fader e bilanciamento della traccia, poi il master.
+una; oppure usa *Assign free mixer track* nel menu del tasto destro del canale), poi attraversa i quattro slot effetti
+della traccia, poi fader e bilanciamento della traccia; la somma di tutte le tracce passa poi dai quattro slot effetti
+del master e dal fader master.
 
 Ogni traccia, dall'alto in basso:
 
@@ -267,8 +270,17 @@ slot selezionato.
 Sono effetti propri di Sun Loops Studio. **I plugin VST3 non si possono ancora caricare negli slot**: il menu dello slot
 mostra una voce "VST3 plugin..." in grigio come promemoria.
 
+### Effetti sul master
+
+La **strip master** (a destra delle tracce) ha gli stessi quattro slot effetti di una traccia. Clicca uno slot per
+scegliere un effetto (Equalizer, Reverb, Delay, Compressor); cliccando la strip o uno slot lo vedi nel pannello
+effetti, intitolato *Effects - Master*. La catena master elabora la **somma di tutte le tracce**, in ordine, **prima
+del fader master** e del limitatore morbido finale, quindi un compressore o un equalizzatore lì modella tutto il mix,
+e il WAV esportato lo include. Serve per compressione di insieme, un EQ finale o un filo di riverbero su tutto. Gli
+slot si possono escludere (bypass) o rimuovere come quelli di una traccia, e la catena viene salvata nel progetto.
+
 Il volume master è il cursore della barra degli strumenti e il fader master è lo stesso controllo. La strip master ha un
-indicatore e nessun effetto.
+indicatore.
 
 ## Esportazione
 
@@ -315,7 +327,7 @@ occupato più tardi, un brano più pesante o un mixer pieno di effetti possono r
 
 - Fino a 8 canali, 8 tracce del mixer con 4 slot effetti ciascuna, 64 pattern, 8 tracce di playlist, una linea del
   tempo lunga 32 pattern, 32 voci simultanee.
-- Gli effetti usano circa 16 MB di memoria a 48 kHz (di più a frequenze di campionamento maggiori).
+- Gli effetti usano circa 18 MB di memoria a 48 kHz (di più a frequenze di campionamento maggiori).
 - Un pattern dura sempre due battute, 4/4, griglia di sedicesimi.
 - I sample sono mono o stereo, al massimo 30 secondi, suonati una volta sola (niente loop né editing
   dell'inviluppo).

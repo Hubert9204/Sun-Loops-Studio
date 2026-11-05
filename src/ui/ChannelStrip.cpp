@@ -358,6 +358,7 @@ void ChannelStrip::showContextMenu()
     menu.addItem (4, "Load sample...", channel.instrument == Instrument::Sampler);
     menu.addItem (5, "Rename...");
     menu.addSeparator();
+    menu.addItem (7, "Assign free mixer track");
     menu.addItem (6, "Save as preset...");
 
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
@@ -375,6 +376,7 @@ void ChannelStrip::showContextMenu()
                                 case 4: if (safe->onLoadSample) safe->onLoadSample (i); break;
                                 case 5: if (safe->onRename) safe->onRename (i); break;
                                 case 6: if (safe->onSavePreset) safe->onSavePreset (i); break;
+                                case 7: if (safe->onAssignTrack) safe->onAssignTrack (i); break;
                                 default: break;
                             }
                         });

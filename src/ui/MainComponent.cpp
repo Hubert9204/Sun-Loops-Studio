@@ -1,5 +1,6 @@
 #include "ui/MainComponent.h"
 
+#include "ui/AssignTrackDialog.h"
 #include "ui/AudioSettings.h"
 
 #include <functional>
@@ -174,6 +175,7 @@ MainComponent::MainComponent()
     rackView.onItemDroppedOnEmptyArea = [this] (const drag::Item& item) { applyBrowserItem (-1, item); };
 
     mixerPanel.setTracks (tracks);
+    mixerPanel.setMaster (masterTrack);
     mixerPanel.onTrackChanged = [this] (int) { publishProject(); };
     mixerPanel.onMasterVolumeChanged = [this] (double v) { volumeSlider.setValue (v); }; // the slider drives the engine
     updateTrackRouting();
@@ -349,6 +351,7 @@ MainComponent::~MainComponent()
     stopTimer();
     engine.getDeviceManager().removeChangeListener (this);
     audioDialog.deleteAndZero(); // it refers to the engine
+    assignDialog.deleteAndZero();
     saveLayout();
     if (pluginScanThread != nullptr)
         pluginScanThread->stopThread (5000);
@@ -601,6 +604,7 @@ void MainComponent::createStrip (size_t channelIndex)
         publishProject();
     };
     strip->onSavePreset = [this] (int idx) { savePresetFor (idx); };
+    strip->onAssignTrack = [this] (int idx) { openAssignTrack (idx); };
     strip->onItemDropped = [this] (int idx, const drag::Item& item) { applyBrowserItem (idx, item); };
     strip->onLoadSample = [this] (int idx) { chooseSampleFor (idx); };
     strip->onOpenPianoRoll = [this] (int idx) { openPianoRoll (idx); };
@@ -764,8 +768,8 @@ void MainComponent::setSongMode (bool shouldPlaySong)
 Project MainComponent::compileCurrent()
 {
     commitCurrentPattern();
-    return songMode ? compileSong (channels, arrangement, tracks)
-                    : compilePattern (channels, arrangement, currentPattern, tracks);
+    return songMode ? compileSong (channels, arrangement, tracks, masterTrack.slots)
+                    : compilePattern (channels, arrangement, currentPattern, tracks, masterTrack.slots);
 }
 
 // ------------------------------------------------------------------------- Project
@@ -813,6 +817,48 @@ void MainComponent::openAudioSettings()
     options.useNativeTitleBar = true;
     options.resizable = false;
     audioDialog = options.launchAsync();
+}
+
+void MainComponent::openAssignTrack (int channelIndex)
+{
+    if (channelIndex < 0 || channelIndex >= static_cast<int> (channels.size()) || assignDialog != nullptr)
+        return;
+
+    juce::DialogWindow::LaunchOptions options;
+    options.content.setOwned (new AssignTrackComponent (channels, channelIndex,
+                                                        [safe = juce::Component::SafePointer<MainComponent> (this), channelIndex] (int track)
+                                                        {
+                                                            if (safe != nullptr)
+                                                                safe->assignChannelToTrack (channelIndex, track);
+                                                        }));
+    options.dialogTitle = "Assign free mixer track - " + juce::String (channels[static_cast<size_t> (channelIndex)].name);
+    options.componentToCentreAround = this;
+    options.dialogBackgroundColour = juce::Colour (0xff2a2d34);
+    options.useNativeTitleBar = true;
+    options.resizable = false;
+    assignDialog = options.launchAsync();
+}
+
+void MainComponent::assignChannelToTrack (int channelIndex, int track)
+{
+    if (channelIndex < 0 || channelIndex >= static_cast<int> (channels.size()) || track < 0 || track >= kMaxTracks)
+        return;
+
+    auto& channel = channels[static_cast<size_t> (channelIndex)];
+    if (channel.mixerTrack == track)
+    {
+        statusLabel.setText (juce::String (channel.name) + " is already on mixer track " + juce::String (track + 1),
+                             juce::dontSendNotification);
+        return;
+    }
+
+    channel.mixerTrack = track;
+    strips[static_cast<size_t> (channelIndex)]->refreshFromChannel(); // the Track N display
+    updateTrackRouting();
+    mixerPanel.setSelectedTrack (track);
+    statusLabel.setText (juce::String (channel.name) + " now plays through mixer track " + juce::String (track + 1),
+                         juce::dontSendNotification);
+    publishProject();
 }
 
 void MainComponent::changeListenerCallback (juce::ChangeBroadcaster*)
@@ -1171,6 +1217,7 @@ ProjectDocument MainComponent::makeDocument()
         c.sample = nullptr;
     }
     doc.tracks = tracks;
+    doc.masterSlots = masterTrack.slots;
     doc.arrangement = arrangement;
     doc.currentPattern = currentPattern;
     doc.songMode = songMode;
@@ -1225,6 +1272,7 @@ void MainComponent::applyDocument (ProjectDocument doc, const juce::File& file, 
 
     for (size_t t = 0; t < tracks.size() && t < doc.tracks.size(); ++t)
         tracks[t] = doc.tracks[t]; // in place: the mixer strips refer to these objects
+    masterTrack.slots = doc.masterSlots;
 
     arrangement = std::move (doc.arrangement);
     arrangement.patternTicks = kLoopTicks;
@@ -1245,6 +1293,7 @@ void MainComponent::applyDocument (ProjectDocument doc, const juce::File& file, 
 
     for (int t = 0; t < kMaxTracks; ++t)
         mixerPanel.refreshTrack (t);
+    mixerPanel.refreshTrack (kMasterIndex);
 
     bpmSlider.setValue (doc.bpm, juce::dontSendNotification);
     engine.setBpm (doc.bpm);

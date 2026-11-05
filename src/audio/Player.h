@@ -10,7 +10,7 @@
 
 namespace sls
 {
-// Sequencer + synth + sampler + mixer (channels -> mixer tracks -> insert effects -> fader -> master). Single-threaded: the caller (audio
+// Sequencer + synth + sampler + mixer (channels -> mixer tracks -> insert effects -> fader -> master effects -> soft limiter). Single-threaded: the caller (audio
 // callback or offline renderer) owns it. render() never allocates, locks or does I/O.
 class Player
 {
@@ -93,6 +93,7 @@ private:
     std::array<float, kMaxTracks> trackPeaks {};
     std::array<float, kMaxTracks> trackMeanSquare {};
     std::array<std::array<EffectUnit, kSlotsPerTrack>, kMaxTracks> effects;
+    std::array<EffectUnit, kSlotsPerTrack> masterEffects; // on the master bus
     float rmsCoef = 0.0001f;
 
     double sampleRate = 48000.0;

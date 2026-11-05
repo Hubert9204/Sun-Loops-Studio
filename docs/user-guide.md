@@ -148,6 +148,7 @@ One row per channel: a **Track N** display and the name, **M** (mute), **S** (so
 | Instrument > Synth / Sampler | Chooses what makes the sound. Switching to Sampler on a channel without a sample asks for one. The sample is kept if you switch back to Synth. |
 | Load sample... | Pick a WAV, FLAC, OGG or AIFF file (the first 30 seconds are used). The channel is renamed after the file. |
 | Rename... | Up to 16 characters. |
+| Assign free mixer track | Opens a window listing the 8 mixer tracks: free ones (no instrument on them) in green, the others with the instruments that are on them, and the current one marked. The first free track is selected for you; **Select first free track** picks it again, or choose any track (sharing one is allowed), then **Assign** (or Return; Escape cancels). The channel's **Track N** display and the mixer follow, and the mixer selects that track. |
 | Save as preset... | Asks for a name and writes a `.slspreset` file (instrument, sample, volume, pan, pitch, swing; not the notes) into `~/Music/Sun Loops Studio/Presets`; it appears in the browser's Presets folder at once. |
 
 Double-clicking a synth channel's note preview, or the name of any channel, also opens its Piano Roll. On sampler
@@ -227,7 +228,9 @@ Press **F9** or the **Mixer F9** button. The Mixer opens large over the other pa
 It has 8 vertical **tracks**, a **master** strip on the right and the **effects panel** of the selected track.
 
 Sound path: each channel goes to the mixer track chosen with its **Track N** display (several channels can share
-one), then through the track's four effect slots, then the track fader and balance, then the master.
+one; or use *Assign free mixer track* in the channel's right-click menu), then through the track's four effect slots,
+then the track fader and balance, then the sum of all tracks goes through the master's four effect slots and the
+master fader.
 
 Each track, from top to bottom:
 
@@ -259,8 +262,16 @@ a power button per slot (bypass) and a slider per parameter of the selected slot
 These are Sun Loops Studio's own effects. **VST3 plugins cannot be loaded into the slots yet**: the slot menu shows
 a greyed-out "VST3 plugin..." entry as a reminder.
 
-The master volume is the toolbar slider and the master fader is the same control. The master strip has a meter and
-no effects.
+### Master effects
+
+The **master strip** (right of the tracks) has the same four effect slots as a track. Click a slot to pick an effect
+(Equalizer, Reverb, Delay, Compressor); click the strip or a slot to show it in the effects panel, which is titled
+*Effects - Master*. The master chain processes the **sum of all tracks**, in order, **before the master fader** and
+the final soft limiter, so a compressor or equalizer there shapes the whole mix, and the exported WAV includes it. Use
+it for glue compression, a final EQ, or a touch of reverb on everything. Slots can be bypassed or removed like those
+on a track, and the chain is saved in the project.
+
+The master volume is the toolbar slider and the master fader is the same control. The master strip has a meter.
 
 ## Export
 
@@ -304,7 +315,7 @@ a heavier song or a plugin-heavy mixer can still need a bigger size.
 
 - Up to 8 channels, 8 mixer tracks with 4 effect slots each, 64 patterns, 8 playlist tracks, a 32-pattern-long
   timeline, 32 simultaneous voices.
-- The effects use about 16 MB of memory at 48 kHz (more at higher sample rates).
+- The effects use about 18 MB of memory at 48 kHz (more at higher sample rates).
 - A pattern is always two bars long, 4/4, 16th-note grid.
 - Samples are mono or stereo, at most 30 seconds, played one-shot (no looping, no envelope editing).
 - Not available yet: playing notes from the computer keyboard or a MIDI keyboard, undo, embedding samples in the project, automatic saving and crash recovery, VST plugins as instruments or effects, sends and master effects, automation, MIDI input and

@@ -63,6 +63,7 @@ public:
     std::function<void (int, Instrument)> onInstrumentChosen; // context menu "Instrument"
     std::function<void (int)> onRename;        // context menu "Rename..."
     std::function<void (int)> onSavePreset;    // context menu "Save as preset..."
+    std::function<void (int)> onAssignTrack;   // context menu "Assign free mixer track"
     std::function<void (int, const drag::Item&)> onItemDropped; // something was dropped from the browser
 
     void paint (juce::Graphics&) override;

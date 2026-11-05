@@ -2,6 +2,22 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.7.0 - 2026-11-05
+
+### Added
+- **Effects on the master.** The master strip now has four effect slots like a track (Equalizer, Reverb, Delay,
+  Compressor, each with bypass and its parameters in the effects panel, titled *Effects - Master*). The chain processes
+  the sum of all tracks, before the master fader and the soft limiter, so it also shapes the exported WAV. It is saved
+  in the project (`"master"` in the `.slsproj`; older files open with an empty chain).
+- **Assign free mixer track** in a channel's right-click menu. It opens a window listing the 8 mixer tracks (free ones
+  marked, the others with the instruments on them, the current one marked) with the first free track selected; **Assign**
+  puts the instrument on the chosen track. The Track display, the mixer and the project's changed marker follow.
+- Engine: `Project::masterSlots`, `Player::masterEffects`; `MixerRouting.h` (free-track helpers).
+- Tests: 17 new checks (280 in total).
+
+### Changed
+- Effects memory grows to about 18 MB at 48 kHz (the master chain adds four units).
+
 ## 0.6.1 - 2026-11-05
 
 ### Added

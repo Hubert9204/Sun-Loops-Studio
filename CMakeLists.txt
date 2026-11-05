@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(SunLoopsStudio VERSION 0.6.1 LANGUAGES C CXX)
+project(SunLoopsStudio VERSION 0.7.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -51,6 +51,7 @@ target_sources(SunLoopsStudio PRIVATE
     src/audio/AudioEngine.cpp
     src/ui/AudioMeter.cpp
     src/ui/AudioSettings.cpp
+    src/ui/AssignTrackDialog.cpp
     src/ui/VuMeter.cpp
     src/ui/Knob.cpp
     src/ui/FileBrowser.cpp

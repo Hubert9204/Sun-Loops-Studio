@@ -1,6 +1,6 @@
 # Status and roadmap
 
-Version 0.6.1 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
+Version 0.7.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
 what is missing. If something here disagrees with the program, the program is right: please fix the page.
 
 ## What has been verified, and how
@@ -22,6 +22,8 @@ what is missing. If something here disagrees with the program, the program is ri
 | AppImage: `scripts/build_appimage.sh` builds `dist/Sun-Loops-Studio-0.6.0-x86_64.AppImage` (5 MB); started with `--appimage-extract-and-run` in a virtual display, it opened a project given on the command line (title and panels correct) | Built on Ubuntu 24.04 (glibc 2.39), run in a virtual display with a silent audio device | Worked |
 | Buffer size: the `BufferTuner` search and the clean-trial rule (all paths: fast and slow computers, flaky sizes, nothing clean, bad input) | Automated headless tests (263 checks in total) and mutation checks (ignoring dropped blocks, accepting a single clean trial: each made tests fail) | All pass |
 | Buffer size in the interface: default 1024 on a fresh profile; the menu switching to 256 and back (device restarts, status line and delay label follow); the choice still there after a restart; Auto testing 256 then 512 with the song playing and extra load (the load read-out showed 35 % during the test and 0 % after), choosing 512 and listing what it tested; Cancel and closing the window mid-test restoring the old size and stopping the song again; closing the program with the dialog open | Manual, in a virtual display with a window manager and a silent (ALSA `null`) device | Worked |
+| Master effects: a delay tail on the master, bypass, a compressor acting on the sum of two tracks, hostile parameters, no allocation with a full chain over 2000 blocks, removing an effect stops its tail, pattern/song compilation, project round trip and an old file without a master chain; the track-assignment helpers | Automated headless tests (280 checks in total) and a mutation check (removing the master processing made 5 checks fail) | All pass |
+| Master effects and track assignment in the interface: the master strip's four slots line up with the tracks and open the effect menu; Compressor and Equalizer added to the master and shown as *Effects - Master* with their parameters; saved, and found again after reopening the file; the right-click menu entry; the window listing tracks (free ones in green, current marked), first free track preselected; choosing track 8 and Assign moved the instrument (Track display, mixer routing text, status line, track selected, project marked as changed) | Manual, in a virtual display with a window manager and a silent device | Worked |
 | A use-after-free when clicking an item that rebuilds the browser tree (crash on *Scan for VST3 plugins...*) | Found in that manual session | Fixed (item actions are deferred); the same click was repeated afterwards |
 
 ## What has not been verified
@@ -49,11 +51,12 @@ what is missing. If something here disagrees with the program, the program is ri
   with a computer that actually struggles. If 1024 is not enough, try a bigger size and tell us what **Audio...** shows
   (load, busiest block, dropped blocks). Whether PipeWire's ALSA layer reports every dropout is also unchecked; Auto
   says so when the count is unavailable.
+- **How the master effects sound.** Only measured (levels, tails, bypass) and seen, not listened to on real hardware. The master chain was not checked in an exported WAV by ear.
 - **Dragging files from the desktop file manager** onto the program: not implemented (drags from the in-app browser
   were verified only with simulated mouse events).
 - **Typing in the "Save as preset" name box** was not tested (the virtual display had no window manager, so dialogs
   do not receive keyboard focus); saving and loading presets is covered by the tests.
-- **Memory of the effects**: about 16 MB at 48 kHz (8 tracks x 4 slots), more at higher sample rates; not measured
+- **Memory of the effects**: about 18 MB at 48 kHz (8 tracks + master, 4 slots each), more at higher sample rates; not measured
   on a real device.
 - **Latency.** The program shows what the device reports; it has never been measured.
 - **The installed menu entry on KDE** (the file is installed and well-formed, but it was not seen in a real menu).
@@ -70,7 +73,7 @@ what is missing. If something here disagrees with the program, the program is ri
 | VST3 plugins | Plugins can be *scanned* (library code, no UI). Playing them as instruments or effects is not implemented: it needs plugin processing inside the audio thread, state saving, parameter handling and plugin editor windows. |
 | Undo / redo | Not implemented. |
 | VST3 effects in the mixer | The four slots per track hold built-in effects only. No third-party plugin can be loaded. |
-| Sends, groups, master effects, more than 8 mixer tracks | A channel goes to one of 8 tracks; the master strip has a fader and a meter only. No sends or sidechain, no effect on the master, no per-slot wet/dry beyond what each effect offers, no effect-chain presets. |
+| Sends, groups, more than 8 mixer tracks | A channel goes to one of 8 tracks; the master strip has a fader, a meter and four effect slots. No sends or sidechain, no per-slot wet/dry beyond what each effect offers, no effect-chain presets. |
 | Automation, MIDI input and recording | Not implemented. Notes can be played with the mouse on the piano roll keyboard only (not from the computer keyboard). |
 | Playlist seeking | Clicking the ruler does not move the playhead. |
 | Pattern deletion and renaming | Patterns are created and cloned only; clips cannot be re-pointed to another pattern. |
@@ -86,7 +89,7 @@ what is missing. If something here disagrees with the program, the program is ri
 2. **Project extras**: autosave and recovery, embedding samples, a project folder with its samples.
 3. **Playlist and pattern polish**: seeking from the ruler, pattern rename and delete, pattern length.
 4. **Continuous integration**: build and run the tests on every push (GitHub Actions on a Fedora container).
-5. **Mixer**: sends, master effects, effect-chain presets, a spectrum display.
+5. **Mixer**: sends, effect-chain presets, a spectrum display.
 6. **VST3 hosting**, instruments first, then effects in the existing mixer slots. This is the largest item and
    deserves its own design note.
 7. **Sampler improvements** (loop, envelope, trim), then automation and MIDI input.

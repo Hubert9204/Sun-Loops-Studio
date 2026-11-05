@@ -17,6 +17,7 @@ src/audio/                      No UI dependencies except JUCE audio types
   SnapshotExchange.h            Lock-free hand-over of snapshots from the UI thread to the audio thread
   Player.*                      Transport, synth and sampler voices, channels, mixer tracks and effects (real-time safe)
   AudioEngine.*                 Audio device, atomics (BPM, gain, play state, peaks, RMS, load), audio callback
+  MixerRouting.h                Which mixer tracks have channels on them / are free (plain C++)
   BufferTuning.h                Buffer size logic: clean-trial rule and the BufferTuner search (plain C++)
   OfflineRenderer.*             Renders a Project to a buffer or WAV file with the same Player
   BuiltinSamples.*              Synthesised kick, snare and hat
@@ -39,7 +40,8 @@ src/ui/
   PianoRoll.*                   Note editor
   PlaylistView.*                Playlist panel body
   AudioSettings.*               The Audio... dialog: device selector, buffer size menu, Auto, load read-out
-  MixerPanel.*                  Mixer panel body: track strips, master strip, effects panel
+  MixerPanel.*                  Mixer panel body: track strips, master strip (with its effect slots), effects panel
+  AssignTrackDialog.*           The "Assign free mixer track" window
   VuMeter.*                     Peak/RMS meter (mixer)
   AudioMeter.*                  Simple level meter (rack rows, toolbar)
 
@@ -129,16 +131,24 @@ voices -> channel (smoothed gain, equal-power pan, channel mute/solo)
        -> mixer track bus (Channel::mixerTrack, 0..7)
        -> insert chain: slot 1 -> 2 -> 3 -> 4   (EffectUnit::process, pre-fader)
        -> track fader (0..1.5, smoothed) x balance (centre = unity), track mute/solo
-       -> peak + RMS measurement -> master sum -> tanh -> master gain (AudioEngine)
+       -> peak + RMS measurement -> master sum
+       -> master insert chain: slot 1 -> 2 -> 3 -> 4   (Project::masterSlots, on the sum, before the master fader)
+       -> tanh -> master gain (AudioEngine)
 ```
 
 - `MixerTrack { name, volume, pan, mute, solo, slots[4] }`; `Project::make` always yields exactly 8 tracks and clamps
   every field. A `Project` that arrives with fewer tracks (older code, tests) is padded with defaults.
+- The master bus has its own chain, `Project::masterSlots` (4 `EffectSlot`s, sanitised in `Project::make` and passed through
+  `compilePattern` / `compileSong`), run by `Player::masterEffects` (4 more `EffectUnit`s, allocated in `prepare`). It
+  sits before the soft limiter and before the master volume, so the offline renderer and the export include it. The UI
+  keeps it in a `MixerTrack masterTrack` (only `slots` used) so the same `FxPanel` edits it; `kMasterIndex` (= `kMaxTracks`)
+  stands for the master wherever a track index is passed (`MixerPanel::setSelectedTrack`, `refreshTrack`, `onTrackChanged`).
+  The project file stores it as `"master": {"effects": [...]}`; files without it open with an empty chain.
 - Track mute/solo are separate from channel mute/solo. If any track is soloed, non-soloed tracks are silent.
 - `EffectSlot { type, bypass, params[5] }` is plain data inside the snapshot. `sanitised()` maps unknown types to
   empty, NaN/inf parameters to their defaults and clamps the rest, so a corrupt slot cannot reach the DSP.
 - `EffectUnit` is the DSP behind one slot. **All its memory (reverb combs and all-passes, a 1 s delay line) is
-  allocated in `Player::prepare`** for 8 x 4 = 32 units; about 0.5 MB each at 48 kHz, so ~16 MB, and proportionally
+  allocated in `Player::prepare`** for 9 x 4 = 36 units (8 tracks and the master); about 0.5 MB each at 48 kHz, so ~18 MB, and proportionally
   more at higher sample rates. `process` never allocates. If a slot's type changes the old state is dropped; a
   bypassed slot clears its state when it is switched on again, so no stale tail comes back.
 - Equalizer: low shelf 120 Hz, peaking mid (Q 0.8, frequency parameter), high shelf 6 kHz, as biquads; a band at 0 dB is
@@ -253,6 +263,11 @@ new `Project` after either changes. Changing a channel's track updates the "rout
 (`updateTrackRouting`). Peaks and RMS are read from the engine once per timer tick and handed to the rack rows, the
 mixer strips and the master strip.
 
+"Assign free mixer track" (channel right-click menu) opens `AssignTrackComponent` in a `DialogWindow`. It lists the 8
+tracks with the instruments on each (`channelsPerTrack`), marks the free ones, preselects `firstFreeTrack`, and on
+Assign calls `MainComponent::assignChannelToTrack`, which sets `Channel::mixerTrack`, refreshes the strip's Track display
+and the routing text, selects the track in the mixer and publishes the project (so it also marks the project changed).
+
 ### Browser and drag and drop
 
 `MainComponent` is a `juce::DragAndDropContainer`. `FileBrowser` shows a `juce::TreeView` built from a `BrowserNode`
@@ -299,6 +314,9 @@ failed. It covers:
 - the browser model (tree building, leaf kinds, which items are draggable, search filtering), channel presets (JSON
   round trip, rejection of bad input, factory presets) and the library scan (a temporary directory tree, hidden
   files, depth and node limits);
+- master effects (a delay tail, bypass, the compressor on the sum of two tracks, hostile parameters, no allocation with a
+  full chain, a removed effect's tail stops, pattern and song compilation carry the chain) and the free-track helpers
+  (`MixerRouting.h`: first free track, a channel's own track, shared tracks, all eight used, out-of-range numbers);
 - the project file: a rich document survives write and read unchanged; the loaded project renders exactly
   the same audio as the original; sample sources (built-in, path, missing) and effect chains are kept; and every kind
   of bad input is rejected or repaired as described above (wrong format name or version, unknown instrument, NaN, out-of-range

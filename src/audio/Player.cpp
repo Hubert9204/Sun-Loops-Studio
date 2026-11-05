@@ -43,6 +43,8 @@ void Player::prepare (double newSampleRate) noexcept
     for (auto& chain : effects)
         for (auto& unit : chain)
             unit.prepare (sampleRate);
+    for (auto& unit : masterEffects)
+        unit.prepare (sampleRate);
 
     tickPos = 0.0;
     projectRevision = ~std::uint64_t { 0 };
@@ -375,7 +377,10 @@ void Player::render (const Project& project, double bpm, bool playing,
                 trackMeanSquare[t] = 0.0f;
         }
 
-        // 3. Master bus: soft limiter, added to the output.
+        // 3. Master bus: insert effects on the sum of all tracks, then a soft limiter, added to the output.
+        for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
+            masterEffects[s].process (project.masterSlots[s], mixL.data(), mixR.data(), n);
+
         for (int i = 0; i < n; ++i)
         {
             const float outL = std::tanh (mixL[static_cast<size_t> (i)]);
