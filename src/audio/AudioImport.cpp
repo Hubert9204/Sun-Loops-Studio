@@ -2,8 +2,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <map>
+#include <tuple>
 
 #include "audio/AudioExport.h"
+#include "audio/BuiltinSamples.h"
 
 namespace sls
 {
@@ -256,4 +259,50 @@ ImportResult importMediaFile (const juce::File& file, const juce::File& videoDes
     r.error = file.getFileName() + " is not an audio or video file this program can read";
     return r;
 }
+
+// After a project was opened its audio clips only know the path of their file: read the audio now (and stretch it again
+// if the clip was stretched; clips with the same file and settings share one rendering). A file that is
+// gone leaves a silent clip that keeps the path, so saving the project again does not lose it.
+void loadAudioForClips (Arrangement& arrangement, juce::StringArray& problems)
+{
+    std::map<std::string, std::shared_ptr<const SampleData>> loaded;
+    std::map<std::tuple<std::string, double, double, bool>, std::shared_ptr<const SampleData>> stretched;
+    for (auto& clip : arrangement.audioClips)
+    {
+        if (clip.data == nullptr || clip.data->numFrames() > 0)
+            continue;
+
+        const auto source = clip.data->source;
+        auto found = loaded.find (source);
+        if (found == loaded.end())
+        {
+            std::shared_ptr<const SampleData> data;
+            if (source.rfind ("builtin:", 0) == 0) // a sound built into the program (Cyber-Hub, the intro)
+                data = makeBuiltinSample (source.substr (8));
+            else
+                data = importAudioFile (juce::File (juce::String (source))).data;
+            if (data == nullptr)
+                problems.add ("Audio file not found or unreadable: " + juce::String (source));
+            found = loaded.emplace (source, data != nullptr ? data : clip.data).first;
+        }
+        const auto base = found->second;
+        if (base != nullptr && base->numFrames() > 0 && ! clip.stretch.isNeutral())
+        {
+            const auto key = std::make_tuple (source, clip.stretch.lengthRatio, clip.stretch.semitones, clip.stretch.keepTimbre);
+            auto done = stretched.find (key);
+            if (done == stretched.end())
+                done = stretched.emplace (key, stretchSample (base, clip.stretch)).first;
+            if (done->second != nullptr)
+            {
+                clip.original = base;
+                clip.data = done->second;
+                continue;
+            }
+            problems.add ("Could not stretch the audio of " + juce::String (clip.name) + " (too long?): it plays unchanged.");
+            clip.stretch = {};
+        }
+        clip.data = base;
+    }
+}
+
 } // namespace sls

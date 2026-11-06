@@ -163,6 +163,41 @@ inline int cutPatternRange (Arrangement& a, int index, int fromUnit, int toUnit)
     return 2;
 }
 
+// Gives audio clip `clip` new time-stretch / pitch-shift settings: renders the file's audio again (`original`, or `data` if
+// the clip was never stretched) and swaps it in. The clip keeps covering the same stretch of the music, so its
+// length in ticks and the offset into its audio change by the same factor as the audio does; the length is then kept
+// within what the audio can fill at `bpm`. Returns false, leaving the clip as it was, if there is nothing to stretch or the
+// audio is too long. The caller must check that the longer clip still fits on its track (Arrangement::canPlaceAudio).
+inline bool restretchClip (AudioClip& clip, const StretchSettings& wanted, double bpm)
+{
+    const auto base = clip.original != nullptr ? clip.original : clip.data;
+    if (base == nullptr || base->numFrames() < 2)
+        return false;
+
+    const auto settings = wanted.sanitised();
+    const auto processed = stretchSample (base, settings);
+    if (processed == nullptr)
+        return false;
+
+    const double change = settings.lengthRatio / clip.stretch.sanitised().lengthRatio;
+    clip.offsetSeconds *= change;
+    clip.lengthTicks = std::max (1, static_cast<int> (std::lround (clip.lengthTicks * change)));
+    clip.data = processed;
+    clip.original = settings.isNeutral() ? nullptr : base;
+    clip.stretch = settings;
+    clip.lengthTicks = std::min (clip.lengthTicks, std::max (1, clip.naturalLengthTicks (bpm)));
+    return true;
+}
+
+// The stretch that makes audio recorded at `sourceBpm` play in time at the project tempo `projectBpm` (the length ratio is
+// source / project: a 90 BPM loop in a 120 BPM project becomes 0.75 times as long). Returns 1 for tempos that make no sense.
+inline double lengthRatioForTempo (double sourceBpm, double projectBpm) noexcept
+{
+    if (! (sourceBpm > 0.0) || ! (projectBpm > 0.0) || ! std::isfinite (sourceBpm) || ! std::isfinite (projectBpm))
+        return 1.0;
+    return std::clamp (sourceBpm / projectBpm, kMinStretchRatio, kMaxStretchRatio);
+}
+
 // A pattern name as typed by the user: trimmed, never empty, at most 40 characters. Returns false for an empty name.
 inline bool cleanPatternName (std::string& name)
 {

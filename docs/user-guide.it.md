@@ -258,7 +258,7 @@ La barra sotto il menu dei pattern ha cinque strumenti (tasti **1** - **5** con 
 
 | Strumento | Cosa fa |
 | --- | --- |
-| **Select** (1) | Lo strumento normale: clic su una clip per selezionarla, trascina per spostarla, trascina il **bordo sinistro o destro** per accorciarla o allungarla (una clip audio mantiene il suono al suo posto: se ne sente solo di più o di meno), tasto destro per un menu (*Split here, Duplicate, Copy, Delete*, più *Position, length and gain...* su una clip audio oppure *Open this pattern* su una clip di pattern), doppio clic su una clip di pattern per aprirla. |
+| **Select** (1) | Lo strumento normale: clic su una clip per selezionarla, trascina per spostarla, trascina il **bordo sinistro o destro** per accorciarla o allungarla (una clip audio mantiene il suono al suo posto: se ne sente solo di più o di meno), tasto destro per un menu (*Split here, Duplicate, Copy, Delete*, più *Position, length and gain...* e *Stretch and pitch...* su una clip audio oppure *Open this pattern* su una clip di pattern), doppio clic su una clip di pattern per aprirla. |
 | **Split** (2) | Clic su una clip per tagliarla in due in quel punto (agganciato alla griglia). Il tasto **S** divide la clip selezionata dove si trova il mouse. |
 | **Cut** (3) | Trascina su una clip per togliere quel tratto: il suono dopo il vuoto resta dov'era. |
 | **Erase** (4) | Clic su una clip per eliminarla, o trascina su più clip. |
@@ -311,6 +311,30 @@ quindi valgono il suo fader, mute, solo ed effetti, ed è inclusa in ogni esport
 ne dura l'audio al tempo in cui è stata aggiunta; se poi cambi il BPM il suono continua a suonare alla sua velocità
 originale, quindi la clip può finire prima o dopo l'audio (la forma d'onda mostra dove il suono finisce davvero). Se il file
 viene poi spostato o cancellato, il progetto si apre con una clip muta segnata *(file not found)* che conserva il percorso.
+
+### Stretch e pitch
+
+Tasto destro su una clip audio > **Stretch and pitch...** per cambiarne la lunghezza o l'intonazione, o entrambe, in modo **indipendente**:
+
+| Campo | Significato |
+| --- | --- |
+| Length (%) | 100 = invariata, 200 = lunga il doppio (metà del tempo), 50 = lunga la metà. Da 25 a 400. L'intonazione non cambia. |
+| Pitch (semitoni) | Da -24 a +24; i decimali funzionano (0,5 = 50 cent). La lunghezza non cambia. |
+| Tempo of the audio (BPM) | Facoltativo. Se conosci il tempo a cui è stato registrato un loop, scrivilo: la lunghezza diventa *suo tempo / tempo del progetto*, quindi un loop a 90 BPM in un progetto a 120 BPM diventa lungo il 75 %. Ha la precedenza sul campo Length. |
+| Pitch mode | *Normal*, oppure *Keep the timbre*, che limita quanto si sposta lo spettro sopra gli 8 kHz (un po' meglio su voci e piatti quando si trasporta di vari semitoni). |
+
+**Apply** elabora di nuovo l'audio, una volta sola (qualche secondo per un file lungo) e la clip diventa più lunga o più corta dello stesso fattore;
+**Back to the original** torna al suono e alla lunghezza del file; funziona anche **Undo** della playlist. Il file su disco non viene mai modificato.
+Una clip modificata lo mostra nel nome: `[x1.50, +3 st]`. Il risultato parte sempre dall'audio originale, quindi due volte 150 % fanno
+150 %, non 225 %. Se la clip più lunga si sovrappone alla vicina o supera la fine della playlist, non cambia nulla e il programma te lo dice.
+
+Il file di progetto salva solo i numeri; l'audio viene elaborato di nuovo all'apertura (le clip con lo stesso file e gli stessi
+numeri condividono un'unica elaborazione). Dividere una clip modificata lascia entrambe le metà modificate.
+
+Quanto è buono? Il metodo (Signalsmith Stretch) rende meglio tra il 75 % e il 150 % e per trasposizioni di pochi semitoni; agli
+estremi (4x, un'ottava o più) il suono si impasta e diventa un po' metallico, soprattutto batterie e note percussive,
+perché i transienti non hanno un trattamento separato. È stato misurato su toni di prova (lunghezza, intonazione e tempi sono
+esatti entro pochi millisecondi; un attacco netto si sfuma di circa 10-25 ms) e **non giudicato a orecchio su musica vera**.
 
 ### Registrazione
 
@@ -579,5 +603,5 @@ occupato più tardi, un brano più pesante o un mixer pieno di effetti possono r
 - I sample sono mono o stereo, al massimo 30 secondi, suonati una volta sola (niente loop né editing
   dell'inviluppo). Clip audio: fino a 5 minuti per file, 64 clip.
 - Non ancora disponibili: suonare le note con la tastiera del computer, annulla per impostazioni dei canali e mixer, incorporare i sample nel progetto,
-  salvataggio automatico e recupero dopo un crash, plugin VST come strumenti o effetti, automazione di qualsiasi cosa tranne volumi, pan e parametri degli effetti, trasformare l'altezza di
+  salvataggio automatico e recupero dopo un crash, plugin VST come strumenti o effetti, time-stretch dei campioni nel Sampler (si possono modificare solo le clip audio della playlist), automazione di qualsiasi cosa tranne volumi, pan e parametri degli effetti, trasformare l'altezza di
   chitarra o voce in note, punch-in e conteggio iniziale per la registrazione, dissolvenze ed effetti per clip, spostare il cursore con un clic sul righello. Vedi [roadmap.md](roadmap.md) (in inglese).

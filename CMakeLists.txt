@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(SunLoopsStudio VERSION 0.11.0 LANGUAGES C CXX)
+project(SunLoopsStudio VERSION 0.12.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -43,6 +43,7 @@ set(SLS_CORE_SOURCES
     src/audio/AudioImport.cpp
     src/audio/InputRecorder.cpp
     src/audio/MidiImport.cpp
+    src/audio/TimeStretch.cpp
     src/library/ChannelPreset.cpp
     src/library/Library.cpp
     src/library/ProjectFile.cpp
@@ -92,6 +93,7 @@ target_sources(SunLoopsStudio PRIVATE
     ${SLS_CORE_SOURCES})
 
 target_include_directories(SunLoopsStudio PRIVATE src)
+target_include_directories(SunLoopsStudio SYSTEM PRIVATE third_party/signalsmith)
 
 target_compile_definitions(SunLoopsStudio PRIVATE
     ${SLS_COMMON_DEFINITIONS}
@@ -132,6 +134,7 @@ target_sources(SunLoopsStudioTests PRIVATE
     ${SLS_CORE_SOURCES})
 
 target_include_directories(SunLoopsStudioTests PRIVATE src)
+target_include_directories(SunLoopsStudioTests SYSTEM PRIVATE third_party/signalsmith)
 target_compile_definitions(SunLoopsStudioTests PRIVATE ${SLS_COMMON_DEFINITIONS})
 
 target_link_libraries(SunLoopsStudioTests PRIVATE

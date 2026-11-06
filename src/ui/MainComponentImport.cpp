@@ -9,6 +9,7 @@
 #include <functional>
 #include <map>
 #include <optional>
+#include <tuple>
 
 #include <juce_audio_utils/juce_audio_utils.h>
 
@@ -275,31 +276,10 @@ void MainComponent::finishImport (const std::shared_ptr<ImportBatch>& batch, con
                                                 batch->errors.joinIntoString ("\n"));
 }
 
-// After a project was opened its audio clips only know the path of their file: read the audio now. A file that is
-// gone leaves a silent clip that keeps the path, so saving the project again does not lose it.
+// After a project was opened its audio clips only know the path of their file: read the audio now.
 void MainComponent::loadAudioClipFiles (juce::StringArray& problems)
 {
-    std::map<std::string, std::shared_ptr<const SampleData>> loaded;
-    for (auto& clip : arrangement.audioClips)
-    {
-        if (clip.data == nullptr || clip.data->numFrames() > 0)
-            continue;
-
-        const auto source = clip.data->source;
-        auto found = loaded.find (source);
-        if (found == loaded.end())
-        {
-            std::shared_ptr<const SampleData> data;
-            if (source.rfind ("builtin:", 0) == 0) // a sound built into the program (Cyber-Hub, the intro)
-                data = makeBuiltinSample (source.substr (8));
-            else
-                data = importAudioFile (juce::File (juce::String (source))).data;
-            if (data == nullptr)
-                problems.add ("Audio file not found or unreadable: " + juce::String (source));
-            found = loaded.emplace (source, data != nullptr ? data : clip.data).first;
-        }
-        clip.data = found->second;
-    }
+    loadAudioForClips (arrangement, problems);
 }
 
 } // namespace sls

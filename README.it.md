@@ -14,7 +14,7 @@ strumento sta in un pannello mobile che puoi spostare, ridimensionare, sovrappor
 Sun Loops Studio si ispira al modo di lavorare dei DAW a loop come FL Studio. È un progetto indipendente: non usa
 codice, nomi, grafica o risorse di altri prodotti e non è affiliato né approvato dai loro produttori.
 
-**Stato: alpha (0.11.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
+**Stato: alpha (0.12.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
 La riproduzione è stata confermata su un vero PC Nobara per la versione 0.3; tutto ciò che è stato aggiunto dopo
 (pannelli, pattern, playlist, browser, pitch/swing, mixer espanso ed effetti, salvataggio dei progetti, AppImage, clip audio, trascinamento
 dei file, registrazione, MIDI, metronomo e formati di esportazione) è stato provato con test automatici e in un display virtuale con un
@@ -61,6 +61,8 @@ cosa manca (hosting VST3 e annulla/ripristina sono le mancanze principali).
   ha gli stessi 4 slot, applicati a tutto il mix. Più canali possono usare la stessa traccia.
 - **Automazione** - tasto destro su volume, pan, fader o parametro di un effetto > *Create automation clip*; le clip stanno su quattro
   corsie sotto le tracce della playlist e hanno un editor dei punti (linee lineari / a gradino / morbide). Solo in modalità Song.
+- **Stretch e pitch** - tasto destro su una clip audio: allungala o accorciala senza cambiarne l'intonazione, trasponila senza cambiarne la lunghezza,
+  o adatta un loop al tempo del progetto (Signalsmith Stretch).
 - **Misuratori** - loudness in LUFS (momentaneo, breve, integrato, range; EBU R128), true peak, analizzatore di spettro, goniometro e correlazione.
 - **Sampler** - carica file WAV, FLAC, OGG e AIFF (fino a 30 s), li suona una volta sola, ritonati in base alla nota.
   Cassa, rullante e hi-hat sono sintetizzati: non servono file per iniziare.
@@ -125,3 +127,5 @@ Il repository contiene una [LICENSE](LICENSE) MIT. Attenzione: JUCE è disponibi
 licenza commerciale a pagamento, e un programma che usa JUCE con la licenza gratuita deve a sua volta essere
 distribuito con GPL. Prima di distribuire eseguibili, o si passa questo progetto a GPLv3 oppure si acquista una
 licenza commerciale JUCE.
+
+`third_party/signalsmith` contiene Signalsmith Stretch e Signalsmith Linear, entrambe con licenza MIT (le licenze e le revisioni esatte sono in quella cartella).

@@ -195,6 +195,7 @@ private:
     bool splitAt (int track, int tick, bool noSnap);
     void showClipMenu (const juce::MouseEvent& e);
     void editAudioProperties (int index);
+    void editAudioStretch (int index);
     void showAutomationMenu (int index);
     void duplicateSelected();
     void copySelected();

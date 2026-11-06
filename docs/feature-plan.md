@@ -1,10 +1,10 @@
-# Plan for the next feature blocks (written 2026-11-06, updated for 0.11.0)
+# Plan for the next feature blocks (written 2026-11-06, updated for 0.12.0)
 
 Each block is a release of its own, in the order chosen by the maintainer. "Done" means what the repository has now.
 Effort is a rough size: S = a few days of work, M = about two weeks, L = a month or more, XL = a long project of its own.
 
 ## Already in the program
-**0.11.0: blocks A, B and C below** (automation, aux buses / sends / VCA groups, LUFS / true-peak / spectrum / goniometer meters; see the notes after the table).
+**0.12.0: block D** (time-stretch and pitch-shift of audio clips with Signalsmith Stretch). **0.11.0: blocks A, B and C below** (automation, aux buses / sends / VCA groups, LUFS / true-peak / spectrum / goniometer meters; see the notes after the table).
 MIDI file import into patterns; legato and slide between notes of one channel (0.10.0). Basic sampler, a synth, four effects, mixer with
 tracks and master chain, audio and MIDI recording, playlist editing, metronome, export in seven formats.
 
@@ -15,7 +15,7 @@ tracks and master chain, audio and MIDI recording, playlist editing, metronome, 
 | A | **Automation** (done, 0.11.0) | Right-click on any knob / fader -> *Create automation clip*; automation clips as free graphic objects on the playlist; parameters of the native effects and instruments first | none (own code) | L | no |
 | B | **Mixer console** (done, 0.11.0, without a separate routing-matrix window) | Fader / pan per track (exists), **auxiliary buses (sends)**, **VCA groups**, bus routing; routing matrix for audio | none | M | no |
 | C | **Metering** (done, 0.11.0) | Peak, **LUFS (ITU-R BS.1770 / EBU R128 momentary, short-term, integrated, loudness range)**, true peak, spectrum analyser (FFT), goniometer / phase scope | none (the standards are public) | M | no |
-| D | **Time-stretch and pitch-shift** | Stretch a clip to the project tempo, pitch it without changing speed, transient-preserving mode | **Signalsmith Stretch (MIT)**. *zplane elastique is commercial and closed: it cannot be added to an MIT program. Rubber Band is GPL: using it would make the whole program GPL.* | M | no |
+| D | **Time-stretch and pitch-shift** (done, 0.12.0: audio clips only, offline, source tempo typed in, no transient mode or tempo detection) | Stretch a clip to the project tempo, pitch it without changing speed, transient-preserving mode | **Signalsmith Stretch (MIT)**. *zplane elastique is commercial and closed: it cannot be added to an MIT program. Rubber Band is GPL: using it would make the whole program GPL.* | M | no |
 | E | **Sample editor** | Destructive editing (cut, normalise, fade, reverse), **slicing** (by transients, by grid) to a pattern, **noise reduction** (spectral gating), real-time spectrum | own code | L | no |
 | F | **Native synths** | A subtractive synth (oscillators, filter, envelopes, LFO), an **FM synth** (Sytrus-like operator matrix), an **additive synth** (Harmor-like partial editor and resynthesis from a sample) | own code. "Professional level" is a long road: each of the three is its own project | XL | no |
 | G | **Drum machine** | Pad grid with per-pad sample, choke groups, velocity layers, swing; a kit format | own code | M | no |
@@ -31,7 +31,7 @@ tracks and master chain, audio and MIDI recording, playlist editing, metronome, 
 1. **Split `MainComponent.cpp`** (it is 2 600 lines; see `audit.md`). Prerequisite for everything below, S.
 2. **A Automation**, because it touches every parameter and is easier before the parameter list grows.
 3. **B + C** (console and metering): small, useful, and the routing matrix is needed by J.
-4. **D + E** (stretch, sample editor): the part most useful for working on recorded audio.
+4. **D + E** (stretch is done; next the sample editor): the part most useful for working on recorded audio.
 5. **G + H** (drum machine, sampler, SoundFont), then **F** (synths), then **I** (plugins), then **K**, **N**, **M**, **J**, **L**.
 
 ## Things that cannot be done as asked (and what is offered instead)

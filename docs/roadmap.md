@@ -1,6 +1,6 @@
 # Status and roadmap
 
-Version 0.11.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
+Version 0.12.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
 what is missing. If something here disagrees with the program, the program is right: please fix the page.
 
 ## What has been verified, and how
@@ -35,9 +35,15 @@ what is missing. If something here disagrees with the program, the program is ri
 | Automation (model and evaluation: shapes, held last value, later clip taking over, hostile numbers; clip editing helpers; the audible result of volume, pan, track fader/balance and effect-parameter clips through the offline renderer; Song mode only; project file round trip and an old file without clips), aux buses / sends (pre and post fader, mute/solo rules, effects on a bus, bus before the master chain) and VCA groups (scaling, two groups multiplying, mute, pre/post-fader sends), the console in the project file | Automated headless tests (652 checks in total) | All pass |
 | Metering: K-weighting against the BS.1770 reference curve, a -23 dBFS stereo sine reading -23.0 LUFS at 44.1 / 48 / 96 kHz, absolute and relative gating, loudness range of a 10 LU test signal, 4x true peak on a faded tone and an inter-sample-peak signal, FFT bin position and Hann levels, goniometer ring, correlation | Automated headless tests (same 652), reference values computed independently from the published filter coefficients | All pass |
 | 0.11.0 in the interface: right-click > *Create automation clip* on the channel volume, a mixer fader and an effect slider; the clip in a lane, moved, resized, duplicated and deleted; the point editor (add, move, shape menu, delete); aux strips, send sliders, Pre / V1 / V2 buttons, VCA strips; the Meters window with a signal playing | Manual, in a virtual display with a window manager and a silent (ALSA `null`) device | Worked |
+| Time-stretch and pitch-shift (length and pitch of test tones at 22.05 / 44.1 / 48 / 96 kHz, mono-in-left stays left, silence stays silent, tiny and one-frame inputs, timing of a tone burst, no clicks at the ends, hostile numbers), the clip arithmetic (length, offset, undoing, restretching from the original, splitting), tempo matching, the project file round trip (settings only, shared renderings, missing file, hostile values, older files) | Automated headless tests | All pass |
+| Stretch and pitch in the interface: the menu item, the dialog, a x1.5 / +3 st clip with its label, the longer clip on the timeline, Undo | Manual, in a virtual display | Worked |
 | A use-after-free when clicking an item that rebuilds the browser tree (crash on *Scan for VST3 plugins...*) | Found in that manual session | Fixed (item actions are deferred); the same click was repeated afterwards |
 
 ## What has not been verified
+
+- **How stretched audio sounds on real music.** Length, pitch and timing were measured on synthetic tones only; the quality on drums, voices and full mixes
+  (smearing of attacks, a metallic tone at 4x or an octave and more) was not judged by ear. There is no separate transient mode and no tempo detection:
+  the source tempo has to be typed. The processing blocks the window for the few seconds it takes.
 
 - **How automation, sends, buses and VCA groups sound on real hardware.** Everything was measured in rendered audio and seen in a virtual display;
   nothing was heard. Automation is evaluated once per 64 samples, so a very steep clip (a hold step on a loud signal) can click: not listened to.
@@ -111,18 +117,18 @@ what is missing. If something here disagrees with the program, the program is ri
 | More than 8 mixer tracks, sidechain, a routing-matrix window | A channel goes to one of 8 tracks. Two aux buses and two VCA groups exist (0.11.0); a bus cannot be sent to another bus and nothing can be sidechained. No per-slot wet/dry beyond what each effect offers, no effect-chain presets. |
 | Automation of other things | Automation covers channel volume and pan, track fader and balance, and the parameters of effects on tracks and the master (Song mode only, evaluated per 64 samples). Not covered: pitch, swing, master volume, mute / solo, sends, aux buses and VCA groups, and the controls do not move with it. |
 | Pitch-to-MIDI | MIDI keyboards play the selected channel live and **Rec notes** records their notes into the piano roll, but the pitch of a guitar or voice is **not** turned into notes (an audio take can become a sampler channel to be played or sequenced). Audio is recorded into the playlist or a new sampler channel, but there is no punch-in, no count-in, no loop recording and takes always start at the beginning of the song. |
-| Audio clip editing | Clips can be moved, shortened and lengthened (up to the length of the audio) and deleted. No trimming of the start, splitting, fades, gain control in the interface, time-stretch or pitch-shift; a clip keeps the length it had when it was added, so after a tempo change the audio no longer ends where the clip does. At most 5 minutes of audio per file and 64 audio clips. |
+| Audio clip editing | Clips can be moved, shortened and lengthened (up to the length of the audio) and deleted. Time-stretch and pitch-shift exist (0.12.0, below). No fades; a clip keeps the length it had when it was added, so after a tempo change the audio no longer ends where the clip does. At most 5 minutes of audio per file and 64 audio clips. |
 | Playlist seeking | Clicking the ruler does not move the playhead (so playback and recording always start at the beginning). |
 | Pattern deletion and renaming | Patterns are created and cloned only; clips cannot be re-pointed to another pattern. |
 | Channel deletion and reordering | Channels can be added (up to 8) but not removed or moved. |
 | Pattern length, time signature, tempo changes | A pattern is always two bars of 4/4 with a 16th grid; one BPM for the whole song. Swing exists per channel (off-beat 16ths only). |
-| Sample editing | Samples play once from the start: no loop points, envelope, trim or time-stretch. |
+| Sample editing | Samples play once from the start: no loop points, envelope, trim, or time-stretch (stretching works on audio clips of the playlist only). |
 | Export options | Fixed settings: 48 kHz, 24-bit for WAV/AIFF/FLAC, MP3 and AAC at 192 kbit/s, Ogg Vorbis at about 192 kbit/s. No choice of quality or sample rate, no stems, no tags/metadata. |
 | Packaging | An AppImage can be built (`scripts/build_appimage.sh`, not yet tested on a real Nobara machine); no Flatpak or RPM; install can also be `cmake --install`. |
 
 ## Proposed order of work
 
-The larger feature blocks are in [feature-plan.md](feature-plan.md) (A, B and C are done in 0.11.0; next are time-stretch and the sample editor). Smaller items:
+The larger feature blocks are in [feature-plan.md](feature-plan.md) (A, B and C are done in 0.11.0, D in 0.12.0; next is the sample editor). Smaller items:
 
 1. **Undo / redo** for channel settings and the Mixer (notes and the Playlist already have it).
 2. **Project extras**: autosave and recovery, embedding samples, a project folder with its samples.

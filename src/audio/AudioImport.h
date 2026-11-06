@@ -4,6 +4,7 @@
 
 #include <juce_audio_formats/juce_audio_formats.h>
 
+#include "audio/Arrangement.h"
 #include "audio/Project.h"
 
 namespace sls
@@ -43,4 +44,10 @@ ImportResult importVideoAudio (const juce::File& video, const juce::File& destin
 // Either of the above, by the kind of file; Unsupported files fail with a message.
 ImportResult importMediaFile (const juce::File& file, const juce::File& videoDestinationFolder,
                               const juce::File& ffmpegOverride = {});
+
+// After a project was opened its audio clips only know the path of their file: reads the audio now (a file path, or
+// "builtin:<id>" for a sound inside the program) and stretches it again if the clip was stretched (clips with the same
+// file and settings share one rendering). A file that is gone leaves a silent clip that keeps the path, so saving the
+// project again does not lose it; every problem is added to `problems`.
+void loadAudioForClips (Arrangement& arrangement, juce::StringArray& problems);
 } // namespace sls

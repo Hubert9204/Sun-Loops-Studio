@@ -16,7 +16,7 @@ Sun Loops Studio is inspired by the workflow of loop-based DAWs such as FL Studi
 that uses no code, names, graphics or assets from other products, and it is not affiliated with or endorsed by
 their makers.
 
-**Status: alpha (0.11.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
+**Status: alpha (0.12.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
 display. Playback was confirmed on a real Nobara machine for version 0.3; everything added since (panels, patterns,
 playlist, browser, pitch/swing, the expanded mixer and its effects, saving projects, the AppImage, audio clips, drag and
 drop, recording, MIDI, the metronome and the export formats) was tested headless and in a virtual display with a silent
@@ -61,6 +61,8 @@ exactly what is and is not verified and what is missing (VST3 hosting and undo a
   right has the same 4 effect slots, applied to the whole mix. Several channels can share a track.
 - **Automation** - right-click a volume, pan, fader or effect parameter > *Create automation clip*; clips live on four lanes under the
   playlist tracks and have a point editor (linear / hold / smooth lines). Song mode only.
+- **Stretch and pitch** - right-click an audio clip: make it longer or shorter without changing its pitch, shift its pitch without changing its length,
+  or match a loop to the project tempo (Signalsmith Stretch).
 - **Meters** - loudness in LUFS (momentary, short-term, integrated, range; EBU R128), true peak, spectrum analyser, goniometer and correlation.
 - **Sampler** - loads WAV, FLAC, OGG and AIFF files (up to 30 s), plays them one-shot, repitched by note.
   Kick, snare and hat are synthesised, so you need no sample files to start.
@@ -123,3 +125,5 @@ importing audio and video, audio clips, the recorder, MIDI note handling and the
 This repository carries an MIT [LICENSE](LICENSE). Note that JUCE is available only under the GPLv3/AGPLv3 or a
 paid commercial license, and a program linking JUCE under its free license must itself be distributed under the GPL.
 Before distributing binaries, either relicense this project under GPLv3 or obtain a JUCE commercial license.
+
+`third_party/signalsmith` holds Signalsmith Stretch and Signalsmith Linear, both MIT-licensed (their licences and the exact revisions are in that folder).

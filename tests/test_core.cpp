@@ -28,6 +28,7 @@
 #include "audio/MidiNotes.h"
 #include "audio/MixerRouting.h"
 #include "audio/OneShot.h"
+#include "audio/TimeStretch.h"
 #include "audio/NoteRecorder.h"
 #include "audio/SpscQueue.h"
 #include "audio/LiveNotes.h"
@@ -4475,6 +4476,305 @@ void testCyberHub()
            "and numbers every 1st, 2nd, 4th... bar as the zoom requires");
 }
 
+
+// --- time-stretch and pitch-shift --------------------------------------------------------------------------------
+std::shared_ptr<sls::SampleData> makeTone (double hz, double seconds, double sr, double amp = 0.5)
+{
+    auto d = std::make_shared<sls::SampleData>();
+    d->sampleRate = sr;
+    d->name = "tone";
+    d->source = "/tmp/tone.wav";
+    const int n = static_cast<int> (seconds * sr);
+    d->left.resize (static_cast<size_t> (n));
+    d->right.resize (static_cast<size_t> (n));
+    for (int i = 0; i < n; ++i)
+    {
+        d->left[static_cast<size_t> (i)] = static_cast<float> (amp * std::sin (2.0 * 3.14159265358979323846 * hz * i / sr));
+        d->right[static_cast<size_t> (i)] = d->left[static_cast<size_t> (i)];
+    }
+    return d;
+}
+
+// Frequency of a steady tone from the rising zero crossings between two frames.
+double zeroCrossingHz (const std::vector<float>& x, double sr, int from, int to)
+{
+    int crossings = 0, first = -1, last = -1;
+    for (int i = std::max (1, from); i < to && i < static_cast<int> (x.size()); ++i)
+        if (x[static_cast<size_t> (i - 1)] < 0.0f && x[static_cast<size_t> (i)] >= 0.0f)
+        {
+            if (first < 0)
+                first = i;
+            last = i;
+            ++crossings;
+        }
+    return crossings > 1 ? (crossings - 1) * sr / (last - first) : 0.0;
+}
+
+double stretchRms (const std::vector<float>& x, int from, int to)
+{
+    double sum = 0.0;
+    to = std::min (to, static_cast<int> (x.size()));
+    for (int i = from; i < to; ++i)
+        sum += static_cast<double> (x[static_cast<size_t> (i)]) * x[static_cast<size_t> (i)];
+    return to > from ? std::sqrt (sum / (to - from)) : 0.0;
+}
+
+void testTimeStretch()
+{
+    std::cout << "Time-stretch and pitch-shift\n";
+    constexpr double sr = 44100.0;
+    const std::shared_ptr<const sls::SampleData> tone = makeTone (440.0, 3.0, sr);
+
+    {   // neutral settings return the same object; hostile settings are clamped; bad input is refused
+        check (sls::stretchSample (tone, {}) == tone, "neutral settings return the input itself");
+        check (sls::stretchSample (nullptr, { 2.0, 0.0, false }) == nullptr, "no input gives nothing");
+        check (sls::stretchSample (std::make_shared<sls::SampleData>(), { 2.0, 0.0, false }) == nullptr, "empty audio gives nothing");
+        sls::StretchSettings hostile { std::nan (""), 1.0e30, false };
+        const auto h = hostile.sanitised();
+        check (h.lengthRatio == 1.0 && h.semitones == sls::kMaxStretchSemitones, "NaN length ratio becomes 1, huge pitch is clamped to 24 semitones");
+        check (sls::StretchSettings { 100.0, 0.0, false }.sanitised().lengthRatio == sls::kMaxStretchRatio
+               && sls::StretchSettings { 0.0, 0.0, false }.sanitised().lengthRatio == sls::kMinStretchRatio, "length ratio limited to 0.25 .. 4");
+    }
+
+    {   // longer, same pitch
+        const auto t0 = std::chrono::steady_clock::now();
+        const auto y = sls::stretchSample (tone, { 2.0, 0.0, false });
+        const double seconds = std::chrono::duration<double> (std::chrono::steady_clock::now() - t0).count();
+        std::cout << "  (3 s of stereo audio stretched in " << seconds << " s)\n";
+        check (y != nullptr && y->numFrames() == tone->numFrames() * 2, "ratio 2 makes the audio exactly twice as long");
+        check (y != nullptr && y->sampleRate == sr && y->source == tone->source && y->name == tone->name, "sample rate, name and source are kept");
+        if (y != nullptr)
+        {
+            const double hz = zeroCrossingHz (y->left, sr, static_cast<int> (sr), static_cast<int> (4.0 * sr));
+            check (std::fabs (hz - 440.0) < 3.0, "stretched to twice the length, the tone is still 440 Hz");
+            const double rms = stretchRms (y->left, static_cast<int> (sr), static_cast<int> (4.0 * sr));
+            check (std::fabs (rms - 0.5 / std::sqrt (2.0)) < 0.03, "the level of the steady part is unchanged");
+            check (stretchRms (y->left, 0, 200) < 0.4 && stretchRms (y->left, y->numFrames() - 200, y->numFrames()) < 0.45, "no click at the ends (the first and last 200 frames are not louder than the tone)");
+        }
+    }
+    {   // shorter, same pitch
+        const auto y = sls::stretchSample (tone, { 0.5, 0.0, false });
+        check (y != nullptr && y->numFrames() == tone->numFrames() / 2, "ratio 0.5 makes the audio half as long");
+        check (y != nullptr && std::fabs (zeroCrossingHz (y->left, sr, 10000, 60000) - 440.0) < 4.0, "compressed to half the length, the tone is still 440 Hz");
+    }
+    {   // pitch only
+        const auto up = sls::stretchSample (tone, { 1.0, 12.0, false });
+        check (up != nullptr && up->numFrames() == tone->numFrames(), "pitch shifting alone keeps the length");
+        check (up != nullptr && std::fabs (zeroCrossingHz (up->left, sr, 20000, 100000) - 880.0) < 8.0, "+12 semitones: 440 Hz becomes 880 Hz");
+        const auto down = sls::stretchSample (tone, { 1.0, -12.0, false });
+        check (down != nullptr && std::fabs (zeroCrossingHz (down->left, sr, 20000, 100000) - 220.0) < 3.0, "-12 semitones: 440 Hz becomes 220 Hz");
+        const auto fifth = sls::stretchSample (tone, { 1.0, 7.0, false });
+        check (fifth != nullptr && std::fabs (zeroCrossingHz (fifth->left, sr, 20000, 100000) - 440.0 * std::pow (2.0, 7.0 / 12.0)) < 6.0, "+7 semitones is a perfect fifth (659.3 Hz)");
+        const auto cents = sls::stretchSample (tone, { 1.0, 0.5, false });
+        check (cents != nullptr && std::fabs (zeroCrossingHz (cents->left, sr, 20000, 100000) - 440.0 * std::pow (2.0, 0.5 / 12.0)) < 3.0, "+50 cents is accepted (fractions of a semitone)");
+    }
+    {   // both at once
+        const auto y = sls::stretchSample (tone, { 1.5, 5.0, false });
+        check (y != nullptr && y->numFrames() == static_cast<int> (std::llround (tone->numFrames() * 1.5)), "length and pitch together: the length follows the ratio");
+        check (y != nullptr && std::fabs (zeroCrossingHz (y->left, sr, 20000, 120000) - 440.0 * std::pow (2.0, 5.0 / 12.0)) < 6.0, "length and pitch together: the pitch follows the semitones");
+    }
+    {   // timing: a tone burst keeps its place (the latency of the stretcher is compensated)
+        auto burst = makeTone (1000.0, 3.0, sr);
+        for (int i = 0; i < burst->numFrames(); ++i)
+            if (i < static_cast<int> (1.0 * sr) || i >= static_cast<int> (1.5 * sr))
+                burst->left[static_cast<size_t> (i)] = burst->right[static_cast<size_t> (i)] = 0.0f;
+        const std::shared_ptr<const sls::SampleData> b = burst;
+        for (const double ratio : { 1.0, 2.0, 0.5 })
+        {
+            const auto y = sls::stretchSample (b, { ratio, ratio == 1.0 ? 0.02 : 0.0, false }); // (a pure ratio of 1 would be neutral)
+            int onset = -1, end = -1;
+            if (y != nullptr)
+                for (int i = 0; i < y->numFrames(); ++i)
+                    if (std::fabs (y->left[static_cast<size_t> (i)]) > 0.1f)
+                    {
+                        if (onset < 0)
+                            onset = i;
+                        end = i;
+                    }
+            const double expectedOnset = 1.0 * sr * ratio, expectedEnd = 1.5 * sr * ratio;
+            std::cout << "  (burst at ratio " << ratio << ": onset off by " << (onset - expectedOnset) * 1000.0 / sr << " ms, end off by " << (end - expectedEnd) * 1000.0 / sr << " ms)\n";
+            check (y != nullptr && std::fabs (onset - expectedOnset) < 0.03 * sr && std::fabs (end - expectedEnd) < 0.03 * sr,
+                   ("a burst from 1.0 s to 1.5 s lands at " + std::to_string (ratio) + " x that, within 30 ms").c_str());
+        }
+    }
+    {   // silence stays silent, a stereo image is kept, very short audio does not crash
+        auto silent = std::make_shared<sls::SampleData>();
+        silent->sampleRate = sr;
+        silent->left.assign (30000, 0.0f);
+        silent->right.assign (30000, 0.0f);
+        const auto y = sls::stretchSample (silent, { 1.7, 3.0, true });
+        check (y != nullptr && stretchRms (y->left, 0, y->numFrames()) == 0.0 && stretchRms (y->right, 0, y->numFrames()) == 0.0, "silence in, silence out (no noise is made up)");
+
+        auto leftOnly = makeTone (500.0, 2.0, sr);
+        leftOnly->right.assign (leftOnly->right.size(), 0.0f);
+        const auto z = sls::stretchSample (leftOnly, { 1.3, 2.0, false });
+        check (z != nullptr && stretchRms (z->left, 20000, 60000) > 0.2 && stretchRms (z->right, 20000, 60000) < 0.01, "a sound on the left channel stays on the left");
+
+        for (const int n : { 2, 3, 50, 500 })
+        {
+            auto tiny = makeTone (1000.0, 1.0, sr);
+            tiny->left.resize (static_cast<size_t> (n));
+            tiny->right.resize (static_cast<size_t> (n));
+            const auto r = sls::stretchSample (tiny, { 3.0, -5.0, false });
+            check (r != nullptr && r->numFrames() == n * 3, ("a " + std::to_string (n) + "-frame clip is stretched without trouble").c_str());
+        }
+        auto one = makeTone (1000.0, 1.0, sr);
+        one->left.resize (1);
+        one->right.resize (1);
+        check (sls::stretchSample (one, { 2.0, 0.0, false }) == nullptr, "a one-frame sound is refused");
+    }
+    {   // other sample rates
+        for (const double rate : { 22050.0, 48000.0, 96000.0 })
+        {
+            const auto t = makeTone (600.0, 2.0, rate);
+            const auto y = sls::stretchSample (t, { 1.25, 3.0, false });
+            check (y != nullptr && y->numFrames() == static_cast<int> (std::llround (t->numFrames() * 1.25))
+                       && std::fabs (zeroCrossingHz (y->left, rate, static_cast<int> (rate * 0.5), static_cast<int> (rate * 2.0)) - 600.0 * std::pow (2.0, 3.0 / 12.0)) < 8.0,
+                   ("at " + std::to_string (static_cast<int> (rate)) + " Hz the length and the pitch are right").c_str());
+        }
+    }
+}
+
+void testStretchedClips()
+{
+    std::cout << "Stretched audio clips\n";
+    constexpr double bpm = 120.0; // one beat = 480 ticks = 0.5 s
+    const auto kick = sls::makeBuiltinSample ("intro");
+    check (kick != nullptr && kick->numFrames() > 2 * 48000 / 2, "the built-in sound used here exists");
+    if (kick == nullptr)
+        return;
+    const double seconds = kick->numFrames() / kick->sampleRate;
+
+    sls::AudioClip clip;
+    clip.data = kick;
+    clip.name = "loop";
+    clip.lengthTicks = static_cast<int> (std::floor (sls::secondsToTicks (seconds, bpm)));
+    clip.startTick = 960;
+    const int originalLength = clip.lengthTicks;
+
+    {   // stretching a clip
+        auto c = clip;
+        check (sls::restretchClip (c, { 2.0, 0.0, false }, bpm), "a clip can be stretched");
+        check (c.data != kick && c.original == kick && c.data->numFrames() == static_cast<int> (std::llround (kick->numFrames() * 2.0)),
+               "the new audio is twice as long and the original is kept");
+        check (c.stretch.lengthRatio == 2.0 && c.data->source == kick->source, "the settings are kept, and the file path stays the same");
+        check (std::abs (c.lengthTicks - 2 * originalLength) <= 1 && c.startTick == 960, "the clip becomes twice as long and starts where it did");
+
+        auto back = c;
+        check (sls::restretchClip (back, {}, bpm) && back.data == kick && back.original == nullptr && back.stretch.isNeutral()
+                   && std::abs (back.lengthTicks - originalLength) <= 1,
+               "going back to neutral gives the original audio and length again, with no copy left over");
+
+        auto again = c;
+        check (sls::restretchClip (again, { 3.0, 2.0, true }, bpm) && again.original == kick
+                   && again.data->numFrames() == static_cast<int> (std::llround (kick->numFrames() * 3.0))
+                   && std::abs (again.lengthTicks - 3 * originalLength) <= 2,
+               "stretching a stretched clip starts again from the original (3x, not 6x)");
+
+        auto none = clip;
+        none.data = nullptr;
+        check (! sls::restretchClip (none, { 2.0, 0.0, false }, bpm), "a clip without audio is refused and left alone");
+        auto missing = clip;
+        missing.data = sls::makeMissingSample ("/nope.wav");
+        check (! sls::restretchClip (missing, { 2.0, 0.0, false }, bpm) && missing.data->numFrames() == 0, "a clip whose file is missing is refused");
+    }
+    {   // a clip cut at the start: the offset and length scale
+        auto c = clip;
+        c.offsetSeconds = 0.5;
+        c.lengthTicks = static_cast<int> (std::floor (sls::secondsToTicks (seconds - 0.5, bpm)));
+        const int before = c.lengthTicks;
+        check (sls::restretchClip (c, { 0.5, 0.0, false }, bpm) && std::abs (c.offsetSeconds - 0.25) < 1e-9 && std::abs (c.lengthTicks - before / 2) <= 1,
+               "a clip that starts 0.5 s into its audio starts 0.25 s into the half-length audio, and is half as long");
+        check (c.lengthTicks <= c.naturalLengthTicks (bpm), "the length never exceeds what the audio can fill");
+    }
+    {   // a clip shorter than its audio (trimmed at the end) stays in proportion
+        auto c = clip;
+        c.lengthTicks = originalLength / 2;
+        check (sls::restretchClip (c, { 1.5, 0.0, false }, bpm) && std::abs (c.lengthTicks - static_cast<int> (std::lround (originalLength / 2 * 1.5))) <= 1,
+               "a trimmed clip keeps its share of the audio");
+    }
+    {   // splitting keeps the stretch on both halves
+        sls::Arrangement a;
+        auto c = clip;
+        sls::restretchClip (c, { 1.25, 3.0, false }, bpm);
+        a.audioClips.push_back (c);
+        const int r = sls::splitAudioClip (a, 0, c.startTick + c.lengthTicks / 2, bpm);
+        check (r == 1 && a.audioClips[1].data == a.audioClips[0].data && a.audioClips[1].original == kick && a.audioClips[1].stretch == a.audioClips[0].stretch,
+               "both halves of a split stretched clip share the audio and the settings");
+    }
+    {   // tempo matching
+        check (std::abs (sls::lengthRatioForTempo (90.0, 120.0) - 0.75) < 1e-12, "a 90 BPM loop in a 120 BPM project is 0.75 times as long");
+        check (std::abs (sls::lengthRatioForTempo (120.0, 90.0) - 4.0 / 3.0) < 1e-12, "a 120 BPM loop in a 90 BPM project is 4/3 as long");
+        check (sls::lengthRatioForTempo (0.0, 120.0) == 1.0 && sls::lengthRatioForTempo (-5.0, 120.0) == 1.0 && sls::lengthRatioForTempo (std::nan (""), 120.0) == 1.0
+                   && sls::lengthRatioForTempo (120.0, 0.0) == 1.0, "nonsense tempos change nothing");
+        check (sls::lengthRatioForTempo (1000.0, 20.0) == sls::kMaxStretchRatio && sls::lengthRatioForTempo (20.0, 1000.0) == sls::kMinStretchRatio, "extreme tempos are limited to 0.25 .. 4");
+    }
+    {   // project file
+        auto doc = sls::ProjectDocument::blank();
+        auto c1 = clip;
+        c1.track = 1;
+        c1.data = sls::makeMissingSample ("builtin:intro");
+        c1.stretch = { 1.5, -3.5, true };
+        c1.lengthTicks = 2000;
+        auto c2 = clip;
+        c2.track = 2;
+        c2.data = sls::makeMissingSample ("builtin:intro");
+        auto c3 = c1;
+        c3.track = 3;
+        doc.arrangement.audioClips = { c1, c2, c3 };
+        const auto text = doc.toJson();
+        check (text.contains ("\"stretch\""), "the stretch settings are written to the project");
+        const auto parsed = sls::ProjectDocument::fromJson (text);
+        check (parsed.document.has_value() && parsed.warnings.empty() && parsed.document->arrangement.audioClips.size() == 3, "the project opens again");
+        if (parsed.document)
+        {
+            auto arr = parsed.document->arrangement;
+            check (arr.audioClips[0].stretch == c1.stretch && arr.audioClips[1].stretch.isNeutral() && arr.audioClips[0].data->numFrames() == 0,
+                   "the settings come back; the audio is not stored");
+
+            juce::StringArray problems;
+            sls::loadAudioForClips (arr, problems);
+            check (problems.isEmpty(), "reading the audio of the clips reports no problem");
+            check (arr.audioClips[1].data->numFrames() == kick->numFrames() && arr.audioClips[1].original == nullptr, "an unstretched clip gets the file's audio");
+            check (arr.audioClips[0].original != nullptr && arr.audioClips[0].original->numFrames() == kick->numFrames()
+                       && arr.audioClips[0].data->numFrames() == static_cast<int> (std::llround (kick->numFrames() * 1.5)),
+                   "a stretched clip gets the stretched audio and keeps the original");
+            check (arr.audioClips[0].data == arr.audioClips[2].data, "two clips with the same file and settings share one rendering");
+            check (arr.audioClips[0].data->source == "builtin:intro", "the stretched audio still names its file, so saving again works");
+            auto resaved = *parsed.document;
+            resaved.arrangement = arr;
+            const auto again = sls::ProjectDocument::fromJson (resaved.toJson());
+            check (again.document.has_value() && again.document->arrangement.audioClips[0].stretch == c1.stretch, "saving after loading keeps the settings");
+        }
+
+        // hostile numbers in the file are brought into range
+        auto var = juce::JSON::parse (text);
+        auto* list = var.getDynamicObject()->getProperty ("audioClips").getArray();
+        auto* st = (*list)[0].getDynamicObject()->getProperty ("stretch").getDynamicObject();
+        st->setProperty ("lengthRatio", 1.0e9);
+        st->setProperty ("semitones", -1.0e9);
+        const auto hostile = sls::ProjectDocument::fromJson (juce::JSON::toString (var));
+        check (hostile.document.has_value() && hostile.document->arrangement.audioClips[0].stretch.lengthRatio == sls::kMaxStretchRatio
+                   && hostile.document->arrangement.audioClips[0].stretch.semitones == -sls::kMaxStretchSemitones,
+               "absurd stretch values in a file are limited to the allowed range");
+
+        // a file from before stretching existed
+        auto older = juce::JSON::parse (text);
+        for (auto& item : *older.getDynamicObject()->getProperty ("audioClips").getArray())
+            item.getDynamicObject()->removeProperty ("stretch");
+        const auto old = sls::ProjectDocument::fromJson (juce::JSON::toString (older));
+        check (old.document.has_value() && old.warnings.empty() && old.document->arrangement.audioClips[0].stretch.isNeutral(), "projects without stretch settings still open");
+
+        // a stretched clip whose file is gone stays silent and keeps its settings
+        auto gone = parsed.document->arrangement;
+        gone.audioClips[0].data = sls::makeMissingSample ("/does/not/exist.wav");
+        juce::StringArray problems;
+        sls::loadAudioForClips (gone, problems);
+        check (problems.size() == 1 && gone.audioClips[0].data->numFrames() == 0 && gone.audioClips[0].stretch == c1.stretch,
+               "a missing file is reported once, the clip stays silent and keeps its stretch settings");
+    }
+}
+
 int main()
 {
     testProjectModel();
@@ -4521,6 +4821,8 @@ int main()
     testAutomation();
     testMidiImport();
     testLegatoAndSlide();
+    testTimeStretch();
+    testStretchedClips();
 
     std::cout << "\n" << (failures == 0 ? "ALL TESTS PASSED" : "SOME TESTS FAILED") << " (" << failures << " failures)\n";
     return failures == 0 ? 0 : 1;

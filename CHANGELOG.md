@@ -2,6 +2,19 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.12.0 - 2026-11-06
+
+### Added
+- **Time-stretch and pitch-shift of audio clips.** Right-click an audio clip > *Stretch and pitch...*: make it longer or shorter (25 % to
+  400 %) without changing its pitch, change its pitch (-24 to +24 semitones, decimals allowed) without changing its length, or both. Type
+  the **tempo the audio was recorded at** and the length is set so that it plays in time at the project tempo. A *Keep the timbre* mode limits how
+  far high frequencies are moved when pitch-shifting. *Back to the original* undoes it for good (the file is never touched); the playlist's Undo works too.
+  The clip changes length by the same factor, its name shows the change (`[x1.50, +3 st]`), a split keeps it on both halves, and the project
+  file stores only the settings (the audio is processed again when the project is opened; clips with the same file and settings share one rendering).
+  The processing is done by [Signalsmith Stretch](https://github.com/Signalsmith-Audio/signalsmith-stretch) (MIT) and its FFT library, copied
+  unchanged into `third_party/signalsmith` with their licences. It runs offline, once, when you press *Apply*: about 40 times faster than the audio lasts
+  on the test machine, so a 3-minute clip takes a few seconds; audio longer than about 15 minutes is refused.
+
 ## 0.11.0 - 2026-11-06
 
 ### Added

@@ -314,6 +314,15 @@ juce::String ProjectDocument::toJson() const
         o->setProperty ("lengthTicks", a.lengthTicks);
         o->setProperty ("gain", static_cast<double> (a.gain));
         o->setProperty ("offsetSeconds", a.offsetSeconds);
+        if (! a.stretch.isNeutral())
+        {
+            // Only the settings: the audio is stretched again when the project is opened.
+            auto* st = new juce::DynamicObject();
+            st->setProperty ("lengthRatio", a.stretch.lengthRatio);
+            st->setProperty ("semitones", a.stretch.semitones);
+            st->setProperty ("keepTimbre", a.stretch.keepTimbre);
+            o->setProperty ("stretch", juce::var (st));
+        }
         audioList.add (juce::var (o));
     }
     root->setProperty ("audioClips", audioList);
@@ -574,6 +583,12 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
                 clip.lengthTicks = readInt (o->getProperty ("lengthTicks"), 0, 0, 100000000);
                 clip.gain = static_cast<float> (readNumber (o->getProperty ("gain"), 1.0, 0.0, 2.0));
                 clip.offsetSeconds = readNumber (o->getProperty ("offsetSeconds"), 0.0, 0.0, 1.0e6);
+                if (auto* st = o->getProperty ("stretch").getDynamicObject())
+                {
+                    clip.stretch.lengthRatio = readNumber (st->getProperty ("lengthRatio"), 1.0, kMinStretchRatio, kMaxStretchRatio);
+                    clip.stretch.semitones = readNumber (st->getProperty ("semitones"), 0.0, -kMaxStretchSemitones, kMaxStretchSemitones);
+                    clip.stretch.keepTimbre = readBool (st->getProperty ("keepTimbre"), false);
+                }
                 clip.data = makeMissingSample (source);
             }
             if (o != nullptr && ! source.empty() && d.arrangement.audioClips.size() < static_cast<size_t> (kMaxAudioClips)

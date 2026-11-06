@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "audio/Automation.h"
+#include "audio/TimeStretch.h"
 #include "audio/Project.h"
 
 namespace sls
@@ -43,7 +44,9 @@ constexpr int kMaxAudioClips = 64;
 // The playlist track number is also the mixer track the audio plays through.
 struct AudioClip
 {
-    std::shared_ptr<const SampleData> data; // decoded audio; holds the file path in `source` (empty frames = file missing)
+    std::shared_ptr<const SampleData> data; // the audio that plays, after `stretch`; holds the file path in `source` (empty frames = file missing)
+    std::shared_ptr<const SampleData> original; // the audio of the file itself; only set while `stretch` is not neutral
+    StretchSettings stretch;                    // time-stretch / pitch-shift applied to `original` to make `data`
     std::string name;
     int track = 0;
     int startTick = 0;

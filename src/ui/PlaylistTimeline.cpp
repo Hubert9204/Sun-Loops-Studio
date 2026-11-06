@@ -299,6 +299,20 @@ void PlaylistTimeline::pruneWaveformCache()
                          waveformCache.end());
 }
 
+namespace
+{
+// "x2.00, +3 st" for the name of a stretched clip.
+juce::String describeStretch (const StretchSettings& s)
+{
+    juce::StringArray parts;
+    if (std::fabs (s.lengthRatio - 1.0) > 1.0e-6)
+        parts.add ("x" + juce::String (s.lengthRatio, 2));
+    if (std::fabs (s.semitones) > 1.0e-6)
+        parts.add ((s.semitones > 0.0 ? "+" : "") + juce::String (s.semitones, std::fabs (s.semitones - std::round (s.semitones)) < 1.0e-6 ? 0 : 2) + " st");
+    return parts.joinIntoString (", ");
+}
+} // namespace
+
 void PlaylistTimeline::paintAudioClip (juce::Graphics& g, const AudioClip& clip, bool selected)
 {
     const auto r = audioClipRect (clip).reduced (0, 2).withTrimmedRight (selected ? 0 : 1);
@@ -364,7 +378,7 @@ void PlaylistTimeline::paintAudioClip (juce::Graphics& g, const AudioClip& clip,
 
     g.setColour (juce::Colours::white.withAlpha (0.92f));
     g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
-    g.drawText (juce::String (clip.name) + (missing ? "  (file not found)" : ""), r.reduced (5, 0).withHeight (14).translated (0, 1),
+    g.drawText (juce::String (clip.name) + (clip.stretch.isNeutral() ? juce::String() : "  [" + describeStretch (clip.stretch) + "]") + (missing ? "  (file not found)" : ""), r.reduced (5, 0).withHeight (14).translated (0, 1),
                 juce::Justification::centredLeft, true);
 
     if (selected)
@@ -1076,6 +1090,80 @@ void PlaylistTimeline::editAudioProperties (int index)
                              true);
 }
 
+// Time-stretch and pitch-shift of one audio clip: the settings are typed in, the audio is rendered again at once (a few
+// seconds for a long file) and the clip gets longer or shorter by the same factor.
+void PlaylistTimeline::editAudioStretch (int index)
+{
+    if (index < 0 || index >= static_cast<int> (arrangement.audioClips.size()))
+        return;
+
+    const auto clip = arrangement.audioClips[static_cast<size_t> (index)];
+    if (clip.data == nullptr || clip.data->numFrames() < 2)
+    {
+        juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Stretch and pitch", "This clip has no audio (its file is missing).");
+        return;
+    }
+
+    auto* window = new juce::AlertWindow ("Stretch and pitch", juce::String (clip.name)
+                                              + "\nLength 200 % = twice as long and half the tempo; 50 % = half as long. The pitch stays the same unless you change it."
+                                              + "\nIf you know the tempo the audio was recorded at, type it: the length is set so that it plays in time at "
+                                              + juce::String (bpm, 1) + " BPM (this overrides the length).",
+                                          juce::MessageBoxIconType::NoIcon);
+    window->addTextEditor ("length", juce::String (clip.stretch.lengthRatio * 100.0, 2), "Length (%, 25 to 400)");
+    window->addTextEditor ("pitch", juce::String (clip.stretch.semitones, 2), "Pitch (semitones, -24 to +24, decimals allowed)");
+    window->addTextEditor ("bpm", {}, "Tempo of the audio (BPM, optional)");
+    window->addComboBox ("mode", { "Normal", "Keep the timbre (limits the shift of high frequencies)" }, "Pitch mode");
+    if (auto* mode = window->getComboBoxComponent ("mode"))
+        mode->setSelectedItemIndex (clip.stretch.keepTimbre ? 1 : 0, juce::dontSendNotification);
+    window->addButton ("Apply", 1, juce::KeyPress (juce::KeyPress::returnKey));
+    window->addButton ("Back to the original", 2);
+    window->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+
+    window->enterModalState (true,
+                             juce::ModalCallbackFunction::create (
+                                 [safe = juce::Component::SafePointer<PlaylistTimeline> (this), window, index, clip] (int result)
+                                 {
+                                     if (safe == nullptr || result == 0 || index >= static_cast<int> (safe->arrangement.audioClips.size()))
+                                         return;
+
+                                     StretchSettings wanted;
+                                     if (result == 1)
+                                     {
+                                         wanted.lengthRatio = window->getTextEditorContents ("length").getDoubleValue() / 100.0;
+                                         wanted.semitones = window->getTextEditorContents ("pitch").getDoubleValue();
+                                         if (auto* mode = window->getComboBoxComponent ("mode"))
+                                             wanted.keepTimbre = mode->getSelectedItemIndex() == 1;
+                                         const auto sourceBpm = window->getTextEditorContents ("bpm").trim();
+                                         if (sourceBpm.isNotEmpty())
+                                             wanted.lengthRatio = lengthRatioForTempo (sourceBpm.getDoubleValue(), safe->bpm);
+                                         if (! (wanted.lengthRatio > 0.0))
+                                             wanted.lengthRatio = 1.0;
+                                     }
+
+                                     auto edited = clip;
+                                     juce::MouseCursor::showWaitCursor();
+                                     const bool rendered = restretchClip (edited, wanted, safe->bpm);
+                                     juce::MouseCursor::hideWaitCursor();
+                                     if (! rendered)
+                                     {
+                                         juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Stretch and pitch",
+                                                                                 "The audio could not be processed (it is longer than about 15 minutes, or empty).");
+                                         return;
+                                     }
+                                     if (! safe->arrangement.canPlaceAudio (edited, index))
+                                     {
+                                         juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Stretch and pitch",
+                                                                                 "The longer clip does not fit there: it would overlap another clip or go past the end of the playlist. Move the neighbour away or choose a shorter length.");
+                                         return;
+                                     }
+                                     safe->beginEdit();
+                                     safe->commitPendingUndo();
+                                     safe->arrangement.audioClips[static_cast<size_t> (index)] = edited;
+                                     safe->notifyChanged();
+                                 }),
+                             true);
+}
+
 void PlaylistTimeline::showClipMenu (const juce::MouseEvent& e)
 {
     const int track = yToTrack (e.y);
@@ -1092,7 +1180,10 @@ void PlaylistTimeline::showClipMenu (const juce::MouseEvent& e)
     menu.addItem (2, "Duplicate (Ctrl+D)");
     menu.addItem (3, "Copy (Ctrl+C)");
     if (audio >= 0)
+    {
         menu.addItem (4, "Position, length and gain...");
+        menu.addItem (7, "Stretch and pitch...");
+    }
     else
         menu.addItem (5, "Open this pattern");
     menu.addSeparator();
@@ -1109,6 +1200,7 @@ void PlaylistTimeline::showClipMenu (const juce::MouseEvent& e)
                                 case 2: safe->duplicateSelected(); break;
                                 case 3: safe->copySelected(); break;
                                 case 4: safe->editAudioProperties (audio); break;
+                                case 7: safe->editAudioStretch (audio); break;
                                 case 5:
                                     if (safe->selection.kind == Kind::Pattern && safe->selection.index >= 0
                                         && safe->selection.index < static_cast<int> (safe->arrangement.clips.size()) && safe->onPatternPicked)

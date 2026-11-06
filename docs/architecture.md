@@ -13,6 +13,7 @@ src/audio/                      No UI dependencies except JUCE audio types
   NoteSequence.h                Note, 480 ticks per beat, note validation and sorting
   Project.h                     Channel, MixerTrack, Console (aux buses, VCA groups), SampleData, Project: the immutable snapshot the audio thread reads
   Automation.h                  Automation targets, ranges, clips, points, evaluation and editing helpers (plain C++)
+  TimeStretch.*                 StretchSettings and stretchSample(): offline time-stretch / pitch-shift of a SampleData with Signalsmith Stretch
   Loudness.h                    LoudnessMeter: BS.1770-4 K-weighting, gating, LUFS, loudness range, true peak (plain C++)
   Spectrum.h                    StereoRing (lock-free audio -> GUI hand-over), SpectrumAnalyser (own FFT), stereo correlation
   Effects.*                     EffectSlot (type, bypass, parameters) and EffectUnit: Equalizer, Reverb, Delay, Compressor
@@ -247,6 +248,18 @@ voices -> channel (smoothed gain, equal-power pan, channel mute/solo)
 - There is no VST3 hosting. An `EffectSlot` has a built-in `EffectType`; hosting would add a slot kind that points at
   a plugin instance owned outside the snapshot, which needs its own design (state, editors, threading).
 
+### Time-stretch and pitch-shift (0.12.0)
+
+`stretchSample (input, StretchSettings)` renders a whole `SampleData` offline with Signalsmith Stretch (`third_party/signalsmith`, header-only,
+compiled as a `SYSTEM` include so its warnings are not ours): `seek` with the first `inputLatency` samples, `process` the rest plus `inputLatency`
+samples of silence into `round(frames x ratio)` output frames, `flush` the last `outputLatency`, and drop the first `outputLatency` samples, so the result
+is exactly `ratio` times as long and aligned with the input. Pitch is `setTransposeSemitones` (with a tonality limit of 8 kHz in *keep timbre* mode); the
+length ratio is the ratio of the buffer sizes. The result keeps `name` and `source`.
+An `AudioClip` has `data` (what plays), `original` (the file's audio, only while stretched) and `StretchSettings stretch`; `restretchClip` always renders from
+`original` and scales `lengthTicks` and `offsetSeconds` by the change of the ratio. **The audio thread knows nothing about it**: `compileSong` still hands
+`clip.data` to the player. The project file keeps `"stretch": {lengthRatio, semitones, keepTimbre}` per audio clip; `loadAudioForClips` (AudioImport.cpp, called
+by `MainComponent::loadAudioClipFiles`) reads the files and renders each distinct (file, settings) pair once.
+
 ### Aux buses, sends and VCA groups (0.11.0)
 
 `Project::console` holds `aux[2]` (each a `MixerTrack`: name, fader, balance, mute, four effect slots) and `vcaLevel[2]` /
@@ -461,6 +474,7 @@ failed. It covers:
   the offline renderer, Song mode only, the project file round trip and old files;
 - the console: sends (pre / post fader, mute and solo), aux bus effects and fader, bus before the master chain, VCA scaling, two groups, VCA mute,
   hostile values and the project file;
+- time-stretch: length, pitch and timing of test tones at four sample rates, edge cases, the clip arithmetic, tempo matching and the project file;
 - metering: K-weighting response, the -23 dBFS reference at three sample rates, gating, loudness range, true peak, FFT bin and level, correlation, the ring;
 - the arrangement: placement rules, compilation of pattern and song, and audible results through the offline
   renderer (the first and second clip sound, the gap between them is silent).

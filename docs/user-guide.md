@@ -254,7 +254,7 @@ The toolbar under the pattern box has five tools (keys **1** - **5** while the m
 
 | Tool | What it does |
 | --- | --- |
-| **Select** (1) | The normal tool described above and below: click a clip to select it, drag to move it, drag its **left or right edge** to trim or lengthen it (an audio clip keeps its sound in place: only more or less of it is heard), right-click for a menu (*Split here, Duplicate, Copy, Delete*, plus *Position, length and gain...* on an audio clip or *Open this pattern* on a pattern clip), double-click a pattern clip to open that pattern. |
+| **Select** (1) | The normal tool described above and below: click a clip to select it, drag to move it, drag its **left or right edge** to trim or lengthen it (an audio clip keeps its sound in place: only more or less of it is heard), right-click for a menu (*Split here, Duplicate, Copy, Delete*, plus *Position, length and gain...* and *Stretch and pitch...* on an audio clip or *Open this pattern* on a pattern clip), double-click a pattern clip to open that pattern. |
 | **Split** (2) | Click a clip to cut it in two at that point (snapped to the grid). Key **S** splits the selected clip at the mouse. |
 | **Cut** (3) | Drag across a clip to remove that stretch of it: the sound after the gap stays where it was. |
 | **Erase** (4) | Click a clip to delete it, or drag across several. |
@@ -305,6 +305,30 @@ mute, solo and effects apply, and it is part of every export. A clip lasts as ma
 tempo it was added at; if you change the BPM later the sound still plays at its original speed, so the clip may end
 before or after the audio does (the waveform shows where the sound really ends). If the file is later moved or deleted,
 the project opens with a silent clip marked *(file not found)* that keeps the path.
+
+### Stretch and pitch
+
+Right-click an audio clip > **Stretch and pitch...** to change its length or its pitch, or both, **independently**:
+
+| Field | Meaning |
+| --- | --- |
+| Length (%) | 100 = unchanged, 200 = twice as long (half the tempo), 50 = half as long. From 25 to 400. The pitch does not change. |
+| Pitch (semitones) | -24 to +24; decimals work (0.5 = 50 cents). The length does not change. |
+| Tempo of the audio (BPM) | Optional. If you know the tempo a loop was recorded at, type it: the length is set to *its tempo / project tempo*, so a 90 BPM loop in a 120 BPM project becomes 75 % as long. This overrides the Length field. |
+| Pitch mode | *Normal*, or *Keep the timbre*, which limits how far the spectrum above 8 kHz is moved (a little better on voices and cymbals when shifting by several semitones). |
+
+**Apply** renders the audio again, once (a few seconds for a long file) and the clip becomes longer or shorter by the same factor;
+**Back to the original** returns to the file's own sound and length; the playlist's **Undo** works too. The file on disk is never changed.
+A clip with a change shows it in its name: `[x1.50, +3 st]`. The result is always made from the original audio, so stretching twice by 150 % is
+150 %, not 225 %. If the longer clip would overlap its neighbour or pass the end of the playlist, nothing changes and you are told.
+
+The project file stores only the numbers; the audio is processed again when the project is opened (clips with the same file and the same
+numbers share one rendering). Splitting a stretched clip leaves both halves stretched.
+
+How good is it? The method (Signalsmith Stretch) works best between 75 % and 150 % and for pitch shifts of a few semitones; at the
+extremes (4x, an octave or more) sounds get smeared and a little metallic, especially drums and percussive
+notes, because there is no separate treatment of transients. It was measured on test tones (the length, the pitch and the timing are
+exact within a few milliseconds; a sharp attack is smeared by about 10 to 25 ms) and **not judged by ear on real music**.
 
 ### Recording
 
@@ -572,5 +596,5 @@ a heavier song or a plugin-heavy mixer can still need a bigger size.
 - Samples are mono or stereo, at most 30 seconds, played one-shot (no looping, no envelope editing). Audio clips: up to
   5 minutes per file, 64 clips.
 - Not available yet: playing notes from the computer keyboard, undo of channel settings and the mixer, embedding samples in the project, automatic saving
-  and crash recovery, VST plugins as instruments or effects, automation of anything except volumes, pans and effect parameters, turning guitar or voice pitch into notes,
+  and crash recovery, VST plugins as instruments or effects, time-stretching of samples in the Sampler (only audio clips on the playlist can be stretched), automation of anything except volumes, pans and effect parameters, turning guitar or voice pitch into notes,
   punch-in and count-in for recording, fades and per-clip effects, seeking by clicking the ruler. See [roadmap.md](roadmap.md).
