@@ -172,6 +172,7 @@ It is closed at start and opens from a channel, as above.
 | Move a note | Drag it. |
 | Change its length | Drag its right edge. |
 | Delete a note | Right-click it. |
+| Legato / slide | Shift + click a note: normal -> **legato** (blue, "L") -> **slide** (amber, "S") -> normal. |
 | Scroll pitch | Mouse wheel. |
 | Scroll time | Shift + wheel. |
 | Zoom time | Ctrl + wheel. Until you zoom, the whole pattern fits the panel width. |
@@ -186,6 +187,13 @@ It is closed at start and opens from a channel, as above.
   works whether the transport is playing or stopped. On a sampler channel each press plays the sample once, at the
   pitch of the key.
 - If the sound seems missing, check the channel's **M** button, the track's **M** and the master volume.
+
+**Legato and slide.** Two notes of the same channel can be joined: with **legato** the sound that is playing goes on and only its pitch
+jumps to the new note (no new attack, as on a monosynth); with **slide** the pitch glides to the new note in at most an eighth note
+(or the note's length, if shorter). The line drawn from the old note to the new one shows the join. For it to work the note before must
+still be sounding when the linked note starts, so the two should touch or overlap (turning legato on lengthens a note that stops up to
+a 16th early; a note that stops earlier leaves a gap and the linked note then just plays normally, with its own attack). It works on synth
+and sampler channels and is saved in the project.
 
 Notes snap to 16th notes. A pattern is two bars long. A synth note ends at its length or at the end of the pattern,
 whichever comes first. When you open a channel the view scrolls to its notes.
@@ -205,6 +213,24 @@ the Piano Roll.
 
 Channel settings (volume, pan, mute, solo, pitch, swing, instrument, sample, mixer track) belong to the channel, not
 to the pattern: they are the same in every pattern. Mixer tracks and their effects belong to neither.
+
+## Undo and redo of notes
+
+**Ctrl+Z** undoes and **Ctrl+Y** (or Ctrl+Shift+Z) redoes the last edit of notes - in the Piano Roll, the step sequencer, *Clear notes*, or a
+whole take of **Rec notes** (one step). With the mouse over the Playlist the same keys undo the Playlist's own edits instead. The File menu
+has the two commands too. The last 200 edits are kept. Not covered: volume, pan, pitch and the other channel settings, the mixer, adding
+or deleting patterns and channels; opening a project or deleting a pattern forgets the history.
+
+## Importing a MIDI file
+
+*File > Import a MIDI file into patterns...* (or drop a `.mid` / `.midi` file on the Playlist) turns a Standard MIDI File into **new synth
+channels** (one per track and MIDI channel that has notes, named after the track) and **new patterns** of two bars each, placed one after the
+other on playlist track 1 after the existing clips. Long notes that cross the end of a pattern are cut there and sound again at the start of
+the next pattern. The first tempo of the file sets the BPM. The status line reports what was done and what was left out.
+
+Left out: General MIDI **drum** tracks (MIDI channel 10), tempo changes after the first, controllers, pitch bend, program changes; tracks that
+do not fit in the free channels (there are 8 in all); files over 8 MB or with more than 200 000 notes; files timed in SMPTE frames. The
+imported channels are plain synths: give them a sampler or another sound afterwards.
 
 ## Playlist
 
@@ -455,6 +481,6 @@ a heavier song or a plugin-heavy mixer can still need a bigger size.
 - A pattern is always two bars long, 4/4, 16th-note grid.
 - Samples are mono or stereo, at most 30 seconds, played one-shot (no looping, no envelope editing). Audio clips: up to
   5 minutes per file, 64 clips.
-- Not available yet: playing notes from the computer keyboard, undo outside the Playlist, embedding samples in the project, automatic saving
+- Not available yet: playing notes from the computer keyboard, undo of channel settings and the mixer, embedding samples in the project, automatic saving
   and crash recovery, VST plugins as instruments or effects, sends, automation, turning guitar or voice pitch into notes,
   punch-in and count-in for recording, fades and per-clip effects, seeking by clicking the ruler. See [roadmap.md](roadmap.md).

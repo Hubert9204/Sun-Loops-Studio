@@ -1,5 +1,7 @@
 #include "ui/PlaylistTimeline.h"
 
+#include "audio/MidiImport.h"
+
 #include <cmath>
 
 #include "audio/AudioImport.h"
@@ -1372,7 +1374,7 @@ void PlaylistTimeline::mouseWheelMove (const juce::MouseEvent& e, const juce::Mo
 bool PlaylistTimeline::isInterestedInFileDrag (const juce::StringArray& files)
 {
     for (const auto& f : files)
-        if (classifyMediaFile (juce::File (f)) != FileKind::Unsupported)
+        if (classifyMediaFile (juce::File (f)) != FileKind::Unsupported || isMidiFileName (f.toStdString()))
             return true;
     return false;
 }
@@ -1412,7 +1414,7 @@ void PlaylistTimeline::filesDropped (const juce::StringArray& files, int x, int 
 
     juce::StringArray usable;
     for (const auto& f : files)
-        if (classifyMediaFile (juce::File (f)) != FileKind::Unsupported)
+        if (classifyMediaFile (juce::File (f)) != FileKind::Unsupported || isMidiFileName (f.toStdString()))
             usable.add (f);
 
     if (! usable.isEmpty() && onFilesDropped)

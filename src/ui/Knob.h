@@ -24,7 +24,6 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
 
-    juce::Slider& getSlider() noexcept { return slider; }
 
     // Also called for the mouse events of the slider inside (it reports to this component), so the caption
     // can switch to the value while the knob is hovered or dragged.

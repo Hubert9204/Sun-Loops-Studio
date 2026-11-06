@@ -53,7 +53,6 @@ public:
     void newProject();
     void openProject();                          // asks for a file
     bool openProjectFile (const juce::File& file); // returns false (after telling the user) if it cannot be opened
-    bool hasUnsavedChanges() const noexcept { return projectDirty; }
 
     // Runs `proceed` straight away if there is nothing to lose; otherwise asks "Save / Don't save / Cancel" first.
     void confirmDiscardChanges (std::function<void()> proceed);
@@ -66,6 +65,25 @@ private:
     void setPlaying (bool shouldPlay);
     void openAudioSettings();
     void openMetronomePanel();
+    // Undo / redo of note edits (piano roll, step sequencer, Clear notes, recorded notes) in the patterns. A state is the notes of
+    // every channel in one pattern; the state before each edit is kept (the last 200). Not covered: channel settings, the mixer,
+    // patterns added or removed, and the playlist (which has its own undo).
+    struct NoteState
+    {
+        int pattern = 0;
+        std::vector<std::vector<Note>> notes; // [channel]
+    };
+    NoteState captureNoteState() const;
+    static bool sameNoteState (const NoteState& a, const NoteState& b);
+    void recordNoteChange();  // call after notes may have changed: remembers the earlier state if they did
+    void resetNoteHistory();  // call after the notes were replaced wholesale (a project opened, a pattern deleted, a MIDI import)
+    void applyNoteState (const NoteState& state);
+    void undoNotes();
+    void redoNotes();
+    std::vector<NoteState> noteUndo, noteRedo;
+    NoteState lastNoteState;
+
+    void refreshRackStrips();
     void applyMetronome();                                  // button state, engine and saved settings
     void openAssignTrack (int channelIndex);                 // the "Assign free mixer track" window
     void assignChannelToTrack (int channelIndex, int track); // puts the instrument on that mixer track
@@ -78,6 +96,8 @@ private:
     struct ImportBatch;
     void importMediaFiles (const juce::StringArray& paths, int track, int tick);
     void chooseMediaToImport();
+    void chooseMidiToImport();
+    void importMidiFile (const juce::File& file); // new channels and patterns from a Standard MIDI File
     void finishImport (const std::shared_ptr<ImportBatch>& batch, const ImportResult& result, const juce::File& file, int track, int tick);
     bool addAudioClip (const std::shared_ptr<const SampleData>& data, int track, int tick, juce::String& note);
     void loadAudioClipFiles (juce::StringArray& problems); // after a project was opened: read the audio its clips refer to

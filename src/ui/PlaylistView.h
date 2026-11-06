@@ -45,7 +45,6 @@ public:
     std::function<void (const drag::Item&, int, int)> onItemDropped;
     std::function<void (int)> onTrackSelected;
 
-    PlaylistTimeline& getTimeline() noexcept { return timeline; }
 
     void paint (juce::Graphics&) override;
     void resized() override;

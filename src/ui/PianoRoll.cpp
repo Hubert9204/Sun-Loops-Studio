@@ -15,6 +15,8 @@ const juce::Colour kLineBeat { 0x30ffffff };
 const juce::Colour kLineBar { 0x66ffffff };
 const juce::Colour kNote { 0xff4cc38a };
 const juce::Colour kNoteSelected { 0xff8fe8b8 };
+const juce::Colour kNoteLegato { 0xff4ca6e0 };
+const juce::Colour kNoteSlide { 0xffe8a23a };
 const juce::Colour kPlayhead { 0xffffb347 };
 } // namespace
 
@@ -124,6 +126,20 @@ int PianoRoll::noteIndexAt (juce::Point<float> p) const noexcept
     return -1;
 }
 
+int PianoRoll::soundingNoteBefore (int index) const noexcept
+{
+    const auto& n = notes[static_cast<size_t> (index)];
+    int best = -1;
+    for (int i = 0; i < static_cast<int> (notes.size()); ++i)
+    {
+        const auto& o = notes[static_cast<size_t> (i)];
+        if (i != index && o.startTick < n.startTick && o.startTick + o.lengthTicks >= n.startTick
+            && (best < 0 || o.startTick > notes[static_cast<size_t> (best)].startTick))
+            best = i;
+    }
+    return best;
+}
+
 void PianoRoll::clampScroll()
 {
     const auto grid = gridArea();
@@ -229,12 +245,33 @@ void PianoRoll::paint (juce::Graphics& g)
         {
             const auto r = noteRect (notes[i]);
             const bool selected = static_cast<int> (i) == dragIndex && dragMode != Drag::None;
-            g.setColour (kNote.withAlpha (0.45f + 0.55f * notes[i].velocity));
+            const auto base = notes[i].link == NoteLink::Slide ? kNoteSlide : notes[i].link == NoteLink::Legato ? kNoteLegato : kNote;
+            g.setColour (base.withAlpha (0.45f + 0.55f * notes[i].velocity));
             if (selected)
                 g.setColour (kNoteSelected);
             g.fillRoundedRectangle (r, 2.0f);
             g.setColour (juce::Colours::black.withAlpha (0.5f));
             g.drawRoundedRectangle (r, 2.0f, 1.0f);
+
+            if (notes[i].link != NoteLink::None)
+            {
+                const int from = soundingNoteBefore (static_cast<int> (i));
+                if (from >= 0)
+                {
+                    // the join: a straight tie for legato, a line gliding from the old pitch for slide
+                    const auto old = noteRect (notes[static_cast<size_t> (from)]);
+                    const float glide = notes[i].link == NoteLink::Slide
+                                            ? static_cast<float> (std::min (notes[i].lengthTicks, kTicksPerBeat / 2) * pixelsPerTick()) : 0.0f;
+                    g.setColour (juce::Colours::white.withAlpha (0.85f));
+                    g.drawLine (r.getX(), old.getCentreY(), r.getX() + glide, r.getCentreY(), 1.5f);
+                }
+                if (r.getWidth() > 14.0f)
+                {
+                    g.setColour (juce::Colours::black.withAlpha (0.75f));
+                    g.setFont (10.0f);
+                    g.drawText (notes[i].link == NoteLink::Slide ? "S" : "L", r.withTrimmedLeft (3.0f), juce::Justification::centredLeft);
+                }
+            }
         }
 
         // Playhead.
@@ -313,6 +350,32 @@ void PianoRoll::mouseDown (const juce::MouseEvent& e)
 
     const auto pos = e.position;
     const int hit = noteIndexAt (pos);
+
+    if (hit >= 0 && e.mods.isShiftDown() && ! (e.mods.isRightButtonDown() || e.mods.isPopupMenu()))
+    {
+        auto& link = notes[static_cast<size_t> (hit)].link; // normal -> legato -> slide -> normal
+        link = link == NoteLink::None ? NoteLink::Legato : link == NoteLink::Legato ? NoteLink::Slide : NoteLink::None;
+        if (link == NoteLink::Legato && soundingNoteBefore (hit) < 0)
+        {
+            // A legato note needs the note before it to be still sounding: if that one stops a little early (up to a 16th),
+            // it is lengthened to meet this one.
+            const auto& me = notes[static_cast<size_t> (hit)];
+            int best = -1;
+            for (int i = 0; i < static_cast<int> (notes.size()); ++i)
+            {
+                const auto& o = notes[static_cast<size_t> (i)];
+                const int end = o.startTick + o.lengthTicks;
+                if (i != hit && o.startTick < me.startTick && end < me.startTick && me.startTick - end <= kGridTicks
+                    && (best < 0 || end > notes[static_cast<size_t> (best)].startTick + notes[static_cast<size_t> (best)].lengthTicks))
+                    best = i;
+            }
+            if (best >= 0)
+                notes[static_cast<size_t> (best)].lengthTicks = me.startTick - notes[static_cast<size_t> (best)].startTick;
+        }
+        repaint();
+        notifyChanged();
+        return;
+    }
 
     if (e.mods.isRightButtonDown() || e.mods.isPopupMenu())
     {

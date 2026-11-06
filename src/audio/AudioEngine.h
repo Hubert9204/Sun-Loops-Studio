@@ -72,7 +72,6 @@ public:
     // empty on success.
     juce::String startRecording (const juce::File& file, InputRecorder::Channels channels);
     InputRecorder::Take stopRecording(); // the transport keeps running; the caller stops it
-    bool isRecording() const noexcept { return recorder.isActive(); }
     double getRecordedSeconds() const noexcept { return recorder.getSecondsRecorded(); }
     // Hear the input through the speakers (adds its latency; keep off with speakers and a microphone: feedback).
     void setInputMonitoring (bool on) noexcept { monitorInput.store (on, std::memory_order_relaxed); }

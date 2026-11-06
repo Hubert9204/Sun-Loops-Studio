@@ -16,7 +16,7 @@ Sun Loops Studio is inspired by the workflow of loop-based DAWs such as FL Studi
 that uses no code, names, graphics or assets from other products, and it is not affiliated with or endorsed by
 their makers.
 
-**Status: alpha (0.9.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
+**Status: alpha (0.10.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
 display. Playback was confirmed on a real Nobara machine for version 0.3; everything added since (panels, patterns,
 playlist, browser, pitch/swing, the expanded mixer and its effects, saving projects, the AppImage, audio clips, drag and
 drop, recording, MIDI, the metronome and the export formats) was tested headless and in a virtual display with a silent
@@ -51,6 +51,9 @@ exactly what is and is not verified and what is missing (VST3 hosting and undo a
 - **Cyber-Hub sounds** - 30 system sounds by Hubert are built in (Browser > Samples > Cyber-Hub, and a Cyber-Hub Kit); the demo
   project is made of them and a start-up sound plays when the program opens (switch it off in the File menu). See
   [docs/cyber-hub.md](docs/cyber-hub.md).
+- **MIDI import, legato and slide, note undo** - a Standard MIDI File (File menu, or dropped on the Playlist) becomes new
+  channels and patterns; notes can be joined with **legato** or a pitch **slide** (Shift+click in the Piano Roll); **Ctrl+Z / Ctrl+Y**
+  undo and redo note edits (the Playlist has its own undo).
 - **Metronome** - a click with adjustable tempo (and tap tempo) and volume, on its own button.
 - **Mixer** (`F9`) - 8 vertical tracks, each with a fader and dB read-out, stereo balance, mute, solo, a Peak/RMS
   meter and 4 insert-effect slots (Equalizer, Reverb, Delay, Compressor, each with bypass). The master strip on the

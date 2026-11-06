@@ -102,7 +102,6 @@ class Workspace : public juce::Component
 public:
     void addPanel (PanelWindow& panel);
     void activate (PanelWindow* panel); // nullptr: no active panel
-    PanelWindow* getActive() const noexcept { return activePanel; }
 
     void paint (juce::Graphics&) override;
     void resized() override;

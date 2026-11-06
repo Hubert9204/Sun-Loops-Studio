@@ -7,6 +7,12 @@
 namespace sls
 {
 constexpr int kTicksPerBeat = 480;
+constexpr int kSixteenthTicks = kTicksPerBeat / 4; // the step of the step sequencer and of the swing
+
+// How a note joins the one sounding before it in the same channel (see Player::noteOn): Legato = the same sound goes on, its
+// pitch jumps to this note's pitch (no new attack); Slide = the same, but the pitch glides there (at most an eighth note). With
+// no note sounding at its start, a Legato or Slide note simply plays as a normal note.
+enum class NoteLink : std::uint8_t { None, Legato, Slide };
 
 struct Note
 {
@@ -14,10 +20,11 @@ struct Note
     int startTick = 0;
     int lengthTicks = kTicksPerBeat;
     float velocity = 0.8f;             // 0..1
+    NoteLink link = NoteLink::None;
 };
 
 // Immutable snapshot of the pattern, read by the audio thread.
-// Build it with Sequence::make(), then hand it to SequenceExchange::publish().
+// Sequence::make() validates and sorts a list of notes (used when a Project is built).
 struct Sequence
 {
     std::vector<Note> notes;           // sorted by startTick, all inside [0, lengthTicks)

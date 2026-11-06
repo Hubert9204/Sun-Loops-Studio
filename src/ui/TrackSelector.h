@@ -14,7 +14,6 @@ public:
     explicit TrackSelector (int numberOfTracks);
 
     void setTrack (int zeroBasedTrack);
-    int getTrack() const noexcept { return track; }
 
     std::function<void (int)> onChange; // called with the new 0-based track
 

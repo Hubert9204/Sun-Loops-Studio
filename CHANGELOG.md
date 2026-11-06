@@ -2,6 +2,31 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.10.0 - 2026-11-06
+
+### Added
+- **MIDI file import.** *File > Import a MIDI file into patterns...*, or drop a `.mid` / `.midi` file on the Playlist. Every track (and every channel of a track) with notes becomes a new **synth channel** named after
+  the track; the notes are spread over new patterns of two bars (a note that crosses the end of a pattern is cut there and continues, as a
+  new note, at the start of the next), placed on playlist track 1 after whatever the playlist already holds. The file's first tempo
+  becomes the BPM. Format 0 and 1 files with beat timing (any resolution) are read; SMPTE-timed files, files without notes and files over
+  8 MB or 200 000 notes are refused with a message. **Not imported:** General MIDI drum tracks (channel 10: the pitch picks a drum, which
+  needs a kit mapping), tempo changes after the first one, controllers, pitch bend and program changes. Tracks that do not fit in the free
+  channels (8 in all) are counted and skipped.
+- **Legato and slide between notes of one channel.** A note can be *Legato* (the sound that is playing goes on, its pitch jumps to the new
+  note: no new attack) or *Slide* (the same, with the pitch gliding to the new note in at most an eighth note). It works on synth and
+  sampler channels, needs the note before to still be sounding when the linked note starts (otherwise it plays normally) and is saved in
+  the project (a fifth value of the note; older programs ignore it). In the Piano Roll **Shift+click** a note to cycle normal, legato
+  (blue "L"), slide (amber "S"); the join is drawn as a line. Turning legato on lengthens a note that stops up to a 16th early.
+- **Undo / redo of note edits** (Piano Roll, step sequencer, Clear notes, a take of recorded notes as one step): **Ctrl+Z / Ctrl+Y** (or
+  Ctrl+Shift+Z) anywhere except over the Playlist, where the keys still undo the playlist; also in the File menu. The last 200 edits are
+  kept. Not covered: channel settings, the mixer, adding or deleting patterns and channels (opening a project or deleting a pattern
+  forgets the history).
+
+### Changed
+- Code clean-up from an audit: the duplicated fader layout of the mixer strips is one function, the 16th-note constant lives in one
+  place, the strip hand-over to the rack is one function, ten unused getters and a stale comment were removed.
+- `Note` has a `link` field (`NoteLink`); project files store it only when it is set.
+
 ## 0.9.0 - 2026-11-06
 
 ### Added

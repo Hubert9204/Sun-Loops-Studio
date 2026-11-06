@@ -15,7 +15,6 @@ public:
     // 0 at -60 dB and below, 1 at +6 dB and above.
     static float levelToPosition (float linear) noexcept;
 
-    float getPeakHold() const noexcept { return peakHold; }
 
     void paint (juce::Graphics&) override;
     void mouseDown (const juce::MouseEvent&) override { clipped = false; peakHold = 0.0f; repaint(); }

@@ -13,6 +13,7 @@
 #include "audio/BuiltinSamples.h"
 #include "audio/CyberHub.h"
 #include "audio/ClipEdit.h"
+#include "audio/MidiImport.h"
 #include "audio/OfflineRenderer.h"
 
 namespace sls
@@ -26,7 +27,6 @@ namespace
 {
 constexpr int kLoopBars = 2;
 constexpr int kLoopTicks = kLoopBars * 4 * kTicksPerBeat;
-constexpr int kStep = kTicksPerBeat / 4;
 constexpr double kDemoBpm = 112.0;
 
 Channel makeSynth (const char* name, float volume)
@@ -51,7 +51,7 @@ Channel makeDrum (const char* name, std::shared_ptr<const SampleData> sample, fl
 
 void addStep (Channel& c, int step, float velocity = 0.9f)
 {
-    c.notes.push_back ({ c.rootPitch, step * kStep, kStep, velocity });
+    c.notes.push_back ({ c.rootPitch, step * kSixteenthTicks, kSixteenthTicks, velocity });
 }
 
 // A small groove so there is something to hear and edit on first launch.
@@ -176,11 +176,7 @@ MainComponent::MainComponent()
     for (size_t i = 0; i < channels.size(); ++i)
         createStrip (i);
 
-    std::vector<ChannelStrip*> stripPointers;
-    for (auto& s : strips)
-        stripPointers.push_back (s.get());
-    rackView.setStrips (std::move (stripPointers));
-    rackView.setAddChannelEnabled (channels.size() < static_cast<size_t> (kMaxChannels));
+    refreshRackStrips();
     rackView.onAddChannel = [this]
     {
         juce::PopupMenu menu;
@@ -226,6 +222,7 @@ MainComponent::MainComponent()
         pianoRoll.setNotes ({});
         strips[static_cast<size_t> (selected)]->repaint();
         publishProject();
+        recordNoteChange();
     };
     deviceButton.onClick = [this] { openAudioSettings(); };
 
@@ -290,6 +287,7 @@ MainComponent::MainComponent()
         channels[static_cast<size_t> (selected)].notes = pianoRoll.getNotes();
         strips[static_cast<size_t> (selected)]->repaint();
         publishProject();
+        recordNoteChange();
     };
 
     playlistView.onChanged = [this]
@@ -407,11 +405,123 @@ MainComponent::MainComponent()
     deviceLabel.setText (error.isEmpty() ? engine.describeDevice() : "Audio error: " + error,
                          juce::dontSendNotification);
 
+    resetNoteHistory();
     startTimerHz (30);
 
     // Space and F5/F6/F7/F9 work from the start, without needing a click first.
     juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<MainComponent> (this)]
                                      { if (safe != nullptr) safe->grabKeyboardFocus(); });
+}
+
+// ------------------------------------------------------------------------- Undo / redo of note edits
+
+MainComponent::NoteState MainComponent::captureNoteState() const
+{
+    NoteState s;
+    s.pattern = currentPattern;
+    s.notes.reserve (channels.size());
+    for (const auto& c : channels)
+        s.notes.push_back (c.notes);
+    return s;
+}
+
+bool MainComponent::sameNoteState (const NoteState& a, const NoteState& b)
+{
+    if (a.pattern != b.pattern || a.notes.size() != b.notes.size())
+        return false;
+    for (size_t c = 0; c < a.notes.size(); ++c)
+    {
+        if (a.notes[c].size() != b.notes[c].size())
+            return false;
+        for (size_t i = 0; i < a.notes[c].size(); ++i)
+        {
+            const auto& x = a.notes[c][i];
+            const auto& y = b.notes[c][i];
+            if (x.pitch != y.pitch || x.startTick != y.startTick || x.lengthTicks != y.lengthTicks || std::abs (x.velocity - y.velocity) > 1.0e-6f || x.link != y.link)
+                return false;
+        }
+    }
+    return true;
+}
+
+void MainComponent::recordNoteChange()
+{
+    auto now = captureNoteState();
+    if (sameNoteState (now, lastNoteState))
+        return;
+
+    // The pattern or the number of channels changed since the last state: that is not a note edit, only a new starting point.
+    if (now.pattern == lastNoteState.pattern && now.notes.size() == lastNoteState.notes.size())
+    {
+        noteUndo.push_back (std::move (lastNoteState));
+        if (noteUndo.size() > 200)
+            noteUndo.erase (noteUndo.begin());
+        noteRedo.clear();
+    }
+    lastNoteState = std::move (now);
+}
+
+void MainComponent::resetNoteHistory()
+{
+    noteUndo.clear();
+    noteRedo.clear();
+    lastNoteState = captureNoteState();
+}
+
+void MainComponent::applyNoteState (const NoteState& state)
+{
+    if (state.pattern != currentPattern && state.pattern < static_cast<int> (arrangement.patterns.size()))
+        selectPattern (state.pattern);
+
+    for (size_t c = 0; c < channels.size() && c < state.notes.size(); ++c)
+    {
+        channels[c].notes = state.notes[c];
+        strips[c]->refreshFromChannel();
+    }
+    pianoRoll.setNotes (channels[static_cast<size_t> (selected)].notes);
+    commitCurrentPattern();
+    lastNoteState = captureNoteState();
+    markDirty();
+    publishProject();
+}
+
+void MainComponent::undoNotes()
+{
+    if (noteUndo.empty())
+    {
+        statusLabel.setText ("Nothing to undo in the notes", juce::dontSendNotification);
+        return;
+    }
+    auto target = std::move (noteUndo.back());
+    noteUndo.pop_back();
+    noteRedo.push_back (captureNoteState());
+    applyNoteState (target);
+    statusLabel.setText ("Undid a note edit", juce::dontSendNotification);
+}
+
+void MainComponent::redoNotes()
+{
+    if (noteRedo.empty())
+    {
+        statusLabel.setText ("Nothing to redo in the notes", juce::dontSendNotification);
+        return;
+    }
+    auto target = std::move (noteRedo.back());
+    noteRedo.pop_back();
+    noteUndo.push_back (captureNoteState());
+    applyNoteState (target);
+    statusLabel.setText ("Redid a note edit", juce::dontSendNotification);
+}
+
+// Hands the strips to the rack (after strips were created or removed) and enables or disables "add channel".
+void MainComponent::refreshRackStrips()
+{
+    std::vector<ChannelStrip*> stripPointers;
+    stripPointers.reserve (strips.size());
+    for (auto& s : strips)
+        stripPointers.push_back (s.get());
+    rackView.setStrips (std::move (stripPointers));
+    rackView.setAddChannelEnabled (channels.size() < static_cast<size_t> (kMaxChannels));
 }
 
 MainComponent::~MainComponent()
@@ -508,8 +618,17 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
         if (letter == 'O' && ! shift) { openProject(); return true; }
     }
 
+    // Ctrl+Z / Ctrl+Y undo and redo in the playlist when the mouse is over it, otherwise in the notes.
+    const bool overPlaylist = playlistPanel.isOpen() && playlistView.isShowing() && playlistView.isMouseOver (true);
+    if (! overPlaylist && key.getModifiers().isCommandDown())
+    {
+        const auto letter = juce::CharacterFunctions::toUpperCase (static_cast<juce::juce_wchar> (key.getKeyCode()));
+        if (letter == 'Z') { if (key.getModifiers().isShiftDown()) redoNotes(); else undoNotes(); return true; }
+        if (letter == 'Y') { redoNotes(); return true; }
+    }
+
     // With the mouse over the playlist its keys (Delete, Ctrl+Z/Y/C/X/V/D, 1..5 for the tools, +/- to zoom) work first.
-    if (playlistPanel.isOpen() && playlistView.isShowing() && playlistView.isMouseOver (true) && playlistView.handleKey (key))
+    if (overPlaylist && playlistView.handleKey (key))
         return true;
 
     if (key == juce::KeyPress::spaceKey)
@@ -700,6 +819,7 @@ void MainComponent::createStrip (size_t channelIndex)
             pianoRoll.setNotes (channels[static_cast<size_t> (idx)].notes);
         updateTrackRouting();
         publishProject();
+        recordNoteChange(); // (does nothing unless a step was edited)
     };
     strip->onSavePreset = [this] (int idx) { savePresetFor (idx); };
     strip->onAssignTrack = [this] (int idx) { openAssignTrack (idx); };
@@ -728,11 +848,7 @@ int MainComponent::addChannel (Instrument instrument, bool askForSample)
 
     createStrip (channels.size() - 1);
 
-    std::vector<ChannelStrip*> stripPointers;
-    for (auto& s : strips)
-        stripPointers.push_back (s.get());
-    rackView.setStrips (std::move (stripPointers));
-    rackView.setAddChannelEnabled (channels.size() < static_cast<size_t> (kMaxChannels));
+    refreshRackStrips();
 
     const int index = static_cast<int> (channels.size()) - 1;
     updateTrackRouting();
@@ -823,6 +939,7 @@ void MainComponent::selectPattern (int index)
     patternBox.setSelectedId (index + 1, juce::dontSendNotification);
     statusLabel.setText ("Pattern: " + juce::String (arrangement.patterns[static_cast<size_t> (index)].name),
                          juce::dontSendNotification);
+    lastNoteState = captureNoteState(); // another pattern is not a note edit
     publishProject();
 }
 
@@ -898,6 +1015,7 @@ void MainComponent::loadPatternIntoChannels (int index)
         strips[c]->refreshFromChannel();
     }
     pianoRoll.setNotes (channels[static_cast<size_t> (selected)].notes);
+    resetNoteHistory(); // the pattern numbers behind the old states may be gone
 }
 
 void MainComponent::deletePattern (int index)
@@ -1200,6 +1318,112 @@ struct MainComponent::ImportBatch
     juce::StringArray errors, notes;
 };
 
+void MainComponent::chooseMidiToImport()
+{
+    fileChooser = std::make_unique<juce::FileChooser> ("Import a MIDI file into new channels and patterns", library.root, "*.mid;*.midi");
+    fileChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+                              [safe = juce::Component::SafePointer<MainComponent> (this)] (const juce::FileChooser& chooser)
+                              {
+                                  if (safe != nullptr && chooser.getResult() != juce::File())
+                                      safe->importMidiFile (chooser.getResult());
+                              });
+}
+
+// Every MIDI track with notes becomes a new synth channel, the notes are spread over new patterns (two bars each) and the
+// patterns are placed on playlist track 1 after whatever the playlist already holds. See planMidiImport.
+void MainComponent::importMidiFile (const juce::File& file)
+{
+    const auto fail = [this, &file] (const juce::String& why)
+    {
+        statusLabel.setText ("Could not import " + file.getFileName() + ": " + why, juce::dontSendNotification);
+        juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "MIDI import", file.getFileName() + "\n\n" + why);
+    };
+
+    if (file.getSize() > static_cast<juce::int64> (kMaxMidiFileBytes))
+        return fail ("the file is larger than 8 MB");
+    juce::MemoryBlock bytes;
+    if (! file.loadFileAsData (bytes))
+        return fail ("the file cannot be read");
+
+    const auto parsed = parseMidiFile (bytes.getData(), bytes.getSize());
+    if (! parsed.ok)
+        return fail (juce::String (parsed.error));
+
+    const int startUnit = arrangement.songLengthUnits();
+    const int room = std::min (kMaxPatterns - static_cast<int> (arrangement.patterns.size()), kPlaylistUnits - startUnit);
+    if (room <= 0)
+        return fail ("there is no room left for new patterns on the playlist");
+
+    const int freeChannels = kMaxChannels - static_cast<int> (channels.size());
+    const auto plan = planMidiImport (parsed, freeChannels, arrangement.patternTicks, room);
+    if (plan.channelNames.empty() || plan.patternCount() == 0)
+        return fail (plan.skippedPercussion > 0 && freeChannels > 0 ? "it only holds drums (General MIDI percussion is not imported)"
+                                                                   : "there is no free channel: remove a channel first");
+
+    commitCurrentPattern();
+    std::vector<int> newChannels;
+    for (const auto& name : plan.channelNames)
+    {
+        const int index = addChannel (Instrument::Synth, false);
+        if (index < 0)
+            break;
+        auto channelName = name;
+        if (channelName.size() > 40)
+            channelName.resize (40);
+        channels[static_cast<size_t> (index)].name = channelName;
+        newChannels.push_back (index);
+    }
+    arrangement.ensureChannelCount (channels.size());
+
+    auto stem = file.getFileNameWithoutExtension().toStdString();
+    if (! cleanPatternName (stem))
+        stem = "MIDI";
+    if (plan.patternCount() > 1 && stem.size() > 36)
+        stem.resize (36);
+
+    const int firstPattern = static_cast<int> (arrangement.patterns.size());
+    for (int p = 0; p < plan.patternCount(); ++p)
+    {
+        Pattern pattern;
+        pattern.name = plan.patternCount() == 1 ? stem : stem + " " + std::to_string (p + 1);
+        pattern.notes.resize (channels.size());
+        for (size_t k = 0; k < newChannels.size() && k < plan.patternNotes[static_cast<size_t> (p)].size(); ++k)
+            pattern.notes[static_cast<size_t> (newChannels[k])] = plan.patternNotes[static_cast<size_t> (p)][k];
+        arrangement.patterns.push_back (std::move (pattern));
+        arrangement.clips.push_back ({ firstPattern + p, 0, startUnit + p, 1 });
+    }
+
+    juce::String message = "Imported " + file.getFileName() + ": " + juce::String (static_cast<int> (newChannels.size()))
+                         + (newChannels.size() == 1 ? " channel, " : " channels, ") + juce::String (plan.patternCount())
+                         + (plan.patternCount() == 1 ? " pattern" : " patterns") + " on playlist track 1";
+    if (parsed.bpm > 0.0)
+    {
+        bpmSlider.setValue (std::clamp (std::round (parsed.bpm), 40.0, 240.0)); // the slider drives the engine
+        message += ", tempo " + juce::String (juce::roundToInt (bpmSlider.getValue())) + " BPM";
+    }
+    if (parsed.tempoChanges)
+        message += " (the file changes tempo: only its first tempo is used)";
+    if (plan.skippedPercussion > 0)
+        message += ". Drum tracks skipped: " + juce::String (plan.skippedPercussion);
+    if (plan.skippedTracks > 0)
+        message += ". Tracks that did not fit in the free channels: " + juce::String (plan.skippedTracks);
+    if (plan.tiedNotes > 0)
+        message += ". " + juce::String (plan.tiedNotes) + " long notes cross a pattern boundary and sound again at the start of the next pattern";
+    if (plan.cutNotes > 0)
+        message += ". " + juce::String (plan.cutNotes) + " notes at the end did not fit on the playlist";
+
+    selectPattern (firstPattern);
+    if (! newChannels.empty())
+        selectChannel (newChannels.front()); // shows its name and scrolls the piano roll to its notes
+    refreshPatternBox();
+    resetNoteHistory();
+    playlistView.clearHistory();
+    playlistView.repaint();
+    markDirty();
+    publishProject();
+    statusLabel.setText (message, juce::dontSendNotification);
+}
+
 void MainComponent::chooseMediaToImport()
 {
     juce::String wildcard;
@@ -1224,8 +1448,17 @@ void MainComponent::chooseMediaToImport()
 }
 
 // The files go on consecutive tracks starting at `track`, each at the first free beat from `tick` on.
-void MainComponent::importMediaFiles (const juce::StringArray& paths, int track, int tick)
+void MainComponent::importMediaFiles (const juce::StringArray& allPaths, int track, int tick)
 {
+    // MIDI files are not audio: they become channels and patterns, right away.
+    juce::StringArray paths;
+    for (const auto& path : allPaths)
+    {
+        if (isMidiFileName (path.toStdString()))
+            importMidiFile (juce::File (path));
+        else
+            paths.add (path);
+    }
     if (paths.isEmpty())
         return;
 
@@ -1672,6 +1905,7 @@ void MainComponent::endNoteTake()
         pianoRoll.setNotes (channels[static_cast<size_t> (selected)].notes);
         publishProject();
     }
+    recordNoteChange(); // everything recorded since the take began is one undo step
 }
 
 // Called from the timer: the notes that the audio thread stamped since the last tick become notes of the pattern.
@@ -2099,11 +2333,7 @@ void MainComponent::applyDocument (ProjectDocument doc, const juce::File& file, 
 
     for (size_t i = 0; i < channels.size(); ++i)
         createStrip (i);
-    std::vector<ChannelStrip*> stripPointers;
-    for (auto& s : strips)
-        stripPointers.push_back (s.get());
-    rackView.setStrips (std::move (stripPointers));
-    rackView.setAddChannelEnabled (channels.size() < static_cast<size_t> (kMaxChannels));
+    refreshRackStrips();
 
     for (int t = 0; t < kMaxTracks; ++t)
         mixerPanel.refreshTrack (t);
@@ -2119,6 +2349,7 @@ void MainComponent::applyDocument (ProjectDocument doc, const juce::File& file, 
     refreshPatternBox();
     playlistView.setSelectedPattern (currentPattern);
     playlistView.clearHistory(); // the arrangement was changed from outside: undo could not restore it safely
+    resetNoteHistory();
     playlistView.repaint();
     setSongMode (doc.songMode);
     selectChannel (0);
@@ -2310,7 +2541,11 @@ void MainComponent::showFileMenu()
     menu.addSeparator();
     menu.addItem (item (3, "Save", "Ctrl+S"));
     menu.addItem (item (4, "Save As...", "Ctrl+Shift+S"));
+    menu.addItem (item (9, "Undo a note edit", "Ctrl+Z", ! noteUndo.empty()));
+    menu.addItem (item (10, "Redo a note edit", "Ctrl+Y", ! noteRedo.empty()));
+    menu.addSeparator();
     menu.addItem (item (6, "Import audio or video into the playlist...", ""));
+    menu.addItem (item (8, "Import a MIDI file into patterns...", ""));
     menu.addSeparator();
 
     // Export: the same render the engine plays, written as the chosen file type. MP3 and AAC are encoded by ffmpeg.
@@ -2346,6 +2581,9 @@ void MainComponent::showFileMenu()
                                 case 4: safe->saveProjectAs(); break;
                                 case 5: safe->library.ensureExists(); safe->library.projects.revealToUser(); break;
                                 case 6: safe->chooseMediaToImport(); break;
+                                case 8: safe->chooseMidiToImport(); break;
+                                case 9: safe->undoNotes(); break;
+                                case 10: safe->redoNotes(); break;
                                 case 7:
                                     if (safe->settings != nullptr)
                                     {

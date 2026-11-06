@@ -14,7 +14,7 @@ strumento sta in un pannello mobile che puoi spostare, ridimensionare, sovrappor
 Sun Loops Studio si ispira al modo di lavorare dei DAW a loop come FL Studio. È un progetto indipendente: non usa
 codice, nomi, grafica o risorse di altri prodotti e non è affiliato né approvato dai loro produttori.
 
-**Stato: alpha (0.9.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
+**Stato: alpha (0.10.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
 La riproduzione è stata confermata su un vero PC Nobara per la versione 0.3; tutto ciò che è stato aggiunto dopo
 (pannelli, pattern, playlist, browser, pitch/swing, mixer espanso ed effetti, salvataggio dei progetti, AppImage, clip audio, trascinamento
 dei file, registrazione, MIDI, metronomo e formati di esportazione) è stato provato con test automatici e in un display virtuale con un
@@ -51,6 +51,9 @@ cosa manca (hosting VST3 e annulla/ripristina sono le mancanze principali).
 - **Suoni Cyber-Hub** - 30 suoni di sistema di Hubert sono incorporati (Browser > Samples > Cyber-Hub e un Cyber-Hub Kit); il progetto
   dimostrativo è fatto con questi e all'apertura suona un suono di avvio (si disattiva nel menu File). Vedi
   [docs/cyber-hub.md](docs/cyber-hub.md) (in inglese).
+- **Importazione MIDI, legato e slide, annulla per le note** - un file MIDI standard (menu File, o trascinato sulla Playlist) diventa
+  nuovi canali e pattern; le note si possono unire con **legato** o con uno **slide** di altezza (Maiusc+clic nel Piano Roll); **Ctrl+Z / Ctrl+Y**
+  annullano e ripristinano le modifiche alle note (la Playlist ha il suo annulla).
 - **Metronomo** - un click con tempo (anche tap tempo) e volume regolabili, su un pulsante a parte.
 - **Mixer** (`F9`) - 8 tracce verticali, ognuna con fader e dB, bilanciamento stereo, mute, solo, indicatore
   Peak/RMS e 4 slot per effetti in serie (Equalizer, Reverb, Delay, Compressor, con bypass). La strip master a destra

@@ -90,6 +90,9 @@ private:
         double pos = 0.0;
         double step = 1.0;
         std::uint64_t age = 0;
+        int glideLeft = 0;                  // samples left of a pitch slide (multiplies increment / step by glideRatio each sample)
+        double glideRatio = 1.0;
+        double glideTarget = 0.0;           // the exact rate at the end of the slide
     };
 
     // Audio clips of the playlist (recordings, imported files): one voice each, played straight through.
@@ -133,6 +136,7 @@ private:
     float rmsCoef = 0.0001f;
 
     double sampleRate = 48000.0;
+    double ticksPerSampleNow = 0.01; // of the block being rendered: converts a note's length to samples for slides
     double tickPos = 0.0;
     std::uint64_t projectRevision = ~std::uint64_t { 0 };
     std::uint64_t ageCounter = 0;

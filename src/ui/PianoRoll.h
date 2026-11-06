@@ -13,6 +13,9 @@ namespace sls
 //   Left click on empty grid   : create a note (drag right to set its length)
 //   Left drag on a note        : move it (drag its right edge to resize)
 //   Right click on a note      : delete it
+//   Shift + click on a note    : changes how it joins the note before it: normal -> legato (blue: the sound goes on, the pitch
+//                                jumps) -> slide (amber: the pitch glides, drawn as a line from the old pitch) -> normal. The note before must still be sounding
+//                                when the linked note starts (turning legato on lengthens a note that stops up to a 16th early)
 //   Left button on a key       : plays that note for as long as the button is down (slide to change the note)
 //   Left button on the grid    : the note being created, moved or resized sounds while the button is down
 //   Mouse wheel                : scroll pitch   | Shift+wheel: scroll time | Ctrl+wheel: zoom time
@@ -28,7 +31,6 @@ public:
     void scrollToNotes();
 
     void setLoopLengthTicks (int ticks);
-    int getLoopLengthTicks() const noexcept { return loopLengthTicks; }
 
     // tick < 0 hides the playhead.
     void setPlayheadTick (int tick);
@@ -68,6 +70,7 @@ private:
     int snap (double tick) const noexcept;
     juce::Rectangle<float> noteRect (const Note& n) const noexcept;
     int noteIndexAt (juce::Point<float> p) const noexcept;
+    int soundingNoteBefore (int index) const noexcept; // the note that a legato / slide note takes over from, or -1
     void clampScroll();
     void notifyChanged();
     void sound (int pitch); // -1 stops; a different pitch stops the previous one and starts the new one

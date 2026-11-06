@@ -32,7 +32,7 @@ public:
     void mouseDoubleClick (const juce::MouseEvent&) override;
 
 private:
-    static constexpr int kStepTicks = kTicksPerBeat / 4;
+    static constexpr int kStepTicks = kSixteenthTicks;
 
     int stepCount() const noexcept { return std::max (1, loopLengthTicks / kStepTicks); }
     int stepAt (int x) const noexcept;

@@ -202,6 +202,42 @@ void Player::noteOn (const Channel& channel, int channelIndex, const Note& n, in
     if (isSampler && (channel.sample == nullptr || channel.sample->numFrames() < 2))
         return;
 
+    // Legato and slide: the note sounding in this channel goes on instead of a new voice starting.
+    if (! live && n.link != NoteLink::None)
+    {
+        Voice* held = nullptr;
+        for (auto& v : voices)
+            if (v.channel == channelIndex && ! v.live && v.sampler == isSampler
+                && (v.state == State::Attack || v.state == State::Sustain)
+                && (! isSampler || v.sample == channel.sample.get())
+                && (held == nullptr || v.age > held->age))
+                held = &v;
+
+        if (held != nullptr)
+        {
+            double& rate = isSampler ? held->step : held->increment;
+            const double newRate = isSampler
+                ? std::pow (2.0, (n.pitch - channel.rootPitch + static_cast<double> (channel.pitch)) / 12.0) * held->sample->sampleRate / sampleRate
+                : kTwoPi * pitchToHz (n.pitch + static_cast<double> (channel.pitch)) / sampleRate;
+            if (! isSampler)
+                held->endTick = std::min (n.startTick + n.lengthTicks, loopLength);
+
+            if (n.link == NoteLink::Slide && rate > 0.0 && newRate > 0.0)
+            {
+                const int glideTicks = std::min (n.lengthTicks, kTicksPerBeat / 2);
+                held->glideLeft = std::max (1, static_cast<int> (std::lround (glideTicks / std::max (ticksPerSampleNow, 1.0e-9))));
+                held->glideRatio = std::pow (newRate / rate, 1.0 / held->glideLeft);
+                held->glideTarget = newRate;
+            }
+            else
+            {
+                rate = newRate;
+                held->glideLeft = 0;
+            }
+            return;
+        }
+    }
+
     Voice* target = nullptr;
 
     for (auto& v : voices)
@@ -257,6 +293,7 @@ void Player::render (const Project& project, double bpm, bool playing,
 {
     bpm = std::clamp (bpm, 20.0, 400.0);
     const double ticksPerSample = bpm * kTicksPerBeat / (60.0 * sampleRate);
+    ticksPerSampleNow = ticksPerSample;
     const int loopLength = std::max (1, project.lengthTicks);
     const size_t numMixerChannels = std::min (project.channels.size(), static_cast<size_t> (kMaxChannels));
 
@@ -481,6 +518,15 @@ void Player::render (const Project& project, double bpm, bool playing,
                     v.phase += v.increment;
                     if (v.phase >= kTwoPi)
                         v.phase -= kTwoPi;
+                }
+
+                if (v.glideLeft > 0) // a pitch slide in progress: move towards the target pitch, in equal steps of semitones
+                {
+                    double& rate = v.sampler ? v.step : v.increment;
+                    if (--v.glideLeft == 0)
+                        rate = v.glideTarget;
+                    else
+                        rate *= v.glideRatio;
                 }
 
                 busL[static_cast<size_t> (v.channel)] += l;

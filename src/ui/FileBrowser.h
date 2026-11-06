@@ -32,8 +32,6 @@ public:
     void resized() override;
 
     // For the tests of the GUI: how many leaves are currently shown.
-    int getShownLeafCount() const noexcept { return shownLeaves; }
-    juce::TextEditor& getSearchBox() noexcept { return search; }
 
 private:
     class Item;

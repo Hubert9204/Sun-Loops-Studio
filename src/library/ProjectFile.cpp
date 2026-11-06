@@ -42,6 +42,8 @@ juce::var noteToVar (const Note& n)
     a.add (n.startTick);
     a.add (n.lengthTicks);
     a.add (number (static_cast<double> (n.velocity)));
+    if (n.link != NoteLink::None)
+        a.add (static_cast<int> (n.link)); // 1 = legato, 2 = slide; older programs ignore this fifth value
     return a;
 }
 
@@ -128,6 +130,8 @@ bool readNote (const juce::var& v, int patternTicks, Note& out)
     out.startTick = static_cast<int> (std::lround (start));
     out.lengthTicks = std::min (static_cast<int> (std::lround (length)), patternTicks - out.startTick);
     out.velocity = static_cast<float> (readNumber (a->size() > 3 ? (*a)[3] : juce::var (0.8), 0.8, 0.0, 1.0));
+    const int link = static_cast<int> (std::lround (readNumber (a->size() > 4 ? (*a)[4] : juce::var (0), 0, 0, 2)));
+    out.link = link == 1 ? NoteLink::Legato : link == 2 ? NoteLink::Slide : NoteLink::None;
     return true;
 }
 } // namespace

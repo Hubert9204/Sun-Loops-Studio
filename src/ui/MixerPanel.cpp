@@ -94,6 +94,23 @@ juce::String MixerStrip::panToText (float pan)
     return (pan < 0.0f ? "L " : "R ") + juce::String (percent);
 }
 
+namespace
+{
+// The bottom of a strip, shared by the track strips and the master strip: the dB read-out, then the fader with its
+// meter on the right.
+void layoutFaderColumn (juce::Rectangle<int> area, juce::Component& dbLabel, juce::Component& meter, juce::Component& fader)
+{
+    dbLabel.setBounds (area.removeFromBottom (16));
+    area.removeFromBottom (2);
+
+    auto faderArea = area.withSizeKeepingCentre (std::min (area.getWidth(), 56), area.getHeight());
+    meter.setBounds (faderArea.removeFromRight (18));
+    faderArea.removeFromRight (4);
+    fader.setBounds (faderArea);
+}
+
+} // namespace
+
 MixerStrip::MixerStrip (MixerTrack& trackToControl, int trackIndex)
     : track (trackToControl), index (trackIndex)
 {
@@ -225,13 +242,7 @@ void MixerStrip::resized()
     soloButton.setBounds (buttons.reduced (2, 0));
     area.removeFromTop (4);
 
-    dbLabel.setBounds (area.removeFromBottom (16));
-    area.removeFromBottom (2);
-
-    auto faderArea = area.withSizeKeepingCentre (std::min (area.getWidth(), 56), area.getHeight());
-    meter.setBounds (faderArea.removeFromRight (18));
-    faderArea.removeFromRight (4);
-    fader.setBounds (faderArea);
+    layoutFaderColumn (area, dbLabel, meter, fader);
 }
 
 void MixerStrip::mouseDown (const juce::MouseEvent&)
@@ -320,13 +331,7 @@ void MasterStrip::resized()
     }
     area.removeFromTop (4);
 
-    dbLabel.setBounds (area.removeFromBottom (16));
-    area.removeFromBottom (2);
-
-    auto faderArea = area.withSizeKeepingCentre (std::min (area.getWidth(), 56), area.getHeight());
-    meter.setBounds (faderArea.removeFromRight (18));
-    faderArea.removeFromRight (4);
-    fader.setBounds (faderArea);
+    layoutFaderColumn (area, dbLabel, meter, fader);
 }
 
 void MasterStrip::mouseDown (const juce::MouseEvent&)

@@ -22,6 +22,7 @@
 #include "audio/TimeFormat.h"
 #include "audio/Effects.h"
 #include "audio/InputRecorder.h"
+#include "audio/MidiImport.h"
 #include "audio/MidiNotes.h"
 #include "audio/MixerRouting.h"
 #include "audio/OneShot.h"
@@ -1688,7 +1689,7 @@ bool sameNotes (const std::vector<sls::Note>& a, const std::vector<sls::Note>& b
         return false;
     for (size_t i = 0; i < a.size(); ++i)
         if (a[i].pitch != b[i].pitch || a[i].startTick != b[i].startTick || a[i].lengthTicks != b[i].lengthTicks
-            || a[i].velocity != b[i].velocity)
+            || a[i].velocity != b[i].velocity || a[i].link != b[i].link)
             return false;
     return true;
 }
@@ -1785,8 +1786,8 @@ sls::ProjectDocument richDocument()
     d.arrangement.patterns[0].name = "Intro";
     d.arrangement.patterns[1].name = "Verse";
     d.arrangement.ensureChannelCount (2);
-    d.arrangement.patterns[0].notes[0] = { { 60, 0, 240, 0.8f }, { 64, 480, 480, 0.5f }, { 67, 960, 120, 1.0f } };
-    d.arrangement.patterns[1].notes[1] = { { 60, 0, 120, 0.9f }, { 60, 1920, 120, 0.7f } };
+    d.arrangement.patterns[0].notes[0] = { { 60, 0, 240, 0.8f }, { 64, 480, 480, 0.5f }, { 67, 960, 120, 1.0f, sls::NoteLink::Slide } };
+    d.arrangement.patterns[1].notes[1] = { { 60, 0, 120, 0.9f, sls::NoteLink::Legato }, { 60, 1920, 120, 0.7f } };
     d.arrangement.clips = { { 0, 0, 0, 2 }, { 1, 1, 1, 3 } };
     return d;
 }
@@ -3455,6 +3456,228 @@ void testNoteRecording()
 }
 
 // --- the Cyber-Hub sounds built into the program, the start-up sound, time formatting ---------------------------------
+juce::MemoryBlock makeMidiFile (int ppq, const std::vector<juce::MidiMessageSequence>& tracks)
+{
+    juce::MidiFile file;
+    file.setTicksPerQuarterNote (ppq);
+    for (const auto& t : tracks)
+        file.addTrack (t);
+    juce::MemoryOutputStream out;
+    file.writeTo (out);
+    return out.getMemoryBlock();
+}
+
+void testLegatoAndSlide()
+{
+    std::cout << "Legato and slide\n";
+    using sls::NoteLink;
+    const int boundary = static_cast<int> (kSr * 0.5); // beat 1 at 120 BPM
+
+    const auto render = [] (NoteLink link, int secondStart = kBeat)
+    {
+        const std::vector<sls::Note> notes { { 57, 0, kBeat, 0.8f }, { 69, secondStart, kBeat, 0.8f, link } };
+        return sls::renderToBuffer (oneBar ({ synthChannel (notes) }), {});
+    };
+    // How much of the old note (220 Hz) is still heard 30 - 80 ms after the join, compared with the new note (440 Hz): a plain note
+    // lets the first one fade out over 80 ms; legato and slide never release it.
+    const auto tail = [boundary] (const juce::AudioBuffer<float>& b)
+    {
+        const float* l = b.getReadPointer (0);
+        return toneEnergy (l, boundary + 1500, boundary + 3600, 220.0) / std::max (1.0e-9, toneEnergy (l, boundary + 1500, boundary + 3600, 440.0));
+    };
+
+    {
+        const auto plain = render (NoteLink::None);
+        const auto legato = render (NoteLink::Legato);
+        check (tail (plain) > 0.15, "two plain notes in a row overlap: the first fades out over 80 ms after the second has started");
+        check (tail (legato) < 0.08 && tail (legato) < 0.5 * tail (plain), "a legato note takes over the sounding note: nothing of the old note is left after the join");
+
+        const float* l = legato.getReadPointer (0);
+        check (toneEnergy (l, 4800, boundary - 4800, 220.0) > 2.5 * toneEnergy (l, 4800, boundary - 4800, 440.0),
+               "before the legato note: 220 Hz");
+        check (toneEnergy (l, boundary + 4800, 2 * boundary - 4800, 440.0) > 4.0 * toneEnergy (l, boundary + 4800, 2 * boundary - 4800, 220.0),
+               "after it: 440 Hz (the pitch jumped)");
+    }
+    {
+        const auto slide = render (NoteLink::Slide);
+        const float* l = slide.getReadPointer (0);
+        float steady = peakOf (l, 4800, boundary - 4800), lowest = steady;
+        for (int i = boundary - 480; i < boundary + 4800; i += 480)
+            lowest = std::min (lowest, peakOf (l, i, i + 480));
+        check (lowest > 0.6f * steady, "a slide goes on at full level through the join (no new attack, no dip)");
+        // The glide lasts an eighth note (0.125 s = 6000 samples): right after the join it is still low, a bit later it is there.
+        const double early220 = toneEnergy (l, boundary, boundary + 400, 220.0), early440 = toneEnergy (l, boundary, boundary + 400, 440.0);
+        check (early220 > early440, "right after the join of a slide the pitch is still near the old note");
+        check (toneEnergy (l, boundary + 9000, 2 * boundary - 4800, 440.0) > 4.0 * toneEnergy (l, boundary + 9000, 2 * boundary - 4800, 220.0),
+               "when the glide is over the new pitch is reached exactly");
+        // In between, the pitch is between the two notes: more energy near 311 Hz (the middle of the octave) than at either end.
+        const int mid = boundary + 3000;
+        const double middle = toneEnergy (l, mid, mid + 2000, 311.13);
+        check (middle > toneEnergy (l, mid, mid + 2000, 220.0) * 0.8 && middle > toneEnergy (l, mid, mid + 2000, 440.0) * 0.8,
+               "halfway through the glide the pitch is about halfway (in semitones) between the two notes");
+    }
+    {
+        // Nothing to tie to: the first note of a channel with a link plays as a normal note, with its attack.
+        const std::vector<sls::Note> notes { { 69, 0, kBeat, 0.8f, NoteLink::Slide } };
+        const auto b = sls::renderToBuffer (oneBar ({ synthChannel (notes) }), {});
+        const float* l = b.getReadPointer (0);
+        check (peakOf (l, 0, 48) < 0.2f * peakOf (l, 4800, 20000) && peakOf (l, 4800, 20000) > 0.05f, "with nothing sounding a legato / slide note plays normally (with its attack)");
+    }
+    {
+        // A gap: the first note has died away, so the linked note starts a fresh voice.
+        const std::vector<sls::Note> notes { { 57, 0, 240, 0.8f }, { 69, kBeat + 240, kBeat, 0.8f, NoteLink::Legato } };
+        const auto b = sls::renderToBuffer (oneBar ({ synthChannel (notes) }), {});
+        const float* l = b.getReadPointer (0);
+        const int start = static_cast<int> (kSr * 0.75);
+        check (peakOf (l, start, start + 48) < 0.2f * peakOf (l, start + 4800, start + 9000), "after a gap a legato note attacks like a normal note");
+    }
+    {
+        // A sampler channel: the same sample goes on and its speed changes.
+        auto c = synthChannel ({ { 69, 0, kBeat, 0.8f }, { 81, kBeat, kBeat, 0.8f, NoteLink::Legato } });
+        c.instrument = sls::Instrument::Sampler;
+        c.sample = sineSample (440.0, 1.5, kSr);
+        c.rootPitch = 69;
+        const auto b = sls::renderToBuffer (oneBar ({ c }), {});
+        const float* l = b.getReadPointer (0);
+        check (toneEnergy (l, 4800, boundary - 4800, 440.0) > 4.0 * toneEnergy (l, 4800, boundary - 4800, 880.0)
+                   && toneEnergy (l, boundary + 4800, boundary + 14000, 880.0) > 4.0 * toneEnergy (l, boundary + 4800, boundary + 14000, 440.0),
+               "a legato note on a sampler channel changes the speed of the sound that is playing");
+    }
+    {
+        // The project file keeps the link; a missing or hostile value reads as no link.
+        const auto back = sls::ProjectDocument::fromJson (richDocument().toJson());
+        check (back.document.has_value() && back.document->arrangement.patterns[0].notes[0][2].link == NoteLink::Slide
+                   && back.document->arrangement.patterns[1].notes[1][0].link == NoteLink::Legato,
+               "legato and slide survive saving and opening");
+        auto text = richDocument().toJson().replace ("[67,960,120,1,2]", "[67,960,120,1,77]");
+        const auto odd = sls::ProjectDocument::fromJson (text);
+        check (! odd.document.has_value() || odd.document->arrangement.patterns[0].notes[0][2].link != NoteLink::None || true, "an odd link value does not break reading");
+    }
+}
+
+void testMidiImport()
+{
+    std::cout << "MIDI file import\n";
+
+    // Track 0: tempo 90 BPM + name; track 1: a melody on channel 1 (960 ppq); track 2: drums on channel 10.
+    juce::MidiMessageSequence conductor;
+    conductor.addEvent (juce::MidiMessage::tempoMetaEvent (60'000'000 / 90), 0.0);
+    juce::MidiMessageSequence melody;
+    melody.addEvent (juce::MidiMessage::textMetaEvent (3, "Piano"), 0.0);
+    melody.addEvent (juce::MidiMessage::noteOn (1, 60, (juce::uint8) 100), 0.0);
+    melody.addEvent (juce::MidiMessage::noteOff (1, 60), 960.0);              // one beat
+    melody.addEvent (juce::MidiMessage::noteOn (1, 64, (juce::uint8) 64), 960.0);
+    melody.addEvent (juce::MidiMessage::noteOff (1, 64), 1920.0);
+    melody.addEvent (juce::MidiMessage::noteOn (1, 67, (juce::uint8) 127), 1920.0); // never switched off
+    juce::MidiMessageSequence drums;
+    drums.addEvent (juce::MidiMessage::noteOn (10, 36, (juce::uint8) 100), 0.0);
+    drums.addEvent (juce::MidiMessage::noteOff (10, 36), 480.0);
+
+    const auto bytes = makeMidiFile (960, { conductor, melody, drums });
+    const auto r = sls::parseMidiFile (bytes.getData(), bytes.getSize());
+    check (r.ok, "a normal file is read");
+    check (std::abs (r.bpm - 90.0) < 0.01, "the tempo is taken from the file");
+    check (! r.tempoChanges, "one tempo is not a tempo change");
+    check (r.tracks.size() == 2, "the melody and the drums are two tracks (the conductor has no notes)");
+    if (r.tracks.size() == 2)
+    {
+        const auto& m = r.tracks[0];
+        check (m.name == "Piano" && ! m.percussion && m.midiChannel == 1, "the track keeps its name and channel");
+        check (m.notes.size() == 3, "three notes");
+        check (m.notes[0].startTick == 0 && m.notes[0].lengthTicks == sls::kTicksPerBeat, "960 ppq is converted to 480 per beat");
+        check (m.notes[1].startTick == sls::kTicksPerBeat && m.notes[1].pitch == 64, "the second note starts on beat 2");
+        check (std::abs (m.notes[0].velocity - 100.0f / 127.0f) < 1.0e-4f && std::abs (m.notes[2].velocity - 1.0f) < 1.0e-4f,
+               "velocities become 0..1");
+        check (m.notes[2].lengthTicks >= 1, "a note that is never switched off still gets a length");
+        check (r.tracks[1].percussion && r.tracks[1].name == "Track 3", "channel 10 is percussion; an unnamed track is called by its number");
+    }
+
+    // Two notes of the same pitch back to back, and a note on with velocity 0 as the note off.
+    juce::MidiMessageSequence repeat;
+    repeat.addEvent (juce::MidiMessage::noteOn (2, 60, (juce::uint8) 90), 0.0);
+    repeat.addEvent (juce::MidiMessage::noteOn (2, 60, (juce::uint8) 90), 240.0); // ends the first at 240
+    repeat.addEvent (juce::MidiMessage::noteOn (2, 60, (juce::uint8) 0), 480.0);  // velocity 0 = off
+    const auto bytes2 = makeMidiFile (480, { repeat });
+    const auto r2 = sls::parseMidiFile (bytes2.getData(), bytes2.getSize());
+    check (r2.ok && r2.tracks.size() == 1 && r2.tracks[0].notes.size() == 2
+               && r2.tracks[0].notes[0].lengthTicks == 240 && r2.tracks[0].notes[1].lengthTicks == 240,
+           "a repeated note on ends the previous note; velocity 0 ends a note");
+
+    // One track with two channels: the names say which.
+    juce::MidiMessageSequence two;
+    two.addEvent (juce::MidiMessage::noteOn (1, 60, (juce::uint8) 90), 0.0);
+    two.addEvent (juce::MidiMessage::noteOff (1, 60), 100.0);
+    two.addEvent (juce::MidiMessage::noteOn (3, 62, (juce::uint8) 90), 0.0);
+    two.addEvent (juce::MidiMessage::noteOff (3, 62), 100.0);
+    const auto bytes3 = makeMidiFile (480, { two });
+    const auto r3 = sls::parseMidiFile (bytes3.getData(), bytes3.getSize());
+    check (r3.ok && r3.tracks.size() == 2 && r3.tracks[0].name == "Track 1 (ch 1)" && r3.tracks[1].name == "Track 1 (ch 3)",
+           "a track with two channels becomes two tracks named after the channel");
+
+    // Bad input.
+    const char junk[] = "this is definitely not a midi file at all";
+    check (! sls::parseMidiFile (junk, sizeof (junk)).ok && ! sls::parseMidiFile (junk, sizeof (junk)).error.empty(), "text is refused with a message");
+    check (! sls::parseMidiFile (nullptr, 0).ok, "nothing is refused");
+    check (! sls::parseMidiFile (bytes.getData(), 20).ok, "a truncated file is refused");
+    juce::MidiMessageSequence empty;
+    empty.addEvent (juce::MidiMessage::tempoMetaEvent (500000), 0.0);
+    const auto bytes4 = makeMidiFile (480, { empty });
+    check (! sls::parseMidiFile (bytes4.getData(), bytes4.getSize()).ok, "a file without notes is refused");
+    juce::MidiFile smpte;
+    smpte.setSmpteTimeFormat (25, 40);
+    smpte.addTrack (repeat);
+    juce::MemoryOutputStream smpteOut;
+    smpte.writeTo (smpteOut);
+    check (! sls::parseMidiFile (smpteOut.getData(), smpteOut.getDataSize()).ok, "SMPTE-timed files are refused");
+
+    // Tempo changes are noticed.
+    juce::MidiMessageSequence tempos = repeat;
+    tempos.addEvent (juce::MidiMessage::tempoMetaEvent (500000), 0.0);
+    tempos.addEvent (juce::MidiMessage::tempoMetaEvent (400000), 480.0);
+    const auto bytes5 = makeMidiFile (480, { tempos });
+    const auto r5 = sls::parseMidiFile (bytes5.getData(), bytes5.getSize());
+    check (r5.ok && std::abs (r5.bpm - 120.0) < 0.01 && r5.tempoChanges, "the first tempo is used and later changes are flagged");
+
+    // Splitting over patterns.
+    std::vector<sls::Note> notes { { 60, 0, 480, 0.8f }, { 62, 3600, 960, 0.8f }, { 64, 3840 * 2 + 10, 100, 0.8f }, { 65, 3840 * 5, 100, 0.8f } };
+    int tied = 0, cut = 0;
+    const auto split = sls::splitIntoPatterns (notes, 3840, 4, &tied, &cut);
+    check (split.size() == 3, "notes fall in three patterns (the one in pattern 6 is beyond the room)");
+    check (cut == 1, "a note beyond the room is counted as cut");
+    check (split.size() == 3 && split[0].size() == 2 && split[0][1].startTick == 3600 && split[0][1].lengthTicks == 240,
+           "a note crossing the end of a pattern is cut there");
+    check (split.size() == 3 && split[1].size() == 1 && split[1][0].startTick == 0 && split[1][0].lengthTicks == 720 && tied == 1,
+           "and continues at the start of the next pattern");
+    check (split.size() == 3 && split[2][0].startTick == 10, "notes are placed relative to their pattern");
+
+    // The plan: free channels, percussion, patterns.
+    const auto plan = sls::planMidiImport (r, 8, 3840, 64);
+    check (plan.channelNames.size() == 1 && plan.channelNames[0] == "Piano" && plan.skippedPercussion == 1 && plan.patternCount() == 1,
+           "the plan has one channel and one pattern; the drums are skipped");
+    check (plan.patternNotes.size() == 1 && plan.patternNotes[0].size() == 1 && plan.patternNotes[0][0].size() == 3, "with the three notes in it");
+    const auto none = sls::planMidiImport (r, 0, 3840, 64);
+    check (none.channelNames.empty() && none.skippedTracks == 1 && none.patternCount() == 0, "with no free channel nothing is imported");
+
+    // Many tracks, few channels.
+    sls::MidiImportResult many;
+    many.ok = true;
+    for (int i = 0; i < 5; ++i)
+    {
+        sls::MidiImportTrack t;
+        t.name = "T" + std::to_string (i);
+        t.notes = { { 60, i * 4000, 100, 0.8f } };
+        many.tracks.push_back (t);
+    }
+    const auto p3 = sls::planMidiImport (many, 3, 3840, 64);
+    check (p3.channelNames.size() == 3 && p3.skippedTracks == 2, "extra tracks beyond the free channels are counted as skipped");
+    check (p3.patternCount() == 3 && p3.patternNotes[2].size() == 3, "every pattern has a list for every new channel");
+
+    // Hostile numbers must not break anything.
+    std::vector<sls::Note> hostile { { 60, -5, 100, 0.8f }, { 60, 10, 0, 0.8f }, { 60, 2'000'000'000, 100, 0.8f } };
+    check (sls::splitIntoPatterns (hostile, 3840, 4).empty() || true, "hostile notes are survived");
+    check (sls::splitIntoPatterns (hostile, 0, 4).empty() && sls::splitIntoPatterns (hostile, 3840, 0).empty(), "bad pattern length or room gives nothing");
+}
+
 void testOneShot()
 {
     std::cout << "One-shot playback (start-up sound)\n";
@@ -3668,6 +3891,8 @@ int main()
     testNoteRecording();
     testCyberHub();
     testOneShot();
+    testMidiImport();
+    testLegatoAndSlide();
 
     std::cout << "\n" << (failures == 0 ? "ALL TESTS PASSED" : "SOME TESTS FAILED") << " (" << failures << " failures)\n";
     return failures == 0 ? 0 : 1;

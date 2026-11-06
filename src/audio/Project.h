@@ -99,9 +99,8 @@ struct Project
         if (shift <= 0)
             return;
 
-        constexpr int kStep = kTicksPerBeat / 4;  // 16th note
         for (auto& n : notes)
-            if (n.startTick >= 0 && (n.startTick / kStep) % 2 == 1 && n.startTick + shift < loopLengthTicks)
+            if (n.startTick >= 0 && (n.startTick / kSixteenthTicks) % 2 == 1 && n.startTick + shift < loopLengthTicks)
                 n.startTick += shift;
     }
 

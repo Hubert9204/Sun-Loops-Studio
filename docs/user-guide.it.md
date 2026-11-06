@@ -177,6 +177,7 @@ chiuso all'avvio e si apre da un canale, come sopra.
 | Spostare una nota | Trascinala. |
 | Cambiare la lunghezza | Trascina il bordo destro. |
 | Eliminare una nota | Tasto destro sulla nota. |
+| Legato / slide | Maiusc + clic su una nota: normale -> **legato** (blu, "L") -> **slide** (arancione, "S") -> normale. |
 | Scorrere in altezza | Rotella del mouse. |
 | Scorrere nel tempo | Maiusc + rotella. |
 | Zoom nel tempo | Ctrl + rotella. Finché non zoomi, tutto il pattern entra nella larghezza del pannello. |
@@ -191,6 +192,13 @@ chiuso all'avvio e si apre da un canale, come sopra.
   Funziona sia con la riproduzione in corso sia ferma. Su un canale sampler ogni pressione suona il sample una volta,
   all'altezza del tasto.
 - Se non senti nulla, controlla il pulsante **M** del canale, quello della traccia e il volume master.
+
+**Legato e slide.** Due note dello stesso canale si possono unire: con il **legato** il suono che sta suonando continua e cambia solo
+l'altezza, che salta alla nuova nota (nessun nuovo attacco, come in un monosynth); con lo **slide** l'altezza scivola fino alla nuova nota in
+al massimo un ottavo (o nella durata della nota, se più breve). La linea disegnata dalla vecchia alla nuova nota mostra il collegamento. Perché
+funzioni la nota precedente deve suonare ancora quando parte quella collegata, quindi le due devono toccarsi o sovrapporsi (attivando il legato
+una nota che finisce fino a un sedicesimo prima viene allungata; se finisce prima resta un vuoto e la nota collegata suona normalmente, con il
+suo attacco). Funziona su canali synth e sampler e viene salvato nel progetto.
 
 Le note si agganciano ai sedicesimi. Un pattern dura due battute. Una nota synth termina alla sua lunghezza o alla
 fine del pattern, quale viene prima. Quando apri un canale la vista scorre fino alle sue note.
@@ -209,6 +217,24 @@ suonano**; l'ultimo pattern rimasto non si può eliminare. Scegliere un pattern 
 Le impostazioni del canale (volume, pan, mute, solo, pitch, swing, strumento, sample, traccia del mixer) appartengono
 al canale, non al pattern: sono le stesse in ogni pattern. Le tracce del mixer e i loro effetti non appartengono né
 all'uno né all'altro.
+
+## Annulla e ripristina per le note
+
+**Ctrl+Z** annulla e **Ctrl+Y** (o Ctrl+Maiusc+Z) ripristina l'ultima modifica alle note: nel Piano Roll, nello step sequencer, con *Clear notes*, o un
+intero take di **Rec notes** (un solo passo). Con il mouse sulla Playlist gli stessi tasti annullano invece le modifiche della Playlist. I due comandi
+sono anche nel menu File. Si ricordano le ultime 200 modifiche. Non coperti: volume, pan, pitch e le altre impostazioni dei canali, il mixer,
+l'aggiunta o l'eliminazione di pattern e canali; aprire un progetto o eliminare un pattern cancella la cronologia.
+
+## Importare un file MIDI
+
+*File > Import a MIDI file into patterns...* (oppure trascina un file `.mid` / `.midi` sulla Playlist) trasforma un file MIDI standard in **nuovi
+canali synth** (uno per ogni traccia e canale MIDI con note, col nome della traccia) e **nuovi pattern** di due battute ciascuno, messi uno dopo l'altro
+sulla traccia 1 della playlist dopo le clip esistenti. Le note lunghe che superano la fine di un pattern vengono tagliate lì e suonano di nuovo
+all'inizio del pattern successivo. Il primo tempo del file imposta il BPM. La riga di stato dice cosa è stato fatto e cosa è stato lasciato fuori.
+
+Lasciati fuori: le tracce di **batteria** General MIDI (canale MIDI 10), i cambi di tempo dopo il primo, controller, pitch bend, cambi di programma; le
+tracce che non entrano nei canali liberi (in tutto sono 8); file oltre 8 MB o con più di 200 000 note; file con tempo in frame SMPTE. I canali importati
+sono semplici synth: dopo puoi dare loro un sampler o un altro suono.
 
 ## Playlist
 
@@ -468,6 +494,6 @@ occupato più tardi, un brano più pesante o un mixer pieno di effetti possono r
 - Un pattern dura sempre due battute, 4/4, griglia di sedicesimi.
 - I sample sono mono o stereo, al massimo 30 secondi, suonati una volta sola (niente loop né editing
   dell'inviluppo). Clip audio: fino a 5 minuti per file, 64 clip.
-- Non ancora disponibili: suonare le note con la tastiera del computer, annulla fuori dalla Playlist, incorporare i sample nel progetto,
+- Non ancora disponibili: suonare le note con la tastiera del computer, annulla per impostazioni dei canali e mixer, incorporare i sample nel progetto,
   salvataggio automatico e recupero dopo un crash, plugin VST come strumenti o effetti, send, automazione, trasformare l'altezza di
   chitarra o voce in note, punch-in e conteggio iniziale per la registrazione, dissolvenze ed effetti per clip, spostare il cursore con un clic sul righello. Vedi [roadmap.md](roadmap.md) (in inglese).
