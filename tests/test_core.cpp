@@ -33,6 +33,7 @@
 #include "audio/DrumKit.h"
 #include "library/DrumKitFile.h"
 #include "library/SoundFont.h"
+#include "plugins/PluginHost.h"
 #include "audio/SampleEdit.h"
 #include "audio/TimeStretch.h"
 #include "audio/NoteRecorder.h"
@@ -1322,11 +1323,10 @@ void testBrowserModel()
     }
 
     check (node ("a", NodeKind::AudioFile).isDraggable() && node ("a", NodeKind::BuiltinSample).isDraggable()
-               && node ("a", NodeKind::Instrument).isDraggable() && node ("a", NodeKind::Preset).isDraggable(),
-           "audio, built-in samples, instruments and presets can be dragged");
-    check (! node ("a", NodeKind::Plugin).isDraggable() && ! node ("a", NodeKind::Folder).isDraggable()
-               && ! node ("a", NodeKind::Action).isDraggable() && ! node ("a", NodeKind::Note).isDraggable(),
-           "plugins, folders, actions and notes cannot be dragged");
+               && node ("a", NodeKind::Instrument).isDraggable() && node ("a", NodeKind::Preset).isDraggable() && node ("a", NodeKind::Plugin).isDraggable(),
+           "audio, built-in samples, instruments, presets and plugins (0.17.0) can be dragged");
+    check (! node ("a", NodeKind::Folder).isDraggable() && ! node ("a", NodeKind::Action).isDraggable() && ! node ("a", NodeKind::Note).isDraggable(),
+           "folders, actions and notes cannot be dragged");
 }
 
 void testChannelPresets()
@@ -1461,10 +1461,23 @@ void testLibraryScan()
     info.name = "Fake Synth";
     info.manufacturer = "Acme";
     info.path = "/x/Fake.vst3";
-    const auto scannedTree = sls::buildBrowserTree (paths, { info }, sls::PluginScanState::Done);
+    info.identifier = "VST3-Fake Synth-1-2";
+    info.format = "VST3";
+    info.isInstrument = true;
+    sls::PluginInfo fx = info;
+    fx.name = "Fake Delay";
+    fx.identifier = "LV2-Fake Delay-3-4";
+    fx.format = "LV2";
+    fx.isInstrument = false;
+    const auto scannedTree = sls::buildBrowserTree (paths, { info, fx }, sls::PluginScanState::Done);
     const auto* scannedPlugin = findChild (scannedTree, "Plugin");
-    const auto* entry = scannedPlugin != nullptr ? findChild (*scannedPlugin, "Fake Synth  -  Acme") : nullptr;
-    check (entry != nullptr && entry->kind == NodeKind::Plugin && ! entry->isDraggable(), "scanned plugins are listed but cannot be dragged");
+    const auto* instFolder = scannedPlugin != nullptr ? findChild (*scannedPlugin, "Instruments") : nullptr;
+    const auto* fxFolder = scannedPlugin != nullptr ? findChild (*scannedPlugin, "Effects") : nullptr;
+    const auto* entry = instFolder != nullptr ? findChild (*instFolder, "Fake Synth  (VST3, Acme)") : nullptr;
+    const auto* fxEntry = fxFolder != nullptr ? findChild (*fxFolder, "Fake Delay  (LV2, Acme)") : nullptr;
+    check (entry != nullptr && entry->kind == NodeKind::Plugin && entry->isDraggable() && entry->payload == "instrument|VST3-Fake Synth-1-2",
+           "scanned instrument plugins are listed under Instruments and can be dragged");
+    check (fxEntry != nullptr && fxEntry->payload == "effect|LV2-Fake Delay-3-4", "scanned effect plugins are listed under Effects");
 
     tmp.deleteRecursively();
 }
@@ -6296,6 +6309,338 @@ void testSamplerPersistence()
     dir.deleteRecursively();
 }
 
+// ------------------------------------------------------------------------- 0.17.0: plugin hosting
+
+#ifdef SLS_TEST_PLUGIN_DIR
+const juce::PluginDescription* findPlugin (sls::PluginHost& host, const juce::String& name, const juce::String& format)
+{
+    for (const auto& d : host.known().getTypes())
+        if (d.name == name && d.pluginFormatName == format)
+        {
+            static juce::PluginDescription kept;
+            kept = d;
+            return &kept;
+        }
+    return nullptr;
+}
+
+int firstNonZero (const std::vector<float>& x, float threshold = 1.0e-6f)
+{
+    for (size_t i = 0; i < x.size(); ++i)
+        if (std::abs (x[i]) > threshold)
+            return static_cast<int> (i);
+    return -1;
+}
+
+void testPluginProjectFile()
+{
+    std::cout << "Plugins in the project file (0.17.0)\n";
+    auto d = sls::ProjectDocument::blank();
+    d.channels[0].instrument = sls::Instrument::Plugin;
+    d.tracks[2].slots[1].type = sls::EffectType::Plugin;
+    d.tracks[2].slots[1].bypass = true;
+    d.masterSlots[3].type = sls::EffectType::Plugin;
+    d.console.aux[1].slots[0].type = sls::EffectType::Plugin;
+    const auto spec = [] (sls::PluginSpec::Place place, int index, int slot, const char* name, bool instrument)
+    {
+        sls::PluginSpec s;
+        s.place = place;
+        s.index = index;
+        s.slot = slot;
+        s.description = std::string ("<PLUGIN name=\"") + name + "\" format=\"VST3\"/>";
+        s.state = std::string ("state-of-") + name;
+        s.instrument = instrument;
+        return s;
+    };
+    d.pluginSpecs.push_back (spec (sls::PluginSpec::Place::Channel, 0, 0, "Synth A", true));
+    d.pluginSpecs.push_back (spec (sls::PluginSpec::Place::Track, 2, 1, "Delay B", false));
+    d.pluginSpecs.push_back (spec (sls::PluginSpec::Place::Master, 0, 3, "Limiter C", false));
+    d.pluginSpecs.push_back (spec (sls::PluginSpec::Place::Aux, 1, 0, "Reverb D", false));
+
+    const auto parsed = sls::ProjectDocument::fromJson (d.toJson());
+    check (parsed.document.has_value(), "a project with plugins reads back");
+    if (! parsed.document.has_value())
+        return;
+    const auto& r = *parsed.document;
+    check (r.channels[0].instrument == sls::Instrument::Plugin, "a plugin channel stays a plugin channel");
+    check (r.pluginSpecs.size() == 4, "every plugin is found again (4)");
+    const auto same = [&] (sls::PluginSpec::Place place, int index, int slot, const char* name)
+    {
+        const auto* found = r.findPlugin (place, index, slot);
+        return found != nullptr && found->description.find (name) != std::string::npos && found->state == std::string ("state-of-") + name;
+    };
+    check (same (sls::PluginSpec::Place::Channel, 0, 0, "Synth A") && r.findPlugin (sls::PluginSpec::Place::Channel, 0, 0)->instrument,
+           "the instrument plugin keeps its description and state");
+    check (same (sls::PluginSpec::Place::Track, 2, 1, "Delay B") && r.tracks[2].slots[1].type == sls::EffectType::Plugin && r.tracks[2].slots[1].bypass,
+           "a plugin effect on a track keeps its slot, description, state and bypass");
+    check (same (sls::PluginSpec::Place::Master, 0, 3, "Limiter C") && r.masterSlots[3].type == sls::EffectType::Plugin,
+           "a plugin effect on the master keeps its slot");
+    check (same (sls::PluginSpec::Place::Aux, 1, 0, "Reverb D") && r.console.aux[1].slots[0].type == sls::EffectType::Plugin,
+           "a plugin effect on an aux bus keeps its slot");
+    check (r.tracks[2].slots[0].type == sls::EffectType::None && r.tracks[2].slots[1].plugin == nullptr,
+           "no instance is made while reading (the program makes them)");
+
+    // A plugin slot without a plugin description is read as empty; a plugin channel without one stays a (silent) plugin channel.
+    auto text = d.toJson();
+    auto broken = sls::ProjectDocument::fromJson (text.replace ("<PLUGIN name=\\\"Delay B\\\" format=\\\"VST3\\\"/>", ""));
+    check (broken.document.has_value() && broken.document->tracks[2].slots[1].type == sls::EffectType::None && broken.document->pluginSpecs.size() == 3,
+           "a plugin slot with an empty description becomes an empty slot");
+
+    // Writing without any plugin spec (the slot type alone) writes no plugin object and reads back as an empty slot.
+    auto noSpec = d;
+    noSpec.pluginSpecs.clear();
+    const auto noSpecRead = sls::ProjectDocument::fromJson (noSpec.toJson());
+    check (noSpecRead.document.has_value() && noSpecRead.document->masterSlots[3].type == sls::EffectType::None && noSpecRead.document->pluginSpecs.empty(),
+           "a plugin slot saved without its plugin reads back empty");
+}
+
+void testPluginHosting()
+{
+    std::cout << "Plugin hosting (VST3, LV2, LADSPA)\n";
+    const juce::ScopedJuceInitialiser_GUI juceInit; // plugins need a message manager
+    sls::PluginHost host;
+    check (host.formatNames().contains ("VST3") && host.formatNames().contains ("LV2"), "the host offers VST3 and LV2");
+    {
+        const auto home = juce::File::getSpecialLocation (juce::File::userHomeDirectory);
+        const auto ladspaHome = home.getChildFile (".ladspa");
+        const bool made = ! ladspaHome.exists() && ladspaHome.createDirectory();
+        const auto extra = sls::PluginHost::distributionPaths ("LADSPA");
+        bool listed = false;
+        for (int i = 0; i < extra.getNumPaths(); ++i)
+            listed = listed || extra[i] == ladspaHome;
+        check (listed && sls::PluginHost::distributionPaths ("Nonsense").getNumPaths() == 0,
+               "extra plugin folders: an existing ~/.ladspa is added, unknown formats get none");
+        if (made)
+            ladspaHome.deleteRecursively();
+    }
+
+    const juce::File dir (SLS_TEST_PLUGIN_DIR);
+    const auto paths = [&] (const juce::String& format)
+    {
+        juce::FileSearchPath p;
+        if (format == "VST3" || format == "LV2")
+            for (const char* kind : { "SlsTestSynth", "SlsTestGain" })
+                p.add (dir.getChildFile (juce::String (kind) + "_artefacts/Release/" + format));
+        return p;
+    };
+    const auto pedal = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("sls-test-scan.txt");
+    int scanned = 0;
+    host.scan (paths, pedal, [&] (const juce::String&) { ++scanned; });
+    const auto* synthVst3 = findPlugin (host, "SLS Test Synth", "VST3");
+    const auto synthVst3Copy = synthVst3 != nullptr ? *synthVst3 : juce::PluginDescription();
+    const auto* gainVst3 = findPlugin (host, "SLS Test Gain", "VST3");
+    const auto gainVst3Copy = gainVst3 != nullptr ? *gainVst3 : juce::PluginDescription();
+    const auto* synthLv2 = findPlugin (host, "SLS Test Synth", "LV2");
+    const auto synthLv2Copy = synthLv2 != nullptr ? *synthLv2 : juce::PluginDescription();
+    const auto* gainLv2 = findPlugin (host, "SLS Test Gain", "LV2");
+    const auto gainLv2Copy = gainLv2 != nullptr ? *gainLv2 : juce::PluginDescription();
+    check (synthVst3 != nullptr && gainVst3 != nullptr, "the scan finds the VST3 test synth and effect");
+    check (synthLv2 != nullptr && gainLv2 != nullptr, "the scan finds the LV2 test synth and effect");
+    check (synthVst3Copy.isInstrument && ! gainVst3Copy.isInstrument, "instruments and effects are told apart");
+    if (synthVst3 == nullptr || gainVst3 == nullptr)
+        return;
+
+    juce::String error;
+    auto synth = host.create (synthVst3Copy, kSr, sls::Player::kChunk, error);
+    check (synth != nullptr && synth->isLoaded() && synth->isInstrument() && synth->displayName() == "SLS Test Synth", "a VST3 instrument is created");
+    if (synth == nullptr)
+        return;
+
+    // The plugin plays the notes of its channel, starting at the exact sample.
+    sls::Channel c;
+    c.instrument = sls::Instrument::Plugin;
+    c.plugin = synth;
+    c.volume = 1.0f;
+    c.notes = { { 69, kBeat / 2, kBeat, 1.0f } }; // starts at 0.25 s = sample 12000 (in the middle of a 64-sample chunk)
+    const auto project = sls::Project::make ({ c }, 16 * kBeat);
+    sls::Player p;
+    p.prepare (kSr);
+    auto out = renderBlocks (p, project, true, 1.0);
+    const int start = firstNonZero (out);
+    // The test synth's sine starts at phase 0, so sample 12000 itself is 0 and the first non-zero sample is 12001.
+    check (start == 12001, ("the note starts on its sample (12000; first non-zero sample " + std::to_string (start) + ")").c_str());
+    check (toneEnergy (out.data(), 13000, 30000, 440.0) > 0.05, "the plugin plays 440 Hz for A4");
+    check (rmsWindow (out, 0.76, 1.0) < 1.0e-4f, "the note ends at its length (note-off sent)");
+
+    // Live notes.
+    {
+        sls::Player q;
+        q.prepare (kSr);
+        q.liveNoteOn (project, 0, 81, 0.8f);
+        auto held = renderBlocks (q, project, false, 0.3);
+        check (toneEnergy (held.data(), 2000, 12000, 880.0) > 0.03, "a note played by hand reaches the plugin");
+        q.liveNoteOff (0, 81);
+        auto after = renderBlocks (q, project, false, 0.1);
+        check (rmsWindow (after, 0.01, 0.1) < 1.0e-4f, "and stops when the key is let go");
+    }
+
+    // Stop sends the note-offs.
+    {
+        auto longNote = c;
+        longNote.notes = { { 64, 0, 8 * kBeat, 1.0f } };
+        const auto longProject = sls::Project::make ({ longNote }, 16 * kBeat);
+        sls::Player q;
+        q.prepare (kSr);
+        renderBlocks (q, longProject, true, 0.3);
+        auto stopped = renderBlocks (q, longProject, false, 0.3);
+        check (rmsWindow (stopped, 0.05, 0.3) < 1.0e-4f, "Stop ends the plugin's notes");
+    }
+
+    // An effect plugin in a mixer slot.
+    auto gain = host.create (gainVst3Copy, kSr, sls::Player::kChunk, error);
+    check (gain != nullptr && ! gain->isInstrument(), "a VST3 effect is created");
+    if (gain != nullptr)
+    {
+        const auto dry = renderBlocks (p = sls::Player(), sls::Project::make ({ synthChannel ({ { 69, 0, 2 * kBeat, 0.8f } }) }, 16 * kBeat), true, 0.6);
+        auto tracks = sls::Project::defaultTracks();
+        tracks[0].slots[0].type = sls::EffectType::Plugin;
+        tracks[0].slots[0].plugin = gain;
+        sls::Player q;
+        q.prepare (kSr);
+        const auto wet = renderBlocks (q, sls::Project::make ({ synthChannel ({ { 69, 0, 2 * kBeat, 0.8f } }) }, 16 * kBeat, tracks), true, 0.6);
+        const float ratio = rmsWindow (wet, 0.1, 0.5) / std::max (1.0e-9f, rmsWindow (dry, 0.1, 0.5));
+        check (std::abs (ratio - 0.5f) < 0.03f, ("the effect plugin processes the track (gain 0.5; ratio " + std::to_string (ratio) + ")").c_str());
+
+        // The state as the format keeps it: change the parameter, save the state, give it to a fresh instance.
+        if (auto* param = gain->getInstance()->getParameters()[0])
+            param->setValueNotifyingHost (0.25f);
+        const auto saved = gain->getState();
+        auto fresh = host.create (gainVst3Copy, kSr, sls::Player::kChunk, error);
+        check (fresh != nullptr && fresh->setState (saved), "a saved plugin state is given to a new instance");
+        tracks[0].slots[0].plugin = fresh;
+        sls::Player r;
+        r.prepare (kSr);
+        const auto quieter = renderBlocks (r, sls::Project::make ({ synthChannel ({ { 69, 0, 2 * kBeat, 0.8f } }) }, 16 * kBeat, tracks), true, 0.6);
+        const float ratio2 = rmsWindow (quieter, 0.1, 0.5) / std::max (1.0e-9f, rmsWindow (dry, 0.1, 0.5));
+        check (std::abs (ratio2 - 0.25f) < 0.02f, "a plugin state that is set is used");
+        check (fresh != nullptr && std::abs (fresh->getInstance()->getParameters()[0]->getValue() - 0.25f) < 1e-3f, "and its parameter is back");
+
+        tracks[0].slots[0].bypass = true;
+        sls::Player b;
+        b.prepare (kSr);
+        const auto bypassed = renderBlocks (b, sls::Project::make ({ synthChannel ({ { 69, 0, 2 * kBeat, 0.8f } }) }, 16 * kBeat, tracks), true, 0.6);
+        check (std::abs (rmsWindow (bypassed, 0.1, 0.5) / rmsWindow (dry, 0.1, 0.5) - 1.0f) < 0.01f, "bypass leaves the signal alone");
+    }
+
+    // LV2 versions of the same plugins.
+    if (synthLv2 != nullptr && gainLv2 != nullptr)
+    {
+        auto lv2Synth = host.create (synthLv2Copy, kSr, sls::Player::kChunk, error);
+        check (lv2Synth != nullptr && lv2Synth->isInstrument(), ("an LV2 instrument is created " + error.toStdString()).c_str());
+        if (lv2Synth != nullptr)
+        {
+            auto lv2Channel = c;
+            lv2Channel.plugin = lv2Synth;
+            sls::Player q;
+            q.prepare (kSr);
+            auto lv2Out = renderBlocks (q, sls::Project::make ({ lv2Channel }, 16 * kBeat), true, 1.0);
+            check (firstNonZero (lv2Out) == 12001 && toneEnergy (lv2Out.data(), 13000, 30000, 440.0) > 0.05, "the LV2 instrument plays the note on its sample");
+        }
+        auto lv2Gain = host.create (gainLv2Copy, kSr, sls::Player::kChunk, error);
+        check (lv2Gain != nullptr && ! lv2Gain->isInstrument(), "an LV2 effect is created");
+    }
+
+    // LADSPA (the SDK's example plugins, when they are installed).
+    if (host.formatNames().contains ("LADSPA"))
+    {
+        juce::PluginDescription amp;
+        for (const auto& d : host.known().getTypes())
+            if (d.pluginFormatName == "LADSPA" && d.name.containsIgnoreCase ("amplifier"))
+                amp = d;
+        if (amp.name.isNotEmpty())
+        {
+            auto ladspa = host.create (amp, kSr, sls::Player::kChunk, error);
+            check (ladspa != nullptr && ! ladspa->isInstrument(), ("a LADSPA effect is created (" + amp.name.toStdString() + ")").c_str());
+        }
+        else
+            std::cout << "  (no stereo LADSPA amplifier installed: LADSPA not exercised)\n";
+    }
+
+    // A new sample rate: plugins are prepared again and keep their pitch.
+    host.prepareAll (44100.0, sls::Player::kChunk);
+    {
+        sls::Player q;
+        q.prepare (44100.0);
+        std::vector<float> l (44100), r (44100);
+        for (int done = 0; done < 44100; done += 256)
+        {
+            float* ch[2] = { l.data() + done, r.data() + done };
+            q.render (project, 120.0, true, ch, 2, std::min (256, 44100 - done));
+        }
+        double re = 0.0, im = 0.0;
+        for (int i = 13000; i < 30000; ++i)
+        {
+            re += l[static_cast<size_t> (i)] * std::cos (6.283185307179586 * 440.0 * i / 44100.0);
+            im += l[static_cast<size_t> (i)] * std::sin (6.283185307179586 * 440.0 * i / 44100.0);
+        }
+        check (std::sqrt (re * re + im * im) / 17000.0 > 0.05, "prepared again for 44.1 kHz, the plugin still plays 440 Hz");
+    }
+    host.prepareAll (kSr, sls::Player::kChunk);
+
+    // Placeholders for plugins that cannot be found.
+    juce::MemoryBlock kept ("abc", 3);
+    auto missing = sls::JucePlugin::placeholder (synthVst3Copy, kept, true);
+    check (! missing->isLoaded() && missing->getState() == kept && missing->displayName() == "SLS Test Synth", "a placeholder keeps the description and state");
+    std::array<float, 64> pl {}, pr {};
+    pl.fill (0.3f);
+    pr.fill (0.3f);
+    missing->process (pl.data(), pr.data(), 64, nullptr, 0);
+    check (pl[10] == 0.3f, "a placeholder leaves the signal alone");
+    juce::PluginDescription parsed;
+    check (sls::PluginHost::descriptionFromText (sls::PluginHost::descriptionToText (synthVst3Copy), parsed) && parsed.isDuplicateOf (synthVst3Copy),
+           "a plugin description survives the text round trip");
+    juce::String bad;
+    juce::PluginDescription nothing;
+    nothing.name = "Nothing";
+    nothing.pluginFormatName = "VST3";
+    nothing.fileOrIdentifier = "/nowhere/nothing.vst3";
+    check (host.create (nothing, kSr, 64, bad) == nullptr && bad.isNotEmpty(), "a plugin that does not exist is refused with a message");
+
+    // The known list survives saving.
+    const auto listFile = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("sls-known-plugins.xml");
+    host.saveKnownList (listFile);
+    sls::PluginHost other;
+    other.loadKnownList (listFile);
+    check (other.known().getNumTypes() == host.known().getNumTypes() && other.known().getNumTypes() >= 4, "the list of known plugins is saved and read back");
+    // A program started later (a new host that only read the list, no scan) can still make every kind of plugin from it.
+    for (const auto* format : { "VST3", "LV2" })
+    {
+        const auto* d = findPlugin (other, "SLS Test Gain", format);
+        juce::String err;
+        auto made = d != nullptr ? other.create (*d, kSr, sls::Player::kChunk, err) : nullptr;
+        if (err.isNotEmpty())
+            std::cout << "    (" << err << ")\n";
+        check (made != nullptr && made->isLoaded(), (std::string ("a ") + format + " plugin is made from the saved list without a new scan").c_str());
+    }
+    listFile.deleteFile();
+
+    // No allocation by the Player while a plugin instrument and a plugin effect run (the plugins' own code is not counted).
+    if (gain != nullptr)
+    {
+        std::vector<sls::Note> notes;
+        for (int i = 0; i < 64; ++i)
+            notes.push_back ({ 50 + i % 30, i * 60, 90, 0.7f });
+        auto busy = c;
+        busy.notes = notes;
+        auto tracks = sls::Project::defaultTracks();
+        tracks[0].slots[1].type = sls::EffectType::Plugin;
+        tracks[0].slots[1].plugin = gain;
+        const auto heavy = sls::Project::make ({ busy }, 4 * kBeat, tracks);
+        std::vector<float> l (256), r (256);
+        float* ch[2] = { l.data(), r.data() };
+        sls::Player z;
+        z.prepare (kSr);
+        z.render (heavy, 140.0, true, ch, 2, 256); // first call outside the counted region
+        tCounting = true;
+        tAllocs = 0;
+        for (int i = 0; i < 2000; ++i)
+            z.render (heavy, 140.0, true, ch, 2, 256);
+        tCounting = false;
+        check (tAllocs == 0, ("no allocation through Player::render with plugins (2000 blocks; counted: " + std::to_string (tAllocs) + ")").c_str());
+    }
+}
+#endif
+
 int main()
 {
     testProjectModel();
@@ -6355,6 +6700,10 @@ int main()
     testAdvancedSampler();
     testSoundFont();
     testSamplerPersistence();
+#ifdef SLS_TEST_PLUGIN_DIR
+    testPluginProjectFile();
+    testPluginHosting();
+#endif
 
     std::cout << "\n" << (failures == 0 ? "ALL TESTS PASSED" : "SOME TESTS FAILED") << " (" << failures << " failures)\n";
     return failures == 0 ? 0 : 1;

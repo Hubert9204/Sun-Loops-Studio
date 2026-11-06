@@ -12,7 +12,7 @@ namespace sls::drag
 //   sls:preset:builtin:<id>           a factory channel preset
 struct Item
 {
-    juce::String kind;    // "file", "builtin", "instrument", "preset"
+    juce::String kind;    // "file", "builtin", "instrument", "preset", "plugin" ("instrument|<id>" or "effect|<id>")
     juce::String payload;
 
     juce::String toString() const { return "sls:" + kind + ":" + payload; }
@@ -33,7 +33,7 @@ struct Item
 
         out.kind = rest.substring (0, colon);
         out.payload = rest.substring (colon + 1);
-        return out.kind == "file" || out.kind == "builtin" || out.kind == "instrument" || out.kind == "preset";
+        return out.kind == "file" || out.kind == "builtin" || out.kind == "instrument" || out.kind == "preset" || out.kind == "plugin";
     }
 };
 } // namespace sls::drag

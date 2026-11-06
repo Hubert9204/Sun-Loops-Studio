@@ -92,4 +92,4 @@ of the file: the sound is added **after** the master volume, so the Master slide
 The theme's own `index.theme` says *Creative Commons Attribution-NoDerivatives 4.0 International*, while the
 Cyber-Hub repository's `LICENSE` file is CC0. The files are used **unchanged** and credited ("Cyber-Hub sound theme by Hubert,
 CC BY-ND 4.0 (used unchanged)", shown in the browser), which satisfies the stricter of the two. The rest of Sun Loops
-Studio is MIT. Because the author is the same person, this can be settled by one line in the Cyber-Hub repository.
+Studio is GPLv3 (MIT up to 0.16.0). Because the author is the same person, this can be settled by one line in the Cyber-Hub repository.

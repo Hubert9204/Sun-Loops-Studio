@@ -1,6 +1,8 @@
 #pragma once
 
 #include <functional>
+#include <utility>
+#include <vector>
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -65,6 +67,9 @@ public:
     std::function<void (int)> onOpenPianoRoll; // context menu "Piano roll", or double click on the name / note preview
     std::function<void (int)> onOpenDrumMachine; // drum channels: "Drum machine..." in the menu, or a double click (instead of the piano roll)
     std::function<void (int, Instrument)> onInstrumentChosen; // context menu "Instrument"
+    std::function<void (int)> onOpenPlugin;      // plugin channels: "Plugin window..." in the menu, or a double click (0.17.0)
+    std::function<std::vector<std::pair<juce::String, juce::String>>()> listInstrumentPlugins; // name, identifier (from the last scan)
+    std::function<void (int, const juce::String&)> onPluginChosen; // context menu "Instrument > Plugin instruments > ..."
     std::function<void (int)> onRename;        // context menu "Rename..."
     std::function<void (int)> onDelete;        // context menu "Delete channel..."
     std::function<void (int)> onSamplerSettings; // context menu "Sampler settings..." (sampler channels)

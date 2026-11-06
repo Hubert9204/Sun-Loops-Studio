@@ -221,7 +221,9 @@ ChannelStrip::ChannelStrip (Channel& channelToControl, int channelIndex)
     grid.onClickedPreview = [this] { if (onSelect) onSelect (index); };
     grid.onDoubleClicked = [this]
     {
-        if (channel.instrument == Instrument::Drums && onOpenDrumMachine)
+        if (channel.instrument == Instrument::Plugin && onOpenPlugin)
+            onOpenPlugin (index);
+        else if (channel.instrument == Instrument::Drums && onOpenDrumMachine)
             onOpenDrumMachine (index);
         else if (onOpenPianoRoll)
             onOpenPianoRoll (index);
@@ -348,7 +350,9 @@ void ChannelStrip::mouseDoubleClick (const juce::MouseEvent& e)
 {
     if (e.mods.isPopupMenu())
         return;
-    if (channel.instrument == Instrument::Drums && onOpenDrumMachine)
+    if (channel.instrument == Instrument::Plugin && onOpenPlugin)
+        onOpenPlugin (index);
+    else if (channel.instrument == Instrument::Drums && onOpenDrumMachine)
         onOpenDrumMachine (index);
     else if (onOpenPianoRoll)
         onOpenPianoRoll (index);
@@ -364,8 +368,19 @@ void ChannelStrip::showContextMenu()
     instrument.addItem (2, "Synth", true, channel.instrument == Instrument::Synth);
     instrument.addItem (3, "Sampler (WAV / FLAC / OGG / AIFF)", true, channel.instrument == Instrument::Sampler);
     instrument.addItem (9, "Drum machine (16 pads)", true, channel.instrument == Instrument::Drums);
+    const auto plugins = listInstrumentPlugins ? listInstrumentPlugins() : std::vector<std::pair<juce::String, juce::String>> {};
+    if (plugins.empty())
+        instrument.addItem (17, "Plugin instruments (scan the browser's Plugin folder first)", false);
+    else
+    {
+        juce::PopupMenu pluginMenu;
+        for (size_t p = 0; p < plugins.size(); ++p)
+            pluginMenu.addItem (1000 + static_cast<int> (p), plugins[p].first);
+        instrument.addSubMenu ("Plugin instruments", pluginMenu, true, nullptr, channel.instrument == Instrument::Plugin);
+    }
 
     juce::PopupMenu menu;
+    menu.addItem (18, "Plugin window...", channel.instrument == Instrument::Plugin && channel.plugin != nullptr);
     menu.addItem (10, "Drum machine...", channel.instrument == Instrument::Drums);
     menu.addItem (1, "Piano roll");
     menu.addSeparator();
@@ -381,15 +396,21 @@ void ChannelStrip::showContextMenu()
     menu.addItem (14, "Delete channel...");
     menu.addSeparator();
     menu.addItem (7, "Assign free mixer track");
-    menu.addItem (6, "Save as preset...", channel.instrument != Instrument::Drums);
+    menu.addItem (6, "Save as preset...", channel.instrument != Instrument::Drums && channel.instrument != Instrument::Plugin);
 
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
-                        [safe = juce::Component::SafePointer<ChannelStrip> (this)] (int result)
+                        [safe = juce::Component::SafePointer<ChannelStrip> (this), plugins] (int result)
                         {
                             if (safe == nullptr || result == 0)
                                 return;
 
                             const int i = safe->index;
+                            if (result >= 1000 && result < 1000 + static_cast<int> (plugins.size()))
+                            {
+                                if (safe->onPluginChosen)
+                                    safe->onPluginChosen (i, plugins[static_cast<size_t> (result - 1000)].second);
+                                return;
+                            }
                             switch (result)
                             {
                                 case 1: if (safe->onOpenPianoRoll) safe->onOpenPianoRoll (i); break;
@@ -408,6 +429,7 @@ void ChannelStrip::showContextMenu()
                                 case 14: if (safe->onDelete) safe->onDelete (i); break;
                                 case 15: if (safe->onSamplerSettings) safe->onSamplerSettings (i); break;
                                 case 16: if (safe->onLoadSoundFont) safe->onLoadSoundFont (i); break;
+                                case 18: if (safe->onOpenPlugin) safe->onOpenPlugin (i); break;
                                 default: break;
                             }
                         });

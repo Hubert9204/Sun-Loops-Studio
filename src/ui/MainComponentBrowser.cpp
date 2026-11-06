@@ -45,28 +45,32 @@ void MainComponent::rebuildBrowser()
 
 namespace
 {
-// Scans for VST3 plugins off the message thread. It loads each candidate in-process to read its description,
-// so it is only started when the user asks for it.
+// Scans for plugins (VST3, LV2, LADSPA) off the message thread. Each candidate is loaded in this process to read its description, so it
+// only runs when the user asks for it. A plugin that crashes the scan is remembered (the "dead man's pedal" file) and skipped next time.
 class PluginScanThread : public juce::Thread
 {
 public:
-    explicit PluginScanThread (std::function<void (std::vector<PluginInfo>)> whenDone)
-        : juce::Thread ("VST3 scan"), done (std::move (whenDone))
+    PluginScanThread (PluginHost& hostToUse, juce::File pedalFile, std::function<void (const juce::String&)> onProgress, std::function<void (int)> whenDone)
+        : juce::Thread ("Plugin scan"), host (hostToUse), pedal (std::move (pedalFile)), progress (std::move (onProgress)), done (std::move (whenDone))
     {
     }
 
     void run() override
     {
-        PluginScanner scanner;
-        auto found = scanner.scan (PluginScanner::defaultSearchPaths(), true);
+        const int count = host.scan (&PluginHost::distributionPaths, pedal, [this] (const juce::String& file)
+        {
+            juce::MessageManager::callAsync ([callback = progress, file] { callback (file); });
+        });
         if (threadShouldExit())
             return;
-
-        juce::MessageManager::callAsync ([callback = done, result = std::move (found)]() mutable { callback (std::move (result)); });
+        juce::MessageManager::callAsync ([callback = done, count] { callback (count); });
     }
 
 private:
-    std::function<void (std::vector<PluginInfo>)> done;
+    PluginHost& host;
+    juce::File pedal;
+    std::function<void (const juce::String&)> progress;
+    std::function<void (int)> done;
 };
 } // namespace
 
@@ -77,17 +81,29 @@ void MainComponent::startPluginScan()
 
     pluginScanState = PluginScanState::Scanning;
     rebuildBrowser();
-    statusLabel.setText ("Scanning for VST3 plugins...", juce::dontSendNotification);
+    statusLabel.setText ("Scanning for plugins (" + pluginHost->formatNames().joinIntoString (", ") + ")...", juce::dontSendNotification);
 
+    using Safe = juce::Component::SafePointer<MainComponent>;
     pluginScanThread = std::make_unique<PluginScanThread> (
-        [safe = juce::Component::SafePointer<MainComponent> (this)] (std::vector<PluginInfo> found)
+        *pluginHost, pluginSettingsFile ("plugin-scan-crashed.txt"),
+        [safe = Safe (this)] (const juce::String& file)
+        {
+            if (safe != nullptr && safe->pluginScanState == PluginScanState::Scanning)
+                safe->statusLabel.setText ("Scanning " + file.fromLastOccurrenceOf ("/", false, false), juce::dontSendNotification);
+        },
+        [safe = Safe (this)] (int)
         {
             if (safe == nullptr)
                 return;
-            safe->foundPlugins = std::move (found);
+            safe->pluginHost->saveKnownList (safe->pluginSettingsFile ("plugins.xml"));
+            safe->refreshFoundPlugins();
             safe->pluginScanState = PluginScanState::Done;
             safe->rebuildBrowser();
-            safe->statusLabel.setText (juce::String (safe->foundPlugins.size()) + " VST3 plugin(s) found (listed only: plugin hosting is not implemented yet)",
+            int instruments = 0;
+            for (const auto& p : safe->foundPlugins)
+                instruments += p.isInstrument ? 1 : 0;
+            safe->statusLabel.setText (juce::String (safe->foundPlugins.size()) + " plugin(s) found: " + juce::String (instruments) + " instrument(s), "
+                                           + juce::String (static_cast<int> (safe->foundPlugins.size()) - instruments) + " effect(s)",
                                        juce::dontSendNotification);
         });
     pluginScanThread->startThread();
@@ -127,6 +143,18 @@ bool MainComponent::applyPreset (int channelIndex, const ChannelPreset& preset)
 
 void MainComponent::applyBrowserItem (int channelIndex, const drag::Item& item)
 {
+    if (item.kind == "plugin")
+    {
+        // "instrument|<id>": a new channel (dropped on empty space or double-clicked) or this channel's instrument (dropped on it).
+        // "effect|<id>": the first free slot of the channel's mixer track.
+        const auto id = item.payload.fromFirstOccurrenceOf ("|", false, false);
+        if (item.payload.startsWith ("instrument|"))
+            setPluginInstrument (channelIndex, id);
+        else
+            addPluginEffectForChannel (channelIndex, id);
+        return;
+    }
+
     if (channelIndex < 0)
     {
         if (channels.size() >= static_cast<size_t> (kMaxChannels))
@@ -262,7 +290,9 @@ void MainComponent::exportAs (ExportFormat format)
         RenderOptions options;
         options.bpm = safe->bpmSlider.getValue();
 
+        safe->beginPluginExport (options.sampleRate); // plugins render the export; the live engine is silent meanwhile
         const auto result = exportAudio (safe->compileCurrent(), options, file, format);
+        safe->endPluginExport();
 
         safe->statusLabel.setText (result.wasOk() ? "Exported " + file.getFileName()
                                                   : "Export failed: " + result.getErrorMessage(),

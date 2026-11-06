@@ -167,6 +167,18 @@ void AudioEngine::audioDeviceAboutToStart (juce::AudioIODevice* device)
                                 std::memory_order_relaxed);
     masterMeanSquare = 0.0f;
     player.prepare (sampleRateHz);
+    deviceRate.store (sampleRateHz, std::memory_order_relaxed);
+    if (onDeviceStarting)
+        onDeviceStarting (sampleRateHz);
+}
+
+void AudioEngine::setSuspended (bool shouldSuspend)
+{
+    suspended.store (shouldSuspend, std::memory_order_seq_cst);
+    if (! shouldSuspend)
+        return;
+    for (int i = 0; i < 500 && inCallback.load (std::memory_order_seq_cst); ++i)
+        juce::Thread::sleep (1);
 }
 
 void AudioEngine::audioDeviceStopped() {}
@@ -181,6 +193,19 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* in, int 
     for (int ch = 0; ch < numOut; ++ch)
         if (out[ch] != nullptr)
             juce::FloatVectorOperations::clear (out[ch], numSamples);
+
+    // Suspended (an export is using the plugins): silence, and the Player is not touched.
+    inCallback.store (true, std::memory_order_seq_cst);
+    if (suspended.load (std::memory_order_seq_cst))
+    {
+        inCallback.store (false, std::memory_order_seq_cst);
+        return;
+    }
+    struct LeaveCallback
+    {
+        std::atomic<bool>& flag;
+        ~LeaveCallback() { flag.store (false, std::memory_order_seq_cst); }
+    } leave { inCallback };
 
     const Project* project = exchange.acquire();
 

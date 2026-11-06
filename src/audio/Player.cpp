@@ -71,6 +71,7 @@ void Player::prepare (double newSampleRate) noexcept
 
 void Player::releaseVoices (bool includeSamplers) noexcept
 {
+    releasePluginNotes();
     for (auto& v : voices)
         if ((v.state == State::Attack || v.state == State::Sustain) && (includeSamplers || ! v.sampler || v.held) && ! v.live)
             v.state = State::Release; // notes held by hand are ended by liveNoteOff, not by the transport
@@ -197,6 +198,20 @@ void Player::onProjectChanged (const Project& project) noexcept
 {
     locate (project, tickPos);
 
+    // A sounding plugin note follows its plugin (a channel may have moved); a note whose plugin is gone is forgotten (it may be freed).
+    for (int i = numPluginNotes - 1; i >= 0; --i)
+    {
+        auto& note = pluginNotes[static_cast<size_t> (i)];
+        int found = -1;
+        for (size_t ch = 0; ch < project.channels.size() && ch < static_cast<size_t> (kMaxChannels) && found < 0; ++ch)
+            if (project.channels[ch].plugin.get() == note.plugin)
+                found = static_cast<int> (ch);
+        if (found >= 0)
+            note.channel = found;
+        else
+            pluginNotes[static_cast<size_t> (i)] = pluginNotes[static_cast<size_t> (--numPluginNotes)];
+    }
+
     // Audio clips: a playing clip may only go on if the new snapshot still owns the very same audio (it belongs to the
     // snapshot and may be freed).
     {
@@ -242,11 +257,16 @@ void Player::liveNoteOn (const Project& project, int channel, int pitch, float v
     n.startTick = 0;
     n.lengthTicks = 0;
     n.velocity = std::isfinite (velocity) ? std::clamp (velocity, 0.0f, 1.0f) : 0.8f;
+    chunkSample = 0;
     noteOn (project.channels[static_cast<size_t> (channel)], channel, n, 1, true);
 }
 
 void Player::liveNoteOff (int channel, int pitch) noexcept
 {
+    chunkSample = 0;
+    for (int i = numPluginNotes - 1; i >= 0; --i)
+        if (pluginNotes[static_cast<size_t> (i)].live && pluginNotes[static_cast<size_t> (i)].channel == channel && pluginNotes[static_cast<size_t> (i)].pitch == pitch)
+            pluginNoteOff (i);
     for (auto& v : voices)
         if (v.live && v.channel == channel && v.livePitch == pitch
             && (v.state == State::Attack || v.state == State::Sustain))
@@ -319,6 +339,11 @@ void Player::noteOn (const Channel& channel, int channelIndex, const Note& n, in
     if (channel.instrument == Instrument::Drums)
     {
         drumNoteOn (channel, channelIndex, n);
+        return;
+    }
+    if (channel.instrument == Instrument::Plugin)
+    {
+        pluginNoteOn (channel, channelIndex, n, loopLength, live);
         return;
     }
     const bool isSampler = channel.instrument == Instrument::Sampler;
@@ -408,6 +433,56 @@ void Player::noteOn (const Channel& channel, int channelIndex, const Note& n, in
     v.attackStep = static_cast<float> (1.0 / (0.005 * sampleRate)); // 5 ms
 
     *target = v;
+}
+
+void Player::pluginEvent (int channelIndex, std::uint8_t status, int data1, int data2) noexcept
+{
+    if (channelIndex < 0 || channelIndex >= kMaxChannels)
+        return;
+    auto& count = pluginEventCount[static_cast<size_t> (channelIndex)];
+    if (count >= kMaxPluginEvents)
+        return;
+    auto& e = pluginEvents[static_cast<size_t> (channelIndex)][static_cast<size_t> (count++)];
+    e.offset = chunkSample;
+    e.bytes[0] = status;
+    e.bytes[1] = static_cast<std::uint8_t> (std::clamp (data1, 0, 127));
+    e.bytes[2] = static_cast<std::uint8_t> (std::clamp (data2, 0, 127));
+}
+
+void Player::pluginNoteOn (const Channel& channel, int channelIndex, const Note& n, int loopLength, bool live) noexcept
+{
+    if (channel.plugin == nullptr)
+        return;
+    // The same key still sounding on this plugin: end it first (a plugin may not expect two note-ons for one key).
+    for (int i = numPluginNotes - 1; i >= 0; --i)
+        if (pluginNotes[static_cast<size_t> (i)].plugin == channel.plugin.get() && pluginNotes[static_cast<size_t> (i)].pitch == n.pitch)
+            pluginNoteOff (i);
+    if (numPluginNotes >= kMaxPluginNotes)
+        pluginNoteOff (0); // the oldest makes room
+    pluginEvent (channelIndex, 0x90, n.pitch, std::max (1, static_cast<int> (std::lround (n.velocity * 127.0f))));
+    PluginNote note;
+    note.plugin = channel.plugin.get();
+    note.channel = channelIndex;
+    note.pitch = n.pitch;
+    note.live = live;
+    note.endTick = live ? INT_MAX : std::min (n.startTick + std::max (1, n.lengthTicks), loopLength);
+    pluginNotes[static_cast<size_t> (numPluginNotes++)] = note;
+}
+
+void Player::pluginNoteOff (int noteIndex) noexcept
+{
+    if (noteIndex < 0 || noteIndex >= numPluginNotes)
+        return;
+    const auto note = pluginNotes[static_cast<size_t> (noteIndex)];
+    pluginEvent (note.channel, 0x80, note.pitch, 0);
+    pluginNotes[static_cast<size_t> (noteIndex)] = pluginNotes[static_cast<size_t> (--numPluginNotes)];
+}
+
+void Player::releasePluginNotes() noexcept
+{
+    for (int i = numPluginNotes - 1; i >= 0; --i)
+        if (! pluginNotes[static_cast<size_t> (i)].live)
+            pluginNoteOff (i);
 }
 
 void Player::samplerVoiceOn (const Channel& channel, int channelIndex, const Note& n, int loopLength, bool live, const SampleData* sample,
@@ -734,8 +809,13 @@ void Player::render (const Project& project, double bpm, bool playing,
                 clickPos = -1;
             }
 
+            chunkSample = i;
             if (playing)
             {
+                for (int k = numPluginNotes - 1; k >= 0; --k)
+                    if (! pluginNotes[static_cast<size_t> (k)].live && tickPos >= static_cast<double> (pluginNotes[static_cast<size_t> (k)].endTick))
+                        pluginNoteOff (k);
+
                 for (size_t ch = 0; ch < numMixerChannels; ++ch)
                 {
                     const auto& notes = project.channels[ch].notes;
@@ -920,6 +1000,29 @@ void Player::render (const Project& project, double bpm, bool playing,
                 }
             }
         }
+
+        // 1b. Plugin instruments render this chunk with the MIDI it produced, then go through their channel strip like the voices did.
+        for (size_t ch = 0; ch < numMixerChannels; ++ch)
+        {
+            const auto& c = project.channels[ch];
+            const int count = std::min (pluginEventCount[ch], kMaxPluginEvents);
+            pluginEventCount[ch] = 0;
+            if (c.instrument != Instrument::Plugin || c.plugin == nullptr)
+                continue;
+            std::fill_n (pluginL.begin(), n, 0.0f);
+            std::fill_n (pluginR.begin(), n, 0.0f);
+            c.plugin->process (pluginL.data(), pluginR.data(), n, pluginEvents[ch].data(), count);
+            const float g = smoothedGain[ch];
+            for (int i = 0; i < n; ++i)
+            {
+                const float l = pluginL[static_cast<size_t> (i)] * g * panLeft[ch];
+                const float r = pluginR[static_cast<size_t> (i)] * g * panRight[ch];
+                peaks[ch] = std::max ({ peaks[ch], std::fabs (l), std::fabs (r) });
+                trackL[routedTo[ch]][static_cast<size_t> (i)] += l;
+                trackR[routedTo[ch]][static_cast<size_t> (i)] += r;
+            }
+        }
+        chunkSample = 0;
 
         // 2. Each track: insert effects (pre-fader), then fader, balance, mute/solo, metering, master bus.
         std::array<float, kChunk> mixL {}, mixR {};

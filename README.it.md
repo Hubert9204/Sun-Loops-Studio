@@ -14,14 +14,13 @@ strumento sta in un pannello mobile che puoi spostare, ridimensionare, sovrappor
 Sun Loops Studio si ispira al modo di lavorare dei DAW a loop come FL Studio. È un progetto indipendente: non usa
 codice, nomi, grafica o risorse di altri prodotti e non è affiliato né approvato dai loro produttori.
 
-**Stato: alpha (0.16.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
+**Stato: alpha (0.17.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
 La riproduzione è stata confermata su un vero PC Nobara per la versione 0.3; tutto ciò che è stato aggiunto dopo
 (pannelli, pattern, playlist, browser, pitch/swing, mixer espanso ed effetti, salvataggio dei progetti, AppImage, clip audio, trascinamento
 dei file, registrazione, MIDI, metronomo e formati di esportazione) è stato provato con test automatici e in un display virtuale con un
-dispositivo audio muto, non ancora con audio reale, microfoni o hardware MIDI. **L'hosting di plugin VST3 non è
-implementato**: gli slot effetti del mixer contengono gli effetti propri di Sun Loops Studio (Equalizer, Reverb,
-Delay, Compressor). Vedi [docs/roadmap.md](docs/roadmap.md) per sapere con precisione cosa è verificato, cosa no e
-cosa manca (l'hosting VST3 è la mancanza principale).
+dispositivo audio muto, non ancora con audio reale, microfoni o hardware MIDI. **Dalla 0.17.0 si possono usare i plugin (VST3, LV2,
+LADSPA)** come strumenti e come effetti del mixer; sono stati provati con piccoli plugin di prova e con gli esempi LADSPA, non ancora con
+plugin commerciali. Vedi [docs/roadmap.md](docs/roadmap.md) per sapere con precisione cosa è verificato, cosa no e cosa manca.
 
 ## Funzioni
 
@@ -58,6 +57,8 @@ cosa manca (l'hosting VST3 è la mancanza principale).
 - **Sicurezza** - salvataggio automatico ogni minuto, recupero dopo un crash, un `.bak` della versione precedente ed *Export project with samples*
   per portare un progetto su un altro computer.
 - **Metronomo** - un click con tempo (anche tap tempo) e volume regolabili, su un pulsante a parte.
+- **Plugin** - strumenti ed effetti VST3, LV2 e LADSPA: si cercano dal browser, doppio clic o trascinamento di uno strumento per un canale,
+  un effetto si sceglie in uno slot del mixer, ognuno ha la sua finestra; le impostazioni si salvano nel progetto, anche se il plugin manca.
 - **Mixer** (`F9`) - 8 tracce verticali, ognuna con fader e dB, bilanciamento stereo, mute, solo, indicatore
   Peak/RMS e 4 slot per effetti in serie (Equalizer, Reverb, Delay, Compressor, con bypass), due **send** (pre o post fader)
   e due interruttori **VCA**. Accanto alle tracce ci sono due **bus aux** con effetti propri e due **gruppi VCA**. La strip master a destra
@@ -133,10 +134,9 @@ la gestione delle note MIDI e il metronomo.
 
 ## Licenza
 
-Il repository contiene una [LICENSE](LICENSE) MIT. Attenzione: JUCE è disponibile solo con licenza GPLv3/AGPLv3 o con
-licenza commerciale a pagamento, e un programma che usa JUCE con la licenza gratuita deve a sua volta essere
-distribuito con GPL. Prima di distribuire eseguibili, o si passa questo progetto a GPLv3 oppure si acquista una
-licenza commerciale JUCE.
+Sun Loops Studio è software libero con licenza **GNU General Public License, versione 3** ([LICENSE](LICENSE)); le versioni fino
+alla 0.16.0 erano pubblicate con licenza MIT. La GPLv3 è la licenza con cui JUCE si può usare gratuitamente, quindi il programma e la
+sua AppImage si possono condividere purché siano accompagnati dal codice sorgente.
 
 `third_party/signalsmith` contiene Signalsmith Stretch e Signalsmith Linear, entrambe con licenza MIT (le licenze e le revisioni esatte sono in quella cartella).
 `third_party/tinysoundfont` contiene `tsf.h` di TinySoundFont (MIT), usato solo per leggere i file SoundFont.

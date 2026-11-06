@@ -69,7 +69,7 @@ void MainComponent::addRecentProject (const juce::File& file)
     settings->saveIfNeeded();
 }
 
-ProjectDocument MainComponent::makeDocument()
+ProjectDocument MainComponent::makeDocument (bool withPluginStates)
 {
     commitCurrentPattern();
 
@@ -84,7 +84,9 @@ ProjectDocument MainComponent::makeDocument()
         c.sample = nullptr;
         c.kit = nullptr;
         c.program = nullptr;
+        c.plugin = nullptr; // described by doc.pluginSpecs
     }
+    addPluginSpecs (doc, withPluginStates);
     doc.tracks = tracks;
     doc.masterSlots = masterTrack.slots;
     doc.console = console;
@@ -106,6 +108,9 @@ void MainComponent::applyDocument (ProjectDocument doc, const juce::File& file, 
     pianoRoll.setNotes ({}); // also ends a note that is being played by hand
     closeDrumMachine();      // it points at a channel of the old project
     closeSamplerSettings();
+
+    // Plugins (instruments and effects): a plugin that is not installed here becomes a silent placeholder that keeps its settings.
+    loadDocumentPlugins (doc, problems);
 
     // Samples: built-in ones are regenerated, the others are read from the path stored in the file.
     for (size_t i = 0; i < doc.channels.size(); ++i)

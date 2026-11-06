@@ -27,6 +27,13 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.17.0
+Block I added plugin processing to the audio thread: MIDI events written into fixed arrays, a pass over the plugin channels per chunk, and
+`JucePlugin::process`, which copies into a preallocated buffer and calls the plugin under a try-lock (never waits). The "no allocation" test
+runs a VST3 instrument and a VST3 effect for 2000 blocks; what a third-party plugin does inside `processBlock` is out of the program's hands.
+`AudioEngine::setSuspended` uses two sequentially-consistent atomics so that an export can use the same instances. clang-tidy (the audit's
+check set) on `PluginHost.cpp` and `MainComponentPlugins.cpp`: no findings.
+
 ## After 0.16.0
 The sampler voice gained a loop, an envelope decay, a per-voice filter and zone gain / pan in `Player::render`; `noteOn` loops over a program's zones (no
 allocation: tested with zones, loops, filters and envelopes for 2000 blocks). TinySoundFont is compiled in one file (`SoundFont.cpp`) with its warnings

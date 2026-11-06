@@ -203,6 +203,23 @@ MainComponent::MainComponent()
     mixerPanel.setConsole (console);
     mixerPanel.onTrackChanged = [this] (int) { publishProject(); };
     mixerPanel.onAutomate = [this] (const AutomationTarget& t) { createAutomationFor (t); };
+    mixerPanel.listEffectPlugins = [this]
+    {
+        std::vector<FxPanel::PluginChoice> list;
+        for (const auto& p : foundPlugins)
+            if (! p.isInstrument)
+                list.push_back ({ p.name + "  (" + p.format + ")", p.identifier });
+        return list;
+    };
+    mixerPanel.createEffectPlugin = [this] (const juce::String& id) -> std::shared_ptr<HostedPlugin>
+    {
+        juce::String error;
+        auto plugin = createPlugin (id, error);
+        if (plugin == nullptr)
+            statusLabel.setText ("Plugin not loaded: " + error, juce::dontSendNotification);
+        return plugin;
+    };
+    mixerPanel.openPluginWindow = [this] (const std::shared_ptr<HostedPlugin>& p) { openPluginWindow (p); };
     mixerPanel.onMasterVolumeChanged = [this] (double v) { volumeSlider.setValue (v); }; // the slider drives the engine
     updateTrackRouting();
 
@@ -353,7 +370,11 @@ MainComponent::MainComponent()
         };
     }
 
-    browser.onItemActivated = [this] (const drag::Item& item) { applyBrowserItem (selected, item); };
+    browser.onItemActivated = [this] (const drag::Item& item)
+    {
+        // A double-clicked plugin instrument gets a channel of its own instead of replacing the selected one.
+        applyBrowserItem (item.kind == "plugin" && item.payload.startsWith ("instrument|") ? -1 : selected, item);
+    };
     browser.onAction = [this] (const juce::String& action) { if (action == "scan-plugins") startPluginScan(); };
     browser.onRefresh = [this] { rebuildBrowser(); };
     browser.onOpenFolder = [this] { library.ensureExists(); library.root.revealToUser(); };
@@ -428,6 +449,7 @@ MainComponent::MainComponent()
     engine.setInputMonitoring (monitorInput);
     engine.setMidiTargetChannel (selected);
     engine.setStartupSound (makeStartupSample());
+    initPlugins(); // before the device starts: it prepares the plugins for its rate
     const auto error = engine.initialise (savedAudio.get());
     if (error.isEmpty() && (settings == nullptr || settings->getBoolValue ("startup.sound", true)))
         engine.playStartupSound();
@@ -471,6 +493,7 @@ MainComponent::~MainComponent()
     saveLayout();
     if (pluginScanThread != nullptr)
         pluginScanThread->stopThread (5000);
+    pluginWindows.clear(); // editors go before their plugins
 }
 
 void MainComponent::paint (juce::Graphics& g)
@@ -587,6 +610,15 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
 void MainComponent::timerCallback()
 {
     autosaveIfNeeded();
+
+    // A plugin's settings changed in its own window: the project needs saving (plugin edits are not in the undo history).
+    if (++pluginPollTicks >= 10)
+    {
+        pluginPollTicks = 0;
+        for (const auto& p : pluginHost->livePlugins())
+            if (p->takeChanged() && projectUsesPlugin (p.get()))
+                markDirty();
+    }
 
     const float masterPeak = engine.consumePeak();
     meter.setLevel (masterPeak);
@@ -779,6 +811,16 @@ void MainComponent::createStrip (size_t channelIndex)
     strip->onEditSample = [this] (int idx) { openSampleEditorForChannel (idx); };
     strip->onOpenPianoRoll = [this] (int idx) { openPianoRoll (idx); };
     strip->onOpenDrumMachine = [this] (int idx) { openDrumMachine (idx); };
+    strip->onOpenPlugin = [this] (int idx) { openChannelPlugin (idx); };
+    strip->listInstrumentPlugins = [this]
+    {
+        std::vector<std::pair<juce::String, juce::String>> list;
+        for (const auto& p : foundPlugins)
+            if (p.isInstrument)
+                list.emplace_back (p.name + "  (" + p.format + ")", p.identifier);
+        return list;
+    };
+    strip->onPluginChosen = [this] (int idx, const juce::String& id) { setPluginInstrument (idx, id); };
     strip->onInstrumentChosen = [this] (int idx, Instrument instrument)
     {
         setInstrument (idx, instrument);
@@ -803,7 +845,8 @@ int MainComponent::addChannel (Instrument instrument, bool askForSample)
 
     Channel c;
     c.instrument = instrument;
-    c.name = (instrument == Instrument::Synth ? "Synth " : instrument == Instrument::Drums ? "Drums " : "Sampler ") + std::to_string (channels.size() + 1);
+    c.name = (instrument == Instrument::Synth ? "Synth " : instrument == Instrument::Drums ? "Drums " : instrument == Instrument::Plugin ? "Plugin " : "Sampler ")
+           + std::to_string (channels.size() + 1);
     if (instrument == Instrument::Drums)
         c.kit = defaultDrumKit();
     c.mixerTrack = std::min (static_cast<int> (channels.size()), kMaxTracks - 1); // next free track
@@ -830,6 +873,8 @@ void MainComponent::setInstrument (int channelIndex, Instrument instrument)
 {
     auto& channel = channels[static_cast<size_t> (channelIndex)];
     channel.instrument = instrument;
+    if (instrument != Instrument::Plugin)
+        channel.plugin = nullptr; // its window closes with the next publish
     if (instrument == Instrument::Drums && channel.kit == nullptr)
         channel.kit = defaultDrumKit();
 
@@ -887,6 +932,7 @@ void MainComponent::publishProject()
     }
     engine.publishProject (std::move (project));
     recordHistory();
+    closeUnusedPluginWindows();
 }
 
 void MainComponent::selectChannel (int index)

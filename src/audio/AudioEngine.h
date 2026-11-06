@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <functional>
 #include <atomic>
 #include <memory>
 
@@ -99,6 +100,14 @@ public:
         metronomeVolume.store (volume, std::memory_order_relaxed);
     }
     int getPlayheadTick() const noexcept       { return playheadTick.load (std::memory_order_relaxed); }
+
+    // Plugins (0.17.0). The sample rate the device runs at (what new plugins are prepared for).
+    double getSampleRate() const noexcept { return deviceRate.load (std::memory_order_relaxed); }
+    // Called (not on the audio thread, with the audio stopped) whenever the device starts, with its sample rate: plugins are prepared again there.
+    std::function<void (double)> onDeviceStarting;
+    // While suspended the audio callback outputs silence and does not run the Player, so another thread (an export) may use the plugins.
+    // setSuspended (true) returns once the callback is no longer inside the Player (or after about half a second). Message thread.
+    void setSuspended (bool shouldSuspend);
     // Moves the song position to `tick` (playing or stopped); it is also where Stop returns to. Applied by the next audio block.
     void requestSeek (int tick) noexcept { seekRequest.store (std::max (0, tick), std::memory_order_release); }
 
@@ -234,5 +243,8 @@ private:
     std::array<std::atomic<float>, kAuxBuses> auxRms {};
     std::atomic<int> playheadTick { 0 };
     std::atomic<int> seekRequest { -1 };
+    std::atomic<bool> suspended { false };
+    std::atomic<bool> inCallback { false };
+    std::atomic<double> deviceRate { 48000.0 };
 };
 } // namespace sls

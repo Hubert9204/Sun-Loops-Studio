@@ -17,8 +17,8 @@ juce::String kindName (NodeKind k)
         case NodeKind::BuiltinSample: return "builtin";
         case NodeKind::Instrument:    return "instrument";
         case NodeKind::Preset:        return "preset";
+        case NodeKind::Plugin:        return "plugin";
         case NodeKind::Folder:
-        case NodeKind::Plugin:
         case NodeKind::Action:
         case NodeKind::Note:          break;
     }
@@ -33,7 +33,7 @@ juce::Colour dotColour (NodeKind k)
         case NodeKind::BuiltinSample: return juce::Colour (0xff4cc38a);
         case NodeKind::Instrument:    return kAccent;
         case NodeKind::Preset:        return juce::Colour (0xff6aa7e8);
-        case NodeKind::Plugin:        return juce::Colour (0xff6b717c);
+        case NodeKind::Plugin:        return juce::Colour (0xffb38cf0);
         case NodeKind::Folder:
         case NodeKind::Action:
         case NodeKind::Note:          break;
@@ -83,7 +83,7 @@ public:
         }
 
         const bool folder = node.kind == NodeKind::Folder;
-        const bool dim = node.kind == NodeKind::Plugin || node.kind == NodeKind::Note;
+        const bool dim = node.kind == NodeKind::Note;
         g.setColour (node.kind == NodeKind::Action ? kAccent : (dim ? kDim : kText));
         g.setFont (juce::FontOptions (13.0f, folder ? juce::Font::bold : (node.kind == NodeKind::Note ? juce::Font::italic : juce::Font::plain)));
         g.drawText (juce::String (node.name), area, juce::Justification::centredLeft, true);

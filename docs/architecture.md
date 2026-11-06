@@ -16,6 +16,7 @@ src/audio/                      No UI dependencies except JUCE audio types
   TimeStretch.*                 StretchSettings and stretchSample(): offline time-stretch / pitch-shift of a SampleData with Signalsmith Stretch
   SampleEdit.*                  Destructive edits of a SampleData (ranges, cut / crop / fades / gain / normalise ...), noise reduction (spectral gating), onset detection, grid slices, 32-bit float WAV writing (plain C++ over SampleData)
   Auditioner.h                  The editor's preview voice: lock-free hand-over to the audio thread, mixed after the master chain
+  HostedPlugin.h                What the engine knows of a third-party plugin (0.17.0): process(), isInstrument(), isLoaded(); no JUCE
   SampleData.h                  SampleData (decoded audio) and finiteOr(), split from Project.h so that DrumKit.h and Project.h can include each other's needs
   SamplerProgram.h              The advanced sampler: SamplerSettings (envelope, loop, filter), SampleZone / SamplerProgram (multi-sample, key and velocity ranges), makeSliceProgram() (plain C++)
   DrumKit.h                     The drum machine model: 16 pads, 4 velocity layers, choke groups, swing; layerFor(), padForPitch(), sanitised() (plain C++)
@@ -45,7 +46,10 @@ src/library/                    No JUCE GUI; JUCE core only (files, JSON)
   Library.*                     ~/Music/Sun Loops Studio folders, directory scan, building the browser tree
   ProjectFile.*                 The .slp project file (older .slsproj still read): ProjectDocument <-> JSON, safe read and write
 
-src/plugins/PluginScanner.*     VST3 discovery. Only feeds the browser's Plugin folder; no hosting
+src/plugins/PluginScanner.*     A plain VST3 file finder (older; kept for its tests). The browser uses PluginHost's scan since 0.17.0
+src/plugins/PluginHost.*        Plugin hosting (0.17.0): JucePlugin (a VST3 / LV2 / LADSPA instance behind HostedPlugin: block processing, MIDI, state,
+                                placeholders for missing plugins, a "changed" flag) and PluginHost (formats, scan with the dead man's pedal, known list,
+                                creating instances, preparing them all again for a new sample rate)
 
 src/ui/
   MainComponent.*               Toolbar, workspace, panel wiring, channels, layout persistence, the demo project, timer
@@ -59,6 +63,7 @@ src/ui/
   AutomationEditor.*            The point editor window for one automation clip
   MetersView.*                  The Meters window: loudness read-outs, true peak, spectrum, goniometer, correlation
   SamplerPanel.*                The sampler settings window (MainComponentSampler.cpp opens and wires it, loads SoundFonts, makes slice channels)
+  PluginWindow.h                A plugin's window: its own editor or JUCE's generic one (0.17.0; MainComponentPlugins.cpp creates, wires and closes them)
   DrumMachine.*                 The drum machine window: pad grid, pad inspector, step grid per pad, kit menu (MainComponentDrums.cpp opens and wires it)
   PanelWindow.*                 PanelWindow (floating panel) and Workspace (the area they float in)
   PanelLayout.h                 Panel position/size/visibility: parse, serialise, clamp (no JUCE)
@@ -257,8 +262,36 @@ voices -> channel (smoothed gain, equal-power pan, channel mute/solo)
 - Meters: the audio thread keeps a peak per track (`consumeTrackPeak` reads and resets it on the UI timer) and a
   sliding mean square over ~300 ms (`getTrackRms`). `AudioEngine` does the same for the master. `ScopedNoDenormals`
   is active in the audio callback and the feedback loops flush tiny values.
-- There is no VST3 hosting. An `EffectSlot` has a built-in `EffectType`; hosting would add a slot kind that points at
-  a plugin instance owned outside the snapshot, which needs its own design (state, editors, threading).
+- Plugin effects (0.17.0): `EffectType::Plugin` with `EffectSlot::plugin` (a `shared_ptr<HostedPlugin>`). `EffectUnit::process` hands the
+  chunk to the plugin; bypass leaves the signal alone. See *Plugins* below.
+
+### Plugins (0.17.0)
+
+The engine sees a plugin only through `HostedPlugin` (`audio/HostedPlugin.h`): `process (left, right, n, events, numEvents)`. The JUCE side,
+`JucePlugin` in `plugins/PluginHost.cpp`, owns the `AudioPluginInstance`, a preallocated buffer (at least two channels, `Player::kChunk`
+samples) and a preallocated `MidiBuffer`; `process` copies the chunk in, calls `processBlock` under a *try*-lock of the plugin's callback lock
+(it never waits: a plugin being reconfigured is skipped for that chunk) and copies stereo back. A placeholder (the plugin is not installed)
+has no instance: effects pass the sound through, instruments are silent, and the saved state is kept for the next save.
+
+- **Instruments**: `Channel::plugin` on an `Instrument::Plugin` channel. In `Player`, note starts and ends (pattern, song, live notes, MIDI
+  keyboards) become 3-byte MIDI events at their sample inside the current 64-sample chunk (`pluginNoteOn`, at most 256 events per channel
+  and chunk, 256 sounding notes tracked so their note-offs are sent at the note end, at a loop or jump and at Stop; the notes of a
+  plugin that leaves the project are forgotten).
+  After the voices, each plugin channel renders its chunk into the channel's mix. No allocation (tested over 2000 blocks).
+- **Ownership and threads**: plugins are `shared_ptr`s in the channels and slots, so the snapshots, the undo history and the open document
+  share them; the last reference is dropped on the message thread (snapshots are freed there). `PluginHost` is declared before the engine in
+  `MainComponent`, so every instance goes before the formats (modules) that made it. Creating, preparing, opening editors and reading
+  state happen on the message thread; `prepare` is called when the device starts (`AudioEngine::onDeviceStarting`, audio stopped) and around
+  an export, while `AudioEngine::setSuspended (true)` keeps the callback out of the `Player` (the export renders the same instances at 48 kHz).
+- **Project file**: a `PluginSpec` per plugin (place: channel / track / master / aux, index, slot; the `PluginDescription` as XML text; the
+  state from `getStateInformation` in JUCE's base64). `MainComponent::makeDocument (true)` asks every plugin for its state; the undo history
+  uses `makeDocument (false)`, which names a plugin by its instance (cheap, and enough to see that a slot changed). Edits made in a plugin's
+  window raise its "changed" flag (`AudioProcessorListener`), which the UI timer turns into an unsaved-changes mark.
+- **Scan**: `PluginHost::scan` runs JUCE's `PluginDirectoryScanner` per format on a background thread with a dead man's pedal file in the
+  settings folder; `distributionPaths` adds the `lib64` folders JUCE's defaults miss on Fedora. The known list is `plugins.xml` next to the
+  settings and is read at start-up.
+- **Tests**: `tests/plugins/TestPlugins.cpp` builds two JUCE plugins (a sine synth and a gain with a saved parameter) as VST3 and LV2;
+  the test program scans them, plays and measures them through the `Player`, saves and restores state, and checks placeholders.
 
 ### Time-stretch and pitch-shift (0.12.0)
 
@@ -498,10 +531,11 @@ usable, goes at most 6 levels deep and creates at most 5000 nodes; a note appear
 `filterTree` implements the search: a case-insensitive substring match on names; a folder whose own name matches
 keeps its whole subtree, otherwise it stays only if something below it matches (notes and actions are hidden).
 
-A dragged item is described by a string `sls:<kind>:<payload>` (kinds: `file`, `builtin`, `instrument`, `preset`;
+A dragged item is described by a string `sls:<kind>:<payload>` (kinds: `file`, `builtin`, `instrument`, `preset`, `plugin`;
 `drag::Item` parses and builds it). `ChannelStrip` and `RackView` are `DragAndDropTarget`s; both end in
 `MainComponent::applyBrowserItem(channelIndex, item)`, which is also what double-clicking an item calls. Dropping on
-the empty rack area passes index -1, which first creates a channel. Plugin items are not draggable.
+the empty rack area passes index -1, which first creates a channel. A plugin item's payload is `instrument|<id>` or `effect|<id>`
+(JUCE's identifier string): an instrument becomes the channel's instrument (or a new channel), an effect goes into the channel's track.
 
 The tree items call back into `MainComponent`, and some callbacks rebuild the tree. Doing that inside the item's own
 event handler destroyed the item while it was running (a use-after-free that crashed the program when *Scan for
@@ -544,7 +578,7 @@ failed. It covers:
   instead of a file), plus atomic writing (a failed write leaves the old file untouched, no temporary file is left
   behind) and the automatic file name. The 32 MB size limit has no test of its own;
 - a concurrent stress test of `SnapshotExchange` (a reader on its own thread against a publishing writer);
-- WAV round trip and the VST3 scanner on empty and invalid directories;
+- WAV round trip and the VST3 scanner on empty and invalid directories; plugin hosting with real VST3 / LV2 test plugins (0.17.0);
 - export to every format (round trip with length and sound; ffmpeg formats decoded again with ffmpeg; no temporary
   files left; a missing or failing ffmpeg writes nothing and never damages an existing file);
 - importing: every format, mono, the length limit, damaged/missing files, AAC without ffmpeg, the sound of a video (and a

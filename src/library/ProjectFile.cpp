@@ -44,6 +44,7 @@ const char* effectKey (EffectType t)
         case EffectType::Reverb:     return "reverb";
         case EffectType::Delay:      return "delay";
         case EffectType::Compressor: return "compressor";
+        case EffectType::Plugin:     return "plugin";
         case EffectType::None:       break;
     }
     return "none";
@@ -71,8 +72,26 @@ juce::var noteToVar (const Note& n)
     return a;
 }
 
-juce::var slotToVar (const EffectSlot& slot)
+juce::var pluginToVar (const PluginSpec& spec)
 {
+    auto* o = new juce::DynamicObject();
+    o->setProperty ("description", juce::String (spec.description));
+    o->setProperty ("state", juce::String (spec.state));
+    return juce::var (o);
+}
+
+juce::var slotToVar (const EffectSlot& slot, const PluginSpec* plugin)
+{
+    if (slot.type == EffectType::Plugin)
+    {
+        // The plugin keeps its own parameters: what is written is where it comes from and its state.
+        auto* o = new juce::DynamicObject();
+        o->setProperty ("type", "plugin");
+        o->setProperty ("bypass", slot.bypass);
+        if (plugin != nullptr)
+            o->setProperty ("plugin", pluginToVar (*plugin));
+        return juce::var (o);
+    }
     const auto s = slot.sanitised();
     auto* o = new juce::DynamicObject();
     o->setProperty ("type", effectKey (s.type));
@@ -95,11 +114,29 @@ struct Reader
 };
 
 
-EffectSlot readSlot (const juce::var& v)
+// A plugin slot comes back as type Plugin without an instance; `plugin` receives its description and state.
+EffectSlot readSlot (const juce::var& v, std::vector<PluginSpec>& plugins, PluginSpec::Place place, int index, int slotIndex)
 {
     auto* o = v.getDynamicObject();
     if (o == nullptr)
         return {};
+    if (o->getProperty ("type").toString() == "plugin")
+    {
+        auto* p = o->getProperty ("plugin").getDynamicObject();
+        if (p == nullptr || p->getProperty ("description").toString().isEmpty())
+            return {};
+        PluginSpec spec;
+        spec.place = place;
+        spec.index = index;
+        spec.slot = slotIndex;
+        spec.description = p->getProperty ("description").toString().toStdString();
+        spec.state = p->getProperty ("state").toString().toStdString();
+        plugins.push_back (std::move (spec));
+        EffectSlot slot;
+        slot.type = EffectType::Plugin;
+        slot.bypass = readBool (o->getProperty ("bypass"), false);
+        return slot;
+    }
 
     EffectSlot slot = EffectSlot::make (effectFromKey (o->getProperty ("type").toString()));
     slot.bypass = readBool (o->getProperty ("bypass"), false);
@@ -172,7 +209,11 @@ juce::String ProjectDocument::toJson() const
         const auto& c = channels[i];
         auto* o = new juce::DynamicObject();
         o->setProperty ("name", juce::String (c.name));
-        o->setProperty ("instrument", c.instrument == Instrument::Sampler ? "sampler" : c.instrument == Instrument::Drums ? "drums" : "synth");
+        o->setProperty ("instrument", c.instrument == Instrument::Sampler ? "sampler" : c.instrument == Instrument::Drums ? "drums"
+                                    : c.instrument == Instrument::Plugin ? "plugin" : "synth");
+        if (c.instrument == Instrument::Plugin)
+            if (const auto* spec = findPlugin (PluginSpec::Place::Channel, static_cast<int> (i), 0))
+                o->setProperty ("plugin", pluginToVar (*spec));
         if (c.instrument == Instrument::Drums)
             o->setProperty ("kit", kitSpecToVar (i < kitSpecs.size() ? kitSpecs[i] : KitSpec::empty()));
         o->setProperty ("sample", juce::String (i < sampleSources.size() ? sampleSources[i] : std::string()));
@@ -204,8 +245,9 @@ juce::String ProjectDocument::toJson() const
         o->setProperty ("mute", t.mute);
         o->setProperty ("solo", t.solo);
         juce::Array<juce::var> slots;
-        for (const auto& s : t.slots)
-            slots.add (slotToVar (s));
+        const int trackIndex = static_cast<int> (&t - tracks.data());
+        for (size_t s = 0; s < t.slots.size(); ++s)
+            slots.add (slotToVar (t.slots[s], findPlugin (PluginSpec::Place::Track, trackIndex, static_cast<int> (s))));
         o->setProperty ("effects", slots);
         juce::Array<juce::var> sendList;
         for (const auto send : t.sends)
@@ -228,8 +270,9 @@ juce::String ProjectDocument::toJson() const
             o->setProperty ("pan", number (static_cast<double> (a.pan)));
             o->setProperty ("mute", a.mute);
             juce::Array<juce::var> slots;
-            for (const auto& s : a.slots)
-                slots.add (slotToVar (s));
+            const int auxIndex = static_cast<int> (&a - console.aux.data());
+            for (size_t s = 0; s < a.slots.size(); ++s)
+                slots.add (slotToVar (a.slots[s], findPlugin (PluginSpec::Place::Aux, auxIndex, static_cast<int> (s))));
             o->setProperty ("effects", slots);
             auxList.add (juce::var (o));
         }
@@ -249,8 +292,8 @@ juce::String ProjectDocument::toJson() const
     {
         auto* master = new juce::DynamicObject();
         juce::Array<juce::var> slots;
-        for (const auto& s : masterSlots)
-            slots.add (slotToVar (s));
+        for (size_t s = 0; s < masterSlots.size(); ++s)
+            slots.add (slotToVar (masterSlots[s], findPlugin (PluginSpec::Place::Master, 0, static_cast<int> (s))));
         master->setProperty ("effects", slots);
         root->setProperty ("master", juce::var (master));
     }
@@ -406,6 +449,21 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
             c.instrument = Instrument::Drums; // files from before 0.14.0 never say this
         else if (instrument == "synth")
             c.instrument = Instrument::Synth;
+        else if (instrument == "plugin")
+        {
+            c.instrument = Instrument::Plugin; // files from before 0.17.0 never say this
+            if (auto* p = o->getProperty ("plugin").getDynamicObject())
+            {
+                PluginSpec spec;
+                spec.place = PluginSpec::Place::Channel;
+                spec.index = i;
+                spec.instrument = true;
+                spec.description = p->getProperty ("description").toString().toStdString();
+                spec.state = p->getProperty ("state").toString().toStdString();
+                if (! spec.description.empty())
+                    d.pluginSpecs.push_back (std::move (spec));
+            }
+        }
         else
         {
             result.error = "Channel " + std::to_string (i + 1) + " has an unknown instrument.";
@@ -446,7 +504,7 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
 
             if (auto* slots = o->getProperty ("effects").getArray())
                 for (int s = 0; s < std::min (slots->size(), kSlotsPerTrack); ++s)
-                    t.slots[static_cast<size_t> (s)] = readSlot ((*slots)[s]);
+                    t.slots[static_cast<size_t> (s)] = readSlot ((*slots)[s], d.pluginSpecs, PluginSpec::Place::Track, i, s);
 
             // Sends and VCA membership (files from older versions have none)
             if (auto* sendList = o->getProperty ("sends").getArray())
@@ -473,7 +531,7 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
                 bus.mute = readBool (o->getProperty ("mute"), false);
                 if (auto* slots = o->getProperty ("effects").getArray())
                     for (int s = 0; s < std::min (slots->size(), kSlotsPerTrack); ++s)
-                        bus.slots[static_cast<size_t> (s)] = readSlot ((*slots)[s]);
+                        bus.slots[static_cast<size_t> (s)] = readSlot ((*slots)[s], d.pluginSpecs, PluginSpec::Place::Aux, a, s);
             }
         if (auto* vcaList = consoleObject->getProperty ("vca").getArray())
             for (int g = 0; g < std::min (vcaList->size(), kVcaGroups); ++g)
@@ -488,7 +546,7 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
     if (auto* master = root->getProperty ("master").getDynamicObject())
         if (auto* slots = master->getProperty ("effects").getArray())
             for (int s = 0; s < std::min (slots->size(), kSlotsPerTrack); ++s)
-                d.masterSlots[static_cast<size_t> (s)] = readSlot ((*slots)[s]);
+                d.masterSlots[static_cast<size_t> (s)] = readSlot ((*slots)[s], d.pluginSpecs, PluginSpec::Place::Master, 0, s);
 
     // --- pattern length (0.15.0; older files: two bars)
     {

@@ -12,7 +12,7 @@ namespace sls
 MainComponent::EditState MainComponent::captureEditState()
 {
     EditState s;
-    s.text = makeDocument().toJson(); // commits the current pattern, so `channels` and `arrangement` agree
+    s.text = makeDocument (false).toJson(); // (plugins named by instance, not by their state) commits the current pattern, so `channels` and `arrangement` agree
     s.channels = channels;
     s.arrangement = arrangement;
     s.tracks = tracks;

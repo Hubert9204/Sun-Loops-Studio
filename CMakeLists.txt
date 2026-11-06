@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(SunLoopsStudio VERSION 0.16.0 LANGUAGES C CXX)
+project(SunLoopsStudio VERSION 0.17.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -50,13 +50,26 @@ set(SLS_CORE_SOURCES
     src/library/SoundFont.cpp
     src/library/Library.cpp
     src/library/ProjectFile.cpp
-    src/plugins/PluginScanner.cpp)
+    src/plugins/PluginScanner.cpp
+    src/plugins/PluginHost.cpp)
+
+# LADSPA plugins can be hosted only when the LADSPA header is installed (Fedora / Nobara: ladspa-devel).
+include(CheckIncludeFileCXX)
+check_include_file_cxx(ladspa.h SLS_HAVE_LADSPA_H)
+if(SLS_HAVE_LADSPA_H)
+    set(SLS_LADSPA 1)
+else()
+    set(SLS_LADSPA 0)
+    message(STATUS "ladspa.h not found: LADSPA plugins will not be hosted (install ladspa-devel to enable them)")
+endif()
 
 set(SLS_COMMON_DEFINITIONS
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
     JUCE_USE_MP3AUDIOFORMAT=1
-    JUCE_PLUGINHOST_VST3=1)
+    JUCE_PLUGINHOST_VST3=1
+    JUCE_PLUGINHOST_LV2=1
+    JUCE_PLUGINHOST_LADSPA=${SLS_LADSPA})
 
 # --- Application -------------------------------------------------------------
 juce_add_gui_app(SunLoopsStudio
@@ -97,6 +110,7 @@ target_sources(SunLoopsStudio PRIVATE
     src/ui/MainComponentHistory.cpp
     src/ui/MainComponentSafety.cpp
     src/ui/MainComponentSampler.cpp
+    src/ui/MainComponentPlugins.cpp
     src/ui/DrumMachine.cpp
     src/ui/SamplerPanel.cpp
     src/ui/AutomationEditor.cpp
@@ -155,6 +169,38 @@ target_link_libraries(SunLoopsStudioTests PRIVATE
     juce::juce_audio_processors
     juce::juce_recommended_config_flags
     juce::juce_recommended_warning_flags)
+
+# Two tiny plugins (VST3 and LV2) that the tests load to check the plugin host with real binaries. Not installed.
+option(SLS_BUILD_TEST_PLUGINS "Build the VST3 / LV2 test plugins used by the tests" ON)
+if(SLS_BUILD_TEST_PLUGINS)
+    foreach(kind Synth Gain)
+        set(target SlsTest${kind})
+        if(kind STREQUAL "Synth")
+            set(isSynth TRUE)
+            set(code Slsy)
+        else()
+            set(isSynth FALSE)
+            set(code Slsg)
+        endif()
+        juce_add_plugin(${target}
+            COMPANY_NAME "Sun Loops Studio tests"
+            PRODUCT_NAME "SLS Test ${kind}"
+            PLUGIN_MANUFACTURER_CODE Slst
+            PLUGIN_CODE ${code}
+            IS_SYNTH ${isSynth}
+            NEEDS_MIDI_INPUT ${isSynth}
+            FORMATS VST3 LV2
+            LV2URI "urn:sun-loops-studio:test-${kind}"
+            COPY_PLUGIN_AFTER_BUILD FALSE)
+        target_sources(${target} PRIVATE tests/plugins/TestPlugins.cpp)
+        target_compile_definitions(${target} PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0
+                                   $<$<STREQUAL:${kind},Synth>:SLS_TEST_SYNTH=1>)
+        target_link_libraries(${target} PRIVATE juce::juce_audio_utils juce::juce_recommended_config_flags)
+        add_dependencies(SunLoopsStudioTests ${target}_VST3 ${target}_LV2)
+    endforeach()
+    target_compile_definitions(SunLoopsStudioTests PRIVATE
+        SLS_TEST_PLUGIN_DIR="${CMAKE_BINARY_DIR}")
+endif()
 
 enable_testing()
 add_test(NAME core COMMAND SunLoopsStudioTests)

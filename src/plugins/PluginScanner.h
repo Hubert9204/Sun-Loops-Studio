@@ -11,6 +11,8 @@ struct PluginInfo
     juce::String name;
     juce::String manufacturer;
     juce::String path;
+    juce::String identifier; // JUCE's PluginDescription::createIdentifierString(): how the program finds it again
+    juce::String format;     // "VST3", "LV2", "LADSPA"
     bool isInstrument = false;
     int numInputChannels = 0;
     int numOutputChannels = 0;

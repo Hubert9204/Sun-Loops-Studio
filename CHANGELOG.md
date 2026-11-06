@@ -2,6 +2,36 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.17.0 - 2026-11-06
+
+### Added
+- **Plugin hosting** (block I): third-party **VST3**, **LV2** and **LADSPA** plugins as instruments and as effects.
+  - Browser > Plugin > *Scan for plugins (VST3, LV2, LADSPA)...* scans in the background (the usual folders, including the `lib64` ones of
+    Fedora / Nobara) and sorts what it finds into *Instruments* and *Effects*. The list is saved and shown at the next start; a plugin that
+    crashes the scan is skipped next time.
+  - **Instruments**: double-click one (a new channel), drag it onto the rack or a channel, or right-click a channel > *Instrument > Plugin
+    instruments*. A plugin channel gets its notes as MIDI at the exact sample, from the steps, the piano roll, the playlist and MIDI keyboards.
+    Double-click the channel (or *Plugin window...*) for the plugin's own window, or a generic one with a slider per parameter.
+  - **Effects**: a mixer slot > *Plugin effects*, or drag an effect from the browser onto a channel (first free slot of its track); on tracks,
+    aux buses and the master. Bypass works as for the built-in effects.
+  - Projects store each plugin's description and settings; a plugin that is not installed becomes a silent placeholder that keeps them.
+    Changes made in a plugin's window mark the project as changed. Exports render with the plugins (the live sound pauses meanwhile).
+    Cloning a plugin channel makes a second instance with the same settings.
+  - `src/audio/HostedPlugin.h` (what the engine knows of a plugin), `src/plugins/PluginHost.*` (formats, scan, known list, instances),
+    `src/ui/PluginWindow.h`, `src/ui/MainComponentPlugins.cpp`; two small test plugins (`tests/plugins/`, VST3 and LV2) built with the tests.
+
+### Changed
+- **License: GNU GPL version 3** (was MIT), the license under which JUCE may be used for free. Third-party code keeps its own MIT license.
+- `scripts/setup_nobara.sh` and the CI also install `ladspa-devel` (LADSPA hosting is built only when `ladspa.h` is found).
+
+### Limits
+- No VST2 (the SDK cannot be obtained legally) and no Audio Units (macOS only). Plugins run in the program's process: a crashing plugin
+  closes Sun Loops Studio (autosave keeps the work).
+- Stereo only: extra outputs, side-chain inputs and MIDI output of plugins are not used. Plugin parameters cannot be automated, and
+  edits in a plugin's window are not in the undo history. Projects with plugins cannot be opened by older versions.
+- Tried with the two test plugins and the LADSPA example plugins only, in a virtual display with a silent device: no commercial plugin,
+  no real audio.
+
 ## 0.16.0 - 2026-11-06
 
 ### Added

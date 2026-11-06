@@ -233,13 +233,14 @@ BrowserNode buildBrowserTree (const LibraryPaths& paths, const std::vector<Plugi
         root.children.push_back (std::move (presets));
     }
 
-    // Plugin: VST3 plugins found on disk. They are listed so you can see what is installed; hosting is not implemented.
+    // Plugin: the VST3 / LV2 / LADSPA plugins found by the last scan, instruments and effects apart. Drag an instrument onto the rack
+    // (or double-click it) for a plugin channel; an effect goes into a mixer slot (drag it onto a channel: its track's first free slot).
     {
         auto plugin = folder ("Plugin");
         switch (scanState)
         {
             case PluginScanState::NotScanned:
-                plugin.children.push_back (leaf ("Scan for VST3 plugins...", NodeKind::Action, "scan-plugins"));
+                plugin.children.push_back (leaf ("Scan for plugins (VST3, LV2, LADSPA)...", NodeKind::Action, "scan-plugins"));
                 break;
             case PluginScanState::Scanning:
                 plugin.children.push_back (leaf ("Scanning... (this can take a while)", NodeKind::Note, {}));
@@ -247,13 +248,24 @@ BrowserNode buildBrowserTree (const LibraryPaths& paths, const std::vector<Plugi
             case PluginScanState::Done:
                 plugin.children.push_back (leaf ("Scan again...", NodeKind::Action, "scan-plugins"));
                 if (plugins.empty())
-                    plugin.children.push_back (leaf ("No VST3 plugins found", NodeKind::Note, {}));
-                for (const auto& p : plugins)
-                    plugin.children.push_back (leaf ((p.name + (p.manufacturer.isNotEmpty() ? "  -  " + p.manufacturer : juce::String())).toStdString(),
-                                                     NodeKind::Plugin, p.path.toStdString()));
+                    plugin.children.push_back (leaf ("No plugins found", NodeKind::Note, {}));
                 break;
         }
-        plugin.children.push_back (leaf ("VST3 hosting: not implemented yet", NodeKind::Note, {}));
+        if (! plugins.empty())
+        {
+            auto instruments = folder ("Instruments");
+            auto effects = folder ("Effects");
+            for (const auto& p : plugins)
+            {
+                const auto label = (p.name + "  (" + p.format + (p.manufacturer.isNotEmpty() ? ", " + p.manufacturer : juce::String()) + ")").toStdString();
+                (p.isInstrument ? instruments : effects)
+                    .children.push_back (leaf (label, NodeKind::Plugin, ((p.isInstrument ? "instrument|" : "effect|") + p.identifier).toStdString()));
+            }
+            if (! instruments.children.empty())
+                plugin.children.push_back (std::move (instruments));
+            if (! effects.children.empty())
+                plugin.children.push_back (std::move (effects));
+        }
         root.children.push_back (std::move (plugin));
     }
 

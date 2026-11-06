@@ -3,16 +3,20 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <memory>
 #include <vector>
+
+#include "audio/HostedPlugin.h"
 
 namespace sls
 {
-// Built-in insert effects. They are Sun Loops Studio's own DSP: VST3 hosting is not implemented yet,
-// so the mixer's effect slots hold these four. Everything here is free of JUCE and of the GUI.
+// Insert effects: Sun Loops Studio's own four (Equalizer, Reverb, Delay, Compressor) and, since 0.17.0, a third-party plugin
+// (EffectType::Plugin, whose processing is the plugin's). Everything here is free of JUCE and of the GUI.
 
-enum class EffectType : std::uint8_t { None, Equalizer, Reverb, Delay, Compressor };
+enum class EffectType : std::uint8_t { None, Equalizer, Reverb, Delay, Compressor, Plugin };
 
-constexpr int kEffectTypeCount = 5;
+constexpr int kEffectTypeCount = 6;
+constexpr int kBuiltinEffectTypeCount = 5; // None and the four built-in effects (the effect menu lists these, plugins separately)
 constexpr int kMaxEffectParams = 5;
 constexpr int kSlotsPerTrack = 4;
 
@@ -31,6 +35,7 @@ inline const char* effectName (EffectType t) noexcept
         case EffectType::Reverb:     return "Reverb";
         case EffectType::Delay:      return "Delay";
         case EffectType::Compressor: return "Compressor";
+        case EffectType::Plugin:     return "Plugin";
         case EffectType::None:       break;
     }
     return "Empty";
@@ -44,6 +49,7 @@ inline int effectParamCount (EffectType t) noexcept
         case EffectType::Reverb:
         case EffectType::Delay:      return 4;
         case EffectType::Compressor: return 5;
+        case EffectType::Plugin:
         case EffectType::None:       break;
     }
     return 0;
@@ -79,6 +85,7 @@ inline EffectParamInfo effectParamInfo (EffectType t, int index) noexcept
         case EffectType::Reverb:     return rev[index];
         case EffectType::Delay:      return dly[index];
         case EffectType::Compressor: return comp[index];
+        case EffectType::Plugin:
         case EffectType::None:       break;
     }
     return none;
@@ -90,6 +97,7 @@ struct EffectSlot
     EffectType type = EffectType::None;
     bool bypass = false;
     std::array<float, kMaxEffectParams> params {};
+    std::shared_ptr<HostedPlugin> plugin; // EffectType::Plugin only (its parameters live in the plugin)
 
     static EffectSlot make (EffectType t) noexcept
     {
@@ -103,10 +111,12 @@ struct EffectSlot
     // Unknown types become empty, NaN/inf parameters become their default, the rest is clamped to its range.
     EffectSlot sanitised() const noexcept
     {
-        if (static_cast<int> (type) >= kEffectTypeCount)
+        if (static_cast<int> (type) >= kEffectTypeCount || (type == EffectType::Plugin && plugin == nullptr))
             return EffectSlot {};
 
         EffectSlot s = *this;
+        if (type != EffectType::Plugin)
+            s.plugin = nullptr;
         for (int i = 0; i < kMaxEffectParams; ++i)
         {
             auto& v = s.params[static_cast<size_t> (i)];
@@ -123,7 +133,7 @@ struct EffectSlot
 
     bool operator== (const EffectSlot& o) const noexcept
     {
-        return type == o.type && bypass == o.bypass && params == o.params;
+        return type == o.type && bypass == o.bypass && params == o.params && plugin == o.plugin;
     }
 };
 

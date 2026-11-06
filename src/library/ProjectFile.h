@@ -24,12 +24,35 @@ constexpr const char* kProjectFormatName = "sun-loops-studio-project";
 
 struct ProjectParseResult;
 
+// A plugin of the project (0.17.0), as the file stores it: where it sits, its description (JUCE's PluginDescription as XML text) and its
+// state (base64). The program creates the instances from these (library code knows nothing of plugin formats).
+struct PluginSpec
+{
+    enum class Place { Channel, Track, Master, Aux };
+    Place place = Place::Channel;
+    int index = 0;           // channel, track or aux bus
+    int slot = 0;            // effect slot (not for channels)
+    std::string description; // XML text
+    std::string state;       // base64
+    bool instrument = false;
+
+    bool sameSpot (Place p, int i, int s) const noexcept { return place == p && index == i && (p == Place::Channel || slot == s); }
+};
+
 struct ProjectDocument
 {
     std::vector<Channel> channels;           // 1..kMaxChannels; `notes` and `sample` are empty (see below)
     std::vector<std::string> sampleSources;  // one per channel: "builtin:<id>", an absolute path, or empty
     std::vector<KitSpec> kitSpecs;           // one per channel (may be shorter): the pads of a drum channel, from where their sounds come (0.14.0)
     std::vector<ProgramSpec> programSpecs;   // one per channel (may be shorter): a sampler channel's SoundFont preset or slices (0.16.0)
+    std::vector<PluginSpec> pluginSpecs;     // every plugin instrument and plugin effect (0.17.0)
+    const PluginSpec* findPlugin (PluginSpec::Place p, int index, int slot) const
+    {
+        for (const auto& s : pluginSpecs)
+            if (s.sameSpot (p, index, slot))
+                return &s;
+        return nullptr;
+    }
     std::vector<MixerTrack> tracks;          // exactly kMaxTracks
     std::array<EffectSlot, kSlotsPerTrack> masterSlots {}; // effects on the master bus
     Console console = Console::defaults();   // aux buses and VCA groups

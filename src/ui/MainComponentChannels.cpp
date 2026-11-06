@@ -104,6 +104,8 @@ void MainComponent::cloneChannel (int index)
     remapChannels (order, index + 1);
     auto& copy = channels[static_cast<size_t> (index) + 1];
     copy.name = (juce::String (copy.name).substring (0, 12) + " 2").toStdString();
+    if (copy.instrument == Instrument::Plugin && copy.plugin != nullptr)
+        copy.plugin = duplicatePlugin (*copy.plugin); // one instance per channel: a plugin is never run twice per block
     strips[static_cast<size_t> (index) + 1]->refreshFromChannel();
     publishProject();
     statusLabel.setText ("Cloned channel " + juce::String (channels[static_cast<size_t> (index)].name) + " (with its notes in every pattern)",

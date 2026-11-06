@@ -29,6 +29,8 @@
 #include "ui/PanelWindow.h"
 #include "ui/RightClickButton.h"
 #include "ui/PianoRoll.h"
+#include "ui/PluginWindow.h"
+#include "plugins/PluginHost.h"
 #include "ui/PlaylistView.h"
 #include "ui/RackView.h"
 
@@ -168,7 +170,9 @@ private:
     void endNoteTake();
 
     // Project files
-    ProjectDocument makeDocument();
+    // withPluginStates: the plugins' own settings are asked for (saving, autosave); without, a plugin is named by its instance only
+    // (the undo history compares documents after every edit and must stay cheap).
+    ProjectDocument makeDocument (bool withPluginStates = true);
     void applyDocument (ProjectDocument document, const juce::File& file, juce::StringArray& problems);
     bool saveProjectTo (const juce::File& file);
     void showFileMenu();
@@ -182,6 +186,26 @@ private:
     void setBrowserOpen (bool shouldBeOpen);
     void rebuildBrowser();
     void startPluginScan();
+
+    // Plugins (0.17.0, MainComponentPlugins.cpp)
+    void initPlugins();                           // before the audio device starts: the known list, the device-rate hook
+    juce::File pluginSettingsFile (const juce::String& name) const;
+    void refreshFoundPlugins();                   // foundPlugins from the host's known list
+    bool findPluginDescription (const juce::String& identifier, juce::PluginDescription& out) const;
+    std::shared_ptr<JucePlugin> createPlugin (const juce::String& identifier, juce::String& error);
+    std::shared_ptr<JucePlugin> duplicatePlugin (const HostedPlugin& original); // a second instance with the same settings
+    void setPluginInstrument (int channelIndex, const juce::String& identifier); // -1: a new channel
+    void addPluginEffectForChannel (int channelIndex, const juce::String& identifier); // first free slot of the channel's track
+    void openPluginWindow (const std::shared_ptr<HostedPlugin>& plugin);
+    void openChannelPlugin (int channelIndex);
+    void closeUnusedPluginWindows();              // after every edit: a plugin that left the project loses its window
+    bool projectUsesPlugin (const HostedPlugin* plugin) const;
+    void addPluginSpecs (ProjectDocument& doc, bool withState) const;
+    void loadDocumentPlugins (ProjectDocument& doc, juce::StringArray& problems);
+    bool projectHasPlugins() const;
+    // An export renders with the same plugins: the live engine is suspended and they are prepared for the export's rate meanwhile.
+    void beginPluginExport (double sampleRate);
+    void endPluginExport();
     void applyBrowserItem (int channelIndex, const drag::Item& item);
     bool applyPreset (int channelIndex, const ChannelPreset& preset);
     void savePresetFor (int channelIndex);
@@ -241,6 +265,8 @@ private:
     void saveLayout();
     void updateToggleButtons();
 
+    // Declared before the engine and everything that can hold a plugin: plugin instances must go before the formats that made them.
+    std::unique_ptr<PluginHost> pluginHost = std::make_unique<PluginHost>();
     AudioEngine engine;
     juce::AudioFormatManager formats;
 
@@ -286,6 +312,8 @@ private:
     std::vector<PluginInfo> foundPlugins;
     PluginScanState pluginScanState = PluginScanState::NotScanned;
     std::unique_ptr<juce::Thread> pluginScanThread;
+    std::vector<std::unique_ptr<PluginWindow>> pluginWindows;
+    int pluginPollTicks = 0;
     bool browserOpen = true;
 
     PanelWindow rackPanel { "Channel Rack" };

@@ -18,7 +18,8 @@
 
 The script runs `sudo dnf install` for: `gcc-c++ cmake ninja-build git pkgconf-pkg-config alsa-lib-devel
 pipewire-jack-audio-connection-kit-devel freetype-devel fontconfig-devel libX11-devel libXext-devel
-libXinerama-devel libXrandr-devel libXcursor-devel libXrender-devel libXcomposite-devel mesa-libGL-devel`.
+libXinerama-devel libXrandr-devel libXcursor-devel libXrender-devel libXcomposite-devel mesa-libGL-devel ladspa-devel`
+(`ladspa-devel` only provides `ladspa.h`: without it the program builds but cannot host LADSPA plugins; VST3 and LV2 need nothing extra).
 It only installs packages: it does not upgrade the system or touch audio services. On Fedora with PipeWire the
 JACK headers come from `pipewire-jack-audio-connection-kit-devel`; do not also install
 `jack-audio-connection-kit-devel`, the two conflict.

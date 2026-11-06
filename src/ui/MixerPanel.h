@@ -156,7 +156,7 @@ private:
 };
 
 // The effects of the selected track: four slots (pick an effect, switch it on/off) and the parameters of the
-// selected slot. These are Sun Loops Studio's built-in effects; hosting VST3 plugins is not implemented yet.
+// selected slot: the built-in effects, or a third-party plugin effect (VST3, LV2, LADSPA; 0.17.0).
 class FxPanel : public juce::Component
 {
 public:
@@ -172,6 +172,15 @@ public:
     std::function<void (int)> onSlotsChanged;   // slots were added/removed/bypassed (track index): strips redraw
     std::function<void (int)> onSelectedSlotChanged; // the user picked another slot in this panel
     std::function<void (const AutomationTarget&)> onAutomate; // right click on a parameter (index = track or kMasterIndex)
+
+    // Plugin effects (0.17.0): what the slot menu lists, how one is made, and how its window is opened.
+    struct PluginChoice
+    {
+        juce::String name, identifier;
+    };
+    std::function<std::vector<PluginChoice>()> listEffectPlugins;
+    std::function<std::shared_ptr<HostedPlugin> (const juce::String& identifier)> createEffectPlugin;
+    std::function<void (const std::shared_ptr<HostedPlugin>&)> openPluginWindow;
 
     void showSlotMenu (int slot);
 
@@ -191,6 +200,7 @@ private:
     std::array<juce::TextButton, kSlotsPerTrack> powerButtons;
     juce::Label effectLabel;
     juce::Label notePlaceholder;
+    juce::TextButton pluginButton { "Open plugin window" };
     struct ParamRow
     {
         juce::Label name;
@@ -228,6 +238,9 @@ public:
     std::function<void (double)> onMasterVolumeChanged;
     // Right click on a track fader / balance or on an effect parameter. For the master bus: kind MasterEffect.
     std::function<void (const AutomationTarget&)> onAutomate;
+    std::function<std::vector<FxPanel::PluginChoice>()> listEffectPlugins;
+    std::function<std::shared_ptr<HostedPlugin> (const juce::String& identifier)> createEffectPlugin;
+    std::function<void (const std::shared_ptr<HostedPlugin>&)> openPluginWindow;
 
     void paint (juce::Graphics&) override;
     void resized() override;

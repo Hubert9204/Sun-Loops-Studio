@@ -1,6 +1,6 @@
 # Status and roadmap
 
-Version 0.16.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
+Version 0.17.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
 what is missing. If something here disagrees with the program, the program is right: please fix the page.
 
 ## What has been verified, and how
@@ -45,10 +45,16 @@ what is missing. If something here disagrees with the program, the program is ri
 | The advanced sampler (default one-shot unchanged; envelope: hold and release, attack, decay to the sustain level, a sustain of zero; forward loop keeping a 0.1 s sample sounding at its pitch and stopping with the note; low-pass and high-pass taking a tone down by more than 26 dB, an open filter leaving the level alone; zones by key and by velocity, zone pan; a program swapped under a sounding voice; live notes held with the envelope; no allocation with zones, loops, filters and envelopes over 2000 blocks; hostile settings and damaged programs), SoundFont loading (a SoundFont 2 file written by the test: preset list, zones, key ranges, root keys, loop points, pan, attenuation, the sound of both zones, a missing preset, a damaged, a missing and four truncated files), slice programs (zones, keys, the spec and loading it again, a missing file kept as a placeholder), the sampler and program in the project file (round trip, older files, hostile values) and export with samples copying the `.sf2` | Automated headless tests (947 checks in total) | All pass |
 | 0.16.0 in the interface: *Load SoundFont (.sf2)...* from the channel menu, the file chooser, the preset menu of a real SoundFont (the 519 KB `florestan-subset.sf2` from the TinySoundFont repository, 15 presets), "Synth Bass 1" loaded (3 zones) and shown in the *Sampler settings...* window with the envelope taken from the file; the sample editor on an audio clip, three markers by double-click, *Slices to sampler channel* making a channel with 4 slices and 4 notes C4 to D#4 in the piano roll; the project saved and opened again without problems (the slice program read back) | Manual, in a virtual display with a window manager and a silent ALSA `null` device | Worked |
 | The sample editor in the interface: *Edit sample...* on a clip and on a channel, selecting, cut, markers (slicing controls disabled for a channel), Reverse, Apply writing `Samples/Edited/<name>-edit.wav`, the clip cut into pieces on the playlist, the channel loading the new file, the window closing | Manual, in a virtual display with a window manager and a silent device | Worked (the status-bar text after Apply on a channel was not seen in a screenshot) |
+| Plugin hosting (0.17.0): the scan of VST3 / LV2 folders (two test plugins built with the tests), the known list saved and read back by a new host that can make every plugin from it without scanning, an instrument plugin playing 440 Hz for A4 from a pattern and from a note played by hand, Stop ending its notes, prepared again for 44.1 kHz, a gain effect plugin halving a track, its state saved and given to a new instance, a placeholder for a missing plugin (keeps description and state, leaves effects alone), the LADSPA example amplifier when installed, no allocation in `Player::render` with plugins (2000 blocks), the plugin specs of the project file (channel, track, master and aux slots; broken and empty entries) | Automated headless tests (990 checks in total) | All pass |
+| Plugins in the interface: *Scan for plugins* found the two test plugins (VST3, and the gain also as LV2) and the 10 LADSPA example plugins of the build host (sorted into Instruments and Effects), the list shown again after a restart; a double-click on *SLS Test Synth* made a channel and opened its window; the channel menu with *Plugin window...* and *Plugin instruments*; notes drawn in the piano roll played (channel meter, playhead) and a key held in the piano roll sounded; *SLS Test Gain* chosen in a mixer slot, its window, its gain changed (the title showed the unsaved change), saved, the program restarted with the file: the channel, its notes, the effect and its gain came back; a WAV export with the plugin channel soloed contained its 262 Hz tone (C4) and the live engine played again afterwards; cloning the plugin channel | Manual, in a virtual display with a window manager and the ALSA default device of the build host (no speakers) | Worked |
 | A use-after-free when clicking an item that rebuilds the browser tree (crash on *Scan for VST3 plugins...*) | Found in that manual session | Fixed (item actions are deferred); the same click was repeated afterwards |
 
 ## What has not been verified
 
+- **Plugins with real, commercial plugins (0.17.0).** Only the two small test plugins (made with JUCE, like most plugins) and the LADSPA
+  example plugins were loaded. Plugins with their own graphical editors, plugins made with other frameworks (DPF, iPlug2, native LV2 such as
+  the Calf or x42 sets), plugins with several outputs or side-chain inputs, heavy plugins at small buffer sizes, and how they behave when the
+  audio device changes while they play were not tried. Nothing was heard.
 - **How the sampler sounds (0.16.0).** Envelope, loops, filter and zones were measured on sine tones only. The loop of a real sample can click where its
   ends do not meet (there is no crossfade); the filter's resonance at high settings, and how SoundFont presets compare with other SoundFont players
   (attenuation uses the EMU / FluidSynth 0.4 factor; modulators, vibrato and the file's own filter are ignored), were not judged by ear. Only one
@@ -141,9 +147,8 @@ what is missing. If something here disagrees with the program, the program is ri
 | Feature | Notes |
 | --- | --- |
 | Project file extras | Samples are referenced by path. *Export project with samples* (0.15.0) writes a folder with copies and relative paths, autosave runs once a minute, a crash is offered for recovery and the previous version is kept as `.slp.bak`; there is still no single-file bundle with the audio inside, and only one backup generation. |
-| VST3 plugins | Plugins can be *scanned* (library code, no UI). Playing them as instruments or effects is not implemented: it needs plugin processing inside the audio thread, state saving, parameter handling and plugin editor windows. |
+| Plugins | 0.17.0: VST3, LV2 and LADSPA instruments and effects, scanned, played, saved with the project, with their own windows. Missing: automation of plugin parameters, undo of edits made in a plugin's window, extra outputs / side-chain inputs / MIDI output, a plugin sandbox (a crashing plugin closes the program), plugin presets, VST2 (cannot be obtained legally) and Audio Units (macOS only). |
 | Undo / redo | Since 0.15.0 one history covers every edit (100 steps, a mouse gesture = one step); the Playlist keeps its own finer clip history. Not covered: the panel layout, the audio settings, the metronome. |
-| VST3 effects in the mixer | The four slots per track hold built-in effects only. No third-party plugin can be loaded. |
 | More than 8 mixer tracks, sidechain, a routing-matrix window | A channel goes to one of 8 tracks. Two aux buses and two VCA groups exist (0.11.0); a bus cannot be sent to another bus and nothing can be sidechained. No per-slot wet/dry beyond what each effect offers, no effect-chain presets. |
 | Automation of other things | Automation covers channel volume and pan, track fader and balance, and the parameters of effects on tracks and the master (Song mode only, evaluated per 64 samples). Not covered: pitch, swing, master volume, mute / solo, sends, aux buses and VCA groups, and the controls do not move with it. |
 | Pitch-to-MIDI | MIDI keyboards play the selected channel live and **Rec notes** records their notes into the piano roll, but the pitch of a guitar or voice is **not** turned into notes (an audio take can become a sampler channel to be played or sequenced). Audio is recorded into the playlist or a new sampler channel, but there is no punch-in, no count-in, no loop recording and takes always start at the beginning of the song. |
@@ -159,21 +164,19 @@ what is missing. If something here disagrees with the program, the program is ri
 
 ## Proposed order of work
 
-The larger feature blocks are in [feature-plan.md](feature-plan.md) (A, B and C are done in 0.11.0, D in 0.12.0, E in 0.13.0, G in 0.14.0; next is the advanced sampler, block H). Smaller items:
+The larger feature blocks are in [feature-plan.md](feature-plan.md) (A, B and C are done in 0.11.0, D in 0.12.0, E in 0.13.0, G in 0.14.0, H in 0.16.0, I in 0.17.0; next are the native synths, block F). Smaller items:
 
 1. **Undo / redo** for channel settings and the Mixer (notes and the Playlist already have it).
 2. **Project extras**: autosave and recovery, embedding samples, a project folder with its samples.
 3. **Playlist and pattern polish**: seeking from the ruler, pattern length, tempo-independent cut points, drum-kit mapping for imported General MIDI drums.
 4. **Continuous integration**: build and run the tests on every push (GitHub Actions on a Fedora container).
 5. **Mixer**: sends, effect-chain presets, a spectrum display.
-6. **VST3 hosting**, instruments first, then effects in the existing mixer slots. This is the largest item and
-   deserves its own design note.
+6. **Plugins** (done in 0.17.0): next, automation of their parameters and plugin presets.
 7. **Sampler and audio-clip improvements** (loop, envelope, fades), pitch-to-MIDI, then automation.
-8. **Packaging** and a decision on the license (see below).
+8. **Packaging** (Flatpak or RPM). The license was settled in 0.17.0 (GPLv3, see below).
 
 ## License
 
-The repository carries an MIT `LICENSE`, which is a deliberate choice of the maintainer. JUCE, however, is available
-only under the GPLv3/AGPLv3 or a paid commercial license, and a program linking JUCE under its free license must be
-distributed under the GPL. This must be settled (relicense under GPLv3, or buy a JUCE commercial license) before
-binaries are distributed.
+Since 0.17.0 Sun Loops Studio is licensed under the GNU GPL version 3 (the maintainer's choice on 2026-11-06), which is the
+license under which JUCE may be used for free; versions up to 0.16.0 were published under MIT. Signalsmith Stretch and
+TinySoundFont keep their MIT licenses (compatible with the GPL).

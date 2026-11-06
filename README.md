@@ -16,13 +16,13 @@ Sun Loops Studio is inspired by the workflow of loop-based DAWs such as FL Studi
 that uses no code, names, graphics or assets from other products, and it is not affiliated with or endorsed by
 their makers.
 
-**Status: alpha (0.16.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
+**Status: alpha (0.17.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
 display. Playback was confirmed on a real Nobara machine for version 0.3; everything added since (panels, patterns,
 playlist, browser, pitch/swing, the expanded mixer and its effects, saving projects, the AppImage, audio clips, drag and
 drop, recording, MIDI, the metronome and the export formats) was tested headless and in a virtual display with a silent
-audio device, not yet with real audio, microphones or MIDI hardware. **Hosting VST3 plugins is not implemented**: the mixer's effect
-slots hold Sun Loops Studio's own Equalizer, Reverb, Delay and Compressor. See [docs/roadmap.md](docs/roadmap.md) for
-exactly what is and is not verified and what is missing (VST3 hosting is the big one).
+audio device, not yet with real audio, microphones or MIDI hardware. **Plugins (VST3, LV2, LADSPA) can be used since 0.17.0** as
+instruments and as mixer effects; they were tried with small test plugins and the LADSPA examples, not yet with commercial plugins.
+See [docs/roadmap.md](docs/roadmap.md) for exactly what is and is not verified and what is missing.
 
 ## Features
 
@@ -61,6 +61,8 @@ exactly what is and is not verified and what is missing (VST3 hosting is the big
   meter and 4 insert-effect slots (Equalizer, Reverb, Delay, Compressor, each with bypass), two **sends** (pre or post fader)
   and two **VCA** switches. Two **aux buses** with their own effects and two **VCA groups** sit beside the tracks. The master strip on the
   right has the same 4 effect slots, applied to the whole mix. Several channels can share a track.
+- **Plugins** - VST3, LV2 and LADSPA instruments and effects: scan them from the browser, double-click or drag an instrument for a channel,
+  pick an effect in a mixer slot, open the plugin's own window; their settings are saved in the project, and a missing plugin keeps them.
 - **Automation** - right-click a volume, pan, fader or effect parameter > *Create automation clip*; clips live on four lanes under the
   playlist tracks and have a point editor (linear / hold / smooth lines). Song mode only.
 - **Stretch and pitch** - right-click an audio clip: make it longer or shorter without changing its pitch, shift its pitch without changing its length,
@@ -131,9 +133,9 @@ importing audio and video, audio clips, the recorder, MIDI note handling and the
 
 ## License
 
-This repository carries an MIT [LICENSE](LICENSE). Note that JUCE is available only under the GPLv3/AGPLv3 or a
-paid commercial license, and a program linking JUCE under its free license must itself be distributed under the GPL.
-Before distributing binaries, either relicense this project under GPLv3 or obtain a JUCE commercial license.
+Sun Loops Studio is free software under the **GNU General Public License, version 3** ([LICENSE](LICENSE)); versions up to
+0.16.0 were published under MIT. GPLv3 is the license under which JUCE may be used for free, so the program and its AppImage can
+be shared as long as the source comes with them.
 
 `third_party/signalsmith` holds Signalsmith Stretch and Signalsmith Linear, both MIT-licensed (their licences and the exact revisions are in that folder).
 `third_party/tinysoundfont` holds TinySoundFont's `tsf.h` (MIT), used only to read SoundFont files.

@@ -1,0 +1,242 @@
+#include "plugins/PluginHost.h"
+
+#include <algorithm>
+
+namespace sls
+{
+// ------------------------------------------------------------------------- JucePlugin
+
+JucePlugin::JucePlugin (std::unique_ptr<juce::AudioPluginInstance> instanceToUse, const juce::PluginDescription& d)
+    : instance (std::move (instanceToUse)), description (d)
+{
+    name = (instance != nullptr ? instance->getName() : d.name).toStdString();
+    instrument = d.isInstrument;
+    midi.ensureSize (8192);
+    if (instance != nullptr)
+        instance->addListener (this);
+}
+
+std::shared_ptr<JucePlugin> JucePlugin::placeholder (const juce::PluginDescription& d, juce::MemoryBlock savedState, bool isInstrumentPlugin)
+{
+    std::shared_ptr<JucePlugin> p (new JucePlugin());
+    p->description = d;
+    p->keptState = std::move (savedState);
+    p->name = d.name.toStdString();
+    p->instrument = isInstrumentPlugin;
+    return p;
+}
+
+JucePlugin::~JucePlugin()
+{
+    if (instance != nullptr)
+    {
+        instance->removeListener (this);
+        instance->releaseResources();
+    }
+}
+
+void JucePlugin::prepare (double sampleRate, int maxBlock)
+{
+    rate = sampleRate;
+    block = std::max (1, maxBlock);
+    if (instance == nullptr)
+        return;
+    instance->releaseResources();
+    instance->enableAllBuses();
+    const int channels = std::max ({ 2, instance->getTotalNumInputChannels(), instance->getTotalNumOutputChannels() });
+    buffer.setSize (channels, block, false, true, false);
+    instance->setRateAndBufferSizeDetails (sampleRate, block);
+    instance->prepareToPlay (sampleRate, block);
+}
+
+void JucePlugin::process (float* left, float* right, int numSamples, const PluginMidiEvent* events, int numEvents) noexcept
+{
+    if (instance == nullptr || numSamples <= 0 || rate <= 0.0)
+        return; // a placeholder: an effect leaves the signal alone, an instrument stays silent
+    numSamples = std::min (numSamples, block);
+
+    // The plugin's own lock is only held by the plugin or the host while it is being reconfigured: never wait for it here.
+    const juce::ScopedTryLock lock (instance->getCallbackLock());
+    if (! lock.isLocked() || instance->isSuspended())
+        return;
+
+    const juce::ScopedNoDenormals noDenormals;
+    const int channels = buffer.getNumChannels();
+    for (int ch = 0; ch < channels; ++ch)
+    {
+        auto* d = buffer.getWritePointer (ch);
+        if (ch == 0)
+            std::copy (left, left + numSamples, d);
+        else if (ch == 1)
+            std::copy (right, right + numSamples, d);
+        else
+            std::fill (d, d + numSamples, 0.0f);
+    }
+    juce::AudioBuffer<float> view (buffer.getArrayOfWritePointers(), channels, numSamples); // no allocation: refers to `buffer`
+
+    midi.clear();
+    for (int i = 0; i < numEvents; ++i)
+        midi.addEvent (events[i].bytes, 3, std::clamp (events[i].offset, 0, numSamples - 1));
+
+    instance->processBlock (view, midi);
+
+    const int outs = instance->getTotalNumOutputChannels();
+    std::copy (view.getReadPointer (0), view.getReadPointer (0) + numSamples, left);
+    std::copy (view.getReadPointer (outs >= 2 ? 1 : 0), view.getReadPointer (outs >= 2 ? 1 : 0) + numSamples, right);
+}
+
+juce::MemoryBlock JucePlugin::getState() const
+{
+    if (instance == nullptr)
+        return keptState;
+    juce::MemoryBlock state;
+    instance->getStateInformation (state);
+    return state;
+}
+
+bool JucePlugin::setState (const juce::MemoryBlock& state)
+{
+    if (instance == nullptr)
+    {
+        keptState = state;
+        return false;
+    }
+    if (state.getSize() > 0)
+        instance->setStateInformation (state.getData(), static_cast<int> (state.getSize()));
+    changed.store (false, std::memory_order_release); // what was just loaded is not an edit
+    return true;
+}
+
+// ------------------------------------------------------------------------- PluginHost
+
+PluginHost::PluginHost()
+{
+    formatManager.addFormat (new juce::VST3PluginFormat());
+#if JUCE_PLUGINHOST_LV2
+    formatManager.addFormat (new juce::LV2PluginFormat());
+#endif
+#if JUCE_PLUGINHOST_LADSPA
+    formatManager.addFormat (new juce::LADSPAPluginFormat());
+#endif
+}
+
+juce::StringArray PluginHost::formatNames() const
+{
+    juce::StringArray names;
+    for (auto* f : formatManager.getFormats())
+        names.add (f->getName());
+    return names;
+}
+
+int PluginHost::scan (const std::function<juce::FileSearchPath (const juce::String&)>& extraPaths, const juce::File& deadMansPedal,
+                      const std::function<void (const juce::String&)>& progress)
+{
+    for (auto* format : formatManager.getFormats())
+    {
+        auto paths = format->getDefaultLocationsToSearch();
+        if (extraPaths)
+        {
+            const auto extra = extraPaths (format->getName());
+            for (int i = 0; i < extra.getNumPaths(); ++i)
+                paths.addIfNotAlreadyThere (extra[i]);
+        }
+        juce::PluginDirectoryScanner scanner (knownPlugins, *format, paths, true, deadMansPedal, false);
+        juce::String current;
+        for (;;)
+        {
+            const auto next = scanner.getNextPluginFileThatWillBeScanned();
+            if (progress && next.isNotEmpty())
+                progress (format->getName() + ": " + next);
+            if (! scanner.scanNextFile (true, current))
+                break;
+        }
+    }
+    deadMansPedal.deleteFile();
+    return knownPlugins.getNumTypes();
+}
+
+juce::FileSearchPath PluginHost::distributionPaths (const juce::String& formatName)
+{
+    juce::FileSearchPath paths;
+    const auto addIfThere = [&paths] (const char* path)
+    {
+        const juce::File f (path); // JUCE expands a leading "~" to the home folder
+        if (f.isDirectory())
+            paths.add (f);
+    };
+    if (formatName == "VST3")
+        for (const char* p : { "/usr/lib64/vst3", "/usr/local/lib64/vst3" })
+            addIfThere (p);
+    else if (formatName == "LV2")
+        for (const char* p : { "/usr/lib/lv2", "/usr/lib64/lv2", "/usr/local/lib/lv2", "/usr/local/lib64/lv2" })
+            addIfThere (p);
+    else if (formatName == "LADSPA")
+        for (const char* p : { "/usr/lib/ladspa", "/usr/lib64/ladspa", "/usr/local/lib/ladspa", "/usr/local/lib64/ladspa", "~/.ladspa" })
+            addIfThere (p);
+    return paths;
+}
+
+void PluginHost::loadKnownList (const juce::File& file)
+{
+    if (auto xml = juce::parseXML (file))
+        knownPlugins.recreateFromXml (*xml);
+}
+
+void PluginHost::saveKnownList (const juce::File& file) const
+{
+    if (auto xml = knownPlugins.createXml())
+        xml->writeTo (file);
+}
+
+std::shared_ptr<JucePlugin> PluginHost::create (const juce::PluginDescription& description, double sampleRate, int maxBlock, juce::String& error)
+{
+    auto instance = formatManager.createPluginInstance (description, sampleRate, maxBlock, error);
+    if (instance == nullptr)
+    {
+        if (error.isEmpty())
+            error = "The plugin " + description.name + " could not be loaded.";
+        return nullptr;
+    }
+    auto plugin = std::make_shared<JucePlugin> (std::move (instance), description);
+    plugin->prepare (sampleRate, maxBlock);
+    registerPlugin (plugin);
+    return plugin;
+}
+
+void PluginHost::registerPlugin (const std::shared_ptr<JucePlugin>& plugin)
+{
+    const std::lock_guard<std::mutex> guard (registryLock);
+    registry.erase (std::remove_if (registry.begin(), registry.end(), [] (const std::weak_ptr<JucePlugin>& w) { return w.expired(); }), registry.end());
+    registry.push_back (plugin);
+}
+
+std::vector<std::shared_ptr<JucePlugin>> PluginHost::livePlugins()
+{
+    const std::lock_guard<std::mutex> guard (registryLock);
+    std::vector<std::shared_ptr<JucePlugin>> list;
+    for (const auto& w : registry)
+        if (auto p = w.lock())
+            list.push_back (std::move (p));
+    return list;
+}
+
+void PluginHost::prepareAll (double sampleRate, int maxBlock)
+{
+    for (const auto& p : livePlugins())
+        p->prepare (sampleRate, maxBlock);
+}
+
+juce::String PluginHost::descriptionToText (const juce::PluginDescription& d)
+{
+    if (auto xml = d.createXml())
+        return xml->toString (juce::XmlElement::TextFormat().singleLine().withoutHeader());
+    return {};
+}
+
+bool PluginHost::descriptionFromText (const juce::String& text, juce::PluginDescription& d)
+{
+    if (auto xml = juce::parseXML (text))
+        return d.loadFromXml (*xml);
+    return false;
+}
+} // namespace sls

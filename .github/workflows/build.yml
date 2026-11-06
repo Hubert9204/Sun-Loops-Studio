@@ -16,7 +16,7 @@ jobs:
           dnf install -y gcc-c++ cmake ninja-build git pkgconf-pkg-config alsa-lib-devel \
             pipewire-jack-audio-connection-kit-devel freetype-devel fontconfig-devel libX11-devel libXext-devel \
             libXinerama-devel libXrandr-devel libXcursor-devel libXrender-devel libXcomposite-devel mesa-libGL-devel \
-            libcurl-devel
+            libcurl-devel ladspa-devel
       - uses: actions/checkout@v4
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release

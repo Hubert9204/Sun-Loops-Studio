@@ -70,6 +70,14 @@ void EffectUnit::reset() noexcept
 
 void EffectUnit::process (const EffectSlot& requested, float* left, float* right, int numSamples) noexcept
 {
+    if (requested.type == EffectType::Plugin)
+    {
+        // A plugin keeps its own state; bypass simply leaves the signal alone.
+        active = EffectType::Plugin;
+        if (! requested.bypass && requested.plugin != nullptr)
+            requested.plugin->process (left, right, numSamples, nullptr, 0);
+        return;
+    }
     const EffectSlot slot = requested.sanitised();
 
     if (slot.type != active)
@@ -95,6 +103,7 @@ void EffectUnit::process (const EffectSlot& requested, float* left, float* right
         case EffectType::Reverb:     runReverb (slot, left, right, numSamples); break;
         case EffectType::Delay:      runDelay (slot, left, right, numSamples); break;
         case EffectType::Compressor: runCompressor (slot, left, right, numSamples); break;
+        case EffectType::Plugin:
         case EffectType::None:       break;
     }
 }

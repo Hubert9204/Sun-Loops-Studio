@@ -141,6 +141,29 @@ private:
     };
 
     void startClip (const AudioEvent& e, double extraSeconds = 0.0) noexcept;
+
+    // Plugin instruments (0.17.0): notes become MIDI events at their sample in the 64-sample chunk; the plugin renders the chunk after
+    // the voices, so it is as sample-accurate as the built-in instruments. The notes that are sounding are tracked to send their note-offs.
+    struct PluginNote
+    {
+        const HostedPlugin* plugin = nullptr;
+        int channel = 0;
+        int pitch = 0;
+        int endTick = 0;
+        bool live = false;
+    };
+    static constexpr int kMaxPluginNotes = 256;
+    static constexpr int kMaxPluginEvents = 256; // per channel and chunk; more are dropped
+    void pluginNoteOn (const Channel& channel, int channelIndex, const Note& n, int loopLength, bool live) noexcept;
+    void pluginEvent (int channelIndex, std::uint8_t status, int data1, int data2) noexcept;
+    void pluginNoteOff (int noteIndex) noexcept; // ends pluginNotes[noteIndex] and removes it
+    void releasePluginNotes() noexcept;          // every note not held by hand
+    std::array<PluginNote, kMaxPluginNotes> pluginNotes {};
+    int numPluginNotes = 0;
+    std::array<std::array<PluginMidiEvent, kMaxPluginEvents>, kMaxChannels> pluginEvents {};
+    std::array<int, kMaxChannels> pluginEventCount {};
+    std::array<float, kChunk> pluginL {}, pluginR {};
+    int chunkSample = 0; // the sample of the current chunk being rendered (where new MIDI events go)
     // The next note of every channel and the next audio clip from `tick` on (no sound changes).
     void locate (const Project& project, double tick) noexcept;
     // Starts the audio clips that began before `tick` and are still going there, from the matching point in their sound.

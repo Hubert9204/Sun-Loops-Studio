@@ -15,7 +15,7 @@ enum class NodeKind
     BuiltinSample, // payload: id (kick, snare, hat)
     Instrument,    // payload: synth | sampler
     Preset,        // payload: absolute path of the .slspreset file, or "builtin:<id>"
-    Plugin,        // payload: path of the VST3 bundle (listed only: plugin hosting is not implemented)
+    Plugin,        // payload: "instrument|<identifier>" or "effect|<identifier>" (JUCE's PluginDescription identifier string)
     Action,        // payload: the action name (e.g. "scan-plugins"); activated by a click
     Note           // an explanatory line, nothing happens
 };
@@ -31,7 +31,7 @@ struct BrowserNode
     bool isDraggable() const noexcept
     {
         return kind == NodeKind::AudioFile || kind == NodeKind::BuiltinSample || kind == NodeKind::Instrument
-            || kind == NodeKind::Preset;
+            || kind == NodeKind::Preset || kind == NodeKind::Plugin;
     }
 };
 

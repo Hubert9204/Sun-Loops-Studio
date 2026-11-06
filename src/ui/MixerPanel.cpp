@@ -19,6 +19,7 @@ juce::String shortEffectName (EffectType t)
         case EffectType::Reverb:     return "Reverb";
         case EffectType::Delay:      return "Delay";
         case EffectType::Compressor: return "Comp";
+        case EffectType::Plugin:     return "Plugin";
         case EffectType::None:       break;
     }
     return juce::String::fromUTF8 ("\xe2\x80\x94");
@@ -56,8 +57,10 @@ void SlotButton::paint (juce::Graphics& g)
     g.setColour (selected ? kAccent : juce::Colour (0xff4a505c));
     g.drawRoundedRectangle (r, 3.0f, selected ? 1.6f : 1.0f);
 
-    juce::String text = fullName ? (empty ? juce::String ("Empty - click to add an effect") : juce::String (effectName (slotCopy.type)))
-                                 : shortEffectName (slotCopy.type);
+    const bool isPlugin = slotCopy.type == EffectType::Plugin && slotCopy.plugin != nullptr;
+    const juce::String pluginName = isPlugin ? juce::String (slotCopy.plugin->displayName()) : juce::String();
+    juce::String text = fullName ? (empty ? juce::String ("Empty - click to add an effect") : isPlugin ? pluginName + "  (plugin)" : juce::String (effectName (slotCopy.type)))
+                                 : (isPlugin ? pluginName.substring (0, 7) : shortEffectName (slotCopy.type));
     if (slotCopy.bypass && ! empty)
         text += fullName ? "  (bypassed)" : "";
 
@@ -511,12 +514,13 @@ FxPanel::FxPanel()
     notePlaceholder.setColour (juce::Label::textColourId, juce::Colour (0xff9aa0ab));
     notePlaceholder.setText ("Click a slot to add an effect to this track's chain "
                              "(Equalizer, Reverb, Delay, Compressor). Effects run in order, before the fader.\n\n"
-                             "VST3 plugin hosting is not implemented yet: the slots hold Sun Loops Studio's built-in effects.",
+                             "Plugin effects (VST3, LV2, LADSPA) are in the slot menu once the browser's Plugin folder was scanned.",
                              juce::dontSendNotification);
 
     addAndMakeVisible (titleLabel);
     addAndMakeVisible (effectLabel);
     addAndMakeVisible (notePlaceholder);
+    addChildComponent (pluginButton);
 
     for (size_t s = 0; s < slotButtons.size(); ++s)
     {
@@ -593,10 +597,10 @@ void FxPanel::refresh()
         : (isMaster
         ? "Click a slot to add an effect to the master chain (Equalizer, Reverb, Delay, Compressor). "
           "These effects process the sum of all tracks, in order, before the master fader.\n\n"
-          "VST3 plugin hosting is not implemented yet: the slots hold Sun Loops Studio's built-in effects."
+          "Plugin effects (VST3, LV2, LADSPA) are in the slot menu once the browser's Plugin folder was scanned."
         : "Click a slot to add an effect to this track's chain "
           "(Equalizer, Reverb, Delay, Compressor). Effects run in order, before the fader.\n\n"
-          "VST3 plugin hosting is not implemented yet: the slots hold Sun Loops Studio's built-in effects."),
+          "Plugin effects (VST3, LV2, LADSPA) are in the slot menu once the browser's Plugin folder was scanned."),
         juce::dontSendNotification);
 
     for (size_t s = 0; s < slotButtons.size(); ++s)
@@ -614,9 +618,15 @@ void FxPanel::rebuildParameters()
     const EffectSlot slot = track != nullptr ? track->slots[static_cast<size_t> (selectedSlot)] : EffectSlot {};
     const int count = effectParamCount (slot.type);
 
-    effectLabel.setText (slot.type == EffectType::None ? juce::String() : "Slot " + juce::String (selectedSlot + 1) + ": " + effectName (slot.type),
+    const bool isPlugin = slot.type == EffectType::Plugin && slot.plugin != nullptr;
+    effectLabel.setText (slot.type == EffectType::None ? juce::String()
+                                                       : "Slot " + juce::String (selectedSlot + 1) + ": "
+                                                             + (isPlugin ? juce::String (slot.plugin->displayName()) + " (plugin)" : juce::String (effectName (slot.type))),
                          juce::dontSendNotification);
     notePlaceholder.setVisible (slot.type == EffectType::None);
+    pluginButton.setVisible (isPlugin);
+    if (isPlugin)
+        pluginButton.onClick = [this, plugin = slot.plugin] { if (openPluginWindow) openPluginWindow (plugin); };
 
     for (int i = 0; i < kMaxEffectParams; ++i)
     {
@@ -684,21 +694,47 @@ void FxPanel::showSlotMenu (int slot)
 
     juce::PopupMenu menu;
     menu.addSectionHeader ("Slot " + juce::String (slot + 1));
-    for (int t = 1; t < kEffectTypeCount; ++t)
+    for (int t = 1; t < kBuiltinEffectTypeCount; ++t)
         menu.addItem (t, effectName (static_cast<EffectType> (t)), true, current.type == static_cast<EffectType> (t));
     menu.addSeparator();
-    menu.addItem (100, "VST3 plugin... (hosting not implemented yet)", false);
+    const auto plugins = listEffectPlugins ? listEffectPlugins() : std::vector<PluginChoice> {};
+    juce::PopupMenu pluginMenu;
+    for (size_t i = 0; i < plugins.size(); ++i)
+        pluginMenu.addItem (1000 + static_cast<int> (i), plugins[i].name);
+    if (plugins.empty())
+        menu.addItem (100, "Plugin effects (scan the browser's Plugin folder first)", false);
+    else
+        menu.addSubMenu ("Plugin effects", pluginMenu);
+    menu.addItem (103, "Open plugin window", current.type == EffectType::Plugin && current.plugin != nullptr);
     menu.addSeparator();
     menu.addItem (101, "Bypass", current.type != EffectType::None, current.bypass);
     menu.addItem (102, "Remove effect", current.type != EffectType::None);
 
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&slotButtons[static_cast<size_t> (slot)]),
-                        [safe = juce::Component::SafePointer<FxPanel> (this), slot, current] (int result)
+                        [safe = juce::Component::SafePointer<FxPanel> (this), slot, current, plugins] (int result)
                         {
                             if (safe == nullptr || result == 0)
                                 return;
 
-                            if (result >= 1 && result < kEffectTypeCount)
+                            if (result >= 1000 && result < 1000 + static_cast<int> (plugins.size()))
+                            {
+                                auto plugin = safe->createEffectPlugin ? safe->createEffectPlugin (plugins[static_cast<size_t> (result - 1000)].identifier) : nullptr;
+                                if (plugin != nullptr)
+                                {
+                                    EffectSlot s;
+                                    s.type = EffectType::Plugin;
+                                    s.plugin = std::move (plugin);
+                                    safe->applySlot (slot, s);
+                                    if (safe->openPluginWindow)
+                                        safe->openPluginWindow (s.plugin);
+                                }
+                            }
+                            else if (result == 103)
+                            {
+                                if (safe->openPluginWindow)
+                                    safe->openPluginWindow (current.plugin);
+                            }
+                            else if (result >= 1 && result < kBuiltinEffectTypeCount)
                             {
                                 const auto type = static_cast<EffectType> (result);
                                 if (type != current.type)
@@ -742,6 +778,7 @@ void FxPanel::resized()
     effectLabel.setBounds (area.removeFromTop (20));
     area.removeFromTop (4);
     notePlaceholder.setBounds (area);
+    pluginButton.setBounds (area.getX(), area.getY(), std::min (200, area.getWidth()), 26);
 
     for (auto& row : params)
     {
@@ -767,6 +804,9 @@ MixerPanel::MixerPanel()
     masterStrip.onVolumeChanged = [this] (double v) { if (onMasterVolumeChanged) onMasterVolumeChanged (v); };
     fxPanel.onChanged = [this] (int track) { if (onTrackChanged) onTrackChanged (track); };
     fxPanel.onAutomate = [this] (const AutomationTarget& t) { if (onAutomate) onAutomate (t); };
+    fxPanel.listEffectPlugins = [this] { return listEffectPlugins ? listEffectPlugins() : std::vector<FxPanel::PluginChoice> {}; };
+    fxPanel.createEffectPlugin = [this] (const juce::String& id) { return createEffectPlugin ? createEffectPlugin (id) : std::shared_ptr<HostedPlugin>(); };
+    fxPanel.openPluginWindow = [this] (const std::shared_ptr<HostedPlugin>& p) { if (openPluginWindow) openPluginWindow (p); };
     fxPanel.onSlotsChanged = [this] (int track) { refreshTrack (track); };
     fxPanel.onSelectedSlotChanged = [this] (int slot)
     {

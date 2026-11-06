@@ -123,7 +123,7 @@ The sidebar on the left lists your sounds as a tree. Click the arrow of a folder
 | Drum Kits | A built-in kit, then one entry per sub-folder of `~/Music/Sun Loops Studio/Drum Kits`. |
 | Instruments | *Synth* and *Sampler*. |
 | Presets | Six factory channel presets, then your own `.slspreset` files from `~/Music/Sun Loops Studio/Presets`. |
-| Plugin | Starts empty. *Scan for VST3 plugins...* searches the usual VST3 folders in the background and lists what it finds. **The plugins cannot be used yet** (hosting is not implemented); they are shown for information only. |
+| Plugin | *Scan for plugins (VST3, LV2, LADSPA)...* searches the usual plugin folders in the background; the list is kept for the next start. Found plugins are sorted into **Instruments** and **Effects** (see *Plugins* below). |
 
 The three folders under `~/Music/Sun Loops Studio` are created when the program starts. **Folder** opens that
 location in your file manager; **Refresh** looks for new files (the browser does not watch the disk).
@@ -167,6 +167,8 @@ One row per channel: a **Track N** display and the name, **M** (mute), **S** (so
 | Drum machine... | (Drum channels) opens the drum machine window. |
 | Piano roll | Selects the channel and opens the Piano Roll for it. |
 | Instrument > Synth / Sampler | Chooses what makes the sound. Switching to Sampler on a channel without a sample asks for one. The sample is kept if you switch back to Synth. |
+| Instrument > Plugin instruments | The instrument plugins found by the last scan: the channel plays the chosen plugin (see *Plugins*). |
+| Plugin window... | (Plugin channels) opens the plugin's own window. A double-click on the channel does the same. |
 | Load sample... | Pick a WAV, FLAC, OGG or AIFF file (the first 30 seconds are used). The channel is renamed after the file. |
 | Rename... | Up to 16 characters. |
 | Clone channel | Adds a copy right under it: same instrument, sound and settings, and the same notes in every pattern. |
@@ -238,6 +240,32 @@ the sounds are read again; a file that is gone leaves a silent layer that keeps 
 Not available: undo of kit edits (the steps can be undone), an output or effects per pad (the whole channel goes to one mixer track), round-robin layers, editing a pad's sound in the sample editor (edit it
 on a sampler channel, then load the saved file), more than 16 pads or 4 layers, sounds longer than 30 seconds, saving a drum channel as a channel preset (save the kit), mapping imported MIDI percussion to pads.
 Projects that contain a drum machine cannot be opened by versions older than 0.14.
+
+## Plugins
+
+Sun Loops Studio hosts third-party **VST3**, **LV2** and **LADSPA** plugins, as instruments and as effects.
+
+1. In the browser, open **Plugin** and click **Scan for plugins (VST3, LV2, LADSPA)...**. The scan runs in the background
+   (the status line shows the file being read) and looks in the usual folders, `lib64` ones included (where Fedora and
+   Nobara install them): VST3 in `~/.vst3`, `/usr/lib/vst3`, `/usr/lib64/vst3` and the same under `/usr/local`; LV2 in `~/.lv2`,
+   `/usr/lib/lv2`, `/usr/lib64/lv2` and under `/usr/local`; LADSPA in `LADSPA_PATH` (if set), `/usr/lib/ladspa`, `/usr/lib64/ladspa`,
+   under `/usr/local` and in `~/.ladspa`. The list is saved and shown again at the next start; scan again after installing new plugins.
+2. **Instruments**: double-click one (a new channel plays it), drag it onto the empty space under the rack (a new
+   channel) or onto a channel (that channel now plays it), or right-click a channel > *Instrument > Plugin instruments*.
+   The channel gets its notes from the step grid, the piano roll, the playlist and a MIDI keyboard like any other instrument.
+   Its window opens by itself; later, double-click the channel or choose *Plugin window...*.
+3. **Effects**: in the mixer, click a slot > *Plugin effects* and choose one, or drag an effect from the browser onto a
+   channel (it goes into the first free slot of that channel's mixer track). *Open plugin window* shows its controls;
+   the power button bypasses it as for the built-in effects.
+
+A plugin's settings (what you change in its window) are saved in the project. A project that uses a plugin which is not
+installed on this computer still opens: the plugin is silent (an effect lets the sound through), its settings are kept,
+and saving the project keeps them for the computer that has it. Exports use the same plugins; while an export runs, the
+live sound is muted.
+
+Plugins run inside Sun Loops Studio: **a plugin that crashes closes the program** (autosave and recovery keep your work).
+A plugin that crashed the scan is skipped by the next scan. Cloning a plugin channel makes a second copy of the plugin with
+the same settings.
 
 ## Piano Roll
 
@@ -595,8 +623,8 @@ a power button per slot (bypass) and a slider per parameter of the selected slot
 | Delay | Time (10-1000 ms), Feedback, Tone, Mix |
 | Compressor | Threshold (-60 to 0 dB), Ratio (1-20:1), Attack, Release, Makeup gain |
 
-These are Sun Loops Studio's own effects. **VST3 plugins cannot be loaded into the slots yet**: the slot menu shows
-a greyed-out "VST3 plugin..." entry as a reminder.
+These are Sun Loops Studio's own effects. The slot menu also has **Plugin effects** (the effect plugins found by the last
+scan, see *Plugins*) and **Open plugin window** for a plugin slot; a plugin's parameters are in its own window, not in the effects panel.
 
 ### Master effects
 
@@ -728,5 +756,7 @@ a heavier song or a plugin-heavy mixer can still need a bigger size.
 - Patterns are 1, 2, 4 or 8 bars long (the same for all patterns), 4/4, 16th-note grid; one tempo for the whole song.
 - Samples are mono or stereo, at most 30 seconds. The sampler has one envelope and one filter per channel (no filter envelope, LFO or modulation);
   at most four zones sound per note. Audio clips: up to 5 minutes per file, 64 clips.
-- Not available yet: playing notes from the computer keyboard, VST plugins as instruments or effects, time-stretching of samples in the Sampler (only audio clips on the playlist can be stretched), automation of anything except volumes, pans and effect parameters, turning guitar or voice pitch into notes,
+- Plugins: VST3, LV2 and LADSPA (no VST2, no Audio Units); stereo in and out (extra outputs and side-chain inputs are not used); their parameters
+  cannot be automated; edits made in a plugin's window are saved with the project but are not in the undo history.
+- Not available yet: playing notes from the computer keyboard, time-stretching of samples in the Sampler (only audio clips on the playlist can be stretched), automation of anything except volumes, pans and effect parameters, turning guitar or voice pitch into notes,
   punch-in and count-in for recording, fades and per-clip effects. See [roadmap.md](roadmap.md).
