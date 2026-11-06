@@ -13,6 +13,7 @@
 #include "audio/Effects.h"
 #include "audio/NoteSequence.h"
 #include "audio/SampleData.h"
+#include "audio/SamplerProgram.h"
 
 namespace sls
 {
@@ -28,7 +29,9 @@ struct Channel
     std::string name = "Channel";
     Instrument instrument = Instrument::Synth;
     std::vector<Note> notes;
-    std::shared_ptr<const SampleData> sample; // Sampler only. Plays one-shot.
+    std::shared_ptr<const SampleData> sample; // Sampler only (when there is no program). Plays one-shot unless `sampler` says otherwise.
+    std::shared_ptr<const SamplerProgram> program; // Sampler only: a multi-sample program (a SoundFont preset, slices); used instead of `sample`
+    SamplerSettings sampler;                  // Sampler only: envelope, loop, filter (0.16.0)
     std::shared_ptr<const DrumKit> kit;       // Drums only: the 16 pads (see DrumKit.h). Never null for a Drums channel after Project::make().
     int rootPitch = 60;                       // Sampler: pitch at which the sample plays unchanged
     float volume = 0.8f;                      // 0..1.5
@@ -154,6 +157,9 @@ struct Project
             c.rootPitch = std::clamp (c.rootPitch, 0, 127);
             c.pitch = std::clamp (finiteOr (c.pitch, 0.0f), -24.0f, 24.0f);
             c.mixerTrack = std::clamp (c.mixerTrack, 0, kMaxTracks - 1);
+            c.sampler = c.sampler.sanitised(); // a program is sanitised when it is made (SoundFont loader, slices)
+            if (c.instrument != Instrument::Sampler)
+                c.program = nullptr;
         }
 
         if (tracks.empty())

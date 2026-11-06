@@ -12,6 +12,7 @@ void MainComponent::remapChannels (const std::vector<int>& newToOld, int newSele
 {
     commitCurrentPattern();
     closeDrumMachine();          // it points at a channel by index
+    closeSamplerSettings();      // so does the sampler window
     closeAutomationEditor();     // its clip index may change
     sampleEditorWindow.reset();  // it may edit a channel that moves or goes
     pianoRoll.setNotes ({});     // also ends a note played by hand

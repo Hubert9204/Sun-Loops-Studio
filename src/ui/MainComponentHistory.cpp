@@ -112,6 +112,8 @@ void MainComponent::applyEditState (const EditState& s)
         mixerPanel.setMasterVolume (static_cast<float> (s.masterVolume));
     }
 
+    if (samplerWindow != nullptr && (samplerWindowChannel < 0 || samplerWindowChannel >= static_cast<int> (channels.size())))
+        closeSamplerSettings(); // (otherwise publishProject() below refreshes it)
     if (drumWindow != nullptr)
     {
         if (drumWindowChannel >= 0 && drumWindowChannel < static_cast<int> (channels.size())

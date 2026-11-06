@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(SunLoopsStudio VERSION 0.15.0 LANGUAGES C CXX)
+project(SunLoopsStudio VERSION 0.16.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -47,6 +47,7 @@ set(SLS_CORE_SOURCES
     src/audio/SampleEdit.cpp
     src/library/ChannelPreset.cpp
     src/library/DrumKitFile.cpp
+    src/library/SoundFont.cpp
     src/library/Library.cpp
     src/library/ProjectFile.cpp
     src/plugins/PluginScanner.cpp)
@@ -95,14 +96,16 @@ target_sources(SunLoopsStudio PRIVATE
     src/ui/MainComponentChannels.cpp
     src/ui/MainComponentHistory.cpp
     src/ui/MainComponentSafety.cpp
+    src/ui/MainComponentSampler.cpp
     src/ui/DrumMachine.cpp
+    src/ui/SamplerPanel.cpp
     src/ui/AutomationEditor.cpp
     src/ui/MetersView.cpp
     src/ui/SampleEditor.cpp
     ${SLS_CORE_SOURCES})
 
 target_include_directories(SunLoopsStudio PRIVATE src)
-target_include_directories(SunLoopsStudio SYSTEM PRIVATE third_party/signalsmith)
+target_include_directories(SunLoopsStudio SYSTEM PRIVATE third_party/signalsmith third_party/tinysoundfont)
 
 target_compile_definitions(SunLoopsStudio PRIVATE
     ${SLS_COMMON_DEFINITIONS}
@@ -143,7 +146,7 @@ target_sources(SunLoopsStudioTests PRIVATE
     ${SLS_CORE_SOURCES})
 
 target_include_directories(SunLoopsStudioTests PRIVATE src)
-target_include_directories(SunLoopsStudioTests SYSTEM PRIVATE third_party/signalsmith)
+target_include_directories(SunLoopsStudioTests SYSTEM PRIVATE third_party/signalsmith third_party/tinysoundfont)
 target_compile_definitions(SunLoopsStudioTests PRIVATE ${SLS_COMMON_DEFINITIONS})
 
 target_link_libraries(SunLoopsStudioTests PRIVATE

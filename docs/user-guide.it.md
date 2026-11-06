@@ -179,11 +179,36 @@ Una riga per canale: un display **Track N** e il nome, **M** (mute), **S** (solo
 | Move up / Move down | Sposta il canale di una riga; le sue note in ogni pattern e le sue clip di automazione lo seguono. |
 | Delete channel... | Dopo una conferma elimina il canale, le sue note in ogni pattern e le clip di automazione del suo volume o pan. L'ultimo canale non si può eliminare. `Ctrl+Z` lo riporta indietro. |
 | Assign free mixer track | Apre una finestra con le 8 tracce del mixer: quelle libere (senza strumenti) in verde, le altre con gli strumenti che ci sono sopra, e quella attuale segnata. La prima traccia libera è già selezionata; **Select first free track** la riseleziona, oppure scegli una traccia qualsiasi (condividerla è permesso), poi **Assign** (o Invio; Esc annulla). Il display **Track N** del canale e il mixer si aggiornano, e il mixer seleziona quella traccia. |
-| Save as preset... | Chiede un nome e scrive un file `.slspreset` (strumento, sample, volume, pan, pitch, swing; non le note) in `~/Music/Sun Loops Studio/Presets`; compare subito nella cartella Presets del browser. |
+| Save as preset... | Chiede un nome e scrive un file `.slspreset` (strumento, sample, volume, pan, pitch, swing; non le note, le impostazioni del sampler o un SoundFont) in `~/Music/Sun Loops Studio/Presets`; compare subito nella cartella Presets del browser. |
+| Sampler settings... | (Canali sampler) apre la finestra del sampler: inviluppo, loop, filtro, nota di base (vedi *Sampler e SoundFont*). |
+| Load SoundFont (.sf2)... | Sceglie un file `.sf2`, poi uno dei suoi preset: il canale diventa un sampler che lo suona (vedi sotto). Un `.sf2` nella cartella Samples si può anche trascinare dal browser su un canale. |
 
 Anche il doppio clic sull'anteprima delle note di un canale synth, o sul nome di un qualsiasi canale, apre il suo
 Piano Roll. Sui canali sampler il doppio clic sugli step non ha un significato speciale: ogni clic attiva o
 disattiva uno step.
+
+## Sampler e SoundFont
+
+Tasto destro su un canale sampler > **Sampler settings...** apre una finestra per quel canale:
+
+- **Sound**: il sample (o il preset SoundFont / programma di slice) che il canale suona, **Load sample...**, **Load SoundFont (.sf2)...** e **Use the
+  sample** (dimentica il programma: il canale torna a suonare il suo sample). **Root key**: il tasto a cui il sample suona alla sua altezza (C4 = 60).
+- **Envelope** (inviluppo): spento (predefinito), una nota suona il sample una volta fino in fondo, qualunque sia la sua lunghezza, come in tutte le
+  versioni precedenti. Acceso, una nota suona finché è tenuta: **Attack** (entrata), **Decay** fino al livello di **Sustain**, e **Release** dopo la fine
+  della nota. Anche le note suonate a mano (piano roll, tastiera MIDI) vengono tenute.
+- **Loop**: *Forward* ripete la parte tra **Loop start** e **Loop end** (in % del sample) finché la nota è tenuta, così un suono corto può durare.
+- **Filter**: *Low-pass*, *High-pass* o *Band-pass*, con **Cutoff** (da 20 Hz a 20 kHz) e **Resonance**. Ogni nota è filtrata per conto suo.
+
+**SoundFont.** *Load SoundFont (.sf2)...* (nel menu del canale o nella finestra del sampler) chiede un file ed elenca i suoi preset (per banco se ce
+ne sono più di uno); scegline uno. I campioni del preset diventano **zone**: ognuna risponde a un intervallo di tasti e di velocity, con la sua nota di
+base, accordatura, livello, pan e loop, esattamente come dice il file, e l'inviluppo viene preso dal file (puoi cambiarlo). Il progetto ricorda il file
+e il preset, ed *Export project with samples* copia il `.sf2`. Non vengono presi dal file: modulatori, LFO e vibrato, il suo filtro e l'inviluppo di
+modulazione, mandate di chorus / riverbero e classi esclusive. File fino a 512 MB.
+
+**Dalle slice alle note.** Nell'editor di campioni (una clip o un canale sampler) metti dei marcatori (*Find hits*, *Equal parts...* o doppio clic) e
+premi **Slices to sampler channel**: l'audio modificato viene salvato come nuovo file WAV, un **nuovo canale sampler** suona la slice 1 su C4, la 2 su
+C#4 e così via (un tasto ciascuna, alla loro altezza), e il pattern corrente riceve **una nota per slice nel momento in cui era nell'audio**, quindi il
+pattern suona il loop com'era e puoi spostare, ripetere o eliminare le note per fare un groove nuovo.
 
 ## Drum machine
 
@@ -432,16 +457,17 @@ di audio che la clip suona. Lavora su una copia: fuori non cambia nulla finché 
   Il programma misura il rumore in ogni banda di frequenza e abbassa, in **tutto il campione**, ciò che non supera chiaramente il rumore. *Reduction* (da 0 a 60 dB,
   predefinito 12) è di quanto si abbassa il rumore; *Sensitivity* (da 0 a 8, predefinito 3) è di quanto un suono deve superare il rumore per essere tenuto.
   Troppo di entrambi rende il suono "acquoso": prova, ascolta e usa Undo.
-- **Slicing** (solo clip audio). *Find hits* mette un marcatore all'inizio di ogni colpo, nota o parola che trova; il **cursore Sensitivity** accanto (basso = solo i
+- **Slicing**. *Find hits* mette un marcatore all'inizio di ogni colpo, nota o parola che trova; il **cursore Sensitivity** accanto (basso = solo i
   colpi più chiari) decide quanti. *Equal parts...* mette da 2 a 128 marcatori equidistanti. Doppio clic sulla forma d'onda aggiunge un marcatore o toglie quello vicino al clic;
   *Clear markers* li toglie tutti. Con **Save as new file and use** la clip viene tagliata nei marcatori in clip separate della playlist (un solo passo di Undo), che poi puoi spostare, ripetere o eliminare.
+  **Slices to sampler channel** le trasforma invece in un nuovo canale sampler con una nota per slice (vedi *Sampler e SoundFont*); funziona anche sul sample di un canale sampler.
 - Il pulsante in basso a destra (**Save as new file and use**) scrive il risultato come **nuovo file WAV a 32 bit float in `Samples/Edited`**
   accanto ai tuoi campioni (se il nome esiste si aggiunge un numero: una modifica precedente non viene mai sostituita) e lo mette sulla clip o nel canale. Il file
   originale non viene mai toccato e il file di progetto punta semplicemente al nuovo. **Cancel** (o chiudere la finestra) scarta la modifica.
 
 Da sapere: una clip **allungata o trasposta** va prima riportata com'era con *Stretch and pitch... > Back to the original*, modificata e poi di nuovo allungata. Dopo il salvataggio una clip
 suona tutto l'audio modificato dall'inizio, finché c'è posto sulla sua traccia (si accorcia se un'altra clip è in mezzo; il tempo è quello attuale). Si può aprire un solo editor alla
-volta. Un canale sampler si può modificare ma non tagliare in parti.
+volta. Il sample di un canale sampler non si può tagliare in clip (non ci sono clip), ma le sue slice possono diventare un nuovo canale sampler.
 
 La riduzione del rumore e il rilevamento dei colpi sono stati misurati su segnali di prova (rumore abbassato di circa 18 dB con un tono mantenuto entro 1,5 dB; cinque colpi di prova
 trovati entro 0,2 ms) e **non giudicati ad orecchio su registrazioni reali**: lo spectral gating scambia sempre rumore con una certa perdita del dettaglio più debole del suono.
@@ -710,7 +736,7 @@ occupato più tardi, un brano più pesante o un mixer pieno di effetti possono r
   tempo di almeno 32 pattern e 64 battute, 4 corsie di automazione, 64 clip di automazione di al massimo 256 punti, 32 voci simultanee.
 - Gli effetti usano circa 18 MB di memoria a 48 kHz (di più a frequenze di campionamento maggiori).
 - I pattern durano 1, 2, 4 o 8 battute (uguale per tutti), 4/4, griglia di sedicesimi; un solo tempo per tutto il brano.
-- I sample sono mono o stereo, al massimo 30 secondi, suonati una volta sola (niente loop né editing
-  dell'inviluppo). Clip audio: fino a 5 minuti per file, 64 clip.
-- Non ancora disponibili: suonare le note con la tastiera del computer, plugin VST come strumenti o effetti, time-stretch dei campioni nel Sampler (si possono modificare solo le clip audio della playlist), punti di loop e inviluppo per i campioni, trasformare le parti in note, automazione di qualsiasi cosa tranne volumi, pan e parametri degli effetti, trasformare l'altezza di
+- I sample sono mono o stereo, al massimo 30 secondi. Il sampler ha un inviluppo e un filtro per canale (niente inviluppo del filtro, LFO o
+  modulazione); al massimo quattro zone suonano per nota. Clip audio: fino a 5 minuti per file, 64 clip.
+- Non ancora disponibili: suonare le note con la tastiera del computer, plugin VST come strumenti o effetti, time-stretch dei campioni nel Sampler (si possono modificare solo le clip audio della playlist), automazione di qualsiasi cosa tranne volumi, pan e parametri degli effetti, trasformare l'altezza di
   chitarra o voce in note, punch-in e conteggio iniziale per la registrazione, dissolvenze ed effetti per clip. Vedi [roadmap.md](roadmap.md) (in inglese).

@@ -72,7 +72,7 @@ void Player::prepare (double newSampleRate) noexcept
 void Player::releaseVoices (bool includeSamplers) noexcept
 {
     for (auto& v : voices)
-        if ((v.state == State::Attack || v.state == State::Sustain) && (includeSamplers || ! v.sampler) && ! v.live)
+        if ((v.state == State::Attack || v.state == State::Sustain) && (includeSamplers || ! v.sampler || v.held) && ! v.live)
             v.state = State::Release; // notes held by hand are ended by liveNoteOff, not by the transport
 }
 
@@ -224,7 +224,8 @@ void Player::onProjectChanged (const Project& project) noexcept
         if (static_cast<size_t> (v.channel) < project.channels.size())
         {
             const auto& ch = project.channels[static_cast<size_t> (v.channel)];
-            stillValid = v.pad >= 0 ? (ch.kit != nullptr && ch.kit->owns (v.sample)) : ch.sample.get() == v.sample;
+            stillValid = v.pad >= 0 ? (ch.kit != nullptr && ch.kit->owns (v.sample))
+                                    : (ch.sample.get() == v.sample || (ch.program != nullptr && ch.program->owns (v.sample)));
         }
         if (! stillValid)
             v = Voice {};
@@ -321,7 +322,8 @@ void Player::noteOn (const Channel& channel, int channelIndex, const Note& n, in
         return;
     }
     const bool isSampler = channel.instrument == Instrument::Sampler;
-    if (isSampler && (channel.sample == nullptr || channel.sample->numFrames() < 2))
+    const bool hasProgram = isSampler && channel.program != nullptr && ! channel.program->zones.empty();
+    if (isSampler && ! hasProgram && (channel.sample == nullptr || channel.sample->numFrames() < 2))
         return;
 
     // Legato and slide: the note sounding in this channel goes on instead of a new voice starting.
@@ -331,17 +333,21 @@ void Player::noteOn (const Channel& channel, int channelIndex, const Note& n, in
         for (auto& v : voices)
             if (v.channel == channelIndex && ! v.live && v.sampler == isSampler
                 && (v.state == State::Attack || v.state == State::Sustain)
-                && (! isSampler || v.sample == channel.sample.get())
+                && (! isSampler || hasProgram || v.sample == channel.sample.get())
                 && (held == nullptr || v.age > held->age))
                 held = &v;
 
         if (held != nullptr)
         {
             double& rate = isSampler ? held->step : held->increment;
-            const double newRate = isSampler
+            const double settled = held->glideLeft > 0 ? held->glideTarget : rate;
+            const double newRate = hasProgram
+                ? settled * std::pow (2.0, (n.pitch - held->livePitch) / 12.0) // a zone keeps playing, retuned by the step between the notes
+                : isSampler
                 ? std::pow (2.0, (n.pitch - channel.rootPitch + static_cast<double> (channel.pitch)) / 12.0) * held->sample->sampleRate / sampleRate
                 : kTwoPi * pitchToHz (n.pitch + static_cast<double> (channel.pitch)) / sampleRate;
-            if (! isSampler)
+            held->livePitch = n.pitch;
+            if (! isSampler || held->held)
                 held->endTick = std::min (n.startTick + n.lengthTicks, loopLength);
 
             if (n.link == NoteLink::Slide && rate > 0.0 && newRate > 0.0)
@@ -360,35 +366,109 @@ void Player::noteOn (const Channel& channel, int channelIndex, const Note& n, in
         }
     }
 
+    if (isSampler)
+    {
+        if (hasProgram)
+        {
+            // Every zone that answers to the key and the velocity plays (at most four: a stereo pair, layers).
+            const int velocity = std::clamp (static_cast<int> (std::lround (n.velocity * 127.0f)), 1, 127);
+            int started = 0;
+            for (const auto& z : channel.program->zones)
+            {
+                if (started >= 4 || ! z.answers (n.pitch, velocity))
+                    continue;
+                const bool loops = z.loop != LoopMode::Off && z.loopEnd > z.loopStart + 1;
+                samplerVoiceOn (channel, channelIndex, n, loopLength, live, z.sample.get(), z.rootKey, z.tune, z.keyTrack, z.gain, z.pan,
+                                loops ? z.loopStart : 0.0, loops ? z.loopEnd : 0.0);
+                ++started;
+            }
+            return;
+        }
+        const auto& set = channel.sampler;
+        const double frames = channel.sample->numFrames();
+        const bool loops = set.loop != LoopMode::Off && (set.loopEnd - set.loopStart) * frames > 2.0;
+        samplerVoiceOn (channel, channelIndex, n, loopLength, live, channel.sample.get(), channel.rootPitch, 0.0, 1.0, 1.0f, 0.0f,
+                        loops ? std::floor (set.loopStart * frames) : 0.0, loops ? std::floor (set.loopEnd * frames) : 0.0);
+        return;
+    }
+
     Voice* target = &takeVoice();
 
     Voice v;
     v.state = State::Attack;
-    v.sampler = isSampler;
     v.channel = channelIndex;
-    v.live = live && ! isSampler; // a sampler note is a one-shot either way
+    v.live = live;
     v.livePitch = n.pitch;
     v.velocity = n.velocity;
     v.env = 0.0f;
     v.age = ++ageCounter;
+    v.endTick = live ? INT_MAX : std::min (n.startTick + n.lengthTicks, loopLength);
+    v.phase = 0.0;
+    v.increment = kTwoPi * pitchToHz (n.pitch + static_cast<double> (channel.pitch)) / sampleRate;
+    v.attackStep = static_cast<float> (1.0 / (0.005 * sampleRate)); // 5 ms
 
-    if (isSampler)
+    *target = v;
+}
+
+void Player::samplerVoiceOn (const Channel& channel, int channelIndex, const Note& n, int loopLength, bool live, const SampleData* sample,
+                             double rootKey, double tune, double keyTrack, float gain, float pan, double loopStart, double loopEnd) noexcept
+{
+    const auto& set = channel.sampler;
+    const bool loops = loopEnd > loopStart + 1.0;
+    const bool held = set.envelope || loops;
+
+    Voice* target = &takeVoice();
+    Voice v;
+    v.state = State::Attack;
+    v.sampler = true;
+    v.channel = channelIndex;
+    v.held = held;
+    v.live = live && held; // a one-shot sampler note plays to its end either way
+    v.livePitch = n.pitch;
+    v.velocity = n.velocity;
+    v.env = 0.0f;
+    v.age = ++ageCounter;
+    v.endTick = held && ! live ? std::min (n.startTick + n.lengthTicks, loopLength) : INT_MAX;
+    v.sample = sample;
+    v.pos = 0.0;
+    v.step = std::pow (2.0, ((n.pitch - rootKey) * keyTrack + tune + static_cast<double> (channel.pitch)) / 12.0) * sample->sampleRate / sampleRate;
+    if (loops)
     {
-        v.endTick = INT_MAX; // one-shot: plays to the end of the sample
-        v.sample = channel.sample.get();
-        v.pos = 0.0;
-        v.step = std::pow (2.0, (n.pitch - channel.rootPitch + static_cast<double> (channel.pitch)) / 12.0)
-               * v.sample->sampleRate / sampleRate;
-        v.attackStep = static_cast<float> (1.0 / (0.0005 * sampleRate)); // 0.5 ms
+        v.loopStart = loopStart;
+        v.loopEnd = std::min (loopEnd, static_cast<double> (sample->numFrames()));
+    }
+
+    if (set.envelope)
+    {
+        v.attackStep = static_cast<float> (1.0 / (std::max (0.0005, static_cast<double> (set.attack)) * sampleRate));
+        v.sustainLevel = set.sustain;
+        v.decayStep = static_cast<float> ((1.0 - set.sustain) / (std::max (0.001, static_cast<double> (set.decay)) * sampleRate));
+        v.relStep = static_cast<float> (1.0 / (std::max (0.002, static_cast<double> (set.release)) * sampleRate));
     }
     else
+        v.attackStep = static_cast<float> (1.0 / (0.0005 * sampleRate)); // 0.5 ms
+
+    if (std::abs (gain - 1.0f) > 1.0e-6f || std::abs (pan) > 1.0e-6f)
     {
-        v.endTick = live ? INT_MAX : std::min (n.startTick + n.lengthTicks, loopLength);
-        v.phase = 0.0;
-        v.increment = kTwoPi * pitchToHz (n.pitch + static_cast<double> (channel.pitch)) / sampleRate;
-        v.attackStep = static_cast<float> (1.0 / (0.005 * sampleRate)); // 5 ms
+        const double angle = (static_cast<double> (pan) + 1.0) * kTwoPi / 8.0;
+        v.padGain = gain;
+        v.padLeft = static_cast<float> (std::cos (angle) * 1.4142135623730951);
+        v.padRight = static_cast<float> (std::sin (angle) * 1.4142135623730951);
     }
 
+    if (set.filter != SamplerFilter::Off)
+    {
+        // Topology-preserving state-variable filter (Simper): fixed for the note.
+        const double fc = std::min (SamplerSettings::cutoffHz (set.cutoff), 0.45 * sampleRate);
+        const double g = std::tan (kTwoPi * 0.5 * fc / sampleRate);
+        const double k = 2.0 - 1.94 * static_cast<double> (set.resonance); // Q from 0.5 to about 16
+        const double a1 = 1.0 / (1.0 + g * (g + k));
+        v.filter = set.filter;
+        v.fk = static_cast<float> (k);
+        v.fa1 = static_cast<float> (a1);
+        v.fa2 = static_cast<float> (g * a1);
+        v.fa3 = static_cast<float> (g * g * a1);
+    }
     *target = v;
 }
 
@@ -728,18 +808,40 @@ void Player::render (const Project& project, double bpm, bool playing,
 
                 if (v.sampler)
                 {
+                    const bool looping = v.loopEnd > v.loopStart + 1.0;
+                    if (looping && v.pos >= v.loopEnd)
+                        v.pos = v.loopStart + std::fmod (v.pos - v.loopStart, v.loopEnd - v.loopStart);
                     const int idx = static_cast<int> (v.pos);
-                    if (idx + 1 >= v.sample->numFrames())
+                    const int frames = v.sample->numFrames();
+                    if (idx + 1 >= frames && ! (looping && idx < frames))
                     {
                         v = Voice {};
                         continue;
                     }
+                    // The sample after this one: at the end of a loop it is the loop's first sample.
+                    const int next = looping && idx + 1 >= static_cast<int> (v.loopEnd) ? static_cast<int> (v.loopStart) : idx + 1;
                     const float frac = static_cast<float> (v.pos - idx);
                     const float* sl = v.sample->left.data();
                     const float* sr = v.sample->right.data();
+                    float xl = sl[idx] + frac * (sl[next] - sl[idx]);
+                    float xr = sr[idx] + frac * (sr[next] - sr[idx]);
+                    if (v.filter != SamplerFilter::Off)
+                    {
+                        const auto svf = [&v] (float x, float& ic1, float& ic2)
+                        {
+                            const float v3 = x - ic2;
+                            const float v1 = v.fa1 * ic1 + v.fa2 * v3;
+                            const float v2 = ic2 + v.fa2 * ic1 + v.fa3 * v3;
+                            ic1 = 2.0f * v1 - ic1;
+                            ic2 = 2.0f * v2 - ic2;
+                            return v.filter == SamplerFilter::LowPass ? v2 : v.filter == SamplerFilter::BandPass ? v1 : x - v.fk * v1 - v2;
+                        };
+                        xl = svf (xl, v.s1L, v.s2L);
+                        xr = svf (xr, v.s1R, v.s2R);
+                    }
                     const float gain = v.env * v.velocity * kSampleGain * v.padGain;
-                    l = (sl[idx] + frac * (sl[idx + 1] - sl[idx])) * gain * v.padLeft;
-                    r = (sr[idx] + frac * (sr[idx + 1] - sr[idx])) * gain * v.padRight;
+                    l = xl * gain * v.padLeft;
+                    r = xr * gain * v.padRight;
                     v.pos += v.step;
                 }
                 else
@@ -769,9 +871,18 @@ void Player::render (const Project& project, double bpm, bool playing,
                     v.env += v.attackStep;
                     if (v.env >= 1.0f) { v.env = 1.0f; v.state = State::Sustain; }
                 }
+                else if (v.state == State::Sustain)
+                {
+                    if (v.env > v.sustainLevel) // the decay of a sampler envelope
+                    {
+                        v.env = std::max (v.sustainLevel, v.env - v.decayStep);
+                        if (v.env <= 0.0f)
+                            v = Voice {}; // decayed to a sustain level of zero: nothing more to hear
+                    }
+                }
                 else if (v.state == State::Release)
                 {
-                    v.env -= releaseStep;
+                    v.env -= v.relStep > 0.0f ? v.relStep : releaseStep;
                     if (v.env <= 0.0f)
                         v = Voice {};
                 }

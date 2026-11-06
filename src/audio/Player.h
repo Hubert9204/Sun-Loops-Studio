@@ -110,9 +110,19 @@ private:
         double glideTarget = 0.0;           // the exact rate at the end of the slide
         int pad = -1;                       // drum voices: the pad (0..15) and its choke group; -1 for every other voice
         int choke = 0;
-        float padGain = 1.0f;               // the pad's level and pan (1 / 1 / 1 for every other voice)
+        float padGain = 1.0f;               // the pad's (or a sampler zone's) level and pan (1 / 1 / 1 for every other voice)
         float padLeft = 1.0f;
         float padRight = 1.0f;
+
+        // Sampler voices (0.16.0).
+        bool held = false;                  // sounds while the note is held, then releases (envelope or loop); otherwise one-shot
+        double loopStart = 0.0, loopEnd = 0.0; // frames; a loop when loopEnd > loopStart + 1
+        float sustainLevel = 1.0f;          // the envelope decays to this level after the attack
+        float decayStep = 0.0f;
+        float relStep = 0.0f;               // 0: the player's usual short release
+        SamplerFilter filter = SamplerFilter::Off;
+        float fa1 = 0.0f, fa2 = 0.0f, fa3 = 0.0f, fk = 0.0f; // state-variable filter coefficients
+        float s1L = 0.0f, s2L = 0.0f, s1R = 0.0f, s2R = 0.0f; // and its state
     };
 
     // Audio clips of the playlist (recordings, imported files): one voice each, played straight through.
@@ -141,6 +151,9 @@ private:
 
     Voice& takeVoice() noexcept;
     void drumNoteOn (const Channel& channel, int channelIndex, const Note& n) noexcept;
+    // Starts one sampler voice (the channel's sample, or one zone of its program).
+    void samplerVoiceOn (const Channel& channel, int channelIndex, const Note& n, int loopLength, bool live, const SampleData* sample,
+                         double rootKey, double tune, double keyTrack, float gain, float pan, double loopStart, double loopEnd) noexcept;
     void noteOn (const Channel& channel, int channelIndex, const Note& n, int loopLength, bool live = false) noexcept;
     void releaseVoices (bool includeSamplers) noexcept;
     void onProjectChanged (const Project& project) noexcept;

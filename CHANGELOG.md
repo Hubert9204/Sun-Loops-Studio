@@ -2,6 +2,27 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.16.0 - 2026-11-06
+
+### Added
+- **Advanced sampler** (block H). Right-click a sampler channel > **Sampler settings...**: an **envelope** (attack, decay, sustain, release; with it on, notes
+  sustain while held instead of playing one-shot), a **forward loop** with start and end points, a **filter** (low-pass, high-pass, band-pass with cutoff
+  and resonance, per note) and the **root key**. With the envelope off and no loop a sampler plays exactly as before.
+- **SoundFont 2 (.sf2).** *Load SoundFont (.sf2)...* (channel menu, sampler window, or drag a `.sf2` from the browser): choose a preset; its samples become
+  **zones** by key and velocity with their root key, tuning, level, pan and loop, played by Sun Loops Studio's own sampler voices (up to four zones per
+  note). The file is parsed with **TinySoundFont** (MIT, `third_party/tinysoundfont`). Projects store the file and preset; *Export project with samples*
+  copies the `.sf2`.
+- **Slices to notes.** The sample editor's new **Slices to sampler channel** makes a sampler channel that plays slice *n* on key C4 + *n*, with one note
+  per slice in the current pattern at its original time. Markers can now be placed on a sampler channel's sample too.
+- `src/audio/SamplerProgram.h` (settings, zones, slice programs; plain C++), `src/library/SoundFont.*`, `src/ui/SamplerPanel.*`,
+  `src/ui/MainComponentSampler.cpp`; the sampler voice in `Player.cpp` gained envelope, loop, filter and zone pan (no allocation, tested).
+
+### Limits
+- One envelope and one filter per channel; no filter envelope, LFO, vibrato, round-robin or crossfaded / ping-pong loops; zones cannot be edited by hand.
+- SoundFont modulators, LFOs, the file's filter and modulation envelope, chorus / reverb sends and exclusive classes are ignored; no SFZ, GIG or GUS.
+- Channel presets do not store the sampler settings or a SoundFont. Older versions open such projects as one-shot samplers without the program.
+- Measured on test tones and seen in a virtual display only: not heard on real instruments or hardware.
+
 ## 0.15.0 - 2026-11-06
 
 ### Added

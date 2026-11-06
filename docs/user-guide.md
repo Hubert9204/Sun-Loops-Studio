@@ -173,10 +173,35 @@ One row per channel: a **Track N** display and the name, **M** (mute), **S** (so
 | Move up / Move down | Moves the channel one row; its notes in every pattern and its automation clips go with it. |
 | Delete channel... | After a confirmation, removes the channel, its notes in every pattern and the automation clips that move its volume or pan. The last channel cannot be deleted. `Ctrl+Z` brings it back. |
 | Assign free mixer track | Opens a window listing the 8 mixer tracks: free ones (no instrument on them) in green, the others with the instruments that are on them, and the current one marked. The first free track is selected for you; **Select first free track** picks it again, or choose any track (sharing one is allowed), then **Assign** (or Return; Escape cancels). The channel's **Track N** display and the mixer follow, and the mixer selects that track. |
-| Save as preset... | Asks for a name and writes a `.slspreset` file (instrument, sample, volume, pan, pitch, swing; not the notes) into `~/Music/Sun Loops Studio/Presets`; it appears in the browser's Presets folder at once. |
+| Save as preset... | Asks for a name and writes a `.slspreset` file (instrument, sample, volume, pan, pitch, swing; not the notes, the sampler settings or a SoundFont) into `~/Music/Sun Loops Studio/Presets`; it appears in the browser's Presets folder at once. |
+| Sampler settings... | (Sampler channels) opens the sampler window: envelope, loop, filter, root key (see *Sampler and SoundFonts*). |
+| Load SoundFont (.sf2)... | Chooses a `.sf2` file, then one of its presets: the channel becomes a sampler that plays it (see below). A `.sf2` in your Samples folder can also be dragged from the browser onto a channel. |
 
 Double-clicking a synth channel's note preview, or the name of any channel, also opens its Piano Roll. On sampler
 channels double-clicking the steps is not special: every click toggles a step.
+
+## Sampler and SoundFonts
+
+Right-click a sampler channel > **Sampler settings...** opens a window for that channel:
+
+- **Sound**: the sample (or the SoundFont preset / slice program) the channel plays, **Load sample...**, **Load SoundFont (.sf2)...**, and **Use the
+  sample** (forgets a program, the channel plays its own sample again). **Root key**: the key at which the sample plays at its own pitch (C4 = 60).
+- **Envelope**: off (the default), a note plays its sample once to the end, whatever its length, as in every earlier version. On, a note sounds while
+  it is held: **Attack** (fade in), **Decay** to the **Sustain** level, and **Release** after the note ends. Notes played by hand (piano roll, MIDI
+  keyboard) are held too.
+- **Loop**: *Forward* repeats the part between **Loop start** and **Loop end** (in % of the sample) while the note is held, so a short sound can last.
+- **Filter**: *Low-pass*, *High-pass* or *Band-pass*, with **Cutoff** (20 Hz to 20 kHz) and **Resonance**. Each note is filtered on its own.
+
+**SoundFonts.** *Load SoundFont (.sf2)...* (in the channel menu or in the sampler window) asks for a file and lists its presets (by bank when there
+are several); choose one. The preset's samples become **zones**: each answers to a range of keys and velocities, with its own root key, tuning, level,
+pan and loop, exactly as the file says, and the envelope is set from the file (you can change it). The project stores the file and the preset, and
+*Export project with samples* copies the `.sf2`. Not taken over from the file: modulators, LFOs and vibrato, its filter and modulation envelope,
+chorus / reverb sends and exclusive classes. Files up to 512 MB.
+
+**Slices to notes.** In the sample editor (a clip or a sampler channel), place markers (*Find hits*, *Equal parts...* or double-click) and press
+**Slices to sampler channel**: the edited audio is saved as a new WAV file, a **new sampler channel** plays slice 1 on C4, slice 2 on C#4 and so on
+(one key each, at their own pitch), and the current pattern gets **one note per slice at the time it had in the audio**, so the pattern plays the
+loop as it was and you can move, repeat or delete the notes to make a new groove.
 
 ## Drum machine
 
@@ -422,17 +447,18 @@ of the audio that the clip plays. It works on a copy: nothing changes outside un
   program measures the noise in every frequency band and lowers everything in the **whole sample** that does not rise clearly above it. *Reduction* (0 to
   60 dB, default 12) is how much the noise is lowered; *Sensitivity* (0 to 8, default 3) is how far above the noise a sound must be to be kept. Too
   much of either makes the sound "watery"; try it, listen, and use Undo.
-- **Slicing** (audio clips only). *Find hits* puts a marker at the start of every hit, note or word it finds; the **Sensitivity slider** next to it
+- **Slicing**. *Find hits* puts a marker at the start of every hit, note or word it finds; the **Sensitivity slider** next to it
   (low = only the clearest hits) decides how many. *Equal parts...* puts 2 to 128 equally spaced markers. Double-click on the waveform adds a marker or
   removes the one near the click; *Clear markers* removes all. When you press **Save as new file and use** the clip is cut at the markers into separate clips of the
-  playlist (one Undo step), which you can then move, repeat or delete.
+  playlist (one Undo step), which you can then move, repeat or delete. **Slices to sampler channel** turns them into a new sampler channel with one note
+  per slice instead (see *Sampler and SoundFonts*); it also works on a sampler channel's sample.
 - The button at the bottom right (**Save as new file and use**) writes the result as a **new 32-bit float WAV file in
   `Samples/Edited`** next to your other samples (a number is added if the name exists: an earlier edit is never replaced) and puts it on the clip or in the
   channel. The original file is never touched, and the project file just points to the new one. **Cancel** (or closing the window) throws the edit away.
 
 Things to know: a clip that is **stretched or pitch-shifted** must first be taken back with *Stretch and pitch... > Back to the original*, edited, and
 stretched again. After saving, a clip plays the whole edited audio from its start, as far as there is room on its track (it is shortened if a
-neighbour is in the way, and the tempo is the current one). Only one editor can be open at a time. Undo keeps the last 40 steps (fewer for very long samples). A sampler channel can be edited but not sliced.
+neighbour is in the way, and the tempo is the current one). Only one editor can be open at a time. Undo keeps the last 40 steps (fewer for very long samples). A sampler channel's sample cannot be cut into clips (there are no clips), but its slices can become a new sampler channel.
 
 Noise reduction and hit detection were measured on test signals (noise lowered by about 18 dB with a tone kept within 1.5 dB; five test hits found to
 within 0.2 ms) and **not judged by ear on real recordings**: spectral gating always trades noise for some loss of the quiet detail of the sound.
@@ -700,7 +726,7 @@ a heavier song or a plugin-heavy mixer can still need a bigger size.
   at least 32 patterns and 64 bars, 4 automation lanes, 64 automation clips of up to 256 points each, 32 simultaneous voices.
 - The effects use about 18 MB of memory at 48 kHz (more at higher sample rates).
 - Patterns are 1, 2, 4 or 8 bars long (the same for all patterns), 4/4, 16th-note grid; one tempo for the whole song.
-- Samples are mono or stereo, at most 30 seconds, played one-shot (no looping, no envelope editing). Audio clips: up to
-  5 minutes per file, 64 clips.
-- Not available yet: playing notes from the computer keyboard, VST plugins as instruments or effects, time-stretching of samples in the Sampler (only audio clips on the playlist can be stretched), loop points and an envelope for samples, turning slices into notes, automation of anything except volumes, pans and effect parameters, turning guitar or voice pitch into notes,
+- Samples are mono or stereo, at most 30 seconds. The sampler has one envelope and one filter per channel (no filter envelope, LFO or modulation);
+  at most four zones sound per note. Audio clips: up to 5 minutes per file, 64 clips.
+- Not available yet: playing notes from the computer keyboard, VST plugins as instruments or effects, time-stretching of samples in the Sampler (only audio clips on the playlist can be stretched), automation of anything except volumes, pans and effect parameters, turning guitar or voice pitch into notes,
   punch-in and count-in for recording, fades and per-clip effects. See [roadmap.md](roadmap.md).

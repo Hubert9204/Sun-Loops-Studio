@@ -463,6 +463,7 @@ MainComponent::~MainComponent()
     automationWindow.reset();
     sampleEditorWindow.reset();
     drumWindow.reset();
+    samplerWindow.reset();
     metersWindow.reset();
     engine.getDeviceManager().removeChangeListener (this);
     audioDialog.deleteAndZero(); // it refers to the engine
@@ -785,6 +786,8 @@ void MainComponent::createStrip (size_t channelIndex)
             openDrumMachine (idx);
     };
     strip->onRename = [this] (int idx) { renameChannel (idx); };
+    strip->onSamplerSettings = [this] (int idx) { openSamplerSettings (idx); };
+    strip->onLoadSoundFont = [this] (int idx) { chooseSoundFontFor (idx); };
     strip->onDelete = [this] (int idx) { deleteChannel (idx); };
     strip->onClone = [this] (int idx) { cloneChannel (idx); };
     strip->onMove = [this] (int idx, int delta) { moveChannel (idx, delta); };
@@ -872,6 +875,8 @@ void MainComponent::publishProject()
     markDirty();
     if (drumWindow != nullptr)
         drumWindow->view().refresh(); // notes or kit may have changed from somewhere else (piano roll, another pattern, undo)
+    if (samplerWindow != nullptr)
+        samplerWindow->panel().refresh();
     auto project = std::make_unique<Project> (compileCurrent());
     if (songMode && arrangement.hasLoop())
     {
@@ -1047,6 +1052,7 @@ bool MainComponent::loadSampleFile (int channelIndex, const juce::File& file)
     auto& channel = channels[static_cast<size_t> (channelIndex)];
     channel.instrument = Instrument::Sampler;
     channel.sample = std::move (sample);
+    channel.program = nullptr; // a sample chosen by hand replaces a SoundFont or slice program
     channel.name = file.getFileNameWithoutExtension().substring (0, 12).toStdString();
 
     strips[static_cast<size_t> (channelIndex)]->refreshFromChannel();

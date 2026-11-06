@@ -15,6 +15,7 @@
 #include "ui/AudioMeter.h"
 #include "ui/AutomationEditor.h"
 #include "ui/DrumMachine.h"
+#include "ui/SamplerPanel.h"
 #include "ui/SampleEditor.h"
 #include "ui/MetersView.h"
 #include "library/ChannelPreset.h"
@@ -195,6 +196,13 @@ private:
     void deleteChannel (int channelIndex);
     void moveChannel (int channelIndex, int delta);
     void cloneChannel (int channelIndex);
+    // MainComponentSampler.cpp
+    void openSamplerSettings (int channelIndex);
+    void closeSamplerSettings();
+    void chooseSoundFontFor (int channelIndex);
+    void chooseSoundFontPreset (int channelIndex, const juce::File& file);
+    void applySoundFont (int channelIndex, const juce::File& file, int presetIndex);
+    juce::String slicesToSampler (const std::shared_ptr<const SampleData>& edited, const std::vector<double>& markers, const juce::String& name);
 
     // Patterns and the playlist. The channels' `notes` always hold the notes of the current pattern;
     // commitCurrentPattern() copies them into the arrangement before anything is compiled or switched.
@@ -250,6 +258,8 @@ private:
     void openSampleEditorForClip (int audioClipIndex);
     void openSampleEditorForChannel (int channelIndex);
     std::unique_ptr<DrumMachineWindow> drumWindow;
+    std::unique_ptr<SamplerWindow> samplerWindow;
+    int samplerWindowChannel = -1;
     int drumWindowChannel = -1;
     void openDrumMachine (int channelIndex);
     void closeDrumMachine();

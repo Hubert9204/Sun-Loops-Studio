@@ -17,6 +17,7 @@ src/audio/                      No UI dependencies except JUCE audio types
   SampleEdit.*                  Destructive edits of a SampleData (ranges, cut / crop / fades / gain / normalise ...), noise reduction (spectral gating), onset detection, grid slices, 32-bit float WAV writing (plain C++ over SampleData)
   Auditioner.h                  The editor's preview voice: lock-free hand-over to the audio thread, mixed after the master chain
   SampleData.h                  SampleData (decoded audio) and finiteOr(), split from Project.h so that DrumKit.h and Project.h can include each other's needs
+  SamplerProgram.h              The advanced sampler: SamplerSettings (envelope, loop, filter), SampleZone / SamplerProgram (multi-sample, key and velocity ranges), makeSliceProgram() (plain C++)
   DrumKit.h                     The drum machine model: 16 pads, 4 velocity layers, choke groups, swing; layerFor(), padForPitch(), sanitised() (plain C++)
   Loudness.h                    LoudnessMeter: BS.1770-4 K-weighting, gating, LUFS, loudness range, true peak (plain C++)
   Spectrum.h                    StereoRing (lock-free audio -> GUI hand-over), SpectrumAnalyser (own FFT), stereo correlation
@@ -39,6 +40,7 @@ src/library/                    No JUCE GUI; JUCE core only (files, JSON)
   BrowserModel.h                Browser tree nodes, which are draggable, search filter (plain C++)
   ChannelPreset.*               Channel presets as JSON (.slspreset) and the factory presets
   DrumKitFile.*                 Drum kits: KitSpec (what a kit refers to), JSON, kit folders (kit.json + samples/), kits from a folder of sounds, the built-in kits, loadKit()
+  SoundFont.*                   SoundFont 2 presets to SamplerPrograms (parsed with third_party/tinysoundfont), ProgramSpec (what the project file stores), sampler settings as JSON
   JsonRead.h                    readNumber / readInt / readBool / readName / number: the range-clamping JSON helpers shared by the project, preset and kit files
   Library.*                     ~/Music/Sun Loops Studio folders, directory scan, building the browser tree
   ProjectFile.*                 The .slp project file (older .slsproj still read): ProjectDocument <-> JSON, safe read and write
@@ -47,7 +49,7 @@ src/plugins/PluginScanner.*     VST3 discovery. Only feeds the browser's Plugin 
 
 src/ui/
   MainComponent.*               Toolbar, workspace, panel wiring, channels, layout persistence, the demo project, timer
-  MainComponent{Patterns,Import,Recording,Notes,Browser,Project,Automation,Drums,SampleEditor,Channels,History,Safety}.cpp
+  MainComponent{Patterns,Import,Recording,Notes,Browser,Project,Automation,Drums,SampleEditor,Channels,History,Safety,Sampler}.cpp
                                 The rest of MainComponent's member functions, one file per area: patterns, pattern length and playlist; sample /
                                 audio / MIDI import and audio clips; audio recording; MIDI-keyboard note recording; browser, presets, export;
                                 project files, recent projects, the File menu; automation clips; the drum machine window; the sample editor;
@@ -56,6 +58,7 @@ src/ui/
   AutomatableSlider.h           A slider whose right-click menu offers "Create automation clip"
   AutomationEditor.*            The point editor window for one automation clip
   MetersView.*                  The Meters window: loudness read-outs, true peak, spectrum, goniometer, correlation
+  SamplerPanel.*                The sampler settings window (MainComponentSampler.cpp opens and wires it, loads SoundFonts, makes slice channels)
   DrumMachine.*                 The drum machine window: pad grid, pad inspector, step grid per pad, kit menu (MainComponentDrums.cpp opens and wires it)
   PanelWindow.*                 PanelWindow (floating panel) and Workspace (the area they float in)
   PanelLayout.h                 Panel position/size/visibility: parse, serialise, clamp (no JUCE)
@@ -289,6 +292,23 @@ reads nothing back (the sample in memory is used, `source` set to the new path) 
 (ClipEdit.h, pure, tested) on a copy of the arrangement: the clip gets the new audio from its start, the longest length that fits (binary search on
 `canPlaceAudio`), and `splitAudioClip` at each slice point; only a successful result is committed, as one undo step. `openSampleEditorForChannel` replaces
 the channel's sample instead. The project file is unchanged: clips and channels still store only the path.
+
+### The advanced sampler (0.16.0)
+
+A sampler channel has `SamplerSettings` (always) and may have a `SamplerProgram` (`shared_ptr<const ...>`, immutable like a kit): a list of zones, each with
+its own sample, key and velocity range, root key, tuning, key tracking, gain, pan and loop. `Player::noteOn` starts one voice per answering zone (at most
+four; a stereo SoundFont sample is two zones), or one voice for the channel's own sample, through `samplerVoiceOn`. A sampler voice carries its loop points
+(frames), the envelope steps (`attackStep`, `decayStep` towards `sustainLevel`, `relStep`), the zone's gain and constant-power pan (the same fields the drum pads
+use) and, when the filter is on, the coefficients and state of a topology-preserving state-variable filter (Simper), computed once per note. A voice is `held`
+when the envelope is on or it loops: it then ends at the note's end like a synth voice (and `releaseVoices` always releases it); otherwise it is the old
+one-shot. In the render loop the loop wraps the position, interpolation reads the loop start after the loop end, the filter runs per sample and the decay
+happens inside `State::Sustain` (no new voice state, so every existing "is sounding" test still holds). After a new snapshot a voice survives only if the
+channel's sample or program still owns its sample.
+
+SoundFonts are read by TinySoundFont's parser only (`tsf_load_filename`; its synthesizer is not used): each region of the preset becomes a zone, its slice of
+`fontSamples` is copied once into a `SampleData` and shared by the zones that use it. The project file stores `"sampler"` settings and a `"program"` spec
+(`soundfont`: file and preset; `slices`: file, slice starts and first key); `applyDocument` loads the program again, or keeps a zone-less placeholder that
+remembers the spec when the file is missing.
 
 ### Seeking, the loop region and the undo history (0.15.0)
 

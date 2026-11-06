@@ -27,6 +27,12 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.16.0
+The sampler voice gained a loop, an envelope decay, a per-voice filter and zone gain / pan in `Player::render`; `noteOn` loops over a program's zones (no
+allocation: tested with zones, loops, filters and envelopes for 2000 blocks). TinySoundFont is compiled in one file (`SoundFont.cpp`) with its warnings
+silenced there and its directory as a SYSTEM include; only its parser runs, on the message thread. clang-tidy (the audit's check set) on the new files found
+one widening multiplication in `SoundFont.cpp`, fixed. `PlaylistTimeline.cpp` and `Player.cpp` (now ~1 000 lines) are the next candidates to split.
+
 ## After 0.15.0
 The audio thread gained `Player::seek`, `locate`, `startClipsInside` and `jumpTo` (binary searches and a loop over the audio events, no allocation: tested while
 seeking and looping). `PlaylistTimeline.cpp` is now ~2 100 lines with the ruler and loop-region handling: still the first file to split (ruler / clips / lanes).

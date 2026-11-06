@@ -71,6 +71,10 @@ void MainComponent::openSampleEditorForClip (int index)
                                        juce::dontSendNotification);
         return error;
     };
+    window->editor().onSlicesToSampler = [safe = juce::Component::SafePointer<MainComponent> (this), name] (const SamplePtr& edited, const std::vector<double>& markers) -> juce::String
+    {
+        return safe != nullptr ? safe->slicesToSampler (edited, markers, juce::String (name)) : juce::String ("The program is closing.");
+    };
     window->editor().setSample (copy, true, "Save as new file and use");
     window->setVisible (true);
     window->toFront (true);
@@ -125,6 +129,10 @@ void MainComponent::openSampleEditorForChannel (int channelIndex)
         safe->publishProject();
         safe->statusLabel.setText ("Saved " + file.getFullPathName() + " and loaded it into the channel", juce::dontSendNotification);
         return {};
+    };
+    window->editor().onSlicesToSampler = [safe = juce::Component::SafePointer<MainComponent> (this), baseName] (const SamplePtr& edited, const std::vector<double>& markers) -> juce::String
+    {
+        return safe != nullptr ? safe->slicesToSampler (edited, markers, baseName) : juce::String ("The program is closing.");
     };
     window->editor().setSample (std::make_shared<SampleData> (*sample), false, "Save as new file and use");
     window->setVisible (true);

@@ -1,10 +1,10 @@
-# Plan for the next feature blocks (written 2026-11-06, updated for 0.15.0)
+# Plan for the next feature blocks (written 2026-11-06, updated for 0.16.0)
 
 Each block is a release of its own, in the order chosen by the maintainer. "Done" means what the repository has now.
 Effort is a rough size: S = a few days of work, M = about two weeks, L = a month or more, XL = a long project of its own.
 
 ## Already in the program
-**0.15.0** (not a block: ruler seeking and loop region, 32 channels with delete / move / clone, undo of every edit, pattern length, autosave and recovery, export with samples, CI). **0.14.0: block G** (drum machine: 16 pads, velocity layers, choke groups, per-pad swing, kits as folders). **0.13.0: block E** (sample editor: destructive editing, slicing, noise reduction, live spectrum). **0.12.0: block D** (time-stretch and pitch-shift of audio clips with Signalsmith Stretch). **0.11.0: blocks A, B and C below** (automation, aux buses / sends / VCA groups, LUFS / true-peak / spectrum / goniometer meters; see the notes after the table).
+**0.16.0: block H** (advanced sampler: envelope, loop, filter, zones, SoundFont 2 presets through TinySoundFont's parser, slices to a sampler channel). **0.15.0** (not a block: ruler seeking and loop region, 32 channels with delete / move / clone, undo of every edit, pattern length, autosave and recovery, export with samples, CI). **0.14.0: block G** (drum machine: 16 pads, velocity layers, choke groups, per-pad swing, kits as folders). **0.13.0: block E** (sample editor: destructive editing, slicing, noise reduction, live spectrum). **0.12.0: block D** (time-stretch and pitch-shift of audio clips with Signalsmith Stretch). **0.11.0: blocks A, B and C below** (automation, aux buses / sends / VCA groups, LUFS / true-peak / spectrum / goniometer meters; see the notes after the table).
 MIDI file import into patterns; legato and slide between notes of one channel (0.10.0). Basic sampler, a synth, four effects, mixer with
 tracks and master chain, audio and MIDI recording, playlist editing, metronome, export in seven formats.
 
@@ -19,7 +19,7 @@ tracks and master chain, audio and MIDI recording, playlist editing, metronome, 
 | E | **Sample editor** (done, 0.13.0: edits a copy and saves a new WAV; slicing for playlist clips only; spectral gating tested on synthetic signals only) | Destructive editing (cut, normalise, fade, reverse), **slicing** (by transients, by grid) to a pattern, **noise reduction** (spectral gating), real-time spectrum | own code | L | no |
 | F | **Native synths** | A subtractive synth (oscillators, filter, envelopes, LFO), an **FM synth** (Sytrus-like operator matrix), an **additive synth** (Harmor-like partial editor and resynthesis from a sample) | own code. "Professional level" is a long road: each of the three is its own project | XL | no |
 | G | **Drum machine** (done, 0.14.0: one drum channel with 16 pads, no per-pad routing, no round-robin) | Pad grid with per-pad sample, choke groups, velocity layers, swing; a kit format | own code | M | no |
-| H | **Advanced sampler** | Multi-sample zones, velocity layers, loops, ADSR, filter, **SoundFont `.sf2`** loading | **TinySoundFont (MIT)** for `.sf2`; `.GUS` patches are simple and can be read directly; `.GIG` needs libgig, which is GPL: skipped unless the licence question is settled | L | no |
+| H | **Advanced sampler** (done, 0.16.0: SoundFont 2 only, one envelope and filter per channel, no SFZ / GIG / GUS) | Multi-sample zones, velocity layers, loops, ADSR, filter, **SoundFont `.sf2`** loading | **TinySoundFont (MIT)** for `.sf2`; `.GUS` patches are simple and can be read directly; `.GIG` needs libgig, which is GPL: skipped unless the licence question is settled | L | no |
 | I | **Plugin hosting** | VST3, LV2, LADSPA instruments and effects, scanned and loaded into channels and mixer slots; automation of their parameters | JUCE already hosts VST3, LV2 and LADSPA. *VST2: Steinberg no longer licenses the SDK, so it cannot be added legally. Audio Units exist only on macOS.* | L | partly (needs real plugins and a sound card) |
 | J | **Modular patchbay** | A graph of generators, effects, mixers, MIDI processors with unlimited cables, saved as one preset | own code on top of F, G, H and I | XL | no |
 | K | **Session view** | A grid of clips / loops launched live, quantised to the beat, with scenes; recording the performance to the playlist | own code | L | partly |
@@ -32,7 +32,7 @@ tracks and master chain, audio and MIDI recording, playlist editing, metronome, 
 2. **A Automation**, because it touches every parameter and is easier before the parameter list grows.
 3. **B + C** (console and metering): small, useful, and the routing matrix is needed by J.
 4. **D + E** (both done): the part most useful for working on recorded audio.
-5. **G + H** (G done; next the sampler and SoundFont), then **F** (synths), then **I** (plugins), then **K**, **N**, **M**, **J**, **L**.
+5. **G + H** (both done), then **I** (plugins: recommended before F in the status document of 2026-11-06), then **F** (synths), then **K**, **N**, **M**, **J**, **L**.
 
 ## Things that cannot be done as asked (and what is offered instead)
 - *zplane elastique*: closed and commercial. Offered: Signalsmith Stretch (MIT), same kind of result for most material.

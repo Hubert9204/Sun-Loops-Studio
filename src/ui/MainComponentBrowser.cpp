@@ -111,7 +111,10 @@ bool MainComponent::applyPreset (int channelIndex, const ChannelPreset& preset)
         }
 
         if (sample != nullptr)
+        {
             channel.sample = std::move (sample);
+            channel.program = nullptr;
+        }
         else
             sampleOk = false; // keep whatever sample the channel had
     }
@@ -152,7 +155,11 @@ void MainComponent::applyBrowserItem (int channelIndex, const drag::Item& item)
         return;
     }
 
-    if (item.kind == "file")
+    if (item.kind == "file" && item.payload.endsWithIgnoreCase (".sf2"))
+    {
+        chooseSoundFontPreset (channelIndex, juce::File (item.payload));
+    }
+    else if (item.kind == "file")
     {
         loadSampleFile (channelIndex, juce::File (item.payload));
     }
@@ -163,6 +170,7 @@ void MainComponent::applyBrowserItem (int channelIndex, const drag::Item& item)
             channel.instrument = Instrument::Sampler;
             channel.name = sample->name;
             channel.sample = std::move (sample);
+            channel.program = nullptr;
             strips[static_cast<size_t> (channelIndex)]->refreshFromChannel();
             updateTrackRouting();
             publishProject();

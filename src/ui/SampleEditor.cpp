@@ -29,7 +29,7 @@ SampleEditor::SampleEditor (AudioEngine& engineToUse) : engine (engineToUse)
 
     for (auto* b : { &playButton, &loopButton, &undoButton, &redoButton, &allButton, &cutButton, &cropButton, &silenceButton, &reverseButton, &invertButton,
                      &gainButton, &normaliseButton, &dcButton, &fadeInButton, &fadeOutButton, &noiseButton, &hitsButton, &partsButton, &clearMarkersButton,
-                     &applyButton, &cancelButton })
+                     &applyButton, &cancelButton, &toSamplerButton })
     {
         b->setMouseClickGrabsKeyboardFocus (false);
         addAndMakeVisible (*b);
@@ -111,6 +111,21 @@ SampleEditor::SampleEditor (AudioEngine& engineToUse) : engine (engineToUse)
     partsButton.onClick = [this] { sliceByEqualParts(); };
     clearMarkersButton.onClick = [this] { markers.clear(); setStatus ("Markers cleared."); repaint(); updateButtons(); };
     applyButton.onClick = [this] { applyAndClose(); };
+    toSamplerButton.setTooltip ("A new sampler channel that plays slice n on key C4 + n, with one note per slice in the current pattern");
+    toSamplerButton.onClick = [this]
+    {
+        if (current == nullptr || markers.empty() || ! onSlicesToSampler)
+            return;
+        stopPlayback();
+        const auto error = onSlicesToSampler (current, markers);
+        if (error.isNotEmpty())
+        {
+            juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Sample editor", error);
+            return;
+        }
+        if (onClose)
+            onClose();
+    };
     cancelButton.onClick = [this] { stopPlayback(); if (onClose) onClose(); };
 
     startTimerHz (30);
@@ -130,18 +145,20 @@ void SampleEditor::setSample (SamplePtr sample, bool canSliceIn, const juce::Str
     redoStack.clear();
     markers.clear();
     canSlice = canSliceIn;
+    canMark = canSlice || static_cast<bool> (onSlicesToSampler);
     selBegin = selEnd = 0;
     cursor = 0.0;
     applyButton.setButtonText (applyText);
-    hitsButton.setEnabled (canSlice);
-    partsButton.setEnabled (canSlice);
-    clearMarkersButton.setEnabled (canSlice);
-    sensitivitySlider.setEnabled (canSlice);
-    const juce::String why = "Slicing cuts an audio clip of the playlist into pieces; a sampler channel cannot be sliced yet.";
-    hitsButton.setTooltip (canSlice ? "Put a marker at the start of every hit, note or word the program can find" : why);
-    partsButton.setTooltip (canSlice ? "Put markers that cut the sample into equal parts" : why);
-    clearMarkersButton.setTooltip (canSlice ? "Remove all the slice markers" : why);
-    sensitivitySlider.setTooltip (canSlice ? "Low: only the clearest hits. High: everything that changes." : why);
+    hitsButton.setEnabled (canMark);
+    partsButton.setEnabled (canMark);
+    clearMarkersButton.setEnabled (canMark);
+    sensitivitySlider.setEnabled (canMark);
+    const juce::String why = "Markers are for slicing; this editor was opened without slicing.";
+    hitsButton.setTooltip (canMark ? "Put a marker at the start of every hit, note or word the program can find" : why);
+    partsButton.setTooltip (canMark ? "Put markers that cut the sample into equal parts" : why);
+    clearMarkersButton.setTooltip (canMark ? "Remove all the slice markers" : why);
+    sensitivitySlider.setTooltip (canMark ? "Low: only the clearest hits. High: everything that changes." : why);
+    toSamplerButton.setVisible (static_cast<bool> (onSlicesToSampler));
     rebuildPeaks();
     fitView();
     setStatus ("Drag on the waveform to select; the wheel zooms, Shift + wheel scrolls; Space plays.");
@@ -299,7 +316,8 @@ void SampleEditor::updateButtons()
     cropButton.setEnabled (hasSelection());
     loopButton.setEnabled (hasSelection());
     playButton.setButtonText (engine.auditioner().isPlaying() ? "Stop" : "Play");
-    clearMarkersButton.setEnabled (canSlice && ! markers.empty());
+    clearMarkersButton.setEnabled (canMark && ! markers.empty());
+    toSamplerButton.setEnabled (canMark && ! markers.empty());
     if (canSlice && ! markers.empty())
         applyButton.setTooltip ("Saves the edited audio as a new file, puts it on the clip and cuts the clip at the " + juce::String (static_cast<int> (markers.size()))
                                 + " markers");
@@ -369,7 +387,7 @@ void SampleEditor::reduceNoiseDialog()
 
 void SampleEditor::findHits()
 {
-    if (current == nullptr || ! canSlice)
+    if (current == nullptr || ! canMark)
         return;
     auto found = detectOnsets (current, sensitivitySlider.getValue());
     const double length = current->numFrames() / current->sampleRate;
@@ -385,7 +403,7 @@ void SampleEditor::findHits()
 
 void SampleEditor::sliceByEqualParts()
 {
-    if (current == nullptr || ! canSlice)
+    if (current == nullptr || ! canMark)
         return;
     ask ("Equal parts", "Cut the sample into this many equal parts (2 to 128).", { "Parts" }, { "8" },
          [this] (const juce::StringArray& v)
@@ -400,7 +418,7 @@ void SampleEditor::sliceByEqualParts()
 
 void SampleEditor::toggleMarkerAt (double frame, double tolerancePixels)
 {
-    if (current == nullptr || ! canSlice)
+    if (current == nullptr || ! canMark)
         return;
     const double tolerance = tolerancePixels * framesPerPixel / current->sampleRate;
     const double seconds = frame / current->sampleRate;
@@ -591,7 +609,7 @@ void SampleEditor::mouseUp (const juce::MouseEvent& e)
 
 void SampleEditor::mouseDoubleClick (const juce::MouseEvent& e)
 {
-    if (current != nullptr && canSlice && waveArea.contains (e.getPosition()))
+    if (current != nullptr && canMark && waveArea.contains (e.getPosition()))
         toggleMarkerAt (std::clamp (frameAtX (e.x), 0.0, static_cast<double> (current->numFrames())), 6.0);
 }
 
@@ -651,7 +669,7 @@ void SampleEditor::resized()
     place (r2, gainButton, 70); place (r2, normaliseButton, 100); place (r2, dcButton, 96); place (r2, fadeInButton, 72); place (r2, fadeOutButton, 78);
     place (r2, fadeShapeBox, 90); place (r2, noiseButton, 140);
     auto r3 = row (28);
-    place (r3, sensitivityLabel, 76); place (r3, sensitivitySlider, 170); place (r3, hitsButton, 90); place (r3, partsButton, 120); place (r3, clearMarkersButton, 120);
+    place (r3, sensitivityLabel, 76); place (r3, sensitivitySlider, 170); place (r3, hitsButton, 90); place (r3, partsButton, 120); place (r3, clearMarkersButton, 120); place (r3, toSamplerButton, 200);
 
     auto bottom = area.removeFromBottom (30);
     area.removeFromBottom (6);

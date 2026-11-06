@@ -28,6 +28,9 @@ public:
     // Returns an error message, or an empty string when it worked (the owner then closes the editor).
     std::function<juce::String (SamplePtr edited, const std::vector<double>& slices)> onApply;
     std::function<void()> onClose;
+    // Set (before setSample) to offer "Slices to sampler channel": the edited sample and the marker positions (seconds). Returns an error, or ""
+    // when it worked (the editor then closes). Markers can then be placed even when `canSlice` is false.
+    std::function<juce::String (SamplePtr edited, const std::vector<double>& markers)> onSlicesToSampler;
 
     bool hasChanges() const noexcept { return ! undoStack.empty() || ! markers.empty(); }
 
@@ -83,6 +86,7 @@ private:
     std::vector<SamplePtr> undoStack, redoStack;
     Peaks peaks;
     bool canSlice = false;
+    bool canMark = false; // markers can be placed (for slicing a clip, or for slices to a sampler channel)
 
     // view and selection, in frames
     double viewStart = 0.0, framesPerPixel = 100.0;
@@ -108,6 +112,7 @@ private:
     juce::Slider sensitivitySlider;
     juce::TextButton hitsButton { "Find hits" }, partsButton { "Equal parts..." }, clearMarkersButton { "Clear markers" };
     juce::TextButton applyButton { "Apply" }, cancelButton { "Cancel" };
+    juce::TextButton toSamplerButton { "Slices to sampler channel" };
     juce::Label sensitivityLabel;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SampleEditor)

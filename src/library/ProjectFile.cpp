@@ -176,6 +176,12 @@ juce::String ProjectDocument::toJson() const
         if (c.instrument == Instrument::Drums)
             o->setProperty ("kit", kitSpecToVar (i < kitSpecs.size() ? kitSpecs[i] : KitSpec::empty()));
         o->setProperty ("sample", juce::String (i < sampleSources.size() ? sampleSources[i] : std::string()));
+        if (c.instrument == Instrument::Sampler)
+        {
+            o->setProperty ("sampler", samplerSettingsToVar (c.sampler));
+            if (i < programSpecs.size() && ! programSpecs[i].empty())
+                o->setProperty ("program", programSpecToVar (programSpecs[i]));
+        }
         o->setProperty ("rootPitch", c.rootPitch);
         o->setProperty ("volume", number (static_cast<double> (c.volume)));
         o->setProperty ("pan", number (static_cast<double> (c.pan)));
@@ -416,6 +422,8 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
         c.mixerTrack = readInt (o->getProperty ("mixerTrack"), std::min (i, kMaxTracks - 1), 0, kMaxTracks - 1);
 
         d.kitSpecs.push_back (c.instrument == Instrument::Drums ? kitSpecFromVar (o->getProperty ("kit")) : KitSpec::empty());
+        c.sampler = samplerSettingsFromVar (o->getProperty ("sampler")); // older files: the defaults (one-shot)
+        d.programSpecs.push_back (programSpecFromVar (o->getProperty ("program")));
         d.channels.push_back (std::move (c));
         d.sampleSources.push_back (o->getProperty ("sample").toString().toStdString());
     }
@@ -713,6 +721,8 @@ void forEachSource (ProjectDocument& d, Visit&& visit)
         for (auto& pad : spec.pads)
             for (auto& s : pad.sources)
                 visit (s);
+    for (auto& spec : d.programSpecs)
+        visit (spec.file);
     for (auto& clip : d.arrangement.audioClips)
         if (clip.data != nullptr)
         {

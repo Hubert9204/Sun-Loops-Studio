@@ -4,6 +4,7 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <cstring>
 #include <cstdlib>
 #include <iostream>
 #include <new>
@@ -31,6 +32,7 @@
 #include "audio/Auditioner.h"
 #include "audio/DrumKit.h"
 #include "library/DrumKitFile.h"
+#include "library/SoundFont.h"
 #include "audio/SampleEdit.h"
 #include "audio/TimeStretch.h"
 #include "audio/NoteRecorder.h"
@@ -5860,6 +5862,440 @@ void testSeekAndLoopRegion()
     }
 }
 
+// ------------------------------------------------------------------------- 0.16.0: the advanced sampler
+
+float rmsWindow (const std::vector<float>& x, double fromSeconds, double toSeconds)
+{
+    const int a = static_cast<int> (fromSeconds * kSr), b = std::min (static_cast<int> (toSeconds * kSr), static_cast<int> (x.size()));
+    double sum = 0.0;
+    for (int i = a; i < b; ++i)
+        sum += static_cast<double> (x[static_cast<size_t> (i)]) * x[static_cast<size_t> (i)];
+    return b > a ? static_cast<float> (std::sqrt (sum / (b - a))) : 0.0f;
+}
+
+void testAdvancedSampler()
+{
+    std::cout << "Advanced sampler: envelope, loop, filter, zones\n";
+    const auto longSine = sineSample (440.0, 3.0, kSr);
+    const auto shortSine = sineSample (440.0, 0.1, kSr);
+    const auto play = [] (const sls::Project& project, double seconds, std::vector<float>* right = nullptr)
+    {
+        sls::Player p;
+        p.prepare (kSr);
+        return renderBlocks (p, project, true, seconds, right);
+    };
+    const auto oneNote = [&] (sls::Channel c, int lengthTicks = kBeat, int pitch = 60, float velocity = 0.8f)
+    {
+        c.notes = { { pitch, 0, lengthTicks, velocity } };
+        return sls::Project::make ({ c }, 16 * kBeat);
+    };
+
+    // One-shot (the default): the sample rings past the end of the note.
+    auto c = samplerChannel (longSine, {});
+    auto out = play (oneNote (c), 2.0);
+    check (rmsWindow (out, 1.2, 1.4) > 0.05f, "default sampler: one-shot, the sample rings on after a 0.5 s note");
+
+    // Envelope: the note ends at its length, with the release.
+    c.sampler.envelope = true;
+    c.sampler.attack = 0.002f;
+    c.sampler.release = 0.05f;
+    out = play (oneNote (c), 2.0);
+    check (rmsWindow (out, 0.2, 0.4) > 0.05f && rmsWindow (out, 0.6, 2.0) < 0.001f, "envelope on: the note sounds while held and ends after its release");
+    c.sampler.release = 0.6f;
+    out = play (oneNote (c), 2.0);
+    check (rmsWindow (out, 0.7, 0.8) > 0.02f && rmsWindow (out, 1.2, 2.0) < 0.001f, "a longer release rings on after the note, then stops");
+    c.sampler.release = 0.05f;
+    c.sampler.attack = 0.4f;
+    out = play (oneNote (c), 1.0);
+    check (rmsWindow (out, 0.0, 0.05) < 0.25f * rmsWindow (out, 0.42, 0.48), "attack: the note fades in");
+    c.sampler.attack = 0.002f;
+    c.sampler.decay = 0.05f;
+    c.sampler.sustain = 0.25f;
+    out = play (oneNote (c, 2 * kBeat), 1.5);
+    const float early = rmsWindow (out, 0.003, 0.006), held = rmsWindow (out, 0.5, 0.9);
+    check (held > 0.2f * early && held < 0.32f * early, "decay and sustain: the level settles at the sustain level (25 %)");
+    c.sampler.sustain = 0.0f;
+    out = play (oneNote (c, 4 * kBeat), 1.0);
+    check (rmsWindow (out, 0.3, 1.0) < 0.001f, "a sustain level of zero: the note dies away during the decay");
+
+    // Loop: a 0.1 s sample sounds for the whole note.
+    auto looped = samplerChannel (shortSine, {});
+    out = play (oneNote (looped, 2 * kBeat), 1.5);
+    check (rmsWindow (out, 0.3, 0.9) < 0.001f, "(without a loop the short sample is over after 0.1 s)");
+    looped.sampler.loop = sls::LoopMode::Forward;
+    out = play (oneNote (looped, 2 * kBeat), 1.5);
+    check (rmsWindow (out, 0.3, 0.9) > 0.9f * rmsWindow (out, 0.0, 0.09), "a forward loop keeps the short sample sounding while the note is held");
+    check (rmsWindow (out, 1.1, 1.5) < 0.001f, "and the loop stops when the note ends");
+    check (toneEnergy (out.data(), 4800, 43200, 440.0) > 0.1, "the loop keeps the pitch (440 Hz over the loop points)");
+
+    // Filter.
+    auto bright = samplerChannel (sineSample (4000.0, 1.0, kSr), {});
+    const float open = rmsWindow (play (oneNote (bright), 0.5), 0.1, 0.4);
+    bright.sampler.filter = sls::SamplerFilter::LowPass;
+    bright.sampler.cutoff = 0.4f; // about 316 Hz
+    const float lowPassed = rmsWindow (play (oneNote (bright), 0.5), 0.1, 0.4);
+    check (lowPassed < 0.05f * open, "low-pass at 316 Hz takes a 4 kHz tone down by more than 26 dB");
+    auto deep = samplerChannel (sineSample (100.0, 1.0, kSr), {});
+    const float deepOpen = rmsWindow (play (oneNote (deep), 0.5), 0.1, 0.4);
+    deep.sampler.filter = sls::SamplerFilter::HighPass;
+    deep.sampler.cutoff = 0.7f; // about 2.5 kHz
+    check (rmsWindow (play (oneNote (deep), 0.5), 0.1, 0.4) < 0.05f * deepOpen, "high-pass at 2.5 kHz takes a 100 Hz tone down by more than 26 dB");
+    deep.sampler.filter = sls::SamplerFilter::LowPass;
+    deep.sampler.cutoff = 1.0f;
+    const float passed = rmsWindow (play (oneNote (deep), 0.5), 0.1, 0.4);
+    check (passed > 0.9f * deepOpen && passed < 1.1f * deepOpen, "a fully open low-pass leaves the level alone");
+
+    // Zones by key and velocity.
+    auto program = std::make_shared<sls::SamplerProgram>();
+    sls::SampleZone low, high, soft, loud;
+    low.sample = sineSample (440.0, 1.0, kSr); low.rootKey = 69; low.loKey = 0; low.hiKey = 70;
+    high.sample = sineSample (880.0, 1.0, kSr); high.rootKey = 81; high.loKey = 71; high.hiKey = 90;
+    soft.sample = sineSample (300.0, 1.0, kSr); soft.rootKey = 100; soft.loKey = 100; soft.hiKey = 100; soft.hiVel = 64;
+    loud.sample = sineSample (600.0, 1.0, kSr); loud.rootKey = 100; loud.loKey = 100; loud.hiKey = 100; loud.loVel = 65; loud.pan = -1.0f;
+    program->zones = { low, high, soft, loud };
+    sls::Channel multi;
+    multi.instrument = sls::Instrument::Sampler;
+    multi.program = program;
+    out = play (oneNote (multi, kBeat, 69), 0.4);
+    check (toneEnergy (out.data(), 2400, 14400, 440.0) > 0.1 && toneEnergy (out.data(), 2400, 14400, 880.0) < 0.01, "key 69 plays the low zone at its root pitch");
+    out = play (oneNote (multi, kBeat, 76), 0.4);
+    check (toneEnergy (out.data(), 2400, 14400, 880.0 * std::pow (2.0, -5.0 / 12.0)) > 0.1, "key 76 plays the high zone, 5 semitones under its root");
+    out = play (oneNote (multi, kBeat, 100, 0.3f), 0.4);
+    check (toneEnergy (out.data(), 2400, 14400, 300.0) > 0.02 && toneEnergy (out.data(), 2400, 14400, 600.0) < 0.002, "a soft hit plays the soft layer");
+    std::vector<float> right;
+    out = play (oneNote (multi, kBeat, 100, 1.0f), 0.4, &right);
+    check (toneEnergy (out.data(), 2400, 14400, 600.0) > 0.1 && toneEnergy (right.data(), 2400, 14400, 600.0) < 0.001,
+           "a hard hit plays the loud layer, panned hard left as the zone says");
+    out = play (oneNote (multi, kBeat, 120), 0.4);
+    check (peakOf (out.data(), 0, static_cast<int> (out.size())) == 0.0f, "a key no zone answers to is silent");
+
+    // A program swapped while it sounds: the voice stops (the old audio may be freed); the same program goes on.
+    {
+        sls::Player p;
+        p.prepare (kSr);
+        auto first = oneNote (multi, 4 * kBeat, 69);
+        renderBlocks (p, first, true, 0.2);
+        auto same = first;
+        same.revision = 7;
+        auto keep = renderBlocks (p, same, true, 0.1);
+        check (rmsWindow (keep, 0.0, 0.1) > 0.05f, "a new snapshot with the same program keeps the note");
+        auto other = multi;
+        auto copy = std::make_shared<sls::SamplerProgram> (*program);
+        copy->zones[0].sample = sineSample (440.0, 1.0, kSr);
+        other.program = copy;
+        auto swapped = oneNote (other, 4 * kBeat, 69);
+        swapped.revision = 8;
+        auto after = renderBlocks (p, swapped, true, 0.1);
+        check (peakOf (after.data(), 0, static_cast<int> (after.size())) == 0.0f, "a program whose audio changed stops the voices of the old one");
+    }
+
+    // Live notes hold with an envelope; no allocation with zones, loops, filters and envelopes.
+    {
+        auto live = samplerChannel (longSine, {});
+        live.sampler.envelope = true;
+        live.sampler.release = 0.02f;
+        const auto project = sls::Project::make ({ live }, 16 * kBeat);
+        sls::Player p;
+        p.prepare (kSr);
+        p.liveNoteOn (project, 0, 60, 0.8f);
+        auto heldOut = renderBlocks (p, project, false, 0.6);
+        check (rmsWindow (heldOut, 0.4, 0.6) > 0.05f, "a sampler note played by hand with the envelope on sounds while held");
+        p.liveNoteOff (0, 60);
+        auto tail = renderBlocks (p, project, false, 0.2);
+        check (rmsWindow (tail, 0.1, 0.2) < 0.001f, "and stops after the key is let go");
+
+        std::vector<sls::Note> notes;
+        for (int i = 0; i < 64; ++i)
+            notes.push_back ({ 60 + i % 40, i * 60, 200, 0.2f + 0.01f * (i % 60) });
+        auto busy = multi;
+        busy.notes = notes;
+        busy.sampler.envelope = true;
+        busy.sampler.filter = sls::SamplerFilter::BandPass;
+        busy.sampler.cutoff = 0.5f;
+        auto busyLoop = looped;
+        busyLoop.notes = notes;
+        busyLoop.sampler.filter = sls::SamplerFilter::HighPass;
+        const auto heavy = sls::Project::make ({ busy, busyLoop }, 4 * kBeat);
+        std::vector<float> l (256), r (256);
+        float* ch[2] = { l.data(), r.data() };
+        sls::Player z;
+        z.prepare (kSr);
+        gAllocs = 0;
+        gCounting = true;
+        for (int i = 0; i < 2000; ++i)
+            z.render (heavy, 140.0, true, ch, 2, 256);
+        gCounting = false;
+        check (gAllocs.load() == 0, "no allocation with zones, loops, filters and envelopes (2000 blocks)");
+    }
+
+    // Hostile settings are clamped.
+    sls::SamplerSettings bad;
+    bad.attack = std::nanf ("");
+    bad.sustain = 7.0f;
+    bad.loopStart = 0.9f;
+    bad.loopEnd = 0.1f;
+    bad.cutoff = -3.0f;
+    bad.loop = static_cast<sls::LoopMode> (9);
+    const auto fixed = bad.sanitised();
+    check (std::isfinite (fixed.attack) && fixed.sustain == 1.0f && fixed.loopStart < fixed.loopEnd && fixed.cutoff == 0.0f && fixed.loop == sls::LoopMode::Off,
+           "hostile sampler settings are clamped");
+    sls::SamplerProgram badProgram;
+    sls::SampleZone weird;
+    weird.sample = shortSine;
+    weird.loKey = 90; weird.hiKey = 10; weird.loopStart = 4000; weird.loopEnd = 999999; weird.loop = sls::LoopMode::Forward; weird.gain = 1e9f;
+    sls::SampleZone empty;
+    badProgram.zones = { weird, empty };
+    const auto cleaned = badProgram.sanitised();
+    check (cleaned.zones.size() == 1 && cleaned.zones[0].hiKey >= cleaned.zones[0].loKey && cleaned.zones[0].loopEnd <= shortSine->numFrames()
+               && cleaned.zones[0].gain <= 4.0f,
+           "a damaged program: zones without audio removed, ranges and loop points put right");
+}
+
+// A minimal SoundFont 2 file: two mono samples (a 440 Hz and an 880 Hz sine, 0.5 s at 22050 Hz), one instrument with two zones
+// (keys 0..72 play the first, looped, root key 69; keys 73..127 play the second, root key 81, panned right, 60 cB down), one preset.
+juce::MemoryBlock makeSoundFont()
+{
+    juce::MemoryOutputStream out;
+    const auto chunk = [] (juce::MemoryOutputStream& to, const char* id, const juce::MemoryBlock& data)
+    {
+        to.write (id, 4);
+        to.writeInt (static_cast<int> (data.getSize()));
+        to.write (data.getData(), data.getSize());
+        if (data.getSize() % 2 != 0)
+            to.writeByte (0);
+    };
+    const auto list = [&] (const char* type, const juce::MemoryBlock& body)
+    {
+        juce::MemoryOutputStream b;
+        b.write (type, 4);
+        b.write (body.getData(), body.getSize());
+        return b.getMemoryBlock();
+    };
+    const auto name20 = [] (juce::MemoryOutputStream& to, const char* name)
+    {
+        char buf[20] = {};
+        std::strncpy (buf, name, 19);
+        to.write (buf, 20);
+    };
+
+    const int rate = 22050, frames = rate / 2, gap = 46;
+    juce::MemoryOutputStream smpl;
+    for (const double hz : { 440.0, 880.0 })
+    {
+        for (int i = 0; i < frames; ++i)
+            smpl.writeShort (static_cast<short> (std::lround (12000.0 * std::sin (6.283185307179586 * hz * i / rate))));
+        for (int i = 0; i < gap; ++i)
+            smpl.writeShort (0);
+    }
+
+    juce::MemoryOutputStream info, ifil;
+    ifil.writeShort (2); ifil.writeShort (1);
+    chunk (info, "ifil", ifil.getMemoryBlock());
+    juce::MemoryOutputStream isng; isng.write ("EMU8000\0", 8); chunk (info, "isng", isng.getMemoryBlock());
+    juce::MemoryOutputStream inam; inam.write ("Test\0\0", 6); chunk (info, "INAM", inam.getMemoryBlock());
+
+    juce::MemoryOutputStream sdta;
+    chunk (sdta, "smpl", smpl.getMemoryBlock());
+
+    juce::MemoryOutputStream pdta, phdr, pbag, pmod, pgen, inst, ibag, imod, igen, shdr;
+    name20 (phdr, "Test Sines"); phdr.writeShort (0); phdr.writeShort (0); phdr.writeShort (0); phdr.writeInt (0); phdr.writeInt (0); phdr.writeInt (0);
+    name20 (phdr, "EOP"); phdr.writeShort (0); phdr.writeShort (0); phdr.writeShort (1); phdr.writeInt (0); phdr.writeInt (0); phdr.writeInt (0);
+    pbag.writeShort (0); pbag.writeShort (0);
+    pbag.writeShort (1); pbag.writeShort (0);
+    for (int i = 0; i < 10; ++i) pmod.writeByte (0);
+    pgen.writeShort (41); pgen.writeShort (0); // instrument 0
+    pgen.writeShort (0); pgen.writeShort (0);
+    name20 (inst, "Sines"); inst.writeShort (0);
+    name20 (inst, "EOI"); inst.writeShort (2);
+    ibag.writeShort (0); ibag.writeShort (0);
+    ibag.writeShort (4); ibag.writeShort (0);
+    ibag.writeShort (9); ibag.writeShort (0);
+    for (int i = 0; i < 10; ++i) imod.writeByte (0);
+    // zone 1: keyRange 0..72, root 69, loop continuously, sample 0
+    igen.writeShort (43); igen.writeByte (0); igen.writeByte (72);
+    igen.writeShort (58); igen.writeShort (69);
+    igen.writeShort (54); igen.writeShort (1);
+    igen.writeShort (53); igen.writeShort (0);
+    // zone 2: keyRange 73..127, root 81, pan right (+500), attenuation 60 cB, sample 1
+    igen.writeShort (43); igen.writeByte (73); igen.writeByte (127);
+    igen.writeShort (58); igen.writeShort (81);
+    igen.writeShort (17); igen.writeShort (500);
+    igen.writeShort (48); igen.writeShort (60);
+    igen.writeShort (53); igen.writeShort (1);
+    igen.writeShort (0); igen.writeShort (0);
+    const auto sampleHeader = [&] (const char* name, int start, int end, int loopStart, int loopEnd, int pitch)
+    {
+        name20 (shdr, name);
+        shdr.writeInt (start); shdr.writeInt (end); shdr.writeInt (loopStart); shdr.writeInt (loopEnd); shdr.writeInt (rate);
+        shdr.writeByte (static_cast<char> (pitch)); shdr.writeByte (0); shdr.writeShort (0); shdr.writeShort (name[0] == 'E' ? 0 : 1);
+    };
+    sampleHeader ("A440", 0, frames, 1000, 1000 + 50 * 10, 69); // the loop is 10 periods of 440 Hz at 22050 Hz (50.11 frames each: close enough)
+    sampleHeader ("A880", frames + gap, 2 * frames + gap, frames + gap, 2 * frames + gap - 1, 81);
+    sampleHeader ("EOS", 0, 0, 0, 0, 0);
+    chunk (pdta, "phdr", phdr.getMemoryBlock()); chunk (pdta, "pbag", pbag.getMemoryBlock()); chunk (pdta, "pmod", pmod.getMemoryBlock());
+    chunk (pdta, "pgen", pgen.getMemoryBlock()); chunk (pdta, "inst", inst.getMemoryBlock()); chunk (pdta, "ibag", ibag.getMemoryBlock());
+    chunk (pdta, "imod", imod.getMemoryBlock()); chunk (pdta, "igen", igen.getMemoryBlock()); chunk (pdta, "shdr", shdr.getMemoryBlock());
+
+    juce::MemoryOutputStream body;
+    body.write ("sfbk", 4);
+    chunk (body, "LIST", list ("INFO", info.getMemoryBlock()));
+    chunk (body, "LIST", list ("sdta", sdta.getMemoryBlock()));
+    chunk (body, "LIST", list ("pdta", pdta.getMemoryBlock()));
+    chunk (out, "RIFF", body.getMemoryBlock());
+    return out.getMemoryBlock();
+}
+
+void testSoundFont()
+{
+    std::cout << "SoundFont files\n";
+    const auto dir = freshTempDir ("sls-sf2");
+    const auto file = dir.getChildFile ("test.sf2");
+    const auto font = makeSoundFont();
+    file.replaceWithData (font.getData(), font.getSize());
+
+    juce::String error;
+    const auto presets = sls::listSoundFontPresets (file, error);
+    check (presets.size() == 1 && presets[0].name == "Test Sines" && error.isEmpty(), "the preset list of a SoundFont is read");
+
+    sls::SamplerSettings suggested;
+    const auto program = sls::loadSoundFont (file, 0, error, &suggested);
+    check (program != nullptr && program->zones.size() == 2 && program->name == "Test Sines" && program->preset == 0
+               && program->source == file.getFullPathName().toStdString(),
+           "a preset becomes a sampler program with one zone per region");
+    if (program == nullptr || program->zones.size() != 2)
+        return;
+    const auto& a = program->zones[0];
+    const auto& b = program->zones[1];
+    check (a.loKey == 0 && a.hiKey == 72 && a.rootKey == 69 && b.loKey == 73 && b.hiKey == 127 && b.rootKey == 81, "key ranges and root keys");
+    check (a.loop == sls::LoopMode::Forward && a.loopStart == 1000 && a.loopEnd == 1500 && b.loop == sls::LoopMode::Off, "loop points (the first zone loops)");
+    check (b.pan > 0.9f && std::abs (b.gain - 0.759f) < 0.01f && std::abs (a.gain - 1.0f) < 1.0e-3f, "pan and attenuation (60 cB = 2.4 dB, the 0.4 factor of EMU and FluidSynth)");
+    check (a.sample->sampleRate == 22050.0 && std::abs (a.sample->numFrames() - 11025) <= 1, "the sample is copied at its own rate and length");
+    check (suggested.envelope, "suggested settings: the envelope on (SoundFont notes sustain)");
+
+    // It plays: key 69 is the first sample at its own pitch, key 81 the second, panned right.
+    sls::Channel c;
+    c.instrument = sls::Instrument::Sampler;
+    c.program = program;
+    c.sampler = suggested;
+    c.notes = { { 69, 0, 4 * kBeat, 0.9f } };
+    sls::Player p;
+    p.prepare (kSr);
+    auto out = renderBlocks (p, sls::Project::make ({ c }, 16 * kBeat), true, 1.5);
+    check (toneEnergy (out.data(), 4800, 19200, 440.0) > 0.02, "key 69 plays 440 Hz");
+    check (rmsWindow (out, 1.0, 1.4) > 0.02f, "and keeps sounding after the 0.5 s sample, through its loop");
+    c.notes = { { 81, 0, kBeat, 0.9f } };
+    sls::Player q;
+    q.prepare (kSr);
+    std::vector<float> right;
+    out = renderBlocks (q, sls::Project::make ({ c }, 16 * kBeat), true, 0.4, &right);
+    check (toneEnergy (right.data(), 2400, 14400, 880.0) > 0.03 && toneEnergy (out.data(), 2400, 14400, 880.0) < 0.2 * toneEnergy (right.data(), 2400, 14400, 880.0),
+           "key 81 plays 880 Hz, on the right");
+
+    check (sls::loadSoundFont (file, 5, error) == nullptr && error.isNotEmpty(), "a preset that does not exist is refused");
+    const auto junk = dir.getChildFile ("junk.sf2");
+    junk.replaceWithText ("RIFF....sfbk not really");
+    error.clear();
+    check (sls::loadSoundFont (junk, 0, error) == nullptr && error.isNotEmpty() && sls::listSoundFontPresets (junk, error).empty(),
+           "a damaged file is refused with a message");
+    error.clear();
+    check (sls::loadSoundFont (dir.getChildFile ("missing.sf2"), 0, error) == nullptr && error.contains ("does not exist"), "a missing file is refused");
+    // Truncated files must not crash.
+    const auto whole = makeSoundFont();
+    for (const size_t cut : { size_t { 12 }, size_t { 60 }, whole.getSize() / 2, whole.getSize() - 30 })
+    {
+        const auto part = dir.getChildFile ("cut.sf2");
+        part.replaceWithData (whole.getData(), cut);
+        error.clear();
+        sls::loadSoundFont (part, 0, error);
+    }
+    check (true, "truncated SoundFont files do not crash the loader");
+    dir.deleteRecursively();
+}
+
+void testSamplerPersistence()
+{
+    std::cout << "Sampler settings, slices and programs in the project file\n";
+    // Slices of one sample: one zone per slice, one key each, from key 60.
+    auto whole = std::make_shared<sls::SampleData> (*sineData (48000, kSr, 440.0, 0.5f, "/tmp/loop.wav"));
+    const auto sliced = sls::makeSliceProgram (whole, { 12000, 24000, 36000, 47999, -5, 999999 }, 60, "Loop");
+    check (sliced.zones.size() == 4 && sliced.zones[0].sample->numFrames() == 12000 && sliced.zones[3].sample->numFrames() == 11999
+               && sliced.zones[2].loKey == 62 && sliced.zones[2].hiKey == 62 && sliced.zones[2].rootKey == 62,
+           "slices: one zone per slice on consecutive keys at their own pitch (bad positions and a one-frame slice left out)");
+    check (sliced.zones[1].sample->left[0] == whole->left[12000], "a slice starts where its marker is");
+    const auto spec = sls::specFromProgram (sliced);
+    check (spec.kind == sls::ProgramSpec::Kind::Slices && spec.file == "/tmp/loop.wav" && spec.firstKey == 60 && spec.starts.size() == 5,
+           "the slice program's spec names the file and the slice starts");
+
+    juce::String error;
+    const auto reloaded = sls::loadProgram (spec, [&] (const juce::File&, juce::String&) { return std::shared_ptr<const sls::SampleData> (whole); }, error);
+    check (reloaded != nullptr && reloaded->zones.size() == 4 && reloaded->zones[3].sample->numFrames() == 11999, "a slice program is made again from its spec");
+    const auto missing = sls::loadProgram (spec, [] (const juce::File&, juce::String& e) { e = "gone"; return std::shared_ptr<const sls::SampleData>(); }, error);
+    check (missing == nullptr && error == "gone", "a missing sliced file gives an error");
+    const auto placeholder = sls::missingProgram (spec);
+    check (placeholder->zones.empty() && sls::specFromProgram (*placeholder).starts == spec.starts, "a placeholder keeps the spec, so saving does not lose it");
+
+    // Project file round trip.
+    auto doc = sls::ProjectDocument::blank();
+    doc.channels[0].instrument = sls::Instrument::Sampler;
+    doc.channels[0].sampler.envelope = true;
+    doc.channels[0].sampler.attack = 0.25f;
+    doc.channels[0].sampler.sustain = 0.4f;
+    doc.channels[0].sampler.loop = sls::LoopMode::Forward;
+    doc.channels[0].sampler.loopStart = 0.2f;
+    doc.channels[0].sampler.filter = sls::SamplerFilter::BandPass;
+    doc.channels[0].sampler.cutoff = 0.3f;
+    doc.channels[0].sampler.resonance = 0.6f;
+    sls::ProgramSpec font;
+    font.kind = sls::ProgramSpec::Kind::SoundFont;
+    font.file = "/somewhere/piano.sf2";
+    font.preset = 3;
+    doc.programSpecs = { font };
+    auto parsed = sls::ProjectDocument::fromJson (doc.toJson());
+    const auto& c = parsed.document->channels[0];
+    check (parsed.document && c.sampler.envelope && std::abs (c.sampler.attack - 0.25f) < 1e-6f && std::abs (c.sampler.sustain - 0.4f) < 1e-6f
+               && c.sampler.loop == sls::LoopMode::Forward && std::abs (c.sampler.loopStart - 0.2f) < 1e-6f && c.sampler.filter == sls::SamplerFilter::BandPass
+               && std::abs (c.sampler.resonance - 0.6f) < 1e-6f,
+           "sampler settings are saved and read back");
+    check (parsed.document->programSpecs.size() == 1 && parsed.document->programSpecs[0].kind == sls::ProgramSpec::Kind::SoundFont
+               && parsed.document->programSpecs[0].file == "/somewhere/piano.sf2" && parsed.document->programSpecs[0].preset == 3,
+           "the SoundFont preset of a channel is saved and read back");
+    doc.programSpecs = { spec };
+    parsed = sls::ProjectDocument::fromJson (doc.toJson());
+    check (parsed.document && parsed.document->programSpecs[0].kind == sls::ProgramSpec::Kind::Slices && parsed.document->programSpecs[0].starts == spec.starts,
+           "a slice program is saved and read back");
+    auto older = juce::JSON::parse (sls::ProjectDocument::blank().toJson());
+    parsed = sls::ProjectDocument::fromJson (juce::JSON::toString (older));
+    check (parsed.document && ! parsed.document->channels[0].sampler.envelope && parsed.document->channels[0].sampler.loop == sls::LoopMode::Off,
+           "older files: the sampler is one-shot as before");
+    auto hostile = juce::JSON::parse (doc.toJson());
+    auto* ch0 = (*hostile.getDynamicObject()->getProperty ("channels").getArray())[0].getDynamicObject();
+    auto* sampler = ch0->getProperty ("sampler").getDynamicObject();
+    sampler->setProperty ("attack", -40);
+    sampler->setProperty ("cutoff", "loud");
+    sampler->setProperty ("loop", "sideways");
+    ch0->setProperty ("program", "nonsense");
+    parsed = sls::ProjectDocument::fromJson (juce::JSON::toString (hostile));
+    check (parsed.document && parsed.document->channels[0].sampler.attack == 0.0f && parsed.document->channels[0].sampler.cutoff == 1.0f
+               && parsed.document->channels[0].sampler.loop == sls::LoopMode::Off && parsed.document->programSpecs[0].empty(),
+           "hostile sampler values are clamped, a bad program is ignored");
+
+    // Export with samples copies the SoundFont too.
+    const auto dir = freshTempDir ("sls-sf2-export");
+    const auto sf2 = dir.getChildFile ("src/piano.sf2");
+    sf2.getParentDirectory().createDirectory();
+    const auto font2 = makeSoundFont();
+    sf2.replaceWithData (font2.getData(), font2.getSize());
+    font.file = sf2.getFullPathName().toStdString();
+    doc.programSpecs = { font };
+    juce::StringArray notes;
+    check (sls::exportProjectWithSamples (doc, dir.getChildFile ("Out"), "Song", notes).isEmpty() && dir.getChildFile ("Out/Samples/piano.sf2").existsAsFile(),
+           "export with samples copies the SoundFont");
+    const auto back = sls::readProjectFile (dir.getChildFile ("Out/Song.slp"));
+    check (back.document && back.document->programSpecs[0].file == dir.getChildFile ("Out/Samples/piano.sf2").getFullPathName().toStdString(),
+           "and the project finds it there");
+    dir.deleteRecursively();
+}
+
 int main()
 {
     testProjectModel();
@@ -5916,6 +6352,9 @@ int main()
     testChannelRemap();
     testProjectWithSamples();
     testPatternLength();
+    testAdvancedSampler();
+    testSoundFont();
+    testSamplerPersistence();
 
     std::cout << "\n" << (failures == 0 ? "ALL TESTS PASSED" : "SOME TESTS FAILED") << " (" << failures << " failures)\n";
     return failures == 0 ? 0 : 1;
