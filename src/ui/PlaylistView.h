@@ -53,6 +53,8 @@ public:
     std::function<void (const drag::Item&, int, int)> onItemDropped;
     std::function<void (int)> onTrackSelected;
     std::function<void (int)> onEditSample; // an audio clip's "Edit sample..." was chosen: its index
+    std::function<void (int)> onSeek;       // the ruler was clicked: the song position (ticks)
+    std::function<void()> onLoopChanged;    // the loop region was made, changed or deleted
     juce::String useEditedAudio (int index, const std::shared_ptr<const SampleData>& expected, std::shared_ptr<const SampleData> edited,
                                  const std::vector<double>& sliceSeconds)
     {

@@ -27,6 +27,12 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.15.0
+The audio thread gained `Player::seek`, `locate`, `startClipsInside` and `jumpTo` (binary searches and a loop over the audio events, no allocation: tested while
+seeking and looping). `PlaylistTimeline.cpp` is now ~2 100 lines with the ruler and loop-region handling: still the first file to split (ruler / clips / lanes).
+The undo history copies the whole editable state at every edit and serialises it to compare; this is simple and correct but grows with the project (not timed on
+large projects). clang-tidy (the audit's check set) was run on the new and changed files; see the commit message for what it found.
+
 ## After 0.14.0
 Block G changed the audio thread in one place: `Player::drumNoteOn` (a loop over at most 32 voices for the choke group, then the same voice allocation as before) and two more multiplications per sampler voice sample. A test
 counts allocations while a busy drum pattern plays and swaps the kit under sounding voices. `Player::takeVoice` is the former inline allocation, unchanged in behaviour. `DrumMachine.cpp` is a new UI file (about 800 lines: the next candidate to split into the pad / inspector / step grid parts); the

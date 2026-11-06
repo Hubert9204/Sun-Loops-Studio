@@ -105,11 +105,11 @@ void MainComponent::createAutomationFor (const AutomationTarget& target)
 
     // A clip lasts one pattern. It starts at the playhead's pattern while the song plays, otherwise at the start of the song.
     const int playhead = songMode && engine.isPlaying() ? engine.getPlayheadTick() : 0;
-    const int start = (std::max (0, playhead) / kLoopTicks) * kLoopTicks;
+    const int start = (std::max (0, playhead) / arrangement.patternTicks) * arrangement.patternTicks;
     const auto range = automationRange (target, type);
     const float value = std::clamp (currentValueOf (target), range.min, range.max);
 
-    const int index = playlistView.addAutomationClip (makeFlatAutomationClip (target, 0, start, kLoopTicks, value), start);
+    const int index = playlistView.addAutomationClip (makeFlatAutomationClip (target, 0, start, arrangement.patternTicks, value), start);
     if (index < 0)
     {
         statusLabel.setText ("No room for another automation clip (the four lanes are full there, or the limit of "

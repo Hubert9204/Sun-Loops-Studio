@@ -17,7 +17,8 @@ namespace sls
 // renderer know nothing about patterns: they just play notes in a loop.
 
 constexpr int kPlaylistTracks = 8;
-constexpr int kPlaylistUnits = 32;     // timeline length; one unit = one pattern length
+constexpr int kPlaylistUnits = 32;     // the timeline holds at least this many patterns (see Arrangement::timelineUnits); one unit = one pattern length
+constexpr int kPatternBarChoices[] = { 1, 2, 4, 8 }; // the pattern lengths offered, in bars of 4/4
 constexpr int kMaxPatterns = 64;
 
 struct Pattern
@@ -74,8 +75,29 @@ struct Arrangement
     std::vector<AudioClip> audioClips;
     int patternTicks = 8 * kTicksPerBeat; // length of one pattern = one playlist unit
     std::vector<AutomationClip> automationClips; // on the lanes under the tracks; they play in Song mode
+    // The loop region drawn on the playlist's ruler (ticks; -1 / -1 when there is none). In Song mode the transport goes
+    // back to its start when it reaches its end.
+    int loopStartTick = -1;
+    int loopEndTick = -1;
 
-    int timelineTicks() const noexcept { return kPlaylistUnits * patternTicks; }
+    bool hasLoop() const noexcept { return loopStartTick >= 0 && loopEndTick > loopStartTick && loopEndTick <= timelineTicks(); }
+    // Sets the loop region; false (and no region) when it does not fit in the timeline or is shorter than one 16th.
+    bool setLoop (int startTick, int endTick) noexcept
+    {
+        if (startTick < 0 || endTick - startTick < kSixteenthTicks || endTick > timelineTicks())
+        {
+            clearLoop();
+            return false;
+        }
+        loopStartTick = startTick;
+        loopEndTick = endTick;
+        return true;
+    }
+    void clearLoop() noexcept { loopStartTick = loopEndTick = -1; }
+
+    // The timeline holds at least kPlaylistUnits patterns and at least 64 bars (shorter patterns: more of them).
+    int timelineUnits() const noexcept { return std::max (kPlaylistUnits, kPlaylistUnits * 8 * kTicksPerBeat / std::max (1, patternTicks)); }
+    int timelineTicks() const noexcept { return timelineUnits() * patternTicks; }
 
     // Does an audio clip fit: inside the timeline, on an existing track, and clear of every other clip
     // (pattern or audio) on that track? (Audio clips start on any tick: the playlist's snap setting decides how coarse
@@ -206,7 +228,7 @@ struct Arrangement
             return false;
         if (c.track < 0 || c.track >= kPlaylistTracks)
             return false;
-        if (c.startUnit < 0 || c.lengthUnits < 1 || c.endUnit() > kPlaylistUnits)
+        if (c.startUnit < 0 || c.lengthUnits < 1 || c.endUnit() > timelineUnits())
             return false;
 
         for (int i = 0; i < static_cast<int> (clips.size()); ++i)
@@ -308,6 +330,44 @@ inline Project compilePattern (const std::vector<Channel>& channelSettings, cons
         }
     }
     return Project::make (std::move (channels), arrangement.patternTicks, std::move (tracks), masterSlots, {}, {}, std::move (console));
+}
+
+// Channels were deleted, moved or cloned: `newToOld[n]` is the old index of new channel n (an old index may appear twice, a
+// clone, or not at all, a deleted channel). Every pattern's notes follow; automation clips that move a channel's volume or pan
+// follow its first copy and are removed with a deleted channel.
+inline void remapArrangementChannels (Arrangement& arrangement, const std::vector<int>& newToOld, size_t oldCount)
+{
+    std::vector<int> oldToNew (oldCount, -1);
+    for (size_t n = 0; n < newToOld.size(); ++n)
+    {
+        const int old = newToOld[n];
+        if (old >= 0 && static_cast<size_t> (old) < oldCount && oldToNew[static_cast<size_t> (old)] < 0)
+            oldToNew[static_cast<size_t> (old)] = static_cast<int> (n);
+    }
+
+    for (auto& pattern : arrangement.patterns)
+    {
+        pattern.notes.resize (std::max (pattern.notes.size(), oldCount));
+        std::vector<std::vector<Note>> notes;
+        notes.reserve (newToOld.size());
+        for (const int old : newToOld)
+            notes.push_back (old >= 0 && static_cast<size_t> (old) < oldCount ? pattern.notes[static_cast<size_t> (old)] : std::vector<Note> {});
+        pattern.notes = std::move (notes);
+    }
+
+    auto& clips = arrangement.automationClips;
+    clips.erase (std::remove_if (clips.begin(), clips.end(),
+                                 [&] (AutomationClip& c)
+                                 {
+                                     if (c.target.kind != AutomationKind::ChannelVolume && c.target.kind != AutomationKind::ChannelPan)
+                                         return false;
+                                     if (c.target.index < 0 || static_cast<size_t> (c.target.index) >= oldCount
+                                         || oldToNew[static_cast<size_t> (c.target.index)] < 0)
+                                         return true;
+                                     c.target.index = oldToNew[static_cast<size_t> (c.target.index)];
+                                     return false;
+                                 }),
+                 clips.end());
 }
 
 // The whole playlist laid out on one timeline: what "song mode" plays. Loops over the end of the last clip

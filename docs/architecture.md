@@ -47,10 +47,12 @@ src/plugins/PluginScanner.*     VST3 discovery. Only feeds the browser's Plugin 
 
 src/ui/
   MainComponent.*               Toolbar, workspace, panel wiring, channels, layout persistence, the demo project, timer
-  MainComponent{Patterns,Import,Recording,Notes,Browser,Project,Automation}.cpp
-                                The rest of MainComponent's member functions, one file per area: patterns and playlist; sample / audio /
-                                MIDI import and audio clips; audio recording; note undo and MIDI-keyboard note recording; browser, presets,
-                                export; project files, recent projects, the File menu; creating and editing automation clips
+  MainComponent{Patterns,Import,Recording,Notes,Browser,Project,Automation,Drums,SampleEditor,Channels,History,Safety}.cpp
+                                The rest of MainComponent's member functions, one file per area: patterns, pattern length and playlist; sample /
+                                audio / MIDI import and audio clips; audio recording; MIDI-keyboard note recording; browser, presets, export;
+                                project files, recent projects, the File menu; automation clips; the drum machine window; the sample editor;
+                                deleting / moving / cloning channels; the project-wide undo history; autosave, crash recovery, backup and
+                                export with samples
   AutomatableSlider.h           A slider whose right-click menu offers "Create automation clip"
   AutomationEditor.*            The point editor window for one automation clip
   MetersView.*                  The Meters window: loudness read-outs, true peak, spectrum, goniometer, correlation
@@ -287,6 +289,23 @@ reads nothing back (the sample in memory is used, `source` set to the new path) 
 (ClipEdit.h, pure, tested) on a copy of the arrangement: the clip gets the new audio from its start, the longest length that fits (binary search on
 `canPlaceAudio`), and `splitAudioClip` at each slice point; only a successful result is committed, as one undo step. `openSampleEditorForChannel` replaces
 the channel's sample instead. The project file is unchanged: clips and channels still store only the path.
+
+### Seeking, the loop region and the undo history (0.15.0)
+
+The UI asks for a new song position with `AudioEngine::requestSeek (tick)` (an atomic); the audio callback hands it to `Player::seek` before `render`. A seek
+releases the sounding voices (as Stop does), moves `tickPos`, re-locates the next note of every channel and the next audio clip (`locate`, a binary search per
+channel, the same code `onProjectChanged` uses) and, while playing, starts the audio clips that cover the new position from the matching frame
+(`startClipsInside`). It also becomes `startPosition`, where Stop puts the transport (before 0.15.0 Stop always went to 0). The loop region travels in the
+snapshot (`Project::loopStartTick / loopEndTick`, set by `MainComponent::publishProject` in Song mode only, so exports never see it): in the per-sample transport
+step, crossing `loopEndTick` from before it calls `jumpTo (loopStart + overshoot)`, and the end of the song jumps to the region instead of wrapping to 0. All of it is
+allocation-free and covered by a test that seeks and loops for 2000 blocks while counting allocations.
+
+The project-wide undo (`MainComponentHistory.cpp`) records, at every `publishProject`, a copy of the editable state (channels, arrangement, tracks, master chain,
+console, current pattern, tempo, master volume) together with its project-file text; the text decides whether anything changed and the state before an edit is
+pushed unless the edit continues a mouse gesture (button still down). Restoring rebuilds the strips (they hold references into `channels`) and refreshes the mixer;
+the Playlist's and the old note histories are cleared because their steps no longer match. Deleting, moving and cloning channels go through
+`remapArrangementChannels` (Arrangement.h, plain C++, tested): one list "new channel n comes from old channel k" moves the notes of every pattern and the channel
+automation clips.
 
 ### Drum machine (0.14.0)
 

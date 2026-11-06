@@ -16,13 +16,13 @@ Sun Loops Studio is inspired by the workflow of loop-based DAWs such as FL Studi
 that uses no code, names, graphics or assets from other products, and it is not affiliated with or endorsed by
 their makers.
 
-**Status: alpha (0.14.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
+**Status: alpha (0.15.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
 display. Playback was confirmed on a real Nobara machine for version 0.3; everything added since (panels, patterns,
 playlist, browser, pitch/swing, the expanded mixer and its effects, saving projects, the AppImage, audio clips, drag and
 drop, recording, MIDI, the metronome and the export formats) was tested headless and in a virtual display with a silent
 audio device, not yet with real audio, microphones or MIDI hardware. **Hosting VST3 plugins is not implemented**: the mixer's effect
 slots hold Sun Loops Studio's own Equalizer, Reverb, Delay and Compressor. See [docs/roadmap.md](docs/roadmap.md) for
-exactly what is and is not verified and what is missing (VST3 hosting and undo are the big ones).
+exactly what is and is not verified and what is missing (VST3 hosting is the big one).
 
 ## Features
 
@@ -32,15 +32,15 @@ exactly what is and is not verified and what is missing (VST3 hosting and undo a
 - **Browser** (left sidebar, `F8` folds it away) - a tree with *Samples*, *Drum Kits*, *Instruments*, *Presets* and
   *Plugin*, a quick-search box, and drag-and-drop (or double-click) of sounds onto a channel of the Channel Rack.
   Your own files live in `~/Music/Sun Loops Studio/`.
-- **Channel Rack** - up to 8 channels, each a synth or a sampler. 16th-note step sequencer on sampler channels,
+- **Channel Rack** - up to 32 channels, each a synth, a sampler or a drum machine. 16th-note step sequencer on sampler channels,
   note preview on synth channels. Per channel: volume, pan, a **Pitch** knob (semitones) and a **Swing** knob, and a
   **Track N** display that sends the channel to a mixer track. Right-click a channel for *Piano roll*, *Instrument*,
-  *Load sample...*, *Rename...*, *Assign free mixer track*, *Save as preset...*.
+  *Load sample...*, *Rename...*, *Clone*, *Move up / down*, *Delete*, *Assign free mixer track*, *Save as preset...*.
 - **Piano Roll** - for the selected channel: click to add a note, drag to move, drag the right edge to resize,
   right-click to delete, scroll and zoom. Opens from a channel (menu or double-click), as in FL Studio.
 - **Patterns and Playlist** - several patterns (new, cloned, renamed or deleted from buttons above the playlist), arranged
-  as clips on 8 tracks. A *Pattern / Song* switch chooses between looping the selected pattern and playing the whole
-  playlist.
+  as clips on 8 tracks; patterns are 1, 2, 4 or 8 bars long. A *Pattern / Song* switch chooses between looping the selected pattern and playing the whole
+  playlist. **Click the ruler to move the playhead, even while playing; right-drag on it to draw a loop region** (right-click it to move, resize or delete it).
 - **Audio in the Playlist** - drag audio files (`.wav .aiff .flac .ogg .oga .mp3 .aac`) or video files (their sound
   track) from the file manager onto the Playlist: they become clips with a waveform. **Select, Split, Cut, Erase and Zoom
   tools**, trimming from both edges, a grid down to one tick, undo/redo and a ruler in minutes:seconds.milliseconds
@@ -53,7 +53,9 @@ exactly what is and is not verified and what is missing (VST3 hosting and undo a
   [docs/cyber-hub.md](docs/cyber-hub.md).
 - **MIDI import, legato and slide, note undo** - a Standard MIDI File (File menu, or dropped on the Playlist) becomes new
   channels and patterns; notes can be joined with **legato** or a pitch **slide** (Shift+click in the Piano Roll); **Ctrl+Z / Ctrl+Y**
-  undo and redo note edits (the Playlist has its own undo).
+  undo and redo any edit (notes, channels, kits, mixer, patterns; the Playlist also has its own clip undo).
+- **Safety** - autosave every minute, recovery after a crash, a `.bak` of the previous version, and *Export project with samples* to move a
+  project to another computer.
 - **Metronome** - a click with adjustable tempo (and tap tempo) and volume, on its own button.
 - **Mixer** (`F9`) - 8 vertical tracks, each with a fader and dB read-out, stereo balance, mute, solo, a Peak/RMS
   meter and 4 insert-effect slots (Equalizer, Reverb, Delay, Compressor, each with bypass), two **sends** (pre or post fader)

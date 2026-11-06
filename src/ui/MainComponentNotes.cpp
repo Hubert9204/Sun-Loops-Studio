@@ -125,7 +125,7 @@ void MainComponent::redoNotes()
 
 void MainComponent::applyNoteRecording()
 {
-    noteRecorder.configure (kLoopTicks, noteQuantize);
+    noteRecorder.configure (arrangement.patternTicks, noteQuantize);
     noteRecordButton.setToggleState (noteRecordOn, juce::dontSendNotification);
     engine.setNoteRecording (noteRecordOn);
     if (settings != nullptr)

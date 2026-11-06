@@ -373,6 +373,10 @@ void ChannelStrip::showContextMenu()
     menu.addItem (4, "Load sample...", channel.instrument == Instrument::Sampler);
     menu.addItem (8, "Edit sample...", channel.instrument == Instrument::Sampler && channel.sample != nullptr && channel.sample->numFrames() > 1);
     menu.addItem (5, "Rename...");
+    menu.addItem (11, "Clone channel");
+    menu.addItem (12, "Move up", index > 0);
+    menu.addItem (13, "Move down");
+    menu.addItem (14, "Delete channel...");
     menu.addSeparator();
     menu.addItem (7, "Assign free mixer track");
     menu.addItem (6, "Save as preset...", channel.instrument != Instrument::Drums);
@@ -396,6 +400,10 @@ void ChannelStrip::showContextMenu()
                                 case 5: if (safe->onRename) safe->onRename (i); break;
                                 case 6: if (safe->onSavePreset) safe->onSavePreset (i); break;
                                 case 7: if (safe->onAssignTrack) safe->onAssignTrack (i); break;
+                                case 11: if (safe->onClone) safe->onClone (i); break;
+                                case 12: if (safe->onMove) safe->onMove (i, -1); break;
+                                case 13: if (safe->onMove) safe->onMove (i, 1); break;
+                                case 14: if (safe->onDelete) safe->onDelete (i); break;
                                 default: break;
                             }
                         });

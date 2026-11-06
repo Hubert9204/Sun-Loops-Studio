@@ -77,12 +77,72 @@ void MainComponent::showNewPatternMenu (juce::Component& target)
     juce::PopupMenu menu;
     menu.addItem (1, "New empty pattern");
     menu.addItem (2, "Clone current pattern");
+    juce::PopupMenu lengths;
+    const int bars = arrangement.patternTicks / (4 * kTicksPerBeat);
+    for (const int choice : kPatternBarChoices)
+        lengths.addItem (100 + choice, juce::String (choice) + (choice == 1 ? " bar" : " bars"), true, choice == bars);
+    menu.addSeparator();
+    menu.addSubMenu ("Pattern length (all patterns)", lengths);
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&target),
                         [safe = juce::Component::SafePointer<MainComponent> (this)] (int result)
                         {
-                            if (safe != nullptr && result != 0)
+                            if (safe == nullptr || result == 0)
+                                return;
+                            if (result > 100)
+                                safe->setPatternLength (result - 100);
+                            else
                                 safe->addPattern (result == 2);
                         });
+}
+
+void MainComponent::showPatternLength()
+{
+    const int ticks = arrangement.patternTicks;
+    pianoRoll.setLoopLengthTicks (ticks);
+    for (auto& strip : strips)
+    {
+        strip->setLoopLengthTicks (ticks);
+        strip->refreshFromChannel();
+    }
+    if (drumWindow != nullptr)
+        drumWindow->view().setLoopTicks (ticks);
+    noteRecorder.configure (ticks, noteQuantize);
+}
+
+// Every pattern gets the new length (a playlist unit is one pattern long, so pattern clips keep their place in units:
+// with longer patterns the song gets longer). Notes past the end of a shorter pattern are kept but not played, and come
+// back when the patterns are made longer again. Refused when something would no longer fit in the timeline.
+void MainComponent::setPatternLength (int bars)
+{
+    const int ticks = bars * 4 * kTicksPerBeat;
+    if (ticks == arrangement.patternTicks)
+        return;
+    auto changed = arrangement;
+    changed.patternTicks = ticks;
+    bool fits = true;
+    for (const auto& c : changed.clips)
+        fits = fits && c.endUnit() <= changed.timelineUnits();
+    for (const auto& a : changed.audioClips)
+        fits = fits && a.endTick() <= changed.timelineTicks();
+    for (const auto& a : changed.automationClips)
+        fits = fits && a.endTick() <= changed.timelineTicks();
+    if (! fits)
+    {
+        statusLabel.setText ("The playlist would not fit in the timeline with " + juce::String (bars) + "-bar patterns: move the last clips first",
+                             juce::dontSendNotification);
+        return;
+    }
+    commitCurrentPattern();
+    arrangement.patternTicks = ticks;
+    if (! arrangement.hasLoop())
+        arrangement.clearLoop();
+    showPatternLength();
+    playlistView.clearHistory();
+    playlistView.refreshTimeline();
+    pianoRoll.setNotes (channels[static_cast<size_t> (selected)].notes);
+    songStartTick = std::min (songStartTick, arrangement.timelineTicks() - 1);
+    publishProject();
+    statusLabel.setText ("Patterns are " + juce::String (bars) + (bars == 1 ? " bar" : " bars") + " long", juce::dontSendNotification);
 }
 
 void MainComponent::renamePattern (int index)
@@ -222,6 +282,17 @@ void MainComponent::setSongMode (bool shouldPlaySong)
     modeButton.setButtonText (songMode ? "Song" : "Pattern");
     statusLabel.setText (songMode ? "Playing the playlist" : "Looping the selected pattern", juce::dontSendNotification);
     publishProject();
+    if (! engine.isPlaying())
+        engine.requestSeek (songMode ? songStartTick : 0); // a pattern starts at its beginning; the song where it was put
+}
+
+void MainComponent::seekSong (int tick)
+{
+    if (! songMode)
+        setSongMode (true); // the ruler of the playlist is the song's
+    songStartTick = std::max (0, tick);
+    engine.requestSeek (songStartTick);
+    playlistView.setPlayheadTick (songStartTick);
 }
 
 Project MainComponent::compileCurrent()

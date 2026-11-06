@@ -74,6 +74,10 @@ public:
     std::function<void (int)> onPatternPicked;        // a clip was double-clicked: its pattern index
     std::function<void (PlaylistTool)> onToolChanged; // a key changed the tool
     std::function<void (double)> onZoomChanged;       // pixels per tick
+    // Left click (or drag) on the ruler: move the song position to this tick (snapped to the grid; Alt: no snap).
+    std::function<void (int)> onSeek;
+    // The loop region (Arrangement::loopStartTick / loopEndTick) was made, moved, resized or deleted on the ruler.
+    std::function<void()> onLoopChanged;
     // Text for the two readouts under the timeline: the position under the mouse, and the selected clip.
     std::function<void (const juce::String&, const juce::String&)> onReadout;
 
@@ -135,7 +139,10 @@ public:
 
 
 private:
-    enum class Drag { None, MovePattern, ResizePattern, MoveAudio, ResizeAudio, TrimAudio, CutRange, EraseSweep, ZoomRange, MoveAutomation, ResizeAutomation };
+    enum class Drag { None, MovePattern, ResizePattern, MoveAudio, ResizeAudio, TrimAudio, CutRange, EraseSweep, ZoomRange, MoveAutomation, ResizeAutomation,
+                      Seek, LoopCreate, LoopPress, LoopMove, LoopResizeStart, LoopResizeEnd };
+    // After "Move" or "Resize" in the loop region's menu the region follows the mouse until a click (right click / Escape: back as it was).
+    enum class LoopMode { None, Move, Resize };
     enum class Kind { None, Pattern, Audio, Automation };
 
     struct Selection
@@ -161,6 +168,16 @@ private:
     void pruneWaveformCache();
     void paintAudioClip (juce::Graphics& g, const AudioClip& clip, bool selected);
     void paintRuler (juce::Graphics& g);
+    void paintLoopRegion (juce::Graphics& g);
+    // Loop region on the ruler.
+    int loopStep() const noexcept { return std::max (kSixteenthTicks, snapTicks); } // the grid the region snaps to
+    int loopSnap (int tick, bool noSnap) const noexcept;
+    bool onLoopRegion (int x) const noexcept;
+    int loopEdgeAt (int x) const noexcept; // -1 start edge, +1 end edge, 0 none
+    bool placeLoop (int start, int end);   // clamps into the timeline; true when the region changed
+    void showLoopMenu();
+    void followLoopMode (int x);
+    void endLoopMode (bool keep);
     void paintGrid (juce::Graphics& g);
 
     static constexpr int kNameWidth = 64;
@@ -253,6 +270,13 @@ private:
     int hoverTrack = -1;
     int hoverTick = 0;
     int lastMouseX = 0, lastMouseY = 0;
+
+    LoopMode loopMode = LoopMode::None;
+    int loopAnchor = 0;                          // LoopCreate: the tick where the right button went down
+    int loopGrab = 0;                            // LoopMove / Move mode: mouse tick minus region start when grabbed
+    int loopOriginalStart = -1, loopOriginalEnd = -1; // the region before a gesture or a mode (to cancel)
+    int loopResizeEdge = 0;                      // Resize mode: the edge that follows the mouse
+    int pressX = 0;                              // LoopPress: where the right button went down
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PlaylistTimeline)
 };

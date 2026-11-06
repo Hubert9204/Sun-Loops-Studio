@@ -100,6 +100,7 @@ void MainComponent::applyDocument (ProjectDocument doc, const juce::File& file, 
     const juce::ScopedValueSetter<bool> loading (ignoreDirty, true);
 
     setPlaying (false);
+    clearHistory(); // the first publish below records the opened project as the starting point
     pianoRoll.setNotes ({}); // also ends a note that is being played by hand
     closeDrumMachine();      // it points at a channel of the old project
 
@@ -151,7 +152,6 @@ void MainComponent::applyDocument (ProjectDocument doc, const juce::File& file, 
 
     closeAutomationEditor(); // its clip index would point into the old arrangement
     arrangement = std::move (doc.arrangement);
-    arrangement.patternTicks = kLoopTicks;
     arrangement.ensureChannelCount (channels.size());
     loadAudioClipFiles (problems);
     currentPattern = std::clamp (doc.currentPattern, 0, static_cast<int> (arrangement.patterns.size()) - 1);
@@ -163,6 +163,7 @@ void MainComponent::applyDocument (ProjectDocument doc, const juce::File& file, 
     for (size_t i = 0; i < channels.size(); ++i)
         createStrip (i);
     refreshRackStrips();
+    showPatternLength();
 
     for (int t = 0; t < kMaxTracks; ++t)
         mixerPanel.refreshTrack (t);
@@ -181,6 +182,7 @@ void MainComponent::applyDocument (ProjectDocument doc, const juce::File& file, 
     playlistView.clearHistory(); // the arrangement was changed from outside: undo could not restore it safely
     resetNoteHistory();
     playlistView.repaint();
+    songStartTick = arrangement.hasLoop() ? arrangement.loopStartTick : 0;
     setSongMode (doc.songMode);
     selectChannel (0);
     updateTrackRouting();
@@ -193,6 +195,9 @@ void MainComponent::applyDocument (ProjectDocument doc, const juce::File& file, 
 
 bool MainComponent::saveProjectTo (const juce::File& file)
 {
+    // The previous version stays next to it as "<name>.slp.bak" (one generation).
+    if (file.existsAsFile())
+        file.copyFileTo (file.getSiblingFile (file.getFileName() + ".bak"));
     const auto error = writeProjectFile (file, makeDocument());
     if (error.isNotEmpty())
     {
@@ -371,8 +376,9 @@ void MainComponent::showFileMenu()
     menu.addSeparator();
     menu.addItem (item (3, "Save", "Ctrl+S"));
     menu.addItem (item (4, "Save As...", "Ctrl+Shift+S"));
-    menu.addItem (item (9, "Undo a note edit", "Ctrl+Z", ! noteUndo.empty()));
-    menu.addItem (item (10, "Redo a note edit", "Ctrl+Y", ! noteRedo.empty()));
+    menu.addItem (item (11, "Export project with samples...", ""));
+    menu.addItem (item (9, "Undo", "Ctrl+Z", ! undoHistory.empty()));
+    menu.addItem (item (10, "Redo", "Ctrl+Y", ! redoHistory.empty()));
     menu.addSeparator();
     menu.addItem (item (6, "Import audio or video into the playlist...", ""));
     menu.addItem (item (8, "Import a MIDI file into patterns...", ""));
@@ -412,8 +418,9 @@ void MainComponent::showFileMenu()
                                 case 5: safe->library.ensureExists(); safe->library.projects.revealToUser(); break;
                                 case 6: safe->chooseMediaToImport(); break;
                                 case 8: safe->chooseMidiToImport(); break;
-                                case 9: safe->undoNotes(); break;
-                                case 10: safe->redoNotes(); break;
+                                case 9: safe->undoEdit(); break;
+                                case 11: safe->exportProjectFolder(); break;
+                                case 10: safe->redoEdit(); break;
                                 case 7:
                                     if (safe->settings != nullptr)
                                     {

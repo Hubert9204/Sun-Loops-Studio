@@ -99,6 +99,8 @@ public:
         metronomeVolume.store (volume, std::memory_order_relaxed);
     }
     int getPlayheadTick() const noexcept       { return playheadTick.load (std::memory_order_relaxed); }
+    // Moves the song position to `tick` (playing or stopped); it is also where Stop returns to. Applied by the next audio block.
+    void requestSeek (int tick) noexcept { seekRequest.store (std::max (0, tick), std::memory_order_release); }
 
     // Peak since the last call (master, and per mixer channel).
     float consumePeak() noexcept { return peak.exchange (0.0f, std::memory_order_relaxed); }
@@ -231,5 +233,6 @@ private:
     std::array<std::atomic<float>, kAuxBuses> auxPeaks {};
     std::array<std::atomic<float>, kAuxBuses> auxRms {};
     std::atomic<int> playheadTick { 0 };
+    std::atomic<int> seekRequest { -1 };
 };
 } // namespace sls

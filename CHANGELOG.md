@@ -2,6 +2,33 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.15.0 - 2026-11-06
+
+### Added
+- **Song position from the ruler.** A left click on the Playlist's ruler moves the playhead there, also **while the song plays** (playback carries on from
+  the new place at once); dragging scrubs. Stop returns to the last place you clicked, so Play starts there again; an audio clip already under the playhead
+  starts from that point of its sound. The click snaps to the grid (Alt: free) and switches to Song mode.
+- **Loop region.** Right click and drag on the ruler draws a loop region (a blue *LOOP* bar, shaded over the tracks); in Song mode the song repeats it. Right
+  click on it: **Move**, **Resize**, **Zoom to region**, **Delete loop region** (removes only the highlight). Right drag moves it, right drag on an edge resizes it.
+  Saved in the project; exports ignore it.
+- **Channels:** up to **32** (was 8); right-click menu **Clone channel**, **Move up / Move down**, **Delete channel...** (notes in every pattern and channel automation follow).
+- **Undo / redo of everything** (Ctrl+Z / Ctrl+Y and the File menu): channel settings, instruments, kits, notes, patterns, pattern length, the playlist, the mixer,
+  effects, sends, VCA groups, tempo, master volume. One mouse gesture is one step; 100 steps. The Playlist keeps its own clip history with the mouse over it.
+- **Pattern length** 1, 2, 4 or 8 bars for the whole project (the **+** next to the pattern box > *Pattern length*); the timeline holds at least 64 bars.
+- **Safety:** autosave once a minute while there are unsaved changes, **recovery after a crash** at the next start, the previous version kept as `<name>.slp.bak`
+  when saving over it, and **File > Export project with samples...** (a folder with the project and copies of all its sounds, referred to by relative paths;
+  relative paths are now understood when opening a project).
+- **Continuous integration:** `.github/workflows/build.yml` builds on Fedora 41 and runs the tests on every push.
+
+### Changed
+- The old note-only undo of the Piano Roll and the step sequencer is replaced by the project-wide history.
+- Projects store `patternBars` and `loopRegion`; older versions ignore them (a project with 4- or 8-bar patterns opens in an older version with its notes cut to two bars).
+
+### Limits
+- Recording still starts at the beginning of the song (no punch-in); the loop region only works in Song mode and live.
+- The pattern length is the same for every pattern; no time signatures or tempo changes.
+- Not heard on real hardware; see the roadmap.
+
 ## 0.14.0 - 2026-11-06
 
 ### Added

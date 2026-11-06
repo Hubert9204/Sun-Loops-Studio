@@ -224,6 +224,8 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* in, int 
             player.liveNoteOff (live.channel, live.pitch);
     }
 
+    if (const int seekTo = seekRequest.exchange (-1, std::memory_order_acq_rel); seekTo >= 0)
+        player.seek (*project, seekTo, currentBpm);
     player.setMetronome (metronomeOn.load (std::memory_order_relaxed), metronomeVolume.load (std::memory_order_relaxed));
     player.render (*project, currentBpm, isPlaying, out, numOut, numSamples);
     playheadTick.store (static_cast<int> (player.getPositionTicks()), std::memory_order_relaxed);

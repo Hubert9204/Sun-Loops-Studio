@@ -3,6 +3,7 @@
 #include "library/JsonRead.h"
 
 #include <algorithm>
+#include <map>
 #include <cmath>
 
 namespace sls
@@ -266,6 +267,7 @@ juce::String ProjectDocument::toJson() const
         patternList.add (juce::var (o));
     }
     root->setProperty ("patterns", patternList);
+    root->setProperty ("patternBars", arrangement.patternTicks / (4 * kTicksPerBeat));
 
     juce::Array<juce::var> clipList;
     for (const auto& c : arrangement.clips)
@@ -329,6 +331,14 @@ juce::String ProjectDocument::toJson() const
         automationList.add (juce::var (o));
     }
     root->setProperty ("automation", automationList);
+
+    if (arrangement.hasLoop())
+    {
+        auto* loop = new juce::DynamicObject();
+        loop->setProperty ("start", arrangement.loopStartTick);
+        loop->setProperty ("end", arrangement.loopEndTick);
+        root->setProperty ("loopRegion", juce::var (loop));
+    }
 
     return juce::JSON::toString (juce::var (root), false);
 }
@@ -471,6 +481,15 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
         if (auto* slots = master->getProperty ("effects").getArray())
             for (int s = 0; s < std::min (slots->size(), kSlotsPerTrack); ++s)
                 d.masterSlots[static_cast<size_t> (s)] = readSlot ((*slots)[s]);
+
+    // --- pattern length (0.15.0; older files: two bars)
+    {
+        const int bars = readInt (root->getProperty ("patternBars"), 2, 1, 8);
+        const bool offered = std::find (std::begin (kPatternBarChoices), std::end (kPatternBarChoices), bars) != std::end (kPatternBarChoices);
+        if (! offered)
+            r.warnings.push_back ("The pattern length " + std::to_string (bars) + " bars is not offered; two bars are used.");
+        d.arrangement.patternTicks = (offered ? bars : 2) * 4 * kTicksPerBeat;
+    }
 
     // --- patterns
     auto* patternList = root->getProperty ("patterns").getArray();
@@ -622,6 +641,12 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
     if (droppedAutomation > 0)
         r.warnings.push_back (std::to_string (droppedAutomation) + " automation clip(s) could not be placed and were left out.");
 
+    // --- the playlist's loop region (0.15.0; older files have none)
+    if (auto* loop = root->getProperty ("loopRegion").getDynamicObject())
+        if (! d.arrangement.setLoop (readInt (loop->getProperty ("start"), -1, -1, 100000000),
+                                     readInt (loop->getProperty ("end"), -1, -1, 100000000)))
+            r.warnings.push_back ("The loop region did not fit in the playlist and was left out.");
+
     d.arrangement.ensureChannelCount (numChannels);
 
     result.document = std::move (d);
@@ -660,7 +685,91 @@ ProjectParseResult readProjectFile (const juce::File& file)
         result.error = "Cannot read " + file.getFileName().toStdString() + ".";
         return result;
     }
-    return ProjectDocument::fromJson (in.readEntireStreamAsString());
+    auto parsed = ProjectDocument::fromJson (in.readEntireStreamAsString());
+    if (parsed.document.has_value())
+        resolveRelativeSources (*parsed.document, file.getParentDirectory());
+    return parsed;
+}
+
+namespace
+{
+bool isRelativeSource (const std::string& source)
+{
+    return ! source.empty() && source.rfind ("builtin:", 0) != 0 && ! juce::File::isAbsolutePath (juce::String (source));
+}
+
+std::string resolved (const std::string& source, const juce::File& folder)
+{
+    return isRelativeSource (source) ? folder.getChildFile (juce::String (source)).getFullPathName().toStdString() : source;
+}
+
+// Every place a project refers to a sound file, as a reference that can be read and replaced.
+template <typename Visit>
+void forEachSource (ProjectDocument& d, Visit&& visit)
+{
+    for (auto& s : d.sampleSources)
+        visit (s);
+    for (auto& spec : d.kitSpecs)
+        for (auto& pad : spec.pads)
+            for (auto& s : pad.sources)
+                visit (s);
+    for (auto& clip : d.arrangement.audioClips)
+        if (clip.data != nullptr)
+        {
+            auto source = clip.data->source;
+            const auto before = source;
+            visit (source);
+            if (source != before)
+                clip.data = makeMissingSample (source); // only the reference is written to a file; the caller loads the audio
+        }
+}
+} // namespace
+
+void resolveRelativeSources (ProjectDocument& d, const juce::File& projectFolder)
+{
+    forEachSource (d, [&] (std::string& s) { s = resolved (s, projectFolder); });
+}
+
+juce::String exportProjectWithSamples (ProjectDocument d, const juce::File& folder, const juce::String& name, juce::StringArray& notes)
+{
+    if (folder.exists() && ! (folder.isDirectory() && folder.getNumberOfChildFiles (juce::File::findFilesAndDirectories) == 0))
+        return "The folder " + folder.getFullPathName() + " already exists and is not empty.";
+    const auto samples = folder.getChildFile ("Samples");
+    if (! samples.createDirectory().wasOk())
+        return "Cannot create the folder " + samples.getFullPathName();
+
+    std::map<std::string, std::string> copied; // original path -> "Samples/<name>"
+    juce::String error;
+    forEachSource (d, [&] (std::string& s)
+    {
+        if (s.empty() || s.rfind ("builtin:", 0) == 0 || error.isNotEmpty())
+            return;
+        if (const auto it = copied.find (s); it != copied.end())
+        {
+            s = it->second;
+            return;
+        }
+        const juce::File original { juce::String (s) };
+        if (! original.existsAsFile())
+        {
+            notes.addIfNotAlreadyThere ("Not found, left as it was: " + original.getFullPathName());
+            return;
+        }
+        auto target = samples.getChildFile (original.getFileName());
+        for (int n = 2; target.exists(); ++n)
+            target = samples.getChildFile (original.getFileNameWithoutExtension() + "-" + juce::String (n) + original.getFileExtension());
+        if (! original.copyFileTo (target))
+        {
+            error = "Cannot copy " + original.getFullPathName();
+            return;
+        }
+        const auto relative = ("Samples/" + target.getFileName()).toStdString();
+        copied[s] = relative;
+        s = relative;
+    });
+    if (error.isNotEmpty())
+        return error;
+    return writeProjectFile (withProjectExtension (folder.getChildFile (name)), d);
 }
 
 juce::String writeProjectFile (const juce::File& file, const ProjectDocument& document)

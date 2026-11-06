@@ -66,6 +66,9 @@ public:
     std::function<void (int)> onOpenDrumMachine; // drum channels: "Drum machine..." in the menu, or a double click (instead of the piano roll)
     std::function<void (int, Instrument)> onInstrumentChosen; // context menu "Instrument"
     std::function<void (int)> onRename;        // context menu "Rename..."
+    std::function<void (int)> onDelete;        // context menu "Delete channel..."
+    std::function<void (int)> onClone;         // context menu "Clone channel"
+    std::function<void (int, int)> onMove;     // context menu "Move up" (-1) / "Move down" (+1)
     std::function<void (int)> onSavePreset;    // context menu "Save as preset..."
     std::function<void (int)> onAssignTrack;   // context menu "Assign free mixer track"
     std::function<void (int, const drag::Item&)> onItemDropped; // something was dropped from the browser

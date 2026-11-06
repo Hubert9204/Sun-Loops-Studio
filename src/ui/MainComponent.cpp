@@ -1,5 +1,7 @@
 #include "ui/MainComponent.h"
 
+#include "audio/TimeFormat.h"
+
 #include "ui/AssignTrackDialog.h"
 #include "ui/AudioSettings.h"
 #include "ui/MetronomePanel.h"
@@ -265,7 +267,7 @@ MainComponent::MainComponent()
     bpmSlider.setRange (40.0, 240.0, 1.0);
     bpmSlider.setValue (kDemoBpm, juce::dontSendNotification);
     engine.setBpm (kDemoBpm);
-    bpmSlider.onValueChange = [this] { engine.setBpm (bpmSlider.getValue()); playlistView.setBpm (bpmSlider.getValue()); markDirty(); };
+    bpmSlider.onValueChange = [this] { engine.setBpm (bpmSlider.getValue()); playlistView.setBpm (bpmSlider.getValue()); markDirty(); recordHistory(); };
 
     volumeSlider.setRange (0.0, 1.0, 0.01);
     volumeSlider.setValue (0.8, juce::dontSendNotification);
@@ -274,6 +276,7 @@ MainComponent::MainComponent()
         engine.setGain (static_cast<float> (volumeSlider.getValue()));
         mixerPanel.setMasterVolume (volumeSlider.getValue());
         markDirty();
+        recordHistory();
     };
     mixerPanel.setMasterVolume (volumeSlider.getValue());
 
@@ -303,6 +306,23 @@ MainComponent::MainComponent()
     };
     playlistView.onPatternPicked = [this] (int pattern) { selectPattern (pattern); };
     playlistView.onEditSample = [this] (int index) { openSampleEditorForClip (index); };
+    playlistView.onSeek = [this] (int tick) { seekSong (tick); };
+    playlistView.onLoopChanged = [this]
+    {
+        if (! songMode)
+            setSongMode (true); // the loop region belongs to the song
+        publishProject();
+        if (arrangement.hasLoop())
+        {
+            statusLabel.setText ("Loop region " + juce::String (formatBarsBeatsTicks (arrangement.loopStartTick)) + " to "
+                                     + juce::String (formatBarsBeatsTicks (arrangement.loopEndTick)) + " (Song mode repeats it)",
+                                 juce::dontSendNotification);
+            if (! engine.isPlaying())
+                seekSong (arrangement.loopStartTick); // stopped: Play starts at the region
+        }
+        else
+            statusLabel.setText ("Loop region deleted: the whole song plays", juce::dontSendNotification);
+    };
     playlistView.setAutomationLabel ([this] (const AutomationTarget& t) { return automationLabelFor (t); });
     playlistView.setAutomationPicked ([this] (int clip) { openAutomationEditor (clip); });
     playlistView.onPatternSelected = [this] (int pattern) { selectPattern (pattern); };
@@ -416,6 +436,8 @@ MainComponent::MainComponent()
                          juce::dontSendNotification);
 
     resetNoteHistory();
+    lastAutosaveMs = juce::Time::getMillisecondCounter();
+    startSession();
     startTimerHz (30);
 
     // Space and F5/F6/F7/F9 work from the start, without needing a click first.
@@ -437,6 +459,7 @@ void MainComponent::refreshRackStrips()
 MainComponent::~MainComponent()
 {
     stopTimer();
+    endSession();
     automationWindow.reset();
     sampleEditorWindow.reset();
     drumWindow.reset();
@@ -539,8 +562,8 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
     if (! overPlaylist && key.getModifiers().isCommandDown())
     {
         const auto letter = juce::CharacterFunctions::toUpperCase (static_cast<juce::juce_wchar> (key.getKeyCode()));
-        if (letter == 'Z') { if (key.getModifiers().isShiftDown()) redoNotes(); else undoNotes(); return true; }
-        if (letter == 'Y') { redoNotes(); return true; }
+        if (letter == 'Z') { if (key.getModifiers().isShiftDown()) redoEdit(); else undoEdit(); return true; }
+        if (letter == 'Y') { redoEdit(); return true; }
     }
 
     // With the mouse over the playlist its keys (Delete, Ctrl+Z/Y/C/X/V/D, 1..5 for the tools, +/- to zoom) work first.
@@ -562,6 +585,8 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
 
 void MainComponent::timerCallback()
 {
+    autosaveIfNeeded();
+
     const float masterPeak = engine.consumePeak();
     meter.setLevel (masterPeak);
 
@@ -586,7 +611,7 @@ void MainComponent::timerCallback()
     const int playhead = engine.isPlaying() ? engine.getPlayheadTick() : -1;
     const int patternPlayhead = songMode ? -1 : playhead;
     pianoRoll.setPlayheadTick (patternPlayhead);
-    playlistView.setPlayheadTick (songMode ? playhead : -1);
+    playlistView.setPlayheadTick (songMode ? engine.getPlayheadTick() : -1); // stopped: where Play will start
     if (drumWindow != nullptr)
         drumWindow->view().setPlayheadTick (patternPlayhead);
 
@@ -735,7 +760,7 @@ void MainComponent::saveLayout()
 void MainComponent::createStrip (size_t channelIndex)
 {
     auto strip = std::make_unique<ChannelStrip> (channels[channelIndex], static_cast<int> (channelIndex));
-    strip->setLoopLengthTicks (kLoopTicks);
+    strip->setLoopLengthTicks (arrangement.patternTicks);
     strip->onSelect = [this] (int idx) { selectChannel (idx); };
     strip->onChanged = [this] (int idx)
     {
@@ -760,6 +785,9 @@ void MainComponent::createStrip (size_t channelIndex)
             openDrumMachine (idx);
     };
     strip->onRename = [this] (int idx) { renameChannel (idx); };
+    strip->onDelete = [this] (int idx) { deleteChannel (idx); };
+    strip->onClone = [this] (int idx) { cloneChannel (idx); };
+    strip->onMove = [this] (int idx, int delta) { moveChannel (idx, delta); };
     strips.push_back (std::move (strip));
 }
 
@@ -844,7 +872,16 @@ void MainComponent::publishProject()
     markDirty();
     if (drumWindow != nullptr)
         drumWindow->view().refresh(); // notes or kit may have changed from somewhere else (piano roll, another pattern, undo)
-    engine.publishProject (std::make_unique<Project> (compileCurrent()));
+    auto project = std::make_unique<Project> (compileCurrent());
+    if (songMode && arrangement.hasLoop())
+    {
+        // Live playback only (exports use compileCurrent() as it is): the song runs at least to the end of the region.
+        project->loopStartTick = arrangement.loopStartTick;
+        project->loopEndTick = arrangement.loopEndTick;
+        project->lengthTicks = std::max (project->lengthTicks, arrangement.loopEndTick);
+    }
+    engine.publishProject (std::move (project));
+    recordHistory();
 }
 
 void MainComponent::selectChannel (int index)

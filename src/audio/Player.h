@@ -35,6 +35,12 @@ public:
     // zero and the sound that was playing fades out. Audio thread only (the engine calls it at the start of a recording).
     void rewind() noexcept;
 
+    // Moves the song position to `tick` (clamped into the project; past its end means the start), playing or not.
+    // The notes that are sounding stop (with the usual short fade); audio clips that cover `tick` start from the middle,
+    // at the right place in their sound. The position also becomes the place that Stop returns to. Audio thread only.
+    void seek (const Project& project, double tick, double bpm) noexcept;
+    double getStartPosition() const noexcept { return startPosition; }
+
     // Metronome: a short click on every beat (a higher, louder one on the first beat of each bar), added to the
     // output after the master effects and the limiter. While the transport plays the clicks follow it (beat 1 of the
     // loop is a downbeat); while it is stopped they run freely at `bpm`, starting at once. Off by default, so exports
@@ -124,7 +130,13 @@ private:
         std::uint64_t age = 0;
     };
 
-    void startClip (const AudioEvent& e) noexcept;
+    void startClip (const AudioEvent& e, double extraSeconds = 0.0) noexcept;
+    // The next note of every channel and the next audio clip from `tick` on (no sound changes).
+    void locate (const Project& project, double tick) noexcept;
+    // Starts the audio clips that began before `tick` and are still going there, from the matching point in their sound.
+    void startClipsInside (const Project& project, double tick, double ticksPerSecond) noexcept;
+    // Moves the transport to `tick` while it plays (the loop region and the end of the song): sounds are handled as at the loop boundary.
+    void jumpTo (const Project& project, double tick, double ticksPerSecond) noexcept;
     void releaseClips() noexcept;
 
     Voice& takeVoice() noexcept;
@@ -163,6 +175,7 @@ private:
     double sampleRate = 48000.0;
     double ticksPerSampleNow = 0.01; // of the block being rendered: converts a note's length to samples for slides
     double tickPos = 0.0;
+    double startPosition = 0.0; // where Stop puts the transport (the last seek)
     std::uint64_t projectRevision = ~std::uint64_t { 0 };
     std::uint64_t ageCounter = 0;
     bool wasPlaying = false;

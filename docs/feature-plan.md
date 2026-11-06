@@ -1,10 +1,10 @@
-# Plan for the next feature blocks (written 2026-11-06, updated for 0.14.0)
+# Plan for the next feature blocks (written 2026-11-06, updated for 0.15.0)
 
 Each block is a release of its own, in the order chosen by the maintainer. "Done" means what the repository has now.
 Effort is a rough size: S = a few days of work, M = about two weeks, L = a month or more, XL = a long project of its own.
 
 ## Already in the program
-**0.14.0: block G** (drum machine: 16 pads, velocity layers, choke groups, per-pad swing, kits as folders). **0.13.0: block E** (sample editor: destructive editing, slicing, noise reduction, live spectrum). **0.12.0: block D** (time-stretch and pitch-shift of audio clips with Signalsmith Stretch). **0.11.0: blocks A, B and C below** (automation, aux buses / sends / VCA groups, LUFS / true-peak / spectrum / goniometer meters; see the notes after the table).
+**0.15.0** (not a block: ruler seeking and loop region, 32 channels with delete / move / clone, undo of every edit, pattern length, autosave and recovery, export with samples, CI). **0.14.0: block G** (drum machine: 16 pads, velocity layers, choke groups, per-pad swing, kits as folders). **0.13.0: block E** (sample editor: destructive editing, slicing, noise reduction, live spectrum). **0.12.0: block D** (time-stretch and pitch-shift of audio clips with Signalsmith Stretch). **0.11.0: blocks A, B and C below** (automation, aux buses / sends / VCA groups, LUFS / true-peak / spectrum / goniometer meters; see the notes after the table).
 MIDI file import into patterns; legato and slide between notes of one channel (0.10.0). Basic sampler, a synth, four effects, mixer with
 tracks and master chain, audio and MIDI recording, playlist editing, metronome, export in seven formats.
 

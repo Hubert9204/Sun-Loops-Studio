@@ -31,6 +31,7 @@ const juce::Colour kCut { 0xffe5534b };
 const juce::Colour kAutomationColour { 0xff9b6bd1 };
 const juce::Colour kLaneA { 0xff262a38 };
 const juce::Colour kLaneB { 0xff232634 };
+const juce::Colour kLoop { 0xff5fb0ff };
 
 constexpr int kMaxUndo = 64;
 
@@ -105,7 +106,7 @@ int PlaylistTimeline::unitToX (int unit) const noexcept
 int PlaylistTimeline::xToUnit (int x) const noexcept
 {
     const double unit = (static_cast<double> (x - kNameWidth) + scrollX) / unitWidth;
-    return std::clamp (static_cast<int> (std::floor (unit)), 0, kPlaylistUnits - 1);
+    return std::clamp (static_cast<int> (std::floor (unit)), 0, arrangement.timelineUnits() - 1);
 }
 
 int PlaylistTimeline::yToTrack (int y) const noexcept
@@ -148,7 +149,7 @@ juce::Rectangle<int> PlaylistTimeline::audioClipRect (const AudioClip& c) const 
 
 double PlaylistTimeline::totalWidth() const noexcept
 {
-    return kPlaylistUnits * unitWidth;
+    return arrangement.timelineUnits() * unitWidth;
 }
 
 void PlaylistTimeline::clampScroll()
@@ -174,7 +175,7 @@ void PlaylistTimeline::scrollBarMoved (juce::ScrollBar*, double newRangeStart)
 void PlaylistTimeline::setUnitWidth (double newUnitWidth, int anchorX)
 {
     const double visible = std::max (1, getWidth() - kNameWidth);
-    const double minWidth = std::max (6.0, visible / kPlaylistUnits); // the whole timeline fits
+    const double minWidth = std::max (6.0, visible / arrangement.timelineUnits()); // the whole timeline fits
     const double maxWidth = arrangement.patternTicks * 1.6;          // 1 tick = 1.6 pixels
     newUnitWidth = std::clamp (newUnitWidth, minWidth, maxWidth);
 
@@ -484,6 +485,165 @@ void PlaylistTimeline::paintRuler (juce::Graphics& g)
     }
 }
 
+// ------------------------------------------------------------------------- loop region (ruler)
+
+int PlaylistTimeline::loopSnap (int tick, bool noSnap) const noexcept
+{
+    const int step = noSnap ? 1 : loopStep();
+    const int snapped = static_cast<int> (std::lround (static_cast<double> (tick) / step)) * step;
+    return std::clamp (snapped, 0, arrangement.timelineTicks());
+}
+
+bool PlaylistTimeline::onLoopRegion (int x) const noexcept
+{
+    return arrangement.hasLoop() && x >= tickToX (arrangement.loopStartTick) - kEdgeGrab / 2
+           && x <= tickToX (arrangement.loopEndTick) + kEdgeGrab / 2;
+}
+
+int PlaylistTimeline::loopEdgeAt (int x) const noexcept
+{
+    if (! arrangement.hasLoop())
+        return 0;
+    const int a = tickToX (arrangement.loopStartTick), b = tickToX (arrangement.loopEndTick);
+    if (b - a < 3 * kEdgeGrab) // too narrow to tell: only the end edge
+        return std::abs (x - b) <= kEdgeGrab ? 1 : 0;
+    if (std::abs (x - a) <= kEdgeGrab)
+        return -1;
+    if (std::abs (x - b) <= kEdgeGrab)
+        return 1;
+    return 0;
+}
+
+bool PlaylistTimeline::placeLoop (int start, int end)
+{
+    const int total = arrangement.timelineTicks();
+    const int minLength = std::min (loopStep(), total);
+    if (end < start)
+        std::swap (start, end);
+    start = std::clamp (start, 0, total - minLength);
+    end = std::clamp (end, start + minLength, total);
+    if (start == arrangement.loopStartTick && end == arrangement.loopEndTick)
+        return false;
+    arrangement.setLoop (start, end);
+    repaint();
+    if (onLoopChanged)
+        onLoopChanged();
+    return true;
+}
+
+void PlaylistTimeline::showLoopMenu()
+{
+    juce::PopupMenu menu;
+    menu.addSectionHeader ("Loop region");
+    menu.addItem (1, "Move");
+    menu.addItem (2, "Resize");
+    menu.addItem (4, "Zoom to region");
+    menu.addSeparator();
+    menu.addItem (3, "Delete loop region");
+
+    juce::Component::SafePointer<PlaylistTimeline> safe (this);
+    menu.showMenuAsync (juce::PopupMenu::Options().withMousePosition(), [safe] (int choice)
+    {
+        if (safe == nullptr || ! safe->arrangement.hasLoop())
+            return;
+        auto& self = *safe;
+        const int mouseTick = self.xToTick (self.getMouseXYRelative().x);
+        if (choice == 1 || choice == 2)
+        {
+            self.loopOriginalStart = self.arrangement.loopStartTick;
+            self.loopOriginalEnd = self.arrangement.loopEndTick;
+            if (choice == 1)
+            {
+                self.loopMode = LoopMode::Move;
+                self.loopGrab = std::clamp (mouseTick - self.arrangement.loopStartTick, 0, self.arrangement.loopEndTick - self.arrangement.loopStartTick);
+                self.setMouseCursor (juce::MouseCursor::DraggingHandCursor);
+            }
+            else
+            {
+                self.loopMode = LoopMode::Resize;
+                const int middle = (self.arrangement.loopStartTick + self.arrangement.loopEndTick) / 2;
+                self.loopResizeEdge = mouseTick < middle ? -1 : 1;
+                self.setMouseCursor (juce::MouseCursor::LeftRightResizeCursor);
+            }
+            if (self.onReadout)
+                self.onReadout (choice == 1 ? "Moving the loop region: click to place it (right click or Escape: cancel)"
+                                            : "Resizing the loop region: click to finish (right click or Escape: cancel)", {});
+        }
+        else if (choice == 3)
+        {
+            self.arrangement.clearLoop();
+            self.repaint();
+            if (self.onLoopChanged)
+                self.onLoopChanged();
+        }
+        else if (choice == 4)
+            self.zoomToTicks (self.arrangement.loopStartTick, self.arrangement.loopEndTick);
+    });
+}
+
+void PlaylistTimeline::followLoopMode (int x)
+{
+    if (loopMode == LoopMode::None || ! arrangement.hasLoop())
+        return;
+    const int mouseTick = xToTick (x);
+    const int length = arrangement.loopEndTick - arrangement.loopStartTick;
+    if (loopMode == LoopMode::Move)
+    {
+        const int start = std::clamp (loopSnap (mouseTick - loopGrab, false), 0, arrangement.timelineTicks() - length);
+        placeLoop (start, start + length);
+    }
+    else
+    {
+        const int edge = loopSnap (mouseTick, false);
+        if (loopResizeEdge < 0)
+            placeLoop (std::min (edge, arrangement.loopEndTick - loopStep()), arrangement.loopEndTick);
+        else
+            placeLoop (arrangement.loopStartTick, std::max (edge, arrangement.loopStartTick + loopStep()));
+    }
+}
+
+void PlaylistTimeline::endLoopMode (bool keep)
+{
+    if (loopMode == LoopMode::None)
+        return;
+    loopMode = LoopMode::None;
+    setMouseCursor (juce::MouseCursor::NormalCursor);
+    if (! keep && loopOriginalStart >= 0)
+        placeLoop (loopOriginalStart, loopOriginalEnd);
+    loopOriginalStart = loopOriginalEnd = -1;
+    updateReadout (lastMouseX, lastMouseY);
+}
+
+void PlaylistTimeline::paintLoopRegion (juce::Graphics& g)
+{
+    if (! arrangement.hasLoop())
+        return;
+    const int a = tickToX (arrangement.loopStartTick), b = tickToX (arrangement.loopEndTick);
+    if (b < kNameWidth || a > getWidth())
+        return;
+    const auto band = juce::Rectangle<int> (a, 0, std::max (2, b - a), kRulerHeight / 2);
+    const bool active = loopMode != LoopMode::None || drag == Drag::LoopCreate || drag == Drag::LoopMove
+                        || drag == Drag::LoopResizeStart || drag == Drag::LoopResizeEnd;
+    g.setColour (kLoop.withAlpha (active ? 0.75f : 0.55f));
+    g.fillRect (band);
+    g.setColour (kLoop);
+    g.drawRect (band, 1);
+    g.fillRect (a, 0, 2, kRulerHeight);
+    g.fillRect (b - 2, 0, 2, kRulerHeight);
+    // a faint band down the tracks, so the region can be seen against the clips
+    g.setColour (kLoop.withAlpha (0.07f));
+    g.fillRect (a, kRulerHeight, b - a, kPlaylistTracks * trackHeight());
+    g.setColour (kLoop.withAlpha (0.45f));
+    g.drawVerticalLine (a, static_cast<float> (kRulerHeight), static_cast<float> (kRulerHeight + kPlaylistTracks * trackHeight()));
+    g.drawVerticalLine (b - 1, static_cast<float> (kRulerHeight), static_cast<float> (kRulerHeight + kPlaylistTracks * trackHeight()));
+    if (b - a > 44)
+    {
+        g.setColour (juce::Colours::black.withAlpha (0.85f));
+        g.setFont (juce::FontOptions (10.5f, juce::Font::bold));
+        g.drawText ("LOOP", band.reduced (4, 0), juce::Justification::centredLeft, false);
+    }
+}
+
 void PlaylistTimeline::paint (juce::Graphics& g)
 {
     g.fillAll (kBackground);
@@ -509,6 +669,7 @@ void PlaylistTimeline::paint (juce::Graphics& g)
 
         paintGrid (g);
         paintRuler (g);
+        paintLoopRegion (g);
 
         // End of the song: song mode loops here.
         const int songUnits = arrangement.songLengthUnits();
@@ -816,6 +977,14 @@ void PlaylistTimeline::updateReadout (int x, int y)
         position = "Position " + jstr (formatBarsBeatsTicks (tick)) + "  =  " + jstr (formatSeconds (ticksToSeconds (tick, bpm)))
                  + "   Automation lane " + juce::String (yToLane (y) + 1);
     }
+    else if (x >= kNameWidth && y >= 0 && y < kRulerHeight)
+    {
+        const int tick = snapTick (xToTick (x), false);
+        position = "Click: play from " + jstr (formatBarsBeatsTicks (tick)) + "   Right drag: loop region";
+        if (onLoopRegion (x))
+            position = "Loop " + jstr (formatBarsBeatsTicks (arrangement.loopStartTick)) + " to " + jstr (formatBarsBeatsTicks (arrangement.loopEndTick))
+                     + "   Right click: Move / Resize / Delete, right drag: move (edge: resize)";
+    }
     onReadout (position, describeSelection());
 }
 
@@ -837,7 +1006,7 @@ bool PlaylistTimeline::eraseAt (int track, int tick)
         clearSelection();
         return true;
     }
-    const int pattern = arrangement.clipAt (track, std::clamp (tick / std::max (1, arrangement.patternTicks), 0, kPlaylistUnits - 1));
+    const int pattern = arrangement.clipAt (track, std::clamp (tick / std::max (1, arrangement.patternTicks), 0, arrangement.timelineUnits() - 1));
     if (pattern >= 0)
     {
         commitPendingUndo();
@@ -929,7 +1098,7 @@ bool PlaylistTimeline::splitAt (int track, int tick, bool noSnap)
         return false;
     }
 
-    const int unit = std::clamp (tick / std::max (1, arrangement.patternTicks), 0, kPlaylistUnits - 1);
+    const int unit = std::clamp (tick / std::max (1, arrangement.patternTicks), 0, arrangement.timelineUnits() - 1);
     const int pattern = arrangement.clipAt (track, unit);
     if (pattern >= 0)
     {
@@ -1013,10 +1182,10 @@ void PlaylistTimeline::pasteAt (int track, int tick)
     {
         Clip c = clipboard.pattern;
         c.track = std::clamp (track, 0, kPlaylistTracks - 1);
-        c.startUnit = std::clamp (tick / std::max (1, arrangement.patternTicks), 0, kPlaylistUnits - c.lengthUnits);
-        while (c.endUnit() <= kPlaylistUnits && ! arrangement.canPlace (c))
+        c.startUnit = std::clamp (tick / std::max (1, arrangement.patternTicks), 0, arrangement.timelineUnits() - c.lengthUnits);
+        while (c.endUnit() <= arrangement.timelineUnits() && ! arrangement.canPlace (c))
             ++c.startUnit;
-        if (c.endUnit() > kPlaylistUnits)
+        if (c.endUnit() > arrangement.timelineUnits())
             return;
         beginEdit();
         commitPendingUndo();
@@ -1185,7 +1354,7 @@ void PlaylistTimeline::showClipMenu (const juce::MouseEvent& e)
     const int track = yToTrack (e.y);
     const int tick = xToTick (e.x);
     const int audio = arrangement.audioClipAt (track, tick);
-    const int pattern = audio >= 0 ? -1 : arrangement.clipAt (track, std::clamp (tick / std::max (1, arrangement.patternTicks), 0, kPlaylistUnits - 1));
+    const int pattern = audio >= 0 ? -1 : arrangement.clipAt (track, std::clamp (tick / std::max (1, arrangement.patternTicks), 0, arrangement.timelineUnits() - 1));
     if (audio < 0 && pattern < 0)
         return;
 
@@ -1235,6 +1404,12 @@ bool PlaylistTimeline::handleKey (const juce::KeyPress& key)
     const auto mods = key.getModifiers();
     const auto code = key.getKeyCode();
     const bool command = mods.isCommandDown();
+
+    if (loopMode != LoopMode::None && code == juce::KeyPress::escapeKey)
+    {
+        endLoopMode (false);
+        return true;
+    }
 
     if (command)
     {
@@ -1295,7 +1470,21 @@ bool PlaylistTimeline::handleKey (const juce::KeyPress& key)
 
 void PlaylistTimeline::mouseMove (const juce::MouseEvent& e)
 {
+    lastMouseX = e.x;
+    lastMouseY = e.y;
+    if (loopMode != LoopMode::None)
+    {
+        followLoopMode (e.x);
+        return;
+    }
     updateReadout (e.x, e.y);
+
+    if (e.x >= kNameWidth && e.y < kRulerHeight && tool != PlaylistTool::Zoom)
+    {
+        setHover (-1, 0);
+        setMouseCursor (loopEdgeAt (e.x) != 0 ? juce::MouseCursor::LeftRightResizeCursor : juce::MouseCursor::IBeamCursor);
+        return;
+    }
 
     if (e.x >= kNameWidth && e.y >= kRulerHeight && e.y < kRulerHeight + kPlaylistTracks * trackHeight())
         setHover (yToTrack (e.y), xToTick (e.x));
@@ -1350,6 +1539,46 @@ void PlaylistTimeline::mouseDown (const juce::MouseEvent& e)
     pendingUndoValid = false;
     lastMouseX = e.x;
     lastMouseY = e.y;
+
+    if (loopMode != LoopMode::None)
+    {
+        endLoopMode (! e.mods.isPopupMenu()); // a left click places the region, a right click puts it back
+        return;
+    }
+
+    // The ruler: left click moves the song position (while playing too), right button makes or edits the loop region.
+    if (e.x >= kNameWidth && e.y < kRulerHeight && (tool != PlaylistTool::Zoom || e.mods.isPopupMenu()))
+    {
+        const bool noSnap = e.mods.isAltDown();
+        if (e.mods.isPopupMenu())
+        {
+            pressX = e.x;
+            if (onLoopRegion (e.x))
+            {
+                drag = Drag::LoopPress; // a click shows the menu; a drag moves the region or, from an edge, resizes it
+                loopOriginalStart = arrangement.loopStartTick;
+                loopOriginalEnd = arrangement.loopEndTick;
+                loopGrab = xToTick (e.x) - arrangement.loopStartTick;
+                loopResizeEdge = loopEdgeAt (e.x);
+            }
+            else
+            {
+                drag = Drag::LoopCreate;
+                const int step = loopStep();
+                loopAnchor = std::clamp ((xToTick (e.x) / step) * step, 0, arrangement.timelineTicks() - step);
+                if (noSnap)
+                    loopAnchor = std::clamp (xToTick (e.x), 0, arrangement.timelineTicks() - step);
+                placeLoop (loopAnchor, loopAnchor + step);
+            }
+            return;
+        }
+        drag = Drag::Seek;
+        const int tick = std::clamp (snapTick (xToTick (e.x), noSnap), 0, arrangement.timelineTicks() - 1);
+        setPlayheadTick (tick);
+        if (onSeek)
+            onSeek (tick);
+        return;
+    }
 
     if (e.x < kNameWidth && e.y >= kRulerHeight)
     {
@@ -1545,6 +1774,45 @@ void PlaylistTimeline::mouseDrag (const juce::MouseEvent& e)
     lastMouseY = e.y;
     const bool noSnap = e.mods.isAltDown();
 
+    if (drag == Drag::Seek)
+    {
+        const int tick = std::clamp (snapTick (xToTick (e.x), noSnap), 0, arrangement.timelineTicks() - 1);
+        if (tick != playheadTick)
+        {
+            setPlayheadTick (tick);
+            if (onSeek)
+                onSeek (tick);
+        }
+        return;
+    }
+    if (drag == Drag::LoopCreate)
+    {
+        const int mouse = loopSnap (xToTick (e.x), noSnap);
+        const int step = loopStep();
+        if (mouse >= loopAnchor)
+            placeLoop (loopAnchor, std::max (mouse, loopAnchor + step));
+        else
+            placeLoop (mouse, loopAnchor + step);
+        return;
+    }
+    if (drag == Drag::LoopPress && std::abs (e.x - pressX) > 4 && arrangement.hasLoop())
+        drag = loopResizeEdge < 0 ? Drag::LoopResizeStart : loopResizeEdge > 0 ? Drag::LoopResizeEnd : Drag::LoopMove;
+    if (drag == Drag::LoopMove || drag == Drag::LoopResizeStart || drag == Drag::LoopResizeEnd)
+    {
+        const int mouseTick = xToTick (e.x);
+        const int length = loopOriginalEnd - loopOriginalStart;
+        if (drag == Drag::LoopMove)
+        {
+            const int start = std::clamp (loopSnap (mouseTick - loopGrab, noSnap), 0, arrangement.timelineTicks() - length);
+            placeLoop (start, start + length);
+        }
+        else if (drag == Drag::LoopResizeStart)
+            placeLoop (std::min (loopSnap (mouseTick, noSnap), loopOriginalEnd - loopStep()), loopOriginalEnd);
+        else
+            placeLoop (loopOriginalStart, std::max (loopSnap (mouseTick, noSnap), loopOriginalStart + loopStep()));
+        return;
+    }
+
     if (drag == Drag::ZoomRange)
     {
         dragEndX = e.x;
@@ -1645,12 +1913,12 @@ void PlaylistTimeline::mouseDrag (const juce::MouseEvent& e)
 
     if (drag == Drag::MovePattern)
     {
-        clip.startUnit = std::clamp (xToUnit (e.x) - grabOffsetUnits, 0, kPlaylistUnits - clip.lengthUnits);
+        clip.startUnit = std::clamp (xToUnit (e.x) - grabOffsetUnits, 0, arrangement.timelineUnits() - clip.lengthUnits);
         clip.track = yToTrack (e.y);
     }
     else
     {
-        clip.lengthUnits = std::clamp (xToUnit (e.x) - clip.startUnit + 1, 1, kPlaylistUnits - clip.startUnit);
+        clip.lengthUnits = std::clamp (xToUnit (e.x) - clip.startUnit + 1, 1, arrangement.timelineUnits() - clip.startUnit);
     }
 
     auto& stored = arrangement.clips[static_cast<size_t> (dragClip)];
@@ -1669,6 +1937,12 @@ void PlaylistTimeline::mouseDrag (const juce::MouseEvent& e)
 
 void PlaylistTimeline::mouseUp (const juce::MouseEvent& e)
 {
+    if (drag == Drag::LoopPress)
+    {
+        drag = Drag::None;
+        showLoopMenu();
+        return;
+    }
     if (drag == Drag::ZoomRange)
     {
         if (std::abs (dragEndX - dragStartX) > 8)

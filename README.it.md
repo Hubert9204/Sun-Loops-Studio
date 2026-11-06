@@ -14,14 +14,14 @@ strumento sta in un pannello mobile che puoi spostare, ridimensionare, sovrappor
 Sun Loops Studio si ispira al modo di lavorare dei DAW a loop come FL Studio. È un progetto indipendente: non usa
 codice, nomi, grafica o risorse di altri prodotti e non è affiliato né approvato dai loro produttori.
 
-**Stato: alpha (0.14.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
+**Stato: alpha (0.15.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
 La riproduzione è stata confermata su un vero PC Nobara per la versione 0.3; tutto ciò che è stato aggiunto dopo
 (pannelli, pattern, playlist, browser, pitch/swing, mixer espanso ed effetti, salvataggio dei progetti, AppImage, clip audio, trascinamento
 dei file, registrazione, MIDI, metronomo e formati di esportazione) è stato provato con test automatici e in un display virtuale con un
 dispositivo audio muto, non ancora con audio reale, microfoni o hardware MIDI. **L'hosting di plugin VST3 non è
 implementato**: gli slot effetti del mixer contengono gli effetti propri di Sun Loops Studio (Equalizer, Reverb,
 Delay, Compressor). Vedi [docs/roadmap.md](docs/roadmap.md) per sapere con precisione cosa è verificato, cosa no e
-cosa manca (hosting VST3 e annulla/ripristina sono le mancanze principali).
+cosa manca (l'hosting VST3 è la mancanza principale).
 
 ## Funzioni
 
@@ -32,15 +32,16 @@ cosa manca (hosting VST3 e annulla/ripristina sono le mancanze principali).
 - **Browser** (barra laterale a sinistra, `F8` la ripiega) - un albero con *Samples*, *Drum Kits*, *Instruments*,
   *Presets* e *Plugin*, una casella di ricerca rapida e il trascinamento (o il doppio clic) dei suoni su un canale
   del Channel Rack. I tuoi file stanno in `~/Music/Sun Loops Studio/`.
-- **Channel Rack** - fino a 8 canali, ognuno synth o sampler. Sequencer a step da 16esimi sui canali sampler,
+- **Channel Rack** - fino a 32 canali, ognuno synth, sampler o drum machine. Sequencer a step da 16esimi sui canali sampler,
   anteprima delle note sui canali synth. Per canale: volume, pan, manopola **Pitch** (semitoni), manopola **Swing** e
   un display **Track N** che manda il canale a una traccia del mixer. Tasto destro su un canale: *Piano roll*,
-  *Instrument*, *Load sample...*, *Rename...*, *Assign free mixer track*, *Save as preset...*.
+  *Instrument*, *Load sample...*, *Rename...*, *Clone*, *Move up / down*, *Delete*, *Assign free mixer track*, *Save as preset...*.
 - **Piano Roll** - per il canale selezionato: clic per aggiungere una nota, trascina per spostarla, trascina il bordo
   destro per ridimensionarla, tasto destro per eliminarla, scorrimento e zoom. Si apre da un canale (menu o doppio
   clic), come in FL Studio.
 - **Pattern e Playlist** - più pattern (nuovi, copiati, rinominati o eliminati con i pulsanti sopra la playlist) disposti come clip su 8 tracce. Il pulsante *Pattern / Song*
-  sceglie se ripetere il pattern selezionato o suonare tutta la playlist.
+  sceglie se ripetere il pattern selezionato o suonare tutta la playlist; i pattern durano 1, 2, 4 o 8 battute. **Clic sul righello per spostare il
+  cursore, anche in riproduzione; trascinamento col destro per disegnare una zona di loop** (tasto destro sulla zona per spostarla, ridimensionarla o eliminarla).
 - **Audio nella Playlist** - trascina file audio (`.wav .aiff .flac .ogg .oga .mp3 .aac`) o video (ne viene presa la
   traccia audio) dal file manager sulla Playlist: diventano clip con la forma d'onda. Gli **strumenti Select, Split, Cut, Erase e Zoom**,
   il ritaglio dai due bordi, una griglia fino al singolo tick, annulla/ripristina e un righello in minuti:secondi.millisecondi
@@ -53,7 +54,9 @@ cosa manca (hosting VST3 e annulla/ripristina sono le mancanze principali).
   [docs/cyber-hub.md](docs/cyber-hub.md) (in inglese).
 - **Importazione MIDI, legato e slide, annulla per le note** - un file MIDI standard (menu File, o trascinato sulla Playlist) diventa
   nuovi canali e pattern; le note si possono unire con **legato** o con uno **slide** di altezza (Maiusc+clic nel Piano Roll); **Ctrl+Z / Ctrl+Y**
-  annullano e ripristinano le modifiche alle note (la Playlist ha il suo annulla).
+  annullano e ripristinano qualsiasi modifica (note, canali, kit, mixer, pattern; la Playlist ha anche il suo annulla per le clip).
+- **Sicurezza** - salvataggio automatico ogni minuto, recupero dopo un crash, un `.bak` della versione precedente ed *Export project with samples*
+  per portare un progetto su un altro computer.
 - **Metronomo** - un click con tempo (anche tap tempo) e volume regolabili, su un pulsante a parte.
 - **Mixer** (`F9`) - 8 tracce verticali, ognuna con fader e dB, bilanciamento stereo, mute, solo, indicatore
   Peak/RMS e 4 slot per effetti in serie (Equalizer, Reverb, Delay, Compressor, con bypass), due **send** (pre o post fader)

@@ -117,7 +117,7 @@ public:
     // Shortest note that is recorded: a key tapped quickly still makes a note you can see and hear.
     int minimumLength() const noexcept { return std::max (quantize > 0 ? quantize : 0, kMinimumLengthTicks); }
 
-    static constexpr int kChannels = 8;
+    static constexpr int kChannels = 32; // = kMaxChannels (Project.h)
     static constexpr int kMinimumLengthTicks = 60; // an eighth of a beat
 
 private:

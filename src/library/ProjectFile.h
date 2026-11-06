@@ -62,7 +62,17 @@ std::shared_ptr<const SampleData> makeMissingSample (const std::string& source);
 
 // Reads a project file. Files over kMaxProjectFileBytes are refused (a project is a few hundred KB at most).
 constexpr juce::int64 kMaxProjectFileBytes = 32LL * 1024 * 1024;
+// Sound files given by a relative path (as written by exportProjectWithSamples) are found next to the project file.
 ProjectParseResult readProjectFile (const juce::File& file);
+
+// Turns every relative sound reference of `d` (channel samples, drum-kit layers, audio clips) into a path inside `projectFolder`.
+void resolveRelativeSources (ProjectDocument& d, const juce::File& projectFolder);
+
+// "Export project with samples": writes `folder`/<name>.slp and copies every sound file the project uses into `folder`/Samples,
+// referring to them by relative paths, so the folder can be moved to another computer as it is. Built-in sounds stay built-in;
+// files that cannot be found keep their old path and are listed in `notes`. `folder` must not exist or be empty.
+// Returns an error message, empty on success.
+juce::String exportProjectWithSamples (ProjectDocument d, const juce::File& folder, const juce::String& name, juce::StringArray& notes);
 
 // Writes the project so that an existing file is never left half-written: the text goes to a temporary file
 // next to the target, which then replaces it. Returns an error message, empty on success.

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(SunLoopsStudio VERSION 0.14.0 LANGUAGES C CXX)
+project(SunLoopsStudio VERSION 0.15.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -92,6 +92,9 @@ target_sources(SunLoopsStudio PRIVATE
     src/ui/MainComponentAutomation.cpp
     src/ui/MainComponentSampleEditor.cpp
     src/ui/MainComponentDrums.cpp
+    src/ui/MainComponentChannels.cpp
+    src/ui/MainComponentHistory.cpp
+    src/ui/MainComponentSafety.cpp
     src/ui/DrumMachine.cpp
     src/ui/AutomationEditor.cpp
     src/ui/MetersView.cpp

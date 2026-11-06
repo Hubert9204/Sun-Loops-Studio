@@ -63,6 +63,7 @@ void Player::prepare (double newSampleRate) noexcept
             unit.prepare (sampleRate);
 
     tickPos = 0.0;
+    startPosition = 0.0;
     projectRevision = ~std::uint64_t { 0 };
     ageCounter = 0;
     wasPlaying = false;
@@ -85,10 +86,13 @@ void Player::rewind() noexcept
     lastClickBeat = -1;
 }
 
-void Player::startClip (const AudioEvent& e) noexcept
+void Player::startClip (const AudioEvent& e, double extraSeconds) noexcept
 {
     if (e.data == nullptr || e.data->numFrames() < 2)
         return;
+    const double startFrame = (std::max (0.0, e.offsetSeconds) + std::max (0.0, extraSeconds)) * e.data->sampleRate;
+    if (startFrame + 1.0 >= static_cast<double> (e.data->numFrames()))
+        return; // the clip's sound has already ended at that point
 
     ClipVoice* target = nullptr;
     for (auto& v : clipVoices)
@@ -105,7 +109,7 @@ void Player::startClip (const AudioEvent& e) noexcept
     v.active = true;
     v.data = e.data.get();
     v.step = e.data->sampleRate / sampleRate;
-    v.pos = std::max (0.0, e.offsetSeconds) * e.data->sampleRate;
+    v.pos = startFrame;
     v.endTick = e.endTick;
     v.track = std::clamp (e.mixerTrack, 0, kMaxTracks - 1);
     v.gain = e.gain;
@@ -140,24 +144,63 @@ float Player::nextClickSample() noexcept
     return static_cast<float> (std::sin (kTwoPi * frequency * seconds) * envelope) * amplitude;
 }
 
-void Player::onProjectChanged (const Project& project) noexcept
+void Player::locate (const Project& project, double tick) noexcept
 {
-    // First note of each channel that has not started yet at the current position.
+    // First note of each channel that has not started yet at `tick`.
     for (size_t ch = 0; ch < project.channels.size() && ch < static_cast<size_t> (kMaxChannels); ++ch)
     {
         const auto& notes = project.channels[ch].notes;
-        const auto it = std::lower_bound (notes.begin(), notes.end(), tickPos,
+        const auto it = std::lower_bound (notes.begin(), notes.end(), tick,
                                           [] (const Note& n, double t) { return static_cast<double> (n.startTick) < t; });
         nextEvent[ch] = static_cast<size_t> (it - notes.begin());
     }
+    const auto& events = project.audioEvents;
+    const auto it = std::lower_bound (events.begin(), events.end(), tick,
+                                      [] (const AudioEvent& e, double t) { return static_cast<double> (e.startTick) < t; });
+    nextClip = static_cast<size_t> (it - events.begin());
+}
 
-    // Audio clips: the next one that has not started yet, and a playing clip may only go on if the new
-    // snapshot still owns the very same audio (it belongs to the snapshot and may be freed).
+void Player::startClipsInside (const Project& project, double tick, double ticksPerSecond) noexcept
+{
+    if (ticksPerSecond <= 0.0)
+        return;
+    for (const auto& e : project.audioEvents)
+        if (static_cast<double> (e.startTick) < tick && tick < static_cast<double> (e.endTick))
+            startClip (e, (tick - e.startTick) / ticksPerSecond);
+}
+
+void Player::jumpTo (const Project& project, double tick, double ticksPerSecond) noexcept
+{
+    releaseVoices (false); // synth notes end at the jump, samples ring on (as at the loop boundary)
+    releaseClips();        // audio clips are cut there
+    tickPos = tick;
+    locate (project, std::floor (tick)); // a note exactly on the target tick still plays, although the position overshoots it a little
+    startClipsInside (project, std::floor (tick), ticksPerSecond);
+}
+
+void Player::seek (const Project& project, double tick, double bpm) noexcept
+{
+    const int length = std::max (1, project.lengthTicks);
+    if (! std::isfinite (tick) || tick < 0.0 || tick >= static_cast<double> (length))
+        tick = 0.0;
+    startPosition = tick;
+    releaseVoices (true);
+    releaseClips();
+    tickPos = tick;
+    locate (project, tick);
+    lastClickBeat = -1;
+    if (wasPlaying)
+        startClipsInside (project, tick, std::clamp (bpm, 20.0, 400.0) * kTicksPerBeat / 60.0);
+}
+
+void Player::onProjectChanged (const Project& project) noexcept
+{
+    locate (project, tickPos);
+
+    // Audio clips: a playing clip may only go on if the new snapshot still owns the very same audio (it belongs to the
+    // snapshot and may be freed).
     {
         const auto& events = project.audioEvents;
-        const auto it = std::lower_bound (events.begin(), events.end(), tickPos,
-                                          [] (const AudioEvent& e, double t) { return static_cast<double> (e.startTick) < t; });
-        nextClip = static_cast<size_t> (it - events.begin());
 
         for (auto& v : clipVoices)
         {
@@ -421,15 +464,19 @@ void Player::render (const Project& project, double bpm, bool playing,
         onProjectChanged (project);
     }
 
+    const double ticksPerSecond = ticksPerSample * sampleRate;
     if (! playing && wasPlaying)
     {
         releaseVoices (releaseSamplesOnStop);
         releaseClips();
-        tickPos = 0.0;
-        nextEvent.fill (0);
-        nextClip = 0;
+        tickPos = startPosition < static_cast<double> (loopLength) ? startPosition : 0.0; // back to where playback was started from
+        locate (project, tickPos);
     }
+    else if (playing && ! wasPlaying && tickPos > 0.0)
+        startClipsInside (project, tickPos, ticksPerSecond); // started from the middle of the song: clips already going there sound too
     wasPlaying = playing;
+    const bool loopRegion = project.loopStartTick >= 0 && project.loopEndTick > project.loopStartTick
+                            && project.loopEndTick <= loopLength;
 
     // Per-block channel state: target gain and pan gains for every channel.
     bool anySolo = false;
@@ -578,7 +625,7 @@ void Player::render (const Project& project, double bpm, bool playing,
                     if (beat != lastClickBeat)
                     {
                         // switched on in the middle of a beat: wait for the next one instead of clicking off the beat
-                        const bool joinedMidBeat = lastClickBeat < 0 && tickPos > 0.5;
+                        const bool joinedMidBeat = lastClickBeat < 0 && std::fmod (tickPos, static_cast<double> (kTicksPerBeat)) > 0.5;
                         lastClickBeat = beat;
                         if (! joinedMidBeat)
                             startClick (beat % 4 == 0);
@@ -742,14 +789,23 @@ void Player::render (const Project& project, double bpm, bool playing,
 
             if (playing)
             {
+                const double before = tickPos;
                 tickPos += ticksPerSample;
-                if (tickPos >= static_cast<double> (loopLength))
+                const auto regionEnd = static_cast<double> (project.loopEndTick);
+                if (loopRegion && before < regionEnd && tickPos >= regionEnd)
+                    jumpTo (project, project.loopStartTick + (tickPos - regionEnd), ticksPerSecond); // the loop region repeats
+                else if (tickPos >= static_cast<double> (loopLength))
                 {
-                    tickPos = std::fmod (tickPos, static_cast<double> (loopLength));
-                    nextEvent.fill (0);
-                    nextClip = 0;
-                    releaseVoices (false); // synth notes end at the loop boundary, samples ring on
-                    releaseClips();        // audio clips are cut there
+                    if (loopRegion)
+                        jumpTo (project, project.loopStartTick, ticksPerSecond); // started after the region: the end of the song goes back to it
+                    else
+                    {
+                        tickPos = std::fmod (tickPos, static_cast<double> (loopLength));
+                        nextEvent.fill (0);
+                        nextClip = 0;
+                        releaseVoices (false); // synth notes end at the loop boundary, samples ring on
+                        releaseClips();        // audio clips are cut there
+                    }
                 }
             }
         }

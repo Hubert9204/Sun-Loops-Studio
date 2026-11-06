@@ -16,7 +16,7 @@
 
 namespace sls
 {
-constexpr int kMaxChannels = 8;
+constexpr int kMaxChannels = 32;
 constexpr int kMaxTracks = 8; // mixer tracks; every channel is routed to exactly one of them
 constexpr int kAuxBuses = 2;  // aux buses ("returns"): tracks send to them, they have their own effects and fader
 constexpr int kVcaGroups = 2; // VCA groups: one fader that scales the faders of its member tracks
@@ -97,6 +97,10 @@ struct Project
     std::vector<AudioEvent> audioEvents; // song mode only; sorted by startTick, validated by make()
     std::vector<AutomationEvent> automation; // song mode only; sorted by parameter and start, validated by make()
     int lengthTicks = 8 * kTicksPerBeat;
+    // The playlist's loop region (song mode, live playback only): when the transport reaches loopEndTick it goes back to
+    // loopStartTick, and the end of the song goes back to it too. -1 / -1 when there is none (always so in exports).
+    int loopStartTick = -1;
+    int loopEndTick = -1;
     std::uint64_t revision = 0; // assigned by SnapshotExchange
 
     static std::vector<MixerTrack> defaultTracks()

@@ -94,6 +94,43 @@ private:
     std::vector<NoteState> noteUndo, noteRedo;
     NoteState lastNoteState;
 
+    // Undo / redo of every edit (MainComponentHistory.cpp): channels, instruments, kits, notes, patterns, the playlist,
+    // the mixer and its effects, the console, tempo and master volume. The playlist keeps its own finer clip history too.
+    struct EditState
+    {
+        juce::String text; // the project file text: two states with the same text sound and look the same
+        std::vector<Channel> channels;
+        Arrangement arrangement;
+        std::vector<MixerTrack> tracks;
+        std::array<EffectSlot, kSlotsPerTrack> masterSlots {};
+        Console console = Console::defaults();
+        int currentPattern = 0;
+        int selected = 0;
+        double bpm = 120.0;
+        double masterVolume = 0.8;
+    };
+    static constexpr size_t kMaxHistory = 100;
+    EditState captureEditState();
+    void recordHistory();   // called by publishProject()
+    void clearHistory();    // a project was opened or created
+    void applyEditState (const EditState& state);
+    void undoEdit();
+    void redoEdit();
+    std::vector<EditState> undoHistory, redoHistory;
+    EditState historyStable;   // the state after the last recorded edit
+    bool historyReady = false;
+    bool restoringHistory = false;
+    bool lastEditMouseDown = false;
+    juce::uint32 lastEditMs = 0;
+
+    // MainComponentSafety.cpp
+    juce::File autosaveFile() const;
+    void autosaveIfNeeded();
+    void startSession(); // offers the autosaved project if the program did not close normally last time
+    void endSession();
+    void exportProjectFolder();
+    juce::uint32 lastAutosaveMs = 0;
+
     void refreshRackStrips();
     void applyMetronome();                                  // button state, engine and saved settings
     void openAssignTrack (int channelIndex);                 // the "Assign free mixer track" window
@@ -154,6 +191,10 @@ private:
     void setInstrument (int channelIndex, Instrument instrument);
     void renameChannel (int channelIndex);
     void openPianoRoll (int channelIndex);
+    void remapChannels (const std::vector<int>& newToOld, int newSelected); // MainComponentChannels.cpp
+    void deleteChannel (int channelIndex);
+    void moveChannel (int channelIndex, int delta);
+    void cloneChannel (int channelIndex);
 
     // Patterns and the playlist. The channels' `notes` always hold the notes of the current pattern;
     // commitCurrentPattern() copies them into the arrangement before anything is compiled or switched.
@@ -161,6 +202,8 @@ private:
     void selectPattern (int index);
     void addPattern (bool cloneCurrent);
     void showNewPatternMenu (juce::Component& target);
+    void setPatternLength (int bars);
+    void showPatternLength(); // the editors follow arrangement.patternTicks
     void renamePattern (int index);
     void deletePattern (int index);
     void loadPatternIntoChannels (int index);
@@ -168,6 +211,8 @@ private:
     void dropOnPlaylist (const drag::Item& item, int track, int tick);
     void setSongMode (bool shouldPlaySong);
     Project compileCurrent();
+    void seekSong (int tick); // the playlist's ruler was clicked: move the song position there (switches to Song mode)
+    int songStartTick = 0;    // where the song starts playing (and Stop returns to) in Song mode
 
     // Automation (MainComponentAutomation.cpp).
     EffectType effectTypeFor (const AutomationTarget& t) const;

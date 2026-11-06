@@ -62,7 +62,7 @@ void MainComponent::importMidiFile (const juce::File& file)
         return fail (juce::String (parsed.error));
 
     const int startUnit = arrangement.songLengthUnits();
-    const int room = std::min (kMaxPatterns - static_cast<int> (arrangement.patterns.size()), kPlaylistUnits - startUnit);
+    const int room = std::min (kMaxPatterns - static_cast<int> (arrangement.patterns.size()), arrangement.timelineUnits() - startUnit);
     if (room <= 0)
         return fail ("there is no room left for new patterns on the playlist");
 

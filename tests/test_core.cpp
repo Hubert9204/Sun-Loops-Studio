@@ -174,7 +174,7 @@ void testProjectModel()
     check (notes[2].startTick == 1800 && notes[2].lengthTicks == 120, "length is clipped to the loop end");
     check (p.channels[0].volume == 1.5f && p.channels[0].pan == -1.0f, "volume and pan are clamped");
 
-    std::vector<sls::Channel> many (20, synthChannel ({}));
+    std::vector<sls::Channel> many (static_cast<size_t> (sls::kMaxChannels) + 5, synthChannel ({}));
     check (sls::Project::make (many, 1920).channels.size() == static_cast<size_t> (sls::kMaxChannels),
            "channel count is capped");
 }
@@ -681,8 +681,8 @@ void testArrangement()
     check (! a.canPlace ({ 0, sls::kPlaylistTracks, 0, 1 }), "a clip below the last track is refused");
     check (! a.canPlace ({ 0, 0, -1, 1 }), "a clip before the start is refused");
     check (! a.canPlace ({ 0, 0, 0, 0 }), "a zero-length clip is refused");
-    check (! a.canPlace ({ 0, 0, sls::kPlaylistUnits - 1, 2 }), "a clip past the end of the timeline is refused");
-    check (a.canPlace ({ 0, 0, sls::kPlaylistUnits - 2, 2 }), "a clip ending exactly at the end is accepted");
+    check (! a.canPlace ({ 0, 0, a.timelineUnits() - 1, 2 }), "a clip past the end of the timeline is refused");
+    check (a.canPlace ({ 0, 0, a.timelineUnits() - 2, 2 }), "a clip ending exactly at the end is accepted");
 
     // song with two clips on one track, a gap between them
     a.clips = { { 0, 0, 0, 1 }, { 0, 0, 2, 1 } };
@@ -2292,12 +2292,12 @@ void testProjectFile()
         check (! errorOf (doc.toJson()).empty(), "a project without channels is refused");
 
         doc = richDocument();
-        while (doc.channels.size() < 9)
+        while (doc.channels.size() < static_cast<size_t> (sls::kMaxChannels) + 1)
         {
             doc.channels.push_back (doc.channels[0]);
             doc.sampleSources.emplace_back();
         }
-        check (! errorOf (doc.toJson()).empty(), "a project with 9 channels is refused");
+        check (! errorOf (doc.toJson()).empty(), "a project with one channel too many is refused");
 
         doc = richDocument();
         doc.arrangement.patterns.clear();
@@ -5549,6 +5549,317 @@ void testAuditioner()
     }
 }
 
+// ------------------------------------------------------------------------- 0.15.0: seeking and the loop region
+
+void testChannelRemap()
+{
+    std::cout << "Deleting, moving and cloning channels\n";
+    sls::Arrangement a;
+    a.patterns.resize (2);
+    for (auto& p : a.patterns)
+        p.notes = { { { 60, 0, 120, 0.8f } }, { { 62, 0, 120, 0.8f } }, { { 64, 0, 120, 0.8f } } };
+    a.patterns[1].notes[2].push_back ({ 65, 240, 120, 0.8f });
+    sls::AutomationClip vol = sls::makeFlatAutomationClip ({ sls::AutomationKind::ChannelVolume, 2, 0, 0 }, 0, 0, 1920, 0.5f);
+    sls::AutomationClip pan = sls::makeFlatAutomationClip ({ sls::AutomationKind::ChannelPan, 0, 0, 0 }, 1, 0, 1920, 0.5f);
+    sls::AutomationClip track = sls::makeFlatAutomationClip ({ sls::AutomationKind::TrackVolume, 0, 0, 0 }, 2, 0, 1920, 0.5f);
+    a.automationClips = { vol, pan, track };
+
+    auto deleted = a;
+    sls::remapArrangementChannels (deleted, { 1, 2 }, 3); // channel 0 deleted
+    check (deleted.patterns[0].notes.size() == 2 && deleted.patterns[0].notes[0][0].pitch == 62 && deleted.patterns[1].notes[1].size() == 2,
+           "delete: every pattern loses that channel's notes and the others move up");
+    check (deleted.automationClips.size() == 2 && deleted.automationClips[0].target.index == 1
+               && deleted.automationClips[1].target.kind == sls::AutomationKind::TrackVolume,
+           "delete: its automation goes, the others follow their channel, track automation is untouched");
+
+    auto moved = a;
+    sls::remapArrangementChannels (moved, { 0, 2, 1 }, 3); // channels 1 and 2 swapped
+    check (moved.patterns[1].notes[1].size() == 2 && moved.patterns[1].notes[2][0].pitch == 62, "move: the notes go with the channel");
+    check (moved.automationClips[0].target.index == 1 && moved.automationClips[1].target.index == 0, "move: and so does its automation");
+
+    auto cloned = a;
+    sls::remapArrangementChannels (cloned, { 0, 1, 2, 2 }, 3); // channel 2 cloned
+    check (cloned.patterns[1].notes.size() == 4 && cloned.patterns[1].notes[3].size() == 2 && cloned.patterns[1].notes[2].size() == 2,
+           "clone: the copy has the same notes in every pattern");
+    check (cloned.automationClips.size() == 3 && cloned.automationClips[0].target.index == 2, "clone: automation stays on the original");
+
+    auto bad = a;
+    sls::remapArrangementChannels (bad, { 0, 7, -1 }, 3);
+    check (bad.patterns[0].notes.size() == 3 && bad.patterns[0].notes[1].empty() && bad.patterns[0].notes[2].empty(),
+           "indices that do not exist give empty channels instead of a crash");
+}
+
+void testProjectWithSamples()
+{
+    std::cout << "Export project with samples, relative paths\n";
+    const auto dir = freshTempDir ("sls-export");
+    const auto a = dir.getChildFile ("src1/kick.wav"), b = dir.getChildFile ("src2/kick.wav"), c = dir.getChildFile ("clip.wav");
+    for (const auto& f : { a, b, c })
+    {
+        f.getParentDirectory().createDirectory();
+        f.replaceWithText ("RIFF not really a wav, but a file");
+    }
+    auto doc = sls::ProjectDocument::blank();
+    doc.channels.push_back (doc.channels[0]);
+    doc.channels.push_back (doc.channels[0]);
+    doc.sampleSources = { a.getFullPathName().toStdString(), b.getFullPathName().toStdString(), "" };
+    doc.channels[2].instrument = sls::Instrument::Drums;
+    doc.kitSpecs = { sls::KitSpec::empty(), sls::KitSpec::empty(), sls::KitSpec::empty() };
+    doc.kitSpecs[2].pads[0].sources[0] = a.getFullPathName().toStdString();
+    doc.kitSpecs[2].pads[1].sources[0] = dir.getChildFile ("gone.wav").getFullPathName().toStdString();
+    doc.arrangement.ensureChannelCount (doc.channels.size());
+    sls::AudioClip clip;
+    clip.data = sls::makeMissingSample (c.getFullPathName().toStdString());
+    clip.name = "clip";
+    doc.arrangement.audioClips.push_back (clip);
+
+    juce::StringArray notes;
+    const auto out = dir.getChildFile ("Moved Song");
+    const auto error = sls::exportProjectWithSamples (doc, out, "Moved Song", notes);
+    check (error.isEmpty(), "export project with samples succeeds");
+    const auto projectFile = out.getChildFile ("Moved Song.slp");
+    check (projectFile.existsAsFile() && out.getChildFile ("Samples/kick.wav").existsAsFile() && out.getChildFile ("Samples/kick-2.wav").existsAsFile()
+               && out.getChildFile ("Samples/clip.wav").existsAsFile(),
+           "the project file and a copy of every sound are in the folder (two files with one name both kept)");
+    const auto text = projectFile.loadFileAsString();
+    check (text.contains ("Samples/kick.wav") && ! text.contains (a.getFullPathName()),
+           "the copies are referred to by relative paths");
+    check (notes.size() == 1 && notes[0].contains ("gone.wav") && text.contains (dir.getChildFile ("gone.wav").getFullPathName()),
+           "a missing file is reported and keeps its old path");
+
+    // Move the folder: the project still finds its sounds.
+    const auto moved = dir.getChildFile ("elsewhere/Moved Song");
+    moved.getParentDirectory().createDirectory();
+    check (out.moveFileTo (moved), "(the folder is moved)");
+    const auto parsed = sls::readProjectFile (moved.getChildFile ("Moved Song.slp"));
+    check (parsed.document && parsed.document->sampleSources[0] == moved.getChildFile ("Samples/kick.wav").getFullPathName().toStdString()
+               && parsed.document->sampleSources[1] == moved.getChildFile ("Samples/kick-2.wav").getFullPathName().toStdString()
+               && parsed.document->kitSpecs.size() == 3 && parsed.document->kitSpecs[2].pads[0].sources[0] == moved.getChildFile ("Samples/kick.wav").getFullPathName().toStdString()
+               && parsed.document->arrangement.audioClips.size() == 1
+               && parsed.document->arrangement.audioClips[0].data->source == moved.getChildFile ("Samples/clip.wav").getFullPathName().toStdString(),
+           "after moving the folder, relative paths are read as paths inside it (samples, kit layers, audio clips)");
+    check (sls::exportProjectWithSamples (doc, moved, "Again", notes).isNotEmpty(), "exporting into a folder that is not empty is refused");
+    dir.deleteRecursively();
+}
+
+void testPatternLength()
+{
+    std::cout << "Pattern length\n";
+    const int bar = 4 * kBeat;
+    sls::Arrangement a;
+    a.patternTicks = bar;
+    check (a.timelineUnits() == 64 && a.timelineTicks() == 64 * bar, "1-bar patterns: 64 of them fit (64 bars)");
+    a.patternTicks = 2 * bar;
+    check (a.timelineUnits() == 32 && a.timelineTicks() == 64 * bar, "2-bar patterns: 32 (64 bars, as before)");
+    a.patternTicks = 4 * bar;
+    check (a.timelineUnits() == 32 && a.timelineTicks() == 128 * bar, "4-bar patterns: 32 (128 bars)");
+    a.patternTicks = 8 * bar;
+    a.patterns.resize (1);
+    check (a.timelineUnits() == 32 && a.canPlace ({ 0, 0, 31, 1 }) && ! a.canPlace ({ 0, 0, 32, 1 }), "8-bar patterns: 32, and the last unit is the end");
+
+    // A 4-bar pattern played twice in Song mode: its note in bar 3 comes at bars 3 and 7.
+    a.patternTicks = 4 * bar;
+    a.patterns[0].notes = { { { 60, 2 * bar, kBeat, 0.8f } } };
+    a.clips = { { 0, 0, 0, 2 } };
+    const auto song = sls::compileSong ({ synthChannel ({}) }, a);
+    check (song.lengthTicks == 8 * bar && song.channels[0].notes.size() == 2 && song.channels[0].notes[1].startTick == 6 * bar,
+           "4-bar patterns compile to a song with the notes in the right bars");
+
+    auto doc = sls::ProjectDocument::blank();
+    doc.arrangement.patternTicks = 4 * bar;
+    doc.arrangement.patterns[0].notes[0] = { { 60, 3 * bar, kBeat, 0.8f } }; // only exists in a 4-bar pattern
+    auto parsed = sls::ProjectDocument::fromJson (doc.toJson());
+    check (parsed.document && parsed.document->arrangement.patternTicks == 4 * bar && parsed.document->arrangement.patterns[0].notes[0].size() == 1,
+           "the pattern length is saved, and notes beyond two bars are read back");
+    const auto withBars = [&] (const juce::var& value)
+    {
+        auto v = juce::JSON::parse (doc.toJson());
+        if (value.isVoid())
+            v.getDynamicObject()->removeProperty ("patternBars");
+        else
+            v.getDynamicObject()->setProperty ("patternBars", value);
+        return juce::JSON::toString (v);
+    };
+    parsed = sls::ProjectDocument::fromJson (withBars (3));
+    check (parsed.document && parsed.document->arrangement.patternTicks == 2 * bar && ! parsed.warnings.empty(),
+           "a length that is not offered becomes two bars, with a warning");
+    parsed = sls::ProjectDocument::fromJson (withBars (juce::var()));
+    check (parsed.document && parsed.document->arrangement.patternTicks == 2 * bar, "older files (no length) are two bars");
+}
+
+void testSeekAndLoopRegion()
+{
+    std::cout << "Seek and loop region\n";
+    const int sps = 24000; // samples per beat at 120 BPM / 48 kHz
+    // Two bars (4 s): A (440 Hz) on beat 1 of bar 1, B (E5, 659 Hz: not a harmonic of A) on beat 1 of bar 2.
+    const double bHz = 659.2551;
+    auto project = sls::Project::make ({ synthChannel ({ { 69, 0, kBeat, 0.8f }, { 76, 4 * kBeat, kBeat, 0.8f } }) }, 8 * kBeat);
+
+    {
+        sls::Player p;
+        p.prepare (kSr);
+        renderBlocks (p, project, false, 0.05);
+        p.seek (project, 4 * kBeat, 120.0);
+        check (p.getPositionTicks() == 4 * kBeat && p.getStartPosition() == 4 * kBeat, "seek while stopped moves the position and the start point");
+        auto out = renderBlocks (p, project, true, 0.4);
+        check (toneEnergy (out.data(), 2400, 18000, bHz) > 0.05 && toneEnergy (out.data(), 2400, 18000, 440.0) < 0.01,
+               "play after a seek starts there (bar 2's note, not bar 1's)");
+        renderBlocks (p, project, false, 0.05);
+        check (p.getPositionTicks() == 4 * kBeat, "Stop goes back to where playback was started from, not to the beginning");
+        out = renderBlocks (p, project, true, 0.3);
+        check (toneEnergy (out.data(), 2400, 12000, bHz) > 0.05, "and Play starts there again");
+
+        p.seek (project, 0, 120.0); // while playing
+        out = renderBlocks (p, project, true, 0.4);
+        check (toneEnergy (out.data(), 4800, 18000, 440.0) > 0.05, "seek while playing: the note at the new place sounds");
+        check (toneEnergy (out.data(), 4800, 18000, bHz) < 0.005, "and the note that was sounding stops");
+        check (p.getPositionTicks() > 0.0 && p.getPositionTicks() < kBeat, "the position runs on from the new place");
+
+        p.seek (project, 1.0e9, 120.0);
+        check (p.getPositionTicks() == 0.0, "a seek past the end of the song goes to the start");
+        p.seek (project, -5.0, 120.0);
+        check (p.getPositionTicks() == 0.0, "a negative seek goes to the start");
+        p.seek (project, std::nan (""), 120.0);
+        check (p.getPositionTicks() == 0.0, "a NaN seek goes to the start");
+    }
+
+    // Loop region: bar 2, beats 1..2 (ticks 1920..2880 = 2.0 s .. 3.0 s): once there the song never goes back to bar 1.
+    {
+        auto looped = project;
+        looped.loopStartTick = 4 * kBeat;
+        looped.loopEndTick = 6 * kBeat;
+        sls::Player p;
+        p.prepare (kSr);
+        double lowest = 1.0e9, highest = -1.0;
+        std::vector<float> all;
+        for (int block = 0; block < 450; ++block) // 450 x 0.01 s = 4.5 s
+        {
+            const auto out = renderBlocks (p, looped, true, 0.01);
+            all.insert (all.end(), out.begin(), out.end());
+            if (block >= 210)
+            {
+                lowest = std::min (lowest, p.getPositionTicks());
+                highest = std::max (highest, p.getPositionTicks());
+            }
+        }
+        check (lowest >= 4 * kBeat - 1 && highest < 6 * kBeat, "with a loop region the position stays inside it once it got there");
+        // B starts at 2.0 s, 3.0 s, 4.0 s; without the region A would come back at 4.0 s.
+        check (toneEnergy (all.data(), 6 * sps + 2400, 6 * sps + 12000, bHz) > 0.05, "the region's note plays again at the next pass (3.0 s)");
+        check (toneEnergy (all.data(), 8 * sps + 2400, 8 * sps + 12000, bHz) > 0.05, "and again (4.0 s)");
+        check (toneEnergy (all.data(), 8 * sps + 2400, 8 * sps + 12000, 440.0) < 0.01, "and the start of the song does not come back");
+        check (peakOf (all.data(), 6 * sps - 1200, 6 * sps + 1200) < 0.9f, "no jump in level at the loop point");
+
+        // Started after the region: the end of the song goes back to the region, not to bar 1.
+        sls::Player q;
+        q.prepare (kSr);
+        renderBlocks (q, looped, false, 0.01);
+        q.seek (looped, 7 * kBeat, 120.0);
+        const auto out = renderBlocks (q, looped, true, 0.75);
+        check (toneEnergy (out.data(), sps + 2400, sps + 12000, bHz) > 0.05 && toneEnergy (out.data(), sps + 2400, sps + 12000, 440.0) < 0.01,
+               "started after the region, the end of the song goes back to the region");
+
+        // An invalid region is ignored.
+        auto broken = project;
+        broken.loopStartTick = 6 * kBeat;
+        broken.loopEndTick = 4 * kBeat;
+        sls::Player r;
+        r.prepare (kSr);
+        for (int i = 0; i < 430; ++i)
+            renderBlocks (r, broken, true, 0.01);
+        check (r.getPositionTicks() < kBeat, "a region with its end before its start is ignored (the song wraps at its end)");
+
+        // No allocation while seeking and looping.
+        std::vector<float> l (256), rr (256);
+        float* ch[2] = { l.data(), rr.data() };
+        sls::Player z;
+        z.prepare (kSr);
+        gAllocs = 0;
+        gCounting = true;
+        for (int i = 0; i < 2000; ++i)
+        {
+            if (i % 97 == 0)
+                z.seek (looped, (i * 131) % (8 * kBeat), 120.0);
+            z.render (looped, 140.0, true, ch, 2, 256);
+        }
+        gCounting = false;
+        check (gAllocs.load() == 0, "seeking and the loop region allocate nothing");
+    }
+
+    // Audio clips: a seek into the middle of a clip starts its sound at the right point.
+    {
+        auto data = std::make_shared<sls::SampleData>();
+        data->sampleRate = kSr;
+        data->source = "/tmp/half.wav";
+        data->left.assign (static_cast<size_t> (2 * kSr), 0.0f);
+        for (int i = static_cast<int> (kSr); i < static_cast<int> (2 * kSr); ++i) // first second silent, second second a tone
+            data->left[static_cast<size_t> (i)] = 0.5f * static_cast<float> (std::sin (6.283185307179586 * 300.0 * i / kSr));
+        data->right = data->left;
+        sls::AudioEvent e;
+        e.data = data;
+        e.startTick = 0;
+        e.endTick = 4 * kBeat;
+        const auto withClip = sls::Project::make ({ synthChannel ({}) }, 8 * kBeat, {}, {}, { e });
+
+        sls::Player p;
+        p.prepare (kSr);
+        renderBlocks (p, withClip, false, 0.01);
+        p.seek (withClip, 2 * kBeat, 120.0); // 1 s into the clip
+        auto out = renderBlocks (p, withClip, true, 0.2);
+        check (toneEnergy (out.data(), 960, 9600, 300.0) > 0.05, "play from the middle of an audio clip: its sound starts at that point at once");
+
+        p.seek (withClip, kBeat, 120.0); // while playing: 0.5 s in, still silent there
+        out = renderBlocks (p, withClip, true, 0.2);
+        check (toneEnergy (out.data(), 2400, 9600, 300.0) < 0.01, "a seek while playing starts the clip at the new point (still in its silent part)");
+        out = renderBlocks (p, withClip, true, 0.6);
+        check (toneEnergy (out.data(), 24000 - 9600 + 2400, 28800 - 9600, 300.0) > 0.05, "and the tone comes in on time, 0.5 s later");
+
+        sls::AudioEvent shortEvent = e;
+        auto tiny = std::make_shared<sls::SampleData> (*data);
+        tiny->left.resize (100);
+        tiny->right.resize (100);
+        shortEvent.data = tiny;
+        const auto withShort = sls::Project::make ({ synthChannel ({}) }, 8 * kBeat, {}, {}, { shortEvent });
+        sls::Player q;
+        q.prepare (kSr);
+        renderBlocks (q, withShort, false, 0.01);
+        q.seek (withShort, 2 * kBeat, 120.0);
+        out = renderBlocks (q, withShort, true, 0.1);
+        check (peakOf (out.data(), 0, 4800) == 0.0f, "a clip whose sound has already ended at that point stays silent");
+    }
+
+    // The arrangement's region and the project file.
+    {
+        sls::Arrangement a;
+        check (! a.hasLoop(), "a new arrangement has no loop region");
+        check (a.setLoop (kBeat, 5 * kBeat) && a.hasLoop() && a.loopStartTick == kBeat && a.loopEndTick == 5 * kBeat, "setLoop stores a region");
+        check (! a.setLoop (-kBeat, kBeat) && ! a.hasLoop(), "a region before the start is refused (and the old one is gone)");
+        check (! a.setLoop (0, a.timelineTicks() + 1) && ! a.hasLoop(), "a region past the end of the timeline is refused");
+        check (! a.setLoop (kBeat, kBeat + 10) && ! a.hasLoop(), "a region shorter than a 16th is refused");
+        check (a.setLoop (0, a.timelineTicks()), "a region over the whole timeline is fine");
+        a.clearLoop();
+        check (! a.hasLoop(), "clearLoop removes it");
+
+        auto doc = sls::ProjectDocument::blank();
+        doc.arrangement.setLoop (8 * kBeat, 16 * kBeat);
+        auto parsed = sls::ProjectDocument::fromJson (doc.toJson());
+        check (parsed.document && parsed.document->arrangement.loopStartTick == 8 * kBeat && parsed.document->arrangement.loopEndTick == 16 * kBeat,
+               "the loop region is saved in the project file and read back");
+        doc.arrangement.clearLoop();
+        parsed = sls::ProjectDocument::fromJson (doc.toJson());
+        check (parsed.document && ! parsed.document->arrangement.hasLoop() && ! doc.toJson().contains ("loopRegion"),
+               "no region: nothing written, nothing read");
+        auto v = juce::JSON::parse (sls::ProjectDocument::blank().toJson());
+        check (sls::ProjectDocument::fromJson (juce::JSON::toString (v)).warnings.empty(), "(a blank project reads without warnings)");
+        auto* region = new juce::DynamicObject();
+        region->setProperty ("start", 500);
+        region->setProperty ("end", -3);
+        v.getDynamicObject()->setProperty ("loopRegion", juce::var (region));
+        parsed = sls::ProjectDocument::fromJson (juce::JSON::toString (v));
+        check (parsed.document && ! parsed.document->arrangement.hasLoop() && ! parsed.warnings.empty(),
+               "a damaged region in a file is left out with a warning");
+    }
+}
+
 int main()
 {
     testProjectModel();
@@ -5601,6 +5912,10 @@ int main()
     testAuditioner();
     testDrumMachine();
     testDrumKitFiles();
+    testSeekAndLoopRegion();
+    testChannelRemap();
+    testProjectWithSamples();
+    testPatternLength();
 
     std::cout << "\n" << (failures == 0 ? "ALL TESTS PASSED" : "SOME TESTS FAILED") << " (" << failures << " failures)\n";
     return failures == 0 ? 0 : 1;

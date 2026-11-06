@@ -33,6 +33,8 @@ nome del progetto, seguito da `*` quando ci sono modifiche non salvate.
 | **Open recent** | | Gli ultimi otto progetti che esistono ancora. |
 | **Save** | `Ctrl+S` | Scrive il progetto. |
 | **Save as...** | `Ctrl+Maiusc+S` | Chiede un nome (se manca, aggiunge `.slp`) e scrive il progetto lì. Un vecchio `.slsproj` viene proposto come `.slp`. |
+| **Export project with samples...** | | Chiede il nome di una nuova cartella e ci scrive il progetto insieme a una copia di ogni suono che usa (vedi sotto). |
+| **Undo / Redo** | `Ctrl+Z` / `Ctrl+Y` | Annulla o ripristina l'ultima modifica, di qualunque tipo (vedi *Annulla e ripristina*). |
 | **Import audio or video into the playlist...** | | Sceglie file audio o video e li mette nella playlist (vedi *Clip audio*). |
 | **Export audio** | | Un sottomenu con i formati (vedi *Esportazione*). |
 | **Show the projects folder** | | Apre `~/Music/Sun Loops Studio/Projects`. |
@@ -55,6 +57,18 @@ percorso completo del tuo file. Se sposti o cancelli il file il progetto si apre
 un messaggio elenca i file mancanti e il riferimento viene conservato, quindi rimettere il file al suo posto (o
 caricarne un altro con *Load sample...*) risolve. Tieni i sample dove sono, oppure in
 `~/Music/Sun Loops Studio/Samples`.
+
+**Portare un progetto su un altro computer.** *File > Export project with samples...* chiede il nome di una nuova cartella (non deve esistere
+ancora, o deve essere vuota) e ci scrive `<nome>.slp` più una cartella `Samples` con una copia di ogni suono usato dal progetto: canali sampler,
+layer dei kit di batteria e clip audio. Il progetto si riferisce alle copie con **percorsi relativi**, quindi l'intera cartella si può spostare,
+comprimere o copiare su un altro computer e lì si apre con i suoi suoni. I suoni inclusi restano inclusi; un file che non si trova viene elencato e
+mantiene il vecchio percorso.
+
+**Copia di sicurezza, salvataggio automatico e recupero.** Salvando sopra un progetto esistente, la versione precedente resta accanto come
+`<nome>.slp.bak` (una sola generazione). Finché ci sono modifiche non salvate, il progetto viene anche scritto **una volta al minuto** in
+`~/Music/Sun Loops Studio/Autosave/Autosave.slp`. Quel file viene cancellato quando il programma si chiude normalmente; se il programma si è
+bloccato (o è stato terminato), al prossimo avvio compare **Recover your work?** e *Open the recovered project* lo apre (segnato come non salvato,
+con il vecchio nome se ne aveva uno: `Ctrl+S` lo rimette al suo posto).
 
 **File danneggiati.** Un file che non è un progetto di Sun Loops Studio, è rovinato o è stato scritto da una versione
 più recente viene rifiutato con un messaggio e il progetto corrente resta intatto. I valori fuori limite vengono
@@ -144,12 +158,13 @@ Una riga per canale: un display **Track N** e il nome, **M** (mute), **S** (solo
 - **Track N** è la traccia del mixer attraverso cui suona il canale. Clic per un menu delle 8 tracce, oppure
   trascinalo su e giù, o usa la rotella sopra di esso. All'inizio il canale 1 va alla Track 1, il canale 2 alla
   Track 2 e così via.
-- I **canali sampler** mostrano 32 pulsanti step (due battute di sedicesimi). Clic su uno step per accenderlo o
+- I **canali sampler** mostrano un pulsante step per ogni sedicesimo del pattern (32 per le due battute predefinite). Clic su uno step per accenderlo o
   spegnerlo. Il pulsante **Load** sceglie un file audio.
 - I **canali synth** mostrano un'anteprima delle note. Le note si modificano nel Piano Roll.
 - I **canali drum** mostrano un'anteprima delle note; il doppio clic apre la drum machine (vedi sotto).
 - Clic su una riga per selezionare il canale (Piano Roll e Mixer seguono la selezione).
-- **+ Add channel** sotto l'ultima riga aggiunge un canale synth, sampler o drum machine, fino a 8 canali in tutto.
+- **+ Add channel** sotto l'ultima riga aggiunge un canale synth, sampler o drum machine, fino a 32 canali in tutto
+  (il mixer ha sempre 8 tracce: i canali possono condividerle).
 
 ### Menu del tasto destro su un canale
 
@@ -160,6 +175,9 @@ Una riga per canale: un display **Track N** e il nome, **M** (mute), **S** (solo
 | Instrument > Synth / Sampler | Sceglie cosa produce il suono. Passando a Sampler su un canale senza sample ne viene chiesto uno. Il sample resta se torni a Synth. |
 | Load sample... | Scegli un file WAV, FLAC, OGG o AIFF (si usano i primi 30 secondi). Il canale prende il nome del file. |
 | Rename... | Fino a 16 caratteri. |
+| Clone channel | Aggiunge una copia subito sotto: stesso strumento, suono e impostazioni, e le stesse note in ogni pattern. |
+| Move up / Move down | Sposta il canale di una riga; le sue note in ogni pattern e le sue clip di automazione lo seguono. |
+| Delete channel... | Dopo una conferma elimina il canale, le sue note in ogni pattern e le clip di automazione del suo volume o pan. L'ultimo canale non si può eliminare. `Ctrl+Z` lo riporta indietro. |
 | Assign free mixer track | Apre una finestra con le 8 tracce del mixer: quelle libere (senza strumenti) in verde, le altre con gli strumenti che ci sono sopra, e quella attuale segnata. La prima traccia libera è già selezionata; **Select first free track** la riseleziona, oppure scegli una traccia qualsiasi (condividerla è permesso), poi **Assign** (o Invio; Esc annulla). Il display **Track N** del canale e il mixer si aggiornano, e il mixer seleziona quella traccia. |
 | Save as preset... | Chiede un nome e scrive un file `.slspreset` (strumento, sample, volume, pan, pitch, swing; non le note) in `~/Music/Sun Loops Studio/Presets`; compare subito nella cartella Presets del browser. |
 
@@ -187,7 +205,7 @@ MIDI suona i pad e le note importate in quell'intervallo li suonano. Clic su un 
 | Level, Pan, Tuning | Livello da 0 a 150 %, pan da -100 a +100, intonazione da -24 a +24 semitoni (cambia anche la lunghezza del suono). Doppio clic su un cursore per riportarlo al valore iniziale. |
 | Swing | Da 0 a 100 %: ritarda gli step di sedicesimo in levare di questo pad (fino a mezzo sedicesimo). La manopola Swing del canale è nascosta: un canale drum non la usa. |
 
-**Step.** La griglia in basso ha una riga per pad e 32 step (due battute di sedicesimi). Clic su uno step per accenderlo o spegnerlo (senti il pad), trascina per dipingere o cancellare una serie, tasto destro
+**Step.** La griglia in basso ha una riga per pad e uno step per ogni sedicesimo del pattern (32 per due battute). Clic su uno step per accenderlo o spegnerlo (senti il pad), trascina per dipingere o cancellare una serie, tasto destro
 per cancellare. Maiusc+clic mette uno step piano (velocità 0,45), Ctrl+clic uno accentato (1,0), un clic semplice 0,8; la luminosità di uno step mostra la sua velocità. Un clic sull'etichetta di una riga
 seleziona (e suona) quel pad. La griglia modifica le note del canale nel **pattern corrente** (annulla e ripristina delle note funzionano), mostra le note fatte altrove (una nota appartiene allo step in cui
 inizia) e in modalità Pattern una linea segue il playhead.
@@ -238,14 +256,17 @@ funzioni la nota precedente deve suonare ancora quando parte quella collegata, q
 una nota che finisce fino a un sedicesimo prima viene allungata; se finisce prima resta un vuoto e la nota collegata suona normalmente, con il
 suo attacco). Funziona su canali synth e sampler e viene salvato nel progetto.
 
-Le note si agganciano ai sedicesimi. Un pattern dura due battute. Una nota synth termina alla sua lunghezza o alla
+Le note si agganciano ai sedicesimi. Un pattern dura due battute, se non hai scelto un'altra lunghezza (vedi *Pattern*). Una nota synth termina alla sua lunghezza o alla
 fine del pattern, quale viene prima. Quando apri un canale la vista scorre fino alle sue note.
 
 ## Pattern
 
 Un **pattern** contiene le note di tutti i canali. Il menu dei pattern nella barra sceglie il pattern corrente: il
-Channel Rack e il Piano Roll mostrano e modificano quello. Il pulsante **+** accanto offre **New empty pattern** e
-**Clone current pattern**. I nuovi pattern prendono da soli il nome successivo (Pattern 3, Pattern 4, ...). Il progetto dimostrativo parte con "Pattern 1" (il groove completo) e "Drums" (solo la
+Channel Rack e il Piano Roll mostrano e modificano quello. Il pulsante **+** accanto offre **New empty pattern**,
+**Clone current pattern** e **Pattern length (all patterns)**: 1, 2 (predefinito), 4 o 8 battute. La lunghezza vale per tutti i pattern; step
+sequencer, piano roll e drum machine si adeguano. Le clip dei pattern mantengono la loro posizione in unità di pattern, quindi con pattern più lunghi
+il brano si allunga. Le note oltre la fine di un pattern più corto restano conservate ma non suonano, e tornano se allunghi di nuovo i pattern. Il
+cambio viene rifiutato se la playlist non entrerebbe più nella linea del tempo. I nuovi pattern prendono da soli il nome successivo (Pattern 3, Pattern 4, ...). Il progetto dimostrativo parte con "Pattern 1" (il groove completo) e "Drums" (solo la
 batteria), suonati con i suoni Cyber-Hub (vedi [cyber-hub.md](cyber-hub.md), in inglese).
 
 Il **menu dei pattern** in cima alla Playlist ha tre pulsanti: **New** (vuoto o copia, come il **+**), **Rename** (un nome di
@@ -256,29 +277,50 @@ Le impostazioni del canale (volume, pan, mute, solo, pitch, swing, strumento, sa
 al canale, non al pattern: sono le stesse in ogni pattern. Le tracce del mixer e i loro effetti non appartengono né
 all'uno né all'altro.
 
-## Annulla e ripristina per le note
+## Annulla e ripristina
 
-**Ctrl+Z** annulla e **Ctrl+Y** (o Ctrl+Maiusc+Z) ripristina l'ultima modifica alle note: nel Piano Roll, nello step sequencer, con *Clear notes*, o un
-intero take di **Rec notes** (un solo passo). Con il mouse sulla Playlist gli stessi tasti annullano invece le modifiche della Playlist. I due comandi
-sono anche nel menu File. Si ricordano le ultime 200 modifiche. Non coperti: volume, pan, pitch e le altre impostazioni dei canali, il mixer,
-l'aggiunta o l'eliminazione di pattern e canali; aprire un progetto o eliminare un pattern cancella la cronologia.
+**Ctrl+Z** annulla e **Ctrl+Y** (o Ctrl+Maiusc+Z) ripristina l'ultima modifica, **di qualunque tipo**: note (Piano Roll, step sequencer, *Clear notes*,
+un take di **Rec notes**), impostazioni dei canali (volume, pan, pitch, swing, mute/solo, strumento, sample, nome, traccia del mixer), canali aggiunti,
+clonati, spostati o eliminati, modifiche ai kit di batteria, pattern aggiunti, rinominati o eliminati, la lunghezza dei pattern, la playlist, il mixer
+(fader, bilanciamento, effetti e loro impostazioni, send, gruppi VCA), tempo e volume master. I due comandi sono anche nel menu File. Tutto ciò che
+cambia mentre un tasto del mouse resta premuto (una manopola girata, una nota trascinata, step dipinti) è un solo passo; si ricordano gli ultimi 100
+passi. Aprire o creare un progetto fa partire una nuova cronologia.
+
+Con il mouse sulla Playlist gli stessi tasti usano la cronologia propria della Playlist, più fine, per le modifiche alle clip (i suoi pulsanti
+**Undo** / **Redo** fanno lo stesso).
 
 ## Importare un file MIDI
 
 *File > Import a MIDI file into patterns...* (oppure trascina un file `.mid` / `.midi` sulla Playlist) trasforma un file MIDI standard in **nuovi
-canali synth** (uno per ogni traccia e canale MIDI con note, col nome della traccia) e **nuovi pattern** di due battute ciascuno, messi uno dopo l'altro
+canali synth** (uno per ogni traccia e canale MIDI con note, col nome della traccia) e **nuovi pattern** lunghi quanto la lunghezza dei pattern del progetto, messi uno dopo l'altro
 sulla traccia 1 della playlist dopo le clip esistenti. Le note lunghe che superano la fine di un pattern vengono tagliate lì e suonano di nuovo
 all'inizio del pattern successivo. Il primo tempo del file imposta il BPM. La riga di stato dice cosa è stato fatto e cosa è stato lasciato fuori.
 
 Lasciati fuori: le tracce di **batteria** General MIDI (canale MIDI 10), i cambi di tempo dopo il primo, controller, pitch bend, cambi di programma; le
-tracce che non entrano nei canali liberi (in tutto sono 8); file oltre 8 MB o con più di 200 000 note; file con tempo in frame SMPTE. I canali importati
+tracce che non entrano nei canali liberi (in tutto sono 32); file oltre 8 MB o con più di 200 000 note; file con tempo in frame SMPTE. I canali importati
 sono semplici synth: dopo puoi dare loro un sampler o un altro suono.
 
 ## Playlist
 
-La Playlist dispone i pattern nel tempo. Ha 8 tracce e una linea del tempo lunga 32 pattern. Il righello mostra i
-numeri di battuta (un pattern dura due battute, quindi i numeri vanno 1, 3, 5, ...). La linea verticale arancione
-segna la fine del brano: in modalità Song la riproduzione ricomincia da lì.
+La Playlist dispone i pattern nel tempo. Ha 8 tracce e una linea del tempo lunga almeno 32 pattern e almeno 64 battute. Il righello mostra i
+numeri di battuta. La linea verticale arancione segna la fine del brano: in modalità Song la riproduzione ricomincia da lì (o dalla zona di
+loop, sotto).
+
+### Il righello: posizione del brano e zona di loop
+
+- **Clic sinistro sul righello** sposta lì la posizione del brano (il cursore arancione), **anche mentre il brano suona**: la riproduzione continua
+  subito dal nuovo punto. Trascina lungo il righello per scorrere. Il clic si aggancia alla griglia (**Alt**: senza aggancio) e passa alla modalità
+  Song. **Stop** torna all'ultimo punto cliccato, quindi Play riparte da lì. Una clip audio che si trova già sotto il cursore parte da quel punto del
+  suo suono.
+- **Clic destro e trascinamento sul righello** disegna la **zona di loop**, una barra blu con scritto *LOOP* (ombreggiata anche sulle tracce). In
+  modalità Song il brano la ripete: quando il cursore arriva alla fine torna all'inizio della zona; se parti dopo la zona, la fine del brano torna
+  alla zona. A brano fermo il cursore va all'inizio della nuova zona.
+- **Clic destro sulla zona di loop** apre il suo menu: **Move** (la zona segue il mouse; clic per posarla), **Resize** (il bordo più vicino segue il
+  mouse; clic per finire), **Zoom to region** e **Delete loop region**. *Delete* toglie solo l'evidenziazione: nessuna clip, pattern o nota viene
+  toccata. Durante *Move* e *Resize* un clic destro o Esc rimettono la zona com'era.
+- **Trascinamento col destro sulla zona** la sposta subito; trascinamento col destro su uno dei suoi **bordi** la ridimensiona.
+- La zona si aggancia alla griglia scelta in Grid (almeno un sedicesimo) e viene salvata nel progetto. Vale solo per la riproduzione dal vivo in
+  modalità Song: le esportazioni producono sempre l'intero brano.
 
 | Azione | Come |
 | --- | --- |
@@ -455,8 +497,8 @@ tastiera MIDI o da sequenziare nel piano roll (senza canali liberi viene messa n
 Il pulsante **Pattern / Song** decide cosa fa Play.
 
 - **Pattern**: ripete il pattern corrente. Il cursore di riproduzione corre nel Piano Roll e nel Rack.
-- **Song**: suona la Playlist dall'inizio alla fine dell'ultima clip, poi ricomincia. Il cursore corre nella
-  Playlist. Una playlist vuota è silenziosa.
+- **Song**: suona la Playlist dall'inizio (o dal punto cliccato sul righello) alla fine dell'ultima clip, poi ricomincia, oppure ripete la zona di
+  loop se c'è. Il cursore corre nella Playlist e resta visibile da fermo (mostra da dove partirà Play). Una playlist vuota è silenziosa.
 
 In entrambe le modalità puoi modificare mentre suona; il cambiamento si sente subito.
 
@@ -664,12 +706,11 @@ occupato più tardi, un brano più pesante o un mixer pieno di effetti possono r
 
 ## Limiti
 
-- Fino a 8 canali, 8 tracce del mixer con 4 slot effetti ciascuna, 2 bus aux (4 slot ciascuno), 2 gruppi VCA, 64 pattern, 8 tracce di playlist, una linea del
-  tempo lunga 32 pattern, 4 corsie di automazione, 64 clip di automazione di al massimo 256 punti, 32 voci simultanee.
+- Fino a 32 canali, 8 tracce del mixer con 4 slot effetti ciascuna, 2 bus aux (4 slot ciascuno), 2 gruppi VCA, 64 pattern, 8 tracce di playlist, una linea del
+  tempo di almeno 32 pattern e 64 battute, 4 corsie di automazione, 64 clip di automazione di al massimo 256 punti, 32 voci simultanee.
 - Gli effetti usano circa 18 MB di memoria a 48 kHz (di più a frequenze di campionamento maggiori).
-- Un pattern dura sempre due battute, 4/4, griglia di sedicesimi.
+- I pattern durano 1, 2, 4 o 8 battute (uguale per tutti), 4/4, griglia di sedicesimi; un solo tempo per tutto il brano.
 - I sample sono mono o stereo, al massimo 30 secondi, suonati una volta sola (niente loop né editing
   dell'inviluppo). Clip audio: fino a 5 minuti per file, 64 clip.
-- Non ancora disponibili: suonare le note con la tastiera del computer, annulla per impostazioni dei canali e mixer, incorporare i sample nel progetto,
-  salvataggio automatico e recupero dopo un crash, plugin VST come strumenti o effetti, time-stretch dei campioni nel Sampler (si possono modificare solo le clip audio della playlist), punti di loop e inviluppo per i campioni, trasformare le parti in note, automazione di qualsiasi cosa tranne volumi, pan e parametri degli effetti, trasformare l'altezza di
-  chitarra o voce in note, punch-in e conteggio iniziale per la registrazione, dissolvenze ed effetti per clip, spostare il cursore con un clic sul righello. Vedi [roadmap.md](roadmap.md) (in inglese).
+- Non ancora disponibili: suonare le note con la tastiera del computer, plugin VST come strumenti o effetti, time-stretch dei campioni nel Sampler (si possono modificare solo le clip audio della playlist), punti di loop e inviluppo per i campioni, trasformare le parti in note, automazione di qualsiasi cosa tranne volumi, pan e parametri degli effetti, trasformare l'altezza di
+  chitarra o voce in note, punch-in e conteggio iniziale per la registrazione, dissolvenze ed effetti per clip. Vedi [roadmap.md](roadmap.md) (in inglese).
