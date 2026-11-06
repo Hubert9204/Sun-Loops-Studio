@@ -80,6 +80,12 @@ target_sources(SunLoopsStudio PRIVATE
     src/ui/PlaylistTimeline.cpp
     src/ui/PlaylistView.cpp
     src/ui/MainComponent.cpp
+    src/ui/MainComponentNotes.cpp
+    src/ui/MainComponentPatterns.cpp
+    src/ui/MainComponentImport.cpp
+    src/ui/MainComponentRecording.cpp
+    src/ui/MainComponentBrowser.cpp
+    src/ui/MainComponentProject.cpp
     ${SLS_CORE_SOURCES})
 
 target_include_directories(SunLoopsStudio PRIVATE src)

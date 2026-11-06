@@ -36,7 +36,11 @@ src/library/                    No JUCE GUI; JUCE core only (files, JSON)
 src/plugins/PluginScanner.*     VST3 discovery. Only feeds the browser's Plugin folder; no hosting
 
 src/ui/
-  MainComponent.*               Toolbar, workspace, panel wiring, patterns, layout persistence, export
+  MainComponent.*               Toolbar, workspace, panel wiring, channels, layout persistence, the demo project, timer
+  MainComponent{Patterns,Import,Recording,Notes,Browser,Project}.cpp
+                                The rest of MainComponent's member functions, one file per area: patterns and playlist; sample / audio /
+                                MIDI import and audio clips; audio recording; note undo and MIDI-keyboard note recording; browser, presets,
+                                export; project files, recent projects, the File menu
   PanelWindow.*                 PanelWindow (floating panel) and Workspace (the area they float in)
   PanelLayout.h                 Panel position/size/visibility: parse, serialise, clamp (no JUCE)
   RackView.h  ChannelStrip.*    Channel Rack panel body and its rows (step grid, knobs, context menu, drop target)

@@ -29,6 +29,13 @@
 
 namespace sls
 {
+// A pattern is two bars long: the length of the loop in Pattern mode and of one playlist cell.
+constexpr int kLoopBars = 2;
+constexpr int kLoopTicks = kLoopBars * 4 * kTicksPerBeat;
+
+// A sampler channel's sample: any format the playlist can import, at most 30 seconds of it. On failure: nullptr and `error`.
+std::shared_ptr<const SampleData> decodeSample (juce::AudioFormatManager&, const juce::File& file, juce::String& error);
+
 class MainComponent : public juce::Component, public juce::DragAndDropContainer, private juce::Timer,
                       private juce::ChangeListener
 {

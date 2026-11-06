@@ -22,6 +22,7 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   not needed at the current maximum of 16 clip voices and eight channels.
 - Every edit recompiles the whole `Project` snapshot (`compileCurrent`), copying all notes. With the current limits (8 channels, a few
   thousand notes) this takes microseconds; it becomes worth making incremental only with much larger projects.
-- `MainComponent.cpp` (2 600 lines) is the one file that is too big. It works, but splitting it (File menu and project handling,
-  patterns, recording, browser wiring) is the next structural clean-up and should come before the big feature blocks.
+- `MainComponent.cpp` was 2 600 lines. **Done in 0.11:** its member functions now live in seven files by area (the largest, the core,
+  is about 1 000 lines, mostly the demo project and the panel layout). Still one class: a real split of the class (a separate
+  project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
