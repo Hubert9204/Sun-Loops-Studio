@@ -1,4 +1,4 @@
-# Code audit (November 2026, after 0.10.0)
+# Code audit (November 2026, after 0.10.0; notes added for 0.11.0)
 
 Method: `clang-tidy` 18 with the `bugprone-*`, `performance-*`, `clang-analyzer-*`, `misc-unused-*` and `readability-redundant-*`
 checks over every source file of the program; a script that looks for blocks of 7 or more identical lines; a script that lists
@@ -26,3 +26,9 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   is about 1 000 lines, mostly the demo project and the panel layout). Still one class: a real split of the class (a separate
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
+
+## After 0.11.0
+The audit was not repeated in full for automation, the console and the metering. Checked while writing them: the new audio code allocates
+nothing in `Player::render` (the "no allocation" test covers automation running; the sends / buses code was only read for allocations (its buffers are `std::array`s in `Player`), not tested; the loudness meter and the ring live in `AudioEngine`, whose callback needs an audio device and is not covered by such a test, only read for allocations); the automation
+evaluation is one binary search per parameter and chunk; the spectrum uses its own FFT instead of a new dependency. A new full pass with
+clang-tidy and the duplicate-block script is recommended before the next feature block. `PlaylistTimeline.cpp` has grown (clips, lanes, undo): it is the next file to split.

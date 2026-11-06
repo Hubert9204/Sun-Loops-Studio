@@ -363,6 +363,44 @@ The **Pattern / Song** button decides what Play does.
 
 You can edit while playing in either mode; the change is heard immediately.
 
+## Automation
+
+Automation makes a control move by itself while the song plays. It works on:
+
+- a channel's **volume** and **pan** (the two sliders in the Channel Rack);
+- a track's **fader** and **balance** (Mixer);
+- every **parameter of an effect** in a track slot or in a master slot (the sliders of the effects panel).
+
+**Not automatable yet:** the pitch and swing knobs, the master volume, mute and solo, the sends, the aux buses and VCA groups
+(including the parameters of effects on an aux bus), and anything else.
+
+**Create a clip.** Right-click the control and choose *Create automation clip*. A clip one pattern long appears on one of the four
+**automation lanes** (*Auto 1-4*, under the eight tracks of the Playlist) and its editor opens. The clip is a flat line at the
+control's current value. It starts at the pattern under the playhead if the song is playing in Song mode, otherwise at the start of the song. If all four
+lanes are already occupied there (or 64 clips exist), nothing is created and the status line says so; move or delete a clip and try again.
+
+**In the lanes** the clips behave like the other clips of the Playlist: drag to move, drag the right edge to make it longer or shorter,
+*Duplicate* (Ctrl+D) and *Delete* from the right-click menu or the keyboard, the Erase tool removes one, the Zoom tool zooms. The clip shows
+its name (for example *Track 1 Reverb Mix*) and a small picture of its curve. Clips on one lane cannot overlap. Everything here is undone
+with the Playlist's Undo.
+
+**The point editor** (double-click a clip, or right click > *Edit the points...*):
+
+| Action | How |
+| --- | --- |
+| Add a point | Click on empty space |
+| Move a point | Drag it. The time snaps to a 16th note; hold **Alt** to move freely (points can sit at a fraction of a tick). The value is always free. A point cannot jump over its neighbours |
+| Shape of the line after a point | Right-click the point: *linear*, *hold* (a step) or *smooth* (an S curve) |
+| Delete a point | Right-click > *Delete point*, or select it and press Delete or Backspace (a clip keeps at least one point) |
+
+The axis on the left shows the control's own unit (dB for volumes, % or a plain number, Hz, ms...). A yellow line marks the default value.
+
+**How it plays.** Automation is heard in **Song mode only**; in Pattern mode the controls work as usual. For each parameter the clip that started
+last (and has begun) decides; inside it the value follows the curve, after its end the last value stays, before the first clip the control's
+own value is used. While the song plays with automation the **on-screen controls do not move** (they keep showing the value you set), and
+touching one has no lasting effect on a parameter that has a clip under the playhead. The value is updated once per 64 samples
+(1.3 ms at 48 kHz): fast for any musical use, but it is not a per-sample ramp. Clips are saved in the project.
+
 ## Mixer
 
 Press **F9** or the **Mixer F9** button. The Mixer opens large over the other panels; press F9 again to close it.
@@ -413,6 +451,58 @@ it for glue compression, a final EQ, or a touch of reverb on everything. Slots c
 on a track, and the chain is saved in the project.
 
 The master volume is the toolbar slider and the master fader is the same control. The master strip has a meter.
+
+### Sends, aux buses and VCA groups
+
+Under its effect slots every track has:
+
+- **A** and **B**: how much of the track is sent to **Aux A** and **Aux B** (all the way left: nothing; 1.5 at the far right). Double-click
+  a slider to switch the send off;
+- **Pre**: when on, the sends take the sound **before** the fader, the balance and the VCA (so the send level does not follow the
+  fader). Off (the default), they are **post-fader**. A muted track, or a track silenced by another track's solo, sends nothing either way;
+- **V1** and **V2**: put the track in VCA group 1 and/or 2.
+
+**Aux buses** (the two strips after the tracks, with a green bar) sum what the tracks send them, run it through their own four effect slots
+(click a slot as on a track), then their fader and balance, and add the result to the mix **before the master effects**. Typical use: one reverb
+on Aux A, a delay on Aux B (set the effect's Mix to 100 %), and each track sends as much as it needs. An aux bus has mute and balance but no
+solo, and its name is fixed (Aux A, Aux B). Its effect parameters cannot be automated yet.
+
+**VCA groups** (the two strips with a blue bar) have a fader and a mute. The fader multiplies the fader of every member track
+(0 to +3.5 dB); mute silences them. The VCA does not move the member faders, it scales them: a post-fader send follows it, a
+pre-fader send does not, and a track in two groups is scaled by both. The strip shows how many tracks are members.
+
+There is no separate routing-matrix window: each track strip is one row of the matrix (its two sends and its two VCA switches), the
+strips of the buses and groups are the columns. A bus cannot be sent to another bus (no feedback loops) and there is no sidechain. Sends, buses
+and VCA groups are saved in the project.
+
+The mixer is wider with the buses: if the panel is too narrow the strips scroll sideways (there is a scroll bar under them); double-click
+the panel's title bar to make it as large as the window.
+
+## Meters
+
+The **Meters** button (second row of the toolbar) opens a small window that stays above the others (close it with its x or the button
+again). It measures what the program **sends to the speakers**: after the master volume, with the start-up sound and the
+metronome included, and it is not the same as the exported file (the export is rendered separately and is not metered).
+
+**Loudness (LUFS).** Following ITU-R BS.1770-4 and EBU R128:
+
+- *Momentary* (the last 400 ms), *Short-term* (the last 3 s);
+- *Integrated*: the whole programme since the last **Reset** (or since the program started), ignoring silence (under -70 LUFS) and
+  everything more than 10 LU below the average. It turns **green** within 1 LU of the EBU broadcast target of -23 LUFS;
+- *Loudness range* (LRA) in LU, as EBU Tech 3342: how much the short-term loudness varies (10th to 95th percentile, silence and passages 20 LU
+  below the average left out). A steady tone reads 0.
+- *True peak* in dBTP: the highest level of the signal as a converter would reconstruct it (four times oversampling), which can exceed the
+  highest sample. It turns red above -1 dBTP.
+
+The loudness readings are checked in the automated tests against the EBU reference signals (not against a hardware meter); the true-peak
+filter is accurate to about 0.05 dB on a faded tone and a start with no fade-in can read up to 0.4 dB high, because a click really does
+overshoot.
+
+**Spectrum.** A 4096-point FFT (Hann window) of the left+right mix, 20 Hz to 20 kHz on a logarithmic axis and 0 to -90 dB, updated 30 times a second; the
+fill falls 36 dB per second, the thin line is the peak hold (the *Peak hold* button turns it off, *Reset* clears it).
+
+**Goniometer and correlation.** The last 1024 samples as dots: a mono sound is a vertical line, a sound on the left leans left, a wide sound fills the
+square. The bar shows the correlation of the two channels (+1 mono, 0 unrelated, -1 opposite phase: a red bar warns that the sound can disappear on a mono speaker).
 
 ## Metronome
 
@@ -475,12 +565,12 @@ a heavier song or a plugin-heavy mixer can still need a bigger size.
 
 ## Limits
 
-- Up to 8 channels, 8 mixer tracks with 4 effect slots each, 64 patterns, 8 playlist tracks, a 32-pattern-long
-  timeline, 32 simultaneous voices.
+- Up to 8 channels, 8 mixer tracks with 4 effect slots each, 2 aux buses (4 slots each), 2 VCA groups, 64 patterns, 8 playlist tracks, a 32-pattern-long
+  timeline, 4 automation lanes, 64 automation clips of up to 256 points each, 32 simultaneous voices.
 - The effects use about 18 MB of memory at 48 kHz (more at higher sample rates).
 - A pattern is always two bars long, 4/4, 16th-note grid.
 - Samples are mono or stereo, at most 30 seconds, played one-shot (no looping, no envelope editing). Audio clips: up to
   5 minutes per file, 64 clips.
 - Not available yet: playing notes from the computer keyboard, undo of channel settings and the mixer, embedding samples in the project, automatic saving
-  and crash recovery, VST plugins as instruments or effects, sends, automation, turning guitar or voice pitch into notes,
+  and crash recovery, VST plugins as instruments or effects, automation of anything except volumes, pans and effect parameters, turning guitar or voice pitch into notes,
   punch-in and count-in for recording, fades and per-clip effects, seeking by clicking the ruler. See [roadmap.md](roadmap.md).

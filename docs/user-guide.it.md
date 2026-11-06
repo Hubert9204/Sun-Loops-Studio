@@ -368,6 +368,43 @@ Il pulsante **Pattern / Song** decide cosa fa Play.
 
 In entrambe le modalità puoi modificare mentre suona; il cambiamento si sente subito.
 
+## Automazione
+
+L'automazione fa muovere un controllo da solo mentre il brano suona. Funziona su:
+
+- **volume** e **pan** di un canale (i due slider del Channel Rack);
+- **fader** e **bilanciamento** di una traccia (Mixer);
+- ogni **parametro di un effetto** in uno slot di traccia o del master (gli slider del pannello effetti).
+
+**Non ancora automatizzabili:** le manopole Pitch e Swing, il volume master, mute e solo, i send, i bus aux e i gruppi VCA (compresi i
+parametri degli effetti di un bus aux) e tutto il resto.
+
+**Creare una clip.** Tasto destro sul controllo e *Create automation clip*. Una clip lunga un pattern compare su una delle quattro
+**corsie di automazione** (*Auto 1-4*, sotto le otto tracce della Playlist) e si apre il suo editor. La clip è una linea piatta al
+valore attuale del controllo. Parte dal pattern sotto il cursore se il brano suona in modalità Song, altrimenti dall'inizio del brano. Se tutte e quattro le corsie sono
+già occupate in quel punto (o esistono 64 clip), non viene creato nulla e la barra di stato lo dice; sposta o elimina una clip e riprova.
+
+**Nelle corsie** le clip si comportano come le altre clip della Playlist: trascina per spostare, trascina il bordo destro per allungare o
+accorciare, *Duplicate* (Ctrl+D) e *Delete* dal menu del tasto destro o dalla tastiera, lo strumento Erase ne toglie una, Zoom ingrandisce. La clip mostra
+il nome (per esempio *Track 1 Reverb Mix*) e un disegno della curva. Le clip di una corsia non si sovrappongono. Tutto si annulla
+con l'Undo della Playlist.
+
+**L'editor dei punti** (doppio clic su una clip, oppure tasto destro > *Edit the points...*):
+
+| Azione | Come |
+| --- | --- |
+| Aggiungere un punto | Clic su uno spazio vuoto |
+| Spostare un punto | Trascinalo. Il tempo si aggancia a un sedicesimo; tieni premuto **Alt** per muoverlo liberamente (i punti possono stare a una frazione di tick). Il valore è sempre libero. Un punto non può scavalcare i vicini |
+| Forma della linea dopo un punto | Tasto destro sul punto: *linear*, *hold* (a gradino) o *smooth* (curva a S) |
+| Eliminare un punto | Tasto destro > *Delete point*, oppure selezionalo e premi Canc o Backspace (una clip tiene almeno un punto) |
+
+L'asse a sinistra mostra l'unità del controllo (dB per i volumi, numeri semplici, Hz, ms...). Una linea gialla segna il valore predefinito.
+
+**Come suona.** L'automazione si sente **solo in modalità Song**; in modalità Pattern i controlli funzionano come sempre. Per ogni parametro decide la clip partita per
+ultima; al suo interno il valore segue la curva, dopo la fine resta l'ultimo valore, prima della prima clip vale il valore del controllo. Mentre il brano suona con automazione i **controlli sullo schermo non si muovono**
+(mostrano il valore che hai impostato) e toccarne uno non ha effetto duraturo su un parametro che ha una clip sotto il cursore. Il valore si aggiorna
+ogni 64 campioni (1,3 ms a 48 kHz): rapido per qualsiasi uso musicale, ma non è una rampa campione per campione. Le clip si salvano nel progetto.
+
 ## Mixer
 
 Premi **F9** o il pulsante **Mixer F9**. Il Mixer si apre grande sopra gli altri pannelli; F9 di nuovo lo chiude. Ha
@@ -421,7 +458,54 @@ slot si possono escludere (bypass) o rimuovere come quelli di una traccia, e la 
 Il volume master è il cursore della barra degli strumenti e il fader master è lo stesso controllo. La strip master ha un
 indicatore.
 
-## Esportazione
+### Send, bus aux e gruppi VCA
+
+Sotto i suoi slot effetti ogni traccia ha:
+
+- **A** e **B**: quanta parte della traccia va a **Aux A** e **Aux B** (tutto a sinistra: niente; 1,5 tutto a destra). Doppio clic su uno slider
+  per spegnere il send;
+- **Pre**: se acceso, i send prendono il suono **prima** del fader, del bilanciamento e del VCA (il livello del send non segue il fader). Spento
+  (predefinito), sono **post-fader**. Una traccia in mute, o zittita dal solo di un'altra, non manda niente in nessun caso;
+- **V1** e **V2**: mettono la traccia nel gruppo VCA 1 e/o 2.
+
+I **bus aux** (le due strip dopo le tracce, con la barra verde) sommano ciò che le tracce mandano, lo fanno passare dai loro quattro slot effetti
+(clic su uno slot come su una traccia), poi da fader e bilanciamento, e aggiungono il risultato al mix **prima degli effetti master**. Uso tipico: un riverbero
+su Aux A, un delay su Aux B (imposta il Mix dell'effetto al 100 %), e ogni traccia manda quanto serve. Un bus aux ha mute e bilanciamento ma niente
+solo, e il nome è fisso (Aux A, Aux B). I parametri dei suoi effetti non si possono ancora automatizzare.
+
+I **gruppi VCA** (le due strip con la barra blu) hanno fader e mute. Il fader moltiplica il fader di ogni traccia membro (da 0 a +3,5 dB); il mute le zittisce.
+Il VCA non muove i fader dei membri, li scala: un send post-fader lo segue, uno pre-fader no, e una traccia in due gruppi è scalata da entrambi. La strip mostra
+quante tracce ne fanno parte.
+
+Non c'è una finestra a parte per la matrice di routing: ogni strip di traccia è una riga della matrice (i suoi due send e i due interruttori VCA), le strip dei
+bus e dei gruppi sono le colonne. Un bus non si può mandare a un altro bus (niente anelli di feedback) e non c'è sidechain. Send, bus e gruppi VCA si salvano nel progetto.
+
+Con i bus il mixer è più largo: se il pannello è troppo stretto le strip scorrono di lato (c'è una barra sotto); doppio clic sulla barra del titolo del pannello
+per farlo grande quanto la finestra.
+
+## Misuratori
+
+Il pulsante **Meters** (seconda riga della barra degli strumenti) apre una piccola finestra che resta sopra le altre (si chiude con la x o con il pulsante).
+Misura ciò che il programma **manda alle casse**: dopo il volume master, con suono di avvio e metronomo inclusi, e non coincide con il file esportato (l'esportazione
+viene generata a parte e non è misurata).
+
+**Loudness (LUFS).** Secondo ITU-R BS.1770-4 ed EBU R128:
+
+- *Momentary* (gli ultimi 400 ms), *Short-term* (gli ultimi 3 s);
+- *Integrated*: tutto il brano dall'ultimo **Reset** (o dall'avvio), ignorando il silenzio (sotto -70 LUFS) e tutto ciò che sta più di 10 LU sotto la media.
+  Diventa **verde** entro 1 LU dal riferimento EBU di -23 LUFS;
+- *Loudness range* (LRA) in LU, come EBU Tech 3342: quanto varia la loudness a breve termine (dal 10° al 95° percentile, escludendo silenzio e passaggi 20 LU sotto
+  la media). Un tono costante dà 0.
+- *True peak* in dBTP: il livello massimo del segnale come lo ricostruirebbe un convertitore (sovracampionamento 4x), che può superare il campione più alto. Diventa rosso sopra -1 dBTP.
+
+Le letture di loudness sono verificate nei test automatici con i segnali di riferimento EBU (non con uno strumento hardware); il filtro del true peak è preciso a circa 0,05 dB su un tono
+con dissolvenza d'ingresso e un attacco senza dissolvenza può leggere fino a 0,4 dB in più, perché un click sfora davvero.
+
+**Spettro.** FFT a 4096 punti (finestra di Hann) del mix sinistra+destra, da 20 Hz a 20 kHz su asse logaritmico e da 0 a -90 dB, aggiornato 30 volte al secondo; il riempimento
+scende di 36 dB al secondo, la linea sottile è il massimo tenuto (il pulsante *Peak hold* lo spegne, *Reset* lo azzera).
+
+**Goniometro e correlazione.** Gli ultimi 1024 campioni come punti: un suono mono è una linea verticale, un suono a sinistra pende a sinistra, un suono ampio riempie il quadrato. La barra mostra
+la correlazione dei due canali (+1 mono, 0 non correlati, -1 fasi opposte: una barra rossa avverte che il suono può sparire su una cassa mono).
 
 ## Metronomo
 
@@ -488,12 +572,12 @@ occupato più tardi, un brano più pesante o un mixer pieno di effetti possono r
 
 ## Limiti
 
-- Fino a 8 canali, 8 tracce del mixer con 4 slot effetti ciascuna, 64 pattern, 8 tracce di playlist, una linea del
-  tempo lunga 32 pattern, 32 voci simultanee.
+- Fino a 8 canali, 8 tracce del mixer con 4 slot effetti ciascuna, 2 bus aux (4 slot ciascuno), 2 gruppi VCA, 64 pattern, 8 tracce di playlist, una linea del
+  tempo lunga 32 pattern, 4 corsie di automazione, 64 clip di automazione di al massimo 256 punti, 32 voci simultanee.
 - Gli effetti usano circa 18 MB di memoria a 48 kHz (di più a frequenze di campionamento maggiori).
 - Un pattern dura sempre due battute, 4/4, griglia di sedicesimi.
 - I sample sono mono o stereo, al massimo 30 secondi, suonati una volta sola (niente loop né editing
   dell'inviluppo). Clip audio: fino a 5 minuti per file, 64 clip.
 - Non ancora disponibili: suonare le note con la tastiera del computer, annulla per impostazioni dei canali e mixer, incorporare i sample nel progetto,
-  salvataggio automatico e recupero dopo un crash, plugin VST come strumenti o effetti, send, automazione, trasformare l'altezza di
+  salvataggio automatico e recupero dopo un crash, plugin VST come strumenti o effetti, automazione di qualsiasi cosa tranne volumi, pan e parametri degli effetti, trasformare l'altezza di
   chitarra o voce in note, punch-in e conteggio iniziale per la registrazione, dissolvenze ed effetti per clip, spostare il cursore con un clic sul righello. Vedi [roadmap.md](roadmap.md) (in inglese).

@@ -1,6 +1,6 @@
 # Status and roadmap
 
-Version 0.10.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
+Version 0.11.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
 what is missing. If something here disagrees with the program, the program is right: please fix the page.
 
 ## What has been verified, and how
@@ -32,10 +32,17 @@ what is missing. If something here disagrees with the program, the program is ri
 | Playlist 0.9.0 in the interface: audio dropped from the file manager, split, cut, undo / redo, zoom tool, trimming an audio clip from its left edge (the readout showed the new start, length, file offset in seconds and samples and the gain), New / Rename / Delete pattern; a Cyber-Hub sound dragged from the browser onto the Playlist (a clip appeared on the track under the mouse) and onto a channel (the channel took its name); the new demo opening at 112 BPM with Cyber-Hub drums and the login / logout clips on track 8, played in Song mode with the mixer meters moving and the master peaking about 2 dB under full scale | Manual, in a virtual display with a window manager and a silent device (the drag from the file manager through the XDND simulator) | Worked |
 | MIDI file import (parsing: ppq conversion, tempo, names, channels, repeated notes, velocity-0 offs, unterminated notes, bad / truncated / SMPTE / empty files; planning: free channels, percussion, splitting over patterns with ties, hostile numbers) and legato / slide (no re-attack and the old note not left to fade, pitch before / after, glide midway, normal play with nothing to join and after a gap, sampler channels, project file round trip) | Automated headless tests (557 checks in total) | All pass |
 | In the interface: a generated `.mid` (melody, bass, drums, 100 BPM) dropped on the Playlist made two channels and three patterns, set 100 BPM, skipped the drums and showed the right notes in the Piano Roll; Shift+click turned notes legato and slide (colours, letters, join lines; a note that stopped early was lengthened); Ctrl+Z removed an added note and Ctrl+Y brought it back | Manual, in a virtual display (the drop through the XDND simulator) | Worked |
+| Automation (model and evaluation: shapes, held last value, later clip taking over, hostile numbers; clip editing helpers; the audible result of volume, pan, track fader/balance and effect-parameter clips through the offline renderer; Song mode only; project file round trip and an old file without clips), aux buses / sends (pre and post fader, mute/solo rules, effects on a bus, bus before the master chain) and VCA groups (scaling, two groups multiplying, mute, pre/post-fader sends), the console in the project file | Automated headless tests (653 checks in total) | All pass |
+| Metering: K-weighting against the BS.1770 reference curve, a -23 dBFS stereo sine reading -23.0 LUFS at 44.1 / 48 / 96 kHz, absolute and relative gating, loudness range of a 10 LU test signal, 4x true peak on a faded tone and an inter-sample-peak signal, FFT bin position and Hann levels, goniometer ring, correlation | Automated headless tests (same 653), reference values computed independently from the published filter coefficients | All pass |
+| 0.11.0 in the interface: right-click > *Create automation clip* on the channel volume, a mixer fader and an effect slider; the clip in a lane, moved, resized, duplicated and deleted; the point editor (add, move, shape menu, delete); aux strips, send sliders, Pre / V1 / V2 buttons, VCA strips; the Meters window with a signal playing | Manual, in a virtual display with a window manager and a silent (ALSA `null`) device | Worked |
 | A use-after-free when clicking an item that rebuilds the browser tree (crash on *Scan for VST3 plugins...*) | Found in that manual session | Fixed (item actions are deferred); the same click was repeated afterwards |
 
 ## What has not been verified
 
+- **How automation, sends, buses and VCA groups sound on real hardware.** Everything was measured in rendered audio and seen in a virtual display;
+  nothing was heard. Automation is evaluated once per 64 samples, so a very steep clip (a hold step on a loud signal) can click: not listened to.
+  The on-screen controls do not follow automation while the song plays. **The meters were not compared with a hardware or commercial loudness meter**,
+  only with the published reference signals; the true peak is a 4x estimate. They read the program's output, not an exported file.
 - **How legato and slide sound on real hardware** (measured only: pitch and level in rendered audio) and **MIDI import on real-world files**: only
   generated files were used, not files from sequencers; the handling of tempo changes, drums and unusual files is as described in the guide.
 
@@ -84,7 +91,7 @@ what is missing. If something here disagrees with the program, the program is ri
 - **How the metronome sounds** on real hardware (the click is a 45 ms sine burst; nobody has listened to it).
 - **Typing in the "Save as preset" name box** was not tested (the virtual display had no window manager, so dialogs
   do not receive keyboard focus); saving and loading presets is covered by the tests.
-- **Memory of the effects**: about 18 MB at 48 kHz (8 tracks + master, 4 slots each), more at higher sample rates; not measured
+- **Memory of the effects**: about 22 MB at 48 kHz (8 tracks + master + 2 aux buses, 4 slots each), more at higher sample rates; not measured
   on a real device.
 - **Latency.** The program shows what the device reports; it has never been measured.
 - **The installed menu entry on KDE** (the file is installed and well-formed, but it was not seen in a real menu).
@@ -101,8 +108,9 @@ what is missing. If something here disagrees with the program, the program is ri
 | VST3 plugins | Plugins can be *scanned* (library code, no UI). Playing them as instruments or effects is not implemented: it needs plugin processing inside the audio thread, state saving, parameter handling and plugin editor windows. |
 | Undo / redo | For clips in the Playlist and for notes (Piano Roll, step sequencer, Clear notes, a recording of notes). Not for channel settings, the mixer, or adding / deleting patterns and channels. |
 | VST3 effects in the mixer | The four slots per track hold built-in effects only. No third-party plugin can be loaded. |
-| Sends, groups, more than 8 mixer tracks | A channel goes to one of 8 tracks; the master strip has a fader, a meter and four effect slots. No sends or sidechain, no per-slot wet/dry beyond what each effect offers, no effect-chain presets. |
-| Automation, pitch-to-MIDI | Automation is not implemented. MIDI keyboards play the selected channel live and **Rec notes** records their notes into the piano roll, but the pitch of a guitar or voice is **not** turned into notes (an audio take can become a sampler channel to be played or sequenced). Audio is recorded into the playlist or a new sampler channel, but there is no punch-in, no count-in, no loop recording and takes always start at the beginning of the song. |
+| More than 8 mixer tracks, sidechain, a routing-matrix window | A channel goes to one of 8 tracks. Two aux buses and two VCA groups exist (0.11.0); a bus cannot be sent to another bus and nothing can be sidechained. No per-slot wet/dry beyond what each effect offers, no effect-chain presets. |
+| Automation of other things | Automation covers channel volume and pan, track fader and balance, and the parameters of effects on tracks and the master (Song mode only, evaluated per 64 samples). Not covered: pitch, swing, master volume, mute / solo, sends, aux buses and VCA groups, and the controls do not move with it. |
+| Pitch-to-MIDI | MIDI keyboards play the selected channel live and **Rec notes** records their notes into the piano roll, but the pitch of a guitar or voice is **not** turned into notes (an audio take can become a sampler channel to be played or sequenced). Audio is recorded into the playlist or a new sampler channel, but there is no punch-in, no count-in, no loop recording and takes always start at the beginning of the song. |
 | Audio clip editing | Clips can be moved, shortened and lengthened (up to the length of the audio) and deleted. No trimming of the start, splitting, fades, gain control in the interface, time-stretch or pitch-shift; a clip keeps the length it had when it was added, so after a tempo change the audio no longer ends where the clip does. At most 5 minutes of audio per file and 64 audio clips. |
 | Playlist seeking | Clicking the ruler does not move the playhead (so playback and recording always start at the beginning). |
 | Pattern deletion and renaming | Patterns are created and cloned only; clips cannot be re-pointed to another pattern. |
@@ -113,6 +121,8 @@ what is missing. If something here disagrees with the program, the program is ri
 | Packaging | An AppImage can be built (`scripts/build_appimage.sh`, not yet tested on a real Nobara machine); no Flatpak or RPM; install can also be `cmake --install`. |
 
 ## Proposed order of work
+
+The larger feature blocks are in [feature-plan.md](feature-plan.md) (A, B and C are done in 0.11.0; next are time-stretch and the sample editor). Smaller items:
 
 1. **Undo / redo** for channel settings and the Mixer (notes and the Playlist already have it).
 2. **Project extras**: autosave and recovery, embedding samples, a project folder with its samples.

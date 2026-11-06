@@ -2,9 +2,33 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
-## Unreleased
+## 0.11.0 - 2026-11-06
+
+### Added
+- **Automation.** Right-click a control and choose *Create automation clip*: the channel volume and pan (Channel Rack), a track's fader
+  and balance (Mixer) and every parameter of an effect on a track or on the master. The clip (one pattern long, a flat line at the
+  control's current value) lands on one of **four automation lanes under the playlist tracks** and its editor opens. In the lanes
+  a clip is moved, lengthened or shortened by its right edge, duplicated (Ctrl+D), deleted or erased like any other clip; double-click
+  (or right click > *Edit the points...*) opens the **point editor**: click to add a point, drag to move it (time snaps to a 16th note
+  unless Alt is held), right click a point for the shape of the line that leaves it (linear, hold, smooth) or to delete it. Points
+  sit at any position, not on a grid (a fraction of a tick is allowed). Clips are saved in the project; older files open as before.
+  Automation plays in **Song mode only**; where clips of one parameter follow each other the later one takes over at its start, and after
+  the last clip its final value is held. The value is applied once per 64 samples (about 1.3 ms), not per sample.
+- **Mixer: aux buses, sends and VCA groups.** Every track has two send levels (A, B), a **Pre** switch (sends take the sound before the fader,
+  balance and VCA; a muted track still sends nothing) and two VCA switches (V1, V2). Two **aux buses** (Aux A, Aux B) sit right of the tracks: four effect
+  slots, balance, mute, fader and meter each; their output joins the tracks before the master chain. Two **VCA groups** have a fader and a
+  mute that scale / silence every member track (a post-fader send follows the VCA, a pre-fader send does not; two VCAs multiply). All of it is saved in the
+  project; older files open with no sends and two empty buses.
+- **Master meters** (new *Meters* button): momentary, short-term and integrated **loudness in LUFS** and the **loudness range** following ITU-R BS.1770-4 and
+  EBU R128 (K-weighting at any sample rate, absolute and relative gates, 0.1 LU histogram), **true peak** (4x oversampled, dBTP) and sample peak, a
+  **spectrum analyser** (4096-point FFT, Hann window, logarithmic axis, peak hold) and a **goniometer** with the stereo correlation meter.
+  The loudness code is checked against the EBU reference (a -23 dBFS stereo sine reads -23.0 LUFS at 44.1, 48 and 96 kHz), the gating, the
+  K-weighting curve, a 10 LU range test and an inter-sample-peak signal.
 
 ### Changed
+- The channel rack's default height is smaller (the playlist panel needs room for the automation lanes, its minimum height is now 340 px); the mixer
+  strips are 72 px wide (they were 80) and the mixer scrolls sideways when the window is too narrow for 8 tracks, 2 buses, 2 VCAs and the master.
+- `MainComponent.cpp` is split into seven files by area (no change in behaviour).
 - Second code audit (clang-tidy bugprone / performance / clang-analyzer checks, a hunt for repeated blocks and for functions nobody calls):
   the three "ask for a line of text" windows (rename channel, rename pattern, save preset) share one helper (`ui/TextPrompt.h`);
   seven more unused getters were removed; a repeated `switch` branch, a needless copy of the note list and an `int` multiplication that

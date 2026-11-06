@@ -11,7 +11,10 @@ src/main.cpp                    Application and main window (minimum size 1080x6
 
 src/audio/                      No UI dependencies except JUCE audio types
   NoteSequence.h                Note, 480 ticks per beat, note validation and sorting
-  Project.h                     Channel, MixerTrack, SampleData, Project: the immutable snapshot the audio thread reads
+  Project.h                     Channel, MixerTrack, Console (aux buses, VCA groups), SampleData, Project: the immutable snapshot the audio thread reads
+  Automation.h                  Automation targets, ranges, clips, points, evaluation and editing helpers (plain C++)
+  Loudness.h                    LoudnessMeter: BS.1770-4 K-weighting, gating, LUFS, loudness range, true peak (plain C++)
+  Spectrum.h                    StereoRing (lock-free audio -> GUI hand-over), SpectrumAnalyser (own FFT), stereo correlation
   Effects.*                     EffectSlot (type, bypass, parameters) and EffectUnit: Equalizer, Reverb, Delay, Compressor
   Arrangement.h                 Patterns, clips, and compilation of pattern / song into a plain Project
   SnapshotExchange.h            Lock-free hand-over of snapshots from the UI thread to the audio thread
@@ -37,10 +40,13 @@ src/plugins/PluginScanner.*     VST3 discovery. Only feeds the browser's Plugin 
 
 src/ui/
   MainComponent.*               Toolbar, workspace, panel wiring, channels, layout persistence, the demo project, timer
-  MainComponent{Patterns,Import,Recording,Notes,Browser,Project}.cpp
+  MainComponent{Patterns,Import,Recording,Notes,Browser,Project,Automation}.cpp
                                 The rest of MainComponent's member functions, one file per area: patterns and playlist; sample / audio /
                                 MIDI import and audio clips; audio recording; note undo and MIDI-keyboard note recording; browser, presets,
-                                export; project files, recent projects, the File menu
+                                export; project files, recent projects, the File menu; creating and editing automation clips
+  AutomatableSlider.h           A slider whose right-click menu offers "Create automation clip"
+  AutomationEditor.*            The point editor window for one automation clip
+  MetersView.*                  The Meters window: loudness read-outs, true peak, spectrum, goniometer, correlation
   PanelWindow.*                 PanelWindow (floating panel) and Workspace (the area they float in)
   PanelLayout.h                 Panel position/size/visibility: parse, serialise, clamp (no JUCE)
   RackView.h  ChannelStrip.*    Channel Rack panel body and its rows (step grid, knobs, context menu, drop target)
@@ -51,7 +57,7 @@ src/ui/
   PlaylistTimeline.*            The timeline: ruler, clips with waveforms, the five tools, undo snapshots, file and browser drops, track arming
   MetronomePanel.*  RightClickButton.h   The metronome pop-up (tempo, volume, tap); a button with a right-click action
   AudioSettings.*               The Audio... dialog: device selector, buffer size menu, Auto, load read-out
-  MixerPanel.*                  Mixer panel body: track strips, master strip (with its effect slots), effects panel
+  MixerPanel.*                  Mixer panel body: track strips (with sends and VCA switches), aux and VCA strips, master strip, effects panel
   AssignTrackDialog.*           The "Assign free mixer track" window
   VuMeter.*                     Peak/RMS meter (mixer)
   AudioMeter.*                  Simple level meter (rack rows, toolbar)
@@ -228,7 +234,7 @@ voices -> channel (smoothed gain, equal-power pan, channel mute/solo)
 - `EffectSlot { type, bypass, params[5] }` is plain data inside the snapshot. `sanitised()` maps unknown types to
   empty, NaN/inf parameters to their defaults and clamps the rest, so a corrupt slot cannot reach the DSP.
 - `EffectUnit` is the DSP behind one slot. **All its memory (reverb combs and all-passes, a 1 s delay line) is
-  allocated in `Player::prepare`** for 9 x 4 = 36 units (8 tracks and the master); about 0.5 MB each at 48 kHz, so ~18 MB, and proportionally
+  allocated in `Player::prepare`** for 11 x 4 = 44 units (8 tracks, the master and the two aux buses); about 0.5 MB each at 48 kHz, so ~22 MB, and proportionally
   more at higher sample rates. `process` never allocates. If a slot's type changes the old state is dropped; a
   bypassed slot clears its state when it is switched on again, so no stale tail comes back.
 - Equalizer: low shelf 120 Hz, peaking mid (Q 0.8, frequency parameter), high shelf 6 kHz, as biquads; a band at 0 dB is
@@ -240,6 +246,40 @@ voices -> channel (smoothed gain, equal-power pan, channel mute/solo)
   is active in the audio callback and the feedback loops flush tiny values.
 - There is no VST3 hosting. An `EffectSlot` has a built-in `EffectType`; hosting would add a slot kind that points at
   a plugin instance owned outside the snapshot, which needs its own design (state, editors, threading).
+
+### Aux buses, sends and VCA groups (0.11.0)
+
+`Project::console` holds `aux[2]` (each a `MixerTrack`: name, fader, balance, mute, four effect slots) and `vcaLevel[2]` /
+`vcaMute[2]`. Each `MixerTrack` has `sends[2]`, `sendsPreFader` and `vcaMask` (bit n: member of VCA n); `Project::make` clamps all of them.
+In `Player`, per 64-sample chunk, after a track's effects: the VCA factor is the product of the `vcaLevel`s of its groups (0 if one is
+muted); the fader gain is multiplied by it; a **post-fader** send takes the signal after fader, balance and VCA, a **pre-fader** send takes the
+signal after the effects only; a track silenced by mute or by another track's solo sends nothing. Send levels are smoothed (`sendGain`)
+like the fader. The sends are summed into `auxL/auxR`, run through the bus's `EffectUnit`s (allocated in `prepare`: 2 x 4 more units, ~4 MB),
+the bus fader and balance, metered (`getAuxPeak/Rms`) and added to the master sum **before** `masterEffects`. A bus cannot send to a bus.
+Index space used by the UI: tracks 0..7, `kMasterIndex` = 8, `kAuxIndexBase` = 9 (aux A = 9, aux B = 10). The project file keeps
+`"console"` (aux buses, VCA levels and mutes) and per track `sends`, `sendsPreFader` and `vca` (the bit mask); older files open with defaults.
+
+### Automation (0.11.0)
+
+`Automation.h` is plain C++. An `AutomationTarget` names a parameter (`ChannelVolume`, `ChannelPan`, `TrackVolume`, `TrackPan`, `TrackEffect`,
+`MasterEffect` plus index, slot and parameter); `automationRange` gives its min / max / default. An `AutomationClip` has a lane (0..3), a start
+tick, a length and points (tick as a double, value, shape Linear / Hold / Smooth). `Project::make` turns the clips into a sorted vector of
+`AutomationEvent`s (`makeAutomationEvents`): clips with unknown targets, a missing effect or a different effect type are dropped, values and
+ticks are sanitised, lengths and counts are limited. Evaluation is stateless: for a parameter, the latest-started clip that has begun decides;
+the curve is read at `min(tick, end)`, so after the end the last value is held. The `Player` applies it once per 64-sample chunk, in Song mode only,
+to the channel gains, the track faders / balances and **copies** of the effect slots (so the snapshot stays immutable; the effect parameters are
+smoothed by the effect itself). The UI side: `AutomatableSlider` raises `onAutomate`, `MainComponent::createAutomationFor` makes a flat clip
+and `Playlist` places it on a lane; `PlaylistTimeline` draws and edits the lanes with the same undo snapshots as other clips; `AutomationEditor`
+edits the points through `insertAutomationPoint`, `moveAutomationPoint` and `removeAutomationPoint`. The project file keeps `"automation"`.
+
+### Metering (0.11.0)
+
+The audio callback feeds the final stereo output to `LoudnessMeter` (BS.1770-4: stage-1 shelf and RLB high-pass K-weighting coefficients
+computed for the actual sample rate, 400 ms blocks hopping 100 ms for momentary and 3 s for short-term, histograms of 0.1 LU for the absolute
+(-70 LUFS) and relative (-10 LU, and -20 LU for the range) gates, 10th to 95th percentile range, 4x polyphase-sinc true peak) and to a `StereoRing`
+(lock-free, single writer, single reader). The Meters window, on the message thread, reads the loudness values, copies the last 4096 samples from the
+ring, applies a Hann window and the library-free radix-2 FFT of `SpectrumAnalyser`, and draws the spectrum, goniometer (last 1024 samples) and the correlation.
+`Reset` sets a flag (`requestReset`) that the audio thread acts on. The meter's buffers are sized in the constructor; there is no allocation test for `AudioEngine`'s callback itself (the tests call the meter directly).
 
 ## Patterns and the playlist
 
@@ -417,6 +457,11 @@ failed. It covers:
   while a thread is busy calling `process`), MIDI note mapping (also through the queue into the Player), `rewind()`, the
   metronome (timing, accent, BPM, volume, never in an export) and tap tempo;
 - `PanelLayout` parsing and clamping;
+- automation: evaluation (shapes, held last value, overlapping clips, hostile numbers), editing helpers, the audible effect of every target through
+  the offline renderer, Song mode only, the project file round trip and old files;
+- the console: sends (pre / post fader, mute and solo), aux bus effects and fader, bus before the master chain, VCA scaling, two groups, VCA mute,
+  hostile values and the project file;
+- metering: K-weighting response, the -23 dBFS reference at three sample rates, gating, loudness range, true peak, FFT bin and level, correlation, the ring;
 - the arrangement: placement rules, compilation of pattern and song, and audible results through the offline
   renderer (the first and second clip sound, the gap between them is silent).
 
