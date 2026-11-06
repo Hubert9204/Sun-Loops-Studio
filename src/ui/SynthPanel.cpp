@@ -21,12 +21,65 @@ juce::String secondsText (double s)
 const juce::StringArray kWaves { "Sine", "Triangle", "Saw", "Square" };
 } // namespace
 
-SynthPanel::Section& SynthPanel::addSection (const juce::String& title, int column)
+SynthPanel::Section& SynthPanel::addSection (const juce::String& title, std::array<int, 3> columns)
 {
     sections.push_back (std::make_unique<Section>());
     sections.back()->title = title;
-    sections.back()->column = column;
+    sections.back()->columns = columns;
     return *sections.back();
+}
+
+FmMatrixView::FmMatrixView()
+{
+    for (size_t c = 0; c < columnLabels.size(); ++c)
+    {
+        columnLabels[c].setText (c < static_cast<size_t> (kFmOperators) ? juce::String (static_cast<int> (c) + 1) : juce::String ("Out"), juce::dontSendNotification);
+        columnLabels[c].setJustificationType (juce::Justification::centred);
+        columnLabels[c].setColour (juce::Label::textColourId, kPanelDim);
+        columnLabels[c].setFont (juce::FontOptions (11.0f, juce::Font::bold));
+        addAndMakeVisible (columnLabels[c]);
+    }
+    for (size_t r = 0; r < rowLabels.size(); ++r)
+    {
+        rowLabels[r].setText (juce::String (static_cast<int> (r) + 1), juce::dontSendNotification);
+        rowLabels[r].setColour (juce::Label::textColourId, kPanelDim);
+        rowLabels[r].setFont (juce::FontOptions (11.0f, juce::Font::bold));
+        addAndMakeVisible (rowLabels[r]);
+        for (size_t c = 0; c < cells[r].size(); ++c)
+        {
+            auto& s = cells[r][c];
+            s.setSliderStyle (juce::Slider::LinearBar);
+            s.setRange (0.0, 100.0, 1.0);
+            s.setColour (juce::Slider::trackColourId, c == r ? juce::Colour (0xffc98a3a) : c == static_cast<size_t> (kFmOperators) ? juce::Colour (0xff4cc38a)
+                                                                                                                                  : juce::Colour (0xff4a8fd8));
+            s.setTooltip (c == static_cast<size_t> (kFmOperators) ? "How much of operator " + juce::String (static_cast<int> (r) + 1) + " is heard"
+                          : c == r ? "Feedback of operator " + juce::String (static_cast<int> (r) + 1)
+                                   : "How much operator " + juce::String (static_cast<int> (c) + 1) + " modulates operator " + juce::String (static_cast<int> (r) + 1));
+            addAndMakeVisible (s);
+        }
+    }
+}
+
+void FmMatrixView::resized()
+{
+    const int labelWidth = 16, cellWidth = (getWidth() - labelWidth) / (kFmOperators + 1), headerHeight = 16;
+    const int cellHeight = (getHeight() - headerHeight) / kFmOperators;
+    for (size_t c = 0; c < columnLabels.size(); ++c)
+        columnLabels[c].setBounds (labelWidth + static_cast<int> (c) * cellWidth, 0, cellWidth, headerHeight);
+    for (size_t r = 0; r < rowLabels.size(); ++r)
+    {
+        const int y = headerHeight + static_cast<int> (r) * cellHeight;
+        rowLabels[r].setBounds (0, y, labelWidth, cellHeight);
+        for (size_t c = 0; c < cells[r].size(); ++c)
+            cells[r][c].setBounds (labelWidth + static_cast<int> (c) * cellWidth + 1, y + 1, cellWidth - 2, cellHeight - 2);
+    }
+}
+
+void FmMatrixView::paint (juce::Graphics& g)
+{
+    g.setColour (kPanelDim.withAlpha (0.25f));
+    const int labelWidth = 16, cellWidth = (getWidth() - labelWidth) / (kFmOperators + 1);
+    g.drawVerticalLine (labelWidth + kFmOperators * cellWidth, 0.0f, static_cast<float> (getHeight()));
 }
 
 SynthPanel::Param& SynthPanel::addParam (Section& section, const juce::String& name, double lo, double hi, double step, const juce::String& suffix,
@@ -104,14 +157,14 @@ SynthPanel::SynthPanel()
     };
     addAndMakeVisible (previewButton);
 
-    auto& top = addSection ({}, -1);
-    engineChoice = &addChoice (top, "Engine", { "Classic (the original sine sound)", "Subtractive" },
+    auto& top = addSection ({}, { -1, -1, -1 });
+    engineChoice = &addChoice (top, "Engine", { "Classic (the original sine sound)", "Subtractive", "FM (4 operators)" },
                                [] (const SynthPatch& p) { return static_cast<int> (p.engine); },
-                               [] (SynthPatch& p, int i) { p.engine = static_cast<SynthEngine> (std::clamp (i, 0, 1)); });
+                               [] (SynthPatch& p, int i) { p.engine = static_cast<SynthEngine> (std::clamp (i, 0, 2)); });
 
     for (int o = 0; o < 2; ++o)
     {
-        auto& s = addSection ("OSCILLATOR " + juce::String (o + 1), 0);
+        auto& s = addSection ("OSCILLATOR " + juce::String (o + 1), { 0, 0, -1 });
         const auto osc = static_cast<size_t> (o);
         addChoice (s, "Wave", kWaves, [osc] (const SynthPatch& p) { return static_cast<int> (p.osc[osc].wave); },
                    [osc] (SynthPatch& p, int i) { p.osc[osc].wave = static_cast<Waveform> (std::clamp (i, 0, 3)); });
@@ -128,12 +181,12 @@ SynthPanel::SynthPanel()
     }
 
     {
-        auto& s = addSection ("NOISE", 1);
+        auto& s = addSection ("NOISE", { 1, 1, -1 });
         addParam (s, "Level", 0.0, 100.0, 1.0, " %", [] (const SynthPatch& p) { return p.noise * 100.0; },
                   [] (SynthPatch& p, double v) { p.noise = static_cast<float> (v / 100.0); });
     }
     {
-        auto& s = addSection ("FILTER", 1);
+        auto& s = addSection ("FILTER", { 1, 1, -1 });
         addChoice (s, "Type", { "Off", "Low-pass", "High-pass", "Band-pass" }, [] (const SynthPatch& p) { return static_cast<int> (p.filter); },
                    [] (SynthPatch& p, int i) { p.filter = static_cast<SamplerFilter> (std::clamp (i, 0, 3)); });
         steepToggle.setColour (juce::ToggleButton::textColourId, kPanelText);
@@ -155,9 +208,9 @@ SynthPanel::SynthPanel()
                   [] (SynthPatch& p, double v) { p.keyTrack = static_cast<float> (v / 100.0); });
     }
 
-    const auto envelope = [this] (const juce::String& title, Adsr SynthPatch::* member)
+    const auto envelope = [this] (const juce::String& title, Adsr SynthPatch::* member, std::array<int, 3> columns)
     {
-        auto& s = addSection (title, 2);
+        auto& s = addSection (title, columns);
         auto& a = addParam (s, "Attack", 0.0, 10.0, 0.001, {}, [member] (const SynthPatch& p) { return (p.*member).attack; },
                             [member] (SynthPatch& p, double v) { (p.*member).attack = static_cast<float> (v); });
         auto& d = addParam (s, "Decay", 0.0, 10.0, 0.001, {}, [member] (const SynthPatch& p) { return (p.*member).decay; },
@@ -172,11 +225,72 @@ SynthPanel::SynthPanel()
             x->textFromValueFunction = secondsText;
         }
     };
-    envelope ("AMPLIFIER ENVELOPE", &SynthPatch::amp);
-    envelope ("FILTER ENVELOPE", &SynthPatch::filterEnv);
+    envelope ("AMPLIFIER ENVELOPE", &SynthPatch::amp, { 2, 2, 3 });
+    envelope ("FILTER ENVELOPE", &SynthPatch::filterEnv, { 2, 2, -1 });
+
+    // FM (0.19.0): four operators, the algorithm menu and the matrix.
+    for (int o = 0; o < kFmOperators; ++o)
+    {
+        auto& s = addSection ("OPERATOR " + juce::String (o + 1), { -1, -1, o / 2 });
+        const auto op = static_cast<size_t> (o);
+        auto& ratio = addParam (s, "Ratio", 0.125, 32.0, 0.001, {}, [op] (const SynthPatch& p) { return p.op[op].ratio; },
+                                [op] (SynthPatch& p, double v) { p.op[op].ratio = static_cast<float> (v); });
+        ratio.slider.setSkewFactorFromMidPoint (2.0);
+        ratio.slider.textFromValueFunction = [] (double v) { return "x " + juce::String (v, v < 10.0 ? 3 : 2).trimCharactersAtEnd ("0").trimCharactersAtEnd ("."); };
+        addParam (s, "Level", 0.0, 100.0, 1.0, " %", [op] (const SynthPatch& p) { return p.op[op].level * 100.0; },
+                  [op] (SynthPatch& p, double v) { p.op[op].level = static_cast<float> (v / 100.0); });
+        auto& a = addParam (s, "Attack", 0.0, 10.0, 0.001, {}, [op] (const SynthPatch& p) { return p.op[op].env.attack; },
+                            [op] (SynthPatch& p, double v) { p.op[op].env.attack = static_cast<float> (v); });
+        auto& d = addParam (s, "Decay", 0.0, 10.0, 0.001, {}, [op] (const SynthPatch& p) { return p.op[op].env.decay; },
+                            [op] (SynthPatch& p, double v) { p.op[op].env.decay = static_cast<float> (v); });
+        addParam (s, "Sustain", 0.0, 100.0, 1.0, " %", [op] (const SynthPatch& p) { return p.op[op].env.sustain * 100.0; },
+                  [op] (SynthPatch& p, double v) { p.op[op].env.sustain = static_cast<float> (v / 100.0); });
+        auto& r = addParam (s, "Release", 0.0, 10.0, 0.001, {}, [op] (const SynthPatch& p) { return p.op[op].env.release; },
+                            [op] (SynthPatch& p, double v) { p.op[op].env.release = static_cast<float> (v); });
+        for (auto* x : { &a.slider, &d.slider, &r.slider })
+        {
+            x->setSkewFactorFromMidPoint (0.5);
+            x->textFromValueFunction = secondsText;
+        }
+    }
+    {
+        auto& s = addSection ("ALGORITHM AND MATRIX", { -1, -1, 2 });
+        juce::StringArray names;
+        for (const auto& a : fmAlgorithms())
+            names.add (a.name);
+        auto& algorithm = addChoice (s, "Preset", names,
+                                     [] (const SynthPatch& p)
+                                     {
+                                         for (size_t i = 0; i < fmAlgorithms().size(); ++i)
+                                             if (fmAlgorithms()[i].matrix == p.matrix)
+                                                 return static_cast<int> (i);
+                                         return -1;
+                                     },
+                                     [] (SynthPatch& p, int i)
+                                     {
+                                         if (i >= 0 && i < static_cast<int> (fmAlgorithms().size()))
+                                             p.matrix = fmAlgorithms()[static_cast<size_t> (i)].matrix;
+                                     });
+        algorithm.box.setTextWhenNothingSelected ("(your own)");
+        addAndMakeVisible (matrixView);
+        s.rows.push_back ({ nullptr, &matrixView, 150 });
+        for (size_t t = 0; t < static_cast<size_t> (kFmOperators); ++t)
+            for (size_t c = 0; c <= static_cast<size_t> (kFmOperators); ++c)
+                matrixView.cells[t][c].onValueChange = [this, t, c]
+                {
+                    const auto v = static_cast<float> (matrixView.cells[t][c].getValue() / 100.0);
+                    edit ([t, c, v] (SynthPatch& p)
+                    {
+                        if (c < static_cast<size_t> (kFmOperators))
+                            p.matrix.fm[t][c] = v;
+                        else
+                            p.matrix.out[t] = v;
+                    });
+                };
+    }
 
     {
-        auto& s = addSection ("LFO", 3);
+        auto& s = addSection ("LFO", { 3, 3, 3 });
         addChoice (s, "Target", { "Off", "Pitch (vibrato)", "Cutoff", "Level (tremolo)", "Pulse width" },
                    [] (const SynthPatch& p) { return static_cast<int> (p.lfoTarget); },
                    [] (SynthPatch& p, int i) { p.lfoTarget = static_cast<LfoTarget> (std::clamp (i, 0, 4)); });
@@ -189,7 +303,7 @@ SynthPanel::SynthPanel()
                   [] (SynthPatch& p, double v) { p.lfoDepth = static_cast<float> (v / 100.0); });
     }
     {
-        auto& s = addSection ("OUTPUT", 3);
+        auto& s = addSection ("OUTPUT", { 3, 3, 3 });
         addParam (s, "Level", 0.0, 150.0, 1.0, " %", [] (const SynthPatch& p) { return p.gain * 100.0; },
                   [] (SynthPatch& p, double v) { p.gain = static_cast<float> (v / 100.0); });
     }
@@ -222,11 +336,22 @@ void SynthPanel::refresh()
         return;
     }
     const auto& p = c->synth;
-    const bool sub = p.engine == SynthEngine::Subtractive;
+    const bool sub = p.engine != SynthEngine::Classic;
     titleLabel.setText (juce::String (c->name), juce::dontSendNotification);
-    noteLabel.setText (sub ? "Two oscillators and noise, a filter with its own envelope, an amplitude envelope and an LFO."
-                           : "The original sound of Sun Loops Studio (a sine with two harmonics). Choose Subtractive, or load a sound, to shape it.",
+    noteLabel.setText (p.engine == SynthEngine::Subtractive ? "Two oscillators and noise, a filter with its own envelope, an amplitude envelope and an LFO."
+                       : p.engine == SynthEngine::FM ? "Four sine operators: the matrix says which operator modulates which (the diagonal is feedback) and how much of each is heard."
+                       : "The original sound of Sun Loops Studio (a sine with two harmonics). Choose Subtractive or FM, or load a sound, to shape it.",
                        juce::dontSendNotification);
+    if (shownEngine != p.engine)
+    {
+        shownEngine = p.engine;
+        resized();
+        repaint();
+    }
+    for (size_t t = 0; t < static_cast<size_t> (kFmOperators); ++t)
+        for (size_t col = 0; col <= static_cast<size_t> (kFmOperators); ++col)
+            matrixView.cells[t][col].setValue ((col < static_cast<size_t> (kFmOperators) ? p.matrix.fm[t][col] : p.matrix.out[t]) * 100.0,
+                                               juce::dontSendNotification);
 
     int match = -1;
     for (size_t i = 0; i < synthFactoryPatches().size() && match < 0; ++i)
@@ -257,7 +382,7 @@ void SynthPanel::paint (juce::Graphics& g)
     g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
     for (const auto& s : sections)
     {
-        if (s->column < 0)
+        if (s->column (shownEngine) < 0)
             continue;
         g.setColour (kPanelDim);
         g.drawText (s->title, s->header, juce::Justification::centredLeft);
@@ -289,21 +414,31 @@ void SynthPanel::resized()
     y.fill (area.getY());
     for (auto& s : sections)
     {
-        if (s->column < 0)
+        const int column = s->column (shownEngine);
+        const bool shown = column >= 0;
+        for (auto& row : s->rows)
+        {
+            if (s->columns == std::array<int, 3> { -1, -1, -1 })
+                break; // the top bar: placed above
+            if (row.label != nullptr)
+                row.label->setVisible (shown);
+            row.control->setVisible (shown);
+        }
+        if (! shown)
             continue;
-        const int x = area.getX() + s->column * (columnWidth + gap);
-        auto& top = y[static_cast<size_t> (s->column)];
+        const int x = area.getX() + column * (columnWidth + gap);
+        auto& top = y[static_cast<size_t> (column)];
         s->header = { x, top, columnWidth, 18 };
         top += 24;
         for (auto& row : s->rows)
         {
-            juce::Rectangle<int> r (x, top, columnWidth, kRowHeight);
+            juce::Rectangle<int> r (x, top, columnWidth, row.height);
             if (row.label != nullptr)
                 row.label->setBounds (r.removeFromLeft (kLabelWidth));
-            else
+            else if (row.height == kRowHeight)
                 r.removeFromLeft (kLabelWidth);
             row.control->setBounds (r);
-            top += kRowHeight + kRowGap;
+            top += row.height + kRowGap;
         }
         top += 10;
     }

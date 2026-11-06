@@ -17,7 +17,7 @@ src/audio/                      No UI dependencies except JUCE audio types
   SampleEdit.*                  Destructive edits of a SampleData (ranges, cut / crop / fades / gain / normalise ...), noise reduction (spectral gating), onset detection, grid slices, 32-bit float WAV writing (plain C++ over SampleData)
   Auditioner.h                  The editor's preview voice: lock-free hand-over to the audio thread, mixed after the master chain
   HostedPlugin.h                What the engine knows of a third-party plugin (0.17.0): process(), isInstrument(), isLoaded(); no JUCE
-  SynthPatch.h                  The synth channel's sound (0.18.0): engine (Classic / Subtractive), oscillators, noise, filter, envelopes, LFO; factory patches (plain C++)
+  SynthPatch.h                  The synth channel's sound (0.18.0): engine (Classic / Subtractive / FM), oscillators, noise, filter, envelopes, LFO, FM operators and matrix, algorithms; factory patches (plain C++)
   SampleData.h                  SampleData (decoded audio) and finiteOr(), split from Project.h so that DrumKit.h and Project.h can include each other's needs
   SamplerProgram.h              The advanced sampler: SamplerSettings (envelope, loop, filter), SampleZone / SamplerProgram (multi-sample, key and velocity ranges), makeSliceProgram() (plain C++)
   DrumKit.h                     The drum machine model: 16 pads, 4 velocity layers, choke groups, swing; layerFor(), padForPitch(), sanitised() (plain C++)
@@ -134,7 +134,9 @@ It works in chunks of 64 samples so that note starts stay sample-accurate while 
   sine, triangle, and saw / square with PolyBLEP; white noise from a per-voice xorshift; the amplitude envelope uses the voice's existing
   attack / decay / sustain / release fields and the filter envelope its own; every 16 samples the LFO, the pitch and pulse-width modulation and
   the cutoff (base x 2^(envelope + key tracking + LFO) octaves) are computed and the state-variable filter's coefficients updated (one or two
-  filters in a row). The patch is read from the voice's channel in the snapshot (plain values, nothing to free). Either kind ends at the note length and at the loop
+  filters in a row). An **FM** voice (0.19.0, `Player::renderFm`) keeps four operator phases, envelopes and last outputs; each sample
+  every operator's phase is modulated by the matrix-weighted sum of the operators' previous outputs (6 radians at an amount of 1; the
+  diagonal is feedback) and the heard operators are mixed by the output column, normalised by its sum. The patch is read from the voice's channel in the snapshot (plain values, nothing to free). Either kind ends at the note length and at the loop
   boundary. A sampler voice plays its sample once, repitched by note relative to the channel's root pitch (linear
   interpolation, sample-rate compensated) and keeps ringing across the loop boundary.
 - On stop the voices fade out over 80 ms and the transport rewinds to the start.

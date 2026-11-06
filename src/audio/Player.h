@@ -138,10 +138,19 @@ private:
         int controlLeft = 0;                // samples until the LFO, the cutoff and the pitch modulation are computed again
         double pitchMod = 1.0;
         float pwMod = 0.0f, ampMod = 1.0f;
+
+        // FM voices (0.19.0): four sine operators with their own envelopes; the last output of each feeds the matrix.
+        bool fm = false;
+        std::array<double, kFmOperators> opPhase {};
+        std::array<float, kFmOperators> opOut {}, opEnv {}, opAttack {}, opDecay {}, opSustain {}, opRelease {};
+        std::array<std::uint8_t, kFmOperators> opStage {}; // 0 attack, 1 decay / sustain, 2 release
     };
     static constexpr int kControlInterval = 16; // samples between two updates of a subtractive voice's modulation
     void subtractiveVoiceOn (Voice& v, const SynthPatch& patch, int pitch) noexcept;
     float renderSubtractive (Voice& v, const SynthPatch& patch) noexcept;
+    void fmVoiceOn (Voice& v, const SynthPatch& patch) noexcept;
+    float renderFm (Voice& v, const SynthPatch& patch) noexcept;
+    void updateModulation (Voice& v, const SynthPatch& patch) noexcept; // the LFO and what it drives, every kControlInterval samples
 
     // Audio clips of the playlist (recordings, imported files): one voice each, played straight through.
     struct ClipVoice

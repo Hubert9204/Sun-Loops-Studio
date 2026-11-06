@@ -1,6 +1,6 @@
 # Status and roadmap
 
-Version 0.18.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
+Version 0.19.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
 what is missing. If something here disagrees with the program, the program is right: please fix the page.
 
 ## What has been verified, and how
@@ -49,10 +49,13 @@ what is missing. If something here disagrees with the program, the program is ri
 | Plugins in the interface: *Scan for plugins* found the two test plugins (VST3, and the gain also as LV2) and the 10 LADSPA example plugins of the build host (sorted into Instruments and Effects), the list shown again after a restart; a double-click on *SLS Test Synth* made a channel and opened its window; the channel menu with *Plugin window...* and *Plugin instruments*; notes drawn in the piano roll played (channel meter, playhead) and a key held in the piano roll sounded; *SLS Test Gain* chosen in a mixer slot, its window, its gain changed (the title showed the unsaved change), saved, the program restarted with the file: the channel, its notes, the effect and its gain came back; a WAV export with the plugin channel soloed contained its 262 Hz tone (C4) and the live engine played again afterwards; cloning the plugin channel | Manual, in a virtual display with a window manager and the ALSA default device of the build host (no speakers) | Worked |
 | Subtractive synth (0.18.0): the Classic engine rendering bit for bit as before, 440 Hz for A4 with every waveform, oscillator octave and semitone, the band-limited saw at C7, low-pass / 24 dB / high-pass / filter envelope / full resonance staying bounded, attack, sustain level, release, a zero sustain, tremolo and vibrato from the LFO, noise, two oscillators, velocity, slide, every factory patch under full scale, hostile values, no allocation over 2000 blocks; patches in project and preset files (round trip, hostile JSON, classic channels writing nothing) | Automated headless tests (1022 checks in total) | All pass |
 | The synth window in the interface: *Synth settings...* in the channel menu, the window with the Classic engine (controls disabled), *Acid Bass* chosen from the menu (engine and every control followed), the export of the soloed channel differing from the classic sound, `Ctrl+Z` bringing the classic sound back | Manual, in a virtual display with a window manager | Worked (the sound itself not heard) |
+| FM synth (0.19.0): one operator giving a pure 440 Hz sine, ratio 2 giving 880 Hz, modulation and feedback adding harmonics, a modulator's envelope making the brightness decay, two heard operators normalised, the amplitude release, tremolo, the eight algorithms, every operator at full depth and ratio 32 on the top key staying bounded, six FM sounds, no allocation over 2000 blocks, hostile values, JSON round trip and partial files | Automated headless tests (1037 checks in total) | All pass |
+| The FM engine in the interface: *FM E-Piano* from the window's menu (engine, four operators and the matrix shown), the algorithm menu setting *4 > 3 > 2 > 1*, a matrix cell dragged (the menu then shows *(your own)*), a WAV export of the soloed channel with the FM sound | Manual, in a virtual display with a window manager | Worked (not heard) |
 | A use-after-free when clicking an item that rebuilds the browser tree (crash on *Scan for VST3 plugins...*) | Found in that manual session | Fixed (item actions are deferred); the same click was repeated afterwards |
 
 ## What has not been verified
 
+- **How the FM synth sounds (0.19.0).** Only measured (pitch, brightness, envelopes, bounds); the factory FM sounds were set by numbers.
 - **How the subtractive synth sounds (0.18.0).** Pitch, filter, envelopes and LFO were measured on single notes; the factory sounds were
   shaped by numbers (levels, cutoffs, times), not by ear. Aliasing at very high notes with the square wave's pulse-width modulation, the
   resonance at its maximum and the CPU load of 32 subtractive voices on a real computer were not judged.
@@ -169,7 +172,7 @@ what is missing. If something here disagrees with the program, the program is ri
 
 ## Proposed order of work
 
-The larger feature blocks are in [feature-plan.md](feature-plan.md) (A, B and C are done in 0.11.0, D in 0.12.0, E in 0.13.0, G in 0.14.0, H in 0.16.0, I in 0.17.0; the subtractive synth of block F in 0.18.0; next are the FM and additive synths, the rest of block F). Smaller items:
+The larger feature blocks are in [feature-plan.md](feature-plan.md) (A, B and C are done in 0.11.0, D in 0.12.0, E in 0.13.0, G in 0.14.0, H in 0.16.0, I in 0.17.0; the subtractive synth of block F in 0.18.0, the FM synth in 0.19.0; next is the additive synth, the rest of block F). Smaller items:
 
 1. **Undo / redo** for channel settings and the Mixer (notes and the Playlist already have it).
 2. **Project extras**: autosave and recovery, embedding samples, a project folder with its samples.

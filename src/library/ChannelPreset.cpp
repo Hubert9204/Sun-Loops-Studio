@@ -172,7 +172,7 @@ juce::var synthPatchToVar (const SynthPatch& patch)
 {
     const auto p = patch.sanitised();
     auto* o = new juce::DynamicObject();
-    o->setProperty ("engine", p.engine == SynthEngine::Subtractive ? "subtractive" : "classic");
+    o->setProperty ("engine", p.engine == SynthEngine::Subtractive ? "subtractive" : p.engine == SynthEngine::FM ? "fm" : "classic");
     juce::Array<juce::var> oscs;
     for (const auto& osc : p.osc)
     {
@@ -200,6 +200,25 @@ juce::var synthPatchToVar (const SynthPatch& patch)
     o->setProperty ("lfoTarget", targetKey (p.lfoTarget));
     o->setProperty ("lfoDepth", static_cast<double> (p.lfoDepth));
     o->setProperty ("gain", static_cast<double> (p.gain));
+
+    // FM (0.19.0)
+    juce::Array<juce::var> ops, rows, outs;
+    for (size_t i = 0; i < p.op.size(); ++i)
+    {
+        auto* x = new juce::DynamicObject();
+        x->setProperty ("ratio", static_cast<double> (p.op[i].ratio));
+        x->setProperty ("level", static_cast<double> (p.op[i].level));
+        x->setProperty ("envelope", adsrToVar (p.op[i].env));
+        ops.add (juce::var (x));
+        juce::Array<juce::var> row;
+        for (const float m : p.matrix.fm[i])
+            row.add (static_cast<double> (m));
+        rows.add (row);
+        outs.add (static_cast<double> (p.matrix.out[i]));
+    }
+    o->setProperty ("operators", ops);
+    o->setProperty ("fmMatrix", rows);
+    o->setProperty ("fmOutputs", outs);
     return juce::var (o);
 }
 
@@ -210,7 +229,8 @@ SynthPatch synthPatchFromVar (const juce::var& v)
     auto* o = v.getDynamicObject();
     if (o == nullptr)
         return p;
-    p.engine = o->getProperty ("engine").toString() == "subtractive" ? SynthEngine::Subtractive : SynthEngine::Classic;
+    const auto engine = o->getProperty ("engine").toString();
+    p.engine = engine == "subtractive" ? SynthEngine::Subtractive : engine == "fm" ? SynthEngine::FM : SynthEngine::Classic;
     if (auto* oscs = o->getProperty ("oscillators").getArray())
         for (int i = 0; i < std::min (oscs->size(), 2); ++i)
             if (auto* x = (*oscs)[i].getDynamicObject())
@@ -238,6 +258,24 @@ SynthPatch synthPatchFromVar (const juce::var& v)
     p.lfoTarget = targetFromKey (o->getProperty ("lfoTarget").toString());
     p.lfoDepth = static_cast<float> (readNumber (o->getProperty ("lfoDepth"), d.lfoDepth, 0.0, 1.0));
     p.gain = static_cast<float> (readNumber (o->getProperty ("gain"), d.gain, 0.0, 1.5));
+    if (auto* ops = o->getProperty ("operators").getArray())
+        for (int i = 0; i < std::min (ops->size(), kFmOperators); ++i)
+            if (auto* x = (*ops)[i].getDynamicObject())
+            {
+                auto& op = p.op[static_cast<size_t> (i)];
+                const auto& od = d.op[static_cast<size_t> (i)];
+                op.ratio = static_cast<float> (readNumber (x->getProperty ("ratio"), od.ratio, 0.125, 32.0));
+                op.level = static_cast<float> (readNumber (x->getProperty ("level"), od.level, 0.0, 1.0));
+                op.env = adsrFromVar (x->getProperty ("envelope"), od.env);
+            }
+    if (auto* rows = o->getProperty ("fmMatrix").getArray())
+        for (int t = 0; t < std::min (rows->size(), kFmOperators); ++t)
+            if (auto* row = (*rows)[t].getArray())
+                for (int s = 0; s < std::min (row->size(), kFmOperators); ++s)
+                    p.matrix.fm[static_cast<size_t> (t)][static_cast<size_t> (s)] = static_cast<float> (readNumber ((*row)[s], 0.0, 0.0, 1.0));
+    if (auto* outs = o->getProperty ("fmOutputs").getArray())
+        for (int t = 0; t < std::min (outs->size(), kFmOperators); ++t)
+            p.matrix.out[static_cast<size_t> (t)] = static_cast<float> (readNumber ((*outs)[t], d.matrix.out[static_cast<size_t> (t)], 0.0, 1.0));
     return p.sanitised();
 }
 
@@ -283,10 +321,10 @@ const std::vector<ChannelPreset>& factoryPresets()
         swungHat.sampleSource = "builtin:hat";
         v.push_back (swungHat);
 
-        // The subtractive synth's ready-made sounds (0.18.0), as channel presets that can be dragged from the browser.
+        // The synth's ready-made sounds (subtractive 0.18.0, FM 0.19.0), as channel presets that can be dragged from the browser.
         for (const auto& named : synthFactoryPatches())
         {
-            if (named.patch.engine != SynthEngine::Subtractive)
+            if (named.patch.engine == SynthEngine::Classic)
                 continue;
             ChannelPreset p;
             p.id = "synth-" + juce::String (named.name).toLowerCase().replaceCharacter (' ', '-').toStdString();

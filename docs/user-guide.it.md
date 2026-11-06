@@ -207,6 +207,16 @@ PWM Strings*), per modellare il suono. **Play C4** suona il canale finché lo ti
 | LFO | Destinazione (pitch: vibrato fino a 2 semitoni; cutoff: fino a 3 ottave; livello: tremolo; larghezza dell'impulso), forma d'onda, velocità (0,05-20 Hz), profondità. L'LFO riparte a ogni nota. |
 | Output | Il livello del synth prima del volume del canale. |
 
+### Motore FM
+
+**Engine > FM (4 operators)** sostituisce oscillatori, rumore e filtro con quattro **operatori** sinusoidali. Ognuno ha un **rapporto** di
+frequenza rispetto alla nota (x 1 è la nota, x 2 un'ottava sopra, x 3,5 un armonico da campana), un **livello** e un suo **inviluppo**. La
+**matrice** dice chi modula chi: la riga è l'operatore modulato, la colonna il modulatore, la diagonale (arancione) è il feedback di un
+operatore e la colonna **Out** (verde) è quanto di ogni operatore si sente. Trascina una cella in su o in giù per cambiarla. Il menu
+**Preset** sopra di essa imposta una disposizione classica (*2 > 1*, catene di tre e quattro, due coppie, tre modulatori su uno, uno su
+tre, feedback, tutti udibili); dopo una modifica a mano mostra *(your own)*. L'inviluppo di ampiezza, l'LFO (pitch o livello) e il livello
+d'uscita valgono come per il motore sottrattivo. Suoni FM pronti: *FM E-Piano, FM Bell, FM Bass, FM Brass, FM Drawbars, FM Growl*.
+
 Legato e slide (Shift+clic nel Piano Roll) funzionano come con il motore classico. Un preset di synth (*Save as preset...*) salva anche il
 suono. Ogni modifica si annulla con `Ctrl+Z`.
 
@@ -787,8 +797,9 @@ occupato più tardi, un brano più pesante o un mixer pieno di effetti possono r
 - I pattern durano 1, 2, 4 o 8 battute (uguale per tutti), 4/4, griglia di sedicesimi; un solo tempo per tutto il brano.
 - I sample sono mono o stereo, al massimo 30 secondi. Il sampler ha un inviluppo e un filtro per canale (niente inviluppo del filtro, LFO o
   modulazione); al massimo quattro zone suonano per nota. Clip audio: fino a 5 minuti per file, 64 clip.
-- Il synth: un LFO e un filtro per canale, due oscillatori, niente unisono, ancora niente motore FM o additivo, la velocity non modula gli
-  inviluppi; l'LFO riparte a ogni nota.
+- Il synth: un LFO e un filtro per canale, due oscillatori, niente unisono, ancora niente motore additivo, la velocity non modula gli
+  inviluppi; l'LFO riparte a ogni nota. Il motore FM ha quattro operatori, solo sinusoidi, nessun filtro, e la sua matrice è calcolata con un
+  ritardo di un campione (come nella maggior parte dei synth FM a matrice).
 - Plugin: VST3, LV2 e LADSPA (niente VST2, niente Audio Unit); stereo in ingresso e in uscita (uscite extra e ingressi sidechain non sono usati);
   i loro parametri non si possono automatizzare; le modifiche fatte nella finestra di un plugin si salvano col progetto ma non entrano nell'annulla.
 - Non ancora disponibili: suonare le note con la tastiera del computer, time-stretch dei campioni nel Sampler (si possono modificare solo le clip audio della playlist), automazione di qualsiasi cosa tranne volumi, pan e parametri degli effetti, trasformare l'altezza di

@@ -2,6 +2,21 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.19.0 - 2026-11-06
+
+### Added
+- **FM synth** (block F, second part): **Engine > FM (4 operators)** in the synth window. Four sine operators, each with a frequency ratio
+  (x 0.125 to x 32), a level and an ADSR envelope; a **modulation matrix** (any operator into any other, the diagonal is feedback) with an
+  output level per operator, and eight classic algorithms to start from. The amplitude envelope, the LFO (pitch or level) and the output
+  level work as for the subtractive engine.
+- Six FM sounds: FM E-Piano, FM Bell, FM Bass, FM Brass, FM Drawbars, FM Growl (window menu and browser presets).
+- FM patches in project and preset files (operators, matrix, outputs). `FmOperator`, `FmMatrix` and `fmAlgorithms()` in `SynthPatch.h`,
+  `Player::renderFm`, the matrix grid in the synth window.
+
+### Limits
+- Sine operators only, no filter on the FM engine, no velocity sensitivity per operator, no fixed-frequency operators; the matrix uses each
+  operator's output of the previous sample. Measured on test notes, not heard.
+
 ## 0.18.0 - 2026-11-06
 
 ### Added

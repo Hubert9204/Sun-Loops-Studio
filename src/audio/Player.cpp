@@ -11,6 +11,7 @@ namespace
 constexpr double kTwoPi = 6.283185307179586476925286766559;
 constexpr float kSynthGain = 0.25f;
 constexpr float kSubtractiveGain = 0.35f; // a full saw through an open filter about as loud as the classic synth's fundamental
+constexpr float kFmGain = 0.5f;           // a single full sine operator about as loud as the classic synth
 const SynthPatch defaultPatch {};
 constexpr float kSampleGain = 0.5f;
 constexpr float kWaveNorm = 1.0f / 1.35f;
@@ -435,6 +436,8 @@ void Player::noteOn (const Channel& channel, int channelIndex, const Note& n, in
     v.attackStep = static_cast<float> (1.0 / (0.005 * sampleRate)); // 5 ms
     if (channel.synth.engine == SynthEngine::Subtractive)
         subtractiveVoiceOn (v, channel.synth, n.pitch);
+    else if (channel.synth.engine == SynthEngine::FM)
+        fmVoiceOn (v, channel.synth);
 
     *target = v;
 }
@@ -515,6 +518,87 @@ inline float lfoValue (Waveform wave, float t) noexcept
 }
 } // namespace
 
+void Player::fmVoiceOn (Voice& v, const SynthPatch& patch) noexcept
+{
+    v.fm = true;
+    const auto seconds = [this] (float s, double minimum) { return std::max (minimum, static_cast<double> (s)) * sampleRate; };
+    v.attackStep = static_cast<float> (1.0 / seconds (patch.amp.attack, 0.0005));
+    v.sustainLevel = patch.amp.sustain;
+    v.decayStep = static_cast<float> ((1.0 - patch.amp.sustain) / seconds (patch.amp.decay, 0.001));
+    v.relStep = static_cast<float> (1.0 / seconds (patch.amp.release, 0.002));
+    for (size_t i = 0; i < static_cast<size_t> (kFmOperators); ++i)
+    {
+        const auto& e = patch.op[i].env;
+        v.opPhase[i] = 0.0;
+        v.opOut[i] = 0.0f;
+        v.opEnv[i] = 0.0f;
+        v.opStage[i] = 0;
+        v.opAttack[i] = static_cast<float> (1.0 / seconds (e.attack, 0.0005));
+        v.opSustain[i] = e.sustain;
+        v.opDecay[i] = static_cast<float> ((1.0 - e.sustain) / seconds (e.decay, 0.001));
+        v.opRelease[i] = static_cast<float> (1.0 / seconds (e.release, 0.002));
+    }
+    v.lfoPhase = 0.0f;
+    v.lfoInc = static_cast<float> (patch.lfoRate / sampleRate);
+    v.controlLeft = 0;
+}
+
+void Player::updateModulation (Voice& v, const SynthPatch& patch) noexcept
+{
+    const float value = lfoValue (patch.lfoWave, v.lfoPhase);
+    const float lfo = patch.lfoTarget == LfoTarget::Off ? 0.0f : value * patch.lfoDepth;
+    v.pitchMod = patch.lfoTarget == LfoTarget::Pitch ? std::pow (2.0, 2.0 * lfo / 12.0) : 1.0;
+    v.ampMod = patch.lfoTarget == LfoTarget::Amp ? 1.0f - 0.5f * patch.lfoDepth * (1.0f - value) : 1.0f;
+    v.pwMod = patch.lfoTarget == LfoTarget::PulseWidth ? 0.4f * lfo : 0.0f;
+}
+
+// One sample of an FM voice, before the amplitude envelope and velocity (which the caller applies).
+float Player::renderFm (Voice& v, const SynthPatch& patch) noexcept
+{
+    if (--v.controlLeft <= 0)
+    {
+        v.controlLeft = kControlInterval;
+        updateModulation (v, patch);
+    }
+    v.lfoPhase += v.lfoInc;
+    if (v.lfoPhase >= 1.0f)
+        v.lfoPhase -= 1.0f;
+
+    constexpr float kIndex = 6.0f; // radians of phase modulation at a matrix amount of 1
+    const bool releasing = v.state == State::Release;
+    const double base = v.increment / kTwoPi * v.pitchMod;
+    std::array<float, kFmOperators> next {};
+    float mix = 0.0f, outSum = 0.0f;
+    for (size_t i = 0; i < static_cast<size_t> (kFmOperators); ++i)
+    {
+        // The operator's envelope.
+        auto& env = v.opEnv[i];
+        if (releasing)
+            v.opStage[i] = 2;
+        if (v.opStage[i] == 0)
+        {
+            env += v.opAttack[i];
+            if (env >= 1.0f) { env = 1.0f; v.opStage[i] = 1; }
+        }
+        else if (v.opStage[i] == 1)
+            env = std::max (v.opSustain[i], env - v.opDecay[i]);
+        else
+            env = std::max (0.0f, env - v.opRelease[i]);
+
+        const auto& row = patch.matrix.fm[i];
+        float mod = 0.0f;
+        for (size_t s = 0; s < static_cast<size_t> (kFmOperators); ++s)
+            mod += row[s] * v.opOut[s];
+        next[i] = static_cast<float> (std::sin (kTwoPi * v.opPhase[i] + static_cast<double> (kIndex * mod))) * patch.op[i].level * env;
+        v.opPhase[i] += base * static_cast<double> (patch.op[i].ratio);
+        v.opPhase[i] -= std::floor (v.opPhase[i]);
+        mix += patch.matrix.out[i] * next[i];
+        outSum += patch.matrix.out[i];
+    }
+    v.opOut = next;
+    return mix / std::max (1.0f, outSum) * v.ampMod * patch.gain;
+}
+
 // One sample of a subtractive voice, before the amplitude envelope and velocity (which the caller applies like for every voice).
 float Player::renderSubtractive (Voice& v, const SynthPatch& patch) noexcept
 {
@@ -535,10 +619,8 @@ float Player::renderSubtractive (Voice& v, const SynthPatch& patch) noexcept
     if (--v.controlLeft <= 0)
     {
         v.controlLeft = kControlInterval;
+        updateModulation (v, patch);
         const float lfo = patch.lfoTarget == LfoTarget::Off ? 0.0f : lfoValue (patch.lfoWave, v.lfoPhase) * patch.lfoDepth;
-        v.pitchMod = patch.lfoTarget == LfoTarget::Pitch ? std::pow (2.0, 2.0 * lfo / 12.0) : 1.0;
-        v.ampMod = patch.lfoTarget == LfoTarget::Amp ? 1.0f - 0.5f * patch.lfoDepth * (1.0f - lfoValue (patch.lfoWave, v.lfoPhase)) : 1.0f;
-        v.pwMod = patch.lfoTarget == LfoTarget::PulseWidth ? 0.4f * lfo : 0.0f;
         if (v.filter != SamplerFilter::Off)
         {
             const double octaves = 6.0 * patch.envAmount * v.fenv + v.keyOctaves + (patch.lfoTarget == LfoTarget::Cutoff ? 3.0 * lfo : 0.0);
@@ -1091,6 +1173,12 @@ void Player::render (const Project& project, double bpm, bool playing,
                     const auto& patch = static_cast<size_t> (v.channel) < project.channels.size() ? project.channels[static_cast<size_t> (v.channel)].synth
                                                                                                   : defaultPatch;
                     l = r = renderSubtractive (v, patch) * v.env * v.velocity * kSubtractiveGain;
+                }
+                else if (v.fm)
+                {
+                    const auto& patch = static_cast<size_t> (v.channel) < project.channels.size() ? project.channels[static_cast<size_t> (v.channel)].synth
+                                                                                                  : defaultPatch;
+                    l = r = renderFm (v, patch) * v.env * v.velocity * kFmGain;
                 }
                 else
                 {

@@ -15,12 +15,14 @@ namespace sls
 {
 // The sound of a synth channel (0.18.0, block F). The "Classic" engine is the original sine with two harmonics, so projects made before
 // 0.18.0 sound the same; the "Subtractive" engine is a two-oscillator synth with noise, a filter with its own envelope, an amplitude
-// envelope and an LFO. Plain C++: the Player reads it from the channel of the snapshot, the UI edits it, the files store it.
+// envelope and an LFO. The "FM" engine (0.19.0) has four sine operators, each with its frequency ratio, level and envelope, and a
+// modulation matrix (who modulates whom, the diagonal being feedback) with an output level per operator, like a small Sytrus.
+// Plain C++: the Player reads it from the channel of the snapshot, the UI edits it, the files store it.
 
 // Exact equality of two stored settings (bit for bit: what was saved is what is read back).
 inline bool sameValue (float a, float b) noexcept { return std::memcmp (&a, &b, sizeof (float)) == 0; }
 
-enum class SynthEngine : std::uint8_t { Classic, Subtractive };
+enum class SynthEngine : std::uint8_t { Classic, Subtractive, FM };
 enum class Waveform : std::uint8_t { Sine, Triangle, Saw, Square };
 enum class LfoTarget : std::uint8_t { Off, Pitch, Cutoff, Amp, PulseWidth };
 
@@ -63,6 +65,73 @@ struct SynthOsc
     }
 };
 
+constexpr int kFmOperators = 4;
+
+struct FmOperator
+{
+    float ratio = 1.0f;  // frequency / note frequency, 0.125..32
+    float level = 1.0f;  // 0..1
+    Adsr env { 0.002f, 0.6f, 0.7f, 0.3f };
+
+    bool operator== (const FmOperator& o) const noexcept { return sameValue (ratio, o.ratio) && sameValue (level, o.level) && env == o.env; }
+};
+
+// The FM matrix: fm[target][source] is how strongly operator `source` modulates operator `target` (0..1; 1 = about 6 radians of phase
+// modulation); fm[i][i] is operator i's feedback. out[i] is how much of operator i is heard.
+struct FmMatrix
+{
+    std::array<std::array<float, kFmOperators>, kFmOperators> fm {};
+    std::array<float, kFmOperators> out { 1.0f, 0.0f, 0.0f, 0.0f };
+
+    bool operator== (const FmMatrix& o) const noexcept
+    {
+        for (int t = 0; t < kFmOperators; ++t)
+        {
+            if (! sameValue (out[static_cast<size_t> (t)], o.out[static_cast<size_t> (t)]))
+                return false;
+            for (int s = 0; s < kFmOperators; ++s)
+                if (! sameValue (fm[static_cast<size_t> (t)][static_cast<size_t> (s)], o.fm[static_cast<size_t> (t)][static_cast<size_t> (s)]))
+                    return false;
+        }
+        return true;
+    }
+};
+
+// Classic operator arrangements: which operators modulate which (at an amount of 0.5) and which are heard.
+struct FmAlgorithm
+{
+    const char* name;
+    FmMatrix matrix;
+};
+
+inline const std::vector<FmAlgorithm>& fmAlgorithms()
+{
+    static const std::vector<FmAlgorithm> list = []
+    {
+        const auto make = [] (std::initializer_list<std::pair<int, int>> links, std::initializer_list<int> carriers)
+        {
+            FmMatrix m;
+            m.out = {};
+            for (const auto& [target, source] : links)
+                m.fm[static_cast<size_t> (target)][static_cast<size_t> (source)] = 0.5f;
+            for (const int c : carriers)
+                m.out[static_cast<size_t> (c)] = 1.0f;
+            return m;
+        };
+        return std::vector<FmAlgorithm> {
+            { "2 > 1", make ({ { 0, 1 } }, { 0 }) },
+            { "3 > 2 > 1", make ({ { 0, 1 }, { 1, 2 } }, { 0 }) },
+            { "4 > 3 > 2 > 1", make ({ { 0, 1 }, { 1, 2 }, { 2, 3 } }, { 0 }) },
+            { "2 > 1 and 4 > 3", make ({ { 0, 1 }, { 2, 3 } }, { 0, 2 }) },
+            { "2 + 3 + 4 > 1", make ({ { 0, 1 }, { 0, 2 }, { 0, 3 } }, { 0 }) },
+            { "4 > 1, 2, 3", make ({ { 0, 3 }, { 1, 3 }, { 2, 3 } }, { 0, 1, 2 }) },
+            { "1 with feedback", make ({ { 0, 0 } }, { 0 }) },
+            { "All heard (organ)", make ({}, { 0, 1, 2, 3 }) },
+        };
+    }();
+    return list;
+}
+
 struct SynthPatch
 {
     SynthEngine engine = SynthEngine::Classic;
@@ -86,11 +155,18 @@ struct SynthPatch
 
     float gain = 0.8f;                 // 0..1.5
 
+    // FM engine (0.19.0). The amplitude envelope (`amp`), the LFO (pitch or level) and `gain` apply to it too; the filter does not.
+    std::array<FmOperator, kFmOperators> op { FmOperator { 1.0f, 1.0f, { 0.002f, 0.6f, 0.7f, 0.3f } },
+                                              FmOperator { 1.0f, 0.8f, { 0.002f, 0.4f, 0.3f, 0.3f } },
+                                              FmOperator { 2.0f, 0.0f, { 0.002f, 0.6f, 0.7f, 0.3f } },
+                                              FmOperator { 3.0f, 0.0f, { 0.002f, 0.6f, 0.7f, 0.3f } } };
+    FmMatrix matrix = fmAlgorithms().front().matrix;
+
     SynthPatch sanitised() const noexcept
     {
         const SynthPatch d;
         SynthPatch p = *this;
-        if (static_cast<int> (p.engine) > static_cast<int> (SynthEngine::Subtractive))
+        if (static_cast<int> (p.engine) > static_cast<int> (SynthEngine::FM))
             p.engine = SynthEngine::Classic;
         for (auto& o : p.osc)
         {
@@ -118,6 +194,16 @@ struct SynthPatch
             p.lfoTarget = LfoTarget::Off;
         p.lfoDepth = std::clamp (finiteOr (p.lfoDepth, d.lfoDepth), 0.0f, 1.0f);
         p.gain = std::clamp (finiteOr (p.gain, d.gain), 0.0f, 1.5f);
+        for (size_t i = 0; i < p.op.size(); ++i)
+        {
+            auto& o = p.op[i];
+            o.ratio = std::clamp (finiteOr (o.ratio, d.op[i].ratio), 0.125f, 32.0f);
+            o.level = std::clamp (finiteOr (o.level, d.op[i].level), 0.0f, 1.0f);
+            o.env = o.env.sanitised (d.op[i].env);
+            p.matrix.out[i] = std::clamp (finiteOr (p.matrix.out[i], 0.0f), 0.0f, 1.0f);
+            for (auto& m : p.matrix.fm[i])
+                m = std::clamp (finiteOr (m, 0.0f), 0.0f, 1.0f);
+        }
         return p;
     }
 
@@ -126,7 +212,8 @@ struct SynthPatch
         return engine == o.engine && osc == o.osc && sameValue (noise, o.noise) && filter == o.filter && steep == o.steep
             && sameValue (cutoff, o.cutoff) && sameValue (resonance, o.resonance) && sameValue (envAmount, o.envAmount)
             && sameValue (keyTrack, o.keyTrack) && amp == o.amp && filterEnv == o.filterEnv && lfoWave == o.lfoWave
-            && sameValue (lfoRate, o.lfoRate) && lfoTarget == o.lfoTarget && sameValue (lfoDepth, o.lfoDepth) && sameValue (gain, o.gain);
+            && sameValue (lfoRate, o.lfoRate) && lfoTarget == o.lfoTarget && sameValue (lfoDepth, o.lfoDepth) && sameValue (gain, o.gain)
+            && op == o.op && matrix == o.matrix;
     }
 };
 
@@ -250,6 +337,67 @@ inline const std::vector<NamedSynthPatch>& synthFactoryPatches()
         pwm.lfoRate = 0.8f;
         pwm.lfoDepth = 0.8f;
         v.push_back ({ "PWM Strings", pwm });
+
+        // FM sounds (0.19.0).
+        const auto fm = [] (int algorithm)
+        {
+            SynthPatch p;
+            p.engine = SynthEngine::FM;
+            p.matrix = fmAlgorithms()[static_cast<size_t> (algorithm)].matrix;
+            p.amp = { 0.002f, 0.3f, 1.0f, 0.3f };
+            return p;
+        };
+
+        auto ep = fm (3); // two pairs: a soft tine and a bell-like attack
+        ep.op[0] = { 1.0f, 1.0f, { 0.002f, 1.8f, 0.3f, 0.4f } };
+        ep.op[1] = { 1.0f, 0.6f, { 0.002f, 1.2f, 0.15f, 0.4f } };
+        ep.op[2] = { 1.0f, 0.5f, { 0.002f, 0.6f, 0.0f, 0.3f } };
+        ep.op[3] = { 14.0f, 0.5f, { 0.001f, 0.15f, 0.0f, 0.1f } };
+        ep.matrix.fm[0][1] = 0.35f;
+        ep.matrix.fm[2][3] = 0.3f;
+        ep.matrix.out = { 1.0f, 0.0f, 0.35f, 0.0f };
+        ep.amp = { 0.002f, 0.2f, 1.0f, 0.5f };
+        v.push_back ({ "FM E-Piano", ep });
+
+        auto bell = fm (0);
+        bell.op[0] = { 1.0f, 1.0f, { 0.001f, 3.0f, 0.0f, 1.5f } };
+        bell.op[1] = { 3.5f, 0.8f, { 0.001f, 2.0f, 0.0f, 1.5f } };
+        bell.matrix.fm[0][1] = 0.6f;
+        bell.amp = { 0.001f, 0.1f, 1.0f, 1.5f };
+        v.push_back ({ "FM Bell", bell });
+
+        auto fmBass = fm (1);
+        fmBass.op[0] = { 0.5f, 1.0f, { 0.001f, 0.6f, 0.6f, 0.15f } };
+        fmBass.op[1] = { 0.5f, 0.9f, { 0.001f, 0.25f, 0.2f, 0.15f } };
+        fmBass.op[2] = { 1.0f, 0.6f, { 0.001f, 0.12f, 0.0f, 0.1f } };
+        fmBass.matrix.fm[0][1] = 0.5f;
+        fmBass.matrix.fm[1][2] = 0.4f;
+        v.push_back ({ "FM Bass", fmBass });
+
+        auto fmBrass = fm (4);
+        fmBrass.op[0] = { 1.0f, 1.0f, { 0.04f, 0.3f, 0.85f, 0.2f } };
+        fmBrass.op[1] = { 1.0f, 0.7f, { 0.08f, 0.4f, 0.6f, 0.2f } };
+        fmBrass.op[2] = { 2.0f, 0.3f, { 0.08f, 0.4f, 0.4f, 0.2f } };
+        fmBrass.op[3] = { 1.0f, 0.4f, { 0.05f, 0.3f, 0.5f, 0.2f } };
+        fmBrass.matrix.fm[0][0] = 0.15f; // a little feedback for the buzz
+        v.push_back ({ "FM Brass", fmBrass });
+
+        auto drawbar = fm (7);
+        drawbar.op[0] = { 1.0f, 1.0f, { 0.005f, 0.1f, 1.0f, 0.06f } };
+        drawbar.op[1] = { 2.0f, 0.7f, { 0.005f, 0.1f, 1.0f, 0.06f } };
+        drawbar.op[2] = { 3.0f, 0.5f, { 0.005f, 0.1f, 1.0f, 0.06f } };
+        drawbar.op[3] = { 4.0f, 0.35f, { 0.005f, 0.1f, 1.0f, 0.06f } };
+        drawbar.matrix.out = { 0.7f, 0.7f, 0.7f, 0.7f };
+        drawbar.amp = { 0.005f, 0.1f, 1.0f, 0.08f };
+        v.push_back ({ "FM Drawbars", drawbar });
+
+        auto growl = fm (6);
+        growl.op[0] = { 1.0f, 1.0f, { 0.002f, 0.5f, 0.7f, 0.2f } };
+        growl.matrix.fm[0][0] = 0.55f;
+        growl.lfoTarget = LfoTarget::Amp;
+        growl.lfoRate = 4.0f;
+        growl.lfoDepth = 0.4f;
+        v.push_back ({ "FM Growl", growl });
         return v;
     }();
     return list;

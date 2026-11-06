@@ -200,6 +200,16 @@ to shape the sound. **Play C4** sounds the channel while you hold it. The same s
 | LFO | Target (pitch: vibrato up to 2 semitones; cutoff: up to 3 octaves; level: tremolo; pulse width), wave, rate (0.05-20 Hz), depth. The LFO starts again with every note. |
 | Output | The level of the synth before the channel's volume. |
 
+### FM engine
+
+**Engine > FM (4 operators)** replaces the oscillators, noise and filter with four sine **operators**. Each has a frequency **ratio** to the
+note (x 1 is the note, x 2 an octave up, x 3.5 a bell-like overtone), a **level** and its own **envelope**. The **matrix** says who modulates
+whom: the row is the operator being modulated, the column the modulator, the diagonal (orange) is an operator's feedback, and the
+**Out** column (green) is how much of each operator you hear. Drag a cell up or down to change it. The **Preset** menu above it sets a
+classic arrangement (*2 > 1*, stacks of three and four, two pairs, three modulators into one, one into three, feedback, all heard);
+after a change by hand it shows *(your own)*. The amplitude envelope, the LFO (pitch or level) and the output level apply as for the
+subtractive engine. Ready-made FM sounds: *FM E-Piano, FM Bell, FM Bass, FM Brass, FM Drawbars, FM Growl*.
+
 Legato and slide (Shift+click in the Piano Roll) work as with the classic engine. A synth preset (*Save as preset...*) stores the sound too.
 Every change can be undone with `Ctrl+Z`.
 
@@ -777,8 +787,9 @@ a heavier song or a plugin-heavy mixer can still need a bigger size.
 - Patterns are 1, 2, 4 or 8 bars long (the same for all patterns), 4/4, 16th-note grid; one tempo for the whole song.
 - Samples are mono or stereo, at most 30 seconds. The sampler has one envelope and one filter per channel (no filter envelope, LFO or modulation);
   at most four zones sound per note. Audio clips: up to 5 minutes per file, 64 clips.
-- The synth: one LFO and one filter per channel, two oscillators, no unison, no FM or additive engine yet, no modulation of the envelopes by
-  velocity; the LFO is restarted with every note.
+- The synth: one LFO and one filter per channel, two oscillators, no unison, no additive engine yet, no modulation of the envelopes by
+  velocity; the LFO is restarted with every note. The FM engine has four operators, sine waves only, no filter, and its matrix is evaluated
+  with a delay of one sample (as in most matrix FM synths).
 - Plugins: VST3, LV2 and LADSPA (no VST2, no Audio Units); stereo in and out (extra outputs and side-chain inputs are not used); their parameters
   cannot be automated; edits made in a plugin's window are saved with the project but are not in the undo history.
 - Not available yet: playing notes from the computer keyboard, time-stretching of samples in the Sampler (only audio clips on the playlist can be stretched), automation of anything except volumes, pans and effect parameters, turning guitar or voice pitch into notes,

@@ -6564,6 +6564,142 @@ void testSubtractiveSynth()
     }
 }
 
+void testFmSynth()
+{
+    std::cout << "FM synth (0.19.0)\n";
+    const auto play = [] (const sls::SynthPatch& patch, double seconds, int lengthTicks = 2 * kBeat, int pitch = 69)
+    {
+        auto c = synthChannel ({ { pitch, 0, lengthTicks, 0.8f } });
+        c.synth = patch;
+        sls::Player p;
+        p.prepare (kSr);
+        return renderBlocks (p, sls::Project::make ({ c }, 16 * kBeat), true, seconds);
+    };
+    const auto finite = [] (const std::vector<float>& x) { return std::all_of (x.begin(), x.end(), [] (float v) { return std::isfinite (v); }); };
+
+    sls::SynthPatch pure;
+    pure.engine = sls::SynthEngine::FM;
+    pure.matrix = sls::FmMatrix {}; // operator 1 heard, nothing modulates
+    pure.op[0] = { 1.0f, 1.0f, { 0.001f, 0.1f, 1.0f, 0.05f } };
+    pure.amp = { 0.001f, 0.1f, 1.0f, 0.05f };
+
+    const auto sine = play (pure, 0.6);
+    check (std::fabs (zeroCrossingHz (sine, kSr, 2000, 24000) - 440.0) < 2.0 && roughness (sine, 0.1, 0.5) < 0.07f,
+           "one operator, nothing modulating: a pure 440 Hz sine");
+    auto octave = pure;
+    octave.op[0].ratio = 2.0f;
+    check (std::fabs (zeroCrossingHz (play (octave, 0.6), kSr, 2000, 24000) - 880.0) < 3.0, "operator ratio 2: 880 Hz");
+
+    auto modulated = pure;
+    modulated.op[1] = { 1.0f, 1.0f, { 0.001f, 0.1f, 1.0f, 0.05f } };
+    modulated.matrix.fm[0][1] = 0.6f;
+    const auto bright = play (modulated, 0.6);
+    check (roughness (bright, 0.1, 0.5) > 2.0f * roughness (sine, 0.1, 0.5) && finite (bright), "operator 2 modulating operator 1: many more harmonics");
+    auto feedback = pure;
+    feedback.matrix.fm[0][0] = 0.7f;
+    check (roughness (play (feedback, 0.6), 0.1, 0.5) > 1.5f * roughness (sine, 0.1, 0.5), "feedback on operator 1 brightens it (towards a saw)");
+
+    // A modulator whose envelope decays: bright at the start, close to a sine later.
+    auto decaying = modulated;
+    decaying.op[1].env = { 0.001f, 0.15f, 0.0f, 0.05f };
+    const auto d = play (decaying, 0.8);
+    check (roughness (d, 0.01, 0.05) > 2.0f * roughness (d, 0.5, 0.7), "a modulator's own envelope: the brightness decays");
+
+    // Two operators heard (no modulation) with ratios 1 and 2: both are there, and the level is normalised.
+    auto organ = pure;
+    organ.op[1] = { 2.0f, 1.0f, { 0.001f, 0.1f, 1.0f, 0.05f } };
+    organ.matrix.out = { 1.0f, 1.0f, 0.0f, 0.0f };
+    const auto o = play (organ, 0.6);
+    float peakSine = 0.0f, peakOrgan = 0.0f;
+    for (size_t i = 4800; i < 24000; ++i)
+    {
+        peakSine = std::max (peakSine, std::fabs (sine[i]));
+        peakOrgan = std::max (peakOrgan, std::fabs (o[i]));
+    }
+    check (peakOrgan < 1.3f * peakSine && roughness (o, 0.1, 0.5) > 1.3f * roughness (sine, 0.1, 0.5),
+           "two operators heard: the octave is added and the sum is normalised");
+
+    // Release and the amplitude envelope, the LFO on the level.
+    {
+        auto r = pure;
+        r.amp.release = 0.2f;
+        const auto out = play (r, 1.5, 2 * kBeat); // a 1 s note
+        check (rmsWindow (out, 1.02, 1.08) > 0.01f && rmsWindow (out, 1.3, 1.5) < 0.002f, "the note ends with the amplitude release");
+        auto trem = pure;
+        trem.lfoTarget = sls::LfoTarget::Amp;
+        trem.lfoRate = 4.0f;
+        trem.lfoDepth = 1.0f;
+        const auto t = play (trem, 1.0, 2 * kBeat);
+        float lo = 1.0f, hi = 0.0f;
+        for (double x = 0.1; x < 0.9; x += 0.02)
+        {
+            lo = std::min (lo, rmsWindow (t, x, x + 0.02));
+            hi = std::max (hi, rmsWindow (t, x, x + 0.02));
+        }
+        check (lo < 0.2f * hi, "the LFO's tremolo works on the FM engine");
+    }
+
+    // Algorithms, extreme settings, factory sounds, no allocation.
+    {
+        check (sls::fmAlgorithms().size() == 8 && sls::fmAlgorithms()[2].matrix.fm[2][3] > 0.0f && sls::fmAlgorithms()[7].matrix.out[3] > 0.0f,
+               "eight algorithms: e.g. the 4-operator stack and the organ (all heard)");
+        auto wild = pure;
+        for (auto& row : wild.matrix.fm)
+            row.fill (1.0f);
+        wild.matrix.out.fill (1.0f);
+        for (auto& op : wild.op)
+            op = { 32.0f, 1.0f, { 0.0f, 0.0f, 1.0f, 0.0f } };
+        const auto w = play (wild, 0.5, kBeat, 120);
+        float peak = 0.0f;
+        for (float v : w)
+            peak = std::max (peak, std::fabs (v));
+        check (finite (w) && peak < 1.5f, "every operator modulating every other at full depth, ratio 32, top key: finite and bounded");
+        int fmSounds = 0;
+        for (const auto& named : sls::synthFactoryPatches())
+            fmSounds += named.patch.engine == sls::SynthEngine::FM ? 1 : 0;
+        check (fmSounds >= 6, "six FM factory sounds");
+
+        std::vector<sls::Note> notes;
+        for (int i = 0; i < 8; ++i)
+            notes.push_back ({ 48 + 4 * i, (i % 4) * kBeat / 2, 3 * kBeat, 0.7f });
+        auto c = synthChannel (notes);
+        c.synth = wild;
+        const auto project = sls::Project::make ({ c }, 8 * kBeat);
+        sls::Player player;
+        player.prepare (kSr);
+        renderBlocks (player, project, true, 0.1);
+        std::array<float, 256> bufL {}, bufR {};
+        float* chans[2] = { bufL.data(), bufR.data() };
+        tAllocs = 0;
+        tCounting = true;
+        for (int block = 0; block < 2000; ++block)
+            player.render (project, 120.0, true, chans, 2, 256);
+        tCounting = false;
+        check (tAllocs == 0, "FM voices allocate nothing on the audio thread (2000 blocks)");
+    }
+
+    // Hostile values and the file.
+    {
+        auto bad = pure;
+        bad.op[2].ratio = std::numeric_limits<float>::quiet_NaN();
+        bad.op[3].ratio = 1000.0f;
+        bad.matrix.fm[1][2] = -5.0f;
+        bad.matrix.out[3] = std::numeric_limits<float>::infinity();
+        const auto fixed = bad.sanitised();
+        check (fixed.op[2].ratio == sls::SynthPatch {}.op[2].ratio && fixed.op[3].ratio == 32.0f && fixed.matrix.fm[1][2] == 0.0f && fixed.matrix.out[3] == 0.0f,
+               "hostile FM values become valid");
+        auto saved = modulated;
+        saved.op[3] = { 7.0f, 0.25f, { 0.5f, 1.5f, 0.25f, 2.0f } };
+        saved.matrix.fm[3][3] = 0.33f;
+        saved.matrix.out[2] = 0.5f;
+        const auto back = sls::synthPatchFromVar (juce::JSON::parse (juce::JSON::toString (sls::synthPatchToVar (saved))));
+        check (back == saved.sanitised() && back.engine == sls::SynthEngine::FM, "an FM patch survives the JSON round trip (operators, matrix, outputs)");
+        const auto partial = sls::synthPatchFromVar (juce::JSON::parse (R"({"engine":"fm","fmMatrix":[[0,"x"],[9]],"operators":[{"ratio":-1}]})"));
+        check (partial.engine == sls::SynthEngine::FM && partial.op[0].ratio == 0.125f && partial.matrix.fm[1][0] == 1.0f && partial.matrix.fm[0][1] == 0.0f,
+               "a partial or hostile FM patch is read with clamped values");
+    }
+}
+
 void testSynthPatchFiles()
 {
     std::cout << "Synth patches in project and preset files (0.18.0)\n";
@@ -6981,6 +7117,7 @@ int main()
 #ifdef SLS_TEST_PLUGIN_DIR
     testSubtractiveSynth();
     testSynthPatchFiles();
+    testFmSynth();
     testPluginProjectFile();
     testPluginHosting();
 #endif
