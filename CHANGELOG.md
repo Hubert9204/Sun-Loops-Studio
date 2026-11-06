@@ -25,6 +25,9 @@ All notable changes to Sun Loops Studio. Newest first.
   The loudness code is checked against the EBU reference (a -23 dBFS stereo sine reads -23.0 LUFS at 44.1, 48 and 96 kHz), the gating, the
   K-weighting curve, a 10 LU range test and an inter-sample-peak signal.
 
+### Fixed
+- A metronome test read past the end of its buffer (it looked at beat 5 of a render that ended before it), so it failed on some runs. Only the test was wrong.
+
 ### Changed
 - The channel rack's default height is smaller (the playlist panel needs room for the automation lanes, its minimum height is now 340 px); the mixer
   strips are 72 px wide (they were 80) and the mixer scrolls sideways when the window is too narrow for 8 tracks, 2 buses, 2 VCAs and the master.

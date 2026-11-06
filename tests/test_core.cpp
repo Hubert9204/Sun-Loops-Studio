@@ -3477,7 +3477,7 @@ void testMetronome()
         p.prepare (kSr);
         p.setMetronome (true, 1.0f);
         const auto short4 = sls::Project::make ({ synthChannel ({}) }, 4 * kBeat);
-        const auto x = run (p, short4, true, 400); // two passes of a 4-beat loop
+        const auto x = run (p, short4, true, 600); // 153600 samples, enough to look at beat 5 (400 blocks ended before it: a read past the end)
         check (peakOf (x.data(), 4 * kBeatSamples, 4 * kBeatSamples + 1500) > peakOf (x.data(), 5 * kBeatSamples, 5 * kBeatSamples + 1500) * 1.2f,
                "the start of the loop is a downbeat again");
         sls::Player quiet;
