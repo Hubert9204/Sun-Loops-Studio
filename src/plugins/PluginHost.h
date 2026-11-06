@@ -108,6 +108,12 @@ public:
 private:
     juce::AudioPluginFormatManager formatManager;
     juce::KnownPluginList knownPlugins;
+    // LV2 plugins are found by URI in a "world" that must have read their bundles first: the folders of the last scan are kept (also in
+    // the saved list) and read once before the first LV2 plugin is made in a program that did not scan.
+    juce::FileSearchPath lv2Folders;
+    bool lv2FoldersRead = false;
+    void readLv2Folders();
+
     std::mutex registryLock; // message thread only; the audio thread never touches the registry
     std::vector<std::weak_ptr<JucePlugin>> registry;
 };

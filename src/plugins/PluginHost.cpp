@@ -140,6 +140,11 @@ int PluginHost::scan (const std::function<juce::FileSearchPath (const juce::Stri
             for (int i = 0; i < extra.getNumPaths(); ++i)
                 paths.addIfNotAlreadyThere (extra[i]);
         }
+        if (format->getName() == "LV2")
+        {
+            lv2Folders = paths;
+            lv2FoldersRead = true; // the scanner reads them now
+        }
         juce::PluginDirectoryScanner scanner (knownPlugins, *format, paths, true, deadMansPedal, false);
         juce::String current;
         for (;;)
@@ -179,17 +184,45 @@ juce::FileSearchPath PluginHost::distributionPaths (const juce::String& formatNa
 void PluginHost::loadKnownList (const juce::File& file)
 {
     if (auto xml = juce::parseXML (file))
+    {
         knownPlugins.recreateFromXml (*xml);
+        lv2Folders = juce::FileSearchPath (xml->getStringAttribute ("slsLv2Folders"));
+        lv2FoldersRead = false;
+    }
+}
+
+void PluginHost::readLv2Folders()
+{
+    if (lv2FoldersRead)
+        return;
+    lv2FoldersRead = true;
+    for (auto* format : formatManager.getFormats())
+        if (format->getName() == "LV2")
+        {
+            auto folders = lv2Folders;
+            const auto defaults = format->getDefaultLocationsToSearch();
+            const auto extra = distributionPaths ("LV2");
+            for (int i = 0; i < defaults.getNumPaths(); ++i)
+                folders.addIfNotAlreadyThere (defaults[i]);
+            for (int i = 0; i < extra.getNumPaths(); ++i)
+                folders.addIfNotAlreadyThere (extra[i]);
+            format->searchPathsForPlugins (folders, true, false);
+        }
 }
 
 void PluginHost::saveKnownList (const juce::File& file) const
 {
     if (auto xml = knownPlugins.createXml())
+    {
+        xml->setAttribute ("slsLv2Folders", lv2Folders.toString());
         xml->writeTo (file);
+    }
 }
 
 std::shared_ptr<JucePlugin> PluginHost::create (const juce::PluginDescription& description, double sampleRate, int maxBlock, juce::String& error)
 {
+    if (description.pluginFormatName == "LV2")
+        readLv2Folders();
     auto instance = formatManager.createPluginInstance (description, sampleRate, maxBlock, error);
     if (instance == nullptr)
     {

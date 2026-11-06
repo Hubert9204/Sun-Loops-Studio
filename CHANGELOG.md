@@ -16,7 +16,8 @@ All notable changes to Sun Loops Studio. Newest first.
     aux buses and the master. Bypass works as for the built-in effects.
   - Projects store each plugin's description and settings; a plugin that is not installed becomes a silent placeholder that keeps them.
     Changes made in a plugin's window mark the project as changed. Exports render with the plugins (the live sound pauses meanwhile).
-    Cloning a plugin channel makes a second instance with the same settings.
+    Cloning a plugin channel makes a second instance with the same settings. The LV2 folders of the last scan are kept with the list, so
+    LV2 plugins load after a restart without scanning again.
   - `src/audio/HostedPlugin.h` (what the engine knows of a plugin), `src/plugins/PluginHost.*` (formats, scan, known list, instances),
     `src/ui/PluginWindow.h`, `src/ui/MainComponentPlugins.cpp`; two small test plugins (`tests/plugins/`, VST3 and LV2) built with the tests.
 
