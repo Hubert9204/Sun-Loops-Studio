@@ -288,6 +288,63 @@ void Player::noteOn (const Channel& channel, int channelIndex, const Note& n, in
     *target = v;
 }
 
+namespace
+{
+// Sets every automated parameter to its value at song position `tick`. Parameters without a clip that has started are left as
+// they are. Channel and track gains go through `setChannel` / `setTrack` (which know the current volume and pan), effect
+// parameters are written into the slot copies.
+template <typename SetChannel, typename SetTrack>
+void applyAutomation (const Project& project, double tick, size_t numChannels, SetChannel& setChannel, SetTrack& setTrack,
+                      const std::array<float, kMaxChannels>& channelVolume, const std::array<float, kMaxChannels>& channelPan,
+                      const std::array<float, kMaxTracks>& trackVolume, const std::array<float, kMaxTracks>& trackPan,
+                      std::array<std::array<EffectSlot, kSlotsPerTrack>, kMaxTracks>& trackSlots,
+                      std::array<EffectSlot, kSlotsPerTrack>& masterSlots) noexcept
+{
+    const auto& events = project.automation;
+    size_t first = 0;
+    while (first < events.size())
+    {
+        const auto target = events[first].target;
+        size_t last = first + 1;
+        while (last < events.size() && events[last].target.key() == target.key())
+            ++last;
+
+        float v = 0.0f;
+        if (automationValueFor (events, first, last, tick, v))
+        {
+            const auto idx = static_cast<size_t> (std::max (0, target.index));
+            switch (target.kind)
+            {
+                case AutomationKind::ChannelVolume:
+                    if (idx < numChannels)
+                        setChannel (idx, v, channelPan[idx]);
+                    break;
+                case AutomationKind::ChannelPan:
+                    if (idx < numChannels)
+                        setChannel (idx, channelVolume[idx], v);
+                    break;
+                case AutomationKind::TrackVolume:
+                    if (idx < static_cast<size_t> (kMaxTracks))
+                        setTrack (idx, v, trackPan[idx]);
+                    break;
+                case AutomationKind::TrackPan:
+                    if (idx < static_cast<size_t> (kMaxTracks))
+                        setTrack (idx, trackVolume[idx], v);
+                    break;
+                case AutomationKind::TrackEffect:
+                    if (idx < trackSlots.size())
+                        trackSlots[idx][static_cast<size_t> (target.slot)].params[static_cast<size_t> (target.param)] = v;
+                    break;
+                case AutomationKind::MasterEffect:
+                    masterSlots[static_cast<size_t> (target.slot)].params[static_cast<size_t> (target.param)] = v;
+                    break;
+            }
+        }
+        first = last;
+    }
+}
+} // namespace
+
 void Player::render (const Project& project, double bpm, bool playing,
                      float* const* out, int numChannels, int numSamples) noexcept
 {
@@ -322,17 +379,26 @@ void Player::render (const Project& project, double bpm, bool playing,
     std::array<float, kMaxChannels> panLeft {};
     std::array<float, kMaxChannels> panRight {};
     std::array<size_t, kMaxChannels> routedTo {};
+    std::array<bool, kMaxChannels> channelAudible {};
+
+    // A channel's gain and pan for the coming samples (the project's own, or what automation says at this moment).
+    std::array<float, kMaxChannels> channelVolume {}, channelPan {};
+    const auto setChannel = [&] (size_t ch, float volume, float pan)
+    {
+        channelVolume[ch] = volume;
+        channelPan[ch] = pan;
+        targetGain[ch] = channelAudible[ch] ? std::clamp (volume, 0.0f, 1.5f) : 0.0f;
+        const double angle = (static_cast<double> (std::clamp (pan, -1.0f, 1.0f)) + 1.0) * kTwoPi / 8.0; // 0..pi/2
+        panLeft[ch] = static_cast<float> (std::cos (angle));
+        panRight[ch] = static_cast<float> (std::sin (angle));
+    };
 
     for (size_t ch = 0; ch < numMixerChannels; ++ch)
     {
         const auto& c = project.channels[ch];
-        const bool audible = anySolo ? c.solo : ! c.mute;
-        targetGain[ch] = audible ? c.volume : 0.0f;
+        channelAudible[ch] = anySolo ? c.solo : ! c.mute;
         routedTo[ch] = static_cast<size_t> (std::clamp (c.mixerTrack, 0, kMaxTracks - 1));
-
-        const double angle = (static_cast<double> (c.pan) + 1.0) * kTwoPi / 8.0; // 0..pi/2
-        panLeft[ch] = static_cast<float> (std::cos (angle));
-        panRight[ch] = static_cast<float> (std::sin (angle));
+        setChannel (ch, c.volume, c.pan);
 
         if (smoothedGain[ch] < 0.0f)
             smoothedGain[ch] = targetGain[ch]; // no fade-in on the very first block
@@ -351,19 +417,38 @@ void Player::render (const Project& project, double bpm, bool playing,
     std::array<float, kMaxTracks> trackTarget {};
     std::array<float, kMaxTracks> balanceLeft {};
     std::array<float, kMaxTracks> balanceRight {};
+    std::array<bool, kMaxTracks> trackAudible {};
+
+    std::array<float, kMaxTracks> trackVolume {}, trackPan {};
+    const auto setTrack = [&] (size_t t, float volume, float pan)
+    {
+        trackVolume[t] = volume;
+        trackPan[t] = pan;
+        trackTarget[t] = trackAudible[t] ? std::clamp (volume, 0.0f, 1.5f) : 0.0f;
+        const float p = std::clamp (pan, -1.0f, 1.0f);
+        balanceLeft[t] = p > 0.0f ? 1.0f - p : 1.0f;
+        balanceRight[t] = p < 0.0f ? 1.0f + p : 1.0f;
+    };
 
     for (size_t t = 0; t < static_cast<size_t> (kMaxTracks); ++t)
     {
         const auto& tr = trackAt (t);
-        const bool audible = anyTrackSolo ? tr.solo : ! tr.mute;
-        trackTarget[t] = audible ? std::clamp (tr.volume, 0.0f, 1.5f) : 0.0f;
-
-        const float pan = std::clamp (tr.pan, -1.0f, 1.0f);
-        balanceLeft[t] = pan > 0.0f ? 1.0f - pan : 1.0f;
-        balanceRight[t] = pan < 0.0f ? 1.0f + pan : 1.0f;
+        trackAudible[t] = anyTrackSolo ? tr.solo : ! tr.mute;
+        setTrack (t, tr.volume, tr.pan);
 
         if (trackGain[t] < 0.0f)
             trackGain[t] = trackTarget[t];
+    }
+
+    // Automation (Song mode): effect parameters are changed in copies of the slots, so the project itself is never touched.
+    const bool automated = playing && ! project.automation.empty();
+    std::array<std::array<EffectSlot, kSlotsPerTrack>, kMaxTracks> trackSlotsNow {};
+    std::array<EffectSlot, kSlotsPerTrack> masterSlotsNow {};
+    if (automated)
+    {
+        for (size_t t = 0; t < static_cast<size_t> (kMaxTracks); ++t)
+            trackSlotsNow[t] = trackAt (t).slots;
+        masterSlotsNow = project.masterSlots;
     }
 
     peaks.fill (0.0f);
@@ -372,6 +457,10 @@ void Player::render (const Project& project, double bpm, bool playing,
     for (int done = 0; done < numSamples; done += kChunk)
     {
         const int n = std::min (kChunk, numSamples - done);
+
+        if (automated)
+            applyAutomation (project, tickPos, numMixerChannels, setChannel, setTrack, channelVolume, channelPan, trackVolume, trackPan,
+                             trackSlotsNow, masterSlotsNow);
 
         for (size_t t = 0; t < static_cast<size_t> (kMaxTracks); ++t)
         {
@@ -579,7 +668,7 @@ void Player::render (const Project& project, double bpm, bool playing,
             const auto& tr = trackAt (t);
 
             for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
-                effects[t][s].process (tr.slots[s], l, r, n);
+                effects[t][s].process (automated ? trackSlotsNow[t][s] : tr.slots[s], l, r, n);
 
             for (int i = 0; i < n; ++i)
             {
@@ -599,7 +688,7 @@ void Player::render (const Project& project, double bpm, bool playing,
 
         // 3. Master bus: insert effects on the sum of all tracks, then a soft limiter, added to the output.
         for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
-            masterEffects[s].process (project.masterSlots[s], mixL.data(), mixR.data(), n);
+            masterEffects[s].process (automated ? masterSlotsNow[s] : project.masterSlots[s], mixL.data(), mixR.data(), n);
 
         for (int i = 0; i < n; ++i)
         {

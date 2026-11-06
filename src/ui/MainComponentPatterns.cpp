@@ -204,7 +204,6 @@ void MainComponent::dropOnPlaylist (const drag::Item& item, int track, int tick)
     juce::String note;
     if (addAudioClip (data, track, tick, note))
     {
-        playlistView.clearHistory();
         playlistView.clearHistory(); // the arrangement was changed from outside: undo could not restore it safely
         playlistView.repaint();
         publishProject();

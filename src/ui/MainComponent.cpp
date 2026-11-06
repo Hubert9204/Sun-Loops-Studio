@@ -196,6 +196,7 @@ MainComponent::MainComponent()
     mixerPanel.setTracks (tracks);
     mixerPanel.setMaster (masterTrack);
     mixerPanel.onTrackChanged = [this] (int) { publishProject(); };
+    mixerPanel.onAutomate = [this] (const AutomationTarget& t) { createAutomationFor (t); };
     mixerPanel.onMasterVolumeChanged = [this] (double v) { volumeSlider.setValue (v); }; // the slider drives the engine
     updateTrackRouting();
 
@@ -297,6 +298,8 @@ MainComponent::MainComponent()
             publishProject();
     };
     playlistView.onPatternPicked = [this] (int pattern) { selectPattern (pattern); };
+    playlistView.setAutomationLabel ([this] (const AutomationTarget& t) { return automationLabelFor (t); });
+    playlistView.setAutomationPicked ([this] (int clip) { openAutomationEditor (clip); });
     playlistView.onPatternSelected = [this] (int pattern) { selectPattern (pattern); };
     playlistView.onNewPattern = [this] { showNewPatternMenu (playlistView); };
     playlistView.onRenamePattern = [this] (int pattern) { renamePattern (pattern); };
@@ -313,7 +316,7 @@ MainComponent::MainComponent()
     mixerPanelWindow.setContent (&mixerPanel);
     mixerPanelWindow.setMinimumSize (720, 440);
     playlistPanel.setContent (&playlistView);
-    playlistPanel.setMinimumSize (520, 290);
+    playlistPanel.setMinimumSize (520, 340);
 
     for (auto* panel : allPanels())
     {
@@ -427,6 +430,7 @@ void MainComponent::refreshRackStrips()
 MainComponent::~MainComponent()
 {
     stopTimer();
+    automationWindow.reset();
     engine.getDeviceManager().removeChangeListener (this);
     audioDialog.deleteAndZero(); // it refers to the engine
     assignDialog.deleteAndZero();
@@ -609,7 +613,7 @@ namespace
 // "panel2": the layout changed with the browser and the expanded mixer, so layouts stored by older versions are ignored.
 constexpr const char* kPanelKeys[] = { "panel2.rack", "panel2.piano", "panel2.mixer", "panel2.playlist" };
 
-constexpr int kRackHeight = 336;
+constexpr int kRackHeight = 280;
 
 // The channel rack across the top with the playlist below it. The piano roll (closed, as in FL Studio: it opens
 // from a channel) takes the playlist's place; the mixer opens as an expanded view over everything (F9).
@@ -721,6 +725,7 @@ void MainComponent::createStrip (size_t channelIndex)
         publishProject();
         recordNoteChange(); // (does nothing unless a step was edited)
     };
+    strip->onAutomate = [this] (int idx, AutomationKind kind) { createAutomationFor ({ kind, idx, 0, 0 }); };
     strip->onSavePreset = [this] (int idx) { savePresetFor (idx); };
     strip->onAssignTrack = [this] (int idx) { openAssignTrack (idx); };
     strip->onItemDropped = [this] (int idx, const drag::Item& item) { applyBrowserItem (idx, item); };

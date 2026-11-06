@@ -4,7 +4,9 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include "audio/Automation.h"
 #include "audio/Project.h"
+#include "ui/AutomatableSlider.h"
 #include "ui/AudioMeter.h"
 #include "ui/DragItems.h"
 #include "ui/Knob.h"
@@ -65,6 +67,7 @@ public:
     std::function<void (int)> onSavePreset;    // context menu "Save as preset..."
     std::function<void (int)> onAssignTrack;   // context menu "Assign free mixer track"
     std::function<void (int, const drag::Item&)> onItemDropped; // something was dropped from the browser
+    std::function<void (int, AutomationKind)> onAutomate;       // right click on volume / pan: create an automation clip
 
     void paint (juce::Graphics&) override;
     void resized() override;
@@ -89,8 +92,8 @@ private:
     juce::Label nameLabel;
     juce::TextButton muteButton { "M" };
     juce::TextButton soloButton { "S" };
-    juce::Slider volumeSlider { juce::Slider::LinearHorizontal, juce::Slider::NoTextBox };
-    juce::Slider panSlider { juce::Slider::LinearHorizontal, juce::Slider::NoTextBox };
+    AutomatableSlider volumeSlider { juce::Slider::LinearHorizontal, juce::Slider::NoTextBox };
+    AutomatableSlider panSlider { juce::Slider::LinearHorizontal, juce::Slider::NoTextBox };
     TrackSelector trackSelector { kMaxTracks };
     Knob pitchKnob;
     Knob swingKnob;

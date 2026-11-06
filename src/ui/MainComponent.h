@@ -13,6 +13,7 @@
 #include "audio/NoteRecorder.h"
 #include "audio/Project.h"
 #include "ui/AudioMeter.h"
+#include "ui/AutomationEditor.h"
 #include "library/ChannelPreset.h"
 #include "library/Library.h"
 #include "library/ProjectFile.h"
@@ -164,6 +165,15 @@ private:
     void dropOnPlaylist (const drag::Item& item, int track, int tick);
     void setSongMode (bool shouldPlaySong);
     Project compileCurrent();
+
+    // Automation (MainComponentAutomation.cpp).
+    EffectType effectTypeFor (const AutomationTarget& t) const;
+    float currentValueOf (const AutomationTarget& t) const;
+    juce::String automationLabelFor (const AutomationTarget& t) const;
+    juce::String automationValueText (const AutomationTarget& t, float v) const;
+    void createAutomationFor (const AutomationTarget& target); // right click on a control
+    void openAutomationEditor (int clipIndex);
+    void closeAutomationEditor();
     std::array<PanelWindow*, 4> allPanels();
 
     // Panels
@@ -185,6 +195,8 @@ private:
     int selected = 0;
 
     Arrangement arrangement;
+    std::unique_ptr<AutomationEditorWindow> automationWindow;
+    int automationEditing = -1;     // index of the clip the window shows
     int currentPattern = 0;
     bool songMode = false;
 

@@ -82,6 +82,18 @@ public:
     // A sound was dragged here from the browser: the item, the track and the position (in ticks).
     std::function<void (const drag::Item&, int, int)> onItemDropped;
 
+    // Automation clips live on four lanes under the tracks. `automationLabel` names what a clip moves ("Track 2 volume"),
+    // `onAutomationPicked` is called when one is double-clicked or chosen from its menu (to open it in the editor).
+    std::function<juce::String (const AutomationTarget&)> automationLabel;
+    std::function<void (int)> onAutomationPicked;
+    // Puts a new automation clip on the first lane where it fits at or after `startTick` (it checks the end of the
+    // timeline too), selects it and records the step for undo. Returns its index, or -1 if there is no room.
+    int addAutomationClip (AutomationClip clip, int startTick);
+    // Remember the state now, as one undo step: the automation editor calls it before it changes points.
+    void pushUndoPoint();
+    int getSelectedAutomation() const noexcept { return selection.kind == Kind::Automation ? selection.index : -1; }
+    void selectAutomation (int index);
+
     // The track that Record writes to: shown with a red mark, chosen by clicking its name.
     void setArmedTrack (int track);
     std::function<void (int)> onTrackSelected;
@@ -116,8 +128,8 @@ public:
 
 
 private:
-    enum class Drag { None, MovePattern, ResizePattern, MoveAudio, ResizeAudio, TrimAudio, CutRange, EraseSweep, ZoomRange };
-    enum class Kind { None, Pattern, Audio };
+    enum class Drag { None, MovePattern, ResizePattern, MoveAudio, ResizeAudio, TrimAudio, CutRange, EraseSweep, ZoomRange, MoveAutomation, ResizeAutomation };
+    enum class Kind { None, Pattern, Audio, Automation };
 
     struct Selection
     {
@@ -129,6 +141,7 @@ private:
     {
         std::vector<Clip> clips;
         std::vector<AudioClip> audioClips;
+        std::vector<AutomationClip> automationClips;
     };
 
     struct Peaks
@@ -147,8 +160,16 @@ private:
     static constexpr int kRulerHeight = 38;
     static constexpr int kScrollBarHeight = 14;
     static constexpr int kEdgeGrab = 7;
+    static constexpr int kLaneHeight = 22;
+    static constexpr int kLanesGap = 4;
 
     int trackHeight() const noexcept;
+    int lanesTop() const noexcept;                  // y of the first automation lane
+    int lanesBottom() const noexcept { return lanesTop() + kAutomationLanes * kLaneHeight; }
+    bool inLanes (int y) const noexcept { return y >= lanesTop() && y < lanesBottom(); }
+    int yToLane (int y) const noexcept { return std::clamp ((y - lanesTop()) / kLaneHeight, 0, kAutomationLanes - 1); }
+    juce::Rectangle<int> automationClipRect (const AutomationClip& c) const noexcept;
+    void paintAutomationClip (juce::Graphics& g, const AutomationClip& c, bool selected);
     int unitToX (int unit) const noexcept;
     int xToUnit (int x) const noexcept;       // clamped to the timeline
     int yToTrack (int y) const noexcept;      // clamped to the tracks
@@ -174,6 +195,7 @@ private:
     bool splitAt (int track, int tick, bool noSnap);
     void showClipMenu (const juce::MouseEvent& e);
     void editAudioProperties (int index);
+    void showAutomationMenu (int index);
     void duplicateSelected();
     void copySelected();
     void pasteAt (int track, int tick);
@@ -204,6 +226,7 @@ private:
     bool dragChanged = false;
     bool pendingUndoValid = false;
     Snapshot pendingUndo;
+    AutomationClip dragAutomationOriginal; // the clip as it was when a move or resize began
     std::vector<Snapshot> undoStack, redoStack;
     Selection selection;
 

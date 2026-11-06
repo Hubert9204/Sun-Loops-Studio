@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "audio/Automation.h"
 #include "audio/Project.h"
 
 namespace sls
@@ -69,6 +70,7 @@ struct Arrangement
     std::vector<Clip> clips;
     std::vector<AudioClip> audioClips;
     int patternTicks = 8 * kTicksPerBeat; // length of one pattern = one playlist unit
+    std::vector<AutomationClip> automationClips; // on the lanes under the tracks; they play in Song mode
 
     int timelineTicks() const noexcept { return kPlaylistUnits * patternTicks; }
 
@@ -92,6 +94,51 @@ struct Arrangement
             if (o.track == c.track && c.startTick < o.endUnit() * patternTicks && o.startUnit * patternTicks < c.endTick())
                 return false;
         return true;
+    }
+
+    // Does an automation clip fit: on an existing lane, inside the timeline, with at least one point, and clear of the other
+    // automation clips on its lane? `ignoreIndex` is the clip being moved or resized (or -1).
+    bool canPlaceAutomation (const AutomationClip& c, int ignoreIndex = -1) const
+    {
+        if (c.lane < 0 || c.lane >= kAutomationLanes || c.points.empty())
+            return false;
+        if (c.startTick < 0 || c.lengthTicks < 1 || c.endTick() > timelineTicks())
+            return false;
+        for (int i = 0; i < static_cast<int> (automationClips.size()); ++i)
+        {
+            const auto& o = automationClips[static_cast<size_t> (i)];
+            if (i != ignoreIndex && o.lane == c.lane && c.startTick < o.endTick() && o.startTick < c.endTick())
+                return false;
+        }
+        return true;
+    }
+
+    // Index of the automation clip covering (lane, tick), or -1.
+    int automationClipAt (int lane, int tick) const
+    {
+        for (int i = 0; i < static_cast<int> (automationClips.size()); ++i)
+        {
+            const auto& c = automationClips[static_cast<size_t> (i)];
+            if (c.lane == lane && tick >= c.startTick && tick < c.endTick())
+                return i;
+        }
+        return -1;
+    }
+
+    // The first lane where an automation clip of `lengthTicks` fits at `startTick`, or -1.
+    int findFreeAutomationLane (int startTick, int lengthTicks) const
+    {
+        AutomationClip probe;
+        probe.points = { AutomationPoint {} };
+        probe.startTick = startTick;
+        probe.lengthTicks = lengthTicks;
+        for (int lane = 0; lane < kAutomationLanes; ++lane)
+        {
+            probe.lane = lane;
+            if (canPlaceAutomation (probe))
+                return lane;
+        }
+        return -1;
     }
 
     // Index of the audio clip covering (track, tick), or -1.
@@ -305,6 +352,6 @@ inline Project compileSong (const std::vector<Channel>& channelSettings, const A
         events.push_back (std::move (e));
     }
     return Project::make (std::move (channels), units * arrangement.patternTicks, std::move (tracks), masterSlots,
-                          std::move (events));
+                          std::move (events), arrangement.automationClips);
 }
 } // namespace sls

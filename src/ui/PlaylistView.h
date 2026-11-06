@@ -32,6 +32,14 @@ public:
     bool handleKey (const juce::KeyPress& key) { return timeline.handleKey (key); }
     void clearHistory() { timeline.clearHistory(); updateUndoButtons(); }
 
+    // Automation clips (see PlaylistTimeline).
+    int addAutomationClip (AutomationClip clip, int startTick) { return timeline.addAutomationClip (std::move (clip), startTick); }
+    void pushUndoPoint() { timeline.pushUndoPoint(); updateUndoButtons(); }
+    int getSelectedAutomation() const noexcept { return timeline.getSelectedAutomation(); }
+    void refreshTimeline() { timeline.repaint(); }
+    void setAutomationLabel (std::function<juce::String (const AutomationTarget&)> f) { timeline.automationLabel = std::move (f); }
+    void setAutomationPicked (std::function<void (int)> f) { timeline.onAutomationPicked = std::move (f); }
+
     // Pattern list actions (the caller changes the arrangement, then calls setPatterns again).
     std::function<void (int)> onPatternSelected;
     std::function<void()> onNewPattern;

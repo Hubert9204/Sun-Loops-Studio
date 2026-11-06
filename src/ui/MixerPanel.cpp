@@ -129,7 +129,8 @@ MixerStrip::MixerStrip (MixerTrack& trackToControl, int trackIndex)
 
     panSlider.setRange (-1.0, 1.0, 0.01);
     panSlider.setDoubleClickReturnValue (true, 0.0);
-    panSlider.setTooltip ("Stereo balance (double-click: centre)");
+    panSlider.setTooltip ("Stereo balance (double-click: centre; right click: automate)");
+    panSlider.onAutomate = [this] { if (onAutomate) onAutomate ({ AutomationKind::TrackPan, index, 0, 0 }); };
     panSlider.onValueChange = [this]
     {
         track.pan = static_cast<float> (panSlider.getValue());
@@ -157,7 +158,8 @@ MixerStrip::MixerStrip (MixerTrack& trackToControl, int trackIndex)
 
     fader.setRange (0.0, 1.5, 0.01);
     fader.setDoubleClickReturnValue (true, 1.0);
-    fader.setTooltip ("Track volume (double-click: 0 dB)");
+    fader.setTooltip ("Track volume (double-click: 0 dB; right click: automate)");
+    fader.onAutomate = [this] { if (onAutomate) onAutomate ({ AutomationKind::TrackVolume, index, 0, 0 }); };
     fader.onValueChange = [this]
     {
         track.volume = static_cast<float> (fader.getValue());
@@ -477,6 +479,12 @@ void FxPanel::rebuildParameters()
         };
         row.slider.setValue (slot.params[static_cast<size_t> (i)], juce::dontSendNotification);
         row.slider.updateText();
+        row.slider.onAutomate = [this, i]
+        {
+            if (onAutomate)
+                onAutomate (trackIndex == kMasterIndex ? AutomationTarget { AutomationKind::MasterEffect, 0, selectedSlot, i }
+                                                       : AutomationTarget { AutomationKind::TrackEffect, trackIndex, selectedSlot, i });
+        };
         row.slider.onValueChange = [this, i]
         {
             if (track == nullptr)
@@ -592,6 +600,7 @@ MixerPanel::MixerPanel()
 
     masterStrip.onVolumeChanged = [this] (double v) { if (onMasterVolumeChanged) onMasterVolumeChanged (v); };
     fxPanel.onChanged = [this] (int track) { if (onTrackChanged) onTrackChanged (track); };
+    fxPanel.onAutomate = [this] (const AutomationTarget& t) { if (onAutomate) onAutomate (t); };
     fxPanel.onSlotsChanged = [this] (int track) { refreshTrack (track); };
     fxPanel.onSelectedSlotChanged = [this] (int slot)
     {
@@ -650,6 +659,7 @@ void MixerPanel::setTracks (std::vector<MixerTrack>& tracks)
         auto strip = std::make_unique<MixerStrip> (tracks[i], static_cast<int> (i));
         strip->onSelect = [this] (int idx) { setSelectedTrack (idx); };
         strip->onChanged = [this] (int idx) { if (onTrackChanged) onTrackChanged (idx); };
+        strip->onAutomate = [this] (const AutomationTarget& t) { if (onAutomate) onAutomate (t); };
         strip->onSlotClicked = [this] (int idx, int slot)
         {
             setSelectedTrack (idx);

@@ -7,7 +7,9 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include "audio/Automation.h"
 #include "audio/Project.h"
+#include "ui/AutomatableSlider.h"
 #include "ui/VuMeter.h"
 
 namespace sls
@@ -48,6 +50,7 @@ public:
     std::function<void (int)> onChanged;               // fader, balance, mute or solo changed
     std::function<void (int, int)> onSlotClicked;      // (track, slot): select the slot in the effects panel
     std::function<void (int, int)> onSlotMenu;        // (track, slot): right click
+    std::function<void (const AutomationTarget&)> onAutomate; // right click on the fader / balance
 
     void paint (juce::Graphics&) override;
     void resized() override;
@@ -69,11 +72,11 @@ private:
     juce::Label nameLabel;
     juce::Label routedLabel;
     std::array<SlotButton, kSlotsPerTrack> slotButtons;
-    juce::Slider panSlider { juce::Slider::LinearHorizontal, juce::Slider::NoTextBox };
+    AutomatableSlider panSlider { juce::Slider::LinearHorizontal, juce::Slider::NoTextBox };
     juce::Label panLabel;
     juce::TextButton muteButton { "M" };
     juce::TextButton soloButton { "S" };
-    juce::Slider fader { juce::Slider::LinearVertical, juce::Slider::NoTextBox };
+    AutomatableSlider fader { juce::Slider::LinearVertical, juce::Slider::NoTextBox };
     juce::Label dbLabel;
     VuMeter meter;
 
@@ -134,6 +137,7 @@ public:
     std::function<void (int)> onChanged;        // an effect or parameter changed (track index)
     std::function<void (int)> onSlotsChanged;   // slots were added/removed/bypassed (track index): strips redraw
     std::function<void (int)> onSelectedSlotChanged; // the user picked another slot in this panel
+    std::function<void (const AutomationTarget&)> onAutomate; // right click on a parameter (index = track or kMasterIndex)
 
     void showSlotMenu (int slot);
 
@@ -156,7 +160,7 @@ private:
     struct ParamRow
     {
         juce::Label name;
-        juce::Slider slider { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
+        AutomatableSlider slider { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
     };
     std::array<ParamRow, kMaxEffectParams> params;
 
@@ -184,6 +188,8 @@ public:
 
     std::function<void (int)> onTrackChanged;       // anything that changes the sound (track index, or kMasterIndex)
     std::function<void (double)> onMasterVolumeChanged;
+    // Right click on a track fader / balance or on an effect parameter. For the master bus: kind MasterEffect.
+    std::function<void (const AutomationTarget&)> onAutomate;
 
     void paint (juce::Graphics&) override;
     void resized() override;

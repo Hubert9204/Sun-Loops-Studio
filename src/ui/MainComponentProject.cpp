@@ -139,6 +139,7 @@ void MainComponent::applyDocument (ProjectDocument doc, const juce::File& file, 
         tracks[t] = doc.tracks[t]; // in place: the mixer strips refer to these objects
     masterTrack.slots = doc.masterSlots;
 
+    closeAutomationEditor(); // its clip index would point into the old arrangement
     arrangement = std::move (doc.arrangement);
     arrangement.patternTicks = kLoopTicks;
     arrangement.ensureChannelCount (channels.size());

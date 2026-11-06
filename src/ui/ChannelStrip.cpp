@@ -177,7 +177,8 @@ ChannelStrip::ChannelStrip (Channel& channelToControl, int channelIndex)
 
     volumeSlider.setRange (0.0, 1.5, 0.01);
     volumeSlider.setDoubleClickReturnValue (true, 0.8);
-    volumeSlider.setTooltip ("Volume");
+    volumeSlider.setTooltip ("Volume (right click: automate)");
+    volumeSlider.onAutomate = [this] { if (onAutomate) onAutomate (index, AutomationKind::ChannelVolume); };
     volumeSlider.onValueChange = [this]
     {
         channel.volume = static_cast<float> (volumeSlider.getValue());
@@ -186,7 +187,8 @@ ChannelStrip::ChannelStrip (Channel& channelToControl, int channelIndex)
 
     panSlider.setRange (-1.0, 1.0, 0.01);
     panSlider.setDoubleClickReturnValue (true, 0.0);
-    panSlider.setTooltip ("Pan");
+    panSlider.setTooltip ("Pan (right click: automate)");
+    panSlider.onAutomate = [this] { if (onAutomate) onAutomate (index, AutomationKind::ChannelPan); };
     panSlider.onValueChange = [this]
     {
         channel.pan = static_cast<float> (panSlider.getValue());

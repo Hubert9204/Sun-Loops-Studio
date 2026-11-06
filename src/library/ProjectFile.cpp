@@ -10,6 +10,30 @@ namespace
 constexpr size_t kMaxNotesPerChannelPattern = 20000;
 constexpr size_t kMaxNameLength = 40; // channel, track, pattern and clip names
 
+const char* automationKindName (AutomationKind k)
+{
+    switch (k)
+    {
+        case AutomationKind::ChannelVolume: return "channelVolume";
+        case AutomationKind::ChannelPan:    return "channelPan";
+        case AutomationKind::TrackVolume:   return "trackVolume";
+        case AutomationKind::TrackPan:      return "trackPan";
+        case AutomationKind::TrackEffect:   return "trackEffect";
+        case AutomationKind::MasterEffect:  return "masterEffect";
+    }
+    return "trackVolume";
+}
+
+AutomationKind automationKindFromName (const std::string& name, bool& known)
+{
+    known = true;
+    for (int i = 0; i < 6; ++i)
+        if (name == automationKindName (static_cast<AutomationKind> (i)))
+            return static_cast<AutomationKind> (i);
+    known = false;
+    return AutomationKind::TrackVolume;
+}
+
 const char* effectKey (EffectType t)
 {
     switch (t)
@@ -259,6 +283,32 @@ juce::String ProjectDocument::toJson() const
     }
     root->setProperty ("audioClips", audioList);
 
+    // Automation clips: the parameter (as a name and numbers), where it sits and its points.
+    juce::Array<juce::var> automationList;
+    for (const auto& a : arrangement.automationClips)
+    {
+        auto* o = new juce::DynamicObject();
+        o->setProperty ("kind", juce::String (automationKindName (a.target.kind)));
+        o->setProperty ("index", a.target.index);
+        o->setProperty ("slot", a.target.slot);
+        o->setProperty ("param", a.target.param);
+        o->setProperty ("lane", a.lane);
+        o->setProperty ("startTick", a.startTick);
+        o->setProperty ("lengthTicks", a.lengthTicks);
+        juce::Array<juce::var> pointList;
+        for (const auto& p : a.points)
+        {
+            juce::Array<juce::var> one;
+            one.add (p.tick);
+            one.add (static_cast<double> (p.value));
+            one.add (static_cast<int> (p.shape));
+            pointList.add (juce::var (one));
+        }
+        o->setProperty ("points", pointList);
+        automationList.add (juce::var (o));
+    }
+    root->setProperty ("automation", automationList);
+
     return juce::JSON::toString (juce::var (root), false);
 }
 
@@ -464,6 +514,48 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
         }
     if (droppedAudio > 0)
         r.warnings.push_back (std::to_string (droppedAudio) + " audio clip(s) could not be placed and were left out.");
+
+    // --- automation clips (older files have none)
+    int droppedAutomation = 0;
+    if (auto* automationList = root->getProperty ("automation").getArray())
+        for (const auto& av : *automationList)
+        {
+            auto* o = av.getDynamicObject();
+            AutomationClip clip;
+            bool kindKnown = false;
+            if (o != nullptr)
+            {
+                clip.target.kind = automationKindFromName (o->getProperty ("kind").toString().toStdString(), kindKnown);
+                clip.target.index = readInt (o->getProperty ("index"), 0, 0, 1000);
+                clip.target.slot = readInt (o->getProperty ("slot"), 0, 0, 1000);
+                clip.target.param = readInt (o->getProperty ("param"), 0, 0, 1000);
+                clip.lane = readInt (o->getProperty ("lane"), -1, -1, 1000);
+                clip.startTick = readInt (o->getProperty ("startTick"), -1, -1, 100000000);
+                clip.lengthTicks = readInt (o->getProperty ("lengthTicks"), 0, 0, 100000000);
+                if (auto* pointList = o->getProperty ("points").getArray())
+                    for (const auto& pv : *pointList)
+                    {
+                        auto* one = pv.getArray();
+                        if (one == nullptr || one->size() < 2 || static_cast<int> (clip.points.size()) >= kMaxAutomationPoints)
+                            continue;
+                        AutomationPoint pt;
+                        pt.tick = readNumber ((*one)[0], 0.0, 0.0, 1.0e8);
+                        pt.value = static_cast<float> (readNumber ((*one)[1], 0.0, -1.0e6, 1.0e6));
+                        const int shape = one->size() > 2 ? readInt ((*one)[2], 0, 0, 2) : 0;
+                        pt.shape = static_cast<AutomationShape> (shape);
+                        clip.points.push_back (pt);
+                    }
+                std::stable_sort (clip.points.begin(), clip.points.end(),
+                                  [] (const AutomationPoint& x, const AutomationPoint& y) { return x.tick < y.tick; });
+            }
+            if (o != nullptr && kindKnown && d.arrangement.automationClips.size() < static_cast<size_t> (kMaxAutomationClips)
+                && d.arrangement.canPlaceAutomation (clip))
+                d.arrangement.automationClips.push_back (std::move (clip));
+            else
+                ++droppedAutomation;
+        }
+    if (droppedAutomation > 0)
+        r.warnings.push_back (std::to_string (droppedAutomation) + " automation clip(s) could not be placed and were left out.");
 
     d.arrangement.ensureChannelCount (numChannels);
 

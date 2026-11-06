@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "audio/Automation.h"
 #include "audio/Effects.h"
 #include "audio/NoteSequence.h"
 
@@ -80,6 +81,7 @@ struct Project
     std::vector<MixerTrack> tracks; // always kMaxTracks entries after make()
     std::array<EffectSlot, kSlotsPerTrack> masterSlots {}; // insert effects on the master bus (after the sum of all tracks)
     std::vector<AudioEvent> audioEvents; // song mode only; sorted by startTick, validated by make()
+    std::vector<AutomationEvent> automation; // song mode only; sorted by parameter and start, validated by make()
     int lengthTicks = 8 * kTicksPerBeat;
     std::uint64_t revision = 0; // assigned by SnapshotExchange
 
@@ -106,7 +108,7 @@ struct Project
 
     static Project make (std::vector<Channel> input, int loopLengthTicks, std::vector<MixerTrack> tracks = {},
                          std::array<EffectSlot, kSlotsPerTrack> masterSlots = {},
-                         std::vector<AudioEvent> audioEvents = {})
+                         std::vector<AudioEvent> audioEvents = {}, const std::vector<AutomationClip>& automationClips = {})
     {
         Project p;
         p.lengthTicks = std::max (1, loopLengthTicks);
@@ -160,6 +162,15 @@ struct Project
         p.channels = std::move (input);
         p.masterSlots = masterSlots;
         p.tracks = std::move (tracks);
+        p.automation = makeAutomationEvents (automationClips, static_cast<int> (p.channels.size()), kMaxTracks,
+                                             [&p] (const AutomationTarget& t)
+                                             {
+                                                 if (t.kind == AutomationKind::TrackEffect)
+                                                     return p.tracks[static_cast<size_t> (t.index)].slots[static_cast<size_t> (t.slot)].type;
+                                                 if (t.kind == AutomationKind::MasterEffect)
+                                                     return p.masterSlots[static_cast<size_t> (t.slot)].type;
+                                                 return EffectType::None;
+                                             });
         return p;
     }
 };

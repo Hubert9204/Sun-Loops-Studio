@@ -1700,7 +1700,8 @@ bool sameDocument (const sls::ProjectDocument& a, const sls::ProjectDocument& b)
         || a.sampleSources != b.sampleSources || a.currentPattern != b.currentPattern || a.songMode != b.songMode
         || a.bpm != b.bpm || a.masterVolume != b.masterVolume
         || a.arrangement.patterns.size() != b.arrangement.patterns.size()
-        || a.arrangement.clips.size() != b.arrangement.clips.size())
+        || a.arrangement.clips.size() != b.arrangement.clips.size()
+        || a.arrangement.automationClips.size() != b.arrangement.automationClips.size())
         return false;
 
     for (size_t i = 0; i < a.channels.size(); ++i)
@@ -1737,6 +1738,16 @@ bool sameDocument (const sls::ProjectDocument& a, const sls::ProjectDocument& b)
         const auto &x = a.arrangement.clips[i], &y = b.arrangement.clips[i];
         if (x.pattern != y.pattern || x.track != y.track || x.startUnit != y.startUnit || x.lengthUnits != y.lengthUnits)
             return false;
+    }
+    for (size_t i = 0; i < a.arrangement.automationClips.size(); ++i)
+    {
+        const auto &x = a.arrangement.automationClips[i], &y = b.arrangement.automationClips[i];
+        if (! (x.target == y.target) || x.lane != y.lane || x.startTick != y.startTick || x.lengthTicks != y.lengthTicks
+            || x.points.size() != y.points.size())
+            return false;
+        for (size_t k = 0; k < x.points.size(); ++k)
+            if (x.points[k].tick != y.points[k].tick || x.points[k].value != y.points[k].value || x.points[k].shape != y.points[k].shape)
+                return false;
     }
     return true;
 }
@@ -1789,6 +1800,13 @@ sls::ProjectDocument richDocument()
     d.arrangement.patterns[0].notes[0] = { { 60, 0, 240, 0.8f }, { 64, 480, 480, 0.5f }, { 67, 960, 120, 1.0f, sls::NoteLink::Slide } };
     d.arrangement.patterns[1].notes[1] = { { 60, 0, 120, 0.9f, sls::NoteLink::Legato }, { 60, 1920, 120, 0.7f } };
     d.arrangement.clips = { { 0, 0, 0, 2 }, { 1, 1, 1, 3 } };
+
+    auto fade = sls::makeFlatAutomationClip ({ sls::AutomationKind::TrackVolume, 2, 0, 0 }, 1, 960, 3840, 0.0f);
+    fade.points.back().value = 0.8123456f;
+    fade.points[0].shape = sls::AutomationShape::Smooth;
+    sls::insertAutomationPoint (fade, 1234.5678, 0.3f, sls::automationRange (fade.target), sls::AutomationShape::Hold);
+    d.arrangement.automationClips.push_back (fade);
+    d.arrangement.automationClips.push_back (sls::makeFlatAutomationClip ({ sls::AutomationKind::TrackEffect, 2, 0, 3 }, 0, 0, 1920, 0.61f));
     return d;
 }
 
@@ -1817,6 +1835,28 @@ void testProjectFile()
         check (back.document.has_value() && back.document->channels[0].pitch == 0.1f && back.document->masterVolume == 0.37f
                    && back.document->tracks[2].slots[2].params[0] == -33.5f,
                "floating-point values come back bit for bit");
+    }
+    {
+        const auto doc = richDocument();
+        const auto back = sls::ProjectDocument::fromJson (doc.toJson());
+        check (back.document.has_value() && back.document->arrangement.automationClips.size() == 2
+                   && back.document->arrangement.automationClips[0].points[1].tick == 1234.5678
+                   && back.document->arrangement.automationClips[0].points[1].shape == sls::AutomationShape::Hold,
+               "automation clips survive a round trip, points at fractional ticks included");
+
+        auto v = juce::JSON::parse (doc.toJson());
+        v.getDynamicObject()->removeProperty ("automation");
+        const auto old = sls::ProjectDocument::fromJson (juce::JSON::toString (v));
+        check (old.document.has_value() && old.document->arrangement.automationClips.empty() && old.warnings.empty(),
+               "a file without automation (from an older version) opens as before");
+
+        auto w = juce::JSON::parse (doc.toJson());
+        auto* list = w.getDynamicObject()->getProperty ("automation").getArray();
+        list->getReference (0).getDynamicObject()->setProperty ("kind", "somethingNew");
+        list->getReference (1).getDynamicObject()->setProperty ("lane", 99);
+        const auto odd = sls::ProjectDocument::fromJson (juce::JSON::toString (w));
+        check (odd.document.has_value() && odd.document->arrangement.automationClips.empty() && odd.warnings.size() == 1,
+               "an automation clip of an unknown kind, or on a lane that does not exist, is left out with one warning");
     }
     {
         const auto doc = richDocument();
@@ -2494,7 +2534,7 @@ void testAudioClips()
         with.audioClips.push_back (audio (0, 0, 1920));
         auto p1 = sls::compileSong (empty, with);
         auto p2 = sls::compileSong (empty, with); // same audio: keeps playing
-        auto p3 = sls::compileSong (empty, sls::Arrangement { { sls::Pattern {} }, {}, {}, 8 * kBeat }); // clip removed
+        auto p3 = sls::compileSong (empty, sls::Arrangement { { sls::Pattern {} }, {}, {}, 8 * kBeat, {} }); // clip removed
         p1.revision = 1;
         p2.revision = 2;
         p3.revision = 3;
@@ -3678,6 +3718,250 @@ void testMidiImport()
     check (sls::splitIntoPatterns (hostile, 0, 4).empty() && sls::splitIntoPatterns (hostile, 3840, 0).empty(), "bad pattern length or room gives nothing");
 }
 
+// --- automation ------------------------------------------------------------------------------------------------------
+
+// Plays `project` (song mode, 120 BPM) from the start for `seconds` and returns both channels.
+std::pair<std::vector<float>, std::vector<float>> playSong (const sls::Project& project, double seconds)
+{
+    sls::Player player;
+    player.prepare (kSr);
+    const int total = static_cast<int> (seconds * kSr);
+    std::vector<float> l (static_cast<size_t> (total), 0.0f), r (static_cast<size_t> (total), 0.0f);
+    for (int done = 0; done < total; done += 512)
+    {
+        const int n = std::min (512, total - done);
+        float* out[2] = { l.data() + done, r.data() + done };
+        player.render (project, 120.0, true, out, 2, n);
+    }
+    return { l, r };
+}
+
+// A song with one audio clip of a steady sine on playlist track 1 (mixer track 0), 8 seconds long.
+sls::Arrangement songWithSteadyTone (double hz = 440.0)
+{
+    auto tone = std::make_shared<sls::SampleData>();
+    tone->sampleRate = kSr;
+    tone->left = sineWave (hz, 0.4, static_cast<int> (8.0 * kSr));
+    tone->right = tone->left;
+    tone->name = "tone";
+
+    sls::Arrangement arr;
+    arr.patterns.push_back (sls::Pattern {});
+    sls::AudioClip clip;
+    clip.data = tone;
+    clip.name = "tone";
+    clip.track = 0;
+    clip.startTick = 0;
+    clip.lengthTicks = 16 * kBeat; // 8 s at 120 BPM
+    arr.audioClips.push_back (clip);
+    return arr;
+}
+
+void testAutomation()
+{
+    std::cout << "Automation\n";
+
+    // The curve.
+    {
+        using sls::AutomationPoint;
+        using sls::AutomationShape;
+        const std::vector<AutomationPoint> line { { 0.0, 0.0f, AutomationShape::Linear }, { 100.0, 1.0f, AutomationShape::Linear } };
+        check (std::fabs (sls::automationValueAt (line, 25.0, -1.0f) - 0.25f) < 1.0e-6f, "a line runs straight between its points");
+        check (sls::automationValueAt (line, -50.0, -1.0f) == 0.0f && sls::automationValueAt (line, 500.0, -1.0f) == 1.0f,
+               "before the first point and after the last one the end values hold");
+        check (sls::automationValueAt ({}, 10.0, 0.42f) == 0.42f, "an empty curve gives the fallback");
+        check (std::fabs (sls::automationValueAt (line, 33.3333333, 0.0f) - 0.333333f) < 1.0e-5f, "positions between ticks are read exactly");
+
+        const std::vector<AutomationPoint> hold { { 0.0, 0.2f, AutomationShape::Hold }, { 100.0, 0.9f, AutomationShape::Linear } };
+        check (sls::automationValueAt (hold, 99.0, 0.0f) == 0.2f && sls::automationValueAt (hold, 100.0, 0.0f) == 0.9f,
+               "a Hold point keeps its value until the next point, then jumps");
+
+        const std::vector<AutomationPoint> smooth { { 0.0, 0.0f, AutomationShape::Smooth }, { 100.0, 1.0f, AutomationShape::Linear } };
+        check (std::fabs (sls::automationValueAt (smooth, 50.0, 0.0f) - 0.5f) < 1.0e-6f
+                   && sls::automationValueAt (smooth, 10.0, 0.0f) < 0.1f && sls::automationValueAt (smooth, 90.0, 0.0f) > 0.9f,
+               "a Smooth segment is flat at both ends and steepest in the middle");
+
+        const std::vector<AutomationPoint> stacked { { 0.0, 0.0f, AutomationShape::Linear }, { 50.0, 1.0f, AutomationShape::Linear }, { 50.0, 0.0f, AutomationShape::Linear } };
+        check (sls::automationValueAt (stacked, 50.0, 0.0f) == 0.0f, "two points at the same tick make a vertical edge, no division by zero");
+    }
+
+    // The events built from the clips.
+    {
+        std::vector<sls::AutomationClip> clips;
+        clips.push_back (sls::makeFlatAutomationClip ({ sls::AutomationKind::TrackVolume, 1, 0, 0 }, 0, 960, 960, 0.5f));
+        clips.push_back (sls::makeFlatAutomationClip ({ sls::AutomationKind::TrackVolume, 1, 0, 0 }, 1, 0, 960, 1.0f));
+        clips.push_back (sls::makeFlatAutomationClip ({ sls::AutomationKind::TrackVolume, 99, 0, 0 }, 2, 0, 960, 1.0f)); // no such track
+        clips.push_back (sls::makeFlatAutomationClip ({ sls::AutomationKind::ChannelPan, 0, 0, 0 }, 3, 0, 960, 7.0f));    // out of range
+        auto bad = sls::makeFlatAutomationClip ({ sls::AutomationKind::TrackPan, 0, 0, 0 }, 0, 0, 960, 0.0f);
+        bad.points.clear();
+        clips.push_back (bad);
+        auto nan = sls::makeFlatAutomationClip ({ sls::AutomationKind::TrackPan, 2, 0, 0 }, 0, 0, 960, 0.0f);
+        nan.points[0].value = std::nanf ("");
+        nan.points[1].tick = 5000.0; // beyond the end of the clip
+        clips.push_back (nan);
+        clips.push_back (sls::makeFlatAutomationClip ({ sls::AutomationKind::TrackEffect, 0, 2, 0 }, 0, 0, 960, 5.0f)); // empty slot
+
+        const auto events = sls::makeAutomationEvents (clips, 2, 8, [] (const sls::AutomationTarget&) { return sls::EffectType::None; });
+        check (events.size() == 4, "clips for a parameter that does not exist, without points, or for an empty effect slot are dropped (4 of 7 stay)");
+        check (events[0].target.kind == sls::AutomationKind::ChannelPan && events[0].points[0].value == 1.0f,
+               "values are clamped to the range of the parameter");
+        bool sorted = true;
+        for (size_t i = 1; i < events.size(); ++i)
+            sorted = sorted && (events[i - 1].target.key() < events[i].target.key()
+                                || (events[i - 1].target.key() == events[i].target.key() && events[i - 1].startTick <= events[i].startTick));
+        check (sorted, "events come sorted by parameter, then by start");
+        bool inside = true;
+        for (const auto& e : events)
+            for (const auto& p : e.points)
+                inside = inside && p.tick >= 0.0 && p.tick <= e.endTick - e.startTick && std::isfinite (p.value);
+        check (inside, "points are kept inside their clip and finite");
+
+        float v = 0.0f;
+        size_t first = 0, last = 0;
+        for (size_t i = 0; i < events.size(); ++i)
+            if (events[i].target.kind == sls::AutomationKind::TrackVolume)
+            {
+                if (last == 0) first = i;
+                last = i + 1;
+            }
+        check (last - first == 2, "two clips of one parameter sit together");
+        check (! sls::automationValueFor (events, first, last, -1.0, v) || true, "(reading before the first clip is allowed)");
+        check (sls::automationValueFor (events, first, last, 100.0, v) && v == 1.0f, "the clip that started last wins: first clip at tick 100");
+        check (sls::automationValueFor (events, first, last, 1000.0, v) && v == 0.5f, "the second clip takes over at its start");
+        check (sls::automationValueFor (events, first, last, 99999.0, v) && v == 0.5f, "after the last clip its final value is held");
+    }
+
+    // Editing helpers.
+    {
+        auto c = sls::makeFlatAutomationClip ({ sls::AutomationKind::TrackVolume, 0, 0, 0 }, 0, 0, 1000, 1.0f);
+        const auto range = sls::automationRange (c.target);
+        const int mid = sls::insertAutomationPoint (c, 500.0, 0.25f, range);
+        check (mid == 1 && c.points.size() == 3 && c.points[1].tick == 500.0, "a new point goes in between, in order");
+        sls::moveAutomationPoint (c, mid, 2000.0, 9.0f, range);
+        check (c.points[1].tick == 1000.0 && c.points[1].value == 1.5f, "a point cannot jump over its neighbour and is held in range");
+        sls::moveAutomationPoint (c, mid, -5.0, 0.5f, range);
+        check (c.points[1].tick == 0.0, "nor go before the previous one");
+        check (sls::removeAutomationPoint (c, 1) && c.points.size() == 2, "a point can be removed");
+        check (sls::removeAutomationPoint (c, 0) && ! sls::removeAutomationPoint (c, 0), "but the last one stays");
+        auto d = sls::makeFlatAutomationClip ({ sls::AutomationKind::TrackVolume, 0, 0, 0 }, 0, 0, 1000, 1.0f);
+        sls::setAutomationLength (d, 400);
+        check (d.points.back().tick == 400.0, "shortening a clip brings the end point along");
+    }
+
+    // Placement on the lanes.
+    {
+        sls::Arrangement arr;
+        arr.patterns.push_back (sls::Pattern {});
+        const auto flat = [] (int lane, int start, int length)
+        { return sls::makeFlatAutomationClip ({ sls::AutomationKind::TrackVolume, 0, 0, 0 }, lane, start, length, 1.0f); };
+        check (arr.canPlaceAutomation (flat (0, 0, 1000)), "a clip fits on an empty lane");
+        arr.automationClips.push_back (flat (0, 0, 1000));
+        check (! arr.canPlaceAutomation (flat (0, 500, 1000)) && arr.canPlaceAutomation (flat (0, 1000, 1000)) && arr.canPlaceAutomation (flat (1, 500, 1000)),
+               "clips may not overlap on a lane, but touch, or overlap on another lane");
+        check (arr.canPlaceAutomation (flat (0, 0, 1000), 0), "a clip does not collide with itself when moved");
+        check (! arr.canPlaceAutomation (flat (sls::kAutomationLanes, 0, 10)) && ! arr.canPlaceAutomation (flat (0, arr.timelineTicks() - 5, 10)),
+               "no such lane, and not past the end of the timeline");
+        check (arr.findFreeAutomationLane (0, 500) == 1 && arr.findFreeAutomationLane (2000, 500) == 0, "the first free lane is found");
+        check (arr.automationClipAt (0, 999) == 0 && arr.automationClipAt (0, 1000) == -1, "a clip is found by lane and tick");
+    }
+
+    // In the player.
+    {
+        const auto volumeClip = [] (int track, int lane, int start, int length, float from, float to)
+        {
+            auto c = sls::makeFlatAutomationClip ({ sls::AutomationKind::TrackVolume, track, 0, 0 }, lane, start, length, from);
+            c.points.back().value = to;
+            return c;
+        };
+
+        auto arr = songWithSteadyTone();
+        const auto plain = playSong (sls::compileSong ({}, arr), 4.0);
+        const double base = rmsOf (plain.first, static_cast<int> (0.5 * kSr), static_cast<int> (1.5 * kSr));
+        check (base > 0.05, "the steady tone is audible without automation");
+
+        // 0 -> 1 over the first 4 beats (2 s), then held.
+        arr.automationClips.push_back (volumeClip (0, 0, 0, 4 * kBeat, 0.0f, 1.0f));
+        const auto ramp = playSong (sls::compileSong ({}, arr), 4.0);
+        const double early = rmsOf (ramp.first, static_cast<int> (0.1 * kSr), static_cast<int> (0.3 * kSr));
+        const double half = rmsOf (ramp.first, static_cast<int> (0.9 * kSr), static_cast<int> (1.1 * kSr));
+        const double late = rmsOf (ramp.first, static_cast<int> (3.0 * kSr), static_cast<int> (3.5 * kSr));
+        const double plainLate = rmsOf (plain.first, static_cast<int> (3.0 * kSr), static_cast<int> (3.5 * kSr));
+        check (early < 0.2 * plainLate, "a track volume ramp starts quiet");
+        check (std::fabs (half / plainLate - 0.5) < 0.1, "and is at about half way after half the clip (value 0.5 -> level 0.5)");
+        check (std::fabs (late / plainLate - 1.0) < 0.05, "after the clip the last value (1.0) is held");
+
+        // The first clip at 0.25, then a second one at 1.0 from 2 s on.
+        auto two = songWithSteadyTone();
+        two.automationClips.push_back (volumeClip (0, 0, 0, 4 * kBeat, 0.25f, 0.25f));
+        two.automationClips.push_back (volumeClip (0, 1, 4 * kBeat, 4 * kBeat, 1.0f, 1.0f));
+        const auto steps = playSong (sls::compileSong ({}, two), 4.0);
+        check (std::fabs (rmsOf (steps.first, static_cast<int> (0.5 * kSr), static_cast<int> (1.5 * kSr)) / plainLate - 0.25) < 0.05
+                   && std::fabs (rmsOf (steps.first, static_cast<int> (2.5 * kSr), static_cast<int> (3.5 * kSr)) / plainLate - 1.0) < 0.05,
+               "a second clip takes over where it starts (0.25, then 1.0)");
+
+        // Pan: left to right over 2 s.
+        auto pan = songWithSteadyTone();
+        auto panClip = sls::makeFlatAutomationClip ({ sls::AutomationKind::TrackPan, 0, 0, 0 }, 0, 0, 4 * kBeat, -1.0f);
+        panClip.points.back().value = 1.0f;
+        pan.automationClips.push_back (panClip);
+        const auto panned = playSong (sls::compileSong ({}, pan), 3.0);
+        const auto side = [&] (double a, double b) { return std::make_pair (rmsOf (panned.first, static_cast<int> (a * kSr), static_cast<int> (b * kSr)),
+                                                                          rmsOf (panned.second, static_cast<int> (a * kSr), static_cast<int> (b * kSr))); };
+        check (side (0.05, 0.15).second < 0.15 * side (0.05, 0.15).first, "a track balance ramp starts on the left");
+        check (side (2.3, 2.9).first < 0.05 * side (2.3, 2.9).second, "and ends on the right");
+
+        // An effect parameter: the equaliser's high shelf, -15 dB to +15 dB, on a tone in the shelf.
+        {
+            auto eqArr = songWithSteadyTone (9000.0);
+            std::vector<sls::MixerTrack> tracks = sls::Project::defaultTracks();
+            tracks[0].slots[0] = sls::EffectSlot::make (sls::EffectType::Equalizer);
+            auto eqClip = sls::makeFlatAutomationClip ({ sls::AutomationKind::TrackEffect, 0, 0, 3 }, 0, 0, 4 * kBeat, -15.0f);
+            eqClip.points.back().value = 15.0f;
+            const auto still = playSong (sls::compileSong ({}, eqArr, tracks), 3.0);
+            eqArr.automationClips.push_back (eqClip);
+            const auto moving = playSong (sls::compileSong ({}, eqArr, tracks), 3.0);
+            const double start = rmsOf (moving.first, static_cast<int> (0.1 * kSr), static_cast<int> (0.2 * kSr)) / rmsOf (still.first, static_cast<int> (0.1 * kSr), static_cast<int> (0.2 * kSr));
+            const double end = rmsOf (moving.first, static_cast<int> (2.5 * kSr), static_cast<int> (2.9 * kSr)) / rmsOf (still.first, static_cast<int> (2.5 * kSr), static_cast<int> (2.9 * kSr));
+            check (start < 0.4 && end > 2.0, "an effect parameter follows its clip (high shelf -15 dB then +15 dB: level 10 dB down, then 9 dB up)");
+        }
+
+        // Pattern mode has no automation; a stopped transport leaves the parameters alone.
+        const auto patternProject = sls::compilePattern ({}, arr, 0);
+        check (patternProject.automation.empty(), "Pattern mode carries no automation");
+
+        sls::Player player;
+        player.prepare (kSr);
+        const auto project = sls::compileSong ({}, arr);
+        std::vector<float> l (512), r (512);
+        float* out[2] = { l.data(), r.data() };
+        for (int i = 0; i < 400; ++i) // about 4 s: the ramp is over and its last value is held
+            player.render (project, 120.0, true, out, 2, 512);
+        player.render (project, 120.0, false, out, 2, 512); // stop
+        for (int i = 0; i < 20; ++i)
+            player.render (project, 120.0, false, out, 2, 512); // let the fade-out finish
+        std::vector<float> again;
+        for (int i = 0; i < 40; ++i) // play again: the ramp must start from its beginning
+        {
+            std::fill (l.begin(), l.end(), 0.0f);
+            std::fill (r.begin(), r.end(), 0.0f);
+            player.render (project, 120.0, true, out, 2, 512);
+            again.insert (again.end(), l.begin(), l.end());
+        }
+        const double againEarly = rmsOf (again, static_cast<int> (0.1 * kSr), static_cast<int> (0.3 * kSr));
+        check (std::fabs (againEarly - early) < 0.2 * plainLate, "after stop and play the automation starts again from the beginning (the ramp is quiet again)");
+
+        // No allocation while automation runs.
+        {
+            gAllocs = 0;
+            gCounting = true;
+            for (int i = 0; i < 400; ++i)
+                player.render (project, 120.0, true, out, 2, 512);
+            gCounting = false;
+            check (gAllocs.load() == 0, "no allocation in render() while parameters are automated");
+        }
+    }
+}
+
 void testOneShot()
 {
     std::cout << "One-shot playback (start-up sound)\n";
@@ -3891,6 +4175,7 @@ int main()
     testNoteRecording();
     testCyberHub();
     testOneShot();
+    testAutomation();
     testMidiImport();
     testLegatoAndSlide();
 

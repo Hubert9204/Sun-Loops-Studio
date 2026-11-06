@@ -28,6 +28,9 @@ const juce::Colour kAudio { 0xff3f9fa6 };
 const juce::Colour kAudioMissing { 0xff8a4a4a };
 const juce::Colour kSelect { 0xffffffff };
 const juce::Colour kCut { 0xffe5534b };
+const juce::Colour kAutomationColour { 0xff9b6bd1 };
+const juce::Colour kLaneA { 0xff262a38 };
+const juce::Colour kLaneB { 0xff232634 };
 
 constexpr int kMaxUndo = 64;
 
@@ -79,7 +82,19 @@ double PlaylistTimeline::getPixelsPerTick() const noexcept
 
 int PlaylistTimeline::trackHeight() const noexcept
 {
-    return std::clamp ((getHeight() - kRulerHeight - kScrollBarHeight) / kPlaylistTracks, 18, 56);
+    return std::clamp ((getHeight() - kRulerHeight - kScrollBarHeight - kAutomationLanes * kLaneHeight - kLanesGap) / kPlaylistTracks, 18, 56);
+}
+
+int PlaylistTimeline::lanesTop() const noexcept
+{
+    return kRulerHeight + kPlaylistTracks * trackHeight() + kLanesGap;
+}
+
+juce::Rectangle<int> PlaylistTimeline::automationClipRect (const AutomationClip& c) const noexcept
+{
+    const int x0 = tickToX (c.startTick);
+    const int x1 = tickToX (c.endTick());
+    return { x0, lanesTop() + c.lane * kLaneHeight, std::max (2, x1 - x0), kLaneHeight };
 }
 
 int PlaylistTimeline::unitToX (int unit) const noexcept
@@ -370,9 +385,8 @@ void PlaylistTimeline::resized()
 
 void PlaylistTimeline::paintGrid (juce::Graphics& g)
 {
-    const int th = trackHeight();
     const int top = kRulerHeight;
-    const int bottom = kRulerHeight + kPlaylistTracks * th;
+    const int bottom = lanesBottom();
     const double ppt = getPixelsPerTick();
     const int firstTick = std::max (0, static_cast<int> (std::floor (scrollX / ppt)) - 1);
     const int lastTick = std::min (arrangement.timelineTicks(), static_cast<int> (std::ceil ((scrollX + getWidth()) / ppt)) + 1);
@@ -473,6 +487,12 @@ void PlaylistTimeline::paint (juce::Graphics& g)
             g.fillRect (kNameWidth, kRulerHeight + t * th, getWidth() - kNameWidth, th);
         }
 
+        for (int lane = 0; lane < kAutomationLanes; ++lane)
+        {
+            g.setColour (lane % 2 == 0 ? kLaneA : kLaneB);
+            g.fillRect (kNameWidth, lanesTop() + lane * kLaneHeight, getWidth() - kNameWidth, kLaneHeight);
+        }
+
         paintGrid (g);
         paintRuler (g);
 
@@ -515,6 +535,9 @@ void PlaylistTimeline::paint (juce::Graphics& g)
         pruneWaveformCache();
         for (int i = 0; i < static_cast<int> (arrangement.audioClips.size()); ++i)
             paintAudioClip (g, arrangement.audioClips[static_cast<size_t> (i)], selection.kind == Kind::Audio && selection.index == i);
+
+        for (int i = 0; i < static_cast<int> (arrangement.automationClips.size()); ++i)
+            paintAutomationClip (g, arrangement.automationClips[static_cast<size_t> (i)], selection.kind == Kind::Automation && selection.index == i);
 
         // Drop preview (files or sounds dragged over the timeline).
         if (dropTrack >= 0)
@@ -582,19 +605,74 @@ void PlaylistTimeline::paint (juce::Graphics& g)
             g.setColour (kText);
         g.drawText ("Track " + juce::String (t + 1), 6, kRulerHeight + t * th, kNameWidth - 20, th, juce::Justification::centredLeft);
     }
+
+    g.setColour (kAutomationColour.brighter (0.3f));
+    g.setFont (juce::FontOptions (11.0f));
+    for (int lane = 0; lane < kAutomationLanes; ++lane)
+        g.drawText ("Auto " + juce::String (lane + 1), 6, lanesTop() + lane * kLaneHeight, kNameWidth - 8, kLaneHeight, juce::Justification::centredLeft);
+}
+
+void PlaylistTimeline::paintAutomationClip (juce::Graphics& g, const AutomationClip& c, bool selected)
+{
+    const auto r = automationClipRect (c).reduced (0, 1);
+    if (r.getRight() < kNameWidth || r.getX() > getWidth())
+        return;
+
+    g.setColour (kAutomationColour.withAlpha (0.55f));
+    g.fillRoundedRectangle (r.toFloat(), 2.0f);
+
+    // The curve, scaled to the lowest and highest value the clip uses (a flat clip is a line in the middle).
+    float lo = c.points.empty() ? 0.0f : c.points.front().value, hi = lo;
+    for (const auto& p : c.points)
+    {
+        lo = std::min (lo, p.value);
+        hi = std::max (hi, p.value);
+    }
+    const double span = static_cast<double> (hi) - lo;
+    const int x0 = std::max (r.getX(), kNameWidth), x1 = std::min (r.getRight(), getWidth());
+    const int curveHeight = std::max (4, r.getHeight() - 14); // the name is written above the curve
+    juce::Path curve;
+    bool started = false;
+    for (int x = x0; x <= x1; x += 2)
+    {
+        const double tick = (static_cast<double> (x - kNameWidth) + scrollX) / getPixelsPerTick() - c.startTick;
+        const float v = automationValueAt (c.points, tick, lo);
+        const float norm = span > 1.0e-9 ? static_cast<float> ((v - lo) / span) : 0.5f;
+        const float y = static_cast<float> (r.getBottom() - 3) - norm * static_cast<float> (curveHeight);
+        if (! started)
+            curve.startNewSubPath (static_cast<float> (x), y);
+        else
+            curve.lineTo (static_cast<float> (x), y);
+        started = true;
+    }
+    g.setColour (juce::Colours::white.withAlpha (0.9f));
+    g.strokePath (curve, juce::PathStrokeType (1.2f));
+
+    if (automationLabel)
+    {
+        g.setColour (juce::Colours::black.withAlpha (0.75f));
+        g.setFont (juce::FontOptions (10.5f, juce::Font::bold));
+        g.drawText (automationLabel (c.target), r.reduced (4, 0), juce::Justification::topLeft, true);
+    }
+    if (selected)
+    {
+        g.setColour (kSelect);
+        g.drawRoundedRectangle (r.toFloat().reduced (0.5f), 2.0f, 1.5f);
+    }
 }
 
 // ------------------------------------------------------------------------- history
 
 PlaylistTimeline::Snapshot PlaylistTimeline::takeSnapshot() const
 {
-    return { arrangement.clips, arrangement.audioClips };
+    return { arrangement.clips, arrangement.audioClips, arrangement.automationClips };
 }
 
 void PlaylistTimeline::restore (const Snapshot& s)
 {
     arrangement.clips = s.clips;
     arrangement.audioClips = s.audioClips;
+    arrangement.automationClips = s.automationClips;
 }
 
 void PlaylistTimeline::beginEdit()
@@ -682,6 +760,14 @@ juce::String PlaylistTimeline::describeSelection() const
         return text;
     }
 
+    if (selection.kind == Kind::Automation && selection.index >= 0 && selection.index < static_cast<int> (arrangement.automationClips.size()))
+    {
+        const auto& c = arrangement.automationClips[static_cast<size_t> (selection.index)];
+        return (automationLabel ? automationLabel (c.target) : juce::String ("Automation")) + "   start " + jstr (formatBarsBeatsTicks (c.startTick))
+             + " (" + jstr (formatSeconds (ticksToSeconds (c.startTick, bpm))) + ")   length " + jstr (formatLengthBarsBeatsTicks (c.lengthTicks))
+             + " (" + jstr (formatSeconds (ticksToSeconds (c.lengthTicks, bpm))) + ")   " + juce::String (static_cast<int> (c.points.size())) + " points   double-click to edit";
+    }
+
     if (selection.kind == Kind::Pattern && selection.index >= 0 && selection.index < static_cast<int> (arrangement.clips.size()))
     {
         const auto& c = arrangement.clips[static_cast<size_t> (selection.index)];
@@ -709,6 +795,12 @@ void PlaylistTimeline::updateReadout (int x, int y)
         const int tick = xToTick (x);
         position = "Position " + jstr (formatBarsBeatsTicks (tick)) + "  =  " + jstr (formatSeconds (ticksToSeconds (tick, bpm)))
                  + "   Track " + juce::String (yToTrack (y) + 1);
+    }
+    else if (x >= kNameWidth && inLanes (y))
+    {
+        const int tick = xToTick (x);
+        position = "Position " + jstr (formatBarsBeatsTicks (tick)) + "  =  " + jstr (formatSeconds (ticksToSeconds (tick, bpm)))
+                 + "   Automation lane " + juce::String (yToLane (y) + 1);
     }
     onReadout (position, describeSelection());
 }
@@ -740,6 +832,71 @@ bool PlaylistTimeline::eraseAt (int track, int tick)
         return true;
     }
     return false;
+}
+
+int PlaylistTimeline::addAutomationClip (AutomationClip clip, int startTick)
+{
+    if (arrangement.automationClips.size() >= static_cast<size_t> (kMaxAutomationClips))
+        return -1;
+
+    // From the wanted tick, then from the start of each following beat, until a lane has room.
+    int start = std::max (0, startTick);
+    for (int attempt = 0; attempt < 4096; ++attempt)
+    {
+        if (start + clip.lengthTicks > arrangement.timelineTicks())
+            return -1;
+        const int lane = arrangement.findFreeAutomationLane (start, clip.lengthTicks);
+        if (lane >= 0)
+        {
+            clip.startTick = start;
+            clip.lane = lane;
+            beginEdit();
+            commitPendingUndo();
+            arrangement.automationClips.push_back (clip);
+            const int index = static_cast<int> (arrangement.automationClips.size()) - 1;
+            select (Kind::Automation, index);
+            notifyChanged();
+            return index;
+        }
+        start = (start / kTicksPerBeat + 1) * kTicksPerBeat;
+    }
+    return -1;
+}
+
+void PlaylistTimeline::pushUndoPoint()
+{
+    beginEdit();
+    commitPendingUndo();
+}
+
+void PlaylistTimeline::selectAutomation (int index)
+{
+    if (index >= 0 && index < static_cast<int> (arrangement.automationClips.size()))
+        select (Kind::Automation, index);
+    else
+        clearSelection();
+}
+
+void PlaylistTimeline::showAutomationMenu (int index)
+{
+    select (Kind::Automation, index);
+    juce::PopupMenu menu;
+    menu.addItem (1, "Edit the points...");
+    menu.addItem (2, "Duplicate (Ctrl+D)");
+    menu.addSeparator();
+    menu.addItem (3, "Delete (Delete)");
+    menu.showMenuAsync (juce::PopupMenu::Options(),
+                        [safe = juce::Component::SafePointer<PlaylistTimeline> (this), index] (int result)
+                        {
+                            if (safe == nullptr || result == 0)
+                                return;
+                            if (result == 1 && safe->onAutomationPicked)
+                                safe->onAutomationPicked (index);
+                            else if (result == 2)
+                                safe->duplicateSelected();
+                            else if (result == 3)
+                                safe->deleteSelected();
+                        });
 }
 
 bool PlaylistTimeline::splitAt (int track, int tick, bool noSnap)
@@ -788,6 +945,12 @@ void PlaylistTimeline::deleteSelected()
         beginEdit();
         commitPendingUndo();
         arrangement.clips.erase (arrangement.clips.begin() + selection.index);
+    }
+    else if (selection.kind == Kind::Automation && selection.index >= 0 && selection.index < static_cast<int> (arrangement.automationClips.size()))
+    {
+        beginEdit();
+        commitPendingUndo();
+        arrangement.automationClips.erase (arrangement.automationClips.begin() + selection.index);
     }
     else
         return;
@@ -851,6 +1014,13 @@ void PlaylistTimeline::pasteAt (int track, int tick)
 
 void PlaylistTimeline::duplicateSelected()
 {
+    if (selection.kind == Kind::Automation && selection.index >= 0 && selection.index < static_cast<int> (arrangement.automationClips.size()))
+    {
+        const auto original = arrangement.automationClips[static_cast<size_t> (selection.index)];
+        addAutomationClip (original, original.endTick());
+        return;
+    }
+
     const auto saved = clipboard;
     copySelected();
     if (clipboard.kind == Kind::Audio)
@@ -1017,13 +1187,21 @@ void PlaylistTimeline::mouseMove (const juce::MouseEvent& e)
 {
     updateReadout (e.x, e.y);
 
-    if (e.x >= kNameWidth && e.y >= kRulerHeight)
+    if (e.x >= kNameWidth && e.y >= kRulerHeight && e.y < kRulerHeight + kPlaylistTracks * trackHeight())
         setHover (yToTrack (e.y), xToTick (e.x));
     else
         setHover (-1, 0);
 
     if (tool == PlaylistTool::Split || tool == PlaylistTool::Cut)
         repaint();
+
+    if (tool == PlaylistTool::Select && e.x >= kNameWidth && inLanes (e.y))
+    {
+        const int hitClip = arrangement.automationClipAt (yToLane (e.y), xToTick (e.x));
+        const bool edge = hitClip >= 0 && e.x >= automationClipRect (arrangement.automationClips[static_cast<size_t> (hitClip)]).getRight() - kEdgeGrab;
+        setMouseCursor (edge ? juce::MouseCursor::LeftRightResizeCursor : juce::MouseCursor::NormalCursor);
+        return;
+    }
 
     // Resize cursor over the edge of an audio clip (Select tool).
     if (tool == PlaylistTool::Select && hoverTrack >= 0)
@@ -1069,6 +1247,61 @@ void PlaylistTimeline::mouseDown (const juce::MouseEvent& e)
         setArmedTrack (track);
         if (onTrackSelected)
             onTrackSelected (track);
+        return;
+    }
+    if (e.x >= kNameWidth && inLanes (e.y))
+    {
+        const int lane = yToLane (e.y);
+        const int tick = xToTick (e.x);
+        const int hitClip = arrangement.automationClipAt (lane, tick);
+
+        if (tool == PlaylistTool::Zoom)
+        {
+            if (e.mods.isPopupMenu() || e.mods.isShiftDown())
+                zoomBy (1.0 / 2.0, e.x);
+            else
+            {
+                drag = Drag::ZoomRange;
+                dragStartX = dragEndX = e.x;
+            }
+            return;
+        }
+        if (hitClip < 0)
+        {
+            clearSelection();
+            return;
+        }
+        if (e.mods.isPopupMenu())
+        {
+            showAutomationMenu (hitClip);
+            return;
+        }
+        if (tool == PlaylistTool::Erase)
+        {
+            beginEdit();
+            commitPendingUndo();
+            arrangement.automationClips.erase (arrangement.automationClips.begin() + hitClip);
+            clearSelection();
+            notifyChanged();
+            return;
+        }
+        if (tool != PlaylistTool::Select)
+        {
+            select (Kind::Automation, hitClip);
+            return;
+        }
+
+        select (Kind::Automation, hitClip);
+        dragClip = hitClip;
+        dragAutomationOriginal = arrangement.automationClips[static_cast<size_t> (hitClip)];
+        beginEdit();
+        if (e.x >= automationClipRect (dragAutomationOriginal).getRight() - kEdgeGrab)
+            drag = Drag::ResizeAutomation;
+        else
+        {
+            drag = Drag::MoveAutomation;
+            grabOffsetTicks = tick - dragAutomationOriginal.startTick;
+        }
         return;
     }
     if (e.x < kNameWidth || e.y < kRulerHeight || e.y >= kRulerHeight + kPlaylistTracks * trackHeight())
@@ -1227,6 +1460,34 @@ void PlaylistTimeline::mouseDrag (const juce::MouseEvent& e)
         return;
     }
 
+    if ((drag == Drag::MoveAutomation || drag == Drag::ResizeAutomation) && dragClip >= 0
+        && dragClip < static_cast<int> (arrangement.automationClips.size()))
+    {
+        auto clip = dragAutomationOriginal;
+        const int mouseTick = xToTick (e.x);
+        if (drag == Drag::MoveAutomation)
+        {
+            clip.startTick = std::clamp (snapTick (mouseTick - grabOffsetTicks, noSnap), 0, std::max (0, arrangement.timelineTicks() - clip.lengthTicks));
+            clip.lane = yToLane (e.y);
+        }
+        else
+            setAutomationLength (clip, std::max (effectiveSnap (noSnap), snapTick (mouseTick, noSnap) - clip.startTick));
+
+        auto& stored = arrangement.automationClips[static_cast<size_t> (dragClip)];
+        if ((clip.startTick != stored.startTick || clip.lane != stored.lane || clip.lengthTicks != stored.lengthTicks)
+            && arrangement.canPlaceAutomation (clip, dragClip))
+        {
+            commitPendingUndo();
+            stored = clip;
+            dragChanged = true;
+            repaint();
+            updateReadout (e.x, e.y);
+            if (onChanged)
+                onChanged();
+        }
+        return;
+    }
+
     if ((drag == Drag::MoveAudio || drag == Drag::ResizeAudio || drag == Drag::TrimAudio) && dragClip >= 0
         && dragClip < static_cast<int> (arrangement.audioClips.size()))
     {
@@ -1339,6 +1600,14 @@ void PlaylistTimeline::mouseDoubleClick (const juce::MouseEvent& e)
 {
     if (e.x < kNameWidth || e.y < kRulerHeight || tool != PlaylistTool::Select)
         return;
+
+    if (inLanes (e.y))
+    {
+        const int hitClip = arrangement.automationClipAt (yToLane (e.y), xToTick (e.x));
+        if (hitClip >= 0 && onAutomationPicked)
+            onAutomationPicked (hitClip);
+        return;
+    }
 
     const int track = yToTrack (e.y);
     const int audio = arrangement.audioClipAt (track, xToTick (e.x));

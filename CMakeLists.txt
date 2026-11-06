@@ -86,6 +86,8 @@ target_sources(SunLoopsStudio PRIVATE
     src/ui/MainComponentRecording.cpp
     src/ui/MainComponentBrowser.cpp
     src/ui/MainComponentProject.cpp
+    src/ui/MainComponentAutomation.cpp
+    src/ui/AutomationEditor.cpp
     ${SLS_CORE_SOURCES})
 
 target_include_directories(SunLoopsStudio PRIVATE src)
