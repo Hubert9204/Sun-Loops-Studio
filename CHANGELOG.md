@@ -2,6 +2,24 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.18.0 - 2026-11-06
+
+### Added
+- **Subtractive synth** (block F, first part). Right-click a synth channel > **Synth settings...**: switch the engine from **Classic** (the
+  original sine sound, still the default, so older projects sound the same) to **Subtractive**:
+  - two oscillators (sine, triangle, band-limited saw and square with pulse width; octave, semitone, fine tuning, level) and white noise;
+  - a filter (low-pass, high-pass, band-pass; 12 or 24 dB per octave) with cutoff, resonance, its own ADSR envelope (+-6 octaves) and key tracking;
+  - an amplitude ADSR envelope (notes sustain while held) and an LFO on pitch, cutoff, level or pulse width;
+  - nine ready-made sounds (Saw Lead, Square Bass, Acid Bass, Soft Pad, Pluck, Brass, 808 Sub, Organ, PWM Strings) in the window's menu and
+    as factory presets in the browser; a *Play C4* button.
+- The patch is saved in the project (only for subtractive channels, so files with classic synths stay readable by 0.17.0) and in channel presets;
+  edits are in the undo history. `src/audio/SynthPatch.h`, `src/ui/SynthPanel.*`, `src/ui/MainComponentSynth.cpp`; the voice in `Player.cpp`
+  (no allocation: tested over 2000 blocks with eight voices).
+
+### Limits
+- One filter and one LFO per channel, two oscillators, no unison, no velocity-to-filter, no FM or additive engine yet (the next parts of block F).
+- Measured on test notes (pitch, filter, envelopes, LFO) and seen in a virtual display; not heard on speakers.
+
 ## 0.17.0 - 2026-11-06
 
 ### Added

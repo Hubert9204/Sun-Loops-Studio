@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(SunLoopsStudio VERSION 0.17.0 LANGUAGES C CXX)
+project(SunLoopsStudio VERSION 0.18.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -111,6 +111,8 @@ target_sources(SunLoopsStudio PRIVATE
     src/ui/MainComponentSafety.cpp
     src/ui/MainComponentSampler.cpp
     src/ui/MainComponentPlugins.cpp
+    src/ui/MainComponentSynth.cpp
+    src/ui/SynthPanel.cpp
     src/ui/DrumMachine.cpp
     src/ui/SamplerPanel.cpp
     src/ui/AutomationEditor.cpp

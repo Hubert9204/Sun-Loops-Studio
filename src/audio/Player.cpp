@@ -10,6 +10,8 @@ namespace
 {
 constexpr double kTwoPi = 6.283185307179586476925286766559;
 constexpr float kSynthGain = 0.25f;
+constexpr float kSubtractiveGain = 0.35f; // a full saw through an open filter about as loud as the classic synth's fundamental
+const SynthPatch defaultPatch {};
 constexpr float kSampleGain = 0.5f;
 constexpr float kWaveNorm = 1.0f / 1.35f;
 constexpr float kGainSmoothing = 0.002f; // per sample, about 10 ms at 48 kHz
@@ -431,8 +433,167 @@ void Player::noteOn (const Channel& channel, int channelIndex, const Note& n, in
     v.phase = 0.0;
     v.increment = kTwoPi * pitchToHz (n.pitch + static_cast<double> (channel.pitch)) / sampleRate;
     v.attackStep = static_cast<float> (1.0 / (0.005 * sampleRate)); // 5 ms
+    if (channel.synth.engine == SynthEngine::Subtractive)
+        subtractiveVoiceOn (v, channel.synth, n.pitch);
 
     *target = v;
+}
+
+void Player::subtractiveVoiceOn (Voice& v, const SynthPatch& patch, int pitch) noexcept
+{
+    v.subtractive = true;
+    v.ratio1 = patch.osc[0].ratio();
+    v.ratio2 = patch.osc[1].ratio();
+    // Free-running oscillators would beat differently on every note; a fixed start keeps renders repeatable.
+    v.ph1 = 0.0;
+    v.ph2 = 0.25;
+    v.noise = 22222u + static_cast<std::uint32_t> (v.age * 2654435761u);
+    const auto seconds = [this] (float s, double minimum) { return std::max (minimum, static_cast<double> (s)) * sampleRate; };
+    v.attackStep = static_cast<float> (1.0 / seconds (patch.amp.attack, 0.0005));
+    v.sustainLevel = patch.amp.sustain;
+    v.decayStep = static_cast<float> ((1.0 - patch.amp.sustain) / seconds (patch.amp.decay, 0.001));
+    v.relStep = static_cast<float> (1.0 / seconds (patch.amp.release, 0.002));
+    v.fenv = 0.0f;
+    v.fstage = 0;
+    v.fAttackStep = static_cast<float> (1.0 / seconds (patch.filterEnv.attack, 0.0005));
+    v.fSustain = patch.filterEnv.sustain;
+    v.fDecayStep = static_cast<float> ((1.0 - patch.filterEnv.sustain) / seconds (patch.filterEnv.decay, 0.001));
+    v.fRelStep = static_cast<float> (1.0 / seconds (patch.filterEnv.release, 0.002));
+    v.keyOctaves = patch.keyTrack * static_cast<float> (pitch - 60) / 12.0f;
+    v.lfoPhase = 0.0f;
+    v.lfoInc = static_cast<float> (patch.lfoRate / sampleRate);
+    v.controlLeft = 0;
+    v.filter = patch.filter;
+    v.s1L = v.s2L = v.s1R = v.s2R = 0.0f;
+}
+
+namespace
+{
+// PolyBLEP: the correction that takes the step of a saw or square wave off its aliasing (t: phase 0..1, dt: phase step).
+inline double polyBlep (double t, double dt) noexcept
+{
+    if (t < dt)
+    {
+        t /= dt;
+        return t + t - t * t - 1.0;
+    }
+    if (t > 1.0 - dt)
+    {
+        t = (t - 1.0) / dt;
+        return t * t + t + t + 1.0;
+    }
+    return 0.0;
+}
+
+inline double oscillator (Waveform wave, double t, double dt, double pw) noexcept
+{
+    switch (wave)
+    {
+        case Waveform::Sine:     return std::sin (kTwoPi * t);
+        case Waveform::Triangle: return 4.0 * std::abs (t - 0.5) - 1.0;
+        case Waveform::Saw:      return 2.0 * t - 1.0 - polyBlep (t, dt);
+        case Waveform::Square:
+        {
+            double t2 = t + 1.0 - pw;
+            t2 -= std::floor (t2);
+            return (t < pw ? 1.0 : -1.0) + polyBlep (t, dt) - polyBlep (t2, dt);
+        }
+    }
+    return 0.0;
+}
+
+inline float lfoValue (Waveform wave, float t) noexcept
+{
+    switch (wave)
+    {
+        case Waveform::Sine:     return static_cast<float> (std::sin (kTwoPi * t));
+        case Waveform::Triangle: return 1.0f - 4.0f * std::abs (t - 0.5f);
+        case Waveform::Saw:      return 2.0f * t - 1.0f;
+        case Waveform::Square:   return t < 0.5f ? 1.0f : -1.0f;
+    }
+    return 0.0f;
+}
+} // namespace
+
+// One sample of a subtractive voice, before the amplitude envelope and velocity (which the caller applies like for every voice).
+float Player::renderSubtractive (Voice& v, const SynthPatch& patch) noexcept
+{
+    // Filter envelope: attack to 1, decay to the sustain level, release from wherever it is when the note ends.
+    if (v.state == State::Release && v.fstage != 2)
+        v.fstage = 2;
+    if (v.fstage == 0)
+    {
+        v.fenv += v.fAttackStep;
+        if (v.fenv >= 1.0f) { v.fenv = 1.0f; v.fstage = 1; }
+    }
+    else if (v.fstage == 1)
+        v.fenv = std::max (v.fSustain, v.fenv - v.fDecayStep);
+    else
+        v.fenv = std::max (0.0f, v.fenv - v.fRelStep);
+
+    // Control rate: the LFO, the pitch modulation and the filter coefficients every kControlInterval samples.
+    if (--v.controlLeft <= 0)
+    {
+        v.controlLeft = kControlInterval;
+        const float lfo = patch.lfoTarget == LfoTarget::Off ? 0.0f : lfoValue (patch.lfoWave, v.lfoPhase) * patch.lfoDepth;
+        v.pitchMod = patch.lfoTarget == LfoTarget::Pitch ? std::pow (2.0, 2.0 * lfo / 12.0) : 1.0;
+        v.ampMod = patch.lfoTarget == LfoTarget::Amp ? 1.0f - 0.5f * patch.lfoDepth * (1.0f - lfoValue (patch.lfoWave, v.lfoPhase)) : 1.0f;
+        v.pwMod = patch.lfoTarget == LfoTarget::PulseWidth ? 0.4f * lfo : 0.0f;
+        if (v.filter != SamplerFilter::Off)
+        {
+            const double octaves = 6.0 * patch.envAmount * v.fenv + v.keyOctaves + (patch.lfoTarget == LfoTarget::Cutoff ? 3.0 * lfo : 0.0);
+            const double fc = std::clamp (SamplerSettings::cutoffHz (patch.cutoff) * std::pow (2.0, octaves), 20.0, 0.45 * sampleRate);
+            const double g = std::tan (kTwoPi * 0.5 * fc / sampleRate);
+            const double k = 2.0 - 1.94 * static_cast<double> (patch.resonance) * (patch.steep ? 0.8 : 1.0); // two in a row ring more
+            const double a1 = 1.0 / (1.0 + g * (g + k));
+            v.fk = static_cast<float> (k);
+            v.fa1 = static_cast<float> (a1);
+            v.fa2 = static_cast<float> (g * a1);
+            v.fa3 = static_cast<float> (g * g * a1);
+        }
+    }
+    v.lfoPhase += v.lfoInc;
+    if (v.lfoPhase >= 1.0f)
+        v.lfoPhase -= 1.0f;
+
+    // Oscillators and noise.
+    const double base = v.increment / kTwoPi * v.pitchMod; // cycles per sample of the note
+    const double dt1 = std::min (0.5, base * v.ratio1);
+    const double dt2 = std::min (0.5, base * v.ratio2);
+    double x = 0.0;
+    if (patch.osc[0].level > 0.0f)
+        x += patch.osc[0].level * oscillator (patch.osc[0].wave, v.ph1, dt1, std::clamp (patch.osc[0].pulseWidth + v.pwMod, 0.05f, 0.95f));
+    if (patch.osc[1].level > 0.0f)
+        x += patch.osc[1].level * oscillator (patch.osc[1].wave, v.ph2, dt2, std::clamp (patch.osc[1].pulseWidth + v.pwMod, 0.05f, 0.95f));
+    v.ph1 += dt1;
+    v.ph1 -= std::floor (v.ph1);
+    v.ph2 += dt2;
+    v.ph2 -= std::floor (v.ph2);
+    if (patch.noise > 0.0f)
+    {
+        v.noise ^= v.noise << 13;
+        v.noise ^= v.noise >> 17;
+        v.noise ^= v.noise << 5;
+        x += patch.noise * (static_cast<double> (v.noise) / 2147483648.0 - 1.0);
+    }
+    auto y = static_cast<float> (x * 0.5); // two full oscillators stay near +-1
+
+    if (v.filter != SamplerFilter::Off)
+    {
+        const auto svf = [&v] (float in, float& ic1, float& ic2)
+        {
+            const float v3 = in - ic2;
+            const float v1 = v.fa1 * ic1 + v.fa2 * v3;
+            const float v2 = ic2 + v.fa2 * ic1 + v.fa3 * v3;
+            ic1 = 2.0f * v1 - ic1;
+            ic2 = 2.0f * v2 - ic2;
+            return v.filter == SamplerFilter::LowPass ? v2 : v.filter == SamplerFilter::BandPass ? v1 : in - v.fk * v1 - v2;
+        };
+        y = svf (y, v.s1L, v.s2L);
+        if (patch.steep)
+            y = svf (y, v.s1R, v.s2R);
+    }
+    return y * v.ampMod * patch.gain;
 }
 
 void Player::pluginEvent (int channelIndex, std::uint8_t status, int data1, int data2) noexcept
@@ -923,6 +1084,13 @@ void Player::render (const Project& project, double bpm, bool playing,
                     l = xl * gain * v.padLeft;
                     r = xr * gain * v.padRight;
                     v.pos += v.step;
+                }
+                else if (v.subtractive)
+                {
+                    // The patch of the voice's channel in this snapshot (a channel that changed instrument meanwhile still has one).
+                    const auto& patch = static_cast<size_t> (v.channel) < project.channels.size() ? project.channels[static_cast<size_t> (v.channel)].synth
+                                                                                                  : defaultPatch;
+                    l = r = renderSubtractive (v, patch) * v.env * v.velocity * kSubtractiveGain;
                 }
                 else
                 {

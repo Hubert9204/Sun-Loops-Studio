@@ -73,6 +73,7 @@ public:
     std::function<void (int)> onRename;        // context menu "Rename..."
     std::function<void (int)> onDelete;        // context menu "Delete channel..."
     std::function<void (int)> onSamplerSettings; // context menu "Sampler settings..." (sampler channels)
+    std::function<void (int)> onSynthSettings;   // context menu "Synth settings..." (synth channels, 0.18.0)
     std::function<void (int)> onLoadSoundFont;   // context menu "Load SoundFont (.sf2)..."
     std::function<void (int)> onClone;         // context menu "Clone channel"
     std::function<void (int, int)> onMove;     // context menu "Move up" (-1) / "Move down" (+1)

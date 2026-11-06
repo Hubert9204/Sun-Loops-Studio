@@ -114,6 +114,8 @@ void MainComponent::applyEditState (const EditState& s)
 
     if (samplerWindow != nullptr && (samplerWindowChannel < 0 || samplerWindowChannel >= static_cast<int> (channels.size())))
         closeSamplerSettings(); // (otherwise publishProject() below refreshes it)
+    if (synthWindow != nullptr && (synthWindowChannel < 0 || synthWindowChannel >= static_cast<int> (channels.size())))
+        closeSynthSettings();
     if (drumWindow != nullptr)
     {
         if (drumWindowChannel >= 0 && drumWindowChannel < static_cast<int> (channels.size())

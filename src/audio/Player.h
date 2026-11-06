@@ -122,8 +122,26 @@ private:
         float relStep = 0.0f;               // 0: the player's usual short release
         SamplerFilter filter = SamplerFilter::Off;
         float fa1 = 0.0f, fa2 = 0.0f, fa3 = 0.0f, fk = 0.0f; // state-variable filter coefficients
-        float s1L = 0.0f, s2L = 0.0f, s1R = 0.0f, s2R = 0.0f; // and its state
+        float s1L = 0.0f, s2L = 0.0f, s1R = 0.0f, s2R = 0.0f; // and its state (a subtractive voice: two mono filters in a row)
+
+        // Subtractive synth voices (0.18.0). The patch is read from the voice's channel in the snapshot; `increment` stays the note's
+        // rate (radians per sample, so legato and slide work as for the classic synth) and the oscillators run at ratios of it.
+        bool subtractive = false;
+        double ph1 = 0.0, ph2 = 0.0;        // oscillator phases, 0..1
+        double ratio1 = 1.0, ratio2 = 1.0;  // oscillator frequency / note frequency
+        float lfoPhase = 0.0f, lfoInc = 0.0f;
+        std::uint32_t noise = 22222u;       // noise generator state
+        float fenv = 0.0f;                  // filter envelope, 0..1
+        std::uint8_t fstage = 0;            // 0 attack, 1 decay / sustain, 2 release
+        float fAttackStep = 1.0f, fDecayStep = 0.0f, fSustain = 0.0f, fRelStep = 0.0f;
+        float keyOctaves = 0.0f;            // key tracking of the cutoff, in octaves from C4
+        int controlLeft = 0;                // samples until the LFO, the cutoff and the pitch modulation are computed again
+        double pitchMod = 1.0;
+        float pwMod = 0.0f, ampMod = 1.0f;
     };
+    static constexpr int kControlInterval = 16; // samples between two updates of a subtractive voice's modulation
+    void subtractiveVoiceOn (Voice& v, const SynthPatch& patch, int pitch) noexcept;
+    float renderSubtractive (Voice& v, const SynthPatch& patch) noexcept;
 
     // Audio clips of the playlist (recordings, imported files): one voice each, played straight through.
     struct ClipVoice

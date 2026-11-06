@@ -17,6 +17,7 @@ src/audio/                      No UI dependencies except JUCE audio types
   SampleEdit.*                  Destructive edits of a SampleData (ranges, cut / crop / fades / gain / normalise ...), noise reduction (spectral gating), onset detection, grid slices, 32-bit float WAV writing (plain C++ over SampleData)
   Auditioner.h                  The editor's preview voice: lock-free hand-over to the audio thread, mixed after the master chain
   HostedPlugin.h                What the engine knows of a third-party plugin (0.17.0): process(), isInstrument(), isLoaded(); no JUCE
+  SynthPatch.h                  The synth channel's sound (0.18.0): engine (Classic / Subtractive), oscillators, noise, filter, envelopes, LFO; factory patches (plain C++)
   SampleData.h                  SampleData (decoded audio) and finiteOr(), split from Project.h so that DrumKit.h and Project.h can include each other's needs
   SamplerProgram.h              The advanced sampler: SamplerSettings (envelope, loop, filter), SampleZone / SamplerProgram (multi-sample, key and velocity ranges), makeSliceProgram() (plain C++)
   DrumKit.h                     The drum machine model: 16 pads, 4 velocity layers, choke groups, swing; layerFor(), padForPitch(), sanitised() (plain C++)
@@ -63,6 +64,7 @@ src/ui/
   AutomationEditor.*            The point editor window for one automation clip
   MetersView.*                  The Meters window: loudness read-outs, true peak, spectrum, goniometer, correlation
   SamplerPanel.*                The sampler settings window (MainComponentSampler.cpp opens and wires it, loads SoundFonts, makes slice channels)
+  SynthPanel.*                  The synth window (0.18.0; MainComponentSynth.cpp opens and wires it)
   PluginWindow.h                A plugin's window: its own editor or JUCE's generic one (0.17.0; MainComponentPlugins.cpp creates, wires and closes them)
   DrumMachine.*                 The drum machine window: pad grid, pad inspector, step grid per pad, kit menu (MainComponentDrums.cpp opens and wires it)
   PanelWindow.*                 PanelWindow (floating panel) and Workspace (the area they float in)
@@ -127,7 +129,12 @@ It works in chunks of 64 samples so that note starts stay sample-accurate while 
 - **Swing** (`Channel::swing`, 0..1) is applied when the `Project` is made (`Project::applySwing`): a note on an odd
   16th is delayed by `round(swing * 60)` ticks, unless that would push it past the loop end, in which case it stays.
   The stored notes are unchanged, so turning swing down gives the original timing back.
-- A synth voice is a sine with two harmonics and a short attack/release. It ends at the note length and at the loop
+- A synth voice of the **Classic** engine is a sine with two harmonics and a short attack/release. A **Subtractive** voice (0.18.0,
+  `Player::renderSubtractive`) runs two oscillators at fixed ratios of the note's rate (`increment`, so legato and slide work unchanged):
+  sine, triangle, and saw / square with PolyBLEP; white noise from a per-voice xorshift; the amplitude envelope uses the voice's existing
+  attack / decay / sustain / release fields and the filter envelope its own; every 16 samples the LFO, the pitch and pulse-width modulation and
+  the cutoff (base x 2^(envelope + key tracking + LFO) octaves) are computed and the state-variable filter's coefficients updated (one or two
+  filters in a row). The patch is read from the voice's channel in the snapshot (plain values, nothing to free). Either kind ends at the note length and at the loop
   boundary. A sampler voice plays its sample once, repitched by note relative to the channel's root pitch (linear
   interpolation, sample-rate compensated) and keeps ringing across the loop boundary.
 - On stop the voices fade out over 80 ms and the transport rewinds to the start.

@@ -27,6 +27,11 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.18.0
+The subtractive voice adds per-sample work to `Player::render` (two oscillators, noise, one or two filters) and a `std::pow` / `std::tan` per
+voice every 16 samples; nothing allocates (tested with eight voices for 2000 blocks). The CPU load of 32 voices was not measured on the
+maintainer's computer. clang-tidy (the audit's check set) was run on the new files; see the commit message.
+
 ## After 0.17.0
 Block I added plugin processing to the audio thread: MIDI events written into fixed arrays, a pass over the plugin channels per chunk, and
 `JucePlugin::process`, which copies into a preallocated buffer and calls the plugin under a try-lock (never waits). The "no allocation" test

@@ -486,6 +486,7 @@ MainComponent::~MainComponent()
     sampleEditorWindow.reset();
     drumWindow.reset();
     samplerWindow.reset();
+    synthWindow.reset();
     metersWindow.reset();
     engine.getDeviceManager().removeChangeListener (this);
     audioDialog.deleteAndZero(); // it refers to the engine
@@ -829,6 +830,7 @@ void MainComponent::createStrip (size_t channelIndex)
     };
     strip->onRename = [this] (int idx) { renameChannel (idx); };
     strip->onSamplerSettings = [this] (int idx) { openSamplerSettings (idx); };
+    strip->onSynthSettings = [this] (int idx) { openSynthSettings (idx); };
     strip->onLoadSoundFont = [this] (int idx) { chooseSoundFontFor (idx); };
     strip->onDelete = [this] (int idx) { deleteChannel (idx); };
     strip->onClone = [this] (int idx) { cloneChannel (idx); };
@@ -922,6 +924,8 @@ void MainComponent::publishProject()
         drumWindow->view().refresh(); // notes or kit may have changed from somewhere else (piano roll, another pattern, undo)
     if (samplerWindow != nullptr)
         samplerWindow->panel().refresh();
+    if (synthWindow != nullptr)
+        synthWindow->panel().refresh();
     auto project = std::make_unique<Project> (compileCurrent());
     if (songMode && arrangement.hasLoop())
     {

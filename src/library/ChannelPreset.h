@@ -23,6 +23,7 @@ struct ChannelPreset
     float swing = 0.0f;
     int rootPitch = 60;
     std::string sampleSource; // "builtin:<id>", an absolute path, or empty
+    SynthPatch synth;         // synth presets (0.18.0): the engine and its settings; older preset files give the Classic engine
 
     static ChannelPreset fromChannel (const Channel& channel, const std::string& presetName);
 
@@ -36,6 +37,10 @@ struct ChannelPreset
     // clamped into their valid range and a NaN becomes the default.
     static std::optional<ChannelPreset> fromJson (const juce::String& text);
 };
+
+// A synth patch as JSON (project and preset files, 0.18.0). Missing or bad values keep their defaults; everything is clamped.
+juce::var synthPatchToVar (const SynthPatch& patch);
+SynthPatch synthPatchFromVar (const juce::var& v);
 
 // Ready-made presets that ship with the program.
 const std::vector<ChannelPreset>& factoryPresets();

@@ -16,6 +16,7 @@
 #include "ui/AutomationEditor.h"
 #include "ui/DrumMachine.h"
 #include "ui/SamplerPanel.h"
+#include "ui/SynthPanel.h"
 #include "ui/SampleEditor.h"
 #include "ui/MetersView.h"
 #include "library/ChannelPreset.h"
@@ -223,6 +224,8 @@ private:
     // MainComponentSampler.cpp
     void openSamplerSettings (int channelIndex);
     void closeSamplerSettings();
+    void openSynthSettings (int channelIndex);  // MainComponentSynth.cpp (0.18.0)
+    void closeSynthSettings();
     void chooseSoundFontFor (int channelIndex);
     void chooseSoundFontPreset (int channelIndex, const juce::File& file);
     void applySoundFont (int channelIndex, const juce::File& file, int presetIndex);
@@ -286,6 +289,8 @@ private:
     std::unique_ptr<DrumMachineWindow> drumWindow;
     std::unique_ptr<SamplerWindow> samplerWindow;
     int samplerWindowChannel = -1;
+    std::unique_ptr<SynthWindow> synthWindow;
+    int synthWindowChannel = -1;
     int drumWindowChannel = -1;
     void openDrumMachine (int channelIndex);
     void closeDrumMachine();

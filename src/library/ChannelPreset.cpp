@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "library/JsonRead.h"
+
 namespace sls
 {
 namespace
@@ -29,6 +31,8 @@ ChannelPreset ChannelPreset::fromChannel (const Channel& channel, const std::str
     p.rootPitch = channel.rootPitch;
     if (channel.instrument == Instrument::Sampler && channel.sample != nullptr)
         p.sampleSource = channel.sample->source;
+    if (channel.instrument == Instrument::Synth)
+        p.synth = channel.synth;
     return p;
 }
 
@@ -41,6 +45,8 @@ void ChannelPreset::applyTo (Channel& channel) const
     channel.pitch = std::clamp (pitch, -24.0f, 24.0f);
     channel.swing = std::clamp (swing, 0.0f, 1.0f);
     channel.rootPitch = std::clamp (rootPitch, 0, 127);
+    if (instrument == Instrument::Synth)
+        channel.synth = synth.sanitised();
 }
 
 juce::String ChannelPreset::toJson() const
@@ -56,6 +62,8 @@ juce::String ChannelPreset::toJson() const
     o->setProperty ("swing", static_cast<double> (swing));
     o->setProperty ("rootPitch", rootPitch);
     o->setProperty ("sample", juce::String (sampleSource));
+    if (instrument == Instrument::Synth)
+        o->setProperty ("synth", synthPatchToVar (synth));
     return juce::JSON::toString (juce::var (o), false);
 }
 
@@ -83,7 +91,154 @@ std::optional<ChannelPreset> ChannelPreset::fromJson (const juce::String& text)
     p.swing = readFloat (o->getProperty ("swing"), p.swing, 0.0f, 1.0f);
     p.rootPitch = static_cast<int> (readFloat (o->getProperty ("rootPitch"), 60.0f, 0.0f, 127.0f));
     p.sampleSource = o->getProperty ("sample").toString().toStdString();
+    p.synth = synthPatchFromVar (o->getProperty ("synth"));
     return p;
+}
+
+namespace
+{
+const char* waveKey (Waveform w)
+{
+    switch (w)
+    {
+        case Waveform::Sine:     return "sine";
+        case Waveform::Triangle: return "triangle";
+        case Waveform::Saw:      return "saw";
+        case Waveform::Square:   return "square";
+    }
+    return "saw";
+}
+
+Waveform waveFromKey (const juce::String& k, Waveform fallback)
+{
+    return k == "sine" ? Waveform::Sine : k == "triangle" ? Waveform::Triangle : k == "saw" ? Waveform::Saw : k == "square" ? Waveform::Square : fallback;
+}
+
+const char* filterKey (SamplerFilter f)
+{
+    return f == SamplerFilter::LowPass ? "lowpass" : f == SamplerFilter::HighPass ? "highpass" : f == SamplerFilter::BandPass ? "bandpass" : "off";
+}
+
+SamplerFilter filterFromKey (const juce::String& k, SamplerFilter fallback)
+{
+    return k == "lowpass" ? SamplerFilter::LowPass : k == "highpass" ? SamplerFilter::HighPass : k == "bandpass" ? SamplerFilter::BandPass
+         : k == "off" ? SamplerFilter::Off : fallback;
+}
+
+const char* targetKey (LfoTarget t)
+{
+    switch (t)
+    {
+        case LfoTarget::Pitch:      return "pitch";
+        case LfoTarget::Cutoff:     return "cutoff";
+        case LfoTarget::Amp:        return "amp";
+        case LfoTarget::PulseWidth: return "pulsewidth";
+        case LfoTarget::Off:        break;
+    }
+    return "off";
+}
+
+LfoTarget targetFromKey (const juce::String& k)
+{
+    return k == "pitch" ? LfoTarget::Pitch : k == "cutoff" ? LfoTarget::Cutoff : k == "amp" ? LfoTarget::Amp : k == "pulsewidth" ? LfoTarget::PulseWidth
+         : LfoTarget::Off;
+}
+
+juce::var adsrToVar (const Adsr& a)
+{
+    auto* o = new juce::DynamicObject();
+    o->setProperty ("attack", static_cast<double> (a.attack));
+    o->setProperty ("decay", static_cast<double> (a.decay));
+    o->setProperty ("sustain", static_cast<double> (a.sustain));
+    o->setProperty ("release", static_cast<double> (a.release));
+    return juce::var (o);
+}
+
+Adsr adsrFromVar (const juce::var& v, const Adsr& d)
+{
+    Adsr a = d;
+    if (auto* o = v.getDynamicObject())
+    {
+        a.attack = static_cast<float> (readNumber (o->getProperty ("attack"), d.attack, 0.0, 10.0));
+        a.decay = static_cast<float> (readNumber (o->getProperty ("decay"), d.decay, 0.0, 10.0));
+        a.sustain = static_cast<float> (readNumber (o->getProperty ("sustain"), d.sustain, 0.0, 1.0));
+        a.release = static_cast<float> (readNumber (o->getProperty ("release"), d.release, 0.0, 10.0));
+    }
+    return a;
+}
+} // namespace
+
+juce::var synthPatchToVar (const SynthPatch& patch)
+{
+    const auto p = patch.sanitised();
+    auto* o = new juce::DynamicObject();
+    o->setProperty ("engine", p.engine == SynthEngine::Subtractive ? "subtractive" : "classic");
+    juce::Array<juce::var> oscs;
+    for (const auto& osc : p.osc)
+    {
+        auto* x = new juce::DynamicObject();
+        x->setProperty ("wave", waveKey (osc.wave));
+        x->setProperty ("level", static_cast<double> (osc.level));
+        x->setProperty ("octave", osc.octave);
+        x->setProperty ("semitones", osc.semitones);
+        x->setProperty ("fine", static_cast<double> (osc.fine));
+        x->setProperty ("pulseWidth", static_cast<double> (osc.pulseWidth));
+        oscs.add (juce::var (x));
+    }
+    o->setProperty ("oscillators", oscs);
+    o->setProperty ("noise", static_cast<double> (p.noise));
+    o->setProperty ("filter", filterKey (p.filter));
+    o->setProperty ("steep", p.steep);
+    o->setProperty ("cutoff", static_cast<double> (p.cutoff));
+    o->setProperty ("resonance", static_cast<double> (p.resonance));
+    o->setProperty ("envAmount", static_cast<double> (p.envAmount));
+    o->setProperty ("keyTrack", static_cast<double> (p.keyTrack));
+    o->setProperty ("amp", adsrToVar (p.amp));
+    o->setProperty ("filterEnvelope", adsrToVar (p.filterEnv));
+    o->setProperty ("lfoWave", waveKey (p.lfoWave));
+    o->setProperty ("lfoRate", static_cast<double> (p.lfoRate));
+    o->setProperty ("lfoTarget", targetKey (p.lfoTarget));
+    o->setProperty ("lfoDepth", static_cast<double> (p.lfoDepth));
+    o->setProperty ("gain", static_cast<double> (p.gain));
+    return juce::var (o);
+}
+
+SynthPatch synthPatchFromVar (const juce::var& v)
+{
+    const SynthPatch d;
+    SynthPatch p;
+    auto* o = v.getDynamicObject();
+    if (o == nullptr)
+        return p;
+    p.engine = o->getProperty ("engine").toString() == "subtractive" ? SynthEngine::Subtractive : SynthEngine::Classic;
+    if (auto* oscs = o->getProperty ("oscillators").getArray())
+        for (int i = 0; i < std::min (oscs->size(), 2); ++i)
+            if (auto* x = (*oscs)[i].getDynamicObject())
+            {
+                auto& osc = p.osc[static_cast<size_t> (i)];
+                const auto& od = d.osc[static_cast<size_t> (i)];
+                osc.wave = waveFromKey (x->getProperty ("wave").toString(), od.wave);
+                osc.level = static_cast<float> (readNumber (x->getProperty ("level"), od.level, 0.0, 1.0));
+                osc.octave = readInt (x->getProperty ("octave"), od.octave, -3, 3);
+                osc.semitones = readInt (x->getProperty ("semitones"), od.semitones, -12, 12);
+                osc.fine = static_cast<float> (readNumber (x->getProperty ("fine"), od.fine, -100.0, 100.0));
+                osc.pulseWidth = static_cast<float> (readNumber (x->getProperty ("pulseWidth"), od.pulseWidth, 0.05, 0.95));
+            }
+    p.noise = static_cast<float> (readNumber (o->getProperty ("noise"), d.noise, 0.0, 1.0));
+    p.filter = filterFromKey (o->getProperty ("filter").toString(), d.filter);
+    p.steep = readBool (o->getProperty ("steep"), d.steep);
+    p.cutoff = static_cast<float> (readNumber (o->getProperty ("cutoff"), d.cutoff, 0.0, 1.0));
+    p.resonance = static_cast<float> (readNumber (o->getProperty ("resonance"), d.resonance, 0.0, 1.0));
+    p.envAmount = static_cast<float> (readNumber (o->getProperty ("envAmount"), d.envAmount, -1.0, 1.0));
+    p.keyTrack = static_cast<float> (readNumber (o->getProperty ("keyTrack"), d.keyTrack, 0.0, 1.0));
+    p.amp = adsrFromVar (o->getProperty ("amp"), d.amp);
+    p.filterEnv = adsrFromVar (o->getProperty ("filterEnvelope"), d.filterEnv);
+    p.lfoWave = waveFromKey (o->getProperty ("lfoWave").toString(), d.lfoWave);
+    p.lfoRate = static_cast<float> (readNumber (o->getProperty ("lfoRate"), d.lfoRate, 0.05, 20.0));
+    p.lfoTarget = targetFromKey (o->getProperty ("lfoTarget").toString());
+    p.lfoDepth = static_cast<float> (readNumber (o->getProperty ("lfoDepth"), d.lfoDepth, 0.0, 1.0));
+    p.gain = static_cast<float> (readNumber (o->getProperty ("gain"), d.gain, 0.0, 1.5));
+    return p.sanitised();
 }
 
 const std::vector<ChannelPreset>& factoryPresets()
@@ -127,6 +282,19 @@ const std::vector<ChannelPreset>& factoryPresets()
         swungHat.swing = 0.6f;
         swungHat.sampleSource = "builtin:hat";
         v.push_back (swungHat);
+
+        // The subtractive synth's ready-made sounds (0.18.0), as channel presets that can be dragged from the browser.
+        for (const auto& named : synthFactoryPatches())
+        {
+            if (named.patch.engine != SynthEngine::Subtractive)
+                continue;
+            ChannelPreset p;
+            p.id = "synth-" + juce::String (named.name).toLowerCase().replaceCharacter (' ', '-').toStdString();
+            p.name = named.name.substr (0, 16);
+            p.volume = 0.7f;
+            p.synth = named.patch;
+            v.push_back (p);
+        }
 
         return v;
     }();

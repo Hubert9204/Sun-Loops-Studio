@@ -14,6 +14,7 @@
 #include "audio/NoteSequence.h"
 #include "audio/SampleData.h"
 #include "audio/SamplerProgram.h"
+#include "audio/SynthPatch.h"
 
 namespace sls
 {
@@ -32,6 +33,7 @@ struct Channel
     std::shared_ptr<const SampleData> sample; // Sampler only (when there is no program). Plays one-shot unless `sampler` says otherwise.
     std::shared_ptr<const SamplerProgram> program; // Sampler only: a multi-sample program (a SoundFont preset, slices); used instead of `sample`
     SamplerSettings sampler;                  // Sampler only: envelope, loop, filter (0.16.0)
+    SynthPatch synth;                         // Synth only: the engine (Classic = the original sound) and the subtractive synth's settings (0.18.0)
     std::shared_ptr<HostedPlugin> plugin;     // Plugin only: a third-party instrument (0.17.0); it gets the notes as MIDI
     std::shared_ptr<const DrumKit> kit;       // Drums only: the 16 pads (see DrumKit.h). Never null for a Drums channel after Project::make().
     int rootPitch = 60;                       // Sampler: pitch at which the sample plays unchanged
@@ -158,7 +160,8 @@ struct Project
             c.rootPitch = std::clamp (c.rootPitch, 0, 127);
             c.pitch = std::clamp (finiteOr (c.pitch, 0.0f), -24.0f, 24.0f);
             c.mixerTrack = std::clamp (c.mixerTrack, 0, kMaxTracks - 1);
-            c.sampler = c.sampler.sanitised(); // a program is sanitised when it is made (SoundFont loader, slices)
+            c.sampler = c.sampler.sanitised();
+            c.synth = c.synth.sanitised(); // a program is sanitised when it is made (SoundFont loader, slices)
             if (c.instrument != Instrument::Sampler)
                 c.program = nullptr;
             if (c.instrument != Instrument::Plugin)

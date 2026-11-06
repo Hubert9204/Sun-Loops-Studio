@@ -122,7 +122,7 @@ The sidebar on the left lists your sounds as a tree. Click the arrow of a folder
 | Samples | The built-in sounds (kick, snare, hat), then the audio files (WAV, FLAC, OGG, AIFF) found in `~/Music/Sun Loops Studio/Samples`, with its sub-folders. |
 | Drum Kits | A built-in kit, then one entry per sub-folder of `~/Music/Sun Loops Studio/Drum Kits`. |
 | Instruments | *Synth* and *Sampler*. |
-| Presets | Six factory channel presets, then your own `.slspreset` files from `~/Music/Sun Loops Studio/Presets`. |
+| Presets | The factory channel presets (six basic ones and, since 0.18.0, the subtractive synth sounds), then your own `.slspreset` files from `~/Music/Sun Loops Studio/Presets`. |
 | Plugin | *Scan for plugins (VST3, LV2, LADSPA)...* searches the usual plugin folders in the background; the list is kept for the next start. Found plugins are sorted into **Instruments** and **Effects** (see *Plugins* below). |
 
 The three folders under `~/Music/Sun Loops Studio` are created when the program starts. **Folder** opens that
@@ -176,11 +176,32 @@ One row per channel: a **Track N** display and the name, **M** (mute), **S** (so
 | Delete channel... | After a confirmation, removes the channel, its notes in every pattern and the automation clips that move its volume or pan. The last channel cannot be deleted. `Ctrl+Z` brings it back. |
 | Assign free mixer track | Opens a window listing the 8 mixer tracks: free ones (no instrument on them) in green, the others with the instruments that are on them, and the current one marked. The first free track is selected for you; **Select first free track** picks it again, or choose any track (sharing one is allowed), then **Assign** (or Return; Escape cancels). The channel's **Track N** display and the mixer follow, and the mixer selects that track. |
 | Save as preset... | Asks for a name and writes a `.slspreset` file (instrument, sample, volume, pan, pitch, swing; not the notes, the sampler settings or a SoundFont) into `~/Music/Sun Loops Studio/Presets`; it appears in the browser's Presets folder at once. |
+| Synth settings... | (Synth channels) opens the synth window: ready-made sounds, the engine and every setting of the subtractive synth (see *Synth*). |
 | Sampler settings... | (Sampler channels) opens the sampler window: envelope, loop, filter, root key (see *Sampler and SoundFonts*). |
 | Load SoundFont (.sf2)... | Chooses a `.sf2` file, then one of its presets: the channel becomes a sampler that plays it (see below). A `.sf2` in your Samples folder can also be dragged from the browser onto a channel. |
 
 Double-clicking a synth channel's note preview, or the name of any channel, also opens its Piano Roll. On sampler
 channels double-clicking the steps is not special: every click toggles a step.
+
+## Synth
+
+Right-click a synth channel > **Synth settings...** opens its synth window. Every synth channel starts with the **Classic** engine, the
+original sound of Sun Loops Studio (a sine with two harmonics), so older projects sound as they did. Switch **Engine** to **Subtractive**,
+or pick a ready-made sound from the menu at the top (*Saw Lead, Square Bass, Acid Bass, Soft Pad, Pluck, Brass, 808 Sub, Organ, PWM Strings*),
+to shape the sound. **Play C4** sounds the channel while you hold it. The same sounds are in the browser under *Presets > Factory*.
+
+| Section | Settings |
+| --- | --- |
+| Oscillator 1 and 2 | Wave (sine, triangle, saw, square), level, octave (-3..+3), semitone (-12..+12), fine tuning in cents, pulse width (square only). Saw and square are band-limited (PolyBLEP), so high notes do not alias much. |
+| Noise | Level of white noise added to the oscillators. |
+| Filter | Off, low-pass, high-pass or band-pass; **24 dB / octave** puts two filters in a row; cutoff, resonance, how far the filter envelope moves the cutoff (up to 6 octaves up or down) and key tracking (the cutoff follows the note, from C4). |
+| Amplifier envelope | Attack, decay, sustain, release: the note sounds while it is held, then fades with the release. |
+| Filter envelope | Attack, decay, sustain, release of the cutoff movement. |
+| LFO | Target (pitch: vibrato up to 2 semitones; cutoff: up to 3 octaves; level: tremolo; pulse width), wave, rate (0.05-20 Hz), depth. The LFO starts again with every note. |
+| Output | The level of the synth before the channel's volume. |
+
+Legato and slide (Shift+click in the Piano Roll) work as with the classic engine. A synth preset (*Save as preset...*) stores the sound too.
+Every change can be undone with `Ctrl+Z`.
 
 ## Sampler and SoundFonts
 
@@ -756,6 +777,8 @@ a heavier song or a plugin-heavy mixer can still need a bigger size.
 - Patterns are 1, 2, 4 or 8 bars long (the same for all patterns), 4/4, 16th-note grid; one tempo for the whole song.
 - Samples are mono or stereo, at most 30 seconds. The sampler has one envelope and one filter per channel (no filter envelope, LFO or modulation);
   at most four zones sound per note. Audio clips: up to 5 minutes per file, 64 clips.
+- The synth: one LFO and one filter per channel, two oscillators, no unison, no FM or additive engine yet, no modulation of the envelopes by
+  velocity; the LFO is restarted with every note.
 - Plugins: VST3, LV2 and LADSPA (no VST2, no Audio Units); stereo in and out (extra outputs and side-chain inputs are not used); their parameters
   cannot be automated; edits made in a plugin's window are saved with the project but are not in the undo history.
 - Not available yet: playing notes from the computer keyboard, time-stretching of samples in the Sampler (only audio clips on the playlist can be stretched), automation of anything except volumes, pans and effect parameters, turning guitar or voice pitch into notes,

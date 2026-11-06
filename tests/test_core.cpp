@@ -7,6 +7,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <new>
 #include <thread>
 #include <vector>
@@ -6332,6 +6333,283 @@ int firstNonZero (const std::vector<float>& x, float threshold = 1.0e-6f)
     return -1;
 }
 
+// "Roughness": the RMS of the sample-to-sample difference over the RMS, which grows with the high frequencies in a signal.
+float roughness (const std::vector<float>& x, double fromSeconds, double toSeconds)
+{
+    const int a = static_cast<int> (fromSeconds * kSr), b = std::min (static_cast<int> (toSeconds * kSr), static_cast<int> (x.size()));
+    double d = 0.0, e = 0.0;
+    for (int i = a + 1; i < b; ++i)
+    {
+        const double diff = x[static_cast<size_t> (i)] - x[static_cast<size_t> (i - 1)];
+        d += diff * diff;
+        e += static_cast<double> (x[static_cast<size_t> (i)]) * x[static_cast<size_t> (i)];
+    }
+    return e > 0.0 ? static_cast<float> (std::sqrt (d / e)) : 0.0f;
+}
+
+void testSubtractiveSynth()
+{
+    std::cout << "Subtractive synth (0.18.0)\n";
+    const auto play = [] (const sls::SynthPatch& patch, double seconds, int lengthTicks = kBeat, int pitch = 69, float velocity = 0.8f)
+    {
+        auto c = synthChannel ({ { pitch, 0, lengthTicks, velocity } });
+        c.synth = patch;
+        sls::Player p;
+        p.prepare (kSr);
+        return renderBlocks (p, sls::Project::make ({ c }, 16 * kBeat), true, seconds);
+    };
+    const auto finite = [] (const std::vector<float>& x) { return std::all_of (x.begin(), x.end(), [] (float v) { return std::isfinite (v); }); };
+
+    sls::SynthPatch raw;
+    raw.engine = sls::SynthEngine::Subtractive;
+    raw.filter = sls::SamplerFilter::Off;
+    raw.osc[1].level = 0.0f;
+    raw.amp = { 0.001f, 0.1f, 1.0f, 0.05f };
+
+    // Classic stays the classic sound: a project without a patch renders exactly as a project whose patch is the default.
+    {
+        auto c = synthChannel ({ { 69, 0, kBeat, 0.8f } });
+        sls::Player a, b;
+        a.prepare (kSr);
+        b.prepare (kSr);
+        const auto plain = renderBlocks (a, sls::Project::make ({ c }, 16 * kBeat), true, 0.3);
+        c.synth = sls::SynthPatch {};
+        const auto withDefault = renderBlocks (b, sls::Project::make ({ c }, 16 * kBeat), true, 0.3);
+        check (plain == withDefault, "the Classic engine (the default) sounds exactly as before 0.18.0");
+    }
+
+    // Pitch of every waveform, the octave and semitone of an oscillator.
+    for (const auto wave : { sls::Waveform::Sine, sls::Waveform::Triangle, sls::Waveform::Saw, sls::Waveform::Square })
+    {
+        auto p = raw;
+        p.osc[0].wave = wave;
+        const auto out = play (p, 0.4);
+        const double hz = zeroCrossingHz (out, kSr, 2000, 18000);
+        check (std::fabs (hz - 440.0) < 2.0 && finite (out), (std::string ("A4 plays 440 Hz with the ") + (wave == sls::Waveform::Sine ? "sine" : wave == sls::Waveform::Triangle ? "triangle" : wave == sls::Waveform::Saw ? "saw" : "square") + " wave").c_str());
+    }
+    {
+        auto p = raw;
+        p.osc[0].wave = sls::Waveform::Sine;
+        p.osc[0].octave = 1;
+        check (std::fabs (zeroCrossingHz (play (p, 0.4), kSr, 2000, 18000) - 880.0) < 4.0, "oscillator octave +1: 880 Hz");
+        p.osc[0].octave = 0;
+        p.osc[0].semitones = 7;
+        check (std::fabs (zeroCrossingHz (play (p, 0.4), kSr, 2000, 18000) - 440.0 * std::pow (2.0, 7.0 / 12.0)) < 3.0, "oscillator +7 semitones: a fifth up");
+    }
+
+    // The saw is band-limited: much less sample-to-sample jump than a naive saw at a high note.
+    {
+        auto p = raw;
+        const auto out = play (p, 0.3, kBeat, 96); // C7, 2093 Hz
+        float worst = 0.0f;
+        for (size_t i = 2000; i < 12000; ++i)
+            worst = std::max (worst, std::fabs (out[i] - out[i - 1]));
+        float peak = 0.0f;
+        for (size_t i = 2000; i < 12000; ++i)
+            peak = std::max (peak, std::fabs (out[i]));
+        check (worst < 1.6f * peak, "PolyBLEP: the saw's reset is spread over two samples (no full-height jump)");
+    }
+
+    // Filter: a low cutoff takes the high frequencies off; the envelope and key tracking open it; resonance and 24 dB stay stable.
+    {
+        auto open = raw;
+        auto closed = raw;
+        closed.filter = sls::SamplerFilter::LowPass;
+        closed.cutoff = 0.35f; // about 225 Hz
+        closed.envAmount = 0.0f;
+        closed.keyTrack = 0.0f;
+        const auto a = play (open, 0.4), b = play (closed, 0.4);
+        check (roughness (b, 0.1, 0.4) < 0.5f * roughness (a, 0.1, 0.4), "low-pass at a low cutoff: the saw becomes much smoother");
+        auto steep = closed;
+        steep.steep = true;
+        check (roughness (play (steep, 0.4), 0.1, 0.4) < roughness (b, 0.1, 0.4), "24 dB (two filters) removes more than 12 dB");
+        auto hp = closed;
+        hp.filter = sls::SamplerFilter::HighPass;
+        hp.cutoff = 0.85f;
+        check (rmsWindow (play (hp, 0.4), 0.1, 0.4) < 0.5f * rmsWindow (a, 0.1, 0.4), "high-pass well above the note: most of it is gone");
+        auto swept = closed;
+        swept.envAmount = 1.0f;
+        swept.filterEnv = { 0.001f, 0.3f, 0.0f, 0.1f };
+        const auto s = play (swept, 0.6);
+        check (roughness (s, 0.01, 0.05) > 1.5f * roughness (s, 0.4, 0.5), "the filter envelope opens the filter at the start and closes it as it decays");
+        auto ring = closed;
+        ring.resonance = 1.0f;
+        ring.steep = true;
+        ring.envAmount = 1.0f;
+        const auto r = play (ring, 0.6);
+        float peak = 0.0f;
+        for (float v : r)
+            peak = std::max (peak, std::fabs (v));
+        check (finite (r) && peak < 2.0f, "full resonance, 24 dB and a full envelope: stable and bounded");
+    }
+
+    // Amplitude envelope: attack, sustain, release; a sustain of zero ends the note during the decay.
+    {
+        auto p = raw;
+        p.osc[0].wave = sls::Waveform::Sine;
+        p.amp = { 0.2f, 0.1f, 0.5f, 0.3f };
+        const auto out = play (p, 1.4, 2 * kBeat); // a 1 s note
+        check (rmsWindow (out, 0.0, 0.03) < 0.3f * rmsWindow (out, 0.18, 0.2), "attack: the note fades in over 0.2 s");
+        const float held = rmsWindow (out, 0.6, 0.9), top = rmsWindow (out, 0.19, 0.21);
+        check (held > 0.4f * top && held < 0.6f * top, "decay and sustain: the level settles at the sustain level (50 %)");
+        check (rmsWindow (out, 1.05, 1.1) > 0.01f && rmsWindow (out, 1.32, 1.4) < 0.002f, "release: the note rings on for up to 0.3 s after it ends, then stops");
+        p.amp = { 0.001f, 0.15f, 0.0f, 0.3f };
+        const auto pluck = play (p, 1.0, 2 * kBeat);
+        check (rmsWindow (pluck, 0.25, 0.9) < 0.001f, "sustain 0: the note dies away during the decay although it is held");
+    }
+
+    // LFO: tremolo moves the level, vibrato moves the pitch, pulse-width modulation changes the square.
+    {
+        auto p = raw;
+        p.osc[0].wave = sls::Waveform::Sine;
+        p.lfoTarget = sls::LfoTarget::Amp;
+        p.lfoRate = 4.0f;
+        p.lfoDepth = 1.0f;
+        p.amp.sustain = 1.0f;
+        const auto out = play (p, 1.0, 2 * kBeat);
+        float lo = 1.0f, hi = 0.0f;
+        for (double t = 0.1; t < 0.9; t += 0.02)
+        {
+            const float w = rmsWindow (out, t, t + 0.02);
+            lo = std::min (lo, w);
+            hi = std::max (hi, w);
+        }
+        check (lo < 0.2f * hi, "LFO on the level (tremolo, depth 1): the level swings at the LFO rate");
+        p.lfoTarget = sls::LfoTarget::Pitch;
+        p.lfoRate = 2.0f;
+        const auto vib = play (p, 1.0, 2 * kBeat);
+        const double rising = zeroCrossingHz (vib, kSr, static_cast<int> (0.02 * kSr), static_cast<int> (0.2 * kSr));
+        const double falling = zeroCrossingHz (vib, kSr, static_cast<int> (0.27 * kSr), static_cast<int> (0.45 * kSr));
+        check (rising > 445.0 && falling < 435.0, "LFO on the pitch (vibrato): the pitch rises and falls around 440 Hz");
+    }
+
+    // Noise and two oscillators, velocity, legato.
+    {
+        auto p = raw;
+        p.osc[0].level = 0.0f;
+        p.noise = 1.0f;
+        const auto n = play (p, 0.3);
+        std::cout << "    (noise RMS " << rmsWindow (n, 0.05, 0.25) << ", roughness " << roughness (n, 0.05, 0.25) << ")\n";
+        check (rmsWindow (n, 0.05, 0.25) > 0.02f && roughness (n, 0.05, 0.25) > 1.0f && finite (n), "noise alone sounds, and it is rough (white)");
+        auto two = raw;
+        two.osc[1] = { sls::Waveform::Saw, 1.0f, 0, 0, 10.0f, 0.5f };
+        const auto t = play (two, 1.0, 2 * kBeat);
+        check (finite (t) && rmsWindow (t, 0.1, 0.9) > 0.05f, "two detuned saws sound together");
+        const auto soft = play (raw, 0.4, kBeat, 69, 0.3f), loud = play (raw, 0.4, kBeat, 69, 0.9f);
+        check (rmsWindow (loud, 0.1, 0.3) > 2.5f * rmsWindow (soft, 0.1, 0.3), "velocity sets the level");
+    }
+    {
+        auto c = synthChannel ({ { 69, 0, kBeat, 0.8f }, { 72, kBeat, kBeat, 0.8f, sls::NoteLink::Slide } });
+        c.synth = raw;
+        c.synth.osc[0].wave = sls::Waveform::Sine;
+        sls::Player p;
+        p.prepare (kSr);
+        const auto out = renderBlocks (p, sls::Project::make ({ c }, 16 * kBeat), true, 1.2);
+        check (std::fabs (zeroCrossingHz (out, kSr, static_cast<int> (0.1 * kSr), static_cast<int> (0.45 * kSr)) - 440.0) < 3.0
+               && std::fabs (zeroCrossingHz (out, kSr, static_cast<int> (0.85 * kSr), static_cast<int> (0.98 * kSr)) - 523.25) < 4.0,
+               "slide works on the subtractive engine: 440 Hz, then a glide up to C5");
+    }
+
+    // Every factory patch renders, finite and not too loud; hostile values are tamed.
+    {
+        bool ok = true;
+        for (const auto& named : sls::synthFactoryPatches())
+        {
+            const auto out = play (named.patch, 0.8, kBeat, 48);
+            float peak = 0.0f;
+            for (float v : out)
+                peak = std::max (peak, std::fabs (v));
+            ok = ok && finite (out) && peak > 0.01f && peak < 1.2f;
+            if (! (finite (out) && peak > 0.01f && peak < 1.2f))
+                std::cout << "    (" << named.name << ": peak " << peak << ")\n";
+        }
+        check (ok && sls::synthFactoryPatches().size() >= 8, "every factory patch sounds, finite and under full scale (C3, 0.5 s)");
+        sls::SynthPatch bad;
+        bad.engine = static_cast<sls::SynthEngine> (9);
+        bad.osc[0].wave = static_cast<sls::Waveform> (77);
+        bad.osc[0].level = std::numeric_limits<float>::quiet_NaN();
+        bad.osc[1].octave = 50;
+        bad.cutoff = -3.0f;
+        bad.resonance = std::numeric_limits<float>::infinity();
+        bad.amp.attack = -1.0f;
+        bad.lfoRate = 1000.0f;
+        bad.lfoTarget = static_cast<sls::LfoTarget> (40);
+        const auto fixed = bad.sanitised();
+        check (fixed.engine == sls::SynthEngine::Classic && fixed.osc[0].wave == sls::Waveform::Saw && fixed.osc[0].level == 1.0f && fixed.osc[1].octave == 3
+                   && fixed.cutoff == 0.0f && fixed.resonance == 0.2f && fixed.amp.attack == 0.0f && fixed.lfoRate == 20.0f
+                   && fixed.lfoTarget == sls::LfoTarget::Off,
+               "hostile patch values become valid");
+    }
+
+    // No allocation with eight subtractive voices, LFO and 24 dB filters.
+    {
+        std::vector<sls::Note> notes;
+        for (int i = 0; i < 8; ++i)
+            notes.push_back ({ 48 + 3 * i, (i % 4) * kBeat / 2, 3 * kBeat, 0.7f });
+        auto c = synthChannel (notes);
+        c.synth = sls::synthFactoryPatches()[4].patch; // Soft Pad: two saws, noise, LFO on the cutoff
+        c.synth.steep = true;
+        const auto project = sls::Project::make ({ c }, 8 * kBeat);
+        sls::Player player;
+        player.prepare (kSr);
+        renderBlocks (player, project, true, 0.1);
+        std::array<float, 256> bufL {}, bufR {};
+        float* chans[2] = { bufL.data(), bufR.data() };
+        tAllocs = 0;
+        tCounting = true;
+        for (int block = 0; block < 2000; ++block)
+            player.render (project, 120.0, true, chans, 2, 256);
+        tCounting = false;
+        check (tAllocs == 0, "subtractive voices allocate nothing on the audio thread (2000 blocks)");
+    }
+}
+
+void testSynthPatchFiles()
+{
+    std::cout << "Synth patches in project and preset files (0.18.0)\n";
+    const auto& patches = sls::synthFactoryPatches();
+    bool same = true;
+    for (const auto& named : patches)
+    {
+        const auto back = sls::synthPatchFromVar (juce::JSON::parse (juce::JSON::toString (sls::synthPatchToVar (named.patch))));
+        same = same && back == named.patch.sanitised();
+    }
+    check (same, "every factory patch survives the JSON round trip exactly");
+    check (sls::synthPatchFromVar (juce::var()) == sls::SynthPatch {}, "no patch in the file: the Classic engine");
+    const auto hostile = sls::synthPatchFromVar (juce::JSON::parse (R"({"engine":"subtractive","oscillators":[{"wave":"banjo","level":7,"octave":-99}],"cutoff":"x","lfoTarget":"moon","amp":{"attack":1e9}})"));
+    check (hostile.engine == sls::SynthEngine::Subtractive && hostile.osc[0].wave == sls::Waveform::Saw && hostile.osc[0].level == 1.0f
+               && hostile.osc[0].octave == -3 && hostile.cutoff == sls::SynthPatch {}.cutoff && hostile.lfoTarget == sls::LfoTarget::Off && hostile.amp.attack == 10.0f,
+           "a hostile patch is read with clamped values and defaults");
+
+    // In a project file: a subtractive synth channel keeps its patch; a classic one writes nothing (older versions read it as before).
+    auto doc = sls::ProjectDocument::blank();
+    doc.channels[0].instrument = sls::Instrument::Synth;
+    doc.channels[0].synth = patches[3].patch;
+    if (doc.channels.size() < 2)
+        doc.channels.push_back (doc.channels[0]);
+    doc.channels[1].instrument = sls::Instrument::Synth;
+    doc.channels[1].synth = sls::SynthPatch {};
+    while (doc.sampleSources.size() < doc.channels.size())
+        doc.sampleSources.emplace_back();
+    const auto text = doc.toJson();
+    const auto read = sls::ProjectDocument::fromJson (text);
+    check (read.document.has_value() && read.document->channels[0].synth == patches[3].patch.sanitised()
+               && read.document->channels[1].synth == sls::SynthPatch {},
+           "a project keeps a subtractive patch per synth channel; a classic channel stays classic");
+    check (text.containsIgnoreCase ("\"synth\"") && text.indexOf ("\"engine\"") == text.lastIndexOf ("\"engine\""),
+           "only the subtractive channel writes a patch");
+
+    // Channel presets carry the patch.
+    sls::Channel c;
+    c.instrument = sls::Instrument::Synth;
+    c.synth = patches[1].patch;
+    const auto preset = sls::ChannelPreset::fromJson (sls::ChannelPreset::fromChannel (c, "Lead").toJson());
+    sls::Channel target;
+    if (preset.has_value())
+        preset->applyTo (target);
+    check (preset.has_value() && target.synth == patches[1].patch.sanitised(), "a synth preset saves and applies the patch");
+}
+
 void testPluginProjectFile()
 {
     std::cout << "Plugins in the project file (0.17.0)\n";
@@ -6701,6 +6979,8 @@ int main()
     testSoundFont();
     testSamplerPersistence();
 #ifdef SLS_TEST_PLUGIN_DIR
+    testSubtractiveSynth();
+    testSynthPatchFiles();
     testPluginProjectFile();
     testPluginHosting();
 #endif

@@ -1,5 +1,6 @@
 #include "library/ProjectFile.h"
 
+#include "library/ChannelPreset.h"
 #include "library/JsonRead.h"
 
 #include <algorithm>
@@ -214,6 +215,8 @@ juce::String ProjectDocument::toJson() const
         if (c.instrument == Instrument::Plugin)
             if (const auto* spec = findPlugin (PluginSpec::Place::Channel, static_cast<int> (i), 0))
                 o->setProperty ("plugin", pluginToVar (*spec));
+        if (c.instrument == Instrument::Synth && c.synth.engine != SynthEngine::Classic)
+            o->setProperty ("synth", synthPatchToVar (c.synth)); // (a classic synth writes nothing: files stay readable by older versions)
         if (c.instrument == Instrument::Drums)
             o->setProperty ("kit", kitSpecToVar (i < kitSpecs.size() ? kitSpecs[i] : KitSpec::empty()));
         o->setProperty ("sample", juce::String (i < sampleSources.size() ? sampleSources[i] : std::string()));
@@ -481,6 +484,7 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
 
         d.kitSpecs.push_back (c.instrument == Instrument::Drums ? kitSpecFromVar (o->getProperty ("kit")) : KitSpec::empty());
         c.sampler = samplerSettingsFromVar (o->getProperty ("sampler")); // older files: the defaults (one-shot)
+        c.synth = synthPatchFromVar (o->getProperty ("synth"));          // older files: the Classic engine
         d.programSpecs.push_back (programSpecFromVar (o->getProperty ("program")));
         d.channels.push_back (std::move (c));
         d.sampleSources.push_back (o->getProperty ("sample").toString().toStdString());

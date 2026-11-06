@@ -126,7 +126,7 @@ La barra laterale a sinistra elenca i tuoi suoni come un albero. Clic sulla frec
 | Samples | I suoni incorporati (cassa, rullante, hi-hat), poi i file audio (WAV, FLAC, OGG, AIFF) trovati in `~/Music/Sun Loops Studio/Samples` e nelle sue sottocartelle. |
 | Drum Kits | Un kit incorporato, poi una voce per ogni sottocartella di `~/Music/Sun Loops Studio/Drum Kits`. |
 | Instruments | *Synth* e *Sampler*. |
-| Presets | Sei preset di canale di fabbrica, poi i tuoi file `.slspreset` da `~/Music/Sun Loops Studio/Presets`. |
+| Presets | I preset di canale di fabbrica (sei di base e, dalla 0.18.0, i suoni del synth sottrattivo), poi i tuoi file `.slspreset` da `~/Music/Sun Loops Studio/Presets`. |
 | Plugin | *Scan for plugins (VST3, LV2, LADSPA)...* cerca nelle cartelle abituali dei plugin in background; l'elenco resta per l'avvio successivo. I plugin trovati sono divisi in **Instruments** ed **Effects** (vedi *Plugin* più sotto). |
 
 Le tre cartelle in `~/Music/Sun Loops Studio` vengono create all'avvio del programma. **Folder** apre quella posizione
@@ -182,12 +182,33 @@ Una riga per canale: un display **Track N** e il nome, **M** (mute), **S** (solo
 | Delete channel... | Dopo una conferma elimina il canale, le sue note in ogni pattern e le clip di automazione del suo volume o pan. L'ultimo canale non si può eliminare. `Ctrl+Z` lo riporta indietro. |
 | Assign free mixer track | Apre una finestra con le 8 tracce del mixer: quelle libere (senza strumenti) in verde, le altre con gli strumenti che ci sono sopra, e quella attuale segnata. La prima traccia libera è già selezionata; **Select first free track** la riseleziona, oppure scegli una traccia qualsiasi (condividerla è permesso), poi **Assign** (o Invio; Esc annulla). Il display **Track N** del canale e il mixer si aggiornano, e il mixer seleziona quella traccia. |
 | Save as preset... | Chiede un nome e scrive un file `.slspreset` (strumento, sample, volume, pan, pitch, swing; non le note, le impostazioni del sampler o un SoundFont) in `~/Music/Sun Loops Studio/Presets`; compare subito nella cartella Presets del browser. |
+| Synth settings... | (Canali synth) apre la finestra del synth: suoni pronti, il motore e tutte le impostazioni del synth sottrattivo (vedi *Synth*). |
 | Sampler settings... | (Canali sampler) apre la finestra del sampler: inviluppo, loop, filtro, nota di base (vedi *Sampler e SoundFont*). |
 | Load SoundFont (.sf2)... | Sceglie un file `.sf2`, poi uno dei suoi preset: il canale diventa un sampler che lo suona (vedi sotto). Un `.sf2` nella cartella Samples si può anche trascinare dal browser su un canale. |
 
 Anche il doppio clic sull'anteprima delle note di un canale synth, o sul nome di un qualsiasi canale, apre il suo
 Piano Roll. Sui canali sampler il doppio clic sugli step non ha un significato speciale: ogni clic attiva o
 disattiva uno step.
+
+## Synth
+
+Clic destro su un canale synth > **Synth settings...** apre la finestra del synth. Ogni canale synth parte con il motore **Classic**, il
+suono originale di Sun Loops Studio (un seno con due armoniche), così i progetti vecchi suonano come prima. Imposta **Engine** su
+**Subtractive**, oppure scegli un suono pronto dal menu in alto (*Saw Lead, Square Bass, Acid Bass, Soft Pad, Pluck, Brass, 808 Sub, Organ,
+PWM Strings*), per modellare il suono. **Play C4** suona il canale finché lo tieni premuto. Gli stessi suoni sono nel browser in *Presets > Factory*.
+
+| Sezione | Impostazioni |
+| --- | --- |
+| Oscillator 1 e 2 | Forma d'onda (seno, triangolo, dente di sega, quadra), livello, ottava (-3..+3), semitono (-12..+12), intonazione fine in centesimi, larghezza dell'impulso (solo quadra). Dente di sega e quadra sono a banda limitata (PolyBLEP), quindi le note alte hanno poco aliasing. |
+| Noise | Livello di rumore bianco aggiunto agli oscillatori. |
+| Filter | Spento, passa-basso, passa-alto o passa-banda; **24 dB / octave** mette due filtri in serie; cutoff, risonanza, quanto l'inviluppo del filtro sposta il cutoff (fino a 6 ottave in su o in giù) e key tracking (il cutoff segue la nota, a partire da C4). |
+| Amplifier envelope | Attacco, decadimento, sostegno, rilascio: la nota suona finché è tenuta, poi sfuma con il rilascio. |
+| Filter envelope | Attacco, decadimento, sostegno, rilascio del movimento del cutoff. |
+| LFO | Destinazione (pitch: vibrato fino a 2 semitoni; cutoff: fino a 3 ottave; livello: tremolo; larghezza dell'impulso), forma d'onda, velocità (0,05-20 Hz), profondità. L'LFO riparte a ogni nota. |
+| Output | Il livello del synth prima del volume del canale. |
+
+Legato e slide (Shift+clic nel Piano Roll) funzionano come con il motore classico. Un preset di synth (*Save as preset...*) salva anche il
+suono. Ogni modifica si annulla con `Ctrl+Z`.
 
 ## Sampler e SoundFont
 
@@ -766,6 +787,8 @@ occupato più tardi, un brano più pesante o un mixer pieno di effetti possono r
 - I pattern durano 1, 2, 4 o 8 battute (uguale per tutti), 4/4, griglia di sedicesimi; un solo tempo per tutto il brano.
 - I sample sono mono o stereo, al massimo 30 secondi. Il sampler ha un inviluppo e un filtro per canale (niente inviluppo del filtro, LFO o
   modulazione); al massimo quattro zone suonano per nota. Clip audio: fino a 5 minuti per file, 64 clip.
+- Il synth: un LFO e un filtro per canale, due oscillatori, niente unisono, ancora niente motore FM o additivo, la velocity non modula gli
+  inviluppi; l'LFO riparte a ogni nota.
 - Plugin: VST3, LV2 e LADSPA (niente VST2, niente Audio Unit); stereo in ingresso e in uscita (uscite extra e ingressi sidechain non sono usati);
   i loro parametri non si possono automatizzare; le modifiche fatte nella finestra di un plugin si salvano col progetto ma non entrano nell'annulla.
 - Non ancora disponibili: suonare le note con la tastiera del computer, time-stretch dei campioni nel Sampler (si possono modificare solo le clip audio della playlist), automazione di qualsiasi cosa tranne volumi, pan e parametri degli effetti, trasformare l'altezza di

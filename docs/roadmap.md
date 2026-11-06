@@ -1,6 +1,6 @@
 # Status and roadmap
 
-Version 0.17.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
+Version 0.18.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
 what is missing. If something here disagrees with the program, the program is right: please fix the page.
 
 ## What has been verified, and how
@@ -47,10 +47,15 @@ what is missing. If something here disagrees with the program, the program is ri
 | The sample editor in the interface: *Edit sample...* on a clip and on a channel, selecting, cut, markers (slicing controls disabled for a channel), Reverse, Apply writing `Samples/Edited/<name>-edit.wav`, the clip cut into pieces on the playlist, the channel loading the new file, the window closing | Manual, in a virtual display with a window manager and a silent device | Worked (the status-bar text after Apply on a channel was not seen in a screenshot) |
 | Plugin hosting (0.17.0): the scan of VST3 / LV2 folders (two test plugins built with the tests), the known list saved and read back by a new host that can make every plugin from it without scanning (the CI on Fedora 41 found that an LV2 plugin could not be made that way; fixed by keeping the scanned LV2 folders in the list and reading them before the first LV2 plugin is made, and the test failed again when the fix was switched off), an instrument plugin playing 440 Hz for A4 from a pattern and from a note played by hand, Stop ending its notes, prepared again for 44.1 kHz, a gain effect plugin halving a track, its state saved and given to a new instance, a placeholder for a missing plugin (keeps description and state, leaves effects alone), the LADSPA example amplifier when installed, no allocation in `Player::render` with plugins (2000 blocks), the plugin specs of the project file (channel, track, master and aux slots; broken and empty entries) | Automated headless tests (990 checks in total) | All pass |
 | Plugins in the interface: *Scan for plugins* found the two test plugins (VST3, and the gain also as LV2) and the 10 LADSPA example plugins of the build host (sorted into Instruments and Effects), the list shown again after a restart; a double-click on *SLS Test Synth* made a channel and opened its window; the channel menu with *Plugin window...* and *Plugin instruments*; notes drawn in the piano roll played (channel meter, playhead) and a key held in the piano roll sounded; *SLS Test Gain* chosen in a mixer slot, its window, its gain changed (the title showed the unsaved change), saved, the program restarted with the file: the channel, its notes, the effect and its gain came back; a WAV export with the plugin channel soloed contained its 262 Hz tone (C4) and the live engine played again afterwards; cloning the plugin channel | Manual, in a virtual display with a window manager and the ALSA default device of the build host (no speakers) | Worked |
+| Subtractive synth (0.18.0): the Classic engine rendering bit for bit as before, 440 Hz for A4 with every waveform, oscillator octave and semitone, the band-limited saw at C7, low-pass / 24 dB / high-pass / filter envelope / full resonance staying bounded, attack, sustain level, release, a zero sustain, tremolo and vibrato from the LFO, noise, two oscillators, velocity, slide, every factory patch under full scale, hostile values, no allocation over 2000 blocks; patches in project and preset files (round trip, hostile JSON, classic channels writing nothing) | Automated headless tests (1022 checks in total) | All pass |
+| The synth window in the interface: *Synth settings...* in the channel menu, the window with the Classic engine (controls disabled), *Acid Bass* chosen from the menu (engine and every control followed), the export of the soloed channel differing from the classic sound, `Ctrl+Z` bringing the classic sound back | Manual, in a virtual display with a window manager | Worked (the sound itself not heard) |
 | A use-after-free when clicking an item that rebuilds the browser tree (crash on *Scan for VST3 plugins...*) | Found in that manual session | Fixed (item actions are deferred); the same click was repeated afterwards |
 
 ## What has not been verified
 
+- **How the subtractive synth sounds (0.18.0).** Pitch, filter, envelopes and LFO were measured on single notes; the factory sounds were
+  shaped by numbers (levels, cutoffs, times), not by ear. Aliasing at very high notes with the square wave's pulse-width modulation, the
+  resonance at its maximum and the CPU load of 32 subtractive voices on a real computer were not judged.
 - **Plugins with real, commercial plugins (0.17.0).** Only the two small test plugins (made with JUCE, like most plugins) and the LADSPA
   example plugins were loaded. Plugins with their own graphical editors, plugins made with other frameworks (DPF, iPlug2, native LV2 such as
   the Calf or x42 sets), plugins with several outputs or side-chain inputs, heavy plugins at small buffer sizes, and how they behave when the
@@ -164,7 +169,7 @@ what is missing. If something here disagrees with the program, the program is ri
 
 ## Proposed order of work
 
-The larger feature blocks are in [feature-plan.md](feature-plan.md) (A, B and C are done in 0.11.0, D in 0.12.0, E in 0.13.0, G in 0.14.0, H in 0.16.0, I in 0.17.0; next are the native synths, block F). Smaller items:
+The larger feature blocks are in [feature-plan.md](feature-plan.md) (A, B and C are done in 0.11.0, D in 0.12.0, E in 0.13.0, G in 0.14.0, H in 0.16.0, I in 0.17.0; the subtractive synth of block F in 0.18.0; next are the FM and additive synths, the rest of block F). Smaller items:
 
 1. **Undo / redo** for channel settings and the Mixer (notes and the Playlist already have it).
 2. **Project extras**: autosave and recovery, embedding samples, a project folder with its samples.
