@@ -11,6 +11,8 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 
 #include "audio/BuiltinSamples.h"
+#include "audio/CyberHub.h"
+#include "audio/ClipEdit.h"
 #include "audio/OfflineRenderer.h"
 
 namespace sls
@@ -25,6 +27,7 @@ namespace
 constexpr int kLoopBars = 2;
 constexpr int kLoopTicks = kLoopBars * 4 * kTicksPerBeat;
 constexpr int kStep = kTicksPerBeat / 4;
+constexpr double kDemoBpm = 112.0;
 
 Channel makeSynth (const char* name, float volume)
 {
@@ -68,9 +71,17 @@ std::vector<Channel> demoChannels()
     for (const auto& n : bar1) bass.notes.push_back ({ n[0], n[1], n[2], 0.9f });
     for (const auto& n : bar2) bass.notes.push_back ({ n[0], n[1], n[2], 0.9f });
 
-    auto kick = makeDrum ("Kick", makeKickSample(), 0.95f);
-    auto snare = makeDrum ("Snare", makeSnareSample(), 0.7f);
-    auto hat = makeDrum ("Hat", makeHatSample(), 0.5f);
+    // The drums are Cyber-Hub system sounds (see docs/cyber-hub.md), played at their own pitch. If the sounds were not
+    // built in, the program's own synthesised drums stand in.
+    const auto cyber = [] (const char* id, std::shared_ptr<const SampleData> fallback)
+    {
+        auto sample = makeCyberHubSample (id);
+        return sample != nullptr ? sample : fallback;
+    };
+    auto kick = makeDrum ("Kick", cyber ("cyber:button-pressed", makeKickSample()), 0.95f);
+    auto clap = makeDrum ("Clap", cyber ("cyber:trash-empty", makeSnareSample()), 0.5f);
+    auto hat = makeDrum ("Hat", cyber ("cyber:audio-volume-change", makeHatSample()), 0.55f);
+    auto tom = makeDrum ("Tom", cyber ("cyber:button-pressed-modifier", makeSnareSample()), 0.6f);
     for (int bar = 0; bar < kLoopBars; ++bar)
         for (int beat = 0; beat < 4; ++beat)
         {
@@ -78,41 +89,37 @@ std::vector<Channel> demoChannels()
             addStep (kick, base);
             addStep (hat, base + 2, 0.7f);
             if (beat == 1 || beat == 3)
-                addStep (snare, base);
+                addStep (clap, base);
         }
+    for (int bar = 0; bar < kLoopBars; ++bar)
+    {
+        addStep (tom, bar * 16 + 7, 0.8f);
+        addStep (tom, bar * 16 + 14, 0.7f);
+    }
 
-    return { lead, bass, kick, snare, hat };
+    return { lead, bass, kick, clap, hat, tom };
 }
 
-std::shared_ptr<const SampleData> decodeSample (juce::AudioFormatManager& formats, const juce::File& file, juce::String& error)
+// A sampler channel's sample: any format the playlist can import, at most 30 seconds of it.
+std::shared_ptr<const SampleData> decodeSample (juce::AudioFormatManager&, const juce::File& file, juce::String& error)
 {
-    std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (file));
-    if (reader == nullptr)
+    auto imported = importAudioFile (file);
+    if (imported.data == nullptr)
     {
-        error = "Cannot read " + file.getFileName();
+        error = imported.error;
         return nullptr;
     }
 
-    const auto maxFrames = static_cast<juce::int64> (reader->sampleRate * 30.0); // at most 30 seconds
-    const int frames = static_cast<int> (std::min (reader->lengthInSamples, maxFrames));
-    if (frames < 2)
+    std::shared_ptr<const SampleData> sample = imported.data;
+    const int maxFrames = static_cast<int> (sample->sampleRate * 30.0);
+    if (sample->numFrames() > maxFrames)
     {
-        error = file.getFileName() + " is empty";
-        return nullptr;
+        auto cut = std::make_shared<SampleData> (*sample);
+        cut->left.resize (static_cast<size_t> (maxFrames));
+        cut->right.resize (static_cast<size_t> (maxFrames));
+        sample = cut;
     }
-
-    juce::AudioBuffer<float> buffer (2, frames);
-    reader->read (&buffer, 0, frames, 0, true, true);
-    if (reader->numChannels == 1)
-        buffer.copyFrom (1, 0, buffer, 0, 0, frames);
-
-    auto data = std::make_shared<SampleData>();
-    data->left.assign (buffer.getReadPointer (0), buffer.getReadPointer (0) + frames);
-    data->right.assign (buffer.getReadPointer (1), buffer.getReadPointer (1) + frames);
-    data->sampleRate = reader->sampleRate;
-    data->name = file.getFileNameWithoutExtension().toStdString();
-    data->source = file.getFullPathName().toStdString();
-    return data;
+    return sample;
 }
 } // namespace
 
@@ -140,7 +147,8 @@ MainComponent::MainComponent()
 
     library.ensureExists(); // ~/Music/Sun Loops Studio/{Samples,Drum Kits,Presets}: where the browser looks
 
-    // Demo song: "Pattern 1" is the full groove, "Drums" is the same beat without the melodic channels.
+    // Demo song (Cyber-Hub): "Pattern 1" is the full groove, "Drums" is the same beat without the melodic channels.
+    // The playlist is Drums, two times Pattern 1, Drums, with two Cyber-Hub sounds as audio clips on track 8.
     arrangement.patternTicks = kLoopTicks;
     arrangement.patterns.resize (2);
     arrangement.patterns[0].name = "Pattern 1";
@@ -150,7 +158,20 @@ MainComponent::MainComponent()
     for (size_t c = 0; c < channels.size(); ++c)
         if (channels[c].instrument == Instrument::Sampler)
             arrangement.patterns[1].notes[c] = channels[c].notes;
-    arrangement.clips = { { 1, 0, 0, 1 }, { 0, 0, 1, 2 } };
+    arrangement.clips = { { 1, 0, 0, 1 }, { 0, 0, 1, 2 }, { 1, 0, 3, 1 } };
+    for (const auto& piece : { std::pair<const char*, int> { "cyber:desktop-login", 0 },
+                               std::pair<const char*, int> { "cyber:desktop-logout", 3 * kLoopTicks } })
+        if (auto data = makeCyberHubSample (piece.first))
+        {
+            AudioClip clip;
+            clip.data = data;
+            clip.name = data->name;
+            clip.track = 7;
+            clip.startTick = piece.second;
+            clip.gain = 0.6f;
+            clip.lengthTicks = clip.naturalLengthTicks (kDemoBpm);
+            arrangement.audioClips.push_back (clip);
+        }
 
     for (size_t i = 0; i < channels.size(); ++i)
         createStrip (i);
@@ -197,18 +218,7 @@ MainComponent::MainComponent()
     patternBox.onChange = [this] { selectPattern (patternBox.getSelectedId() - 1); };
 
     patternAddButton.setTooltip ("New pattern");
-    patternAddButton.onClick = [this]
-    {
-        juce::PopupMenu menu;
-        menu.addItem (1, "New empty pattern");
-        menu.addItem (2, "Clone current pattern");
-        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&patternAddButton),
-                            [safe = juce::Component::SafePointer<MainComponent> (this)] (int result)
-                            {
-                                if (safe != nullptr && result != 0)
-                                    safe->addPattern (result == 2);
-                            });
-    };
+    patternAddButton.onClick = [this] { showNewPatternMenu (patternAddButton); };
 
     clearButton.onClick = [this]
     {
@@ -241,8 +251,18 @@ MainComponent::MainComponent()
     recordMenuButton.onClick = [this] { openRecordMenu(); };
     playlistView.onTrackSelected = [this] (int track) { setRecordTrack (track); };
 
+    // Rec notes: what a MIDI keyboard plays while the song runs is written into the selected channel's pattern.
+    noteRecordButton.setClickingTogglesState (false);
+    noteRecordButton.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xffd9433b));
+    noteRecordButton.setTooltip ("Record the notes of a MIDI keyboard into the piano roll: switch it on, press Play and play. "
+                                 "The notes go to the selected channel, in the current pattern, and are quantized "
+                                 "(right-click to choose how).");
+    noteRecordButton.onClick = [this] { toggleNoteRecording(); };
+    noteRecordButton.onRightClick = [this] { openNoteRecordMenu(); };
+
     bpmSlider.setRange (40.0, 240.0, 1.0);
-    bpmSlider.setValue (120.0, juce::dontSendNotification);
+    bpmSlider.setValue (kDemoBpm, juce::dontSendNotification);
+    engine.setBpm (kDemoBpm);
     bpmSlider.onValueChange = [this] { engine.setBpm (bpmSlider.getValue()); playlistView.setBpm (bpmSlider.getValue()); markDirty(); };
 
     volumeSlider.setRange (0.0, 1.0, 0.01);
@@ -279,6 +299,11 @@ MainComponent::MainComponent()
             publishProject();
     };
     playlistView.onPatternPicked = [this] (int pattern) { selectPattern (pattern); };
+    playlistView.onPatternSelected = [this] (int pattern) { selectPattern (pattern); };
+    playlistView.onNewPattern = [this] { showNewPatternMenu (playlistView); };
+    playlistView.onRenamePattern = [this] (int pattern) { renamePattern (pattern); };
+    playlistView.onDeletePattern = [this] (int pattern) { deletePattern (pattern); };
+    playlistView.onItemDropped = [this] (const drag::Item& item, int track, int tick) { dropOnPlaylist (item, track, tick); };
     playlistView.onFilesDropped = [this] (const juce::StringArray& files, int track, int tick) { importMediaFiles (files, track, tick); };
     playlistView.setBpm (bpmSlider.getValue());
 
@@ -290,7 +315,7 @@ MainComponent::MainComponent()
     mixerPanelWindow.setContent (&mixerPanel);
     mixerPanelWindow.setMinimumSize (720, 440);
     playlistPanel.setContent (&playlistView);
-    playlistPanel.setMinimumSize (380, 200);
+    playlistPanel.setMinimumSize (520, 290);
 
     for (auto* panel : allPanels())
     {
@@ -328,14 +353,14 @@ MainComponent::MainComponent()
     statusLabel.setFont (juce::FontOptions (12.0f));
 
     // Space and F5/F6/F7/F9 are handled by this component, so these controls must not steal keyboard focus.
-    for (juce::Button* b : std::initializer_list<juce::Button*> { &fileButton, &playButton, &clearButton, &modeButton, &patternAddButton, &deviceButton, &metronomeButton, &recordButton, &recordMenuButton,
+    for (juce::Button* b : std::initializer_list<juce::Button*> { &fileButton, &playButton, &clearButton, &modeButton, &patternAddButton, &deviceButton, &metronomeButton, &recordButton, &recordMenuButton, &noteRecordButton,
                      &browserToggle, &browserTab, &rackToggle, &playlistToggle, &pianoToggle, &mixerToggle, &resetButton })
         b->setMouseClickGrabsKeyboardFocus (false);
     patternBox.setMouseClickGrabsKeyboardFocus (false);
     patternBox.setWantsKeyboardFocus (false);
 
     for (auto* c : std::initializer_list<juce::Component*> { &fileButton, &playButton, &modeButton, &patternBox, &patternAddButton,
-                                                              &clearButton, &deviceButton, &metronomeButton, &recordButton, &recordMenuButton,
+                                                              &clearButton, &deviceButton, &metronomeButton, &recordButton, &recordMenuButton, &noteRecordButton,
                                                               &browserToggle, &rackToggle, &playlistToggle, &pianoToggle,
                                                               &mixerToggle, &resetButton, &bpmSlider, &volumeSlider,
                                                               &bpmLabel, &volumeLabel, &deviceLabel, &statusLabel, &meter,
@@ -366,12 +391,18 @@ MainComponent::MainComponent()
         monitorInput = settings->getBoolValue ("record.monitor", false);
         metronomeOn = settings->getBoolValue ("metronome.on", false);
         metronomeVolume = static_cast<float> (settings->getDoubleValue ("metronome.volume", 0.5));
+        noteQuantize = std::clamp (settings->getIntValue ("midirec.quantize", kTicksPerBeat / 4), 0, kTicksPerBeat);
+        recordTarget = settings->getIntValue ("record.target", 0) == 1 ? RecordTarget::SamplerChannel : RecordTarget::PlaylistTrack;
     }
     applyMetronome();
+    applyNoteRecording();
     playlistView.setArmedTrack (recordTrack);
     engine.setInputMonitoring (monitorInput);
     engine.setMidiTargetChannel (selected);
+    engine.setStartupSound (makeStartupSample());
     const auto error = engine.initialise (savedAudio.get());
+    if (error.isEmpty() && (settings == nullptr || settings->getBoolValue ("startup.sound", true)))
+        engine.playStartupSound();
     engine.getDeviceManager().addChangeListener (this); // from now on the device and buffer size are remembered
     deviceLabel.setText (error.isEmpty() ? engine.describeDevice() : "Audio error: " + error,
                          juce::dontSendNotification);
@@ -424,6 +455,8 @@ void MainComponent::resized()
     top.removeFromLeft (8);
     recordButton.setBounds (top.removeFromLeft (76));
     recordMenuButton.setBounds (top.removeFromLeft (26));
+    top.removeFromLeft (8);
+    noteRecordButton.setBounds (top.removeFromLeft (84));
 
     meter.setBounds (top.removeFromRight (14));
     top.removeFromRight (10);
@@ -474,6 +507,10 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
         if (letter == 'N' && ! shift) { newProject(); return true; }
         if (letter == 'O' && ! shift) { openProject(); return true; }
     }
+
+    // With the mouse over the playlist its keys (Delete, Ctrl+Z/Y/C/X/V/D, 1..5 for the tools, +/- to zoom) work first.
+    if (playlistPanel.isOpen() && playlistView.isShowing() && playlistView.isMouseOver (true) && playlistView.handleKey (key))
+        return true;
 
     if (key == juce::KeyPress::spaceKey)
     {
@@ -537,6 +574,8 @@ void MainComponent::timerCallback()
 
     if (recording)
         showRecordProgress();
+
+    drainMidiTakes();
 
     // When the window is active but keyboard focus is outside this component (e.g. on the window
     // itself), take it so Space and F5/F6/F7/F9 work without a click first.
@@ -795,7 +834,7 @@ void MainComponent::addPattern (bool cloneCurrent)
     commitCurrentPattern();
 
     Pattern pattern;
-    pattern.name = "Pattern " + std::to_string (arrangement.patterns.size() + 1);
+    pattern.name = arrangement.newPatternName();
     if (cloneCurrent)
         pattern.notes = arrangement.patterns[static_cast<size_t> (currentPattern)].notes;
     arrangement.patterns.push_back (std::move (pattern));
@@ -806,12 +845,153 @@ void MainComponent::addPattern (bool cloneCurrent)
     markDirty();
 }
 
+void MainComponent::showNewPatternMenu (juce::Component& target)
+{
+    juce::PopupMenu menu;
+    menu.addItem (1, "New empty pattern");
+    menu.addItem (2, "Clone current pattern");
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&target),
+                        [safe = juce::Component::SafePointer<MainComponent> (this)] (int result)
+                        {
+                            if (safe != nullptr && result != 0)
+                                safe->addPattern (result == 2);
+                        });
+}
+
+void MainComponent::renamePattern (int index)
+{
+    if (index < 0 || index >= static_cast<int> (arrangement.patterns.size()))
+        return;
+
+    auto* window = new juce::AlertWindow ("Rename pattern", "Name:", juce::MessageBoxIconType::NoIcon);
+    window->addTextEditor ("name", juce::String (arrangement.patterns[static_cast<size_t> (index)].name));
+    window->addButton ("OK", 1, juce::KeyPress (juce::KeyPress::returnKey));
+    window->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+
+    window->enterModalState (true,
+                             juce::ModalCallbackFunction::create (
+                                 [safe = juce::Component::SafePointer<MainComponent> (this), window, index] (int result)
+                                 {
+                                     if (safe == nullptr || result != 1 || index >= static_cast<int> (safe->arrangement.patterns.size()))
+                                         return;
+
+                                     auto name = window->getTextEditorContents ("name").toStdString();
+                                     if (! cleanPatternName (name))
+                                         return; // an empty name keeps the old one
+
+                                     safe->arrangement.patterns[static_cast<size_t> (index)].name = name;
+                                     safe->refreshPatternBox();
+                                     safe->markDirty();
+                                     safe->statusLabel.setText ("Pattern renamed to " + juce::String (name), juce::dontSendNotification);
+                                 }),
+                             true);
+}
+
+// Puts the notes of pattern `index` into the channels (without saving the channels' notes anywhere first).
+void MainComponent::loadPatternIntoChannels (int index)
+{
+    arrangement.ensureChannelCount (channels.size());
+    const auto& notes = arrangement.patterns[static_cast<size_t> (index)].notes;
+    for (size_t c = 0; c < channels.size(); ++c)
+    {
+        channels[c].notes = notes[c];
+        strips[c]->refreshFromChannel();
+    }
+    pianoRoll.setNotes (channels[static_cast<size_t> (selected)].notes);
+}
+
+void MainComponent::deletePattern (int index)
+{
+    if (index < 0 || index >= static_cast<int> (arrangement.patterns.size()))
+        return;
+    if (arrangement.patterns.size() <= 1)
+    {
+        statusLabel.setText ("The last pattern cannot be deleted", juce::dontSendNotification);
+        return;
+    }
+
+    commitCurrentPattern();
+    const auto name = juce::String (arrangement.patterns[static_cast<size_t> (index)].name);
+    int used = 0;
+    for (const auto& c : arrangement.clips)
+        used += c.pattern == index ? 1 : 0;
+
+    auto message = "Delete \"" + name + "\" with all its notes?";
+    if (used > 0)
+        message += " The " + juce::String (used) + (used == 1 ? " clip" : " clips") + " that play it on the playlist will be removed too.";
+    message += "\nThis cannot be undone.";
+
+    juce::AlertWindow::showOkCancelBox (juce::MessageBoxIconType::WarningIcon, "Delete pattern", message, "Delete", "Cancel", nullptr,
+                                        juce::ModalCallbackFunction::create (
+                                            [safe = juce::Component::SafePointer<MainComponent> (this), index, name] (int result)
+                                            {
+                                                if (safe == nullptr || result != 1 || index >= static_cast<int> (safe->arrangement.patterns.size()))
+                                                    return;
+
+                                                safe->commitCurrentPattern();
+                                                if (! safe->arrangement.removePattern (index))
+                                                    return;
+
+                                                // Which pattern is open afterwards: the same one if it is still there, else its neighbour.
+                                                int now = safe->currentPattern;
+                                                if (now == index)
+                                                    now = std::min (index, static_cast<int> (safe->arrangement.patterns.size()) - 1);
+                                                else if (now > index)
+                                                    --now;
+                                                safe->currentPattern = now;
+
+                                                safe->loadPatternIntoChannels (now);
+                                                safe->playlistView.clearHistory();
+                                                safe->refreshPatternBox();
+                                                safe->playlistView.setSelectedPattern (now);
+                                                safe->statusLabel.setText ("Deleted pattern " + name, juce::dontSendNotification);
+                                                safe->publishProject();
+                                            }));
+}
+
 void MainComponent::refreshPatternBox()
 {
     patternBox.clear (juce::dontSendNotification);
+    std::vector<std::string> names;
     for (size_t i = 0; i < arrangement.patterns.size(); ++i)
+    {
         patternBox.addItem (juce::String (arrangement.patterns[i].name), static_cast<int> (i) + 1);
+        names.push_back (arrangement.patterns[i].name);
+    }
     patternBox.setSelectedId (currentPattern + 1, juce::dontSendNotification);
+    playlistView.setPatterns (names, currentPattern);
+}
+
+// A sound dragged from the browser onto the playlist becomes an audio clip there.
+void MainComponent::dropOnPlaylist (const drag::Item& item, int track, int tick)
+{
+    if (item.kind == "file")
+    {
+        importMediaFiles (juce::StringArray (item.payload), track, tick);
+        return;
+    }
+    if (item.kind != "builtin")
+        return;
+
+    const auto data = makeBuiltinSample (item.payload.toStdString());
+    if (data == nullptr)
+    {
+        statusLabel.setText ("That sound is not available", juce::dontSendNotification);
+        return;
+    }
+
+    juce::String note;
+    if (addAudioClip (data, track, tick, note))
+    {
+        playlistView.clearHistory();
+        playlistView.clearHistory(); // the arrangement was changed from outside: undo could not restore it safely
+        playlistView.repaint();
+        publishProject();
+        statusLabel.setText ("Placed " + juce::String (data->name) + " on Track " + juce::String (track + 1) + (note.isEmpty() ? juce::String() : ". " + note),
+                             juce::dontSendNotification);
+    }
+    else
+        statusLabel.setText (note, juce::dontSendNotification);
 }
 
 void MainComponent::setSongMode (bool shouldPlaySong)
@@ -858,6 +1038,12 @@ void MainComponent::setPlaying (bool shouldPlay)
 {
     if (! shouldPlay && recording)
         finishRecording ({}); // stopping the song ends the take (finishRecording stops the transport itself)
+    if (! shouldPlay)
+        endNoteTake();
+    if (shouldPlay && noteRecordOn)
+        statusLabel.setText ("Recording notes into " + juce::String (channels[static_cast<size_t> (selected)].name) + ", "
+                                 + juce::String (arrangement.patterns[static_cast<size_t> (currentPattern)].name) + ": play your keyboard",
+                             juce::dontSendNotification);
     engine.setPlaying (shouldPlay);
     playButton.setToggleState (shouldPlay, juce::dontSendNotification);
     playButton.setButtonText (shouldPlay ? "Stop" : "Play");
@@ -1124,6 +1310,7 @@ void MainComponent::finishImport (const std::shared_ptr<ImportBatch>& batch, con
 
     if (batch->added > 0)
     {
+        playlistView.clearHistory(); // the arrangement was changed from outside: undo could not restore it safely
         playlistView.repaint();
         if (! songMode)
         {
@@ -1158,10 +1345,14 @@ void MainComponent::loadAudioClipFiles (juce::StringArray& problems)
         auto found = loaded.find (source);
         if (found == loaded.end())
         {
-            auto result = importAudioFile (juce::File (juce::String (source)));
-            if (result.data == nullptr)
+            std::shared_ptr<const SampleData> data;
+            if (source.rfind ("builtin:", 0) == 0) // a sound built into the program (Cyber-Hub, the intro)
+                data = makeBuiltinSample (source.substr (8));
+            else
+                data = importAudioFile (juce::File (juce::String (source))).data;
+            if (data == nullptr)
                 problems.add ("Audio file not found or unreadable: " + juce::String (source));
-            found = loaded.emplace (source, result.data != nullptr ? result.data : clip.data).first;
+            found = loaded.emplace (source, data != nullptr ? data : clip.data).first;
         }
         clip.data = found->second;
     }
@@ -1191,7 +1382,11 @@ void MainComponent::setRecordTrack (int track)
 void MainComponent::openRecordMenu()
 {
     juce::PopupMenu menu;
-    menu.addSectionHeader ("Record to");
+    menu.addSectionHeader ("The recording becomes");
+    menu.addItem (40, "A clip on a playlist track (choose it below)", ! recording, recordTarget == RecordTarget::PlaylistTrack);
+    menu.addItem (41, "A new sampler channel (play it from the piano roll)", ! recording, recordTarget == RecordTarget::SamplerChannel);
+    menu.addSeparator();
+    menu.addSectionHeader ("Playlist track");
     for (int t = 0; t < kPlaylistTracks; ++t)
         menu.addItem (10 + t, "Track " + juce::String (t + 1), ! recording, t == recordTrack);
     menu.addSeparator();
@@ -1228,6 +1423,15 @@ void MainComponent::openRecordMenu()
                                     safe->settings->saveIfNeeded();
                                 }
                             }
+                            else if (result == 40 || result == 41)
+                            {
+                                safe->recordTarget = result == 41 ? RecordTarget::SamplerChannel : RecordTarget::PlaylistTrack;
+                                if (safe->settings != nullptr)
+                                {
+                                    safe->settings->setValue ("record.target", result == 41 ? 1 : 0);
+                                    safe->settings->saveIfNeeded();
+                                }
+                            }
                             else if (result == 33)
                                 safe->openAudioSettings();
                         });
@@ -1249,8 +1453,8 @@ void MainComponent::startRecording()
         juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Record", message);
     };
 
-    // The take goes to the start of the track, so the track must be free there.
-    if (arrangement.maxAudioLengthAt (recordTrack, 0, arrangement.timelineTicks()) < kTicksPerBeat)
+    // A take that goes to the playlist starts at the start of its track, so the track must be free there.
+    if (recordTarget == RecordTarget::PlaylistTrack && arrangement.maxAudioLengthAt (recordTrack, 0, arrangement.timelineTicks()) < kTicksPerBeat)
     {
         fail ("Track " + juce::String (recordTrack + 1) + " is not empty at the start of the playlist. Click the name of an empty "
               "track in the playlist to choose where to record.");
@@ -1269,7 +1473,7 @@ void MainComponent::startRecording()
     for (int n = 2; file.exists(); ++n)
         file = folder.getChildFile ("Recording " + juce::Time::getCurrentTime().formatted ("%Y-%m-%d %H-%M-%S") + " (" + juce::String (n) + ").wav");
 
-    if (! songMode)
+    if (recordTarget == RecordTarget::PlaylistTrack && ! songMode)
         setSongMode (true); // the playlist is what plays while recording, and the take is part of it
     engine.setInputMonitoring (monitorInput);
 
@@ -1330,8 +1534,31 @@ void MainComponent::finishRecording (const juce::String& why)
     auto data = std::make_shared<SampleData> (*result.data);
     data->name = take.file.getFileNameWithoutExtension().replace ("Recording ", "Rec ").toStdString();
 
-    // Exactly at the start of the track, as long as the take (cut to the free room if the playlist changed meanwhile).
+    // A new sampler channel: the take is the channel's sample, ready to be played from the piano roll.
     juce::String note;
+    if (recordTarget == RecordTarget::SamplerChannel)
+    {
+        const int index = addChannel (Instrument::Sampler, false);
+        if (index >= 0)
+        {
+            auto& channel = channels[static_cast<size_t> (index)];
+            channel.sample = data;
+            channel.name = juce::Time::getCurrentTime().formatted ("Rec %H-%M-%S").toStdString();
+            channel.rootPitch = 60;
+            strips[static_cast<size_t> (index)]->refreshFromChannel();
+            selectChannel (index);
+            publishProject();
+            auto status = "Recorded " + juce::String (take.frames / take.sampleRate, 1) + " s into the new sampler channel \""
+                        + juce::String (channel.name) + "\": open its piano roll and play it, or draw notes";
+            if (take.droppedBlocks > 0)
+                status += ". Warning: some audio was lost because the disk was too slow.";
+            statusLabel.setText (status, juce::dontSendNotification);
+            return;
+        }
+        note = "There is no free channel, so the take was put on the playlist instead.";
+    }
+
+    // Exactly at the start of the track, as long as the take (cut to the free room if the playlist changed meanwhile).
     AudioClip clip;
     clip.data = data;
     clip.name = data->name;
@@ -1361,9 +1588,126 @@ void MainComponent::finishRecording (const juce::String& why)
 
     if (placed)
     {
+        playlistView.clearHistory(); // the arrangement was changed from outside: undo could not restore it safely
         playlistView.repaint();
         publishProject();
     }
+}
+
+// ------------------------------------------------------------------------- Recording notes (MIDI keyboards)
+
+void MainComponent::applyNoteRecording()
+{
+    noteRecorder.configure (kLoopTicks, noteQuantize);
+    noteRecordButton.setToggleState (noteRecordOn, juce::dontSendNotification);
+    engine.setNoteRecording (noteRecordOn);
+    if (settings != nullptr)
+    {
+        settings->setValue ("midirec.quantize", noteQuantize);
+        settings->saveIfNeeded();
+    }
+}
+
+void MainComponent::toggleNoteRecording()
+{
+    noteRecordOn = ! noteRecordOn;
+    if (! noteRecordOn)
+        endNoteTake();
+    applyNoteRecording();
+
+    if (noteRecordOn)
+    {
+        const auto midi = engine.describeMidiInputs();
+        statusLabel.setText (midi.isEmpty() ? "Rec notes is on, but no MIDI keyboard is connected (see Audio...)"
+                                            : (engine.isPlaying() ? "Recording notes: play your keyboard" : "Rec notes is on: press Play, then play your keyboard"),
+                             juce::dontSendNotification);
+    }
+    else
+        statusLabel.setText ("Rec notes is off", juce::dontSendNotification);
+}
+
+void MainComponent::openNoteRecordMenu()
+{
+    struct Option { int id; const char* label; int ticks; };
+    static constexpr Option options[] = { { 1, "Off (keep the exact timing)", 0 },
+                                          { 2, "1/4 note", kTicksPerBeat },
+                                          { 3, "1/8 note", kTicksPerBeat / 2 },
+                                          { 4, "1/16 note", kTicksPerBeat / 4 },
+                                          { 5, "1/32 note", kTicksPerBeat / 8 } };
+    juce::PopupMenu menu;
+    menu.addSectionHeader ("Quantize the start of recorded notes to");
+    for (const auto& o : options)
+        menu.addItem (o.id, o.label, true, noteQuantize == o.ticks);
+    menu.addSeparator();
+    menu.addItem (10, "Audio and MIDI devices...");
+
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&noteRecordButton),
+                        [safe = juce::Component::SafePointer<MainComponent> (this)] (int result)
+                        {
+                            if (safe == nullptr || result == 0)
+                                return;
+                            if (result == 10)
+                            {
+                                safe->openAudioSettings();
+                                return;
+                            }
+                            for (const auto& o : options)
+                                if (o.id == result)
+                                    safe->noteQuantize = o.ticks;
+                            safe->applyNoteRecording();
+                        });
+}
+
+// Ends the notes that are still held when recording stops (key down at the moment the song stops).
+void MainComponent::endNoteTake()
+{
+    bool added = false;
+    noteRecorder.flush (kTicksPerBeat / 2, [this, &added] (int channel, const Note& n)
+    {
+        if (channel >= 0 && channel < static_cast<int> (channels.size()))
+            added = addRecordedNote (channels[static_cast<size_t> (channel)].notes, n) || added;
+    });
+    if (added)
+    {
+        pianoRoll.setNotes (channels[static_cast<size_t> (selected)].notes);
+        publishProject();
+    }
+}
+
+// Called from the timer: the notes that the audio thread stamped since the last tick become notes of the pattern.
+void MainComponent::drainMidiTakes()
+{
+    constexpr size_t kMaxNotesPerChannel = 5000;
+    MidiTake take;
+    std::array<bool, kMaxChannels> touched {};
+    bool any = false;
+
+    while (engine.popMidiTake (take))
+    {
+        if (! noteRecordOn)
+            continue; // switched off after the event was queued
+
+        noteRecorder.process (take, [this, &touched, &any] (int channel, const Note& n)
+        {
+            if (channel < 0 || channel >= static_cast<int> (channels.size()))
+                return;
+            auto& notes = channels[static_cast<size_t> (channel)].notes;
+            if (notes.size() < kMaxNotesPerChannel && addRecordedNote (notes, n))
+            {
+                touched[static_cast<size_t> (channel)] = true;
+                any = true;
+            }
+        });
+    }
+
+    if (! any)
+        return;
+
+    for (size_t c = 0; c < channels.size(); ++c)
+        if (touched[c])
+            strips[c]->repaint();
+    pianoRoll.setNotes (channels[static_cast<size_t> (selected)].notes);
+    publishProject();
 }
 
 // Tells every mixer strip which channels play through it.
@@ -1774,6 +2118,7 @@ void MainComponent::applyDocument (ProjectDocument doc, const juce::File& file, 
 
     refreshPatternBox();
     playlistView.setSelectedPattern (currentPattern);
+    playlistView.clearHistory(); // the arrangement was changed from outside: undo could not restore it safely
     playlistView.repaint();
     setSongMode (doc.songMode);
     selectChannel (0);
@@ -1982,6 +2327,11 @@ void MainComponent::showFileMenu()
 
     menu.addSeparator();
     menu.addItem (item (5, "Show the projects folder", ""));
+    {
+        auto startup = item (7, "Play the start-up sound", "");
+        startup.isTicked = settings == nullptr || settings->getBoolValue ("startup.sound", true);
+        menu.addItem (startup);
+    }
 
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&fileButton),
                         [safe = juce::Component::SafePointer<MainComponent> (this), recentList] (int result)
@@ -1996,6 +2346,13 @@ void MainComponent::showFileMenu()
                                 case 4: safe->saveProjectAs(); break;
                                 case 5: safe->library.ensureExists(); safe->library.projects.revealToUser(); break;
                                 case 6: safe->chooseMediaToImport(); break;
+                                case 7:
+                                    if (safe->settings != nullptr)
+                                    {
+                                        safe->settings->setValue ("startup.sound", ! safe->settings->getBoolValue ("startup.sound", true));
+                                        safe->settings->saveIfNeeded();
+                                    }
+                                    break;
                                 default:
                                     if (result >= 200 && result - 200 < static_cast<int> (exportFormats().size()))
                                     {

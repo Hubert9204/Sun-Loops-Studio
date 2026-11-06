@@ -96,6 +96,7 @@ void Player::startClip (const AudioEvent& e) noexcept
     v.active = true;
     v.data = e.data.get();
     v.step = e.data->sampleRate / sampleRate;
+    v.pos = std::max (0.0, e.offsetSeconds) * e.data->sampleRate;
     v.endTick = e.endTick;
     v.track = std::clamp (e.mixerTrack, 0, kMaxTracks - 1);
     v.gain = e.gain;

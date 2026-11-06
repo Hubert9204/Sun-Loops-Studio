@@ -69,6 +69,7 @@ struct AudioEvent
     int endTick = 0;
     int mixerTrack = 0;
     float gain = 1.0f; // 0..2
+    double offsetSeconds = 0.0; // where in the audio the clip starts playing (a clip cut from a longer one starts later)
 };
 
 // Immutable snapshot of everything the audio thread needs.
@@ -142,10 +143,14 @@ struct Project
 
         audioEvents.erase (std::remove_if (audioEvents.begin(), audioEvents.end(),
                                            [] (const AudioEvent& e)
-                                           { return e.data == nullptr || e.data->numFrames() < 2 || e.startTick < 0 || e.endTick <= e.startTick; }),
+                                           {
+                                               return e.data == nullptr || e.data->numFrames() < 2 || e.startTick < 0 || e.endTick <= e.startTick
+                                                   || finiteOr (static_cast<float> (e.offsetSeconds), 0.0f) * e.data->sampleRate >= e.data->numFrames();
+                                           }),
                            audioEvents.end());
         for (auto& e : audioEvents)
         {
+            e.offsetSeconds = std::isfinite (e.offsetSeconds) ? std::max (0.0, e.offsetSeconds) : 0.0;
             e.mixerTrack = std::clamp (e.mixerTrack, 0, kMaxTracks - 1);
             e.gain = std::clamp (finiteOr (e.gain, 1.0f), 0.0f, 2.0f);
         }

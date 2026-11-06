@@ -16,7 +16,7 @@ Sun Loops Studio is inspired by the workflow of loop-based DAWs such as FL Studi
 that uses no code, names, graphics or assets from other products, and it is not affiliated with or endorsed by
 their makers.
 
-**Status: alpha (0.8.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
+**Status: alpha (0.9.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
 display. Playback was confirmed on a real Nobara machine for version 0.3; everything added since (panels, patterns,
 playlist, browser, pitch/swing, the expanded mixer and its effects, saving projects, the AppImage, audio clips, drag and
 drop, recording, MIDI, the metronome and the export formats) was tested headless and in a virtual display with a silent
@@ -38,13 +38,19 @@ exactly what is and is not verified and what is missing (VST3 hosting and undo a
   *Load sample...*, *Rename...*, *Assign free mixer track*, *Save as preset...*.
 - **Piano Roll** - for the selected channel: click to add a note, drag to move, drag the right edge to resize,
   right-click to delete, scroll and zoom. Opens from a channel (menu or double-click), as in FL Studio.
-- **Patterns and Playlist** - several patterns (new or cloned), arranged as clips on 8 tracks. A *Pattern / Song*
-  switch chooses between looping the selected pattern and playing the whole playlist.
+- **Patterns and Playlist** - several patterns (new, cloned, renamed or deleted from buttons above the playlist), arranged
+  as clips on 8 tracks. A *Pattern / Song* switch chooses between looping the selected pattern and playing the whole
+  playlist.
 - **Audio in the Playlist** - drag audio files (`.wav .aiff .flac .ogg .oga .mp3 .aac`) or video files (their sound
-  track) from the file manager onto the Playlist: they become clips with a waveform that you can move, shorten and
-  delete. AAC and video sound need `ffmpeg` installed.
+  track) from the file manager onto the Playlist: they become clips with a waveform. **Select, Split, Cut, Erase and Zoom
+  tools**, trimming from both edges, a grid down to one tick, undo/redo and a ruler in minutes:seconds.milliseconds
+  with a readout of the time under the mouse let you work on a take precisely. AAC and video sound need `ffmpeg` installed.
 - **Recording** - the **Record** button records a microphone or an instrument into the playlist track you choose, in
-  time with the song. **MIDI keyboards** play the selected channel. Both are set up in **Audio...**.
+  time with the song. **MIDI keyboards** play the selected channel, and **Rec notes** writes what they play into the piano roll
+  (quantized) so you can make patterns; a take can also become a new sampler channel. Set up in **Audio...**.
+- **Cyber-Hub sounds** - 30 system sounds by Hubert are built in (Browser > Samples > Cyber-Hub, and a Cyber-Hub Kit); the demo
+  project is made of them and a start-up sound plays when the program opens (switch it off in the File menu). See
+  [docs/cyber-hub.md](docs/cyber-hub.md).
 - **Metronome** - a click with adjustable tempo (and tap tempo) and volume, on its own button.
 - **Mixer** (`F9`) - 8 vertical tracks, each with a fader and dB read-out, stereo balance, mute, solo, a Peak/RMS
   meter and 4 insert-effect slots (Equalizer, Reverb, Delay, Compressor, each with bypass). The master strip on the
@@ -87,6 +93,7 @@ Press **Space** to play, **F5 / F6 / F7 / F9** to show panels and **F8** for the
 | --- | --- |
 | [docs/user-guide.md](docs/user-guide.md) | How to use every panel, shortcuts, limits ([Italiano](docs/user-guide.it.md)) |
 | [docs/building.md](docs/building.md) | Dependencies, build, install, tests, troubleshooting |
+| [docs/cyber-hub.md](docs/cyber-hub.md) | The Cyber-Hub sounds, the listening analysis, the demo, the start-up sound and a licence note |
 | [docs/architecture.md](docs/architecture.md) | Threads, real-time rules, data flow, patterns and playlist, panels, tests |
 | [docs/roadmap.md](docs/roadmap.md) | What is verified, what is not, what comes next |
 | [CHANGELOG.md](CHANGELOG.md) | Changes per version |

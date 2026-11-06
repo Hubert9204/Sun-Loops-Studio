@@ -17,10 +17,16 @@
 #include "audio/AudioImport.h"
 #include "audio/BufferTuning.h"
 #include "audio/BuiltinSamples.h"
+#include "audio/ClipEdit.h"
+#include "audio/CyberHub.h"
+#include "audio/TimeFormat.h"
 #include "audio/Effects.h"
 #include "audio/InputRecorder.h"
 #include "audio/MidiNotes.h"
 #include "audio/MixerRouting.h"
+#include "audio/OneShot.h"
+#include "audio/NoteRecorder.h"
+#include "audio/SpscQueue.h"
 #include "audio/LiveNotes.h"
 #include "audio/OfflineRenderer.h"
 #include "audio/Player.h"
@@ -2377,7 +2383,7 @@ void testAudioClips()
     check (! a.canPlaceAudio (audio (0, 480, 960)), "audio clips on one track cannot overlap");
     check (a.canPlaceAudio (audio (1, 480, 960)), "but may on another track");
     check (a.canPlaceAudio (audio (0, 960, 960)), "an audio clip can start where the previous one ends");
-    check (! a.canPlaceAudio (audio (0, 100, 960)), "audio clips sit on the beat grid");
+    check (a.canPlaceAudio (audio (0, 1060, 960)), "audio clips may start on any tick (they are no longer tied to the beat grid)");
     check (! a.canPlaceAudio (audio (0, a.timelineTicks() - 480, 960)), "an audio clip cannot run past the end of the timeline");
     check (! a.canPlaceAudio (audio (sls::kPlaylistTracks, 0, 480)), "or sit on a track that does not exist");
     check (a.canPlaceAudio (audio (0, 0, 480), 0), "a clip being moved does not collide with itself");
@@ -2386,8 +2392,8 @@ void testAudioClips()
     a.clips.push_back ({ 0, 2, 1, 1 });
     check (! a.canPlaceAudio (audio (2, a.patternTicks + 480, 480)), "an audio clip cannot cover a pattern clip");
     check (a.audioClipAt (0, 0) == 0 && a.audioClipAt (0, 959) == 0 && a.audioClipAt (0, 960) == -1, "audioClipAt finds the clip under a tick");
-    check (a.findFreeAudioStart (0, 0, 960) == 960 && a.findFreeAudioStart (1, 100, 480) == 0,
-           "findFreeAudioStart skips occupied beats");
+    check (a.findFreeAudioStart (0, 0, 960) == 960 && a.findFreeAudioStart (1, 100, 480) == 100 && a.findFreeAudioStart (0, 100, 480) == 960,
+           "findFreeAudioStart uses the wanted tick if free, else the next free beat");
     check (a.findFreeAudioStart (0, 0, a.timelineTicks()) == -1, "and gives up when nothing fits");
 
     sls::Arrangement b;
@@ -3115,6 +3121,512 @@ void testMetronome()
     }
 }
 
+// --- cutting, trimming and the pattern list --------------------------------------------------------------------------
+void testClipEditing()
+{
+    std::cout << "Clip editing (split, cut, trim), pattern deletion\n";
+    const auto sine = sineData (96000, 48000.0, 440.0, 0.5f); // 2 s
+
+    const auto make = [&] (int start, int length, double offset = 0.0)
+    {
+        sls::Arrangement a;
+        a.patterns.resize (3);
+        sls::AudioClip c;
+        c.data = sine;
+        c.name = "x";
+        c.track = 1;
+        c.startTick = start;
+        c.lengthTicks = length;
+        c.offsetSeconds = offset;
+        a.audioClips.push_back (c);
+        return a;
+    };
+
+    check (std::abs (sls::ticksToSeconds (960, 120.0) - 1.0) < 1.0e-12, "960 ticks last 1 s at 120 BPM");
+    check (std::abs (sls::secondsToTicks (0.5, 120.0) - 480.0) < 1.0e-9 && std::abs (sls::ticksToSeconds (480, 60.0) - 1.0) < 1.0e-12,
+           "tick/second conversion follows the tempo");
+
+    // split
+    {
+        auto a = make (480, 1920);
+        check (sls::splitAudioClip (a, 0, 480, 120.0) == -1 && sls::splitAudioClip (a, 0, 2400, 120.0) == -1 && sls::splitAudioClip (a, 0, 5, 120.0) == -1
+                   && sls::splitAudioClip (a, 3, 900, 120.0) == -1 && a.audioClips.size() == 1,
+               "a split outside the clip, on its edge or on a clip that does not exist changes nothing");
+        const int r = sls::splitAudioClip (a, 0, 1440, 120.0);
+        check (r == 1 && a.audioClips.size() == 2, "a split makes two clips");
+        const auto& left = a.audioClips[0];
+        const auto& right = a.audioClips[1];
+        check (left.startTick == 480 && left.lengthTicks == 960 && right.startTick == 1440 && right.lengthTicks == 960,
+               "the pieces meet at the cut and keep the total length");
+        check (left.offsetSeconds == 0.0 && std::abs (right.offsetSeconds - 1.0) < 1.0e-9, "the right-hand piece starts 1 s into the audio");
+        check (left.data == right.data && a.canPlaceAudio (left, 0) && a.canPlaceAudio (right, 1), "the pieces share the audio and do not overlap");
+        // splitting the right piece again keeps accumulating the offset
+        const int r2 = sls::splitAudioClip (a, 1, 1920, 120.0);
+        check (r2 == 2 && std::abs (a.audioClips[2].offsetSeconds - 1.5) < 1.0e-9, "the offset adds up over repeated splits");
+    }
+
+    // cut a range out
+    {
+        auto a = make (0, 1920);
+        check (sls::cutAudioRange (a, 0, 960, 1440, 120.0) == 2 && a.audioClips.size() == 2, "cutting the middle leaves two pieces");
+        check (a.audioClips[0].startTick == 0 && a.audioClips[0].lengthTicks == 960 && a.audioClips[1].startTick == 1440
+                   && a.audioClips[1].lengthTicks == 480 && std::abs (a.audioClips[1].offsetSeconds - 1.5) < 1.0e-9,
+               "the gap is empty and the audio after it is not moved");
+
+        a = make (0, 1920);
+        check (sls::cutAudioRange (a, 0, -500, 480, 120.0) == 1 && a.audioClips[0].startTick == 480 && a.audioClips[0].lengthTicks == 1440
+                   && std::abs (a.audioClips[0].offsetSeconds - 0.5) < 1.0e-9,
+               "cutting the beginning moves the start forward and into the audio");
+        a = make (0, 1920);
+        check (sls::cutAudioRange (a, 0, 1500, 9999, 120.0) == 1 && a.audioClips[0].lengthTicks == 1500 && a.audioClips[0].offsetSeconds == 0.0,
+               "cutting the end only shortens the clip");
+        a = make (0, 1920);
+        check (sls::cutAudioRange (a, 0, 0, 1920, 120.0) == 0 && a.audioClips.empty(), "cutting all of it removes the clip");
+        a = make (480, 960);
+        check (sls::cutAudioRange (a, 0, 0, 480, 120.0) == -1 && sls::cutAudioRange (a, 0, 1440, 2000, 120.0) == -1
+                   && sls::cutAudioRange (a, 0, 900, 900, 120.0) == -1 && a.audioClips.size() == 1,
+               "a range that misses the clip (or is empty) changes nothing");
+    }
+
+    // trim the start edge
+    {
+        const auto clip = make (960, 960, 1.0).audioClips[0]; // audio 1.0 s .. 2.0 s placed at 960..1920
+        const auto t = sls::trimmedAudioStart (clip, 480, 120.0);
+        check (t.startTick == 480 && t.endTick() == 1920 && std::abs (t.offsetSeconds - 0.5) < 1.0e-9,
+               "dragging the start edge left uncovers earlier audio and keeps the end where it is");
+        const auto far = sls::trimmedAudioStart (clip, -300, 120.0);
+        check (far.startTick == 0 && far.offsetSeconds == 0.0, "the edge cannot go back past the beginning of the audio");
+        const auto in = sls::trimmedAudioStart (clip, 1200, 120.0);
+        check (in.startTick == 1200 && in.lengthTicks == 720 && std::abs (in.offsetSeconds - 1.25) < 1.0e-9,
+               "dragging it right hides the first part of the clip");
+        const auto over = sls::trimmedAudioStart (clip, 99999, 120.0);
+        check (over.lengthTicks == 1 && over.endTick() == clip.endTick(), "the edge cannot pass the end of the clip");
+        check (clip.naturalLengthTicks (120.0) == 960, "naturalLengthTicks counts the audio left after the offset (1 s = 960 ticks)");
+    }
+
+    // the offset is honoured by the player
+    {
+        auto data = std::make_shared<sls::SampleData>();
+        data->sampleRate = 48000.0;
+        data->left.assign (48000, 0.0f);
+        data->right.assign (48000, 0.0f);
+        for (int i = 24000; i < 48000; ++i) // silent for the first half second, then a tone
+            data->left[static_cast<size_t> (i)] = data->right[static_cast<size_t> (i)] = 0.5f * static_cast<float> (std::sin (2.0 * 3.14159265358979 * 440.0 * i / 48000.0));
+
+        const auto render = [&] (double offset)
+        {
+            sls::Arrangement a;
+            a.patterns.resize (1);
+            sls::AudioClip c;
+            c.data = data;
+            c.track = 0;
+            c.startTick = 0;
+            c.lengthTicks = 960;
+            c.offsetSeconds = offset;
+            a.audioClips.push_back (c);
+            const auto project = sls::compileSong ({ synthChannel ({}) }, a);
+            sls::Player player;
+            player.prepare (48000.0);
+            std::vector<float> l (256), r (256), all;
+            float* ch[2] = { l.data(), r.data() };
+            for (int b = 0; b < 40; ++b) // 10240 samples = 0.21 s
+            {
+                std::fill (l.begin(), l.end(), 0.0f);
+                std::fill (r.begin(), r.end(), 0.0f);
+                player.render (project, 120.0, true, ch, 2, 256);
+                all.insert (all.end(), l.begin(), l.end());
+            }
+            float m = 0.0f;
+            for (float v : all)
+                m = std::max (m, std::abs (v));
+            return m;
+        };
+        check (render (0.0) < 1.0e-6, "without an offset the first 0.2 s of that audio are silent");
+        check (render (0.5) > 0.05f, "with a 0.5 s offset the tone is heard at once");
+    }
+
+    // saved and read back
+    {
+        auto doc = sls::ProjectDocument::blank();
+        sls::AudioClip c;
+        c.data = sine;
+        c.name = "A name that is longer than sixteen characters";
+        c.track = 2;
+        c.startTick = 1234; // not on a beat
+        c.lengthTicks = 777;
+        c.offsetSeconds = 0.4375;
+        doc.arrangement.audioClips.push_back (c);
+        const auto back = sls::ProjectDocument::fromJson (doc.toJson());
+        check (back.document.has_value() && back.document->arrangement.audioClips.size() == 1, "a clip that starts off the beat survives a save");
+        if (back.document.has_value() && back.document->arrangement.audioClips.size() == 1)
+        {
+            const auto& r = back.document->arrangement.audioClips[0];
+            check (r.startTick == 1234 && r.lengthTicks == 777 && std::abs (r.offsetSeconds - 0.4375) < 1.0e-12, "start, length and offset are written exactly");
+            check (r.name.size() == 40, "names up to 40 characters are kept (was 16)");
+        }
+    }
+
+    // patterns
+    {
+        sls::Arrangement a;
+        a.patterns.resize (4);
+        a.patterns[0].name = "Pattern 1";
+        a.patterns[1].name = "Pattern 2";
+        a.patterns[2].name = "Pattern 3";
+        a.patterns[3].name = "Drums";
+        a.clips = { { 0, 0, 0, 1 }, { 1, 0, 1, 2 }, { 2, 1, 0, 1 }, { 3, 2, 0, 1 }, { 1, 3, 4, 1 } };
+        check (a.newPatternName() == "Pattern 4", "the next pattern name is the lowest number not in use");
+        check (! a.removePattern (-1) && ! a.removePattern (4) && a.patterns.size() == 4, "deleting a pattern that does not exist changes nothing");
+        check (a.removePattern (1), "a pattern can be deleted");
+        check (a.patterns.size() == 3 && a.patterns[0].name == "Pattern 1" && a.patterns[1].name == "Pattern 3" && a.patterns[2].name == "Drums",
+               "the others keep their order");
+        check (a.clips.size() == 3, "the clips that played it are removed");
+        check (a.clips[0].pattern == 0 && a.clips[1].pattern == 1 && a.clips[2].pattern == 2, "and the clips of later patterns follow them (pattern numbers move up)");
+        check (a.newPatternName() == "Pattern 2", "the freed name is used again");
+        check (a.removePattern (0) && a.removePattern (0) && a.patterns.size() == 1 && ! a.removePattern (0),
+               "the last pattern can never be deleted");
+        std::string n = "  Lead line \n";
+        check (sls::cleanPatternName (n) && n == "Lead line", "pattern names are trimmed");
+        std::string blank = "   ";
+        check (! sls::cleanPatternName (blank), "an empty name is refused");
+        std::string longName (80, 'x');
+        check (sls::cleanPatternName (longName) && longName.size() == 40, "and long names are cut at 40 characters");
+    }
+
+    // pattern clips
+    {
+        sls::Arrangement a;
+        a.patterns.resize (1);
+        a.clips = { { 0, 0, 2, 6 } }; // units 2..8
+        check (sls::splitPatternClip (a, 0, 2) == -1 && sls::splitPatternClip (a, 0, 8) == -1 && a.clips.size() == 1, "pattern clips split only strictly inside");
+        check (sls::splitPatternClip (a, 0, 5) == 1 && a.clips[0].lengthUnits == 3 && a.clips[1].startUnit == 5 && a.clips[1].lengthUnits == 3,
+               "a pattern clip splits at a unit boundary");
+        a.clips = { { 0, 0, 2, 6 } };
+        check (sls::cutPatternRange (a, 0, 4, 6) == 2 && a.clips[0].lengthUnits == 2 && a.clips[1].startUnit == 6 && a.clips[1].lengthUnits == 2,
+               "cutting units out of the middle leaves two clips");
+        a.clips = { { 0, 0, 2, 6 } };
+        check (sls::cutPatternRange (a, 0, 0, 4) == 1 && a.clips[0].startUnit == 4 && a.clips[0].lengthUnits == 4, "cutting from the start");
+        check (sls::cutPatternRange (a, 0, 0, 99) == 0 && a.clips.empty(), "cutting everything removes the clip");
+    }
+}
+
+// --- recording a MIDI keyboard into the piano roll ---------------------------------------------------------------------
+void testNoteRecording()
+{
+    std::cout << "Recording MIDI notes into patterns\n";
+
+    // the stamp the audio thread puts on a key press
+    sls::LiveNoteEvent ev;
+    ev.on = true;
+    ev.channel = 3;
+    ev.pitch = 64;
+    ev.velocity = 0.5f;
+    ev.fromMidi = true;
+    auto take = sls::makeTake (ev, 100.0, 30.0, 3840.0);
+    check (take.on && take.channel == 3 && take.pitch == 64 && take.velocity == 0.5f && std::abs (take.tick - 70.0f) < 1.0e-3f && take.loopTicks == 3840.0f,
+           "a key press is stamped with the song position minus the latency");
+    take = sls::makeTake (ev, 10.0, 30.0, 3840.0);
+    check (std::abs (take.tick - 3820.0f) < 1.0e-3f, "the latency correction wraps round the start of the loop");
+    take = sls::makeTake (ev, 5000.0, 0.0, 3840.0);
+    check (take.tick >= 0.0f && take.tick < 3840.0f, "the stamp is always inside the loop");
+    check (! sls::LiveNoteEvent {}.fromMidi, "notes played with the mouse are not recorded (only MIDI ones are)");
+
+    const auto on = [] (int channel, int pitch, float tick, float velocity = 0.8f)
+    {
+        sls::MidiTake t;
+        t.on = true;
+        t.channel = static_cast<std::uint8_t> (channel);
+        t.pitch = static_cast<std::uint8_t> (pitch);
+        t.tick = tick;
+        t.velocity = velocity;
+        t.loopTicks = 3840.0f;
+        return t;
+    };
+    const auto off = [&] (int channel, int pitch, float tick)
+    {
+        auto t = on (channel, pitch, tick);
+        t.on = false;
+        return t;
+    };
+
+    struct Got { int channel; sls::Note note; };
+    std::vector<Got> got;
+    const auto emit = [&got] (int channel, const sls::Note& n) { got.push_back ({ channel, n }); };
+
+    sls::NoteRecorder rec;
+    rec.configure (3840, 120);
+
+    rec.process (on (0, 60, 500.0f, 0.75f), emit);
+    check (got.empty() && rec.heldCount() == 1, "nothing is written until the key comes up");
+    rec.process (off (0, 60, 900.0f), emit);
+    check (got.size() == 1 && got[0].channel == 0 && got[0].note.pitch == 60 && got[0].note.startTick == 480 && got[0].note.lengthTicks == 400
+               && got[0].note.velocity == 0.75f && rec.heldCount() == 0,
+           "a note is pitch, velocity and length, with its start rounded to the 1/16 grid (500 -> 480)");
+
+    got.clear();
+    rec.process (on (1, 62, 1000.0f), emit);
+    rec.process (off (1, 62, 1010.0f), emit);
+    check (got.size() == 1 && got[0].note.lengthTicks == 120, "a tapped key makes a note at least one grid step long");
+
+    got.clear();
+    rec.configure (3840, 0);
+    rec.process (on (0, 65, 1003.0f), emit);
+    rec.process (off (0, 65, 1013.0f), emit);
+    check (got.size() == 1 && got[0].note.startTick == 1003 && got[0].note.lengthTicks == 60, "without quantizing the timing is kept (and a tap is a short note)");
+    rec.configure (3840, 120);
+
+    got.clear();
+    rec.process (on (0, 67, 3700.0f), emit);
+    rec.process (off (0, 67, 100.0f), emit); // the loop came round while the key was down
+    check (got.size() == 2 && got[0].note.startTick == 3720 && got[0].note.lengthTicks == 120 && got[1].note.startTick == 0 && got[1].note.lengthTicks == 120,
+           "a note held across the end of the loop continues at the start of the pattern");
+    check (got[0].note.startTick + got[0].note.lengthTicks <= 3840, "no recorded note runs past the end of the pattern");
+
+    got.clear();
+    rec.process (on (0, 70, 3790.0f), emit);
+    rec.process (off (0, 70, 3830.0f), emit);
+    check (got.size() == 1 && got[0].note.startTick == 0, "a start that rounds up to the end of the pattern wraps to its start");
+
+    got.clear();
+    rec.process (off (0, 72, 200.0f), emit);
+    check (got.empty(), "a key that went down before recording started produces nothing");
+
+    got.clear();
+    rec.process (on (0, 60, 100.0f), emit);
+    rec.process (on (0, 60, 700.0f), emit); // a second note on for the same key (a lost note off)
+    check (got.size() == 1 && got[0].note.lengthTicks == 600, "a repeated note on ends the first note");
+    rec.process (off (0, 60, 900.0f), emit);
+    check (got.size() == 2 && rec.heldCount() == 0, "and the second one ends normally");
+
+    got.clear();
+    rec.process (on (2, 50, 960.0f), emit);
+    rec.process (on (0, 50, 960.0f), emit);
+    rec.process (off (2, 50, 1440.0f), emit);
+    check (got.size() == 1 && got[0].channel == 2 && rec.heldCount() == 1, "the same pitch on two channels is tracked separately");
+    rec.flush (480, emit);
+    check (got.size() == 2 && got[1].channel == 0 && got[1].note.startTick == 960 && got[1].note.lengthTicks == 480 && rec.heldCount() == 0,
+           "flush ends the notes still held (the song was stopped with a key down)");
+
+    got.clear();
+    rec.process (on (0, 40, 0.0f), emit);
+    rec.process (off (0, 40, 0.0f), emit);
+    check (got.size() == 1 && got[0].note.lengthTicks >= 120 && got[0].note.startTick == 0, "even a note off at the very same tick makes a note");
+
+    std::vector<sls::Note> notes;
+    sls::Note n;
+    n.pitch = 60;
+    n.startTick = 480;
+    check (sls::addRecordedNote (notes, n) && ! sls::addRecordedNote (notes, n) && notes.size() == 1, "playing the same note at the same place twice does not stack it");
+    n.pitch = 61;
+    check (sls::addRecordedNote (notes, n) && notes.size() == 2, "a different pitch at that place is added");
+
+    // the queue between the audio thread and the message thread
+    sls::SpscQueue<int, 8> small;
+    int v = 0;
+    check (! small.pop (v), "an empty queue gives nothing");
+    bool all = true;
+    for (int i = 0; i < 8; ++i)
+        all = all && small.push (i);
+    check (all && ! small.push (99), "the queue refuses a value when it is full");
+    bool ordered = true;
+    for (int i = 0; i < 8; ++i)
+        ordered = ordered && small.pop (v) && v == i;
+    check (ordered && ! small.pop (v), "values come out in the order they went in");
+
+    sls::SpscQueue<int, 64> pipe;
+    constexpr int kCount = 200000;
+    std::atomic<bool> ok { true };
+    std::thread producer ([&]
+    {
+        for (int i = 0; i < kCount; ++i)
+            while (! pipe.push (i))
+                std::this_thread::yield();
+    });
+    for (int expected = 0; expected < kCount; ++expected)
+    {
+        int value = -1;
+        while (! pipe.pop (value))
+            std::this_thread::yield();
+        if (value != expected)
+            ok = false;
+    }
+    producer.join();
+    check (ok.load(), "200000 values cross between two threads in order, none lost");
+}
+
+// --- the Cyber-Hub sounds built into the program, the start-up sound, time formatting ---------------------------------
+void testOneShot()
+{
+    std::cout << "One-shot playback (start-up sound)\n";
+
+    // A 1 s ramp at 24 kHz played on a 48 kHz device lasts 1 s (48000 device frames) and keeps its real speed.
+    auto ramp = std::make_shared<sls::SampleData>();
+    ramp->sampleRate = 24000.0;
+    for (int i = 0; i < 24000; ++i)
+    {
+        ramp->left.push_back (static_cast<float> (i) / 24000.0f);
+        ramp->right.push_back (-static_cast<float> (i) / 24000.0f);
+    }
+
+    sls::OneShot shot;
+    shot.setSound (ramp);
+    std::vector<float> l (48000 * 3, 0.25f), r (48000 * 3, 0.25f); // 0.25 is already in the buffer: the sound is added to it
+
+    check (! shot.isActive(), "nothing plays before start()");
+    shot.start();
+    check (shot.isActive(), "start() makes it play");
+
+    int pos = 0;
+    while (shot.isActive() && pos < 48000 * 3)
+    {
+        float* block[2] = { l.data() + pos, r.data() + pos };
+        shot.mixInto (block, 2, 480, 48000.0);
+        pos += 480;
+    }
+    check (pos == 48000, "it lasts as long as the sound does, whatever the device rate (1 s)");
+    check (std::fabs (l[24000] - (0.25f + 0.5f)) < 1.0e-3f && std::fabs (r[24000] - (0.25f - 0.5f)) < 1.0e-3f,
+           "the middle is where it should be, left and right on their own sides, added to what was there");
+    check (std::fabs (l[48000 + 10] - 0.25f) < 1.0e-6f, "after the end nothing more is added");
+
+    // Block size does not matter.
+    std::vector<float> a (48000 * 2, 0.0f), b (48000 * 2, 0.0f);
+    sls::OneShot one, two;
+    one.setSound (ramp);
+    two.setSound (ramp);
+    one.start();
+    two.start();
+    float* oa[1] = { a.data() };
+    one.mixInto (oa, 1, 48000 * 2, 48000.0);
+    for (int p = 0; p < 48000 * 2; p += 333)
+    {
+        float* ob[1] = { b.data() + p };
+        two.mixInto (ob, 1, std::min (333, 48000 * 2 - p), 48000.0);
+    }
+    double worst = 0.0;
+    for (size_t i = 0; i < a.size(); ++i)
+        worst = std::max (worst, static_cast<double> (std::fabs (a[i] - b[i])));
+    check (worst < 1.0e-3, "playing it in blocks of 333 gives the same result as in one go");
+
+    // Starting again starts over; without a sound nothing happens.
+    shot.start();
+    check (shot.isActive(), "it can be started again");
+    sls::OneShot empty;
+    empty.start();
+    check (! empty.isActive(), "without a sound it stays silent");
+}
+
+void testCyberHub()
+{
+    std::cout << "Cyber-Hub sounds, start-up sound, time formats\n";
+
+    const auto& sounds = sls::cyberHubSounds();
+    check (sounds.size() == 30, "all 30 sounds of the Cyber-Hub theme are built in");
+
+    int hits = 0, tones = 0, longs = 0;
+    bool allDecode = true, allStereo = true, allIdsWork = true, nothingSilent = true, namedOk = true;
+    double longest = 0.0, shortest = 1.0e9;
+    for (const auto& s : sounds)
+    {
+        hits += s.role == sls::CyberRole::Hit ? 1 : 0;
+        tones += s.role == sls::CyberRole::Tone ? 1 : 0;
+        longs += s.role == sls::CyberRole::Long ? 1 : 0;
+        const auto data = sls::makeCyberHubSample (s.id);
+        if (data == nullptr || data->numFrames() < 100)
+        {
+            allDecode = false;
+            continue;
+        }
+        allStereo = allStereo && data->left.size() == data->right.size() && data->sampleRate >= 22050.0;
+        allIdsWork = allIdsWork && sls::makeBuiltinSample (s.id) == data && data->source == "builtin:" + s.id && sls::isCyberHubId (s.id);
+        namedOk = namedOk && ! data->name.empty() && data->name == s.title;
+        float peak = 0.0f;
+        for (float v : data->left)
+            peak = std::max (peak, std::abs (v));
+        nothingSilent = nothingSilent && peak > 0.05f;
+        const double seconds = data->numFrames() / data->sampleRate;
+        longest = std::max (longest, seconds);
+        shortest = std::min (shortest, seconds);
+    }
+    check (allDecode, "every sound decodes");
+    check (allStereo, "they are stereo with the left and right sides of equal length");
+    check (allIdsWork && namedOk, "makeBuiltinSample finds each by its id and returns the very same shared sample");
+    check (nothingSilent, "none of them is silent");
+    check (hits == 14 && tones == 9 && longs == 7, "14 hits, 9 tones and 7 long sounds are filed in the browser");
+    check (shortest > 0.1 && shortest < 0.25 && longest > 8.0 && longest < 8.8, "lengths match the files (0.16 s volume tick ... 8.4 s phone call)");
+
+    const auto login = sls::makeCyberHubSample ("cyber:desktop-login");
+    check (login != nullptr && std::abs (login->numFrames() / login->sampleRate - 5.5) < 0.1, "desktop-login lasts about 5.5 s");
+    const auto plug = sls::makeCyberHubSample ("cyber:power-plug");
+    double diff = 0.0, energy = 1.0e-12;
+    if (plug != nullptr)
+        for (size_t i = 0; i < plug->left.size(); ++i)
+        {
+            diff += std::pow (static_cast<double> (plug->left[i] - plug->right[i]), 2.0);
+            energy += std::pow (static_cast<double> (plug->left[i]), 2.0);
+        }
+    check (plug != nullptr && diff < 1.0e-4 * energy, "power-plug is a near-mono sub hit (the sides differ by less than -40 dB), as the analysis found");
+    check (sls::makeCyberHubSample ("cyber:nope") == nullptr && sls::makeBuiltinSample ("cyber:nope") == nullptr, "an unknown id gives nothing");
+
+    for (const auto& piece : sls::cyberHubKit())
+        check (sls::makeCyberHubSample (piece.id) != nullptr, (std::string ("the kit piece ") + piece.label + " exists").c_str());
+
+    const auto intro = sls::makeStartupSample();
+    check (intro != nullptr && std::abs (intro->sampleRate - 48000.0) < 1.0 && intro->numFrames() == 240000, "the start-up sound is the 5 s, 48 kHz file");
+    float introPeak = 0.0f;
+    if (intro != nullptr)
+        for (float v : intro->left)
+            introPeak = std::max (introPeak, std::abs (v));
+    check (introPeak > 0.15f && introPeak < 0.25f, "and has the level it was made at (peaks around 0.2, i.e. -14 dB: a quiet sound)");
+    check (sls::makeBuiltinSample (sls::kStartupSampleId) != nullptr, "it can be used as a built-in sample too (id \"intro\")");
+
+    // the browser
+    sls::LibraryPaths paths;
+    const auto tree = sls::buildBrowserTree (paths, {}, sls::PluginScanState::NotScanned);
+    const sls::BrowserNode* samples = nullptr;
+    const sls::BrowserNode* kits = nullptr;
+    for (const auto& c : tree.children)
+    {
+        if (c.name == "Samples") samples = &c;
+        if (c.name == "Drum Kits") kits = &c;
+    }
+    const sls::BrowserNode* cyber = nullptr;
+    if (samples != nullptr)
+        for (const auto& c : samples->children)
+            if (c.name == "Cyber-Hub")
+                cyber = &c;
+    check (cyber != nullptr && sls::countLeaves (*cyber) == 30 + 1 + 1, "the browser has a Cyber-Hub folder with the 30 sounds, the intro and the credit");
+    bool draggable = cyber != nullptr;
+    if (cyber != nullptr)
+        for (const auto& group : cyber->children)
+            for (const auto& leaf : group.children)
+                if (leaf.kind == sls::NodeKind::BuiltinSample)
+                    draggable = draggable && leaf.isDraggable() && sls::makeBuiltinSample (leaf.payload) != nullptr;
+    check (draggable, "every sound in it can be dragged and loads");
+    const sls::BrowserNode* kit = nullptr;
+    if (kits != nullptr)
+        for (const auto& c : kits->children)
+            if (c.name == "Cyber-Hub Kit")
+                kit = &c;
+    check (kit != nullptr && kit->children.size() == 5, "and a Cyber-Hub Kit among the drum kits");
+    const auto found = sls::filterTree (tree, "desktop");
+    check (sls::countLeaves (found) == 2, "searching for \"desktop\" finds desktop-login and desktop-logout");
+
+    // time formats of the playlist ruler
+    check (sls::formatBarsBeatsTicks (0) == "1.1.000" && sls::formatBarsBeatsTicks (480) == "1.2.000" && sls::formatBarsBeatsTicks (1920) == "2.1.000"
+               && sls::formatBarsBeatsTicks (1920 * 2 + 480 * 3 + 7) == "3.4.007" && sls::formatBarsBeatsTicks (-5) == "1.1.000",
+           "positions read bar.beat.ticks counting from 1");
+    check (sls::formatLengthBarsBeatsTicks (0) == "0.0.000" && sls::formatLengthBarsBeatsTicks (1920 + 480 + 240) == "1.1.240",
+           "lengths read bars.beats.ticks counting from 0");
+    check (sls::formatSeconds (0.0) == "0:00.000" && sls::formatSeconds (64.25) == "1:04.250" && sls::formatSeconds (0.0004) == "0:00.000"
+               && sls::formatSeconds (0.0005) == "0:00.001" && sls::formatSeconds (-3.0) == "0:00.000",
+           "times read minutes:seconds.milliseconds");
+    check (sls::niceTimeStepSeconds (1000.0, 70.0) == 0.1 && sls::niceTimeStepSeconds (10.0, 70.0) == 10.0 && sls::niceTimeStepSeconds (1.0e6, 70.0) == 0.001
+               && sls::niceTimeStepSeconds (0.01, 70.0) == 120.0,
+           "the ruler picks a round time step that is wide enough");
+    check (sls::barLabelEvery (100.0, 34.0) == 1 && sls::barLabelEvery (20.0, 34.0) == 2 && sls::barLabelEvery (5.0, 34.0) == 8,
+           "and numbers every 1st, 2nd, 4th... bar as the zoom requires");
+}
+
 int main()
 {
     testProjectModel();
@@ -3152,6 +3664,10 @@ int main()
     testInputRecorder();
     testMidiNotes();
     testPlayerRewind();
+    testClipEditing();
+    testNoteRecording();
+    testCyberHub();
+    testOneShot();
 
     std::cout << "\n" << (failures == 0 ? "ALL TESTS PASSED" : "SOME TESTS FAILED") << " (" << failures << " failures)\n";
     return failures == 0 ? 0 : 1;

@@ -75,8 +75,9 @@ void AudioEngine::handleMidi (const juce::MidiMessage& message)
     bool note = false;
     {
         const juce::SpinLock::ScopedLockType lock (producerLock);
-        midiMapper.map (message, midiTarget.load (std::memory_order_relaxed), [this, &note] (const LiveNoteEvent& e)
+        midiMapper.map (message, midiTarget.load (std::memory_order_relaxed), [this, &note] (LiveNoteEvent e)
                         {
+                            e.fromMidi = true;
                             liveNotes.push (e);
                             note = note || e.on;
                         });
@@ -161,6 +162,8 @@ juce::String AudioEngine::describeDevice() const
 void AudioEngine::audioDeviceAboutToStart (juce::AudioIODevice* device)
 {
     sampleRateHz = device != nullptr ? device->getCurrentSampleRate() : 48000.0;
+    outputLatencySamples.store (device != nullptr ? static_cast<double> (std::max (0, device->getOutputLatencyInSamples())) : 0.0,
+                                std::memory_order_relaxed);
     masterMeanSquare = 0.0f;
     player.prepare (sampleRateHz);
 }
@@ -200,9 +203,20 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* in, int 
     if (recording)
         recorder.process (in, numIn, numSamples);
 
+    const bool takeNotes = isPlaying && noteRecording.load (std::memory_order_relaxed);
+    const double blockStartTick = player.getPositionTicks();
+    const double currentBpm = bpm.load (std::memory_order_relaxed);
+    // What a player pressed a key to: the song they heard, which is the output latency behind the song the player is
+    // computing, and the key waited half a block on average before this callback saw it.
+    const double latencySamples = outputLatencySamples.load (std::memory_order_relaxed) + 0.5 * numSamples;
+    const double latencyTicks = latencySamples / sampleRateHz * currentBpm / 60.0 * kTicksPerBeat;
+
     LiveNoteEvent live;
     while (liveNotes.pop (live))
     {
+        if (takeNotes && live.fromMidi)
+            midiTakes.push (makeTake (live, blockStartTick, latencyTicks, project->lengthTicks));
+
         if (live.on)
             player.liveNoteOn (*project, live.channel, live.pitch, live.velocity);
         else
@@ -210,7 +224,7 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* in, int 
     }
 
     player.setMetronome (metronomeOn.load (std::memory_order_relaxed), metronomeVolume.load (std::memory_order_relaxed));
-    player.render (*project, bpm.load (std::memory_order_relaxed), isPlaying, out, numOut, numSamples);
+    player.render (*project, currentBpm, isPlaying, out, numOut, numSamples);
     playheadTick.store (static_cast<int> (player.getPositionTicks()), std::memory_order_relaxed);
 
     const float g = gain.load (std::memory_order_relaxed);
@@ -234,6 +248,14 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* in, int 
         trackRms[static_cast<size_t> (t)].store (player.getTrackRms (t) * g, std::memory_order_relaxed);
     }
 
+    // The start-up sound is added after the master volume is applied (see playStartupSound), so it is as loud as the file.
+    for (int ch = 0; ch < numOut; ++ch)
+        if (out[ch] != nullptr)
+            juce::FloatVectorOperations::multiply (out[ch], g, numSamples);
+    if (startupTrigger.exchange (false, std::memory_order_acquire))
+        startup.start();
+    startup.mixInto (out, numOut, numSamples, sampleRateHz);
+
     float localPeak = 0.0f;
     double sumSquares = 0.0;
     int measuredChannels = 0;
@@ -241,7 +263,6 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* in, int 
     {
         if (out[ch] == nullptr)
             continue;
-        juce::FloatVectorOperations::multiply (out[ch], g, numSamples);
         for (int i = 0; i < numSamples; ++i)
         {
             localPeak = std::fmax (localPeak, std::fabs (out[ch][i]));

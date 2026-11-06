@@ -10,6 +10,7 @@
 
 #include "audio/Arrangement.h"
 #include "audio/AudioEngine.h"
+#include "audio/NoteRecorder.h"
 #include "audio/Project.h"
 #include "ui/AudioMeter.h"
 #include "library/ChannelPreset.h"
@@ -90,6 +91,13 @@ private:
     void updateRecordButton();
     void showRecordProgress();
 
+    // Recording what a MIDI keyboard plays into the piano roll (the selected channel, in the current pattern)
+    void toggleNoteRecording();
+    void applyNoteRecording();
+    void openNoteRecordMenu();
+    void drainMidiTakes();
+    void endNoteTake();
+
     // Project files
     ProjectDocument makeDocument();
     void applyDocument (ProjectDocument document, const juce::File& file, juce::StringArray& problems);
@@ -121,7 +129,12 @@ private:
     void commitCurrentPattern();
     void selectPattern (int index);
     void addPattern (bool cloneCurrent);
+    void showNewPatternMenu (juce::Component& target);
+    void renamePattern (int index);
+    void deletePattern (int index);
+    void loadPatternIntoChannels (int index);
     void refreshPatternBox();
+    void dropOnPlaylist (const drag::Item& item, int track, int tick);
     void setSongMode (bool shouldPlaySong);
     Project compileCurrent();
     std::array<PanelWindow*, 4> allPanels();
@@ -182,6 +195,11 @@ private:
     InputRecorder::Channels recordChannels = InputRecorder::Channels::Mono;
     bool monitorInput = false;
     juce::String midiNote;                                           // last status text set for MIDI activity
+    enum class RecordTarget { PlaylistTrack, SamplerChannel };
+    RecordTarget recordTarget = RecordTarget::PlaylistTrack;        // where a recorded take goes
+    bool noteRecordOn = false;                                       // MIDI keyboard notes are written into the pattern
+    int noteQuantize = kTicksPerBeat / 4;                            // ticks; 0 = do not quantize
+    NoteRecorder noteRecorder;
     bool metronomeOn = false;
     float metronomeVolume = 0.5f;
     bool restoringLayout = false;
@@ -201,6 +219,7 @@ private:
     juce::TextButton resetButton { "Reset" };
     RightClickButton metronomeButton { "Metronome" };
     RightClickButton recordButton { "Record" };
+    RightClickButton noteRecordButton { "Rec notes" };
     juce::TextButton recordMenuButton { juce::String::fromUTF8 ("\xe2\x96\xbe") };
     juce::TextButton deviceButton { "Audio..." };
     juce::Slider bpmSlider { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };

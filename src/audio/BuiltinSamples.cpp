@@ -1,5 +1,7 @@
 #include "audio/BuiltinSamples.h"
 
+#include "audio/CyberHub.h"
+
 #include <algorithm>
 #include <cmath>
 
@@ -100,6 +102,8 @@ std::shared_ptr<const SampleData> makeBuiltinSample (const std::string& id)
     if (id == "kick")  return makeKickSample();
     if (id == "snare") return makeSnareSample();
     if (id == "hat")   return makeHatSample();
+    if (isCyberHubId (id)) return makeCyberHubSample (id);
+    if (id == kStartupSampleId) return makeStartupSample();
     return nullptr;
 }
 } // namespace sls

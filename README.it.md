@@ -14,7 +14,7 @@ strumento sta in un pannello mobile che puoi spostare, ridimensionare, sovrappor
 Sun Loops Studio si ispira al modo di lavorare dei DAW a loop come FL Studio. È un progetto indipendente: non usa
 codice, nomi, grafica o risorse di altri prodotti e non è affiliato né approvato dai loro produttori.
 
-**Stato: alpha (0.8.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
+**Stato: alpha (0.9.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
 La riproduzione è stata confermata su un vero PC Nobara per la versione 0.3; tutto ciò che è stato aggiunto dopo
 (pannelli, pattern, playlist, browser, pitch/swing, mixer espanso ed effetti, salvataggio dei progetti, AppImage, clip audio, trascinamento
 dei file, registrazione, MIDI, metronomo e formati di esportazione) è stato provato con test automatici e in un display virtuale con un
@@ -39,13 +39,18 @@ cosa manca (hosting VST3 e annulla/ripristina sono le mancanze principali).
 - **Piano Roll** - per il canale selezionato: clic per aggiungere una nota, trascina per spostarla, trascina il bordo
   destro per ridimensionarla, tasto destro per eliminarla, scorrimento e zoom. Si apre da un canale (menu o doppio
   clic), come in FL Studio.
-- **Pattern e Playlist** - più pattern (nuovi o copiati) disposti come clip su 8 tracce. Il pulsante *Pattern / Song*
+- **Pattern e Playlist** - più pattern (nuovi, copiati, rinominati o eliminati con i pulsanti sopra la playlist) disposti come clip su 8 tracce. Il pulsante *Pattern / Song*
   sceglie se ripetere il pattern selezionato o suonare tutta la playlist.
 - **Audio nella Playlist** - trascina file audio (`.wav .aiff .flac .ogg .oga .mp3 .aac`) o video (ne viene presa la
-  traccia audio) dal file manager sulla Playlist: diventano clip con la forma d'onda, che puoi spostare, accorciare ed
-  eliminare. AAC e l'audio dei video richiedono `ffmpeg` installato.
+  traccia audio) dal file manager sulla Playlist: diventano clip con la forma d'onda. Gli **strumenti Select, Split, Cut, Erase e Zoom**,
+  il ritaglio dai due bordi, una griglia fino al singolo tick, annulla/ripristina e un righello in minuti:secondi.millisecondi
+  con la lettura del tempo sotto il mouse permettono di lavorare con precisione su una registrazione. AAC e l'audio dei video richiedono `ffmpeg` installato.
 - **Registrazione** - il pulsante **Record** registra un microfono o uno strumento nella traccia di playlist che scegli,
-  a tempo con il brano. Le **tastiere MIDI** suonano il canale selezionato. Entrambi si impostano in **Audio...**.
+  a tempo con il brano. Le **tastiere MIDI** suonano il canale selezionato e **Rec notes** scrive nel piano roll (quantizzato) ciò che suonano, per
+  fare pattern; una registrazione può anche diventare un nuovo canale sampler. Si imposta in **Audio...**.
+- **Suoni Cyber-Hub** - 30 suoni di sistema di Hubert sono incorporati (Browser > Samples > Cyber-Hub e un Cyber-Hub Kit); il progetto
+  dimostrativo è fatto con questi e all'apertura suona un suono di avvio (si disattiva nel menu File). Vedi
+  [docs/cyber-hub.md](docs/cyber-hub.md) (in inglese).
 - **Metronomo** - un click con tempo (anche tap tempo) e volume regolabili, su un pulsante a parte.
 - **Mixer** (`F9`) - 8 tracce verticali, ognuna con fader e dB, bilanciamento stereo, mute, solo, indicatore
   Peak/RMS e 4 slot per effetti in serie (Equalizer, Reverb, Delay, Compressor, con bypass). La strip master a destra
@@ -88,6 +93,7 @@ applicazioni: `cmake --install build --prefix ~/.local`. Per creare un'unica **A
 | --- | --- |
 | [docs/user-guide.it.md](docs/user-guide.it.md) | Come usare ogni pannello, scorciatoie, limiti ([English](docs/user-guide.md)) |
 | [docs/building.md](docs/building.md) | Dipendenze, build, installazione, test, problemi comuni (inglese) |
+| [docs/cyber-hub.md](docs/cyber-hub.md) | I suoni Cyber-Hub, l'analisi d'ascolto, la demo, il suono di avvio e una nota sulla licenza (inglese) |
 | [docs/architecture.md](docs/architecture.md) | Thread, regole real-time, flusso dei dati, pattern e playlist, pannelli, test (inglese) |
 | [docs/roadmap.md](docs/roadmap.md) | Cosa è verificato, cosa no, cosa viene dopo (inglese) |
 | [CHANGELOG.md](CHANGELOG.md) | Modifiche per versione (inglese) |

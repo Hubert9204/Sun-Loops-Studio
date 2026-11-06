@@ -101,6 +101,8 @@ keyboard for that field.
 
 ## Browser
 
+*(New in 0.9.0: **Samples > Cyber-Hub** and **Drum Kits > Cyber-Hub Kit** hold the built-in system sounds by Hubert, and the program plays a start-up sound when it opens: switch it off in **File > Play the start-up sound**. See [cyber-hub.md](cyber-hub.md).)*
+
 The sidebar on the left lists your sounds as a tree. Click the arrow of a folder to open it.
 
 | Folder | Contents |
@@ -192,7 +194,14 @@ whichever comes first. When you open a channel the view scrolls to its notes.
 
 A **pattern** holds the notes of every channel. The pattern box in the toolbar selects the current pattern: the
 Channel Rack and the Piano Roll show and edit that pattern. The **+** button next to it offers **New empty pattern**
-and **Clone current pattern**. The demo project starts with "Pattern 1" (the full groove) and "Drums" (the drums only).
+and **Clone current pattern**. New patterns get the next name automatically (Pattern 3, Pattern 4, ...). The demo project starts
+with "Pattern 1" (the full groove) and "Drums" (the drums only), played with the Cyber-Hub sounds (see
+[cyber-hub.md](cyber-hub.md)).
+
+The **pattern box** at the top of the Playlist has three buttons: **New** (empty or cloned, like the **+**), **Rename**
+(a name of up to 40 characters) and **Delete**. Delete removes the selected pattern, its notes and **every playlist clip
+that plays it**; the last remaining pattern cannot be deleted. Choosing a pattern in that box also opens it in the Rack and
+the Piano Roll.
 
 Channel settings (volume, pan, mute, solo, pitch, swing, instrument, sample, mixer track) belong to the channel, not
 to the pattern: they are the same in every pattern. Mixer tracks and their effects belong to neither.
@@ -205,13 +214,41 @@ in Song mode playback loops there.
 
 | Action | How |
 | --- | --- |
-| Place a clip | Click an empty cell. The clip holds the pattern selected in the pattern box and is one pattern long. Drag right straight away to make it longer. |
+| Place a clip (Select tool) | Click an empty cell. The clip holds the pattern selected in the pattern box and is one pattern long. Drag right straight away to make it longer. |
 | Move a clip | Drag it (it snaps to pattern boundaries and can change track). |
 | Repeat / shorten | Drag the right edge of the clip: the pattern repeats once per pattern length. |
-| Delete | Right-click the clip. |
+| Delete | Right-click the clip > Delete, or select it and press Delete (or use the Erase tool). |
 | Select its pattern | Double-click the clip. |
 | Scroll time | Mouse wheel. |
 | Zoom | Ctrl + wheel. |
+
+### Tools, grid, zoom and undo
+
+The toolbar under the pattern box has five tools (keys **1** - **5** while the mouse is over the timeline):
+
+| Tool | What it does |
+| --- | --- |
+| **Select** (1) | The normal tool described above and below: click a clip to select it, drag to move it, drag its **left or right edge** to trim or lengthen it (an audio clip keeps its sound in place: only more or less of it is heard), right-click for a menu (*Split here, Duplicate, Copy, Delete*, plus *Position, length and gain...* on an audio clip or *Open this pattern* on a pattern clip), double-click a pattern clip to open that pattern. |
+| **Split** (2) | Click a clip to cut it in two at that point (snapped to the grid). Key **S** splits the selected clip at the mouse. |
+| **Cut** (3) | Drag across a clip to remove that stretch of it: the sound after the gap stays where it was. |
+| **Erase** (4) | Click a clip to delete it, or drag across several. |
+| **Zoom** (5) | Click zooms in, right-click or Shift+click zooms out, drag a stretch to zoom to it. |
+
+**Grid** (the box next to the tools) is what audio clips snap to when moved, trimmed, split or cut: from a bar down to a
+single tick (1 beat = 480 ticks); hold **Alt** while dragging to ignore it. Pattern clips always sit on whole patterns.
+**-**, **+** and **Fit** zoom out, in and to the whole song; **Ctrl+wheel** zooms around the mouse and the wheel and the
+scroll bar move in time. The ruler shows **minutes:seconds.milliseconds** and the bar numbers (only as many as fit at the
+current zoom), and the two lines under the timeline read out, for the position under the mouse, *time - bar:beat:tick*, and
+for the selected clip its name, start, length and end (each as bar:beat:tick and as a time), for an audio clip also the length and
+sample rate of the file, where in the file the clip starts (in seconds and in samples) and its gain. On an audio clip, *Position,
+length and gain...* (right-click) lets you type exact values.
+
+**Undo / Redo** (buttons, **Ctrl+Z** and **Ctrl+Y**) cover everything done to clips in the Playlist. **Ctrl+C / X / V** copy,
+cut and paste the selected clip at the mouse and **Ctrl+D** duplicates it; **Delete** removes it. The undo history is
+forgotten when something outside the Playlist changes the arrangement (opening a project, a new recording, deleting a pattern).
+Split and Cut also work on pattern clips, but only on whole pattern lengths. A clip made by splitting an audio clip remembers where it
+starts in the sound **in seconds, at the BPM it was cut at**: if you change the BPM afterwards the sound still plays at its
+original speed, so the cut points no longer fall on the beat they were cut on.
 
 Clips cannot overlap on the same track; a move or resize that would overlap is simply not applied. Clips on
 different tracks play together. Clicking a track's **name** chooses the track that **Record** writes to (marked with a
@@ -224,9 +261,9 @@ Audio clips are recordings and audio files placed on the playlist. They are draw
 | Action | How |
 | --- | --- |
 | Add an audio or video file | Drag it from your file manager onto the Playlist (it lands on the track and beat under the mouse, which is highlighted), or use *File > Import audio or video into the playlist...*. Several files go on consecutive tracks. |
-| Move | Drag the clip (it snaps to the beat and can change track). |
-| Shorten / lengthen | Drag its right edge: at least one beat, at most the length of the audio. |
-| Delete | Right-click it. |
+| Move | Drag the clip (it snaps to the grid chosen in **Grid** and can change track). |
+| Shorten / lengthen | Drag its right or left edge: at most the length of the audio. |
+| Delete | Right-click it > Delete, or select it and press Delete. |
 
 Supported files: `.wav`, `.aiff` / `.aif`, `.flac`, `.ogg`, `.oga` and `.mp3` are read by the program itself. `.aac` /
 `.m4a` and the **sound track of a video** (`.mp4`, `.m4v`, `.mkv`, `.mov`, `.avi`, `.webm`, `.wmv`, `.flv`, `.mpg`, `.mpeg`,
@@ -267,8 +304,28 @@ count-in yet (switch the **Metronome** on to play in time).
 **Audio...** also lists the **MIDI inputs**. Tick the keyboards you want: they play the **selected channel** of the
 Channel Rack (click a channel to select it) with the velocity of the keys, whether the song is playing or not. A keyboard
 that is plugged in while the program runs is switched on automatically; your choice is remembered. The status line names
-the active MIDI inputs and says which channel is playing. Only notes are used (no pitch bend, pedals or knobs), and MIDI is
-for playing: it does not record into the piano roll.
+the active MIDI inputs and says which channel is playing. Only notes are used (no pitch bend, pedals or knobs), and Notes can
+be recorded into the piano roll with **Rec notes** (below).
+
+### Recording notes into the piano roll (Rec notes)
+
+**Rec notes** (toolbar) writes what a MIDI keyboard plays into a pattern, so you can build patterns by playing:
+
+1. Select the channel to record into (click it in the Channel Rack) and make sure the keyboard is ticked in **Audio...**.
+2. Click **Rec notes** (it turns red) and press **Play**. Recording only runs while the song plays, in Pattern mode (the
+   current pattern loops) or Song mode.
+3. Play. Each note goes into the **current pattern** of the **selected channel** at the position you heard it (the output
+   latency is subtracted), with the key's velocity. A note held across the end of the pattern is split and continues at its
+   start; a note still held when you press Stop is ended there. The notes appear in the Piano Roll straight away and can
+   be edited like any other.
+
+Right-click **Rec notes** to choose the **quantize** (1/4, 1/8, **1/16** by default, 1/32 or off). Notes already in the
+pattern at the same place with the same pitch are not duplicated, so recording over a loop several times adds only new notes.
+The pitch of a guitar or a voice is **not** turned into notes: use *Record* (below) for audio.
+
+The arrow next to **Record** has *The recording becomes*: **A clip on a playlist track** (the default) or **A new sampler
+channel**. With the second, an audio take from a microphone or guitar becomes the sample of a new channel, ready to be played with
+a MIDI keyboard or sequenced in the piano roll (with no free channel it is put on the playlist instead).
 
 ## Pattern mode and Song mode
 
@@ -398,7 +455,6 @@ a heavier song or a plugin-heavy mixer can still need a bigger size.
 - A pattern is always two bars long, 4/4, 16th-note grid.
 - Samples are mono or stereo, at most 30 seconds, played one-shot (no looping, no envelope editing). Audio clips: up to
   5 minutes per file, 64 clips.
-- Not available yet: playing notes from the computer keyboard, undo, embedding samples in the project, automatic saving
-  and crash recovery, VST plugins as instruments or effects, sends, automation, recording MIDI notes, punch-in and
-  count-in for recording, trimming or splitting audio clips, deleting or renaming patterns, seeking by clicking the
-  ruler. See [roadmap.md](roadmap.md).
+- Not available yet: playing notes from the computer keyboard, undo outside the Playlist, embedding samples in the project, automatic saving
+  and crash recovery, VST plugins as instruments or effects, sends, automation, turning guitar or voice pitch into notes,
+  punch-in and count-in for recording, fades and per-clip effects, seeking by clicking the ruler. See [roadmap.md](roadmap.md).

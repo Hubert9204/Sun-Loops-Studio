@@ -43,7 +43,8 @@ src/ui/
   Knob.*  TrackSelector.*       Rotary knob with caption; the "Track N" display
   FileBrowser.*  DragItems.h    The browser sidebar; the text format of dragged items
   PianoRoll.*                   Note editor
-  PlaylistView.*                Playlist panel body: pattern clips, audio clips with waveforms, file drops, track arming
+  PlaylistView.*                Playlist panel body: pattern box with New / Rename / Delete, tool buttons, grid, zoom, undo, readouts
+  PlaylistTimeline.*            The timeline: ruler, clips with waveforms, the five tools, undo snapshots, file and browser drops, track arming
   MetronomePanel.*  RightClickButton.h   The metronome pop-up (tempo, volume, tap); a button with a right-click action
   AudioSettings.*               The Audio... dialog: device selector, buffer size menu, Auto, load read-out
   MixerPanel.*                  Mixer panel body: track strips, master strip (with its effect slots), effects panel
@@ -131,10 +132,22 @@ LiveNoteQueue (wait-free SPSC, 64 events)  -->  audio callback  -->  Player::liv
   is hidden or its notes are replaced). `MainComponent` remembers which channel got the "on" so the "off" goes to the
   same one even if the selection changes in between.
 
+## Recording notes, Cyber-Hub and the start-up sound
+
+- **Note recording.** The audio thread stamps every keyboard note (`LiveNoteEvent::fromMidi`) with the song position minus the
+  output latency and half a block (`makeTake`) and pushes a `MidiTake` into a `SpscQueue`; a message-thread timer drains it into
+  `NoteRecorder` (quantize, wrap across the loop end, closing held notes on stop), whose notes `MainComponent` writes into the
+  selected channel's current pattern. Nothing on the audio thread allocates or locks.
+- **Cyber-Hub.** `resources/sounds/` is turned into C++ data by `juce_add_binary_data` (target `SunLoopsSounds`, namespace
+  `SunLoopsSoundData`) and decoded by `CyberHub.cpp` with JUCE's Ogg Vorbis / WAV readers from memory, once, then cached. Ids are
+  `cyber:<name>`; `BuiltinSamples` forwards them, so projects store `builtin:cyber:<name>`.
+- **Start-up sound.** `OneShot` (header only) plays a `SampleData` once with linear interpolation; `AudioEngine` owns one, started by
+  an atomic flag (`playStartupSound`) and mixed after the master volume.
+
 ## Audio clips
 
 An `AudioClip` (in `Arrangement`) holds the decoded `SampleData` (whose `source` is the file path), a name, a playlist
-track, a start in ticks (always on a beat), a length in ticks and a gain. `canPlaceAudio` enforces the timeline limits and
+track, a start in ticks (any tick; the grid is a UI matter), a length in ticks, a gain and an `offsetSeconds` (where in the sound the clip starts: non-zero after a trim or split from the left). `ClipEdit.h` holds the pure functions behind Split and Cut. `canPlaceAudio` enforces the timeline limits and
 no overlap with other audio clips *or* pattern clips on the same track (and `canPlace` for pattern clips now checks the
 audio clips). `compileSong` turns each clip into an `AudioEvent` (start, end, mixer track = playlist track, gain, shared
 pointer to the audio) in `Project::audioEvents`, sorted by start; `compilePattern` has none, so audio only plays in Song

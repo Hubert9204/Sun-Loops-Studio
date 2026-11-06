@@ -1,0 +1,11 @@
+# License: Creative Commons Attribution-NoDerivatives 4.0 International (CC BY-ND 4.0)
+# Copyright (C) 2026 - by Hubert. All rights reserved.
+# Commercial use is permitted. No modifications, forks, or rebranding of the distributed material are allowed.
+
+[Sound Theme]
+Name=Cyber-Hub
+Comment=Custom Sci-Fi Ambient sound theme
+Directories=stereo
+
+[stereo]
+OutputProfile=stereo

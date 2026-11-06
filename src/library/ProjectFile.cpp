@@ -8,7 +8,7 @@ namespace sls
 namespace
 {
 constexpr size_t kMaxNotesPerChannelPattern = 20000;
-constexpr size_t kMaxNameLength = 16;
+constexpr size_t kMaxNameLength = 40; // channel, track, pattern and clip names
 
 const char* effectKey (EffectType t)
 {
@@ -250,6 +250,7 @@ juce::String ProjectDocument::toJson() const
         o->setProperty ("startTick", a.startTick);
         o->setProperty ("lengthTicks", a.lengthTicks);
         o->setProperty ("gain", static_cast<double> (a.gain));
+        o->setProperty ("offsetSeconds", a.offsetSeconds);
         audioList.add (juce::var (o));
     }
     root->setProperty ("audioClips", audioList);
@@ -448,6 +449,7 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
                 clip.startTick = readInt (o->getProperty ("startTick"), -1, -1, 100000000);
                 clip.lengthTicks = readInt (o->getProperty ("lengthTicks"), 0, 0, 100000000);
                 clip.gain = static_cast<float> (readNumber (o->getProperty ("gain"), 1.0, 0.0, 2.0));
+                clip.offsetSeconds = readNumber (o->getProperty ("offsetSeconds"), 0.0, 0.0, 1.0e6);
                 clip.data = makeMissingSample (source);
             }
             if (o != nullptr && ! source.empty() && d.arrangement.audioClips.size() < static_cast<size_t> (kMaxAudioClips)

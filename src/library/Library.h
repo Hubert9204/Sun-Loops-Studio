@@ -23,7 +23,7 @@ struct LibraryPaths
 
 enum class PluginScanState { NotScanned, Scanning, Done };
 
-bool isAudioFileName (const juce::String& fileName); // wav, flac, ogg, aif, aiff
+bool isAudioFileName (const juce::String& fileName); // wav, flac, ogg, oga, aif, aiff, mp3, aac, m4a
 
 // Scans a directory tree into folder/leaf nodes. Hidden entries (starting with '.') are skipped, folders with
 // nothing usable inside are left out, and at most `nodeBudget` nodes are created in total (a note says so when

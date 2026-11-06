@@ -1,6 +1,6 @@
 # Status and roadmap
 
-Version 0.8.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
+Version 0.9.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
 what is missing. If something here disagrees with the program, the program is right: please fix the page.
 
 ## What has been verified, and how
@@ -28,9 +28,17 @@ what is missing. If something here disagrees with the program, the program is ri
 | File menu with the Export submenu (all seven formats listed, an FLAC export written and read back 24-bit stereo 48 kHz), Metronome button (toggle, right-click panel with tempo, volume and tap), `.slp` saving and reopening | Manual, in a virtual display with a window manager and a silent device | Worked |
 | Dragging files from a file manager onto the Playlist: all seven audio formats and an MP4 dropped together landed on consecutive tracks with waveforms; the drop highlight; move, shorten, delete and re-place by mouse; saving a project with audio clips and reopening it (clips and waveforms back); the song with the clips exported to WAV and measured | Manual, in a virtual display; the drag was simulated with a small program that speaks the X11 drag-and-drop protocol (XDND) to the window, as a file manager does | Worked |
 | Recording in the interface: the input is opened on first use, the take is written, placed as a clip at the start of the armed track, a second take on an occupied track is refused with a message, the Audio dialog shows input device, channels and the level bar | Manual, in a virtual display with the silent (ALSA `null`) device, which delivers silence faster than real time (so a take ended by itself at the end of the playlist) | Worked |
+| Playlist editing (split, cut, trim, erase of audio and pattern clips with offsets in seconds, undo snapshots), pattern rename / delete helpers, MIDI note recording (quantize, loop wrap, held notes, dedupe, stamping with latency), the Cyber-Hub sounds (30 decode, ids, kit, role counts, intro level), the one-shot start-up player (rate conversion, block size independence), time formats and ruler steps | Automated headless tests (513 checks in total) | All pass |
+| Playlist 0.9.0 in the interface: audio dropped from the file manager, split, cut, undo / redo, zoom tool, trimming an audio clip from its left edge (the readout showed the new start, length, file offset in seconds and samples and the gain), New / Rename / Delete pattern; a Cyber-Hub sound dragged from the browser onto the Playlist (a clip appeared on the track under the mouse) and onto a channel (the channel took its name); the new demo opening at 112 BPM with Cyber-Hub drums and the login / logout clips on track 8, played in Song mode with the mixer meters moving and the master peaking about 2 dB under full scale | Manual, in a virtual display with a window manager and a silent device (the drag from the file manager through the XDND simulator) | Worked |
 | A use-after-free when clicking an item that rebuilds the browser tree (crash on *Scan for VST3 plugins...*) | Found in that manual session | Fixed (item actions are deferred); the same click was repeated afterwards |
 
 ## What has not been verified
+
+- **How the Cyber-Hub sounds, the new demo and the start-up sound actually sound.** Nothing could be heard here: the start-up
+  player and the demo were checked by unit tests (rate, length, block independence, levels) and by meters on a silent device.
+  Whether the start-up sound plays at a comfortable loudness on a real device, and whether the demo's drums sit well together,
+  is not known. **MIDI note recording from a real keyboard** (timing against the output latency, loop wrap by ear) was only
+  tested with stamped events in unit tests.
 
 - **Sound of the new features on real hardware.** Panels, patterns, the playlist, Song mode, pitch, swing, track
   routing and the effects were not heard through an audio device (the test environment had none); they are covered
@@ -86,10 +94,10 @@ what is missing. If something here disagrees with the program, the program is ri
 | --- | --- |
 | Project file extras | Samples are referenced by path, not embedded, so a project moved to another computer needs its samples copied too. No autosave, no crash recovery, no backup of the previous version, no "export project with its samples". |
 | VST3 plugins | Plugins can be *scanned* (library code, no UI). Playing them as instruments or effects is not implemented: it needs plugin processing inside the audio thread, state saving, parameter handling and plugin editor windows. |
-| Undo / redo | Not implemented. |
+| Undo / redo | Only for clips in the Playlist (Ctrl+Z / Ctrl+Y). Not for the Channel Rack, the Piano Roll or the Mixer. |
 | VST3 effects in the mixer | The four slots per track hold built-in effects only. No third-party plugin can be loaded. |
 | Sends, groups, more than 8 mixer tracks | A channel goes to one of 8 tracks; the master strip has a fader, a meter and four effect slots. No sends or sidechain, no per-slot wet/dry beyond what each effect offers, no effect-chain presets. |
-| Automation, MIDI recording | Not implemented. MIDI keyboards play the selected channel live, but their notes are not recorded into the piano roll; notes can also be played with the mouse on the piano roll keyboard (not from the computer keyboard). Audio is recorded into the playlist, but there is no punch-in, no count-in, no loop recording and takes always start at the beginning of the song. |
+| Automation, pitch-to-MIDI | Automation is not implemented. MIDI keyboards play the selected channel live and **Rec notes** records their notes into the piano roll, but the pitch of a guitar or voice is **not** turned into notes (an audio take can become a sampler channel to be played or sequenced). Audio is recorded into the playlist or a new sampler channel, but there is no punch-in, no count-in, no loop recording and takes always start at the beginning of the song. |
 | Audio clip editing | Clips can be moved, shortened and lengthened (up to the length of the audio) and deleted. No trimming of the start, splitting, fades, gain control in the interface, time-stretch or pitch-shift; a clip keeps the length it had when it was added, so after a tempo change the audio no longer ends where the clip does. At most 5 minutes of audio per file and 64 audio clips. |
 | Playlist seeking | Clicking the ruler does not move the playhead (so playback and recording always start at the beginning). |
 | Pattern deletion and renaming | Patterns are created and cloned only; clips cannot be re-pointed to another pattern. |
@@ -101,14 +109,14 @@ what is missing. If something here disagrees with the program, the program is ri
 
 ## Proposed order of work
 
-1. **Undo / redo** over the edits the arrangement and channels already funnel through one place.
+1. **Undo / redo** for the Rack, Piano Roll and Mixer (the Playlist already has it).
 2. **Project extras**: autosave and recovery, embedding samples, a project folder with its samples.
-3. **Playlist and pattern polish**: seeking from the ruler, pattern rename and delete, pattern length.
+3. **Playlist and pattern polish**: seeking from the ruler, pattern length, undo for the Rack and Piano Roll, tempo-independent cut points.
 4. **Continuous integration**: build and run the tests on every push (GitHub Actions on a Fedora container).
 5. **Mixer**: sends, effect-chain presets, a spectrum display.
 6. **VST3 hosting**, instruments first, then effects in the existing mixer slots. This is the largest item and
    deserves its own design note.
-7. **Sampler and audio-clip improvements** (loop, envelope, trim, fades), MIDI recording, then automation.
+7. **Sampler and audio-clip improvements** (loop, envelope, fades), pitch-to-MIDI, then automation.
 8. **Packaging** and a decision on the license (see below).
 
 ## License

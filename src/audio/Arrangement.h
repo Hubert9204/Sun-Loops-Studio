@@ -37,8 +37,8 @@ struct Clip
 
 constexpr int kMaxAudioClips = 64;
 
-// A recording or an imported audio file on a playlist track. Unlike a pattern clip it sits on a beat grid
-// (`startTick`, a multiple of one beat) and its length is in ticks: it plays the audio once and is cut at its end.
+// A recording or an imported audio file on a playlist track. Unlike a pattern clip its position (`startTick`) and
+// length are in ticks, not in whole patterns: it plays the audio once and is cut at its end.
 // The playlist track number is also the mixer track the audio plays through.
 struct AudioClip
 {
@@ -48,15 +48,17 @@ struct AudioClip
     int startTick = 0;
     int lengthTicks = kTicksPerBeat;
     float gain = 1.0f; // 0..2
+    double offsetSeconds = 0.0; // the clip plays the audio from this point (0 unless the clip was cut or trimmed at its start)
 
     int endTick() const noexcept { return startTick + lengthTicks; }
 
-    // How long the audio really is, in ticks, at `bpm`.
+    // How much audio there is from the clip's start to the end of the file, in ticks at `bpm`. A clip cannot be
+    // made longer than this.
     int naturalLengthTicks (double bpm) const noexcept
     {
         if (data == nullptr || data->sampleRate <= 0.0 || bpm <= 0.0)
             return kTicksPerBeat;
-        const double seconds = data->numFrames() / data->sampleRate;
+        const double seconds = std::max (0.0, data->numFrames() / data->sampleRate - offsetSeconds);
         return std::max (1, static_cast<int> (std::ceil (seconds * bpm / 60.0 * kTicksPerBeat)));
     }
 };
@@ -70,13 +72,14 @@ struct Arrangement
 
     int timelineTicks() const noexcept { return kPlaylistUnits * patternTicks; }
 
-    // Does an audio clip fit: inside the timeline, on a beat, on an existing track, and clear of every other clip
-    // (pattern or audio) on that track? `ignoreIndex` is the audio clip being moved/resized (or -1).
+    // Does an audio clip fit: inside the timeline, on an existing track, and clear of every other clip
+    // (pattern or audio) on that track? (Audio clips start on any tick: the playlist's snap setting decides how coarse
+    // the positions you can drag them to are.) `ignoreIndex` is the audio clip being moved/resized (or -1).
     bool canPlaceAudio (const AudioClip& c, int ignoreIndex = -1) const
     {
         if (c.data == nullptr || c.track < 0 || c.track >= kPlaylistTracks)
             return false;
-        if (c.startTick < 0 || c.lengthTicks < 1 || c.endTick() > timelineTicks() || c.startTick % kTicksPerBeat != 0)
+        if (c.startTick < 0 || c.lengthTicks < 1 || c.endTick() > timelineTicks() || ! std::isfinite (c.offsetSeconds) || c.offsetSeconds < 0.0)
             return false;
 
         for (int i = 0; i < static_cast<int> (audioClips.size()); ++i)
@@ -124,15 +127,19 @@ struct Arrangement
         return best;
     }
 
-    // First beat at or after `fromTick` on `track` where an audio clip of `lengthTicks` fits, or -1.
+    // `fromTick` itself if an audio clip of `lengthTicks` fits there on `track`, otherwise the first beat after it
+    // where one does; -1 if there is no such place.
     int findFreeAudioStart (int track, int fromTick, int lengthTicks) const
     {
         AudioClip probe;
         probe.data = std::make_shared<SampleData>();
         probe.track = track;
         probe.lengthTicks = lengthTicks;
-        const int first = (std::max (0, fromTick) / kTicksPerBeat) * kTicksPerBeat;
-        for (int t = first; t + lengthTicks <= timelineTicks(); t += kTicksPerBeat)
+        const int from = std::max (0, fromTick);
+        probe.startTick = from;
+        if (from + lengthTicks <= timelineTicks() && canPlaceAudio (probe))
+            return from;
+        for (int t = (from / kTicksPerBeat + 1) * kTicksPerBeat; t + lengthTicks <= timelineTicks(); t += kTicksPerBeat)
         {
             probe.startTick = t;
             if (canPlaceAudio (probe))
@@ -192,6 +199,33 @@ struct Arrangement
     {
         for (auto& p : patterns)
             p.notes.resize (numChannels);
+    }
+
+    // "Pattern 3": the lowest number that no pattern uses yet, so names stay tidy after patterns were deleted.
+    std::string newPatternName() const
+    {
+        for (int n = 1; n <= kMaxPatterns + 1; ++n)
+        {
+            const auto name = "Pattern " + std::to_string (n);
+            if (std::none_of (patterns.begin(), patterns.end(), [&name] (const Pattern& p) { return p.name == name; }))
+                return name;
+        }
+        return "Pattern";
+    }
+
+    // Deletes a pattern together with the playlist clips that play it; later patterns move up one place (clips
+    // follow). The last pattern cannot be deleted. Returns false (and changes nothing) for a bad index or the last pattern.
+    bool removePattern (int index)
+    {
+        if (index < 0 || index >= static_cast<int> (patterns.size()) || patterns.size() <= 1)
+            return false;
+
+        patterns.erase (patterns.begin() + index);
+        clips.erase (std::remove_if (clips.begin(), clips.end(), [index] (const Clip& c) { return c.pattern == index; }), clips.end());
+        for (auto& c : clips)
+            if (c.pattern > index)
+                --c.pattern;
+        return true;
     }
 
     // Remove clips that refer to a pattern that no longer exists.
@@ -267,6 +301,7 @@ inline Project compileSong (const std::vector<Channel>& channelSettings, const A
         e.endTick = a.endTick();
         e.mixerTrack = a.track; // playlist track n plays through mixer track n
         e.gain = a.gain;
+        e.offsetSeconds = a.offsetSeconds;
         events.push_back (std::move (e));
     }
     return Project::make (std::move (channels), units * arrangement.patternTicks, std::move (tracks), masterSlots,

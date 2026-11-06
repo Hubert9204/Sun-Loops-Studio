@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(SunLoopsStudio VERSION 0.8.0 LANGUAGES C CXX)
+project(SunLoopsStudio VERSION 0.9.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -22,11 +22,22 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(JUCE)
 
+# Sounds built into the program: the Cyber-Hub theme and the start-up sound (used unchanged, see resources/sounds/README.md).
+file(GLOB SLS_SOUND_FILES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/resources/sounds/cyber-hub/*.oga"
+    "${CMAKE_CURRENT_SOURCE_DIR}/resources/sounds/intro.wav")
+juce_add_binary_data(SunLoopsSounds
+    NAMESPACE SunLoopsSoundData
+    HEADER_NAME SunLoopsSoundData.h
+    SOURCES ${SLS_SOUND_FILES})
+set_target_properties(SunLoopsSounds PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 # Code shared by the app and the tests (no GUI dependencies).
 set(SLS_CORE_SOURCES
     src/audio/Player.cpp
     src/audio/Effects.cpp
     src/audio/BuiltinSamples.cpp
+    src/audio/CyberHub.cpp
     src/audio/OfflineRenderer.cpp
     src/audio/AudioExport.cpp
     src/audio/AudioImport.cpp
@@ -65,6 +76,7 @@ target_sources(SunLoopsStudio PRIVATE
     src/ui/ChannelStrip.cpp
     src/ui/PanelWindow.cpp
     src/ui/MixerPanel.cpp
+    src/ui/PlaylistTimeline.cpp
     src/ui/PlaylistView.cpp
     src/ui/MainComponent.cpp
     ${SLS_CORE_SOURCES})
@@ -77,6 +89,7 @@ target_compile_definitions(SunLoopsStudio PRIVATE
     JUCE_APPLICATION_VERSION_STRING="${PROJECT_VERSION}")
 
 target_link_libraries(SunLoopsStudio PRIVATE
+    SunLoopsSounds
     juce::juce_audio_utils
     juce::juce_audio_processors
     juce::juce_gui_extra
@@ -112,6 +125,7 @@ target_include_directories(SunLoopsStudioTests PRIVATE src)
 target_compile_definitions(SunLoopsStudioTests PRIVATE ${SLS_COMMON_DEFINITIONS})
 
 target_link_libraries(SunLoopsStudioTests PRIVATE
+    SunLoopsSounds
     juce::juce_audio_formats
     juce::juce_audio_processors
     juce::juce_recommended_config_flags

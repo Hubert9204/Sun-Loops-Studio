@@ -2,6 +2,45 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.9.0 - 2026-11-06
+
+### Added
+- **Recording MIDI notes into the piano roll.** A **Rec notes** button (right-click: quantize to 1/4, 1/8, 1/16 - the
+  default - 1/32 or off). With it on, **Play** and play a MIDI keyboard: the notes go to the selected channel, in the
+  current pattern (Pattern or Song mode), at the song position you heard them (the output latency is taken off), with
+  their velocity, and can be edited in the piano roll straight away. A note held past the end of the pattern is split
+  across the loop; notes still held when you stop are closed. Recording only runs while the song plays.
+- **Record into an instrument.** *Record > The recording becomes > A new sampler channel*: the audio take of a
+  microphone or guitar becomes the sample of a **new sampler channel** (play it from a MIDI keyboard or draw notes in
+  the piano roll to make patterns of it) instead of a playlist clip. If all 8 channels are in use the take goes to the
+  playlist and the status line says so. Pitch detection (guitar or voice turned into notes) is **not** implemented.
+- **Pattern buttons in the Playlist:** **New**, **Rename** and **Delete** next to the pattern box (the pattern list still
+  grows upwards automatically: Pattern 3, 4...). Delete removes the pattern's notes and every clip that plays it; the
+  last pattern cannot be deleted. Names are trimmed and at most 40 characters.
+- **Audio editing tools in the Playlist:** **Select, Split, Cut, Erase, Zoom** (keys 1-5), a **Grid** box (bar down to a
+  single tick; Alt ignores it), **Undo / Redo** (Ctrl+Z / Ctrl+Y), copy / cut / paste / duplicate (Ctrl+C / X / V / D),
+  trimming an audio clip from either edge (the sound keeps its place), a right-click menu (*Split here, Duplicate, Copy, Delete*, and
+  *Position, length and gain...* for audio) with a **properties** dialog for exact values. Split and Cut also work on pattern clips (on whole
+  patterns). Audio clips can now start on any tick, not only on a beat.
+- **Precise metrics:** a ruler with minutes:seconds.milliseconds and bar numbers that adapt to the zoom, a readout of the
+  time and bar:beat:tick under the mouse and of the selected clip (start, length, end, file length and sample rate, offset into
+  the file in seconds and samples, gain), zoom from the
+  toolbar, Ctrl+wheel or a dragged range, **Fit**, and a horizontal scroll bar.
+- **Cyber-Hub sounds** built into the program (30 system sounds by Hubert, unchanged) in **Browser > Samples >
+  Cyber-Hub** and a **Cyber-Hub Kit** under Drum Kits; see [docs/cyber-hub.md](docs/cyber-hub.md) for the listening
+  analysis and the licence note.
+- **New demo project** made of Cyber-Hub sounds (112 BPM, Cyber-Hub drums, Desktop login / logout as audio clips).
+- **Start-up sound:** `intro.wav` plays once when the program opens; switch off in *File > Play the start-up sound*.
+
+### Changed
+- Audio clips are no longer forced onto the beat grid and are saved with an `offsetSeconds` (older files open as before).
+- The Playlist is now `PlaylistView` (toolbar) around `PlaylistTimeline`; the minimum Playlist size and window width grew.
+- A clip made by Split or Cut keeps the audio's position in **seconds** computed at the tempo of the edit: changing the BPM
+  afterwards moves the cut points relative to the beat (the sound itself plays at its original speed, as before).
+
+### Not done
+- Turning the pitch of a guitar or voice into MIDI notes; real audio and MIDI hardware were not available to test.
+
 ## 0.8.0 - 2026-11-06
 
 ### Added

@@ -9,9 +9,12 @@
 #include "audio/InputRecorder.h"
 #include "audio/LiveNotes.h"
 #include "audio/MidiNotes.h"
+#include "audio/NoteRecorder.h"
+#include "audio/OneShot.h"
 #include "audio/Player.h"
 #include "audio/Project.h"
 #include "audio/SnapshotExchange.h"
+#include "audio/SpscQueue.h"
 
 namespace sls
 {
@@ -55,6 +58,11 @@ public:
     // Feed a MIDI message as if it had come from a keyboard (also used by the tests).
     void handleMidi (const juce::MidiMessage& message);
 
+    // Recording notes: while this is on and the song is playing, every note that a MIDI keyboard plays is also stamped
+    // with the song position and queued for popMidiTake(), which the message thread empties (see NoteRecorder).
+    void setNoteRecording (bool on) noexcept { noteRecording.store (on, std::memory_order_relaxed); }
+    bool popMidiTake (MidiTake& take) noexcept { return midiTakes.pop (take); } // message thread only
+
     // Audio input. The input is only opened when the user chooses one in the Audio dialog or presses Record.
     int getNumActiveInputChannels() const;
     // Switches on the device's first input channels (up to two) if none is on. Returns an error message, empty on success.
@@ -70,6 +78,12 @@ public:
     void setInputMonitoring (bool on) noexcept { monitorInput.store (on, std::memory_order_relaxed); }
     // Loudest input sample since the last call (0 without input).
     float consumeInputPeak() noexcept { return inputPeak.exchange (0.0f, std::memory_order_relaxed); }
+
+    // The start-up sound: a sample that is mixed straight into the output (after the master volume, so it is always as
+    // loud as the file), whatever the transport is doing. setStartupSound must be called before initialise();
+    // playStartupSound can be called from any thread, any number of times (it starts the sound over).
+    void setStartupSound (std::shared_ptr<const SampleData> sound) noexcept { startup.setSound (std::move (sound)); }
+    void playStartupSound() noexcept { startupTrigger.store (true, std::memory_order_release); }
 
     // Any thread.
     void setPlaying (bool shouldPlay) noexcept { playing.store (shouldPlay, std::memory_order_relaxed); }
@@ -170,6 +184,11 @@ private:
     juce::StringArray knownMidiInputs;
     InputRecorder recorder;
     bool captureStarted = false; // audio thread only: the recorder is armed and the song was rewound for it
+    OneShot startup;                                // set before the device starts; played by the audio thread only
+    std::atomic<bool> startupTrigger { false };
+    SpscQueue<MidiTake, 256> midiTakes; // audio thread -> message thread
+    std::atomic<bool> noteRecording { false };
+    std::atomic<double> outputLatencySamples { 0.0 };
     std::atomic<int> midiTarget { 0 };
     std::atomic<bool> midiActivity { false };
     std::atomic<bool> monitorInput { false };

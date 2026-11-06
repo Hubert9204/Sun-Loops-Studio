@@ -103,6 +103,8 @@ rinominare un canale) la tastiera è del campo.
 
 ## Browser
 
+*(Novità della 0.9.0: **Samples > Cyber-Hub** e **Drum Kits > Cyber-Hub Kit** contengono i suoni di sistema incorporati di Hubert, e all'apertura il programma suona un suono di avvio: si disattiva in **File > Play the start-up sound**. Vedi [cyber-hub.md](cyber-hub.md), in inglese.)*
+
 La barra laterale a sinistra elenca i tuoi suoni come un albero. Clic sulla freccia di una cartella per aprirla.
 
 | Cartella | Contenuto |
@@ -197,8 +199,12 @@ fine del pattern, quale viene prima. Quando apri un canale la vista scorre fino 
 
 Un **pattern** contiene le note di tutti i canali. Il menu dei pattern nella barra sceglie il pattern corrente: il
 Channel Rack e il Piano Roll mostrano e modificano quello. Il pulsante **+** accanto offre **New empty pattern** e
-**Clone current pattern**. Il progetto dimostrativo parte con "Pattern 1" (il groove completo) e "Drums" (solo la
-batteria).
+**Clone current pattern**. I nuovi pattern prendono da soli il nome successivo (Pattern 3, Pattern 4, ...). Il progetto dimostrativo parte con "Pattern 1" (il groove completo) e "Drums" (solo la
+batteria), suonati con i suoni Cyber-Hub (vedi [cyber-hub.md](cyber-hub.md), in inglese).
+
+Il **menu dei pattern** in cima alla Playlist ha tre pulsanti: **New** (vuoto o copia, come il **+**), **Rename** (un nome di
+al massimo 40 caratteri) e **Delete**. Delete elimina il pattern selezionato, le sue note e **tutte le clip della playlist che lo
+suonano**; l'ultimo pattern rimasto non si può eliminare. Scegliere un pattern in quel menu lo apre anche nel Rack e nel Piano Roll.
 
 Le impostazioni del canale (volume, pan, mute, solo, pitch, swing, strumento, sample, traccia del mixer) appartengono
 al canale, non al pattern: sono le stesse in ogni pattern. Le tracce del mixer e i loro effetti non appartengono né
@@ -212,13 +218,42 @@ segna la fine del brano: in modalità Song la riproduzione ricomincia da lì.
 
 | Azione | Come |
 | --- | --- |
-| Piazzare una clip | Clic su una cella vuota. La clip contiene il pattern scelto nel menu ed è lunga un pattern. Trascina subito a destra per allungarla. |
+| Piazzare una clip (strumento Select) | Clic su una cella vuota. La clip contiene il pattern scelto nel menu ed è lunga un pattern. Trascina subito a destra per allungarla. |
 | Spostare una clip | Trascinala (si aggancia ai confini dei pattern e può cambiare traccia). |
 | Ripetere / accorciare | Trascina il bordo destro della clip: il pattern si ripete una volta per ogni lunghezza di pattern. |
-| Eliminare | Tasto destro sulla clip. |
+| Eliminare | Tasto destro sulla clip > Delete, oppure selezionala e premi Canc (o usa lo strumento Erase). |
 | Selezionare il suo pattern | Doppio clic sulla clip. |
 | Scorrere nel tempo | Rotella del mouse. |
 | Zoom | Ctrl + rotella. |
+
+### Strumenti, griglia, zoom e annulla
+
+La barra sotto il menu dei pattern ha cinque strumenti (tasti **1** - **5** con il mouse sopra la linea del tempo):
+
+| Strumento | Cosa fa |
+| --- | --- |
+| **Select** (1) | Lo strumento normale: clic su una clip per selezionarla, trascina per spostarla, trascina il **bordo sinistro o destro** per accorciarla o allungarla (una clip audio mantiene il suono al suo posto: se ne sente solo di più o di meno), tasto destro per un menu (*Split here, Duplicate, Copy, Delete*, più *Position, length and gain...* su una clip audio oppure *Open this pattern* su una clip di pattern), doppio clic su una clip di pattern per aprirla. |
+| **Split** (2) | Clic su una clip per tagliarla in due in quel punto (agganciato alla griglia). Il tasto **S** divide la clip selezionata dove si trova il mouse. |
+| **Cut** (3) | Trascina su una clip per togliere quel tratto: il suono dopo il vuoto resta dov'era. |
+| **Erase** (4) | Clic su una clip per eliminarla, o trascina su più clip. |
+| **Zoom** (5) | Il clic ingrandisce, il tasto destro o Maiusc+clic rimpicciolisce, trascinando un tratto si ingrandisce su quel tratto. |
+
+**Grid** (il menu accanto agli strumenti) è la griglia a cui si agganciano le clip audio quando vengono spostate, ritagliate, divise
+o tagliate: da una battuta fino al singolo tick (1 battito = 480 tick); tieni premuto **Alt** mentre trascini per ignorarla. Le clip
+di pattern stanno sempre su pattern interi. **-**, **+** e **Fit** rimpiccioliscono, ingrandiscono e mostrano tutto il brano;
+**Ctrl+rotella** ingrandisce intorno al mouse, la rotella e la barra di scorrimento muovono nel tempo. Il righello mostra
+**minuti:secondi.millisecondi** e i numeri di battuta (solo quanti ne stanno allo zoom attuale); le due righe sotto la linea del
+tempo indicano, per la posizione sotto il mouse, *tempo - battuta:battito:tick* e, per la clip selezionata, nome, inizio, durata e fine
+(in battuta:battito:tick e in tempo), per una clip audio anche durata e frequenza di campionamento del file, il punto del file da cui
+parte la clip (in secondi e in campioni) e il guadagno. Su una clip audio, *Position, length and gain...* (tasto destro) permette di
+scrivere valori esatti.
+
+**Annulla / Ripristina** (pulsanti, **Ctrl+Z** e **Ctrl+Y**) coprono tutto ciò che si fa alle clip nella Playlist. **Ctrl+C / X / V**
+copiano, tagliano e incollano la clip selezionata dove sta il mouse, **Ctrl+D** la duplica, **Canc** la elimina. La cronologia viene
+dimenticata quando qualcosa fuori dalla Playlist cambia la disposizione (apertura di un progetto, una nuova registrazione,
+l'eliminazione di un pattern). Split e Cut funzionano anche sulle clip di pattern, ma solo su lunghezze intere di pattern. Una clip
+ottenuta dividendo una clip audio ricorda dove inizia nel suono **in secondi, al BPM a cui è stata tagliata**: se in seguito cambi il
+BPM il suono continua a suonare alla velocità originale, quindi i punti di taglio non cadono più sul battito su cui erano stati fatti.
 
 Le clip non possono sovrapporsi sulla stessa traccia: uno spostamento o un ridimensionamento che si sovrapporrebbe
 semplicemente non viene applicato. Le clip su tracce diverse suonano insieme. Un clic sul **nome** di una traccia sceglie la
@@ -231,9 +266,9 @@ Le clip audio sono registrazioni e file audio messi nella playlist. Sono disegna
 | Azione | Come |
 | --- | --- |
 | Aggiungere un file audio o video | Trascinalo dal file manager sulla Playlist (cade sulla traccia e sul battito sotto il mouse, che viene evidenziato), oppure usa *File > Import audio or video into the playlist...*. Più file vanno su tracce consecutive. |
-| Spostare | Trascina la clip (si aggancia al battito e può cambiare traccia). |
-| Accorciare / allungare | Trascina il bordo destro: almeno un battito, al massimo la durata dell'audio. |
-| Eliminare | Tasto destro sulla clip. |
+| Spostare | Trascina la clip (si aggancia alla griglia scelta in **Grid** e può cambiare traccia). |
+| Accorciare / allungare | Trascina il bordo destro o sinistro: al massimo la durata dell'audio. |
+| Eliminare | Tasto destro sulla clip > Delete, oppure selezionala e premi Canc. |
 
 File supportati: `.wav`, `.aiff` / `.aif`, `.flac`, `.ogg`, `.oga` e `.mp3` sono letti dal programma stesso. `.aac` /
 `.m4a` e la **traccia audio di un video** (`.mp4`, `.m4v`, `.mkv`, `.mov`, `.avi`, `.webm`, `.wmv`, `.flv`, `.mpg`, `.mpeg`,
@@ -275,8 +310,27 @@ punch-in né conteggio iniziale (accendi il **Metronome** per suonare a tempo).
 **Audio...** elenca anche gli **ingressi MIDI**. Spunta le tastiere che vuoi: suonano il **canale selezionato** del Channel
 Rack (clicca un canale per selezionarlo) con la dinamica dei tasti, sia che il brano suoni o no. Una tastiera collegata mentre
 il programma è in esecuzione viene attivata da sola; la tua scelta viene ricordata. La riga di stato nomina gli ingressi MIDI
-attivi e dice quale canale suona. Si usano solo le note (niente pitch bend, pedali o manopole) e il MIDI serve a suonare: non
-registra nel piano roll.
+attivi e dice quale canale suona. Si usano solo le note (niente pitch bend, pedali o manopole) e il MIDI serve a suonare: le note si
+possono registrare nel piano roll con **Rec notes** (sotto).
+
+### Registrare note nel piano roll (Rec notes)
+
+**Rec notes** (barra) scrive nel pattern ciò che suona una tastiera MIDI, così puoi costruire pattern suonando:
+
+1. Seleziona il canale in cui registrare (clic nel Channel Rack) e controlla che la tastiera sia spuntata in **Audio...**.
+2. Clicca **Rec notes** (diventa rosso) e premi **Play**. La registrazione funziona solo mentre il brano suona, in modalità Pattern
+   (il pattern corrente va in loop) o Song.
+3. Suona. Ogni nota va nel **pattern corrente** del **canale selezionato**, nel punto in cui l'hai sentita (la latenza d'uscita viene
+   sottratta), con la dinamica del tasto. Una nota tenuta oltre la fine del pattern viene divisa e continua dall'inizio; una nota
+   ancora tenuta quando premi Stop finisce lì. Le note compaiono subito nel Piano Roll e si modificano come le altre.
+
+Tasto destro su **Rec notes** per scegliere la **quantizzazione** (1/4, 1/8, **1/16** di default, 1/32 o nessuna). Le note già presenti
+nello stesso punto e con la stessa altezza non vengono duplicate, quindi registrando più volte sul loop si aggiungono solo note nuove.
+L'altezza di una chitarra o di una voce **non** viene trasformata in note: per l'audio usa *Record* (sopra).
+
+La freccia accanto a **Record** ha *The recording becomes*: **A clip on a playlist track** (predefinito) oppure **A new sampler
+channel**. Con la seconda, una registrazione da microfono o chitarra diventa il sample di un nuovo canale, pronto da suonare con una
+tastiera MIDI o da sequenziare nel piano roll (senza canali liberi viene messa nella playlist).
 
 ## Modalità Pattern e Song
 
@@ -414,7 +468,6 @@ occupato più tardi, un brano più pesante o un mixer pieno di effetti possono r
 - Un pattern dura sempre due battute, 4/4, griglia di sedicesimi.
 - I sample sono mono o stereo, al massimo 30 secondi, suonati una volta sola (niente loop né editing
   dell'inviluppo). Clip audio: fino a 5 minuti per file, 64 clip.
-- Non ancora disponibili: suonare le note con la tastiera del computer, annulla, incorporare i sample nel progetto,
-  salvataggio automatico e recupero dopo un crash, plugin VST come strumenti o effetti, send, automazione, registrare
-  note MIDI, punch-in e conteggio iniziale per la registrazione, tagliare o dividere le clip audio, eliminare o
-  rinominare i pattern, spostare il cursore con un clic sul righello. Vedi [roadmap.md](roadmap.md) (in inglese).
+- Non ancora disponibili: suonare le note con la tastiera del computer, annulla fuori dalla Playlist, incorporare i sample nel progetto,
+  salvataggio automatico e recupero dopo un crash, plugin VST come strumenti o effetti, send, automazione, trasformare l'altezza di
+  chitarra o voce in note, punch-in e conteggio iniziale per la registrazione, dissolvenze ed effetti per clip, spostare il cursore con un clic sul righello. Vedi [roadmap.md](roadmap.md) (in inglese).

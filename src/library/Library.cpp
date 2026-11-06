@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "audio/BuiltinSamples.h"
+#include "audio/CyberHub.h"
 #include "library/ChannelPreset.h"
 
 namespace sls
@@ -50,6 +51,40 @@ BrowserNode builtinSamples (const char* title)
     return f;
 }
 
+// The Cyber-Hub theme: its sounds filed by what they are good for, and the start-up sound.
+BrowserNode cyberHubFolder()
+{
+    auto root = folder ("Cyber-Hub");
+    auto hits = folder ("Hits and sub");
+    auto tones = folder ("Tones");
+    auto longs = folder ("Long and ambient");
+    for (const auto& s : cyberHubSounds())
+    {
+        auto& target = s.role == CyberRole::Hit ? hits : (s.role == CyberRole::Tone ? tones : longs);
+        target.children.push_back (leaf (s.title, NodeKind::BuiltinSample, s.id));
+    }
+    root.children.push_back (std::move (hits));
+    root.children.push_back (std::move (tones));
+    root.children.push_back (std::move (longs));
+    root.children.push_back (leaf ("Sun Loops intro", NodeKind::BuiltinSample, kStartupSampleId));
+    root.children.push_back (leaf (kCyberHubCredit, NodeKind::Note, {}));
+    return root;
+}
+
+BrowserNode cyberHubKitFolder()
+{
+    auto kit = folder ("Cyber-Hub Kit");
+    for (const auto& piece : cyberHubKit())
+    {
+        std::string title = piece.id;
+        for (const auto& s : cyberHubSounds())
+            if (s.id == piece.id)
+                title = s.title;
+        kit.children.push_back (leaf (std::string (piece.label) + "  (" + title + ")", NodeKind::BuiltinSample, piece.id));
+    }
+    return kit;
+}
+
 BrowserNode userContent (const char* title, const juce::File& directory, NodeKind kind, const juce::String& extension,
                          int& budget)
 {
@@ -85,7 +120,7 @@ bool LibraryPaths::ensureExists() const
 
 bool isAudioFileName (const juce::String& fileName)
 {
-    for (const char* ext : { ".wav", ".flac", ".ogg", ".aif", ".aiff" })
+    for (const char* ext : { ".wav", ".flac", ".ogg", ".oga", ".aif", ".aiff", ".mp3", ".aac", ".m4a" })
         if (fileName.endsWithIgnoreCase (ext))
             return true;
     return false;
@@ -150,6 +185,8 @@ BrowserNode buildBrowserTree (const LibraryPaths& paths, const std::vector<Plugi
     {
         auto samples = folder ("Samples");
         samples.children.push_back (builtinSamples ("Built-in"));
+        if (! cyberHubSounds().empty())
+            samples.children.push_back (cyberHubFolder());
         auto user = userContent ("My samples", paths.samples, NodeKind::AudioFile, {}, budget);
         if (user.children.empty())
             user.children.push_back (leaf ("Put audio files in " + paths.samples.getFullPathName().toStdString(), NodeKind::Note, {}));
@@ -161,6 +198,8 @@ BrowserNode buildBrowserTree (const LibraryPaths& paths, const std::vector<Plugi
     {
         auto kits = folder ("Drum Kits");
         kits.children.push_back (builtinSamples ("Sun Loops Basic Kit"));
+        if (! cyberHubSounds().empty())
+            kits.children.push_back (cyberHubKitFolder());
         auto user = scanDirectory (paths.drumKits, NodeKind::AudioFile, {}, kMaxBrowserDepth, budget);
         for (auto& child : user.children)
             kits.children.push_back (std::move (child));

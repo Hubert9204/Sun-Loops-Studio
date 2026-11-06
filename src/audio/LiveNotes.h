@@ -14,6 +14,7 @@ struct LiveNoteEvent
     std::uint8_t channel = 0;
     std::uint8_t pitch = 60;
     float velocity = 0.8f;
+    bool fromMidi = false; // came from a MIDI keyboard (and so can be recorded into the piano roll), not from the mouse
 };
 
 // Hand-over of live note events from the UI thread (one producer) to the audio thread (one consumer).
