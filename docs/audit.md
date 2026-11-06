@@ -27,6 +27,12 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.20.0
+clang-tidy (the audit's check set) on `PianoRoll.cpp` reports four `bugprone-swapped-arguments` warnings, all on `drawHorizontalLine` /
+`drawVerticalLine` calls that were there before 0.20.0: the order is JUCE's `(int position, float start, float end)` and the casts are
+explicit, so they are false positives and were left alone. The commit message of 0.20.0 says "no findings"; that is wrong, this note
+corrects it.
+
 ## After 0.19.0
 An FM voice computes four `std::sin` per sample (32 voices: about 6 million per second at 48 kHz) and nothing allocates (tested with eight
 voices at full matrix depth for 2000 blocks). clang-tidy (the audit's check set) was run on the changed files; see the commit message.
