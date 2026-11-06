@@ -7,6 +7,7 @@
 #include <juce_audio_devices/juce_audio_devices.h>
 
 #include "audio/InputRecorder.h"
+#include "audio/Loudness.h"
 #include "audio/LiveNotes.h"
 #include "audio/MidiNotes.h"
 #include "audio/NoteRecorder.h"
@@ -14,6 +15,7 @@
 #include "audio/Player.h"
 #include "audio/Project.h"
 #include "audio/SnapshotExchange.h"
+#include "audio/Spectrum.h"
 #include "audio/SpscQueue.h"
 
 namespace sls
@@ -122,6 +124,12 @@ public:
 
     // Mixer track levels (after effects and fader, scaled by the master volume): peak since the last call,
     // and the latest RMS.
+    // What the program sends to the speakers (after the master volume): loudness and peaks, and the latest samples for the
+    // spectrum analyser and the goniometer. Readable from any thread; resetLoudness() starts a new integrated measurement.
+    const LoudnessMeter& getLoudness() const noexcept { return loudness; }
+    void resetLoudness() noexcept { loudness.requestReset(); }
+    const StereoRing& getOutputRing() const noexcept { return outputRing; }
+
     float getMasterRms() const noexcept { return masterRms.load (std::memory_order_relaxed); }
     float consumeTrackPeak (int track) noexcept
     {
@@ -206,6 +214,8 @@ private:
     std::atomic<float> gain { 0.8f };
     std::atomic<float> peak { 0.0f };
     std::atomic<float> masterRms { 0.0f };
+    LoudnessMeter loudness;
+    StereoRing outputRing;
     std::atomic<float> peakLoad { 0.0f };
     std::atomic<float> loadTest { 0.0f };
     std::atomic<bool> metronomeOn { false };

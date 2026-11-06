@@ -14,6 +14,7 @@
 #include "audio/Project.h"
 #include "ui/AudioMeter.h"
 #include "ui/AutomationEditor.h"
+#include "ui/MetersView.h"
 #include "library/ChannelPreset.h"
 #include "library/Library.h"
 #include "library/ProjectFile.h"
@@ -174,6 +175,7 @@ private:
     void createAutomationFor (const AutomationTarget& target); // right click on a control
     void openAutomationEditor (int clipIndex);
     void closeAutomationEditor();
+    void toggleMeters();
     std::array<PanelWindow*, 4> allPanels();
 
     // Panels
@@ -257,6 +259,8 @@ private:
     juce::TextButton pianoToggle { "Piano F7" };
     juce::TextButton mixerToggle { "Mixer F9" };
     juce::TextButton resetButton { "Reset" };
+    juce::TextButton metersButton { "Meters" };
+    std::unique_ptr<MetersWindow> metersWindow;
     RightClickButton metronomeButton { "Metronome" };
     RightClickButton recordButton { "Record" };
     RightClickButton noteRecordButton { "Rec notes" };

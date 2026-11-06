@@ -343,6 +343,8 @@ MainComponent::MainComponent()
     playlistToggle.onClick = [this] { togglePanel (playlistPanel); };
     pianoToggle.onClick = [this] { togglePanel (pianoPanel); };
     mixerToggle.onClick = [this] { togglePanel (mixerPanelWindow); };
+    metersButton.onClick = [this] { toggleMeters(); };
+    metersButton.setTooltip ("Loudness (LUFS), true peak, spectrum and goniometer of the output");
     resetButton.onClick = [this] { resetLayout(); };
     resetButton.setTooltip ("Restore the default panel layout");
 
@@ -356,7 +358,7 @@ MainComponent::MainComponent()
 
     // Space and F5/F6/F7/F9 are handled by this component, so these controls must not steal keyboard focus.
     for (juce::Button* b : std::initializer_list<juce::Button*> { &fileButton, &playButton, &clearButton, &modeButton, &patternAddButton, &deviceButton, &metronomeButton, &recordButton, &recordMenuButton, &noteRecordButton,
-                     &browserToggle, &browserTab, &rackToggle, &playlistToggle, &pianoToggle, &mixerToggle, &resetButton })
+                     &browserToggle, &browserTab, &rackToggle, &playlistToggle, &pianoToggle, &mixerToggle, &resetButton, &metersButton })
         b->setMouseClickGrabsKeyboardFocus (false);
     patternBox.setMouseClickGrabsKeyboardFocus (false);
     patternBox.setWantsKeyboardFocus (false);
@@ -364,7 +366,7 @@ MainComponent::MainComponent()
     for (auto* c : std::initializer_list<juce::Component*> { &fileButton, &playButton, &modeButton, &patternBox, &patternAddButton,
                                                               &clearButton, &deviceButton, &metronomeButton, &recordButton, &recordMenuButton, &noteRecordButton,
                                                               &browserToggle, &rackToggle, &playlistToggle, &pianoToggle,
-                                                              &mixerToggle, &resetButton, &bpmSlider, &volumeSlider,
+                                                              &mixerToggle, &resetButton, &metersButton, &bpmSlider, &volumeSlider,
                                                               &bpmLabel, &volumeLabel, &deviceLabel, &statusLabel, &meter,
                                                               &browser, &browserTab, &workspace })
         addAndMakeVisible (c);
@@ -432,6 +434,7 @@ MainComponent::~MainComponent()
 {
     stopTimer();
     automationWindow.reset();
+    metersWindow.reset();
     engine.getDeviceManager().removeChangeListener (this);
     audioDialog.deleteAndZero(); // it refers to the engine
     assignDialog.deleteAndZero();
@@ -492,6 +495,8 @@ void MainComponent::resized()
     resetButton.setBounds (views.removeFromLeft (60));
     views.removeFromLeft (16);
     clearButton.setBounds (views.removeFromLeft (90));
+    views.removeFromLeft (4);
+    metersButton.setBounds (views.removeFromLeft (80));
 
     area.removeFromTop (6);
     auto info = area.removeFromTop (20);
@@ -993,4 +998,23 @@ bool MainComponent::loadSampleFile (int channelIndex, const juce::File& file)
     return true;
 }
 
+} // namespace sls
+
+namespace sls
+{
+void MainComponent::toggleMeters()
+{
+    if (metersWindow != nullptr)
+    {
+        metersWindow.reset();
+        return;
+    }
+    metersWindow = std::make_unique<MetersWindow> (engine);
+    metersWindow->onClose = [safe = juce::Component::SafePointer<MainComponent> (this)]
+    {
+        juce::MessageManager::callAsync ([safe] { if (safe != nullptr) safe->metersWindow.reset(); });
+    };
+    metersWindow->setVisible (true);
+    metersWindow->toFront (true);
+}
 } // namespace sls

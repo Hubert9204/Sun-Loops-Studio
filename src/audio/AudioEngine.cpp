@@ -162,6 +162,7 @@ juce::String AudioEngine::describeDevice() const
 void AudioEngine::audioDeviceAboutToStart (juce::AudioIODevice* device)
 {
     sampleRateHz = device != nullptr ? device->getCurrentSampleRate() : 48000.0;
+    loudness.prepare (sampleRateHz);
     outputLatencySamples.store (device != nullptr ? static_cast<double> (std::max (0, device->getOutputLatencyInSamples())) : 0.0,
                                 std::memory_order_relaxed);
     masterMeanSquare = 0.0f;
@@ -260,6 +261,13 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* in, int 
     if (startupTrigger.exchange (false, std::memory_order_acquire))
         startup.start();
     startup.mixInto (out, numOut, numSamples, sampleRateHz);
+
+    if (numOut > 0 && out[0] != nullptr && numSamples > 0)
+    {
+        const float* right = numOut > 1 && out[1] != nullptr ? out[1] : out[0];
+        loudness.process (out[0], right, numSamples);
+        outputRing.push (out[0], right, numSamples);
+    }
 
     float localPeak = 0.0f;
     double sumSquares = 0.0;

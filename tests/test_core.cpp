@@ -22,6 +22,8 @@
 #include "audio/TimeFormat.h"
 #include "audio/Effects.h"
 #include "audio/InputRecorder.h"
+#include "audio/Loudness.h"
+#include "audio/Spectrum.h"
 #include "audio/MidiImport.h"
 #include "audio/MidiNotes.h"
 #include "audio/MixerRouting.h"
@@ -1559,6 +1561,186 @@ void testConsole()
         }
         check (player.getAuxPeak (0) > 0.05f && player.getAuxRms (0) > 0.01f && player.getAuxPeak (1) == 0.0f && player.getAuxPeak (7) == 0.0f,
                "aux meters: the bus that receives the send reads a level, the other reads zero");
+    }
+}
+
+// Feeds `seconds` of a stereo sine to the meter (a different amplitude / frequency per call).
+void feedSine (sls::LoudnessMeter& meter, double sr, double hz, double amplitude, double seconds, double phase = 0.0, bool inverted = false)
+{
+    const int total = static_cast<int> (seconds * sr);
+    std::vector<float> l (480), r (480);
+    int n0 = 0;
+    for (int done = 0; done < total; done += 480)
+    {
+        const int n = std::min (480, total - done);
+        for (int i = 0; i < n; ++i)
+        {
+            const double v = amplitude * std::sin (6.283185307179586 * hz * (n0 + i) / sr + phase);
+            l[static_cast<size_t> (i)] = static_cast<float> (v);
+            r[static_cast<size_t> (i)] = static_cast<float> (inverted ? -v : v);
+        }
+        n0 += n;
+        meter.process (l.data(), r.data(), n);
+    }
+}
+
+double dbOf (double amplitude) { return 20.0 * std::log10 (amplitude); }
+
+void testMetering()
+{
+    std::cout << "Loudness, true peak, spectrum, goniometer\n";
+    const double amp23 = std::pow (10.0, -23.0 / 20.0); // a stereo 1 kHz sine at -23 dBFS reads -23.0 LUFS (EBU Tech 3341)
+
+    for (const double sr : { 44100.0, 48000.0, 96000.0 })
+    {
+        sls::LoudnessMeter m;
+        m.prepare (sr);
+        feedSine (m, sr, 1000.0, amp23, 25.0);
+        const std::string name = "EBU reference: -23 dBFS stereo sine reads -23.0 LUFS (momentary, short-term, integrated) at "
+                                 + std::to_string (static_cast<int> (sr)) + " Hz";
+        check (std::abs (m.momentary() + 23.0f) < 0.1f && std::abs (m.shortTerm() + 23.0f) < 0.1f && std::abs (m.integrated() + 23.0f) < 0.1f,
+               name.c_str());
+    }
+    {
+        sls::LoudnessMeter m;
+        m.prepare (48000.0);
+        check (m.momentary() == sls::LoudnessMeter::kSilence && m.integrated() == sls::LoudnessMeter::kSilence, "nothing measured yet: silence");
+        feedSine (m, 48000.0, 1000.0, amp23, 5.0);
+        const float before = m.momentary();
+        feedSine (m, 48000.0, 1000.0, amp23 * std::pow (10.0, 10.0 / 20.0), 1.0);
+        check (std::abs (m.momentary() - before - 10.0f) < 0.1f, "10 dB louder reads 10 LU higher (after 400 ms)");
+        feedSine (m, 48000.0, 1000.0, 0.0, 1.0);
+        check (m.momentary() == sls::LoudnessMeter::kSilence, "digital silence reads below the range after 400 ms");
+    }
+    {
+        // K-weighting: the high shelf lifts 10 kHz by about 4 dB, the high-pass takes away some of 50 Hz.
+        auto reading = [] (double hz)
+        {
+            sls::LoudnessMeter m;
+            m.prepare (48000.0);
+            feedSine (m, 48000.0, hz, 0.1, 3.0);
+            return m.shortTerm();
+        };
+        const float ref = reading (1000.0);
+        check (reading (10000.0) - ref > 3.0f && reading (10000.0) - ref < 4.6f, "K-weighting: 10 kHz reads about 4 dB above 1 kHz");
+        // The analogue prototype of the RLB high-pass (38.1 Hz, Q 0.5) is 1.17 dB down at 100 Hz and 4.0 dB down at 50 Hz;
+        // the 1 kHz reference sits 0.69 dB above flat, so the readings are 1.9 dB and 4.7 dB below it.
+        check (std::abs (reading (100.0) - ref + 1.85f) < 0.25f, "K-weighting: 100 Hz reads about 1.9 dB below 1 kHz");
+        check (std::abs (reading (50.0) - ref + 4.65f) < 0.3f, "K-weighting: 50 Hz reads about 4.7 dB below 1 kHz");
+        check (reading (20.0) - ref < -8.0f, "K-weighting: 20 Hz is strongly attenuated");
+    }
+    {
+        // Gating (Tech 3341): a quiet passage under the relative gate does not pull the integrated value down.
+        sls::LoudnessMeter m;
+        m.prepare (48000.0);
+        feedSine (m, 48000.0, 1000.0, amp23, 20.0);
+        feedSine (m, 48000.0, 1000.0, amp23 * std::pow (10.0, -40.0 / 20.0), 20.0); // -63 LUFS: more than 10 LU below
+        check (std::abs (m.integrated() + 23.0f) < 0.15f, "relative gate: a passage 40 LU lower is ignored in the integrated loudness");
+
+        sls::LoudnessMeter quiet;
+        quiet.prepare (48000.0);
+        feedSine (quiet, 48000.0, 1000.0, amp23 * std::pow (10.0, -55.0 / 20.0), 10.0); // -78 LUFS: under the absolute gate
+        check (quiet.integrated() == sls::LoudnessMeter::kSilence, "absolute gate: nothing above -70 LUFS gives no integrated value");
+
+        sls::LoudnessMeter two;
+        two.prepare (48000.0);
+        feedSine (two, 48000.0, 1000.0, amp23 * std::pow (10.0, 3.0 / 20.0), 20.0); // -20
+        feedSine (two, 48000.0, 1000.0, amp23 * std::pow (10.0, -7.0 / 20.0), 20.0); // -30
+        // the second half is only 10 LU below the first: it counts. The energy mean of -20 and -30 is 10 log10 (0.0055) = -22.6
+        check (std::abs (two.integrated() + 22.6f) < 0.2f, "two passages within the gate are averaged by energy (-20 and -30 LUFS give -22.6)");
+    }
+    {
+        // Loudness range (Tech 3342, case 3 style): 20 s at -20 LUFS then 20 s at -30 LUFS: 10 LU.
+        sls::LoudnessMeter m;
+        m.prepare (48000.0);
+        feedSine (m, 48000.0, 1000.0, std::pow (10.0, -20.0 / 20.0), 20.0);
+        feedSine (m, 48000.0, 1000.0, std::pow (10.0, -30.0 / 20.0), 20.0);
+        check (std::abs (m.range() - 10.0f) < 1.0f, "loudness range of 20 s at -20 LUFS and 20 s at -30 LUFS is 10 LU (+-1)");
+        sls::LoudnessMeter steady;
+        steady.prepare (48000.0);
+        feedSine (steady, 48000.0, 1000.0, amp23, 40.0);
+        check (steady.range() < 0.3f, "a steady tone has a loudness range of zero");
+        m.requestReset();
+        feedSine (m, 48000.0, 1000.0, amp23, 0.1);
+        check (m.integrated() == sls::LoudnessMeter::kSilence && m.range() == 0.0f, "reset starts a new measurement");
+    }
+    {
+        // Peaks: a sine at fs/4 with a 45 degree phase has samples of +-0.707 but a true peak of 1.
+        sls::LoudnessMeter m;
+        m.prepare (48000.0);
+        feedSine (m, 48000.0, 12000.0, 1.0, 0.5, 3.14159265358979323846 / 4.0);
+        check (std::abs (m.samplePeakDb() - dbOf (0.7071)) < 0.1f, "sample peak of the fs/4 sine is -3.0 dB");
+        check (std::abs (m.truePeakDb()) < 0.3f, "true peak of the same signal is 0 dBTP (+-0.3): the converter would reach full scale");
+        sls::LoudnessMeter q;
+        q.prepare (48000.0);
+        feedSine (q, 48000.0, 1000.0, 0.5, 0.5);
+        check (std::abs (q.truePeakDb() - dbOf (0.5)) < 0.1f, "true peak of a slow sine matches its amplitude");
+
+        // A high tone, faded in (a hard start is a click, and a click really does overshoot): the samples miss the crest,
+        // the reconstruction finds it.
+        sls::LoudnessMeter h;
+        h.prepare (48000.0);
+        std::vector<float> wave (480);
+        for (int d = 0; d < 24000; d += 480)
+        {
+            for (int i = 0; i < 480; ++i)
+            {
+                const int k = d + i;
+                wave[static_cast<size_t> (i)] = static_cast<float> (0.5 * std::min (1.0, k / 4800.0) * std::sin (6.283185307179586 * 18000.0 * k / 48000.0 + 0.3));
+            }
+            h.process (wave.data(), wave.data(), 480);
+        }
+        check (h.truePeakDb() - h.samplePeakDb() > 0.25f && std::abs (h.truePeakDb() - dbOf (0.5)) < 0.1f,
+               "an 18 kHz tone: the true peak (-6.0) is higher than the highest sample (-6.4) and matches the real amplitude");
+    }
+    {
+        // Spectrum
+        auto analyser = std::make_unique<sls::SpectrumAnalyser>();
+        std::vector<float> x (sls::SpectrumAnalyser::kFftSize), db (sls::SpectrumAnalyser::kBins);
+        const double sr = 48000.0;
+        const int bin = 256; // exactly on a bin: 3 kHz
+        const double hz = sls::SpectrumAnalyser::binFrequency (bin, sr);
+        for (size_t i = 0; i < x.size(); ++i)
+            x[i] = static_cast<float> (0.5 * std::sin (6.283185307179586 * hz * static_cast<double> (i) / sr));
+        analyser->analyse (x.data(), static_cast<int> (x.size()), db.data());
+        const int peakBin = static_cast<int> (std::max_element (db.begin(), db.end()) - db.begin());
+        check (peakBin == bin && std::abs (db[static_cast<size_t> (bin)] - dbOf (0.5)) < 0.2f, "spectrum: a 0.5 sine peaks at its bin and reads -6.0 dB");
+        check (db[static_cast<size_t> (bin + 40)] < -70.0f && db[static_cast<size_t> (bin - 40)] < -70.0f, "spectrum: far from the tone the floor is low (window leakage)");
+        for (size_t i = 0; i < x.size(); ++i)
+            x[i] = static_cast<float> (0.25 * std::sin (6.283185307179586 * hz * static_cast<double> (i) / sr)
+                                       + 0.25 * std::sin (6.283185307179586 * sls::SpectrumAnalyser::binFrequency (900, sr) * static_cast<double> (i) / sr));
+        analyser->analyse (x.data(), static_cast<int> (x.size()), db.data());
+        check (std::abs (db[256] - dbOf (0.25)) < 0.2f && std::abs (db[900] - dbOf (0.25)) < 0.2f, "spectrum: two tones are measured separately");
+    }
+    {
+        // Goniometer / correlation and the ring buffer that carries the samples to the GUI
+        std::vector<float> a (1000), b (1000), c (1000);
+        for (size_t i = 0; i < a.size(); ++i)
+        {
+            a[i] = static_cast<float> (std::sin (0.05 * static_cast<double> (i)));
+            b[i] = a[i];
+            c[i] = -a[i];
+        }
+        check (std::abs (sls::stereoCorrelation (a.data(), b.data(), 1000) - 1.0f) < 1.0e-5f, "correlation of identical channels is +1");
+        check (std::abs (sls::stereoCorrelation (a.data(), c.data(), 1000) + 1.0f) < 1.0e-5f, "correlation of opposite channels is -1");
+        std::vector<float> quad (1000);
+        for (size_t i = 0; i < quad.size(); ++i)
+            quad[i] = static_cast<float> (std::cos (0.05 * static_cast<double> (i)));
+        check (std::abs (sls::stereoCorrelation (a.data(), quad.data(), 1000)) < 0.1f, "correlation of channels 90 degrees apart is about 0");
+        const std::vector<float> zero (1000, 0.0f);
+        check (sls::stereoCorrelation (zero.data(), zero.data(), 1000) == 0.0f, "correlation of silence is 0");
+
+        auto ring = std::make_unique<sls::StereoRing>();
+        std::vector<float> l (300), r (300), outL (200), outR (200);
+        for (int i = 0; i < 300; ++i) { l[static_cast<size_t> (i)] = static_cast<float> (i); r[static_cast<size_t> (i)] = static_cast<float> (-i); }
+        check (ring->latest (outL.data(), outR.data(), 200) == 0, "ring: nothing written yet");
+        ring->push (l.data(), r.data(), 300);
+        const int got = ring->latest (outL.data(), outR.data(), 200);
+        check (got == 200 && outL[0] == 100.0f && outL[199] == 299.0f && outR[199] == -299.0f, "ring: the latest frames come back oldest first");
+        for (int k = 0; k < 100; ++k)
+            ring->push (l.data(), r.data(), 300); // wraps the buffer many times
+        ring->latest (outL.data(), outR.data(), 200);
+        check (outL[0] == 100.0f && outL[199] == 299.0f, "ring: still right after wrapping");
     }
 }
 
@@ -4313,6 +4495,7 @@ int main()
     testSwing();
     testMixerTracks();
     testConsole();
+    testMetering();
     testEffects();
     testEffectsInPlayer();
     testBrowserModel();
