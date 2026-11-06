@@ -9,8 +9,10 @@
 #include <vector>
 
 #include "audio/Automation.h"
+#include "audio/DrumKit.h"
 #include "audio/Effects.h"
 #include "audio/NoteSequence.h"
+#include "audio/SampleData.h"
 
 namespace sls
 {
@@ -18,20 +20,8 @@ constexpr int kMaxChannels = 8;
 constexpr int kMaxTracks = 8; // mixer tracks; every channel is routed to exactly one of them
 constexpr int kAuxBuses = 2;  // aux buses ("returns"): tracks send to them, they have their own effects and fader
 constexpr int kVcaGroups = 2; // VCA groups: one fader that scales the faders of its member tracks
-constexpr float kMaxSwingShiftTicks = 60.0f; // swing 100 % delays off-beat notes by half a 16th step
 
-// Decoded audio kept in memory. Immutable once shared.
-struct SampleData
-{
-    std::vector<float> left, right;
-    double sampleRate = 44100.0;
-    std::string name;
-    std::string source; // where it came from: an absolute file path, or "builtin:<id>"; used by channel presets
-
-    int numFrames() const noexcept { return static_cast<int> (left.size()); }
-};
-
-enum class Instrument { Synth, Sampler };
+enum class Instrument { Synth, Sampler, Drums };
 
 struct Channel
 {
@@ -39,6 +29,7 @@ struct Channel
     Instrument instrument = Instrument::Synth;
     std::vector<Note> notes;
     std::shared_ptr<const SampleData> sample; // Sampler only. Plays one-shot.
+    std::shared_ptr<const DrumKit> kit;       // Drums only: the 16 pads (see DrumKit.h). Never null for a Drums channel after Project::make().
     int rootPitch = 60;                       // Sampler: pitch at which the sample plays unchanged
     float volume = 0.8f;                      // 0..1.5
     float pan = 0.0f;                         // -1 (left) .. +1 (right)
@@ -82,8 +73,6 @@ struct Console
         return c;
     }
 };
-
-inline float finiteOr (float v, float fallback) noexcept { return std::isfinite (v) ? v : fallback; }
 
 // A recording or imported audio file placed on the song timeline. It plays once from `startTick`, through mixer
 // track `mixerTrack`, and is cut at `endTick` (so a clip that is shorter than its audio trims it).
@@ -145,7 +134,16 @@ struct Project
         for (auto& c : input)
         {
             c.swing = std::clamp (finiteOr (c.swing, 0.0f), 0.0f, 1.0f);
-            applySwing (c.notes, c.swing, p.lengthTicks);
+            if (c.instrument == Instrument::Drums)
+            {
+                c.kit = std::make_shared<const DrumKit> (c.kit != nullptr ? c.kit->sanitised() : DrumKit::empty());
+                applyPadSwing (c.notes, *c.kit, p.lengthTicks); // each pad has its own swing; the channel's is not used
+            }
+            else
+            {
+                c.kit = nullptr;
+                applySwing (c.notes, c.swing, p.lengthTicks);
+            }
             c.notes = Sequence::make (c.notes, p.lengthTicks).notes; // validate + sort
             c.volume = std::clamp (c.volume, 0.0f, 1.5f);
             c.pan = std::clamp (c.pan, -1.0f, 1.0f);

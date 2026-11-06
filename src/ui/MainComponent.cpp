@@ -182,12 +182,15 @@ MainComponent::MainComponent()
         juce::PopupMenu menu;
         menu.addItem (1, "Synth channel");
         menu.addItem (2, "Sampler channel (load a sample)");
+        menu.addItem (3, "Drum machine (16 pads)");
         menu.showMenuAsync (juce::PopupMenu::Options(),
                             [safe = juce::Component::SafePointer<MainComponent> (this)] (int result)
                             {
                                 if (safe == nullptr || result == 0)
                                     return;
-                                safe->addChannel (result == 1 ? Instrument::Synth : Instrument::Sampler);
+                                const int index = safe->addChannel (result == 1 ? Instrument::Synth : result == 2 ? Instrument::Sampler : Instrument::Drums);
+                                if (index >= 0 && result == 3)
+                                    safe->openDrumMachine (index);
                             });
     };
 
@@ -436,6 +439,7 @@ MainComponent::~MainComponent()
     stopTimer();
     automationWindow.reset();
     sampleEditorWindow.reset();
+    drumWindow.reset();
     metersWindow.reset();
     engine.getDeviceManager().removeChangeListener (this);
     audioDialog.deleteAndZero(); // it refers to the engine
@@ -583,6 +587,8 @@ void MainComponent::timerCallback()
     const int patternPlayhead = songMode ? -1 : playhead;
     pianoRoll.setPlayheadTick (patternPlayhead);
     playlistView.setPlayheadTick (songMode ? playhead : -1);
+    if (drumWindow != nullptr)
+        drumWindow->view().setPlayheadTick (patternPlayhead);
 
     for (auto& strip : strips)
     {
@@ -746,7 +752,13 @@ void MainComponent::createStrip (size_t channelIndex)
     strip->onLoadSample = [this] (int idx) { chooseSampleFor (idx); };
     strip->onEditSample = [this] (int idx) { openSampleEditorForChannel (idx); };
     strip->onOpenPianoRoll = [this] (int idx) { openPianoRoll (idx); };
-    strip->onInstrumentChosen = [this] (int idx, Instrument instrument) { setInstrument (idx, instrument); };
+    strip->onOpenDrumMachine = [this] (int idx) { openDrumMachine (idx); };
+    strip->onInstrumentChosen = [this] (int idx, Instrument instrument)
+    {
+        setInstrument (idx, instrument);
+        if (instrument == Instrument::Drums)
+            openDrumMachine (idx);
+    };
     strip->onRename = [this] (int idx) { renameChannel (idx); };
     strips.push_back (std::move (strip));
 }
@@ -760,7 +772,9 @@ int MainComponent::addChannel (Instrument instrument, bool askForSample)
 
     Channel c;
     c.instrument = instrument;
-    c.name = (instrument == Instrument::Synth ? "Synth " : "Sampler ") + std::to_string (channels.size() + 1);
+    c.name = (instrument == Instrument::Synth ? "Synth " : instrument == Instrument::Drums ? "Drums " : "Sampler ") + std::to_string (channels.size() + 1);
+    if (instrument == Instrument::Drums)
+        c.kit = defaultDrumKit();
     c.mixerTrack = std::min (static_cast<int> (channels.size()), kMaxTracks - 1); // next free track
     jassert (channels.size() < channels.capacity()); // push_back must not reallocate (strips hold references)
     channels.push_back (std::move (c));
@@ -785,6 +799,8 @@ void MainComponent::setInstrument (int channelIndex, Instrument instrument)
 {
     auto& channel = channels[static_cast<size_t> (channelIndex)];
     channel.instrument = instrument;
+    if (instrument == Instrument::Drums && channel.kit == nullptr)
+        channel.kit = defaultDrumKit();
 
     strips[static_cast<size_t> (channelIndex)]->refreshFromChannel();
     updateTrackRouting();
@@ -826,6 +842,8 @@ void MainComponent::openPianoRoll (int channelIndex)
 void MainComponent::publishProject()
 {
     markDirty();
+    if (drumWindow != nullptr)
+        drumWindow->view().refresh(); // notes or kit may have changed from somewhere else (piano roll, another pattern, undo)
     engine.publishProject (std::make_unique<Project> (compileCurrent()));
 }
 

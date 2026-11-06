@@ -147,13 +147,15 @@ Una riga per canale: un display **Track N** e il nome, **M** (mute), **S** (solo
 - I **canali sampler** mostrano 32 pulsanti step (due battute di sedicesimi). Clic su uno step per accenderlo o
   spegnerlo. Il pulsante **Load** sceglie un file audio.
 - I **canali synth** mostrano un'anteprima delle note. Le note si modificano nel Piano Roll.
+- I **canali drum** mostrano un'anteprima delle note; il doppio clic apre la drum machine (vedi sotto).
 - Clic su una riga per selezionare il canale (Piano Roll e Mixer seguono la selezione).
-- **+ Add channel** sotto l'ultima riga aggiunge un canale synth o sampler, fino a 8 canali in tutto.
+- **+ Add channel** sotto l'ultima riga aggiunge un canale synth, sampler o drum machine, fino a 8 canali in tutto.
 
 ### Menu del tasto destro su un canale
 
 | Voce | Effetto |
 | --- | --- |
+| Drum machine... | (Canali drum) apre la finestra della drum machine. |
 | Piano roll | Seleziona il canale e apre il Piano Roll per quel canale. |
 | Instrument > Synth / Sampler | Sceglie cosa produce il suono. Passando a Sampler su un canale senza sample ne viene chiesto uno. Il sample resta se torni a Synth. |
 | Load sample... | Scegli un file WAV, FLAC, OGG o AIFF (si usano i primi 30 secondi). Il canale prende il nome del file. |
@@ -164,6 +166,42 @@ Una riga per canale: un display **Track N** e il nome, **M** (mute), **S** (solo
 Anche il doppio clic sull'anteprima delle note di un canale synth, o sul nome di un qualsiasi canale, apre il suo
 Piano Roll. Sui canali sampler il doppio clic sugli step non ha un significato speciale: ogni clic attiva o
 disattiva uno step.
+
+## Drum machine
+
+Un **canale drum** è un canale con 16 pad. Si aggiunge con **+ Add channel** > *Drum machine (16 pads)*, trascinando *Instruments > Drum machine* dal browser sul rack, oppure con il tasto destro
+su un canale > *Instrument* > *Drum machine (16 pads)*. Un nuovo canale drum parte con il Sun Loops Basic Kit (cassa, rullante e hi-hat sui pad da 1 a 3). Il **doppio clic** sul canale (o tasto destro >
+*Drum machine...*) apre la sua finestra; volume, pan, pitch, mute / solo, traccia del mixer e automazione funzionano come per ogni canale.
+
+**Pad.** La griglia 4 x 4 ha il pad 1 in basso a sinistra. Il pad *n* suona quando il canale riceve la nota MIDI **36 + n** (pad 1 = C2, pad 16 = D#3): le stesse note compaiono nel Piano Roll, una tastiera
+MIDI suona i pad e le note importate in quell'intervallo li suonano. Clic su un pad per sentirlo e selezionarlo (Maiusc+clic = piano, Ctrl+clic = forte, così senti i layer di velocità). Tasto destro su un pad:
+*Load a sound*, *Clear this pad*, *Mute*, *Solo*. Trascina un suono dal browser su un pad per metterlo sul layer 1.
+
+**Il pad selezionato** (a destra):
+
+| Controllo | Significato |
+| --- | --- |
+| Nome, Mute, Solo | Il nome del pad (fino a 24 caratteri, Invio per confermare), e silenziarlo / suonare solo i pad in solo (il mute vince sul solo). *Play pad* lo suona. |
+| Choke group | *None*, o gruppo da 1 a 8. Quando un pad parte, i pad dello stesso gruppo ancora in suono vengono interrotti (con una breve dissolvenza): un hi-hat chiuso ferma uno aperto. Un pad in un gruppo interrompe anche il proprio colpo precedente. |
+| Layer da 1 a 4 | Ogni layer contiene un suono (*Load*, oppure trascinane uno dal browser sulla sua riga; *x* lo svuota) e la **velocità minima a cui risponde** (da 1 a 127). Una nota suona il layer con il minimo più alto che la sua velocità raggiunge; sotto tutti i minimi suona il layer più basso. Un secondo, terzo e quarto layer nuovi partono da 64, 96 e 112. |
+| Level, Pan, Tuning | Livello da 0 a 150 %, pan da -100 a +100, intonazione da -24 a +24 semitoni (cambia anche la lunghezza del suono). Doppio clic su un cursore per riportarlo al valore iniziale. |
+| Swing | Da 0 a 100 %: ritarda gli step di sedicesimo in levare di questo pad (fino a mezzo sedicesimo). La manopola Swing del canale è nascosta: un canale drum non la usa. |
+
+**Step.** La griglia in basso ha una riga per pad e 32 step (due battute di sedicesimi). Clic su uno step per accenderlo o spegnerlo (senti il pad), trascina per dipingere o cancellare una serie, tasto destro
+per cancellare. Maiusc+clic mette uno step piano (velocità 0,45), Ctrl+clic uno accentato (1,0), un clic semplice 0,8; la luminosità di uno step mostra la sua velocità. Un clic sull'etichetta di una riga
+seleziona (e suona) quel pad. La griglia modifica le note del canale nel **pattern corrente** (annulla e ripristina delle note funzionano), mostra le note fatte altrove (una nota appartiene allo step in cui
+inizia) e in modalità Pattern una linea segue il playhead.
+
+**Kit.** *Load kit...* sostituisce tutti i 16 pad (gli step restano): il *Sun Loops Basic Kit*, il *Cyber-Hub Kit*, *From a folder...* (una cartella con un `kit.json`, o semplicemente una cartella di file audio:
+i primi 16 file in ordine di nome riempiono i pad e li battezzano) e ogni sottocartella di `~/Music/Sun Loops Studio/Drum Kits` sotto *My kits*. *Save kit...* chiede un nome e scrive in *Drum Kits* una cartella con quel
+nome, con `kit.json` e copie dei suoni in `samples/` (i suoni inclusi nel programma restano riferimenti); chiede conferma prima di sostituire un kit con lo stesso nome. *Empty kit* svuota tutti i pad dopo conferma.
+
+**Nel progetto.** Il file di progetto salva il kit di ogni canale drum: nomi e impostazioni dei pad e da dove viene ogni suono (un percorso di file, o un suono interno), non l'audio. All'apertura i suoni vengono riletti;
+un file sparito lascia un layer silenzioso che ricorda il percorso (e un messaggio), così salvando di nuovo il riferimento non si perde. Salva il kit come cartella per renderlo portabile.
+
+Non disponibili: annulla per le modifiche al kit (gli step si annullano), un'uscita o effetti per pad (tutto il canale va su una traccia del mixer), layer round-robin, modificare il suono di un pad nell'editor di
+campioni (modificalo su un canale sampler e poi carica il file salvato), più di 16 pad o 4 layer, suoni più lunghi di 30 secondi, salvare un canale drum come preset (salva il kit), assegnare ai pad le percussioni
+di un MIDI importato. I progetti con una drum machine non si aprono con versioni precedenti alla 0.14.
 
 ## Piano Roll
 

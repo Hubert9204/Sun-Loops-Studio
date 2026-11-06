@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(SunLoopsStudio VERSION 0.13.0 LANGUAGES C CXX)
+project(SunLoopsStudio VERSION 0.14.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -46,6 +46,7 @@ set(SLS_CORE_SOURCES
     src/audio/TimeStretch.cpp
     src/audio/SampleEdit.cpp
     src/library/ChannelPreset.cpp
+    src/library/DrumKitFile.cpp
     src/library/Library.cpp
     src/library/ProjectFile.cpp
     src/plugins/PluginScanner.cpp)
@@ -90,6 +91,8 @@ target_sources(SunLoopsStudio PRIVATE
     src/ui/MainComponentProject.cpp
     src/ui/MainComponentAutomation.cpp
     src/ui/MainComponentSampleEditor.cpp
+    src/ui/MainComponentDrums.cpp
+    src/ui/DrumMachine.cpp
     src/ui/AutomationEditor.cpp
     src/ui/MetersView.cpp
     src/ui/SampleEditor.cpp

@@ -2,6 +2,30 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.14.0 - 2026-11-06
+
+### Added
+- **Drum machine.** A new kind of channel (*+ Add channel* > *Drum machine (16 pads)*, the *Drum machine* item of the browser's Instruments, or right-click a channel >
+  *Instrument*). Double-click it (or right-click > *Drum machine...*) to open its window: a **4 x 4 pad grid** (click to hear a pad, Shift = soft, Ctrl = hard), an
+  **inspector** for the selected pad and a **step sequencer with one row per pad** (32 steps, click to toggle, drag to paint, right-click to erase, Shift / Ctrl for
+  soft / accented steps) that edits the channel's notes in the current pattern. Pad *n* answers to MIDI note 36 + *n* (C2 to D#3), so the piano roll, MIDI keyboards and
+  imported notes play pads too.
+- Each pad has up to **four sound layers chosen by velocity** (every layer has the lowest velocity it answers to), its own **level**, **pan**, **tuning** (+-24 semitones),
+  **swing** (off-beat 16ths, per pad), **mute / solo** and a **choke group** (1 to 8: a pad that starts cuts the sounding pads of its group, so a closed hi-hat stops an
+  open one). Sounds are loaded with *Load* or dropped from the browser on a pad or on a layer row.
+- **Kits.** *Load kit...* offers the Sun Loops Basic Kit, the Cyber-Hub Kit, any folder (a folder with a `kit.json`, or just a folder of audio files: the first 16 in name order
+  fill the pads) and every folder in *Drum Kits*. *Save kit...* writes a **kit folder**: `kit.json` plus copies of the sounds in `samples/` (built-in sounds stay references), so
+  the folder can be moved or shared. The project file stores each drum channel's kit (names, settings, where every sound comes from); the audio is read when the project opens.
+- `src/audio/DrumKit.h` (model, plain C++), `src/library/DrumKitFile.*` (kit files and descriptions), `src/ui/DrumMachine.*` (window), the engine in `Player.cpp` (one more
+  instrument; no allocation on the audio thread, tested).
+
+### Limits
+- Kit edits (sounds, levels, names ...) cannot be undone; the steps can (like other notes). 16 pads, 4 layers, 30 seconds per sound; no round-robin layers.
+- The whole channel goes to one mixer track (no output per pad); choke groups work inside one channel; a drum channel ignores the channel's Swing knob (the pads have their own).
+- A drum channel cannot be saved as a channel preset (save the kit instead). A sound dropped on a drum channel's row in the rack is refused: drop it on a pad.
+- Projects with a drum machine cannot be opened by older versions (they report an unknown instrument). MIDI import still skips percussion.
+- Layer choice, choke and levels were tested on synthetic tones and in a virtual display only: **not heard on real drums or real hardware**.
+
 ## 0.13.0 - 2026-11-06
 
 ### Added

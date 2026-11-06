@@ -177,8 +177,12 @@ void Player::onProjectChanged (const Project& project) noexcept
         if (v.state == State::Idle || ! v.sampler)
             continue;
 
-        const bool stillValid = static_cast<size_t> (v.channel) < project.channels.size()
-                             && project.channels[static_cast<size_t> (v.channel)].sample.get() == v.sample;
+        bool stillValid = false;
+        if (static_cast<size_t> (v.channel) < project.channels.size())
+        {
+            const auto& ch = project.channels[static_cast<size_t> (v.channel)];
+            stillValid = v.pad >= 0 ? (ch.kit != nullptr && ch.kit->owns (v.sample)) : ch.sample.get() == v.sample;
+        }
         if (! stillValid)
             v = Voice {};
     }
@@ -205,8 +209,74 @@ void Player::liveNoteOff (int channel, int pitch) noexcept
             v.state = State::Release;
 }
 
+Player::Voice& Player::takeVoice() noexcept
+{
+    for (auto& v : voices)
+        if (v.state == State::Idle)
+            return v;
+
+    // Steal: oldest releasing voice first, otherwise the oldest voice.
+    Voice* target = nullptr;
+    for (auto& v : voices)
+        if (v.state == State::Release && (target == nullptr || v.age < target->age))
+            target = &v;
+    if (target == nullptr)
+    {
+        target = &voices[0];
+        for (auto& v : voices)
+            if (v.age < target->age)
+                target = &v;
+    }
+    return *target;
+}
+
+// A note on a drum channel: the pad it names, the layer its velocity picks, the pad's choke group cut first.
+void Player::drumNoteOn (const Channel& channel, int channelIndex, const Note& n) noexcept
+{
+    if (channel.kit == nullptr)
+        return;
+    const DrumKit& kit = *channel.kit;
+    const int padIndex = DrumKit::padForPitch (n.pitch);
+    if (padIndex < 0 || ! kit.padAudible (padIndex, kit.anySolo()))
+        return;
+    const DrumPad& pad = kit.pads[static_cast<size_t> (padIndex)];
+    const auto* layer = pad.layerFor (std::clamp (static_cast<int> (std::lround (n.velocity * 127.0f)), 1, 127));
+    if (layer == nullptr)
+        return;
+
+    if (pad.chokeGroup > 0)
+        for (auto& other : voices)
+            if (other.pad >= 0 && other.channel == channelIndex && other.choke == pad.chokeGroup
+                && (other.state == State::Attack || other.state == State::Sustain))
+                other.state = State::Release;
+
+    Voice& v = takeVoice();
+    v = Voice {};
+    v.state = State::Attack;
+    v.sampler = true;
+    v.channel = channelIndex;
+    v.livePitch = n.pitch;
+    v.velocity = n.velocity;
+    v.age = ++ageCounter;
+    v.endTick = INT_MAX; // one-shot, like the sampler
+    v.sample = layer->sample.get();
+    v.step = std::pow (2.0, (static_cast<double> (pad.pitch) + static_cast<double> (channel.pitch)) / 12.0) * v.sample->sampleRate / sampleRate;
+    v.attackStep = static_cast<float> (1.0 / (0.0005 * sampleRate));
+    v.pad = padIndex;
+    v.choke = pad.chokeGroup;
+    const double angle = (static_cast<double> (pad.pan) + 1.0) * kTwoPi / 8.0;
+    v.padGain = pad.volume;
+    v.padLeft = static_cast<float> (std::cos (angle) * 1.4142135623730951); // 1 at the centre, like a channel's pan
+    v.padRight = static_cast<float> (std::sin (angle) * 1.4142135623730951);
+}
+
 void Player::noteOn (const Channel& channel, int channelIndex, const Note& n, int loopLength, bool live) noexcept
 {
+    if (channel.instrument == Instrument::Drums)
+    {
+        drumNoteOn (channel, channelIndex, n);
+        return;
+    }
     const bool isSampler = channel.instrument == Instrument::Sampler;
     if (isSampler && (channel.sample == nullptr || channel.sample->numFrames() < 2))
         return;
@@ -247,25 +317,7 @@ void Player::noteOn (const Channel& channel, int channelIndex, const Note& n, in
         }
     }
 
-    Voice* target = nullptr;
-
-    for (auto& v : voices)
-        if (v.state == State::Idle) { target = &v; break; }
-
-    if (target == nullptr)
-    {
-        // Steal: oldest releasing voice first, otherwise the oldest voice.
-        for (auto& v : voices)
-            if (v.state == State::Release && (target == nullptr || v.age < target->age))
-                target = &v;
-    }
-    if (target == nullptr)
-    {
-        target = &voices[0];
-        for (auto& v : voices)
-            if (v.age < target->age)
-                target = &v;
-    }
+    Voice* target = &takeVoice();
 
     Voice v;
     v.state = State::Attack;
@@ -638,9 +690,9 @@ void Player::render (const Project& project, double bpm, bool playing,
                     const float frac = static_cast<float> (v.pos - idx);
                     const float* sl = v.sample->left.data();
                     const float* sr = v.sample->right.data();
-                    const float gain = v.env * v.velocity * kSampleGain;
-                    l = (sl[idx] + frac * (sl[idx + 1] - sl[idx])) * gain;
-                    r = (sr[idx] + frac * (sr[idx + 1] - sr[idx])) * gain;
+                    const float gain = v.env * v.velocity * kSampleGain * v.padGain;
+                    l = (sl[idx] + frac * (sl[idx + 1] - sl[idx])) * gain * v.padLeft;
+                    r = (sr[idx] + frac * (sr[idx + 1] - sr[idx])) * gain * v.padRight;
                     v.pos += v.step;
                 }
                 else

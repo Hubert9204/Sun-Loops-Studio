@@ -16,7 +16,7 @@ Sun Loops Studio is inspired by the workflow of loop-based DAWs such as FL Studi
 that uses no code, names, graphics or assets from other products, and it is not affiliated with or endorsed by
 their makers.
 
-**Status: alpha (0.13.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
+**Status: alpha (0.14.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
 display. Playback was confirmed on a real Nobara machine for version 0.3; everything added since (panels, patterns,
 playlist, browser, pitch/swing, the expanded mixer and its effects, saving projects, the AppImage, audio clips, drag and
 drop, recording, MIDI, the metronome and the export formats) was tested headless and in a virtual display with a silent
@@ -63,6 +63,8 @@ exactly what is and is not verified and what is missing (VST3 hosting and undo a
   playlist tracks and have a point editor (linear / hold / smooth lines). Song mode only.
 - **Stretch and pitch** - right-click an audio clip: make it longer or shorter without changing its pitch, shift its pitch without changing its length,
   or match a loop to the project tempo (Signalsmith Stretch).
+- **Drum machine** - a channel with 16 pads (notes 36 to 51): up to four sound layers per pad chosen by velocity, level, pan, tuning, swing and
+  choke groups per pad, a step sequencer with a row per pad, drag-and-drop from the browser, and kits saved as folders (`kit.json` + sounds).
 - **Sample editor** - right-click an audio clip or a sampler channel > *Edit sample...*: waveform with zoom and selection, preview with a live spectrum,
   cut / crop / silence / reverse / invert / gain / normalise / fades / DC removal with undo, noise reduction (spectral gating), and slicing a clip at detected hits
   or equal parts. The result is saved as a new WAV file; the original is never touched.

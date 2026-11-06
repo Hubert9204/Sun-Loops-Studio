@@ -29,6 +29,8 @@
 #include "audio/MixerRouting.h"
 #include "audio/OneShot.h"
 #include "audio/Auditioner.h"
+#include "audio/DrumKit.h"
+#include "library/DrumKitFile.h"
 #include "audio/SampleEdit.h"
 #include "audio/TimeStretch.h"
 #include "audio/NoteRecorder.h"
@@ -1447,8 +1449,8 @@ void testLibraryScan()
     check (factory != nullptr && factory->children.size() == sls::factoryPresets().size() && factory->children[0].payload.rfind ("builtin:", 0) == 0,
            "factory presets are listed");
     const auto* instruments = findChild (tree, "Instruments");
-    check (instruments != nullptr && instruments->children.size() == 2 && instruments->children[0].payload == "synth",
-           "instruments: Synth and Sampler");
+    check (instruments != nullptr && instruments->children.size() == 3 && instruments->children[0].payload == "synth" && instruments->children[2].payload == "drums",
+           "instruments: Synth, Sampler and Drum machine");
 
     const auto* plugin = findChild (tree, "Plugin");
     check (plugin != nullptr && plugin->children[0].kind == NodeKind::Action && plugin->children[0].payload == "scan-plugins",
@@ -5070,6 +5072,386 @@ void testSampleEditing()
     }
 }
 
+// A drum channel with the given kit and notes (pitch 36 + pad).
+sls::Channel drumChannel (sls::DrumKit kit, std::vector<sls::Note> notes)
+{
+    sls::Channel c;
+    c.name = "Drums";
+    c.instrument = sls::Instrument::Drums;
+    c.kit = std::make_shared<const sls::DrumKit> (std::move (kit));
+    c.notes = std::move (notes);
+    c.volume = 1.0f;
+    return c;
+}
+
+void setPadSample (sls::DrumKit& kit, int pad, int layer, std::shared_ptr<const sls::SampleData> sample, int minVelocity = 1)
+{
+    auto& l = kit.pads[static_cast<size_t> (pad)].layers[static_cast<size_t> (layer)];
+    l.sample = std::move (sample);
+    l.minVelocity = minVelocity;
+}
+
+void testDrumMachine()
+{
+    std::cout << "Drum machine\n";
+    constexpr int kP = sls::kDrumFirstPitch;
+    const auto lowTone = sineSample (200.0, 1.5, 48000.0);
+    const auto highTone = sineSample (800.0, 1.5, 48000.0);
+    const auto render = [] (const sls::Channel& c) { return sls::renderToBuffer (oneBar ({ c }), {}); };
+    const auto energy = [] (const juce::AudioBuffer<float>& b, int ch, double from, double to, double hz)
+    {
+        return toneEnergy (b.getReadPointer (ch), static_cast<int> (from * 48000), static_cast<int> (to * 48000), hz);
+    };
+
+    {   // the model
+        sls::DrumKit k = sls::DrumKit::empty();
+        check (k.pads[0].name == "Pad 1" && k.pads[15].name == "Pad 16" && ! k.pads[3].hasSample() && k.pads[3].layerFor (100) == nullptr,
+               "an empty kit has sixteen empty pads");
+        check (sls::DrumKit::padForPitch (35) == -1 && sls::DrumKit::padForPitch (36) == 0 && sls::DrumKit::padForPitch (51) == 15
+                   && sls::DrumKit::padForPitch (52) == -1 && sls::DrumKit::pitchForPad (15) == 51,
+               "pads answer to the notes 36 to 51");
+        auto& pad = k.pads[0];
+        pad.layers[0] = { lowTone, 1 };
+        pad.layers[1] = { highTone, 90 };
+        check (pad.layerFor (1)->sample == lowTone && pad.layerFor (89)->sample == lowTone && pad.layerFor (90)->sample == highTone
+                   && pad.layerFor (127)->sample == highTone,
+               "a velocity picks the layer with the highest minimum it reaches");
+        pad.layers[0].minVelocity = 40; // below every minimum: the lowest layer plays
+        check (pad.layerFor (10)->sample == lowTone, "a velocity below every minimum uses the lowest layer");
+        pad.layers[2] = { std::make_shared<sls::SampleData>(), 1 }; // empty audio never counts
+        check (pad.layerFor (100)->sample == highTone, "a layer without audio is ignored");
+
+        auto bad = k;
+        bad.pads[1].volume = 9.0f; bad.pads[1].pan = std::nanf (""); bad.pads[1].pitch = -99.0f; bad.pads[1].swing = 4.0f;
+        bad.pads[1].chokeGroup = 77; bad.pads[1].layers[0].minVelocity = 500; bad.pads[1].name = std::string (100, 'x');
+        const auto good = bad.sanitised();
+        check (good.pads[1].volume == 1.5f && good.pads[1].pan == 0.0f && good.pads[1].pitch == -24.0f && good.pads[1].swing == 1.0f
+                   && good.pads[1].chokeGroup == sls::kChokeGroups && good.pads[1].layers[0].minVelocity == 127 && good.pads[1].name.size() == 24,
+               "hostile numbers are forced into range");
+        check (good.owns (lowTone.get()) && ! good.owns (nullptr == nullptr ? sineSample (1.0, 0.1, 48000.0).get() : nullptr), "a kit knows its own samples");
+
+        sls::Channel plain = synthChannel ({});
+        plain.kit = std::make_shared<const sls::DrumKit> (k);
+        sls::Channel noKit;
+        noKit.instrument = sls::Instrument::Drums;
+        const auto proj = sls::Project::make ({ plain, noKit }, 4 * kBeat);
+        check (proj.channels[0].kit == nullptr && proj.channels[1].kit != nullptr && proj.channels[1].kit->pads.size() == 16,
+               "a drum channel always has a kit; another instrument never does");
+    }
+    {   // notes and pads
+        sls::DrumKit k = sls::DrumKit::empty();
+        setPadSample (k, 0, 0, lowTone);
+        const auto b = render (drumChannel (k, { { kP, 0, kBeat, 0.8f }, { kP + 1, kBeat, kBeat, 0.8f }, { kP - 1, 2 * kBeat, kBeat, 0.8f }, { kP + 16, 3 * kBeat, kBeat, 0.8f } }));
+        check (energy (b, 0, 0.05, 0.4, 200.0) > 0.05, "a note on pad 1 plays its sample");
+        check (peakOf (b.getReadPointer (0), static_cast<int> (0.55 * 48000), static_cast<int> (0.6 * 48000)) > 0.0f, "the sample plays on, as one-shots do");
+        sls::DrumKit empty = sls::DrumKit::empty();
+        const auto silent = render (drumChannel (empty, { { kP, 0, kBeat, 0.8f } }));
+        check (peakOf (silent.getReadPointer (0), 0, silent.getNumSamples()) == 0.0f, "a pad without a sample is silent");
+        const auto outside = render (drumChannel (k, { { kP - 1, 0, kBeat, 0.8f }, { kP + 16, 0, kBeat, 0.8f }, { 60, 0, kBeat, 0.8f } }));
+        check (peakOf (outside.getReadPointer (0), 0, outside.getNumSamples()) == 0.0f, "notes outside 36..51 play nothing");
+    }
+    {   // velocity layers
+        sls::DrumKit k = sls::DrumKit::empty();
+        setPadSample (k, 0, 0, lowTone, 1);
+        setPadSample (k, 0, 1, highTone, 90);
+        const auto soft = render (drumChannel (k, { { kP, 0, kBeat, 0.4f } }));
+        const auto hard = render (drumChannel (k, { { kP, 0, kBeat, 1.0f } }));
+        check (energy (soft, 0, 0.05, 0.4, 200.0) > 10.0 * energy (soft, 0, 0.05, 0.4, 800.0), "a soft hit plays the low layer");
+        check (energy (hard, 0, 0.05, 0.4, 800.0) > 10.0 * energy (hard, 0, 0.05, 0.4, 200.0), "a hard hit plays the high layer");
+        const auto live = [&] (float velocity)
+        {
+            const auto project = oneBar ({ drumChannel (k, {}) });
+            sls::Player player;
+            player.prepare (kSr);
+            player.liveNoteOn (project, 0, kP, velocity);
+            return renderBlocks (player, project, false, 0.5);
+        };
+        const auto liveHard = live (1.0f);
+        check (toneEnergy (liveHard.data(), 2400, 20000, 800.0) > 10.0 * toneEnergy (liveHard.data(), 2400, 20000, 200.0), "a pad played by hand picks its layer by velocity too");
+    }
+    {   // choke groups
+        const auto openHat = sineSample (300.0, 1.8, 48000.0);
+        const auto closedHat = sineSample (1000.0, 0.2, 48000.0);
+        const auto make = [&] (int groupOpen, int groupClosed, int groupOther)
+        {
+            sls::DrumKit k = sls::DrumKit::empty();
+            setPadSample (k, 0, 0, openHat);
+            setPadSample (k, 1, 0, closedHat);
+            setPadSample (k, 2, 0, sineSample (2000.0, 1.8, 48000.0));
+            k.pads[0].chokeGroup = groupOpen;
+            k.pads[1].chokeGroup = groupClosed;
+            k.pads[2].chokeGroup = groupOther;
+            return render (drumChannel (k, { { kP, 0, kBeat, 0.8f }, { kP + 2, 0, kBeat, 0.8f }, { kP + 1, kBeat, kBeat, 0.8f } }));
+        };
+        const auto choked = make (1, 1, 2);
+        const auto free = make (0, 0, 0);
+        check (energy (choked, 0, 0.1, 0.45, 300.0) > 0.05 && energy (free, 0, 0.1, 0.45, 300.0) > 0.05, "the open hat rings before the closed hat");
+        check (energy (choked, 0, 0.6, 1.5, 300.0) < 0.02 * energy (free, 0, 0.6, 1.5, 300.0), "the closed hat cuts the open hat of the same group");
+        check (energy (choked, 0, 0.6, 1.5, 2000.0) > 0.9 * energy (free, 0, 0.6, 1.5, 2000.0), "a pad of another group goes on ringing");
+        check (energy (choked, 0, 0.5, 0.65, 1000.0) > 0.05, "the pad that cuts is itself heard");
+        const auto retriggered = [&] (int group)
+        {
+            sls::DrumKit k = sls::DrumKit::empty();
+            setPadSample (k, 0, 0, openHat);
+            k.pads[0].chokeGroup = group;
+            return render (drumChannel (k, { { kP, 0, kBeat, 0.8f }, { kP, 2 * kBeat, kBeat, 0.8f } }));
+        };
+        const auto alone = retriggered (3);
+        const auto overlap = retriggered (0);
+        const float peakAlone = peakOf (alone.getReadPointer (0), static_cast<int> (1.2 * 48000), static_cast<int> (1.7 * 48000));
+        const float peakOverlap = peakOf (overlap.getReadPointer (0), static_cast<int> (1.2 * 48000), static_cast<int> (1.7 * 48000));
+        check (peakAlone > 0.05f && peakAlone < 0.65f * peakOverlap,
+               "choke group: the same pad hit again cuts its own tail (without a group the two hits add up)");
+    }
+    {   // level, pan, tuning
+        const auto level = [&] (float volume, float pan)
+        {
+            sls::DrumKit k = sls::DrumKit::empty();
+            setPadSample (k, 0, 0, lowTone);
+            k.pads[0].volume = volume;
+            k.pads[0].pan = pan;
+            return render (drumChannel (k, { { kP, 0, kBeat, 0.8f } }));
+        };
+        const auto full = level (1.0f, 0.0f);
+        const auto half = level (0.5f, 0.0f);
+        const double ratio = energy (half, 0, 0.1, 0.4, 200.0) / energy (full, 0, 0.1, 0.4, 200.0);
+        check (std::abs (ratio - 0.5) < 0.02, "the pad level scales its sound");
+        check (std::abs (energy (full, 0, 0.1, 0.4, 200.0) - energy (full, 1, 0.1, 0.4, 200.0)) < 1e-6, "a centred pad is the same left and right");
+        const auto left = level (1.0f, -1.0f);
+        const auto right = level (1.0f, 1.0f);
+        check (energy (left, 1, 0.1, 0.4, 200.0) < 0.001 * energy (left, 0, 0.1, 0.4, 200.0) && energy (right, 0, 0.1, 0.4, 200.0) < 0.001 * energy (right, 1, 0.1, 0.4, 200.0),
+               "a pad panned hard left or right is heard on one side only");
+        sls::DrumKit k = sls::DrumKit::empty();
+        setPadSample (k, 0, 0, sineSample (400.0, 1.5, 48000.0));
+        k.pads[0].pitch = 12.0f;
+        const auto up = render (drumChannel (k, { { kP, 0, kBeat, 0.8f } }));
+        check (energy (up, 0, 0.1, 0.4, 800.0) > 10.0 * energy (up, 0, 0.1, 0.4, 400.0), "a pad tuned up an octave sounds twice as high");
+    }
+    {   // mute and solo
+        sls::DrumKit k = sls::DrumKit::empty();
+        setPadSample (k, 0, 0, lowTone);
+        setPadSample (k, 1, 0, highTone);
+        const std::vector<sls::Note> both { { kP, 0, kBeat, 0.8f }, { kP + 1, 0, kBeat, 0.8f } };
+        auto m = k;
+        m.pads[0].mute = true;
+        const auto muted = render (drumChannel (m, both));
+        check (energy (muted, 0, 0.1, 0.4, 200.0) < 1e-6 && energy (muted, 0, 0.1, 0.4, 800.0) > 0.05, "a muted pad is silent, the others play");
+        auto so = k;
+        so.pads[1].solo = true;
+        const auto soloed = render (drumChannel (so, both));
+        check (energy (soloed, 0, 0.1, 0.4, 200.0) < 1e-6 && energy (soloed, 0, 0.1, 0.4, 800.0) > 0.05, "a soloed pad silences the others");
+        so.pads[1].mute = true;
+        const auto both2 = render (drumChannel (so, both));
+        check (peakOf (both2.getReadPointer (0), 0, both2.getNumSamples()) == 0.0f, "mute wins over solo");
+    }
+    {   // swing per pad
+        sls::DrumKit k = sls::DrumKit::empty();
+        k.pads[0].swing = 1.0f;
+        const std::vector<sls::Note> notes { { kP, sls::kSixteenthTicks, 60, 0.8f }, { kP, 2 * sls::kSixteenthTicks, 60, 0.8f },
+                                             { kP + 1, sls::kSixteenthTicks, 60, 0.8f }, { 60, sls::kSixteenthTicks, 60, 0.8f } };
+        auto c = drumChannel (k, notes);
+        c.swing = 1.0f; // a drum channel ignores the channel swing
+        const auto proj = sls::Project::make ({ c }, 4 * kBeat);
+        const auto& out = proj.channels[0].notes;
+        int swungPad0 = -1, straightPad0 = -1, pad1 = -1, other = -1;
+        for (const auto& n : out)
+        {
+            if (n.pitch == kP && n.startTick != 2 * sls::kSixteenthTicks) swungPad0 = n.startTick;
+            if (n.pitch == kP && n.startTick == 2 * sls::kSixteenthTicks) straightPad0 = n.startTick;
+            if (n.pitch == kP + 1) pad1 = n.startTick;
+            if (n.pitch == 60) other = n.startTick;
+        }
+        check (swungPad0 == sls::kSixteenthTicks + 60 && straightPad0 == 2 * sls::kSixteenthTicks, "a pad with swing delays its off-beat 16ths, not the on-beat ones");
+        check (pad1 == sls::kSixteenthTicks && other == sls::kSixteenthTicks, "other pads and other notes are not swung (the channel swing does not apply)");
+    }
+    {   // the audio thread
+        sls::DrumKit k = sls::DrumKit::empty();
+        for (int i = 0; i < 16; ++i)
+            setPadSample (k, i, 0, sineSample (150.0 + 40.0 * i, 0.3, 48000.0));
+        k.pads[1].chokeGroup = 1;
+        k.pads[2].chokeGroup = 1;
+        std::vector<sls::Note> notes;
+        for (int step = 0; step < 32; ++step)
+            for (int pad = 0; pad < 16; pad += 1 + step % 3)
+                notes.push_back ({ kP + pad, step * sls::kSixteenthTicks, 60, 0.3f + 0.02f * static_cast<float> (pad) });
+        const auto project = sls::Project::make ({ drumChannel (k, notes) }, 8 * kBeat);
+        sls::Player player;
+        player.prepare (kSr);
+        renderBlocks (player, project, true, 0.1); // settle lazy initialisation
+        std::array<float, 256> bufL {}, bufR {};
+        float* chans[2] = { bufL.data(), bufR.data() };
+        tAllocs = 0;
+        tCounting = true;
+        for (int block = 0; block < 4 * 48000 / 256; ++block)
+        {
+            bufL.fill (0.0f);
+            bufR.fill (0.0f);
+            player.render (project, 120.0, true, chans, 2, 256);
+        }
+        tCounting = false;
+        check (tAllocs == 0, "playing a busy drum pattern allocates nothing on the audio thread");
+
+        // a new snapshot while pads ring: voices of samples that the new kit still holds go on, others stop without a crash
+        auto k2 = k;
+        k2.pads[0].layers[0].sample = nullptr;
+        const auto next = sls::Project::make ({ drumChannel (k2, notes) }, 8 * kBeat);
+        auto blockOut = renderBlocks (player, next, true, 0.5);
+        check (std::all_of (blockOut.begin(), blockOut.end(), [] (float v) { return std::isfinite (v); }), "swapping the kit while it sounds is safe");
+    }
+}
+
+juce::String kitJson (const sls::KitSpec& spec) { return juce::JSON::toString (sls::kitSpecToVar (spec), false); }
+
+void testDrumKitFiles()
+{
+    std::cout << "Drum kits: files and projects\n";
+    auto root = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("sls-kit-test-" + juce::String (juce::Random::getSystemRandom().nextInt64()));
+    root.createDirectory();
+
+    const auto makeWav = [&] (const char* name, double hz, double seconds)
+    {
+        const auto file = root.getChildFile ("sounds").getChildFile (name);
+        file.getParentDirectory().createDirectory();
+        const auto data = sineSample (hz, seconds, 44100.0);
+        sls::SampleData copy = *data;
+        sls::writeSampleWav (copy, file);
+        return file;
+    };
+    const auto a = makeWav ("a-soft.wav", 200.0, 0.2);
+    const auto b = makeWav ("b-hard.wav", 800.0, 0.3);
+
+    sls::KitSpec spec = sls::KitSpec::empty();
+    spec.name = "Test kit";
+    spec.pads[0].name = "Snare";
+    spec.pads[0].sources[0] = a.getFullPathName().toStdString();
+    spec.pads[0].sources[1] = b.getFullPathName().toStdString();
+    spec.pads[0].minVelocity[1] = 100;
+    spec.pads[0].volume = 0.7f;
+    spec.pads[0].pan = -0.25f;
+    spec.pads[0].pitch = 3.5f;
+    spec.pads[0].swing = 0.4f;
+    spec.pads[0].chokeGroup = 5;
+    spec.pads[0].solo = true;
+    spec.pads[1].sources[0] = "builtin:kick";
+    spec.pads[1].mute = true;
+    spec.pads[2].sources[0] = (root.getChildFile ("gone.wav")).getFullPathName().toStdString();
+
+    {   // JSON
+        const auto back = sls::kitSpecFromVar (juce::JSON::parse (kitJson (spec)));
+        check (kitJson (back) == kitJson (spec), "a kit description survives JSON");
+        const auto hostile = sls::kitSpecFromVar (juce::JSON::parse (
+            "{\"name\":5,\"pads\":[{\"name\":\"x\",\"volume\":99,\"pan\":\"left\",\"pitch\":-500,\"swing\":7,\"choke\":42,\"layers\":["
+            "{\"sample\":\"builtin:kick\",\"minVelocity\":9000},{\"sample\":3},{\"minVelocity\":5},7,{},{},{}]},17,null]}"));
+        check (hostile.pads[0].volume == 1.5f && hostile.pads[0].pan == 0.0f && hostile.pads[0].pitch == -24.0f && hostile.pads[0].swing == 1.0f
+                   && hostile.pads[0].chokeGroup == sls::kChokeGroups && hostile.pads[0].minVelocity[0] == 127
+                   && hostile.pads[0].sources[0] == "builtin:kick" && hostile.pads[0].sources[1].empty() && hostile.pads[1].name == "Pad 2",
+               "hostile values are clamped and bad entries ignored");
+        check (sls::kitSpecFromVar (juce::var (5)).pads[15].name == "Pad 16" && sls::kitSpecFromVar (juce::var()).name == "Kit", "something that is not a kit gives an empty one");
+    }
+    {   // loading
+        juce::StringArray problems;
+        const auto kit = sls::loadKit (spec, problems);
+        check (problems.size() == 1 && problems[0].contains ("gone.wav"), "one missing file is reported");
+        check (kit.pads[0].layers[0].sample != nullptr && kit.pads[0].layers[0].sample->numFrames() == 8820 && kit.pads[0].layers[1].sample->numFrames() == 13230
+                   && kit.pads[0].layers[1].minVelocity == 100 && kit.pads[1].layers[0].sample != nullptr && kit.pads[1].layers[0].sample->source == "builtin:kick",
+               "files and built-in sounds are read, with their velocity layers");
+        check (kit.pads[2].layers[0].sample != nullptr && kit.pads[2].layers[0].sample->numFrames() == 0 && kit.pads[2].layers[0].sample->source == spec.pads[2].sources[0]
+                   && ! kit.pads[2].hasSample(),
+               "a missing file leaves a silent pad that remembers where the file was");
+        check (kit.pads[0].volume == 0.7f && kit.pads[0].chokeGroup == 5 && kit.pads[0].solo && kit.pads[1].mute && kit.pads[0].name == "Snare",
+               "the pad settings come with it");
+        check (kitJson (sls::specFromKit (kit)) == kitJson (spec), "the description of a loaded kit is the one it was loaded from");
+    }
+    {   // kit folders
+        juce::StringArray problems;
+        const auto kit = sls::loadKit (spec, problems);
+        const auto folder = root.getChildFile ("MyKit");
+        check (sls::saveKitFolder (kit, folder).isEmpty() && sls::isKitFolder (folder) && folder.getChildFile ("samples").getChildFile ("01-1-a-soft.wav").existsAsFile()
+                   && folder.getChildFile ("samples").getChildFile ("01-2-b-hard.wav").existsAsFile(),
+               "a kit is saved as a folder with kit.json and copies of its sounds");
+        check (! folder.getChildFile ("samples").getChildFile ("02-1-kick").exists() && ! folder.getChildFile ("kit.json.tmp").exists(), "built-in sounds are not copied, and no temporary file is left");
+        const auto text = folder.getChildFile ("kit.json").loadFileAsString();
+        check (text.contains ("samples/01-1-a-soft.wav") && ! text.contains (root.getChildFile ("sounds").getFullPathName()), "the file stores paths relative to the folder");
+        juce::StringArray problems2;
+        const auto read = sls::readKitFolder (folder, problems2);
+        check (problems2.isEmpty() && read.name == "Test kit" && read.pads[0].sources[0] == folder.getChildFile ("samples/01-1-a-soft.wav").getFullPathName().toStdString()
+                   && read.pads[1].sources[0] == "builtin:kick" && read.pads[0].chokeGroup == 5,
+               "reading it back gives the same kit with absolute paths");
+
+        // the copy is independent of the originals
+        a.deleteFile();
+        b.deleteFile();
+        juce::StringArray problems3;
+        const auto again = sls::loadKit (read, problems3);
+        check (problems3.size() == 1 && again.pads[0].layers[1].sample->numFrames() == 13230, "the kit folder still works after the original files are gone");
+
+        check (sls::saveKitFolder (again, folder).isEmpty(), "a kit folder can be saved over itself");
+        check (sls::saveKitFolder (again, folder.getChildFile ("kit.json")).isNotEmpty(), "a file is refused as a kit folder");
+        const auto foreign = root.getChildFile ("Foreign");
+        foreign.createDirectory();
+        foreign.getChildFile ("notes.txt").replaceWithText ("x");
+        check (sls::saveKitFolder (again, foreign).isNotEmpty() && ! foreign.getChildFile ("kit.json").exists(), "a folder with other files is refused and left alone");
+        const auto emptyFolder = root.getChildFile ("Empty");
+        emptyFolder.createDirectory();
+        check (sls::saveKitFolder (again, emptyFolder).isEmpty(), "an empty folder is fine");
+    }
+    {   // damaged kit.json
+        const auto bad = root.getChildFile ("Bad");
+        bad.createDirectory();
+        bad.getChildFile ("kit.json").replaceWithText ("{ not json");
+        juce::StringArray problems;
+        const auto k = sls::readKitFolder (bad, problems);
+        check (problems.size() == 1 && ! k.pads[0].sources[0].empty() == false, "a damaged kit.json is reported and gives an empty kit");
+        bad.getChildFile ("kit.json").replaceWithText ("{\"format\":\"sun-loops-studio-drum-kit\",\"version\":99,\"pads\":[{\"name\":\"Odd\",\"layers\":[{\"sample\":\"../../etc/x.wav\"}]}]}");
+        juce::StringArray problems2;
+        const auto k2 = sls::readKitFolder (bad, problems2);
+        check (problems2.size() == 1 && k2.pads[0].name == "Odd", "a kit from a newer version is read with a warning");
+    }
+    {   // a plain folder of sounds
+        const auto plain = root.getChildFile ("Plain");
+        plain.createDirectory();
+        for (int i = 1; i <= 18; ++i)
+            sls::writeSampleWav (*sineSample (100.0 + i, 0.05, 44100.0), plain.getChildFile ("s" + juce::String (i) + ".wav"));
+        plain.getChildFile ("readme.txt").replaceWithText ("hello");
+        juce::StringArray problems;
+        const auto k = sls::readKitFolder (plain, problems);
+        check (k.pads[0].name == "s1" && k.pads[1].name == "s2" && k.pads[9].name == "s10" && k.pads[15].name == "s16", "a folder of audio files fills the pads in natural name order");
+        check (problems.size() == 1 && problems[0].contains ("first 16"), "more than sixteen sounds are reported");
+        juce::StringArray none;
+        sls::readKitFolder (root.getChildFile ("Foreign"), none);
+        check (none.size() == 1, "a folder without sounds is reported");
+    }
+    {   // the kits inside the program
+        juce::StringArray problems;
+        const auto basic = sls::loadKit (sls::basicKitSpec(), problems);
+        check (problems.isEmpty() && basic.pads[0].hasSample() && basic.pads[1].hasSample() && basic.pads[2].hasSample() && ! basic.pads[3].hasSample() && basic.pads[2].chokeGroup == 1,
+               "the basic kit has kick, snare and hat");
+        const auto cyber = sls::loadKit (sls::cyberHubKitSpec(), problems);
+        check (problems.isEmpty() && cyber.pads[0].hasSample() && cyber.pads[4].hasSample() && ! cyber.pads[5].hasSample() && cyber.pads[2].chokeGroup == 1, "the Cyber-Hub kit loads");
+    }
+    {   // project file
+        auto doc = sls::ProjectDocument::blank();
+        sls::Channel drums;
+        drums.name = "Beats";
+        drums.instrument = sls::Instrument::Drums;
+        drums.mixerTrack = 1;
+        doc.channels.push_back (drums);
+        doc.sampleSources.emplace_back();
+        doc.kitSpecs = { sls::KitSpec::empty(), spec };
+        doc.arrangement.ensureChannelCount (doc.channels.size());
+        const auto parsed = sls::ProjectDocument::fromJson (doc.toJson());
+        check (parsed.document.has_value() && parsed.document->channels.size() == 2 && parsed.document->channels[1].instrument == sls::Instrument::Drums
+                   && parsed.document->kitSpecs.size() == 2 && kitJson (parsed.document->kitSpecs[1]) == kitJson (spec),
+               "a drum channel and its kit survive the project file");
+        check (parsed.document->channels[0].instrument == sls::Instrument::Synth && kitJson (parsed.document->kitSpecs[0]) == kitJson (sls::KitSpec::empty()), "other channels have no kit");
+        auto text = doc.toJson();
+        text = text.replace ("\"kit\"", "\"kitx\"");
+        const auto old = sls::ProjectDocument::fromJson (text);
+        check (old.document.has_value() && kitJson (old.document->kitSpecs[1]) == kitJson (sls::KitSpec::empty()), "a drum channel without a kit opens as an empty kit");
+    }
+    root.deleteRecursively();
+}
+
 void testAuditioner()
 {
     std::cout << "Sample preview (auditioner)\n";
@@ -5217,6 +5599,8 @@ int main()
     testStretchedClips();
     testSampleEditing();
     testAuditioner();
+    testDrumMachine();
+    testDrumKitFiles();
 
     std::cout << "\n" << (failures == 0 ? "ALL TESTS PASSED" : "SOME TESTS FAILED") << " (" << failures << " failures)\n";
     return failures == 0 ? 0 : 1;

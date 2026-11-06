@@ -1,6 +1,6 @@
 # Status and roadmap
 
-Version 0.13.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
+Version 0.14.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
 what is missing. If something here disagrees with the program, the program is right: please fix the page.
 
 ## What has been verified, and how
@@ -38,10 +38,16 @@ what is missing. If something here disagrees with the program, the program is ri
 | Time-stretch and pitch-shift (length and pitch of test tones at 22.05 / 44.1 / 48 / 96 kHz, mono-in-left stays left, silence stays silent, tiny and one-frame inputs, timing of a tone burst, no clicks at the ends, hostile numbers), the clip arithmetic (length, offset, undoing, restretching from the original, splitting), tempo matching, the project file round trip (settings only, shared renderings, missing file, hostile values, older files) | Automated headless tests | All pass |
 | Stretch and pitch in the interface: the menu item, the dialog, a x1.5 / +3 st clip with its label, the longer clip on the timeline, Undo | Manual, in a virtual display | Worked |
 | Sample editing (selection ranges, cut / crop / silence, reverse / invert / gain, linear / curve / S fades, normalise, DC removal, shared-sample immutability), noise reduction (noise 18.4 dB lower, a tone kept within 1.5 dB, too-short profile refused, stereo channels separately), hit detection (5 of 5 synthetic hits within 0.2 ms, no false hits on the truncated test hits), grid slices, the 32-bit float WAV writer / reader round trip (values above 1.0, never overwriting a file), the preview voice (start / stop / loop / range, nothing after the end, thread-safe stop), and putting an edited clip back on the playlist (length that fits, neighbour in the way, slice points to ticks, clip moved in the list, refusal changes nothing) | Automated headless tests (782 checks in total) | All pass |
+| Drum machine (pad and note mapping, velocity layer choice including a velocity below every minimum and empty layers, hostile numbers, per-pad swing, a drum channel always having a kit, notes outside 36..51 silent, layers heard through the offline renderer, hard and soft hits and hand-played pads, choke groups (same group cut with a short fade, other groups untouched, a pad cutting its own tail), pad level / pan / tuning, mute and solo, no allocation while a busy pattern plays, swapping the kit while it sounds), kit files (JSON round trip, hostile JSON, a kit saved as a folder with copies of its sounds and relative paths, read back, usable after the originals are deleted, refused folders, a damaged kit.json, a plain folder of sounds, the built-in kits) and the drum channel in the project file (old files, missing kit) | Automated headless tests (840 checks in total) | All pass |
+| The drum machine in the interface: adding a drum channel, the window with pads, inspector and step grid, clicking and painting steps, the Cyber-Hub kit from the menu, a second layer loaded through the file chooser (velocity 64+), a sound dragged from the browser onto a pad, a choke group chosen, the project saved and opened again with the same kit, layers and steps | Manual, in a virtual display with a window manager and a silent device | Worked |
 | The sample editor in the interface: *Edit sample...* on a clip and on a channel, selecting, cut, markers (slicing controls disabled for a channel), Reverse, Apply writing `Samples/Edited/<name>-edit.wav`, the clip cut into pieces on the playlist, the channel loading the new file, the window closing | Manual, in a virtual display with a window manager and a silent device | Worked (the status-bar text after Apply on a channel was not seen in a screenshot) |
 | A use-after-free when clicking an item that rebuilds the browser tree (crash on *Scan for VST3 plugins...*) | Found in that manual session | Fixed (item actions are deferred); the same click was repeated afterwards |
 
 ## What has not been verified
+
+- **How the drum machine sounds and plays on real hardware.** Layers, choke groups, levels and swing were checked on synthetic tones and by measuring rendered audio; the pads were clicked in a virtual display with a silent device,
+  never heard on speakers, and never played from a real pad controller or MIDI keyboard. The 20 ms choke fade and the 0.5 ms attack were not judged by ear. Saving kits was tested on a local disk only
+  (no read-only folders, no huge sounds). Loading a big kit blocks the window for as long as the files take to decode.
 
 - **How the sample editor sounds and feels on real material.** Noise reduction (spectral gating) and hit detection were measured on synthetic signals only:
   the watery artefacts on real noise, and the hits found (or missed) in real drums, voices and loops, were not judged by ear. The preview and the spectrum
@@ -129,13 +135,14 @@ what is missing. If something here disagrees with the program, the program is ri
 | Pattern deletion and renaming | Patterns are created and cloned only; clips cannot be re-pointed to another pattern. |
 | Channel deletion and reordering | Channels can be added (up to 8) but not removed or moved. |
 | Pattern length, time signature, tempo changes | A pattern is always two bars of 4/4 with a 16th grid; one BPM for the whole song. Swing exists per channel (off-beat 16ths only). |
+| Drum machine | 16 pads (notes 36..51), 4 velocity layers, 30 seconds per sound, choke groups inside one channel. Kit edits cannot be undone (steps can). One output per channel (no per-pad routing or effects), no round-robin or random layers, no pad flash while a pattern plays, no pad-controller support, no editing of a pad's sound in the sample editor, imported MIDI percussion is not mapped to pads, no channel presets for drum channels. Older versions cannot open projects that contain a drum machine. |
 | Sample editing | The sample editor (0.13.0) edits a copy destructively and saves a new WAV; it has no loop points, envelope, spectral (paint-to-edit) view, resampling, or time-stretch (stretching works on audio clips of the playlist only). A stretched clip must be taken back to the original before editing. After Apply a clip plays the whole edited audio. Slices cut a playlist clip into clips; a sampler channel cannot be sliced, and nothing turns slices into notes (that is in the advanced sampler block). Only one editor window at a time. |
 | Export options | Fixed settings: 48 kHz, 24-bit for WAV/AIFF/FLAC, MP3 and AAC at 192 kbit/s, Ogg Vorbis at about 192 kbit/s. No choice of quality or sample rate, no stems, no tags/metadata. |
 | Packaging | An AppImage can be built (`scripts/build_appimage.sh`, not yet tested on a real Nobara machine); no Flatpak or RPM; install can also be `cmake --install`. |
 
 ## Proposed order of work
 
-The larger feature blocks are in [feature-plan.md](feature-plan.md) (A, B and C are done in 0.11.0, D in 0.12.0, E in 0.13.0). Smaller items:
+The larger feature blocks are in [feature-plan.md](feature-plan.md) (A, B and C are done in 0.11.0, D in 0.12.0, E in 0.13.0, G in 0.14.0; next is the advanced sampler, block H). Smaller items:
 
 1. **Undo / redo** for channel settings and the Mixer (notes and the Playlist already have it).
 2. **Project extras**: autosave and recovery, embedding samples, a project folder with its samples.

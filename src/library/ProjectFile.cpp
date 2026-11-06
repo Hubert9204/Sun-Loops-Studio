@@ -1,5 +1,7 @@
 #include "library/ProjectFile.h"
 
+#include "library/JsonRead.h"
+
 #include <algorithm>
 #include <cmath>
 
@@ -8,7 +10,6 @@ namespace sls
 namespace
 {
 constexpr size_t kMaxNotesPerChannelPattern = 20000;
-constexpr size_t kMaxNameLength = 40; // channel, track, pattern and clip names
 
 const char* automationKindName (AutomationKind k)
 {
@@ -57,8 +58,6 @@ EffectType effectFromKey (const juce::String& key)
 
 // ------------------------------------------------------------------------- writing
 
-juce::var number (double v) { return juce::var (std::isfinite (v) ? v : 0.0); }
-
 juce::var noteToVar (const Note& n)
 {
     juce::Array<juce::var> a;
@@ -94,31 +93,6 @@ struct Reader
     void fail (const std::string& message) { if (error.empty()) error = message; }
 };
 
-double readNumber (const juce::var& v, double fallback, double lo, double hi)
-{
-    if (! (v.isDouble() || v.isInt() || v.isInt64()))
-        return fallback;
-    const double d = static_cast<double> (v);
-    return std::isfinite (d) ? std::clamp (d, lo, hi) : fallback;
-}
-
-int readInt (const juce::var& v, int fallback, int lo, int hi)
-{
-    return static_cast<int> (std::lround (readNumber (v, fallback, lo, hi)));
-}
-
-bool readBool (const juce::var& v, bool fallback)
-{
-    return v.isBool() ? static_cast<bool> (v) : fallback;
-}
-
-std::string readName (const juce::var& v, const std::string& fallback)
-{
-    if (! v.isString())
-        return fallback;
-    const auto s = v.toString().trim().substring (0, static_cast<int> (kMaxNameLength));
-    return s.isEmpty() ? fallback : s.toStdString();
-}
 
 EffectSlot readSlot (const juce::var& v)
 {
@@ -171,6 +145,7 @@ ProjectDocument ProjectDocument::blank()
     c.volume = 0.8f;
     d.channels.push_back (c);
     d.sampleSources.emplace_back();
+    d.kitSpecs.push_back (KitSpec::empty());
 
     d.tracks = Project::defaultTracks();
 
@@ -196,7 +171,9 @@ juce::String ProjectDocument::toJson() const
         const auto& c = channels[i];
         auto* o = new juce::DynamicObject();
         o->setProperty ("name", juce::String (c.name));
-        o->setProperty ("instrument", c.instrument == Instrument::Sampler ? "sampler" : "synth");
+        o->setProperty ("instrument", c.instrument == Instrument::Sampler ? "sampler" : c.instrument == Instrument::Drums ? "drums" : "synth");
+        if (c.instrument == Instrument::Drums)
+            o->setProperty ("kit", kitSpecToVar (i < kitSpecs.size() ? kitSpecs[i] : KitSpec::empty()));
         o->setProperty ("sample", juce::String (i < sampleSources.size() ? sampleSources[i] : std::string()));
         o->setProperty ("rootPitch", c.rootPitch);
         o->setProperty ("volume", number (static_cast<double> (c.volume)));
@@ -409,6 +386,8 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
         const auto instrument = o->getProperty ("instrument").toString();
         if (instrument == "sampler")
             c.instrument = Instrument::Sampler;
+        else if (instrument == "drums")
+            c.instrument = Instrument::Drums; // files from before 0.14.0 never say this
         else if (instrument == "synth")
             c.instrument = Instrument::Synth;
         else
@@ -426,6 +405,7 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
         c.swing = static_cast<float> (readNumber (o->getProperty ("swing"), 0.0, 0.0, 1.0));
         c.mixerTrack = readInt (o->getProperty ("mixerTrack"), std::min (i, kMaxTracks - 1), 0, kMaxTracks - 1);
 
+        d.kitSpecs.push_back (c.instrument == Instrument::Drums ? kitSpecFromVar (o->getProperty ("kit")) : KitSpec::empty());
         d.channels.push_back (std::move (c));
         d.sampleSources.push_back (o->getProperty ("sample").toString().toStdString());
     }

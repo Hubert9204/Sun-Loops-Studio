@@ -14,6 +14,7 @@
 #include "audio/Project.h"
 #include "ui/AudioMeter.h"
 #include "ui/AutomationEditor.h"
+#include "ui/DrumMachine.h"
 #include "ui/SampleEditor.h"
 #include "ui/MetersView.h"
 #include "library/ChannelPreset.h"
@@ -203,6 +204,11 @@ private:
     std::unique_ptr<SampleEditorWindow> sampleEditorWindow;
     void openSampleEditorForClip (int audioClipIndex);
     void openSampleEditorForChannel (int channelIndex);
+    std::unique_ptr<DrumMachineWindow> drumWindow;
+    int drumWindowChannel = -1;
+    void openDrumMachine (int channelIndex);
+    void closeDrumMachine();
+    static std::shared_ptr<const DrumKit> defaultDrumKit();
     int automationEditing = -1;     // index of the clip the window shows
     int currentPattern = 0;
     bool songMode = false;

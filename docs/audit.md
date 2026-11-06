@@ -27,6 +27,11 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.14.0
+Block G changed the audio thread in one place: `Player::drumNoteOn` (a loop over at most 32 voices for the choke group, then the same voice allocation as before) and two more multiplications per sampler voice sample. A test
+counts allocations while a busy drum pattern plays and swaps the kit under sounding voices. `Player::takeVoice` is the former inline allocation, unchanged in behaviour. `DrumMachine.cpp` is a new UI file (about 800 lines: the next candidate to split into the pad / inspector / step grid parts); the
+JSON helpers moved to `library/JsonRead.h` so that the project and kit files share them. clang-tidy was run on the new files; the result is in the commit message.
+
 ## After 0.13.0
 Block E added `SampleEdit.cpp` (pure functions; buffers are `std::vector`s, allocated on the UI thread only), `Auditioner.h` (the only new code on the audio thread:
 no allocation, no lock, a bounded copy loop; covered by a test that runs `mixInto` on a second thread while the UI starts and stops it, but not by the

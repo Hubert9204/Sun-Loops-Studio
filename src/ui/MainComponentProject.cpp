@@ -78,8 +78,10 @@ ProjectDocument MainComponent::makeDocument()
     for (auto& c : doc.channels)
     {
         doc.sampleSources.push_back (c.sample != nullptr ? c.sample->source : std::string());
+        doc.kitSpecs.push_back (c.instrument == Instrument::Drums && c.kit != nullptr ? specFromKit (*c.kit) : KitSpec::empty());
         c.notes.clear(); // the notes live in the patterns
         c.sample = nullptr;
+        c.kit = nullptr;
     }
     doc.tracks = tracks;
     doc.masterSlots = masterTrack.slots;
@@ -99,6 +101,7 @@ void MainComponent::applyDocument (ProjectDocument doc, const juce::File& file, 
 
     setPlaying (false);
     pianoRoll.setNotes ({}); // also ends a note that is being played by hand
+    closeDrumMachine();      // it points at a channel of the old project
 
     // Samples: built-in ones are regenerated, the others are read from the path stored in the file.
     for (size_t i = 0; i < doc.channels.size(); ++i)
@@ -127,6 +130,11 @@ void MainComponent::applyDocument (ProjectDocument doc, const juce::File& file, 
             }
         }
     }
+
+    // Drum kits: every layer is read from its file, or from the program for built-in sounds.
+    for (size_t i = 0; i < doc.channels.size(); ++i)
+        if (doc.channels[i].instrument == Instrument::Drums)
+            doc.channels[i].kit = std::make_shared<const DrumKit> (loadKit (i < doc.kitSpecs.size() ? doc.kitSpecs[i] : KitSpec::empty(), problems));
 
     // The strips hold references into `channels`, so tear them down first and refill the vector within its capacity.
     rackView.setStrips ({});

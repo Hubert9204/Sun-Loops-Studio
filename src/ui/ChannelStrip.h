@@ -63,6 +63,7 @@ public:
     std::function<void (int)> onLoadSample;    // "Load" pressed (sampler channels)
     std::function<void (int)> onEditSample;    // "Edit sample..." chosen (sampler channels with a sample)
     std::function<void (int)> onOpenPianoRoll; // context menu "Piano roll", or double click on the name / note preview
+    std::function<void (int)> onOpenDrumMachine; // drum channels: "Drum machine..." in the menu, or a double click (instead of the piano roll)
     std::function<void (int, Instrument)> onInstrumentChosen; // context menu "Instrument"
     std::function<void (int)> onRename;        // context menu "Rename..."
     std::function<void (int)> onSavePreset;    // context menu "Save as preset..."

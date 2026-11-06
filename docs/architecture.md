@@ -16,6 +16,8 @@ src/audio/                      No UI dependencies except JUCE audio types
   TimeStretch.*                 StretchSettings and stretchSample(): offline time-stretch / pitch-shift of a SampleData with Signalsmith Stretch
   SampleEdit.*                  Destructive edits of a SampleData (ranges, cut / crop / fades / gain / normalise ...), noise reduction (spectral gating), onset detection, grid slices, 32-bit float WAV writing (plain C++ over SampleData)
   Auditioner.h                  The editor's preview voice: lock-free hand-over to the audio thread, mixed after the master chain
+  SampleData.h                  SampleData (decoded audio) and finiteOr(), split from Project.h so that DrumKit.h and Project.h can include each other's needs
+  DrumKit.h                     The drum machine model: 16 pads, 4 velocity layers, choke groups, swing; layerFor(), padForPitch(), sanitised() (plain C++)
   Loudness.h                    LoudnessMeter: BS.1770-4 K-weighting, gating, LUFS, loudness range, true peak (plain C++)
   Spectrum.h                    StereoRing (lock-free audio -> GUI hand-over), SpectrumAnalyser (own FFT), stereo correlation
   Effects.*                     EffectSlot (type, bypass, parameters) and EffectUnit: Equalizer, Reverb, Delay, Compressor
@@ -36,6 +38,8 @@ src/audio/                      No UI dependencies except JUCE audio types
 src/library/                    No JUCE GUI; JUCE core only (files, JSON)
   BrowserModel.h                Browser tree nodes, which are draggable, search filter (plain C++)
   ChannelPreset.*               Channel presets as JSON (.slspreset) and the factory presets
+  DrumKitFile.*                 Drum kits: KitSpec (what a kit refers to), JSON, kit folders (kit.json + samples/), kits from a folder of sounds, the built-in kits, loadKit()
+  JsonRead.h                    readNumber / readInt / readBool / readName / number: the range-clamping JSON helpers shared by the project, preset and kit files
   Library.*                     ~/Music/Sun Loops Studio folders, directory scan, building the browser tree
   ProjectFile.*                 The .slp project file (older .slsproj still read): ProjectDocument <-> JSON, safe read and write
 
@@ -50,6 +54,7 @@ src/ui/
   AutomatableSlider.h           A slider whose right-click menu offers "Create automation clip"
   AutomationEditor.*            The point editor window for one automation clip
   MetersView.*                  The Meters window: loudness read-outs, true peak, spectrum, goniometer, correlation
+  DrumMachine.*                 The drum machine window: pad grid, pad inspector, step grid per pad, kit menu (MainComponentDrums.cpp opens and wires it)
   PanelWindow.*                 PanelWindow (floating panel) and Workspace (the area they float in)
   PanelLayout.h                 Panel position/size/visibility: parse, serialise, clamp (no JUCE)
   RackView.h  ChannelStrip.*    Channel Rack panel body and its rows (step grid, knobs, context menu, drop target)
@@ -283,6 +288,25 @@ reads nothing back (the sample in memory is used, `source` set to the new path) 
 `canPlaceAudio`), and `splitAudioClip` at each slice point; only a successful result is committed, as one undo step. `openSampleEditorForChannel` replaces
 the channel's sample instead. The project file is unchanged: clips and channels still store only the path.
 
+### Drum machine (0.14.0)
+
+A drum channel is `Instrument::Drums` with `Channel::kit`, a `shared_ptr<const DrumKit>` (immutable: an edit copies the kit, changes the copy and replaces the pointer, like a sampler channel's
+sample). `Project::make` gives every drum channel a sanitised kit (and no other channel one) and applies each pad's own swing (`applyPadSwing`) instead of the channel swing. Pad *n* answers to
+note 36 + *n*, so a drum channel's notes are ordinary notes: the sequencer, the piano roll, live notes and MIDI input need nothing new.
+
+`Player::noteOn` hands a drum note to `drumNoteOn`: pad lookup, mute / solo, `DrumPad::layerFor (velocity)`, the choke group (every sounding voice of the same channel and group goes to `Release`), then a one-shot
+sampler voice from the shared voice pool (`takeVoice`, the old allocation code) that also carries `pad`, `choke`, `padGain` and the pad's pan factors (constant power, 1.0 at the centre, so a centred pad is as loud as a
+sampler voice). The render loop multiplies them in; nothing else changed there. After a new snapshot, a drum voice survives only if the new kit still owns its sample (`DrumKit::owns`). Legato / slide never apply to
+drums. The tests count allocations while a busy pattern plays and swap the kit under sounding voices.
+
+`library/DrumKitFile` describes a kit as a `KitSpec` (names, settings, a source string and a minimum velocity per layer) and reads / writes it as JSON for both the project file (`"kit"` inside a `"drums"` channel,
+`ProjectDocument::kitSpecs`) and the kit file. `loadKit` reads every distinct source once; unreadable sources become `makeMissingSample` placeholders that keep the path. `saveKitFolder` writes `kit.json` (temporary
+file, then rename) and copies non-built-in sounds into `samples/` with relative paths; `readKitFolder` also accepts a plain folder of audio files. The JSON readers (`readNumber` ...) moved to `library/JsonRead.h`.
+
+The window (`ui/DrumMachine.*`) never holds a copy of the channel: `getChannel` returns the live channel, kit edits go through `editKit` (copy, change, replace, `onKitChanged`), and steps are edited in
+`Channel::notes` directly with one `onNotesChanged` at the end of a mouse gesture (undo through the existing note history). `MainComponent::publishProject` refreshes the window, so changes from the piano roll, pattern
+switches or undo show up. The window is closed when a project is opened (it points at a channel of the old project).
+
 ### Aux buses, sends and VCA groups (0.11.0)
 
 `Project::console` holds `aux[2]` (each a `MixerTrack`: name, fader, balance, mute, four effect slots) and `vcaLevel[2]` /
@@ -497,6 +521,7 @@ failed. It covers:
   the offline renderer, Song mode only, the project file round trip and old files;
 - the console: sends (pre / post fader, mute and solo), aux bus effects and fader, bus before the master chain, VCA scaling, two groups, VCA mute,
   hostile values and the project file;
+- the drum machine: pad / note mapping, layer choice, choke, level / pan / tuning, mute / solo, per-pad swing, the kit model, kit files (JSON, folders, hostile files) and the project file;
 - the sample editor: every edit operation (ranges, cut / crop, fades, normalise, DC), noise reduction against a tone in noise, onset detection and grid slices,
   the WAV writer, the preview voice (including stop while the audio thread runs) and `useEditedAudio`;
 - time-stretch: length, pitch and timing of test tones at four sample rates, edge cases, the clip arithmetic, tempo matching and the project file;

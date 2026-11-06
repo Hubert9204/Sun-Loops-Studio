@@ -214,6 +214,7 @@ BrowserNode buildBrowserTree (const LibraryPaths& paths, const std::vector<Plugi
         auto instruments = folder ("Instruments");
         instruments.children.push_back (leaf ("Synth", NodeKind::Instrument, "synth"));
         instruments.children.push_back (leaf ("Sampler", NodeKind::Instrument, "sampler"));
+        instruments.children.push_back (leaf ("Drum machine", NodeKind::Instrument, "drums"));
         root.children.push_back (std::move (instruments));
     }
 

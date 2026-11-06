@@ -219,7 +219,13 @@ ChannelStrip::ChannelStrip (Channel& channelToControl, int channelIndex)
 
     grid.onStepsEdited = [this] { if (onChanged) onChanged (index); };
     grid.onClickedPreview = [this] { if (onSelect) onSelect (index); };
-    grid.onDoubleClicked = [this] { if (onOpenPianoRoll) onOpenPianoRoll (index); };
+    grid.onDoubleClicked = [this]
+    {
+        if (channel.instrument == Instrument::Drums && onOpenDrumMachine)
+            onOpenDrumMachine (index);
+        else if (onOpenPianoRoll)
+            onOpenPianoRoll (index);
+    };
     grid.onContextMenu = [this] { showContextMenu(); };
 
     for (auto* c : std::initializer_list<juce::Component*> { &nameLabel, &trackSelector, &muteButton, &soloButton,
@@ -241,6 +247,7 @@ void ChannelStrip::refreshFromChannel()
     pitchKnob.setValue (channel.pitch);
     swingKnob.setValue (channel.swing);
     loadButton.setVisible (channel.instrument == Instrument::Sampler);
+    swingKnob.setVisible (channel.instrument != Instrument::Drums); // a drum machine has a swing per pad
     grid.repaint();
 }
 
@@ -339,7 +346,11 @@ void ChannelStrip::mouseDown (const juce::MouseEvent& e)
 
 void ChannelStrip::mouseDoubleClick (const juce::MouseEvent& e)
 {
-    if (! e.mods.isPopupMenu() && onOpenPianoRoll)
+    if (e.mods.isPopupMenu())
+        return;
+    if (channel.instrument == Instrument::Drums && onOpenDrumMachine)
+        onOpenDrumMachine (index);
+    else if (onOpenPianoRoll)
         onOpenPianoRoll (index);
 }
 
@@ -352,8 +363,10 @@ void ChannelStrip::showContextMenu()
     juce::PopupMenu instrument;
     instrument.addItem (2, "Synth", true, channel.instrument == Instrument::Synth);
     instrument.addItem (3, "Sampler (WAV / FLAC / OGG / AIFF)", true, channel.instrument == Instrument::Sampler);
+    instrument.addItem (9, "Drum machine (16 pads)", true, channel.instrument == Instrument::Drums);
 
     juce::PopupMenu menu;
+    menu.addItem (10, "Drum machine...", channel.instrument == Instrument::Drums);
     menu.addItem (1, "Piano roll");
     menu.addSeparator();
     menu.addSubMenu ("Instrument", instrument);
@@ -362,7 +375,7 @@ void ChannelStrip::showContextMenu()
     menu.addItem (5, "Rename...");
     menu.addSeparator();
     menu.addItem (7, "Assign free mixer track");
-    menu.addItem (6, "Save as preset...");
+    menu.addItem (6, "Save as preset...", channel.instrument != Instrument::Drums);
 
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
                         [safe = juce::Component::SafePointer<ChannelStrip> (this)] (int result)
@@ -378,6 +391,8 @@ void ChannelStrip::showContextMenu()
                                 case 3: if (safe->onInstrumentChosen) safe->onInstrumentChosen (i, Instrument::Sampler); break;
                                 case 4: if (safe->onLoadSample) safe->onLoadSample (i); break;
                                 case 8: if (safe->onEditSample) safe->onEditSample (i); break;
+                                case 9: if (safe->onInstrumentChosen) safe->onInstrumentChosen (i, Instrument::Drums); break;
+                                case 10: if (safe->onOpenDrumMachine) safe->onOpenDrumMachine (i); break;
                                 case 5: if (safe->onRename) safe->onRename (i); break;
                                 case 6: if (safe->onSavePreset) safe->onSavePreset (i); break;
                                 case 7: if (safe->onAssignTrack) safe->onAssignTrack (i); break;

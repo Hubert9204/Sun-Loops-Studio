@@ -9,6 +9,7 @@
 
 #include "audio/Arrangement.h"
 #include "audio/Project.h"
+#include "library/DrumKitFile.h"
 
 namespace sls
 {
@@ -26,6 +27,7 @@ struct ProjectDocument
 {
     std::vector<Channel> channels;           // 1..kMaxChannels; `notes` and `sample` are empty (see below)
     std::vector<std::string> sampleSources;  // one per channel: "builtin:<id>", an absolute path, or empty
+    std::vector<KitSpec> kitSpecs;           // one per channel (may be shorter): the pads of a drum channel, from where their sounds come (0.14.0)
     std::vector<MixerTrack> tracks;          // exactly kMaxTracks
     std::array<EffectSlot, kSlotsPerTrack> masterSlots {}; // effects on the master bus
     Console console = Console::defaults();   // aux buses and VCA groups

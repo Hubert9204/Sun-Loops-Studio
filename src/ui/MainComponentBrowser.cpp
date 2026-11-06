@@ -133,7 +133,8 @@ void MainComponent::applyBrowserItem (int channelIndex, const drag::Item& item)
         }
         const bool wantsSynth = (item.kind == "instrument" && item.payload == "synth")
                              || (item.kind == "preset" && item.payload == "builtin:lead");
-        channelIndex = addChannel (wantsSynth ? Instrument::Synth : Instrument::Sampler, false);
+        const bool wantsDrums = item.kind == "instrument" && item.payload == "drums";
+        channelIndex = addChannel (wantsDrums ? Instrument::Drums : wantsSynth ? Instrument::Synth : Instrument::Sampler, false);
         if (channelIndex < 0)
             return;
     }
@@ -143,6 +144,13 @@ void MainComponent::applyBrowserItem (int channelIndex, const drag::Item& item)
 
     selectChannel (channelIndex);
     auto& channel = channels[static_cast<size_t> (channelIndex)];
+
+    if (channel.instrument == Instrument::Drums && (item.kind == "file" || item.kind == "builtin"))
+    {
+        // A sound dropped on a drum channel would turn it into a sampler and lose the kit: it belongs on a pad.
+        statusLabel.setText ("Drop sounds on a pad of the drum machine (double-click the channel to open it)", juce::dontSendNotification);
+        return;
+    }
 
     if (item.kind == "file")
     {
@@ -163,7 +171,9 @@ void MainComponent::applyBrowserItem (int channelIndex, const drag::Item& item)
     }
     else if (item.kind == "instrument")
     {
-        setInstrument (channelIndex, item.payload == "sampler" ? Instrument::Sampler : Instrument::Synth);
+        setInstrument (channelIndex, item.payload == "sampler" ? Instrument::Sampler : item.payload == "drums" ? Instrument::Drums : Instrument::Synth);
+        if (item.payload == "drums")
+            openDrumMachine (channelIndex);
     }
     else if (item.kind == "preset")
     {

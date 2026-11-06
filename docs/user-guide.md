@@ -144,12 +144,14 @@ One row per channel: a **Track N** display and the name, **M** (mute), **S** (so
   **Load** button picks a sample file.
 - **Synth channels** show a small preview of their notes. Edit the notes in the Piano Roll.
 - Click a row to select that channel (the Piano Roll and the Mixer follow the selection).
-- **+ Add channel** under the last row adds a synth or sampler channel, up to 8 channels in total.
+- **Drum channels** show a small preview of their notes; double-click opens the drum machine (see below).
+- **+ Add channel** under the last row adds a synth, sampler or drum-machine channel, up to 8 channels in total.
 
 ### Right-click menu on a channel
 
 | Item | Effect |
 | --- | --- |
+| Drum machine... | (Drum channels) opens the drum machine window. |
 | Piano roll | Selects the channel and opens the Piano Roll for it. |
 | Instrument > Synth / Sampler | Chooses what makes the sound. Switching to Sampler on a channel without a sample asks for one. The sample is kept if you switch back to Synth. |
 | Load sample... | Pick a WAV, FLAC, OGG or AIFF file (the first 30 seconds are used). The channel is renamed after the file. |
@@ -159,6 +161,42 @@ One row per channel: a **Track N** display and the name, **M** (mute), **S** (so
 
 Double-clicking a synth channel's note preview, or the name of any channel, also opens its Piano Roll. On sampler
 channels double-clicking the steps is not special: every click toggles a step.
+
+## Drum machine
+
+A **drum channel** is one channel with 16 pads. Add one with **+ Add channel** > *Drum machine (16 pads)*, by dragging *Instruments > Drum machine* from the browser onto the rack,
+or by right-clicking a channel > *Instrument* > *Drum machine (16 pads)*. A new drum channel starts with the Sun Loops Basic Kit (kick, snare and hat on pads 1 to 3).
+**Double-click** the channel (or right-click > *Drum machine...*) to open its window; its volume, pan, pitch, mute / solo, mixer track and automation work like those of any channel.
+
+**Pads.** The 4 x 4 grid has pad 1 at the bottom left. Pad *n* plays when the channel gets the MIDI note **36 + n** (pad 1 = C2, pad 16 = D#3): the same notes show up in the
+Piano Roll, a MIDI keyboard plays the pads, and imported notes in that range play them. Click a pad to hear it and select it (Shift+click = soft, Ctrl+click = hard,
+so you can hear the velocity layers). Right-click a pad for *Load a sound*, *Clear this pad*, *Mute* and *Solo*. Drag a sound from the browser onto a pad to put it on layer 1.
+
+**The selected pad** (right side):
+
+| Control | Meaning |
+| --- | --- |
+| Name, Mute, Solo | The pad's name (up to 24 characters, Return to accept), and silencing it / playing only the soloed pads (mute wins over solo). *Play pad* plays it. |
+| Choke group | *None*, or group 1 to 8. When a pad starts, the pads of the same group that are still sounding are cut (a short fade): a closed hi-hat stops an open one. A pad in a group also cuts its own earlier hit. |
+| Layers 1 to 4 | Each layer holds one sound (*Load*, or drop one from the browser on its row; *x* empties it) and the **lowest velocity it answers to** (1 to 127). A note plays the layer with the highest minimum that its velocity reaches; below every minimum the lowest layer plays. A new second, third and fourth layer starts at 64, 96 and 112. |
+| Level, Pan, Tuning | Level 0 to 150 %, pan -100 to +100, tuning -24 to +24 semitones (tuning changes the length of the sound too). Double-click a slider to reset it. |
+| Swing | 0 to 100 %: delays this pad's off-beat 16th steps (up to half a 16th). The channel's own Swing knob is hidden: a drum channel does not use it. |
+
+**Steps.** The grid at the bottom has one row per pad and 32 steps (two bars of 16ths). Click a step to switch it on or off (you hear the pad), drag to paint or erase a run, right-click to erase.
+Shift+click puts a soft step (velocity 0.45), Ctrl+click an accented one (1.0), a plain click 0.8; the brightness of a step shows its velocity. A click on a row label selects (and plays) that pad.
+The grid edits the channel's notes of the **current pattern** (undo and redo of notes work), shows notes made elsewhere (a note belongs to the step it starts in), and a line follows the playhead in Pattern mode.
+
+**Kits.** *Load kit...* replaces all 16 pads (the steps stay): the *Sun Loops Basic Kit*, the *Cyber-Hub Kit*, *From a folder...* (a folder with a `kit.json`, or simply a folder of audio
+files: its first 16 files in name order fill the pads and name them), and every sub-folder of `~/Music/Sun Loops Studio/Drum Kits` under *My kits*. *Save kit...* asks for a name and writes a
+folder of that name in *Drum Kits* with `kit.json` and copies of the sounds in `samples/` (sounds that are built into the program stay references); it asks before replacing a kit of the same
+name. *Empty kit* clears all pads after asking.
+
+**In a project.** The project file stores each drum channel's kit: the pads' names and settings and where every sound comes from (a file path, or a built-in sound), not the audio. When a project is opened
+the sounds are read again; a file that is gone leaves a silent layer that keeps its path (and a message), so saving again does not lose the reference. Save the kit as a folder to make it portable.
+
+Not available: undo of kit edits (the steps can be undone), an output or effects per pad (the whole channel goes to one mixer track), round-robin layers, editing a pad's sound in the sample editor (edit it
+on a sampler channel, then load the saved file), more than 16 pads or 4 layers, sounds longer than 30 seconds, saving a drum channel as a channel preset (save the kit), mapping imported MIDI percussion to pads.
+Projects that contain a drum machine cannot be opened by versions older than 0.14.
 
 ## Piano Roll
 

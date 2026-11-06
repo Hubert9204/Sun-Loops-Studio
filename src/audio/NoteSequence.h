@@ -8,6 +8,7 @@ namespace sls
 {
 constexpr int kTicksPerBeat = 480;
 constexpr int kSixteenthTicks = kTicksPerBeat / 4; // the step of the step sequencer and of the swing
+constexpr float kMaxSwingShiftTicks = 60.0f; // swing 100 % delays off-beat notes by half a 16th step
 
 // How a note joins the one sounding before it in the same channel (see Player::noteOn): Legato = the same sound goes on, its
 // pitch jumps to this note's pitch (no new attack); Slide = the same, but the pitch glides there (at most an eighth note). With

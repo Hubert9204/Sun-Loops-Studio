@@ -102,6 +102,11 @@ private:
         int glideLeft = 0;                  // samples left of a pitch slide (multiplies increment / step by glideRatio each sample)
         double glideRatio = 1.0;
         double glideTarget = 0.0;           // the exact rate at the end of the slide
+        int pad = -1;                       // drum voices: the pad (0..15) and its choke group; -1 for every other voice
+        int choke = 0;
+        float padGain = 1.0f;               // the pad's level and pan (1 / 1 / 1 for every other voice)
+        float padLeft = 1.0f;
+        float padRight = 1.0f;
     };
 
     // Audio clips of the playlist (recordings, imported files): one voice each, played straight through.
@@ -122,6 +127,8 @@ private:
     void startClip (const AudioEvent& e) noexcept;
     void releaseClips() noexcept;
 
+    Voice& takeVoice() noexcept;
+    void drumNoteOn (const Channel& channel, int channelIndex, const Note& n) noexcept;
     void noteOn (const Channel& channel, int channelIndex, const Note& n, int loopLength, bool live = false) noexcept;
     void releaseVoices (bool includeSamplers) noexcept;
     void onProjectChanged (const Project& project) noexcept;

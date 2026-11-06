@@ -14,7 +14,7 @@ strumento sta in un pannello mobile che puoi spostare, ridimensionare, sovrappor
 Sun Loops Studio si ispira al modo di lavorare dei DAW a loop come FL Studio. È un progetto indipendente: non usa
 codice, nomi, grafica o risorse di altri prodotti e non è affiliato né approvato dai loro produttori.
 
-**Stato: alpha (0.13.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
+**Stato: alpha (0.14.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
 La riproduzione è stata confermata su un vero PC Nobara per la versione 0.3; tutto ciò che è stato aggiunto dopo
 (pannelli, pattern, playlist, browser, pitch/swing, mixer espanso ed effetti, salvataggio dei progetti, AppImage, clip audio, trascinamento
 dei file, registrazione, MIDI, metronomo e formati di esportazione) è stato provato con test automatici e in un display virtuale con un
@@ -63,6 +63,8 @@ cosa manca (hosting VST3 e annulla/ripristina sono le mancanze principali).
   corsie sotto le tracce della playlist e hanno un editor dei punti (linee lineari / a gradino / morbide). Solo in modalità Song.
 - **Stretch e pitch** - tasto destro su una clip audio: allungala o accorciala senza cambiarne l'intonazione, trasponila senza cambiarne la lunghezza,
   o adatta un loop al tempo del progetto (Signalsmith Stretch).
+- **Drum machine** - un canale con 16 pad (note da 36 a 51): fino a quattro layer di suono per pad scelti dalla velocità, volume, pan, intonazione, swing e
+  choke group per pad, un sequencer a passi con una riga per pad, trascinamento dal browser e kit salvati come cartelle (`kit.json` + suoni).
 - **Editor di campioni** - tasto destro su una clip audio o su un canale sampler > *Edit sample...*: forma d'onda con zoom e selezione, anteprima con spettro in tempo reale,
   taglia / ritaglia / silenzia / inverti / guadagno / normalizza / dissolvenze / rimozione DC con annulla, riduzione del rumore (spectral gating) e taglio di una clip
   sui colpi rilevati o in parti uguali. Il risultato è salvato come nuovo file WAV; l'originale non viene mai toccato.
