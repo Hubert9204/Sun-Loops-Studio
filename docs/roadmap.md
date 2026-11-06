@@ -51,7 +51,8 @@ what is missing. If something here disagrees with the program, the program is ri
   faster than real time; whether the jump clicks on real material, and how the 20 ms release at a seek sounds, was not judged by ear. *Delete channel*, *Clone channel* and the
   *Export project with samples* dialog were not clicked through in the interface (their data part is covered by tests); the confirmation dialog of *Delete channel* was not seen.
   The undo history copies the whole project at every edit: on very large projects (many long patterns) this was not timed. The CI workflow
-  (`.github/workflows/build.yml`) runs only on GitHub; its first run is the first test of it.
+  (`.github/workflows/build.yml`) ran once on GitHub for 0.15.0 (Fedora 41 container: build and all tests passed); it builds without
+  `FETCHCONTENT_SOURCE_DIR_JUCE`, so it also checks the JUCE download.
 
 - **How the drum machine sounds and plays on real hardware.** Layers, choke groups, levels and swing were checked on synthetic tones and by measuring rendered audio; the pads were clicked in a virtual display with a silent device,
   never heard on speakers, and never played from a real pad controller or MIDI keyboard. The 20 ms choke fade and the 0.5 ms attack were not judged by ear. Saving kits was tested on a local disk only
