@@ -18,6 +18,7 @@ const juce::Colour kNoteSelected { 0xff8fe8b8 };
 const juce::Colour kNoteLegato { 0xff4ca6e0 };
 const juce::Colour kNoteSlide { 0xffe8a23a };
 const juce::Colour kPlayhead { 0xffffb347 };
+const juce::Colour kLoop { 0xff4a8fd8 };
 } // namespace
 
 PianoRoll::PianoRoll()
@@ -78,6 +79,158 @@ void PianoRoll::setPlayheadTick (int tick)
         playheadTick = tick;
         repaint();
     }
+}
+
+void PianoRoll::setStartTick (int tick)
+{
+    tick = std::clamp (tick, 0, loopLengthTicks);
+    if (tick != startTick)
+    {
+        startTick = tick;
+        repaint (rulerArea());
+    }
+}
+
+void PianoRoll::setLoopRegion (int start, int end)
+{
+    if (start < 0 || end <= start || end > loopLengthTicks)
+        start = end = -1;
+    if (start != loopStart || end != loopEnd)
+    {
+        loopStart = start;
+        loopEnd = end;
+        if (loopStart < 0)
+            loopMode = LoopMode::None;
+        repaint();
+    }
+}
+
+juce::Rectangle<int> PianoRoll::rulerArea() const
+{
+    return getLocalBounds().withTrimmedLeft (kKeyboardWidth).removeFromTop (kRulerHeight);
+}
+
+int PianoRoll::rulerSnap (double tick, bool noSnap) const noexcept
+{
+    const int t = noSnap ? static_cast<int> (std::llround (tick)) : snap (tick);
+    return std::clamp (t, 0, loopLengthTicks);
+}
+
+bool PianoRoll::overLoop (int x) const noexcept
+{
+    return loopStart >= 0 && x >= tickToX (loopStart) && x <= tickToX (loopEnd);
+}
+
+int PianoRoll::loopEdgeAt (int x) const noexcept
+{
+    if (loopStart < 0)
+        return 0;
+    if (std::abs (static_cast<float> (x) - tickToX (loopStart)) <= 5.0f)
+        return -1;
+    if (std::abs (static_cast<float> (x) - tickToX (loopEnd)) <= 5.0f)
+        return 1;
+    return 0;
+}
+
+void PianoRoll::placeLoop (int start, int end)
+{
+    start = std::clamp (start, 0, loopLengthTicks);
+    end = std::clamp (end, 0, loopLengthTicks);
+    if (start == loopStart && end == loopEnd)
+        return;
+    loopStart = start;
+    loopEnd = end;
+    repaint();
+}
+
+void PianoRoll::announceLoop()
+{
+    if (onLoopChanged)
+        onLoopChanged (loopStart, loopEnd);
+}
+
+bool PianoRoll::cancelLoopMode()
+{
+    if (loopMode == LoopMode::None)
+        return false;
+    loopMode = LoopMode::None;
+    placeLoop (loopOriginalStart, loopOriginalEnd);
+    setMouseCursor (juce::MouseCursor::NormalCursor);
+    if (onStatus)
+        onStatus ("Loop region left as it was");
+    return true;
+}
+
+void PianoRoll::showLoopMenu()
+{
+    juce::PopupMenu menu;
+    menu.addSectionHeader ("Loop region");
+    menu.addItem (1, "Move");
+    menu.addItem (2, "Resize");
+    menu.addSeparator();
+    menu.addItem (3, "Delete loop region");
+    juce::Component::SafePointer<PianoRoll> safe (this);
+    menu.showMenuAsync (juce::PopupMenu::Options().withMousePosition(), [safe] (int choice)
+    {
+        if (safe == nullptr || safe->loopStart < 0 || choice == 0)
+            return;
+        auto& self = *safe;
+        const int mouseTick = self.rulerSnap (self.xToTick (static_cast<float> (self.getMouseXYRelative().x)), true);
+        if (choice == 3)
+        {
+            self.loopStart = self.loopEnd = -1;
+            self.repaint();
+            self.announceLoop();
+            return;
+        }
+        self.loopOriginalStart = self.loopStart;
+        self.loopOriginalEnd = self.loopEnd;
+        if (choice == 1)
+        {
+            self.loopMode = LoopMode::Move;
+            self.loopGrab = std::clamp (mouseTick - self.loopStart, 0, self.loopEnd - self.loopStart);
+            self.setMouseCursor (juce::MouseCursor::DraggingHandCursor);
+        }
+        else
+        {
+            self.loopMode = LoopMode::Resize;
+            self.loopResizeEdge = mouseTick < (self.loopStart + self.loopEnd) / 2 ? -1 : 1;
+            self.setMouseCursor (juce::MouseCursor::LeftRightResizeCursor);
+        }
+        if (self.onStatus)
+            self.onStatus (choice == 1 ? "Moving the loop region: click to place it (right click or Escape: cancel)"
+                                       : "Resizing the loop region: click to finish (right click or Escape: cancel)");
+    });
+}
+
+void PianoRoll::followLoopMode (int x)
+{
+    if (loopMode == LoopMode::None || loopStart < 0)
+        return;
+    const int mouseTick = static_cast<int> (std::llround (xToTick (static_cast<float> (x))));
+    const int length = loopEnd - loopStart;
+    if (loopMode == LoopMode::Move)
+    {
+        const int start = std::clamp (snap (mouseTick - loopGrab), 0, loopLengthTicks - length);
+        placeLoop (start, start + length);
+    }
+    else if (loopResizeEdge < 0)
+        placeLoop (std::min (rulerSnap (mouseTick, false), loopEnd - kGridTicks), loopEnd);
+    else
+        placeLoop (loopStart, std::max (rulerSnap (mouseTick, false), loopStart + kGridTicks));
+}
+
+void PianoRoll::mouseMove (const juce::MouseEvent& e)
+{
+    if (loopMode != LoopMode::None)
+    {
+        followLoopMode (e.x);
+        return;
+    }
+    if (rulerArea().contains (e.getPosition()))
+        setMouseCursor (loopEdgeAt (e.x) != 0 ? juce::MouseCursor::LeftRightResizeCursor : juce::MouseCursor::NormalCursor);
+    else
+        setMouseCursor (juce::MouseCursor::NormalCursor);
 }
 
 juce::Rectangle<int> PianoRoll::gridArea() const
@@ -240,6 +393,13 @@ void PianoRoll::paint (juce::Graphics& g)
             g.fillRect (loopEndX, static_cast<float> (grid.getY()), grid.getRight() - loopEndX, static_cast<float> (grid.getHeight()));
         }
 
+        // The loop region, faintly over the grid.
+        if (loopStart >= 0)
+        {
+            g.setColour (kLoop.withAlpha (0.10f));
+            g.fillRect (tickToX (loopStart), static_cast<float> (grid.getY()), tickToX (loopEnd) - tickToX (loopStart), static_cast<float> (grid.getHeight()));
+        }
+
         // Notes.
         for (size_t i = 0; i < notes.size(); ++i)
         {
@@ -290,6 +450,19 @@ void PianoRoll::paint (juce::Graphics& g)
         g.reduceClipRegion (ruler);
         g.setColour (juce::Colour (0xff1b1d22));
         g.fillRect (ruler);
+        if (loopStart >= 0)
+        {
+            const float x0 = tickToX (loopStart), x1 = tickToX (loopEnd);
+            g.setColour (kLoop.withAlpha (0.45f));
+            g.fillRect (x0, static_cast<float> (ruler.getY()), x1 - x0, static_cast<float> (ruler.getHeight()));
+            g.setColour (kLoop);
+            g.fillRect (x0, static_cast<float> (ruler.getY()), 2.0f, static_cast<float> (ruler.getHeight()));
+            g.fillRect (x1 - 2.0f, static_cast<float> (ruler.getY()), 2.0f, static_cast<float> (ruler.getHeight()));
+            g.setColour (juce::Colours::white.withAlpha (0.9f));
+            g.setFont (juce::FontOptions (9.0f, juce::Font::bold));
+            if (x1 - x0 > 34.0f)
+                g.drawText ("LOOP", static_cast<int> (x0) + 4, ruler.getBottom() - 11, 40, 10, juce::Justification::centredLeft);
+        }
         g.setColour (juce::Colours::white.withAlpha (0.75f));
         g.setFont (11.0f);
         for (int t = 0; t < loopLengthTicks; t += 4 * kTicksPerBeat)
@@ -299,6 +472,13 @@ void PianoRoll::paint (juce::Graphics& g)
             g.drawText (juce::String (t / (4 * kTicksPerBeat) + 1), static_cast<int> (x) + 4, ruler.getY(), 40, ruler.getHeight(),
                         juce::Justification::centredLeft);
         }
+        // Where Play starts (stopped) or the playhead (playing).
+        const float sx = tickToX (playheadTick >= 0 ? playheadTick : startTick);
+        juce::Path marker;
+        marker.addTriangle (sx - 5.0f, static_cast<float> (ruler.getY() + 2), sx + 5.0f, static_cast<float> (ruler.getY() + 2), sx,
+                            static_cast<float> (ruler.getY() + 11));
+        g.setColour (kPlayhead);
+        g.fillPath (marker);
     }
 
     // --- keyboard -----------------------------------------------------------------
@@ -335,6 +515,52 @@ void PianoRoll::paint (juce::Graphics& g)
 
 void PianoRoll::mouseDown (const juce::MouseEvent& e)
 {
+    const bool right = e.mods.isRightButtonDown() || e.mods.isPopupMenu();
+    if (loopMode != LoopMode::None)
+    {
+        // Following the mouse after the menu: a left click places the region, a right click puts it back.
+        if (right)
+            cancelLoopMode();
+        else
+        {
+            loopMode = LoopMode::None;
+            setMouseCursor (juce::MouseCursor::NormalCursor);
+            announceLoop();
+        }
+        return;
+    }
+
+    if (rulerArea().contains (e.getPosition()))
+    {
+        const int tick = rulerSnap (xToTick (e.position.x), e.mods.isAltDown());
+        if (! right)
+        {
+            dragMode = Drag::Seek;
+            if (onSeek)
+                onSeek (tick);
+            return;
+        }
+        loopDragMoved = false;
+        loopOriginalStart = loopStart;
+        loopOriginalEnd = loopEnd;
+        if (const int edge = loopEdgeAt (e.x); edge != 0)
+        {
+            dragMode = Drag::LoopResize;
+            loopResizeEdge = edge;
+        }
+        else if (overLoop (e.x))
+        {
+            dragMode = Drag::LoopMove;
+            loopGrab = static_cast<int> (std::llround (xToTick (e.position.x))) - loopStart;
+        }
+        else
+        {
+            dragMode = Drag::LoopCreate;
+            loopAnchor = tick;
+        }
+        return;
+    }
+
     if (isOnKeyboard (e.getPosition()))
     {
         if (! (e.mods.isRightButtonDown() || e.mods.isPopupMenu()))
@@ -422,6 +648,39 @@ void PianoRoll::mouseDown (const juce::MouseEvent& e)
 
 void PianoRoll::mouseDrag (const juce::MouseEvent& e)
 {
+    if (dragMode == Drag::Seek)
+    {
+        if (onSeek)
+            onSeek (rulerSnap (xToTick (e.position.x), e.mods.isAltDown()));
+        return;
+    }
+    if (dragMode == Drag::LoopCreate || dragMode == Drag::LoopMove || dragMode == Drag::LoopResize)
+    {
+        if (e.getDistanceFromDragStart() < 3 && ! loopDragMoved)
+            return;
+        loopDragMoved = true;
+        const double mouse = xToTick (e.position.x);
+        const int tick = rulerSnap (mouse, e.mods.isAltDown());
+        if (dragMode == Drag::LoopCreate)
+        {
+            if (tick != loopAnchor)
+                placeLoop (std::min (tick, loopAnchor), std::max (tick, loopAnchor));
+        }
+        else if (dragMode == Drag::LoopMove)
+        {
+            const int length = loopOriginalEnd - loopOriginalStart;
+            const int start = std::clamp (snap (mouse - loopGrab), 0, loopLengthTicks - length);
+            placeLoop (start, start + length);
+        }
+        else if (loopResizeEdge < 0)
+            placeLoop (std::min (tick, loopOriginalEnd - kGridTicks), loopOriginalEnd);
+        else
+            placeLoop (loopOriginalStart, std::max (tick, loopOriginalStart + kGridTicks));
+        if (onStatus && loopStart >= 0)
+            onStatus ("Loop region: 16ths " + juce::String (loopStart / kGridTicks + 1) + " to " + juce::String (loopEnd / kGridTicks));
+        return;
+    }
+
     if (keyboardHeld)
     {
         sound (yToPitch (e.position.y)); // sliding over the keys plays each one in turn
@@ -459,8 +718,27 @@ void PianoRoll::mouseDrag (const juce::MouseEvent& e)
     repaint();
 }
 
-void PianoRoll::mouseUp (const juce::MouseEvent&)
+void PianoRoll::mouseUp (const juce::MouseEvent& e)
 {
+    if (dragMode == Drag::Seek)
+    {
+        dragMode = Drag::None;
+        return;
+    }
+    if (dragMode == Drag::LoopCreate || dragMode == Drag::LoopMove || dragMode == Drag::LoopResize)
+    {
+        const auto mode = dragMode;
+        dragMode = Drag::None;
+        if (loopDragMoved)
+        {
+            if (loopStart != loopOriginalStart || loopEnd != loopOriginalEnd)
+                announceLoop();
+        }
+        else if (mode != Drag::LoopCreate && overLoop (e.x))
+            showLoopMenu(); // a right click (no drag) on the region
+        return;
+    }
+
     sound (-1);
     keyboardHeld = false;
     const bool changed = dragChanged;

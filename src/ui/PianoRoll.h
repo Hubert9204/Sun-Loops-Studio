@@ -19,6 +19,11 @@ namespace sls
 //   Left button on a key       : plays that note for as long as the button is down (slide to change the note)
 //   Left button on the grid    : the note being created, moved or resized sounds while the button is down
 //   Mouse wheel                : scroll pitch   | Shift+wheel: scroll time | Ctrl+wheel: zoom time
+// The ruler (0.20.0), as in the playlist:
+//   Left click / drag          : move the pattern position there (also while playing; snapped to 16ths, Alt: no snap)
+//   Right drag                 : draw a loop region; Pattern mode then repeats only that part of the pattern
+//   Right drag on the region   : move it (on one of its edges: resize it)
+//   Right click on the region  : menu Move / Resize / Delete loop region (Delete removes only the highlight)
 class PianoRoll : public juce::Component
 {
 public:
@@ -35,6 +40,18 @@ public:
     // tick < 0 hides the playhead.
     void setPlayheadTick (int tick);
 
+    // Where Play starts in Pattern mode (a small marker on the ruler while stopped), and the loop region of the pattern
+    // (start < 0: none). Neither calls back.
+    void setStartTick (int tick);
+    void setLoopRegion (int startTick, int endTick);
+    int getLoopStart() const noexcept { return loopStart; }
+    int getLoopEnd() const noexcept { return loopEnd; }
+    bool cancelLoopMode(); // Escape during Move / Resize from the menu: true if there was one to cancel
+
+    std::function<void (int tick)> onSeek;                   // left click on the ruler
+    std::function<void (int start, int end)> onLoopChanged; // the region was drawn, moved, resized (-1, -1: deleted)
+    std::function<void (const juce::String&)> onStatus;
+
     // Called on the message thread whenever the set of notes has changed.
     std::function<void()> onNotesChanged;
 
@@ -49,10 +66,21 @@ public:
     void mouseDrag (const juce::MouseEvent&) override;
     void mouseUp (const juce::MouseEvent&) override;
     void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
+    void mouseMove (const juce::MouseEvent&) override;
     void visibilityChanged() override;
 
 private:
-    enum class Drag { None, Move, Resize };
+    enum class Drag { None, Move, Resize, Seek, LoopCreate, LoopMove, LoopResize };
+    enum class LoopMode { None, Move, Resize }; // following the mouse after the region's menu
+
+    juce::Rectangle<int> rulerArea() const;
+    int rulerSnap (double tick, bool noSnap) const noexcept;
+    bool overLoop (int x) const noexcept;
+    int loopEdgeAt (int x) const noexcept; // -1 start edge, +1 end edge, 0 none
+    void placeLoop (int start, int end);
+    void announceLoop();
+    void showLoopMenu();
+    void followLoopMode (int x);
 
     static constexpr int kLowPitch = 36;   // C2
     static constexpr int kHighPitch = 96;  // C7
@@ -87,6 +115,14 @@ private:
     bool userZoomed = false; // until the user zooms, the loop keeps fitting the width when the panel is resized
 
     int playheadTick = -1;
+    int startTick = 0;
+    int loopStart = -1, loopEnd = -1;
+    int loopOriginalStart = -1, loopOriginalEnd = -1;
+    int loopGrab = 0;          // ticks from the region start to the mouse, while moving it
+    int loopResizeEdge = 0;
+    int loopAnchor = 0;        // where a new region was started
+    bool loopDragMoved = false;
+    LoopMode loopMode = LoopMode::None;
     int soundingPitch = -1;      // the note currently played by hand, -1 if none
     bool keyboardHeld = false;   // the button went down on the keyboard (not on the grid)
 

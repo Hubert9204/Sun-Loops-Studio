@@ -316,6 +316,8 @@ juce::String ProjectDocument::toJson() const
             perChannel.add (notes);
         }
         o->setProperty ("notes", perChannel);
+        if (p.hasLoop (arrangement.patternTicks))
+            o->setProperty ("loop", juce::Array<juce::var> { p.loopStartTick, p.loopEndTick }); // the piano roll's loop region (0.20.0)
         patternList.add (juce::var (o));
     }
     root->setProperty ("patterns", patternList);
@@ -583,6 +585,19 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
         Pattern pattern;
         pattern.name = readName (o->getProperty ("name"), "Pattern " + std::to_string (p + 1));
         pattern.notes.resize (numChannels);
+        if (auto* loop = o->getProperty ("loop").getArray(); loop != nullptr && loop->size() == 2)
+        {
+            // Out-of-range values are dropped, not clamped: a region that does not fit is not this pattern's region.
+            const auto tickOf = [] (const juce::var& x) { return x.isInt() || x.isInt64() || x.isDouble() ? static_cast<double> (x) : -1.0; };
+            const double start = tickOf ((*loop)[0]), end = tickOf ((*loop)[1]);
+            if (start >= 0.0 && end <= d.arrangement.patternTicks)
+            {
+                pattern.loopStartTick = static_cast<int> (start);
+                pattern.loopEndTick = static_cast<int> (end);
+            }
+            if (! pattern.hasLoop (d.arrangement.patternTicks))
+                pattern.loopStartTick = pattern.loopEndTick = -1;
+        }
 
         if (auto* perChannel = o->getProperty ("notes").getArray())
             for (int c = 0; c < std::min (perChannel->size(), static_cast<int> (numChannels)); ++c)

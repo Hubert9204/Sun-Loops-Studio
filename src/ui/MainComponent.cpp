@@ -307,6 +307,30 @@ MainComponent::MainComponent()
     pianoRoll.onNoteStopped = [this] (int pitch) { engine.liveNoteOff (liveChannel, pitch); };
 
     pianoRoll.setLoopLengthTicks (kLoopTicks);
+    pianoRoll.onSeek = [this] (int tick) { seekPattern (tick); };
+    pianoRoll.onStatus = [this] (const juce::String& text) { statusLabel.setText (text, juce::dontSendNotification); };
+    pianoRoll.onLoopChanged = [this] (int start, int end)
+    {
+        commitCurrentPattern();
+        if (currentPattern < 0 || currentPattern >= static_cast<int> (arrangement.patterns.size()))
+            return;
+        auto& pattern = arrangement.patterns[static_cast<size_t> (currentPattern)];
+        pattern.loopStartTick = start;
+        pattern.loopEndTick = end;
+        if (pattern.hasLoop (arrangement.patternTicks))
+        {
+            statusLabel.setText ("Piano roll loop region: 16ths " + juce::String (start / (kTicksPerBeat / 4) + 1) + " to "
+                                     + juce::String (end / (kTicksPerBeat / 4)) + " (Pattern mode repeats it)",
+                                 juce::dontSendNotification);
+            if (! engine.isPlaying())
+                seekPattern (start); // stopped: Play starts at the region
+            else if (songMode)
+                setSongMode (false);
+        }
+        else
+            statusLabel.setText ("Piano roll loop region deleted", juce::dontSendNotification);
+        publishProject();
+    };
     pianoRoll.onNotesChanged = [this]
     {
         channels[static_cast<size_t> (selected)].notes = pianoRoll.getNotes();
@@ -593,6 +617,9 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
 
     // With the mouse over the playlist its keys (Delete, Ctrl+Z/Y/C/X/V/D, 1..5 for the tools, +/- to zoom) work first.
     if (overPlaylist && playlistView.handleKey (key))
+        return true;
+
+    if (key == juce::KeyPress::escapeKey && pianoRoll.cancelLoopMode())
         return true;
 
     if (key == juce::KeyPress::spaceKey)
@@ -927,6 +954,25 @@ void MainComponent::publishProject()
     if (synthWindow != nullptr)
         synthWindow->panel().refresh();
     auto project = std::make_unique<Project> (compileCurrent());
+    if (! songMode && currentPattern >= 0 && currentPattern < static_cast<int> (arrangement.patterns.size()))
+    {
+        // The piano roll's loop region of this pattern (0.20.0); a pattern made shorter loses a region that no longer fits.
+        auto& pattern = arrangement.patterns[static_cast<size_t> (currentPattern)];
+        if (! pattern.hasLoop (arrangement.patternTicks))
+            pattern.loopStartTick = pattern.loopEndTick = -1;
+        else
+        {
+            project->loopStartTick = pattern.loopStartTick;
+            project->loopEndTick = pattern.loopEndTick;
+        }
+    }
+    if (currentPattern >= 0 && currentPattern < static_cast<int> (arrangement.patterns.size()))
+    {
+        const auto& pattern = arrangement.patterns[static_cast<size_t> (currentPattern)];
+        pianoRoll.setLoopRegion (pattern.loopStartTick, pattern.loopEndTick);
+    }
+    patternStartTick = std::clamp (patternStartTick, 0, std::max (0, arrangement.patternTicks - 1));
+    pianoRoll.setStartTick (patternStartTick);
     if (songMode && arrangement.hasLoop())
     {
         // Live playback only (exports use compileCurrent() as it is): the song runs at least to the end of the region.

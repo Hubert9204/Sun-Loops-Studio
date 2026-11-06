@@ -25,6 +25,10 @@ struct Pattern
 {
     std::string name = "Pattern";
     std::vector<std::vector<Note>> notes; // notes[channel], ticks relative to the pattern start
+    // The piano roll's loop region of this pattern (0.20.0): Pattern mode repeats only this part. -1 / -1 when there is none.
+    int loopStartTick = -1;
+    int loopEndTick = -1;
+    bool hasLoop (int patternTicks) const noexcept { return loopStartTick >= 0 && loopEndTick > loopStartTick && loopEndTick <= patternTicks; }
 };
 
 // A clip plays `pattern` on `track`, repeating it over `lengthUnits` pattern lengths.

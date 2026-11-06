@@ -2,6 +2,16 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.20.0 - 2026-11-07
+
+### Added
+- **The piano roll's ruler works like the playlist's** (as asked): a left click or drag moves the pattern position, also while playing
+  (16ths; Alt: no snap; an orange marker shows where Play starts); a **right drag draws a loop region** that Pattern mode repeats; a right
+  drag inside the region moves it, on an edge resizes it; a **right click on the region** opens *Move / Resize / Delete loop region*
+  (Delete removes only the highlight). Escape or a right click cancels Move and Resize.
+- Each pattern keeps its own region; it is saved in the project file (`"loop"` in the pattern) and in the undo history. A pattern made
+  shorter than its region loses the region.
+
 ## 0.19.1 - 2026-11-06
 
 ### Changed

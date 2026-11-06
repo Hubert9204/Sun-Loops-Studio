@@ -314,6 +314,10 @@ It is closed at start and opens from a channel, as above.
 | Scroll pitch | Mouse wheel. |
 | Scroll time | Shift + wheel. |
 | Zoom time | Ctrl + wheel. Until you zoom, the whole pattern fits the panel width. |
+| Move the pattern position | Left click (or drag) on the **ruler**, also while playing (snapped to 16ths; Alt: no snap). Stopped, the orange marker shows where Play starts. The playback switches to Pattern mode. |
+| Loop part of the pattern | **Right drag on the ruler** draws a loop region (blue, "LOOP"): Pattern mode then repeats only that part. Stopped, Play starts at the region. |
+| Move / resize the region | Right drag inside it moves it; right drag on one of its edges resizes it. |
+| Region menu | **Right click on the region**: **Move** (it follows the mouse; click to place it), **Resize** (the nearest edge follows the mouse; click to finish), **Delete loop region** (removes only the highlight: no note is touched). During Move and Resize a right click or Escape puts it back. |
 
 **Playing the notes.** The keyboard on the left and the notes you draw are playable:
 

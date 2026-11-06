@@ -247,6 +247,8 @@ private:
     void setSongMode (bool shouldPlaySong);
     Project compileCurrent();
     void seekSong (int tick); // the playlist's ruler was clicked: move the song position there (switches to Song mode)
+    int patternStartTick = 0; // where a pattern starts playing (and Stop returns to) in Pattern mode (0.20.0)
+    void seekPattern (int tick);
     int songStartTick = 0;    // where the song starts playing (and Stop returns to) in Song mode
 
     // Automation (MainComponentAutomation.cpp).

@@ -5703,6 +5703,56 @@ void testPatternLength()
     check (parsed.document && parsed.document->arrangement.patternTicks == 2 * bar, "older files (no length) are two bars");
 }
 
+void testPatternLoopRegion()
+{
+    std::cout << "Piano roll loop region of a pattern (0.20.0)\n";
+    sls::Pattern pattern;
+    const int ticks = 8 * kBeat;
+    check (! pattern.hasLoop (ticks), "a new pattern has no loop region");
+    pattern.loopStartTick = kBeat;
+    pattern.loopEndTick = 3 * kBeat;
+    check (pattern.hasLoop (ticks) && ! pattern.hasLoop (2 * kBeat), "a region inside the pattern counts; made shorter than its end, it no longer does");
+
+    // In Pattern mode the region is the snapshot's loop region: one bar note at 0 (A) and one at beat 3 (E5); a region over beats 3..4 repeats E5 only.
+    auto project = sls::Project::make ({ synthChannel ({ { 69, 0, kBeat, 0.8f }, { 76, 2 * kBeat, kBeat, 0.8f } }) }, ticks);
+    project.loopStartTick = 2 * kBeat;
+    project.loopEndTick = 4 * kBeat;
+    sls::Player p;
+    p.prepare (kSr);
+    double lowest = 1.0e9, highest = -1.0;
+    for (int block = 0; block < 300; ++block) // 3 s; the region is reached at 1 s
+    {
+        renderBlocks (p, project, true, 0.01);
+        if (block >= 110)
+        {
+            lowest = std::min (lowest, p.getPositionTicks());
+            highest = std::max (highest, p.getPositionTicks());
+        }
+    }
+    check (lowest >= 2 * kBeat - 1 && highest < 4 * kBeat, "Pattern mode with a region: the position stays inside it");
+
+    auto doc = sls::ProjectDocument::blank();
+    doc.arrangement.patterns[0].loopStartTick = kBeat / 2;
+    doc.arrangement.patterns[0].loopEndTick = 2 * kBeat;
+    const auto text = doc.toJson();
+    auto parsed = sls::ProjectDocument::fromJson (text);
+    check (parsed.document && parsed.document->arrangement.patterns[0].loopStartTick == kBeat / 2
+               && parsed.document->arrangement.patterns[0].loopEndTick == 2 * kBeat,
+           "the pattern's region is saved in the project file and read back");
+    doc.arrangement.patterns[0].loopStartTick = doc.arrangement.patterns[0].loopEndTick = -1;
+    check (! doc.toJson().contains ("\"loop\""), "no region: nothing written");
+    auto v = juce::JSON::parse (text);
+    auto* first = v.getDynamicObject()->getProperty ("patterns").getArray()->getReference (0).getDynamicObject();
+    first->setProperty ("loop", juce::Array<juce::var> { 3 * kBeat, kBeat });
+    parsed = sls::ProjectDocument::fromJson (juce::JSON::toString (v));
+    check (parsed.document && ! parsed.document->arrangement.patterns[0].hasLoop (parsed.document->arrangement.patternTicks),
+           "a backwards region in a file is left out");
+    first->setProperty ("loop", juce::Array<juce::var> { 0, 999999 });
+    parsed = sls::ProjectDocument::fromJson (juce::JSON::toString (v));
+    check (parsed.document && ! parsed.document->arrangement.patterns[0].hasLoop (parsed.document->arrangement.patternTicks),
+           "a region past the end of the pattern is left out");
+}
+
 void testSeekAndLoopRegion()
 {
     std::cout << "Seek and loop region\n";
@@ -7108,6 +7158,7 @@ int main()
     testDrumMachine();
     testDrumKitFiles();
     testSeekAndLoopRegion();
+    testPatternLoopRegion();
     testChannelRemap();
     testProjectWithSamples();
     testPatternLength();

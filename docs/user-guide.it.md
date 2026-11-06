@@ -321,6 +321,10 @@ chiuso all'avvio e si apre da un canale, come sopra.
 | Scorrere in altezza | Rotella del mouse. |
 | Scorrere nel tempo | Maiusc + rotella. |
 | Zoom nel tempo | Ctrl + rotella. Finché non zoomi, tutto il pattern entra nella larghezza del pannello. |
+| Spostare la posizione nel pattern | Clic sinistro (o trascinamento) sul **righello**, anche durante la riproduzione (a passi di 16esimi; Alt: libero). A riproduzione ferma il segno arancione mostra da dove parte Play. La riproduzione passa in modalità Pattern. |
+| Ripetere una parte del pattern | **Trascinamento col destro sul righello**: disegna una zona di loop (blu, "LOOP") e la modalità Pattern ripete solo quella parte. A riproduzione ferma Play parte dalla zona. |
+| Spostare / ridimensionare la zona | Trascinamento col destro dentro la zona la sposta; su uno dei suoi bordi la ridimensiona. |
+| Menu della zona | **Clic destro sulla zona**: **Move** (la zona segue il mouse; clic per posarla), **Resize** (il bordo più vicino segue il mouse; clic per finire), **Delete loop region** (toglie solo l'evidenziazione: nessuna nota viene toccata). Durante Move e Resize un clic destro o Esc la rimettono com'era. |
 
 **Suonare le note.** La tastiera a sinistra e le note che disegni si possono suonare:
 

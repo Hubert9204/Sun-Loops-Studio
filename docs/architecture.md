@@ -271,6 +271,8 @@ voices -> channel (smoothed gain, equal-power pan, channel mute/solo)
 - Meters: the audio thread keeps a peak per track (`consumeTrackPeak` reads and resets it on the UI timer) and a
   sliding mean square over ~300 ms (`getTrackRms`). `AudioEngine` does the same for the master. `ScopedNoDenormals`
   is active in the audio callback and the feedback loops flush tiny values.
+- The piano roll's loop region (0.20.0) lives in `Pattern::loopStartTick / loopEndTick`; in Pattern mode `publishProject` copies the current
+  pattern's region into the snapshot's `loopStartTick / loopEndTick`, which the `Player` already handles for the playlist's region.
 - Plugin effects (0.17.0): `EffectType::Plugin` with `EffectSlot::plugin` (a `shared_ptr<HostedPlugin>`). `EffectUnit::process` hands the
   chunk to the plugin; bypass leaves the signal alone. See *Plugins* below.
 

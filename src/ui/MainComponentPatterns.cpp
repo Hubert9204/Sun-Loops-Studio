@@ -283,7 +283,16 @@ void MainComponent::setSongMode (bool shouldPlaySong)
     statusLabel.setText (songMode ? "Playing the playlist" : "Looping the selected pattern", juce::dontSendNotification);
     publishProject();
     if (! engine.isPlaying())
-        engine.requestSeek (songMode ? songStartTick : 0); // a pattern starts at its beginning; the song where it was put
+        engine.requestSeek (songMode ? songStartTick : patternStartTick); // where the ruler of the piano roll or of the playlist put it
+}
+
+void MainComponent::seekPattern (int tick)
+{
+    if (songMode)
+        setSongMode (false); // the ruler of the piano roll is the pattern's
+    patternStartTick = std::clamp (tick, 0, arrangement.patternTicks - 1);
+    engine.requestSeek (patternStartTick);
+    pianoRoll.setStartTick (patternStartTick);
 }
 
 void MainComponent::seekSong (int tick)

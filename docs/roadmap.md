@@ -1,6 +1,6 @@
 # Status and roadmap
 
-Version 0.19.1 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
+Version 0.20.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
 what is missing. If something here disagrees with the program, the program is right: please fix the page.
 
 ## What has been verified, and how
@@ -52,6 +52,8 @@ what is missing. If something here disagrees with the program, the program is ri
 | FM synth (0.19.0): one operator giving a pure 440 Hz sine, ratio 2 giving 880 Hz, modulation and feedback adding harmonics, a modulator's envelope making the brightness decay, two heard operators normalised, the amplitude release, tremolo, the eight algorithms, every operator at full depth and ratio 32 on the top key staying bounded, six FM sounds, no allocation over 2000 blocks, hostile values, JSON round trip and partial files | Automated headless tests (1037 checks in total) | All pass |
 | The FM engine in the interface: *FM E-Piano* from the window's menu (engine, four operators and the matrix shown), the algorithm menu setting *4 > 3 > 2 > 1*, a matrix cell dragged (the menu then shows *(your own)*), a WAV export of the soloed channel with the FM sound | Manual, in a virtual display with a window manager | Worked (not heard) |
 | Playlist wheel zoom (0.19.1): wheel up zoomed in and wheel down zoomed out past the starting view, around the mouse; the loop region's menu without *Zoom to region* | Manual, in a virtual display | Worked |
+| Piano roll ruler and loop region (0.20.0): a pattern's region (inside / shorter pattern), Pattern mode staying inside the region, the region in the project file and broken or out-of-range regions left out | Automated headless tests (1044 checks in total) | All pass |
+| The piano roll's ruler in the interface: a right drag drew a region (Play then started at it and stayed in it), a left click while playing moved the position (the engine sought there, then came back into the region at the end of the pattern), a click while stopped moved the start marker, right drag inside moved and on an edge resized the region, the menu's Move (follows the mouse, click places it) and Delete (notes untouched) | Manual, in a virtual display | Worked |
 | A use-after-free when clicking an item that rebuilds the browser tree (crash on *Scan for VST3 plugins...*) | Found in that manual session | Fixed (item actions are deferred); the same click was repeated afterwards |
 
 ## What has not been verified
