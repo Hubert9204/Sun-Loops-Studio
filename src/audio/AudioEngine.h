@@ -135,6 +135,14 @@ public:
                    ? trackRms[static_cast<size_t> (track)].load (std::memory_order_relaxed)
                    : 0.0f;
     }
+    float consumeAuxPeak (int aux) noexcept
+    {
+        return aux >= 0 && aux < kAuxBuses ? auxPeaks[static_cast<size_t> (aux)].exchange (0.0f, std::memory_order_relaxed) : 0.0f;
+    }
+    float getAuxRms (int aux) const noexcept
+    {
+        return aux >= 0 && aux < kAuxBuses ? auxRms[static_cast<size_t> (aux)].load (std::memory_order_relaxed) : 0.0f;
+    }
 
     // juce::AudioIODeviceCallback
     void audioDeviceIOCallbackWithContext (const float* const* inputChannelData, int numInputChannels,
@@ -207,6 +215,8 @@ private:
     std::array<std::atomic<float>, kMaxChannels> channelPeaks {};
     std::array<std::atomic<float>, kMaxTracks> trackPeaks {};
     std::array<std::atomic<float>, kMaxTracks> trackRms {};
+    std::array<std::atomic<float>, kAuxBuses> auxPeaks {};
+    std::array<std::atomic<float>, kAuxBuses> auxRms {};
     std::atomic<int> playheadTick { 0 };
 };
 } // namespace sls

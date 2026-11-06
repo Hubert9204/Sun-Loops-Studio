@@ -191,6 +191,7 @@ private:
     std::vector<Channel> channels;
     std::vector<MixerTrack> tracks = Project::defaultTracks(); // the mixer: kMaxTracks tracks with their effect chains
     MixerTrack masterTrack;                                    // only its `slots` are used: the master bus's effect chain
+    Console console = Console::defaults();                     // the aux buses and the VCA groups
     std::vector<std::unique_ptr<ChannelStrip>> strips;
     int selected = 0;
 

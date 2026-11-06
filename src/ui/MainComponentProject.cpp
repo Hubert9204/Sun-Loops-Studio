@@ -83,6 +83,7 @@ ProjectDocument MainComponent::makeDocument()
     }
     doc.tracks = tracks;
     doc.masterSlots = masterTrack.slots;
+    doc.console = console;
     doc.arrangement = arrangement;
     doc.currentPattern = currentPattern;
     doc.songMode = songMode;
@@ -138,6 +139,7 @@ void MainComponent::applyDocument (ProjectDocument doc, const juce::File& file, 
     for (size_t t = 0; t < tracks.size() && t < doc.tracks.size(); ++t)
         tracks[t] = doc.tracks[t]; // in place: the mixer strips refer to these objects
     masterTrack.slots = doc.masterSlots;
+    console = doc.console;
 
     closeAutomationEditor(); // its clip index would point into the old arrangement
     arrangement = std::move (doc.arrangement);
@@ -157,6 +159,7 @@ void MainComponent::applyDocument (ProjectDocument doc, const juce::File& file, 
     for (int t = 0; t < kMaxTracks; ++t)
         mixerPanel.refreshTrack (t);
     mixerPanel.refreshTrack (kMasterIndex);
+    mixerPanel.refreshConsole();
 
     bpmSlider.setValue (doc.bpm, juce::dontSendNotification);
     playlistView.setBpm (doc.bpm);

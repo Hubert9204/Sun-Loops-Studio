@@ -247,6 +247,11 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* in, int 
         raiseTo (trackPeaks[static_cast<size_t> (t)], player.getTrackPeak (t) * g);
         trackRms[static_cast<size_t> (t)].store (player.getTrackRms (t) * g, std::memory_order_relaxed);
     }
+    for (int a = 0; a < kAuxBuses; ++a)
+    {
+        raiseTo (auxPeaks[static_cast<size_t> (a)], player.getAuxPeak (a) * g);
+        auxRms[static_cast<size_t> (a)].store (player.getAuxRms (a) * g, std::memory_order_relaxed);
+    }
 
     // The start-up sound is added after the master volume is applied (see playStartupSound), so it is as loud as the file.
     for (int ch = 0; ch < numOut; ++ch)

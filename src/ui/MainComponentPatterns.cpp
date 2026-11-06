@@ -227,8 +227,8 @@ void MainComponent::setSongMode (bool shouldPlaySong)
 Project MainComponent::compileCurrent()
 {
     commitCurrentPattern();
-    return songMode ? compileSong (channels, arrangement, tracks, masterTrack.slots)
-                    : compilePattern (channels, arrangement, currentPattern, tracks, masterTrack.slots);
+    return songMode ? compileSong (channels, arrangement, tracks, masterTrack.slots, console)
+                    : compilePattern (channels, arrangement, currentPattern, tracks, masterTrack.slots, console);
 }
 
 } // namespace sls

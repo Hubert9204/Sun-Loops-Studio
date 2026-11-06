@@ -68,6 +68,15 @@ public:
     {
         return track >= 0 && track < kMaxTracks ? std::sqrt (trackMeanSquare[static_cast<size_t> (track)]) : 0.0f;
     }
+    // The same for aux bus `aux` (after its effects and fader).
+    float getAuxPeak (int aux) const noexcept
+    {
+        return aux >= 0 && aux < kAuxBuses ? auxPeaks[static_cast<size_t> (aux)] : 0.0f;
+    }
+    float getAuxRms (int aux) const noexcept
+    {
+        return aux >= 0 && aux < kAuxBuses ? std::sqrt (auxMeanSquare[static_cast<size_t> (aux)]) : 0.0f;
+    }
 
 private:
     enum class State : std::uint8_t { Idle, Attack, Sustain, Release };
@@ -133,6 +142,15 @@ private:
     std::array<float, kMaxTracks> trackMeanSquare {};
     std::array<std::array<EffectUnit, kSlotsPerTrack>, kMaxTracks> effects;
     std::array<EffectUnit, kSlotsPerTrack> masterEffects; // on the master bus
+
+    // Aux buses: the sends of every track are summed here, run through the bus's effects and fader, and added to the master bus.
+    std::array<std::array<EffectUnit, kSlotsPerTrack>, kAuxBuses> auxEffects;
+    std::array<std::array<float, kChunk>, kAuxBuses> auxL {}, auxR {};
+    std::array<std::array<float, kAuxBuses>, kMaxTracks> sendGain {}; // smoothed send levels
+    std::array<float, kMaxTracks> sendGate {};                        // smoothed 1 / 0: the track is audible (mute / solo)
+    std::array<float, kAuxBuses> auxGain {};
+    std::array<float, kAuxBuses> auxPeaks {};
+    std::array<float, kAuxBuses> auxMeanSquare {};
     float rmsCoef = 0.0001f;
 
     double sampleRate = 48000.0;

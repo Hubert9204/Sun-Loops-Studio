@@ -223,9 +223,44 @@ juce::String ProjectDocument::toJson() const
         for (const auto& s : t.slots)
             slots.add (slotToVar (s));
         o->setProperty ("effects", slots);
+        juce::Array<juce::var> sendList;
+        for (const auto send : t.sends)
+            sendList.add (number (static_cast<double> (send)));
+        o->setProperty ("sends", sendList);
+        o->setProperty ("sendsPreFader", t.sendsPreFader);
+        o->setProperty ("vca", static_cast<int> (t.vcaMask)); // bit n: member of VCA group n
         trackList.add (juce::var (o));
     }
     root->setProperty ("tracks", trackList);
+
+    {
+        auto* consoleObject = new juce::DynamicObject();
+        juce::Array<juce::var> auxList;
+        for (const auto& a : console.aux)
+        {
+            auto* o = new juce::DynamicObject();
+            o->setProperty ("name", juce::String (a.name));
+            o->setProperty ("volume", number (static_cast<double> (a.volume)));
+            o->setProperty ("pan", number (static_cast<double> (a.pan)));
+            o->setProperty ("mute", a.mute);
+            juce::Array<juce::var> slots;
+            for (const auto& s : a.slots)
+                slots.add (slotToVar (s));
+            o->setProperty ("effects", slots);
+            auxList.add (juce::var (o));
+        }
+        consoleObject->setProperty ("aux", auxList);
+        juce::Array<juce::var> vcaList;
+        for (size_t g = 0; g < console.vcaLevel.size(); ++g)
+        {
+            auto* o = new juce::DynamicObject();
+            o->setProperty ("level", number (static_cast<double> (console.vcaLevel[g])));
+            o->setProperty ("mute", static_cast<bool> (console.vcaMute[g]));
+            vcaList.add (juce::var (o));
+        }
+        consoleObject->setProperty ("vca", vcaList);
+        root->setProperty ("console", juce::var (consoleObject));
+    }
 
     {
         auto* master = new juce::DynamicObject();
@@ -405,7 +440,42 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
             if (auto* slots = o->getProperty ("effects").getArray())
                 for (int s = 0; s < std::min (slots->size(), kSlotsPerTrack); ++s)
                     t.slots[static_cast<size_t> (s)] = readSlot ((*slots)[s]);
+
+            // Sends and VCA membership (files from older versions have none)
+            if (auto* sendList = o->getProperty ("sends").getArray())
+                for (int a = 0; a < std::min (sendList->size(), kAuxBuses); ++a)
+                    t.sends[static_cast<size_t> (a)] = static_cast<float> (readNumber ((*sendList)[a], 0.0, 0.0, 1.5));
+            t.sendsPreFader = readBool (o->getProperty ("sendsPreFader"), false);
+            t.vcaMask = static_cast<std::uint8_t> (readInt (o->getProperty ("vca"), 0, 0, (1 << kVcaGroups) - 1));
         }
+
+    // --- aux buses and VCA groups (older files have none)
+    d.console = Console::defaults();
+    if (auto* consoleObject = root->getProperty ("console").getDynamicObject())
+    {
+        if (auto* auxList = consoleObject->getProperty ("aux").getArray())
+            for (int a = 0; a < std::min (auxList->size(), kAuxBuses); ++a)
+            {
+                auto* o = (*auxList)[a].getDynamicObject();
+                if (o == nullptr)
+                    continue;
+                auto& bus = d.console.aux[static_cast<size_t> (a)];
+                bus.name = readName (o->getProperty ("name"), bus.name);
+                bus.volume = static_cast<float> (readNumber (o->getProperty ("volume"), 1.0, 0.0, 1.5));
+                bus.pan = static_cast<float> (readNumber (o->getProperty ("pan"), 0.0, -1.0, 1.0));
+                bus.mute = readBool (o->getProperty ("mute"), false);
+                if (auto* slots = o->getProperty ("effects").getArray())
+                    for (int s = 0; s < std::min (slots->size(), kSlotsPerTrack); ++s)
+                        bus.slots[static_cast<size_t> (s)] = readSlot ((*slots)[s]);
+            }
+        if (auto* vcaList = consoleObject->getProperty ("vca").getArray())
+            for (int g = 0; g < std::min (vcaList->size(), kVcaGroups); ++g)
+                if (auto* o = (*vcaList)[g].getDynamicObject())
+                {
+                    d.console.vcaLevel[static_cast<size_t> (g)] = static_cast<float> (readNumber (o->getProperty ("level"), 1.0, 0.0, 1.5));
+                    d.console.vcaMute[static_cast<size_t> (g)] = readBool (o->getProperty ("mute"), false);
+                }
+    }
 
     // --- master bus effects (older files have none)
     if (auto* master = root->getProperty ("master").getDynamicObject())

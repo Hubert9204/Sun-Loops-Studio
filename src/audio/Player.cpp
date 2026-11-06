@@ -42,6 +42,12 @@ void Player::prepare (double newSampleRate) noexcept
     clickPos = -1;
     smoothedGain.fill (kUnsetGain);
     trackGain.fill (kUnsetGain);
+    for (auto& g : sendGain)
+        g.fill (kUnsetGain);
+    sendGate.fill (kUnsetGain);
+    auxGain.fill (kUnsetGain);
+    auxPeaks.fill (0.0f);
+    auxMeanSquare.fill (0.0f);
     peaks.fill (0.0f);
     trackPeaks.fill (0.0f);
     trackMeanSquare.fill (0.0f);
@@ -52,6 +58,9 @@ void Player::prepare (double newSampleRate) noexcept
             unit.prepare (sampleRate);
     for (auto& unit : masterEffects)
         unit.prepare (sampleRate);
+    for (auto& chain : auxEffects)
+        for (auto& unit : chain)
+            unit.prepare (sampleRate);
 
     tickPos = 0.0;
     projectRevision = ~std::uint64_t { 0 };
@@ -419,12 +428,23 @@ void Player::render (const Project& project, double bpm, bool playing,
     std::array<float, kMaxTracks> balanceRight {};
     std::array<bool, kMaxTracks> trackAudible {};
 
+    // VCA groups: a track's fader is scaled by the level of every group it belongs to (a muted group silences its members).
+    std::array<float, kMaxTracks> trackVca {};
+    for (size_t t = 0; t < static_cast<size_t> (kMaxTracks); ++t)
+    {
+        float v = 1.0f;
+        for (int g = 0; g < kVcaGroups; ++g)
+            if ((trackAt (t).vcaMask >> g) & 1u)
+                v *= project.console.vcaMute[static_cast<size_t> (g)] ? 0.0f : project.console.vcaLevel[static_cast<size_t> (g)];
+        trackVca[t] = v;
+    }
+
     std::array<float, kMaxTracks> trackVolume {}, trackPan {};
     const auto setTrack = [&] (size_t t, float volume, float pan)
     {
         trackVolume[t] = volume;
         trackPan[t] = pan;
-        trackTarget[t] = trackAudible[t] ? std::clamp (volume, 0.0f, 1.5f) : 0.0f;
+        trackTarget[t] = trackAudible[t] ? std::clamp (volume, 0.0f, 1.5f) * trackVca[t] : 0.0f;
         const float p = std::clamp (pan, -1.0f, 1.0f);
         balanceLeft[t] = p > 0.0f ? 1.0f - p : 1.0f;
         balanceRight[t] = p < 0.0f ? 1.0f + p : 1.0f;
@@ -438,6 +458,24 @@ void Player::render (const Project& project, double bpm, bool playing,
 
         if (trackGain[t] < 0.0f)
             trackGain[t] = trackTarget[t];
+        if (sendGate[t] < 0.0f)
+            sendGate[t] = trackAudible[t] ? 1.0f : 0.0f;
+        for (size_t a = 0; a < static_cast<size_t> (kAuxBuses); ++a)
+            if (sendGain[t][a] < 0.0f)
+                sendGain[t][a] = tr.sends[a];
+    }
+
+    // Aux buses: fader, balance, mute.
+    std::array<float, kAuxBuses> auxTarget {}, auxBalanceLeft {}, auxBalanceRight {};
+    for (size_t a = 0; a < static_cast<size_t> (kAuxBuses); ++a)
+    {
+        const auto& bus = project.console.aux[a];
+        auxTarget[a] = bus.mute ? 0.0f : std::clamp (bus.volume, 0.0f, 1.5f);
+        const float p = std::clamp (bus.pan, -1.0f, 1.0f);
+        auxBalanceLeft[a] = p > 0.0f ? 1.0f - p : 1.0f;
+        auxBalanceRight[a] = p < 0.0f ? 1.0f + p : 1.0f;
+        if (auxGain[a] < 0.0f)
+            auxGain[a] = auxTarget[a];
     }
 
     // Automation (Song mode): effect parameters are changed in copies of the slots, so the project itself is never touched.
@@ -453,6 +491,7 @@ void Player::render (const Project& project, double bpm, bool playing,
 
     peaks.fill (0.0f);
     trackPeaks.fill (0.0f);
+    auxPeaks.fill (0.0f);
 
     for (int done = 0; done < numSamples; done += kChunk)
     {
@@ -466,6 +505,11 @@ void Player::render (const Project& project, double bpm, bool playing,
         {
             std::fill_n (trackL[t].begin(), n, 0.0f);
             std::fill_n (trackR[t].begin(), n, 0.0f);
+        }
+        for (size_t a = 0; a < static_cast<size_t> (kAuxBuses); ++a)
+        {
+            std::fill_n (auxL[a].begin(), n, 0.0f);
+            std::fill_n (auxR[a].begin(), n, 0.0f);
         }
 
         // 1. Sequencer, voices and channel strips: everything lands on the mixer tracks.
@@ -670,11 +714,22 @@ void Player::render (const Project& project, double bpm, bool playing,
             for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
                 effects[t][s].process (automated ? trackSlotsNow[t][s] : tr.slots[s], l, r, n);
 
+            const float gateTarget = trackAudible[t] ? 1.0f : 0.0f;
             for (int i = 0; i < n; ++i)
             {
                 trackGain[t] += (trackTarget[t] - trackGain[t]) * kGainSmoothing;
                 const float outL = l[i] * trackGain[t] * balanceLeft[t];
                 const float outR = r[i] * trackGain[t] * balanceRight[t];
+
+                // Sends to the aux buses: after the fader (or before it, if the track says so); a muted track sends nothing.
+                sendGate[t] += (gateTarget - sendGate[t]) * kGainSmoothing;
+                for (size_t a = 0; a < static_cast<size_t> (kAuxBuses); ++a)
+                {
+                    sendGain[t][a] += (tr.sends[a] - sendGain[t][a]) * kGainSmoothing;
+                    const float level = sendGain[t][a] * sendGate[t];
+                    auxL[a][static_cast<size_t> (i)] += (tr.sendsPreFader ? l[i] : outL) * level;
+                    auxR[a][static_cast<size_t> (i)] += (tr.sendsPreFader ? r[i] : outR) * level;
+                }
 
                 trackPeaks[t] = std::max ({ trackPeaks[t], std::fabs (outL), std::fabs (outR) });
                 trackMeanSquare[t] += (0.5f * (outL * outL + outR * outR) - trackMeanSquare[t]) * rmsCoef;
@@ -684,6 +739,29 @@ void Player::render (const Project& project, double bpm, bool playing,
             }
             if (trackMeanSquare[t] < 1.0e-20f)
                 trackMeanSquare[t] = 0.0f;
+        }
+
+        // 2b. Aux buses: effects, fader and balance, then the master bus.
+        for (size_t a = 0; a < static_cast<size_t> (kAuxBuses); ++a)
+        {
+            const auto& bus = project.console.aux[a];
+            float* l = auxL[a].data();
+            float* r = auxR[a].data();
+            for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
+                auxEffects[a][s].process (bus.slots[s], l, r, n);
+
+            for (int i = 0; i < n; ++i)
+            {
+                auxGain[a] += (auxTarget[a] - auxGain[a]) * kGainSmoothing;
+                const float outL = l[i] * auxGain[a] * auxBalanceLeft[a];
+                const float outR = r[i] * auxGain[a] * auxBalanceRight[a];
+                auxPeaks[a] = std::max ({ auxPeaks[a], std::fabs (outL), std::fabs (outR) });
+                auxMeanSquare[a] += (0.5f * (outL * outL + outR * outR) - auxMeanSquare[a]) * rmsCoef;
+                mixL[static_cast<size_t> (i)] += outL;
+                mixR[static_cast<size_t> (i)] += outR;
+            }
+            if (auxMeanSquare[a] < 1.0e-20f)
+                auxMeanSquare[a] = 0.0f;
         }
 
         // 3. Master bus: insert effects on the sum of all tracks, then a soft limiter, added to the output.

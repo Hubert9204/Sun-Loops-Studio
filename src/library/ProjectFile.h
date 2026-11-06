@@ -28,6 +28,7 @@ struct ProjectDocument
     std::vector<std::string> sampleSources;  // one per channel: "builtin:<id>", an absolute path, or empty
     std::vector<MixerTrack> tracks;          // exactly kMaxTracks
     std::array<EffectSlot, kSlotsPerTrack> masterSlots {}; // effects on the master bus
+    Console console = Console::defaults();   // aux buses and VCA groups
     Arrangement arrangement;                 // the notes of every pattern live here
     int currentPattern = 0;
     bool songMode = false;

@@ -195,6 +195,7 @@ MainComponent::MainComponent()
 
     mixerPanel.setTracks (tracks);
     mixerPanel.setMaster (masterTrack);
+    mixerPanel.setConsole (console);
     mixerPanel.onTrackChanged = [this] (int) { publishProject(); };
     mixerPanel.onAutomate = [this] (const AutomationTarget& t) { createAutomationFor (t); };
     mixerPanel.onMasterVolumeChanged = [this] (double v) { volumeSlider.setValue (v); }; // the slider drives the engine
@@ -561,6 +562,12 @@ void MainComponent::timerCallback()
         const float trackPeak = engine.consumeTrackPeak (t);
         if (mixerShown)
             mixerPanel.setTrackLevels (t, trackPeak, engine.getTrackRms (t));
+    }
+    for (int a = 0; a < kAuxBuses; ++a)
+    {
+        const float auxPeak = engine.consumeAuxPeak (a);
+        if (mixerShown)
+            mixerPanel.setAuxLevels (a, auxPeak, engine.getAuxRms (a));
     }
 
     // In pattern mode the playhead is a position inside the pattern (piano roll, rack); in song mode it is

@@ -16,6 +16,8 @@ namespace sls
 {
 constexpr int kMaxChannels = 8;
 constexpr int kMaxTracks = 8; // mixer tracks; every channel is routed to exactly one of them
+constexpr int kAuxBuses = 2;  // aux buses ("returns"): tracks send to them, they have their own effects and fader
+constexpr int kVcaGroups = 2; // VCA groups: one fader that scales the faders of its member tracks
 constexpr float kMaxSwingShiftTicks = 60.0f; // swing 100 % delays off-beat notes by half a 16th step
 
 // Decoded audio kept in memory. Immutable once shared.
@@ -57,6 +59,28 @@ struct MixerTrack
     bool mute = false;
     bool solo = false;
     std::array<EffectSlot, kSlotsPerTrack> slots {};
+
+    // Only used by the tracks (an aux bus ignores them).
+    std::array<float, kAuxBuses> sends {}; // level sent to each aux bus, 0 (off) .. 1.5
+    bool sendsPreFader = false;            // sends take the signal before the fader, balance and VCA (they still follow mute/solo)
+    std::uint8_t vcaMask = 0;              // bit n: this track is a member of VCA group n
+};
+
+// The part of the mixer that is not a track: the aux buses (a MixerTrack each: name, fader, balance, mute and effect chain),
+// and the VCA groups (a level and a mute switch each).
+struct Console
+{
+    std::array<MixerTrack, kAuxBuses> aux;
+    std::array<float, kVcaGroups> vcaLevel { 1.0f, 1.0f };
+    std::array<bool, kVcaGroups> vcaMute {};
+
+    static Console defaults()
+    {
+        Console c;
+        for (size_t a = 0; a < c.aux.size(); ++a)
+            c.aux[a].name = std::string ("Aux ") + static_cast<char> ('A' + static_cast<int> (a));
+        return c;
+    }
 };
 
 inline float finiteOr (float v, float fallback) noexcept { return std::isfinite (v) ? v : fallback; }
@@ -80,6 +104,7 @@ struct Project
     std::vector<Channel> channels;
     std::vector<MixerTrack> tracks; // always kMaxTracks entries after make()
     std::array<EffectSlot, kSlotsPerTrack> masterSlots {}; // insert effects on the master bus (after the sum of all tracks)
+    Console console = Console::defaults(); // aux buses and VCA groups
     std::vector<AudioEvent> audioEvents; // song mode only; sorted by startTick, validated by make()
     std::vector<AutomationEvent> automation; // song mode only; sorted by parameter and start, validated by make()
     int lengthTicks = 8 * kTicksPerBeat;
@@ -108,7 +133,8 @@ struct Project
 
     static Project make (std::vector<Channel> input, int loopLengthTicks, std::vector<MixerTrack> tracks = {},
                          std::array<EffectSlot, kSlotsPerTrack> masterSlots = {},
-                         std::vector<AudioEvent> audioEvents = {}, const std::vector<AutomationClip>& automationClips = {})
+                         std::vector<AudioEvent> audioEvents = {}, const std::vector<AutomationClip>& automationClips = {},
+                         Console console = Console::defaults())
     {
         Project p;
         p.lengthTicks = std::max (1, loopLengthTicks);
@@ -137,7 +163,23 @@ struct Project
             t.pan = std::clamp (finiteOr (t.pan, 0.0f), -1.0f, 1.0f);
             for (auto& slot : t.slots)
                 slot = slot.sanitised();
+            for (auto& send : t.sends)
+                send = std::clamp (finiteOr (send, 0.0f), 0.0f, 1.5f);
+            t.vcaMask = static_cast<std::uint8_t> (t.vcaMask & ((1u << kVcaGroups) - 1u));
         }
+
+        for (auto& a : console.aux)
+        {
+            a.volume = std::clamp (finiteOr (a.volume, 1.0f), 0.0f, 1.5f);
+            a.pan = std::clamp (finiteOr (a.pan, 0.0f), -1.0f, 1.0f);
+            a.sends = {};
+            a.vcaMask = 0;
+            for (auto& slot : a.slots)
+                slot = slot.sanitised();
+        }
+        for (auto& level : console.vcaLevel)
+            level = std::clamp (finiteOr (level, 1.0f), 0.0f, 1.5f);
+        p.console = std::move (console);
 
         for (auto& slot : masterSlots)
             slot = slot.sanitised();

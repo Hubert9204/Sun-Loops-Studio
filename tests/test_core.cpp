@@ -1463,6 +1463,105 @@ void testLibraryScan()
 // ---------------------------------------------------------------------------------------- live notes
 
 // Renders `seconds` of audio in blocks of 256 (like a real device) and returns the left channel.
+void testConsole()
+{
+    std::cout << "Aux buses and VCA groups\n";
+    const std::vector<sls::Note> a4 { { 69, 0, kBeat, 0.6f } };
+
+    auto build = [&] (auto&& edit)
+    {
+        auto tracks = sls::Project::defaultTracks();
+        auto console = sls::Console::defaults();
+        edit (tracks, console);
+        return sls::Project::make ({ synthChannel (a4) }, 4 * kBeat, std::move (tracks), {}, {}, {}, std::move (console));
+    };
+    auto peakIn = [] (const juce::AudioBuffer<float>& b, int from, int to) { return peakOf (b.getReadPointer (0), from, to); };
+    auto render = [&] (auto&& edit) { return sls::renderToBuffer (build (edit), {}); };
+
+    const auto dry = render ([] (auto&, auto&) {});
+    const float refPeak = peakIn (dry, 0, 24000);
+    check (refPeak > 0.05f, "reference note is audible");
+
+    {
+        const auto sent = render ([] (auto& t, auto&) { t[0].sends[0] = 1.0f; });
+        check (std::abs (peakIn (sent, 0, 24000) / refPeak - 2.0f) < 0.15f, "a post-fader send of 1.0 to an empty aux bus doubles the level (dry + send)");
+        const auto b = render ([] (auto& t, auto&) { t[0].sends[1] = 1.0f; });
+        check (std::abs (peakIn (b, 0, 24000) / refPeak - 2.0f) < 0.15f, "the second aux bus works the same way");
+        const auto half = render ([] (auto& t, auto&) { t[0].sends[0] = 0.5f; });
+        check (std::abs (peakIn (half, 0, 24000) / refPeak - 1.5f) < 0.12f, "a send of 0.5 adds half a copy");
+    }
+    {
+        const auto off = render ([] (auto& t, auto& c) { t[0].sends[0] = 1.0f; c.aux[0].mute = true; });
+        check (std::abs (peakIn (off, 0, 24000) / refPeak - 1.0f) < 0.02f, "a muted aux bus adds nothing");
+        const auto fader = render ([] (auto& t, auto& c) { t[0].sends[0] = 1.0f; t[0].sendsPreFader = true; t[0].volume = 0.0f; c.aux[0].volume = 1.0f; });
+        const auto fader2 = render ([] (auto& t, auto& c) { t[0].sends[0] = 1.0f; t[0].sendsPreFader = true; t[0].volume = 0.0f; c.aux[0].volume = 0.5f; });
+        check (std::abs (peakIn (fader, 0, 24000) / refPeak - 1.0f) < 0.05f, "pre-fader send: the track fader at zero does not stop the send");
+        check (std::abs (peakIn (fader2, 0, 24000) / peakIn (fader, 0, 24000) - 0.5f) < 0.03f, "the aux fader scales what the bus returns");
+        const auto post = render ([] (auto& t, auto&) { t[0].sends[0] = 1.0f; t[0].volume = 0.0f; });
+        check (peakIn (post, 0, 120000) == 0.0f, "post-fader send: the track fader at zero silences the send too");
+        const auto muted = render ([] (auto& t, auto&) { t[0].sends[0] = 1.0f; t[0].sendsPreFader = true; t[0].mute = true; });
+        check (peakIn (muted, 0, 120000) == 0.0f, "a muted track sends nothing, even pre-fader");
+        const auto left = render ([] (auto& t, auto& c) { t[0].sends[0] = 1.0f; t[0].sendsPreFader = true; t[0].volume = 0.0f; c.aux[0].pan = -1.0f; });
+        check (peakOf (left.getReadPointer (1), 0, 24000) == 0.0f && peakIn (left, 0, 24000) > 0.05f, "the aux balance works (hard left: right side silent)");
+    }
+    {
+        // An effect on the bus: a delay with only the wet signal, 800 ms, heard after the dry note has ended.
+        const auto echo = render ([] (auto& t, auto& c)
+        {
+            t[0].sends[0] = 1.0f; t[0].sendsPreFader = true; t[0].volume = 0.0f;
+            auto delay = sls::EffectSlot::make (sls::EffectType::Delay);
+            delay.params[0] = 800.0f; delay.params[1] = 0.0f; delay.params[3] = 1.0f;
+            c.aux[0].slots[0] = delay;
+        });
+        const auto none = render ([] (auto& t, auto&) { t[0].sends[0] = 1.0f; t[0].sendsPreFader = true; t[0].volume = 0.0f; });
+        check (peakIn (echo, 37000, 66000) > 0.05f && peakIn (none, 37000, 66000) == 0.0f, "an effect on the aux bus processes the sends (echo after the note)");
+        check (peakIn (echo, 0, 38000) < 0.001f, "and the dry signal is not in the bus output (delay mix 100 %)");
+    }
+    {
+        const auto half = render ([] (auto& t, auto& c) { t[0].vcaMask = 1; c.vcaLevel[0] = 0.5f; });
+        check (std::abs (peakIn (half, 0, 24000) / refPeak - 0.5f) < 0.03f, "a VCA at 0.5 halves its member track");
+        const auto other = render ([] (auto& t, auto& c) { t[0].vcaMask = 2; c.vcaLevel[0] = 0.5f; });
+        check (std::abs (peakIn (other, 0, 24000) / refPeak - 1.0f) < 0.01f, "a VCA does not touch tracks that are not members");
+        const auto two = render ([] (auto& t, auto& c) { t[0].vcaMask = 3; c.vcaLevel[0] = 0.5f; c.vcaLevel[1] = 0.5f; });
+        check (std::abs (peakIn (two, 0, 24000) / refPeak - 0.25f) < 0.03f, "two VCAs multiply");
+        const auto mute = render ([] (auto& t, auto& c) { t[0].vcaMask = 1; c.vcaMute[0] = true; });
+        check (peakIn (mute, 0, 120000) == 0.0f, "a muted VCA silences its members");
+        const auto sendFollows = render ([] (auto& t, auto& c) { t[0].vcaMask = 1; c.vcaLevel[0] = 0.0f; t[0].sends[0] = 1.0f; });
+        check (peakIn (sendFollows, 0, 120000) == 0.0f, "a post-fader send follows the VCA");
+        const auto preIgnores = render ([] (auto& t, auto& c) { t[0].vcaMask = 1; c.vcaLevel[0] = 0.0f; t[0].sends[0] = 1.0f; t[0].sendsPreFader = true; });
+        check (std::abs (peakIn (preIgnores, 0, 24000) / refPeak - 1.0f) < 0.05f, "a pre-fader send does not follow the VCA");
+    }
+    {
+        auto tracks = sls::Project::defaultTracks();
+        tracks[0].sends = { 9.0f, std::nanf ("") };
+        tracks[0].vcaMask = 0xff;
+        auto console = sls::Console::defaults();
+        console.aux[1].volume = -3.0f;
+        console.vcaLevel[0] = 7.0f;
+        console.aux[0].sends[0] = 1.0f;
+        const auto p = sls::Project::make ({}, 1920, tracks, {}, {}, {}, console);
+        check (p.tracks[0].sends[0] == 1.5f && p.tracks[0].sends[1] == 0.0f && p.tracks[0].vcaMask == 3,
+               "send levels are clamped (NaN becomes 0) and the VCA mask is cut to the groups that exist");
+        check (p.console.aux[1].volume == 0.0f && p.console.vcaLevel[0] == 1.5f && p.console.aux[0].sends[0] == 0.0f,
+               "aux and VCA values are clamped; an aux bus has no sends of its own");
+    }
+    {
+        auto project = build ([] (auto& t, auto&) { t[0].sends[0] = 1.0f; });
+        sls::Player player;
+        player.prepare (kSr);
+        std::vector<float> l (512), r (512);
+        float* ch[2] = { l.data(), r.data() };
+        for (int i = 0; i < 40; ++i)
+        {
+            std::fill (l.begin(), l.end(), 0.0f);
+            std::fill (r.begin(), r.end(), 0.0f);
+            player.render (project, 120.0, true, ch, 2, 512);
+        }
+        check (player.getAuxPeak (0) > 0.05f && player.getAuxRms (0) > 0.01f && player.getAuxPeak (1) == 0.0f && player.getAuxPeak (7) == 0.0f,
+               "aux meters: the bus that receives the send reads a level, the other reads zero");
+    }
+}
+
 std::vector<float> renderBlocks (sls::Player& player, const sls::Project& project, bool playing, double seconds,
                                  std::vector<float>* rightOut = nullptr)
 {
@@ -1712,8 +1811,22 @@ bool sameDocument (const sls::ProjectDocument& a, const sls::ProjectDocument& b)
             || x.mixerTrack != y.mixerTrack)
             return false;
     }
+    for (size_t i = 0; i < a.console.aux.size(); ++i)
+    {
+        const auto &x = a.console.aux[i], &y = b.console.aux[i];
+        if (x.name != y.name || x.volume != y.volume || x.pan != y.pan || x.mute != y.mute)
+            return false;
+        for (size_t s = 0; s < x.slots.size(); ++s)
+            if (! (x.slots[s].sanitised() == y.slots[s].sanitised()))
+                return false;
+    }
+    if (a.console.vcaLevel != b.console.vcaLevel || a.console.vcaMute != b.console.vcaMute)
+        return false;
     for (size_t i = 0; i < a.tracks.size(); ++i)
     {
+        if (a.tracks[i].sends != b.tracks[i].sends || a.tracks[i].sendsPreFader != b.tracks[i].sendsPreFader
+            || a.tracks[i].vcaMask != b.tracks[i].vcaMask)
+            return false;
         const auto &x = a.tracks[i], &y = b.tracks[i];
         if (x.name != y.name || x.volume != y.volume || x.pan != y.pan || x.mute != y.mute || x.solo != y.solo)
             return false;
@@ -1788,6 +1901,18 @@ sls::ProjectDocument richDocument()
     d.tracks[2].slots[2].bypass = true;
     d.tracks[2].slots[2].params[0] = -33.5f;
     d.tracks[5].solo = true;
+    d.tracks[2].sends = { 0.7f, 0.25f };
+    d.tracks[2].sendsPreFader = true;
+    d.tracks[2].vcaMask = 2;
+    d.tracks[4].vcaMask = 3;
+    d.console.aux[1].name = "Hall";
+    d.console.aux[1].volume = 0.9f;
+    d.console.aux[1].pan = -0.3f;
+    d.console.aux[1].mute = true;
+    d.console.aux[0].slots[1] = sls::EffectSlot::make (sls::EffectType::Reverb);
+    d.console.aux[0].slots[1].params[3] = 1.0f;
+    d.console.vcaLevel = { 0.6f, 1.2f };
+    d.console.vcaMute = { false, true };
     d.masterSlots[1] = sls::EffectSlot::make (sls::EffectType::Equalizer);
     d.masterSlots[1].params[1] = 4.5f;
     d.masterSlots[3] = sls::EffectSlot::make (sls::EffectType::Compressor);
@@ -1871,6 +1996,40 @@ void testProjectFile()
         const auto old = sls::ProjectDocument::fromJson (juce::JSON::toString (v));
         check (old.document.has_value() && old.warnings.empty() && old.document->masterSlots[1].type == sls::EffectType::None,
                "a project from before master effects opens, with an empty master chain");
+    }
+    {
+        // aux buses, sends and VCA groups
+        const auto doc = richDocument();
+        const auto back = sls::ProjectDocument::fromJson (doc.toJson());
+        check (back.document.has_value() && back.document->tracks[2].sends[0] == 0.7f && back.document->tracks[2].sends[1] == 0.25f
+                   && back.document->tracks[2].sendsPreFader && back.document->tracks[2].vcaMask == 2 && back.document->tracks[4].vcaMask == 3
+                   && back.document->console.aux[1].name == "Hall" && back.document->console.aux[1].mute
+                   && std::abs (back.document->console.aux[1].pan + 0.3f) < 1.0e-6f
+                   && back.document->console.aux[0].slots[1].type == sls::EffectType::Reverb
+                   && back.document->console.vcaLevel[0] == 0.6f && back.document->console.vcaMute[1],
+               "sends, aux buses (with their effects) and VCA groups survive a round trip");
+
+        auto v = juce::JSON::parse (doc.toJson());
+        v.getDynamicObject()->removeProperty ("console");
+        auto* trackList = v.getDynamicObject()->getProperty ("tracks").getArray();
+        trackList->getReference (2).getDynamicObject()->removeProperty ("sends");
+        trackList->getReference (2).getDynamicObject()->removeProperty ("vca");
+        const auto old = sls::ProjectDocument::fromJson (juce::JSON::toString (v));
+        check (old.document.has_value() && old.warnings.empty() && old.document->tracks[2].sends[0] == 0.0f
+                   && old.document->tracks[2].vcaMask == 0 && old.document->console.aux[0].name == "Aux A"
+                   && old.document->console.vcaLevel[0] == 1.0f,
+               "a project from before aux buses opens with no sends, no VCA and two empty buses");
+
+        auto w = juce::JSON::parse (doc.toJson());
+        auto* consoleObject = w.getDynamicObject()->getProperty ("console").getDynamicObject();
+        consoleObject->setProperty ("aux", juce::var ("not a list"));
+        consoleObject->setProperty ("vca", juce::var (3));
+        w.getDynamicObject()->getProperty ("tracks").getArray()->getReference (2).getDynamicObject()->setProperty ("vca", juce::var (99));
+        w.getDynamicObject()->getProperty ("tracks").getArray()->getReference (2).getDynamicObject()->setProperty ("sends", juce::var (juce::Array<juce::var> { juce::var (50.0), juce::var ("x") }));
+        const auto odd = sls::ProjectDocument::fromJson (juce::JSON::toString (w));
+        check (odd.document.has_value() && odd.document->console.aux[1].name == "Aux B" && odd.document->tracks[2].vcaMask == 3
+                   && odd.document->tracks[2].sends[0] == 1.5f && odd.document->tracks[2].sends[1] == 0.0f,
+               "odd console values are repaired (wrong types ignored, numbers clamped)");
     }
     {
         const auto blank = sls::ProjectDocument::blank();
@@ -4153,6 +4312,7 @@ int main()
     testChannelPitch();
     testSwing();
     testMixerTracks();
+    testConsole();
     testEffects();
     testEffectsInPlayer();
     testBrowserModel();

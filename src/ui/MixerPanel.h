@@ -37,7 +37,8 @@ private:
 class MixerStrip : public juce::Component
 {
 public:
-    MixerStrip (MixerTrack& trackToControl, int trackIndex);
+    // `isAuxBus`: the strip of an aux bus (its index is kAuxIndexBase + n): no sends, no VCA, no solo.
+    MixerStrip (MixerTrack& trackToControl, int trackIndex, bool isAuxBus = false);
 
     void refreshFromTrack();
     void setSelected (bool shouldBeSelected);
@@ -59,7 +60,7 @@ public:
     static juce::String volumeToText (float volume);
     static juce::String panToText (float pan);
 
-    static constexpr int kWidth = 80;
+    static constexpr int kWidth = 72;
 
 private:
     void refreshSlots();
@@ -67,11 +68,16 @@ private:
     MixerTrack& track;
     int index;
     bool selected = false;
+    bool isAux = false;
     int selectedSlot = -1;
 
     juce::Label nameLabel;
     juce::Label routedLabel;
     std::array<SlotButton, kSlotsPerTrack> slotButtons;
+    std::array<juce::Slider, kAuxBuses> sendSliders;
+    std::array<juce::Label, kAuxBuses> sendLabels;
+    juce::TextButton preButton { "Pre" };
+    std::array<juce::TextButton, kVcaGroups> vcaButtons;
     AutomatableSlider panSlider { juce::Slider::LinearHorizontal, juce::Slider::NoTextBox };
     juce::Label panLabel;
     juce::TextButton muteButton { "M" };
@@ -85,6 +91,34 @@ private:
 
 // Index that stands for the master bus where a mixer track index is expected (the tracks are 0 .. kMaxTracks - 1).
 constexpr int kMasterIndex = kMaxTracks;
+// ... and the aux buses: kAuxIndexBase + n.
+constexpr int kAuxIndexBase = kMasterIndex + 1;
+
+// One VCA group: a fader that scales the faders of its member tracks (the tracks choose their groups on their own strips).
+class VcaStrip : public juce::Component
+{
+public:
+    VcaStrip (Console& consoleToControl, int groupIndex);
+
+    void refresh();
+    void setMemberCount (int count);
+
+    std::function<void()> onChanged;
+
+    void paint (juce::Graphics&) override;
+    void resized() override;
+
+private:
+    Console& console;
+    int group;
+    juce::Label nameLabel;
+    juce::Label membersLabel;
+    juce::TextButton muteButton { "M" };
+    juce::Slider fader { juce::Slider::LinearVertical, juce::Slider::NoTextBox };
+    juce::Label dbLabel;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VcaStrip)
+};
 
 // The master strip: the master fader (linked to the toolbar's master volume) and four insert-effect slots that
 // process the sum of all tracks, before the master fader and the soft limiter.
@@ -177,6 +211,10 @@ public:
     void setTracks (std::vector<MixerTrack>& tracks);
     // The master bus's effect chain (its `slots`); not owned. Call once, after setTracks().
     void setMaster (MixerTrack& masterTrack);
+    // The aux buses and VCA groups; not owned. Call once, after setTracks().
+    void setConsole (Console& consoleToControl);
+    void refreshConsole(); // after the console was replaced (a project was opened)
+    void setAuxLevels (int aux, float peak, float rms);
 
     // `index` is a track (0 .. kMaxTracks - 1) or kMasterIndex for the master bus, here and in the callbacks.
     void refreshTrack (int index);
@@ -201,10 +239,16 @@ private:
 
     void layoutInner();
     void selectMaster();
+    void selectAux (int aux);
+    void updateVcaMembers();
+    MixerTrack* trackFor (int index) noexcept; // a track, an aux bus or the master (nullptr if there is none)
 
     int selectedTrack = 0;
     std::vector<MixerTrack>* trackData = nullptr;
     MixerTrack* masterData = nullptr;
+    Console* consoleData = nullptr;
+    std::vector<std::unique_ptr<MixerStrip>> auxStrips;
+    std::vector<std::unique_ptr<VcaStrip>> vcaStrips;
     juce::Viewport viewport;
     Inner inner;
     std::vector<std::unique_ptr<MixerStrip>> strips;

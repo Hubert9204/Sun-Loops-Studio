@@ -111,8 +111,8 @@ void layoutFaderColumn (juce::Rectangle<int> area, juce::Component& dbLabel, juc
 
 } // namespace
 
-MixerStrip::MixerStrip (MixerTrack& trackToControl, int trackIndex)
-    : track (trackToControl), index (trackIndex)
+MixerStrip::MixerStrip (MixerTrack& trackToControl, int trackIndex, bool isAuxBus)
+    : track (trackToControl), index (trackIndex), isAux (isAuxBus)
 {
     styleSmallLabel (nameLabel, 12.0f, true, juce::Justification::centred);
     styleSmallLabel (routedLabel, 10.0f, false, juce::Justification::centred);
@@ -127,10 +127,55 @@ MixerStrip::MixerStrip (MixerTrack& trackToControl, int trackIndex)
         addAndMakeVisible (slotButtons[s]);
     }
 
+    for (size_t a = 0; a < sendSliders.size(); ++a)
+    {
+        auto& slider = sendSliders[a];
+        slider.setSliderStyle (juce::Slider::LinearHorizontal);
+        slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+        slider.setRange (0.0, 1.5, 0.01);
+        slider.setDoubleClickReturnValue (true, 0.0);
+        slider.setTooltip ("Send to Aux " + juce::String::charToString (static_cast<juce::juce_wchar> ('A' + static_cast<int> (a)))
+                           + " (all the way left: off; double-click: off)");
+        slider.onValueChange = [this, a]
+        {
+            track.sends[a] = static_cast<float> (sendSliders[a].getValue());
+            if (onChanged) onChanged (index);
+        };
+        styleSmallLabel (sendLabels[a], 11.0f, true, juce::Justification::centred);
+        sendLabels[a].setBorderSize ({ 0, 0, 0, 0 });
+        sendLabels[a].setText (juce::String::charToString (static_cast<juce::juce_wchar> ('A' + static_cast<int> (a))), juce::dontSendNotification);
+        sendLabels[a].setColour (juce::Label::textColourId, juce::Colour (0xff7bc47f));
+    }
+
+    preButton.setClickingTogglesState (true);
+    preButton.setTooltip ("Pre-fader sends: the sends take the sound before the fader, balance and VCA (they still follow mute and solo)");
+    preButton.setMouseClickGrabsKeyboardFocus (false);
+    preButton.onClick = [this]
+    {
+        track.sendsPreFader = preButton.getToggleState();
+        if (onChanged) onChanged (index);
+    };
+    for (size_t g = 0; g < vcaButtons.size(); ++g)
+    {
+        auto& b = vcaButtons[g];
+        b.setButtonText ("V" + juce::String (static_cast<int> (g) + 1));
+        b.setClickingTogglesState (true);
+        b.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff4a8fd0));
+        b.setTooltip ("Member of VCA " + juce::String (static_cast<int> (g) + 1));
+        b.setMouseClickGrabsKeyboardFocus (false);
+        b.onClick = [this, g]
+        {
+            const auto bit = static_cast<std::uint8_t> (1u << g);
+            track.vcaMask = vcaButtons[g].getToggleState() ? static_cast<std::uint8_t> (track.vcaMask | bit)
+                                                           : static_cast<std::uint8_t> (track.vcaMask & ~bit);
+            if (onChanged) onChanged (index);
+        };
+    }
+
     panSlider.setRange (-1.0, 1.0, 0.01);
     panSlider.setDoubleClickReturnValue (true, 0.0);
-    panSlider.setTooltip ("Stereo balance (double-click: centre; right click: automate)");
-    panSlider.onAutomate = [this] { if (onAutomate) onAutomate ({ AutomationKind::TrackPan, index, 0, 0 }); };
+    panSlider.setTooltip (isAux ? "Stereo balance (double-click: centre)" : "Stereo balance (double-click: centre; right click: automate)");
+    panSlider.onAutomate = [this] { if (onAutomate && ! isAux) onAutomate ({ AutomationKind::TrackPan, index, 0, 0 }); };
     panSlider.onValueChange = [this]
     {
         track.pan = static_cast<float> (panSlider.getValue());
@@ -158,8 +203,8 @@ MixerStrip::MixerStrip (MixerTrack& trackToControl, int trackIndex)
 
     fader.setRange (0.0, 1.5, 0.01);
     fader.setDoubleClickReturnValue (true, 1.0);
-    fader.setTooltip ("Track volume (double-click: 0 dB; right click: automate)");
-    fader.onAutomate = [this] { if (onAutomate) onAutomate ({ AutomationKind::TrackVolume, index, 0, 0 }); };
+    fader.setTooltip (isAux ? "Bus volume (double-click: 0 dB)" : "Track volume (double-click: 0 dB; right click: automate)");
+    fader.onAutomate = [this] { if (onAutomate && ! isAux) onAutomate ({ AutomationKind::TrackVolume, index, 0, 0 }); };
     fader.onValueChange = [this]
     {
         track.volume = static_cast<float> (fader.getValue());
@@ -168,15 +213,37 @@ MixerStrip::MixerStrip (MixerTrack& trackToControl, int trackIndex)
     };
 
     for (auto* c : std::initializer_list<juce::Component*> { &nameLabel, &routedLabel, &panSlider, &panLabel,
-                                                              &muteButton, &soloButton, &fader, &dbLabel, &meter })
+                                                              &muteButton, &fader, &dbLabel, &meter })
         addAndMakeVisible (c);
+
+    if (! isAux)
+    {
+        addAndMakeVisible (soloButton);
+        addAndMakeVisible (preButton);
+        for (size_t a = 0; a < sendSliders.size(); ++a)
+        {
+            addAndMakeVisible (sendSliders[a]);
+            addAndMakeVisible (sendLabels[a]);
+        }
+        for (auto& b : vcaButtons)
+            addAndMakeVisible (b);
+    }
+    else
+    {
+        routedLabel.setText ("return", juce::dontSendNotification);
+    }
 
     refreshFromTrack();
 }
 
 void MixerStrip::refreshFromTrack()
 {
-    nameLabel.setText ("Track " + juce::String (index + 1), juce::dontSendNotification);
+    nameLabel.setText (isAux ? juce::String (track.name) : "Track " + juce::String (index + 1), juce::dontSendNotification);
+    for (size_t a = 0; a < sendSliders.size(); ++a)
+        sendSliders[a].setValue (track.sends[a], juce::dontSendNotification);
+    preButton.setToggleState (track.sendsPreFader, juce::dontSendNotification);
+    for (size_t g = 0; g < vcaButtons.size(); ++g)
+        vcaButtons[g].setToggleState (((track.vcaMask >> g) & 1u) != 0, juce::dontSendNotification);
     panSlider.setValue (track.pan, juce::dontSendNotification);
     panLabel.setText (panToText (track.pan), juce::dontSendNotification);
     muteButton.setToggleState (track.mute, juce::dontSendNotification);
@@ -213,9 +280,9 @@ void MixerStrip::paint (juce::Graphics& g)
     g.setColour (selected ? kStripSelectedBg : kStripBg);
     g.fillRoundedRectangle (getLocalBounds().toFloat().reduced (1.0f), 4.0f);
 
-    if (selected)
+    if (selected || isAux)
     {
-        g.setColour (kAccent);
+        g.setColour (isAux ? juce::Colour (0xff7bc47f) : kAccent);
         g.fillRoundedRectangle (4.0f, 1.0f, static_cast<float> (getWidth()) - 8.0f, 3.0f, 1.5f);
     }
 }
@@ -235,13 +302,35 @@ void MixerStrip::resized()
     }
     area.removeFromTop (4);
 
+    if (! isAux)
+    {
+        for (size_t a = 0; a < sendSliders.size(); ++a)
+        {
+            auto row = area.removeFromTop (16);
+            sendLabels[a].setBounds (row.removeFromLeft (12));
+            sendSliders[a].setBounds (row);
+        }
+        area.removeFromTop (2);
+        preButton.setBounds (area.removeFromTop (18).reduced (1, 0));
+        area.removeFromTop (2);
+        auto vcaRow = area.removeFromTop (18);
+        vcaButtons[0].setBounds (vcaRow.removeFromLeft (vcaRow.getWidth() / 2).reduced (1, 0));
+        vcaButtons[1].setBounds (vcaRow.reduced (1, 0));
+        area.removeFromTop (6);
+    }
+
     panSlider.setBounds (area.removeFromTop (16));
     panLabel.setBounds (area.removeFromTop (12));
     area.removeFromTop (4);
 
     auto buttons = area.removeFromTop (22);
-    muteButton.setBounds (buttons.removeFromLeft (buttons.getWidth() / 2).reduced (2, 0));
-    soloButton.setBounds (buttons.reduced (2, 0));
+    if (isAux)
+        muteButton.setBounds (buttons.reduced (2, 0));
+    else
+    {
+        muteButton.setBounds (buttons.removeFromLeft (buttons.getWidth() / 2).reduced (2, 0));
+        soloButton.setBounds (buttons.reduced (2, 0));
+    }
     area.removeFromTop (4);
 
     layoutFaderColumn (area, dbLabel, meter, fader);
@@ -251,6 +340,75 @@ void MixerStrip::mouseDown (const juce::MouseEvent&)
 {
     if (onSelect)
         onSelect (index);
+}
+
+// ------------------------------------------------------------------------- VcaStrip
+
+VcaStrip::VcaStrip (Console& consoleToControl, int groupIndex) : console (consoleToControl), group (groupIndex)
+{
+    styleSmallLabel (nameLabel, 12.0f, true, juce::Justification::centred);
+    nameLabel.setText ("VCA " + juce::String (group + 1), juce::dontSendNotification);
+    styleSmallLabel (membersLabel, 10.0f, false, juce::Justification::centred);
+    membersLabel.setColour (juce::Label::textColourId, juce::Colour (0xff9aa0ab));
+    styleSmallLabel (dbLabel, 11.0f, false, juce::Justification::centred);
+
+    fader.setRange (0.0, 1.5, 0.01);
+    fader.setDoubleClickReturnValue (true, 1.0);
+    fader.setTooltip ("VCA level: scales the faders of its member tracks (double-click: 0 dB)");
+    fader.onValueChange = [this]
+    {
+        console.vcaLevel[static_cast<size_t> (group)] = static_cast<float> (fader.getValue());
+        dbLabel.setText (MixerStrip::volumeToText (console.vcaLevel[static_cast<size_t> (group)]), juce::dontSendNotification);
+        if (onChanged) onChanged();
+    };
+
+    muteButton.setClickingTogglesState (true);
+    muteButton.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xffd9534f));
+    muteButton.setTooltip ("Mute every member track of this VCA");
+    muteButton.setMouseClickGrabsKeyboardFocus (false);
+    muteButton.onClick = [this]
+    {
+        console.vcaMute[static_cast<size_t> (group)] = muteButton.getToggleState();
+        if (onChanged) onChanged();
+    };
+
+    for (auto* c : std::initializer_list<juce::Component*> { &nameLabel, &membersLabel, &muteButton, &fader, &dbLabel })
+        addAndMakeVisible (c);
+    refresh();
+}
+
+void VcaStrip::refresh()
+{
+    fader.setValue (console.vcaLevel[static_cast<size_t> (group)], juce::dontSendNotification);
+    dbLabel.setText (MixerStrip::volumeToText (console.vcaLevel[static_cast<size_t> (group)]), juce::dontSendNotification);
+    muteButton.setToggleState (console.vcaMute[static_cast<size_t> (group)], juce::dontSendNotification);
+}
+
+void VcaStrip::setMemberCount (int count)
+{
+    membersLabel.setText (count == 0 ? juce::String ("no tracks") : juce::String (count) + (count == 1 ? " track" : " tracks"),
+                          juce::dontSendNotification);
+}
+
+void VcaStrip::paint (juce::Graphics& g)
+{
+    g.setColour (kStripBg);
+    g.fillRoundedRectangle (getLocalBounds().toFloat().reduced (1.0f), 4.0f);
+    g.setColour (juce::Colour (0xff4a8fd0));
+    g.fillRoundedRectangle (4.0f, 1.0f, static_cast<float> (getWidth()) - 8.0f, 3.0f, 1.5f);
+}
+
+void VcaStrip::resized()
+{
+    auto area = getLocalBounds().reduced (5, 6);
+    nameLabel.setBounds (area.removeFromTop (18));
+    membersLabel.setBounds (area.removeFromTop (14));
+    area.removeFromTop (4);
+    muteButton.setBounds (area.removeFromTop (22).reduced (2, 0));
+    area.removeFromTop (4);
+    dbLabel.setBounds (area.removeFromBottom (16));
+    area.removeFromBottom (2);
+    fader.setBounds (area.withSizeKeepingCentre (std::min (area.getWidth(), 40), area.getHeight()));
 }
 
 // ------------------------------------------------------------------------- MasterStrip
@@ -422,15 +580,23 @@ void FxPanel::setSelectedSlot (int slot)
 void FxPanel::refresh()
 {
     const bool isMaster = trackIndex == kMasterIndex;
-    titleLabel.setText (isMaster ? juce::String ("Effects - Master") : "Effects - Track " + juce::String (trackIndex + 1),
+    const bool isAuxBus = trackIndex >= kAuxIndexBase;
+    titleLabel.setText (isMaster ? juce::String ("Effects - Master")
+                                 : (isAuxBus ? "Effects - " + (track != nullptr ? juce::String (track->name) : juce::String ("Aux"))
+                                             : "Effects - Track " + juce::String (trackIndex + 1)),
                         juce::dontSendNotification);
-    notePlaceholder.setText (isMaster
+    notePlaceholder.setText (isAuxBus
+        ? "Click a slot to add an effect to this aux bus (Equalizer, Reverb, Delay, Compressor). "
+          "The bus processes what the tracks send to it (set the send level on each track's strip); its output goes to the master.\n\n"
+          "Tip: a reverb or delay here, set to 100 % mix, gives every track the same space.\n"
+          "Effect parameters of aux buses cannot be automated yet."
+        : (isMaster
         ? "Click a slot to add an effect to the master chain (Equalizer, Reverb, Delay, Compressor). "
           "These effects process the sum of all tracks, in order, before the master fader.\n\n"
           "VST3 plugin hosting is not implemented yet: the slots hold Sun Loops Studio's built-in effects."
         : "Click a slot to add an effect to this track's chain "
           "(Equalizer, Reverb, Delay, Compressor). Effects run in order, before the fader.\n\n"
-          "VST3 plugin hosting is not implemented yet: the slots hold Sun Loops Studio's built-in effects.",
+          "VST3 plugin hosting is not implemented yet: the slots hold Sun Loops Studio's built-in effects."),
         juce::dontSendNotification);
 
     for (size_t s = 0; s < slotButtons.size(); ++s)
@@ -481,7 +647,7 @@ void FxPanel::rebuildParameters()
         row.slider.updateText();
         row.slider.onAutomate = [this, i]
         {
-            if (onAutomate)
+            if (onAutomate && trackIndex < kAuxIndexBase)
                 onAutomate (trackIndex == kMasterIndex ? AutomationTarget { AutomationKind::MasterEffect, 0, selectedSlot, i }
                                                        : AutomationTarget { AutomationKind::TrackEffect, trackIndex, selectedSlot, i });
         };
@@ -606,6 +772,12 @@ MixerPanel::MixerPanel()
     {
         if (selectedTrack == kMasterIndex)
             masterStrip.setSelectedSlot (slot);
+        else if (selectedTrack >= kAuxIndexBase)
+        {
+            const auto a = static_cast<size_t> (selectedTrack - kAuxIndexBase);
+            if (a < auxStrips.size())
+                auxStrips[a]->setSelectedSlot (slot);
+        }
         else if (selectedTrack >= 0 && selectedTrack < static_cast<int> (strips.size()))
             strips[static_cast<size_t> (selectedTrack)]->setSelectedSlot (slot);
     };
@@ -628,6 +800,104 @@ MixerPanel::MixerPanel()
     };
 }
 
+MixerTrack* MixerPanel::trackFor (int index) noexcept
+{
+    if (index == kMasterIndex)
+        return masterData;
+    if (index >= kAuxIndexBase)
+        return consoleData != nullptr && index - kAuxIndexBase < kAuxBuses ? &consoleData->aux[static_cast<size_t> (index - kAuxIndexBase)] : nullptr;
+    return trackData != nullptr && index >= 0 && index < static_cast<int> (trackData->size()) ? &(*trackData)[static_cast<size_t> (index)] : nullptr;
+}
+
+void MixerPanel::selectAux (int aux)
+{
+    if (consoleData == nullptr || aux < 0 || aux >= static_cast<int> (auxStrips.size()))
+        return;
+
+    selectedTrack = kAuxIndexBase + aux;
+    for (auto& s : strips)
+        s->setSelected (false);
+    masterStrip.setSelected (false);
+    for (size_t a = 0; a < auxStrips.size(); ++a)
+        auxStrips[a]->setSelected (static_cast<int> (a) == aux);
+    fxPanel.setTrack (&consoleData->aux[static_cast<size_t> (aux)], selectedTrack);
+    auxStrips[static_cast<size_t> (aux)]->setSelectedSlot (fxPanel.getSelectedSlot());
+}
+
+void MixerPanel::setConsole (Console& consoleToControl)
+{
+    consoleData = &consoleToControl;
+    auxStrips.clear();
+    vcaStrips.clear();
+
+    for (int a = 0; a < kAuxBuses; ++a)
+    {
+        auto strip = std::make_unique<MixerStrip> (consoleToControl.aux[static_cast<size_t> (a)], kAuxIndexBase + a, true);
+        strip->onSelect = [this] (int idx) { selectAux (idx - kAuxIndexBase); };
+        strip->onChanged = [this] (int idx) { if (onTrackChanged) onTrackChanged (idx); };
+        strip->onSlotClicked = [this] (int idx, int slot)
+        {
+            selectAux (idx - kAuxIndexBase);
+            fxPanel.setSelectedSlot (slot);
+            auxStrips[static_cast<size_t> (idx - kAuxIndexBase)]->setSelectedSlot (slot);
+            if (consoleData->aux[static_cast<size_t> (idx - kAuxIndexBase)].slots[static_cast<size_t> (slot)].type == EffectType::None)
+                fxPanel.showSlotMenu (slot);
+        };
+        strip->onSlotMenu = [this] (int idx, int slot)
+        {
+            selectAux (idx - kAuxIndexBase);
+            fxPanel.setSelectedSlot (slot);
+            auxStrips[static_cast<size_t> (idx - kAuxIndexBase)]->setSelectedSlot (slot);
+            fxPanel.showSlotMenu (slot);
+        };
+        inner.addAndMakeVisible (*strip);
+        auxStrips.push_back (std::move (strip));
+    }
+
+    for (int g = 0; g < kVcaGroups; ++g)
+    {
+        auto strip = std::make_unique<VcaStrip> (consoleToControl, g);
+        strip->onChanged = [this] { if (onTrackChanged) onTrackChanged (kMasterIndex); };
+        inner.addAndMakeVisible (*strip);
+        vcaStrips.push_back (std::move (strip));
+    }
+
+    refreshConsole();
+    layoutInner();
+}
+
+void MixerPanel::refreshConsole()
+{
+    for (auto& s : auxStrips)
+        s->refreshFromTrack();
+    for (auto& s : vcaStrips)
+        s->refresh();
+    for (auto& s : strips)
+        s->refreshFromTrack();
+    updateVcaMembers();
+    if (selectedTrack >= kAuxIndexBase)
+        fxPanel.refresh();
+}
+
+void MixerPanel::updateVcaMembers()
+{
+    if (trackData == nullptr)
+        return;
+    for (size_t g = 0; g < vcaStrips.size(); ++g)
+    {
+        int count = 0;
+        for (const auto& t : *trackData)
+            count += ((t.vcaMask >> g) & 1u) != 0 ? 1 : 0;
+        vcaStrips[g]->setMemberCount (count);
+    }
+}
+
+void MixerPanel::setAuxLevels (int aux, float peak, float rms)
+{
+    if (aux >= 0 && aux < static_cast<int> (auxStrips.size()))
+        auxStrips[static_cast<size_t> (aux)]->setLevels (peak, rms);
+}
+
 void MixerPanel::setMaster (MixerTrack& masterTrack)
 {
     masterData = &masterTrack;
@@ -644,6 +914,8 @@ void MixerPanel::selectMaster()
     selectedTrack = kMasterIndex;
     for (auto& s : strips)
         s->setSelected (false);
+    for (auto& s : auxStrips)
+        s->setSelected (false);
     masterStrip.setSelected (true);
     fxPanel.setTrack (masterData, kMasterIndex);
     masterStrip.setSelectedSlot (fxPanel.getSelectedSlot());
@@ -658,7 +930,7 @@ void MixerPanel::setTracks (std::vector<MixerTrack>& tracks)
     {
         auto strip = std::make_unique<MixerStrip> (tracks[i], static_cast<int> (i));
         strip->onSelect = [this] (int idx) { setSelectedTrack (idx); };
-        strip->onChanged = [this] (int idx) { if (onTrackChanged) onTrackChanged (idx); };
+        strip->onChanged = [this] (int idx) { updateVcaMembers(); if (onTrackChanged) onTrackChanged (idx); };
         strip->onAutomate = [this] (const AutomationTarget& t) { if (onAutomate) onAutomate (t); };
         strip->onSlotClicked = [this] (int idx, int slot)
         {
@@ -693,6 +965,15 @@ void MixerPanel::refreshTrack (int index)
             fxPanel.refresh();
         return;
     }
+    if (index >= kAuxIndexBase)
+    {
+        const auto a = static_cast<size_t> (index - kAuxIndexBase);
+        if (a < auxStrips.size())
+            auxStrips[a]->refreshFromTrack();
+        if (index == selectedTrack)
+            fxPanel.refresh();
+        return;
+    }
     if (index >= 0 && index < static_cast<int> (strips.size()))
         strips[static_cast<size_t> (index)]->refreshFromTrack();
     if (index == selectedTrack)
@@ -709,8 +990,15 @@ void MixerPanel::setSelectedTrack (int index)
         selectMaster();
         return;
     }
+    if (index >= kAuxIndexBase)
+    {
+        selectAux (index - kAuxIndexBase);
+        return;
+    }
 
     masterStrip.setSelected (false);
+    for (auto& s : auxStrips)
+        s->setSelected (false);
     selectedTrack = std::clamp (index, 0, static_cast<int> (trackData->size()) - 1);
     for (auto& s : strips)
         s->setSelected (s->getIndex() == selectedTrack);
@@ -750,12 +1038,28 @@ void MixerPanel::resized()
 
 void MixerPanel::layoutInner()
 {
-    const int needed = static_cast<int> (strips.size()) * MixerStrip::kWidth;
+    constexpr int kGap = 10; // between the tracks, the aux buses and the VCA groups
+    const int count = static_cast<int> (strips.size() + auxStrips.size() + vcaStrips.size());
+    const int needed = count * MixerStrip::kWidth + (auxStrips.empty() ? 0 : kGap) + (vcaStrips.empty() ? 0 : kGap);
     const int height = std::max (1, viewport.getMaximumVisibleHeight());
     inner.setSize (std::max (needed, viewport.getMaximumVisibleWidth()), height);
 
     int x = 0;
     for (auto& s : strips)
+    {
+        s->setBounds (x, 0, MixerStrip::kWidth, height);
+        x += MixerStrip::kWidth;
+    }
+    if (! auxStrips.empty())
+        x += kGap;
+    for (auto& s : auxStrips)
+    {
+        s->setBounds (x, 0, MixerStrip::kWidth, height);
+        x += MixerStrip::kWidth;
+    }
+    if (! vcaStrips.empty())
+        x += kGap;
+    for (auto& s : vcaStrips)
     {
         s->setBounds (x, 0, MixerStrip::kWidth, height);
         x += MixerStrip::kWidth;
