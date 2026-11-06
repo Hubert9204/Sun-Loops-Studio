@@ -118,7 +118,7 @@ struct Project
         {
             c.swing = std::clamp (finiteOr (c.swing, 0.0f), 0.0f, 1.0f);
             applySwing (c.notes, c.swing, p.lengthTicks);
-            c.notes = Sequence::make (std::move (c.notes), p.lengthTicks).notes; // validate + sort
+            c.notes = Sequence::make (c.notes, p.lengthTicks).notes; // validate + sort
             c.volume = std::clamp (c.volume, 0.0f, 1.5f);
             c.pan = std::clamp (c.pan, -1.0f, 1.0f);
             c.rootPitch = std::clamp (c.rootPitch, 0, 127);

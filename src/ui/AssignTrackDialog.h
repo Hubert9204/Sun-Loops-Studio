@@ -24,7 +24,6 @@ public:
     bool keyPressed (const juce::KeyPress&) override;
     void parentHierarchyChanged() override;
 
-    int getSelectedTrack() const noexcept { return selectedTrack; }
     void assign();                 // what the Assign button does: report the choice and close the window
     void selectTrack (int track);
 

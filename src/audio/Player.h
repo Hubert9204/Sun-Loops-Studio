@@ -143,7 +143,7 @@ private:
     bool wasPlaying = false;
     bool releaseSamplesOnStop = true;
     float releaseStep = 0.001f;
-    std::uint64_t liveLimitSamples = 20 * 48000;
+    std::uint64_t liveLimitSamples = 20ull * 48000;
 
     // Metronome state.
     bool metronomeOn = false;

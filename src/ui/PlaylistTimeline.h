@@ -49,7 +49,6 @@ public:
 
     // The grid that audio clips snap to while they are moved, trimmed, split or cut, in ticks (480 = one beat; 1 = none).
     void setSnapTicks (int ticks);
-    int getSnapTicks() const noexcept { return snapTicks; }
 
     // Zoom (horizontal). 1.0 means the whole song (or, when it is empty, the whole timeline) fills the view.
     void zoomBy (double factor, int anchorX = -1); // anchorX: view coordinate that stays put (default: the middle)
@@ -85,7 +84,6 @@ public:
 
     // The track that Record writes to: shown with a red mark, chosen by clicking its name.
     void setArmedTrack (int track);
-    int getArmedTrack() const noexcept { return armedTrack; }
     std::function<void (int)> onTrackSelected;
 
     // Tempo, to draw audio at its real length (an audio clip lasts a fixed time, not a fixed number of beats) and to
@@ -116,12 +114,6 @@ public:
 
     static juce::Colour colourForPattern (int patternIndex);
 
-    // For the GUI tests.
-    int getSelectedClipKind() const noexcept { return static_cast<int> (selection.kind); }
-    int getSelectedClipIndex() const noexcept { return selection.index; }
-    int tickAtX (int x) const noexcept { return xToTick (x); }
-    int xAtTick (int tick) const noexcept { return tickToX (tick); }
-    int yAtTrack (int track) const noexcept { return kRulerHeight + track * trackHeight() + trackHeight() / 2; }
 
 private:
     enum class Drag { None, MovePattern, ResizePattern, MoveAudio, ResizeAudio, TrimAudio, CutRange, EraseSweep, ZoomRange };

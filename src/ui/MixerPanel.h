@@ -177,7 +177,6 @@ public:
     // `index` is a track (0 .. kMaxTracks - 1) or kMasterIndex for the master bus, here and in the callbacks.
     void refreshTrack (int index);
     void setSelectedTrack (int index);
-    int getSelectedTrack() const noexcept { return selectedTrack; }
     void setTrackChannels (int index, const juce::String& channelNames);
     void setTrackLevels (int index, float peak, float rms);
     void setMasterLevels (float peak, float rms) { masterStrip.setLevels (peak, rms); }

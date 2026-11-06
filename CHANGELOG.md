@@ -2,6 +2,14 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## Unreleased
+
+### Changed
+- Second code audit (clang-tidy bugprone / performance / clang-analyzer checks, a hunt for repeated blocks and for functions nobody calls):
+  the three "ask for a line of text" windows (rename channel, rename pattern, save preset) share one helper (`ui/TextPrompt.h`);
+  seven more unused getters were removed; a repeated `switch` branch, a needless copy of the note list and an `int` multiplication that
+  was widened too late were fixed. No change in behaviour. What the audit found and left alone is listed in `docs/audit.md`.
+
 ## 0.10.0 - 2026-11-06
 
 ### Added

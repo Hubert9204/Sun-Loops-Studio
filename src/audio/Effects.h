@@ -40,8 +40,8 @@ inline int effectParamCount (EffectType t) noexcept
 {
     switch (t)
     {
-        case EffectType::Equalizer:  return 4;
-        case EffectType::Reverb:     return 4;
+        case EffectType::Equalizer:
+        case EffectType::Reverb:
         case EffectType::Delay:      return 4;
         case EffectType::Compressor: return 5;
         case EffectType::None:       break;

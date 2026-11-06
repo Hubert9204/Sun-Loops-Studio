@@ -3,6 +3,7 @@
 #include "ui/AssignTrackDialog.h"
 #include "ui/AudioSettings.h"
 #include "ui/MetronomePanel.h"
+#include "ui/TextPrompt.h"
 
 #include <functional>
 #include <map>
@@ -876,30 +877,21 @@ void MainComponent::setInstrument (int channelIndex, Instrument instrument)
 
 void MainComponent::renameChannel (int channelIndex)
 {
-    auto* window = new juce::AlertWindow ("Rename channel", "Name:", juce::MessageBoxIconType::NoIcon);
-    window->addTextEditor ("name", juce::String (channels[static_cast<size_t> (channelIndex)].name));
-    window->addButton ("OK", 1, juce::KeyPress (juce::KeyPress::returnKey));
-    window->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+    promptForText (*this, "Rename channel", "Name:", juce::String (channels[static_cast<size_t> (channelIndex)].name), "OK",
+                   [safe = juce::Component::SafePointer<MainComponent> (this), channelIndex] (const juce::String& typed)
+                   {
+                       const auto name = typed.trim().substring (0, 16);
+                       if (safe == nullptr || name.isEmpty())
+                           return;
 
-    window->enterModalState (true,
-                             juce::ModalCallbackFunction::create (
-                                 [safe = juce::Component::SafePointer<MainComponent> (this), window, channelIndex] (int result)
-                                 {
-                                     if (safe == nullptr || result != 1)
-                                         return;
-
-                                     const auto name = window->getTextEditorContents ("name").trim().substring (0, 16);
-                                     if (name.isEmpty())
-                                         return;
-
-                                     safe->channels[static_cast<size_t> (channelIndex)].name = name.toStdString();
-                                     safe->strips[static_cast<size_t> (channelIndex)]->refreshFromChannel();
-                                     safe->updateTrackRouting();
-                                     if (channelIndex == safe->selected)
-                                         safe->selectChannel (channelIndex);
-                                     safe->publishProject();
-                                 }),
-                             true);
+                       auto* self = safe.getComponent();
+                       self->channels[static_cast<size_t> (channelIndex)].name = name.toStdString();
+                       self->strips[static_cast<size_t> (channelIndex)]->refreshFromChannel();
+                       self->updateTrackRouting();
+                       if (channelIndex == self->selected)
+                           self->selectChannel (channelIndex);
+                       self->publishProject();
+                   });
 }
 
 void MainComponent::openPianoRoll (int channelIndex)
@@ -980,28 +972,21 @@ void MainComponent::renamePattern (int index)
     if (index < 0 || index >= static_cast<int> (arrangement.patterns.size()))
         return;
 
-    auto* window = new juce::AlertWindow ("Rename pattern", "Name:", juce::MessageBoxIconType::NoIcon);
-    window->addTextEditor ("name", juce::String (arrangement.patterns[static_cast<size_t> (index)].name));
-    window->addButton ("OK", 1, juce::KeyPress (juce::KeyPress::returnKey));
-    window->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+    promptForText (*this, "Rename pattern", "Name:", juce::String (arrangement.patterns[static_cast<size_t> (index)].name), "OK",
+                   [safe = juce::Component::SafePointer<MainComponent> (this), index] (const juce::String& typed)
+                   {
+                       if (safe == nullptr || index >= static_cast<int> (safe->arrangement.patterns.size()))
+                           return;
 
-    window->enterModalState (true,
-                             juce::ModalCallbackFunction::create (
-                                 [safe = juce::Component::SafePointer<MainComponent> (this), window, index] (int result)
-                                 {
-                                     if (safe == nullptr || result != 1 || index >= static_cast<int> (safe->arrangement.patterns.size()))
-                                         return;
+                       auto name = typed.toStdString();
+                       if (! cleanPatternName (name))
+                           return; // an empty name keeps the old one
 
-                                     auto name = window->getTextEditorContents ("name").toStdString();
-                                     if (! cleanPatternName (name))
-                                         return; // an empty name keeps the old one
-
-                                     safe->arrangement.patterns[static_cast<size_t> (index)].name = name;
-                                     safe->refreshPatternBox();
-                                     safe->markDirty();
-                                     safe->statusLabel.setText ("Pattern renamed to " + juce::String (name), juce::dontSendNotification);
-                                 }),
-                             true);
+                       safe->arrangement.patterns[static_cast<size_t> (index)].name = name;
+                       safe->refreshPatternBox();
+                       safe->markDirty();
+                       safe->statusLabel.setText ("Pattern renamed to " + juce::String (name), juce::dontSendNotification);
+                   });
 }
 
 // Puts the notes of pattern `index` into the channels (without saving the channels' notes anywhere first).
@@ -2129,33 +2114,23 @@ void MainComponent::applyBrowserItem (int channelIndex, const drag::Item& item)
 
 void MainComponent::savePresetFor (int channelIndex)
 {
-    auto* window = new juce::AlertWindow ("Save channel preset", "Preset name:", juce::MessageBoxIconType::NoIcon);
-    window->addTextEditor ("name", juce::String (channels[static_cast<size_t> (channelIndex)].name));
-    window->addButton ("Save", 1, juce::KeyPress (juce::KeyPress::returnKey));
-    window->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+    promptForText (*this, "Save channel preset", "Preset name:", juce::String (channels[static_cast<size_t> (channelIndex)].name), "Save",
+                   [safe = juce::Component::SafePointer<MainComponent> (this), channelIndex] (const juce::String& typed)
+                   {
+                       const auto name = typed.trim().substring (0, 16);
+                       const auto fileName = juce::File::createLegalFileName (name);
+                       if (safe == nullptr || name.isEmpty() || fileName.isEmpty())
+                           return;
 
-    window->enterModalState (true,
-                             juce::ModalCallbackFunction::create (
-                                 [safe = juce::Component::SafePointer<MainComponent> (this), window, channelIndex] (int result)
-                                 {
-                                     if (safe == nullptr || result != 1)
-                                         return;
-
-                                     const auto name = window->getTextEditorContents ("name").trim().substring (0, 16);
-                                     const auto fileName = juce::File::createLegalFileName (name);
-                                     if (name.isEmpty() || fileName.isEmpty())
-                                         return;
-
-                                     const auto preset = ChannelPreset::fromChannel (safe->channels[static_cast<size_t> (channelIndex)],
-                                                                                     name.toStdString());
-                                     safe->library.ensureExists();
-                                     const auto file = safe->library.presets.getChildFile (fileName + kPresetExtension);
-                                     const bool ok = file.replaceWithText (preset.toJson());
-                                     safe->rebuildBrowser();
-                                     safe->statusLabel.setText (ok ? "Saved preset " + name : "Could not write " + file.getFullPathName(),
-                                                                juce::dontSendNotification);
-                                 }),
-                             true);
+                       auto* self = safe.getComponent();
+                       const auto preset = ChannelPreset::fromChannel (self->channels[static_cast<size_t> (channelIndex)], name.toStdString());
+                       self->library.ensureExists();
+                       const auto file = self->library.presets.getChildFile (fileName + kPresetExtension);
+                       const bool ok = file.replaceWithText (preset.toJson());
+                       self->rebuildBrowser();
+                       self->statusLabel.setText (ok ? "Saved preset " + name : "Could not write " + file.getFullPathName(),
+                                                  juce::dontSendNotification);
+                   });
 }
 
 void MainComponent::exportAs (ExportFormat format)

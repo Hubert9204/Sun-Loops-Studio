@@ -31,7 +31,7 @@ struct Sequence
     int lengthTicks = 16 * kTicksPerBeat; // loop length
     std::uint64_t revision = 0;        // assigned by SequenceExchange
 
-    static Sequence make (std::vector<Note> input, int loopLengthTicks)
+    static Sequence make (const std::vector<Note>& input, int loopLengthTicks)
     {
         Sequence s;
         s.lengthTicks = std::max (1, loopLengthTicks);
