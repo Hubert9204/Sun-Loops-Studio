@@ -2,6 +2,13 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.19.1 - 2026-11-06
+
+### Changed
+- **Playlist zoom with the mouse wheel**: the wheel now zooms in (up) and out (down) around the mouse, anywhere on the playlist; Shift+wheel,
+  a sideways wheel or a touchpad swipe scroll along the song (before: the wheel scrolled and Ctrl+wheel zoomed).
+- The loop region's right-click menu no longer has *Zoom to region* (it could only zoom in); it keeps *Move*, *Resize* and *Delete loop region*.
+
 ## 0.19.0 - 2026-11-06
 
 ### Added

@@ -391,7 +391,7 @@ numbers. The orange vertical line marks the end of the song: in Song mode playba
   repeats it: when the playhead reaches its end it goes back to its start; if you start after it, the end of the song goes back to it. With the
   song stopped, the playhead moves to the start of a new region.
 - **Right click on the loop region** opens its menu: **Move** (the region follows the mouse; click to place it), **Resize** (the nearest edge
-  follows the mouse; click to finish), **Zoom to region** and **Delete loop region**. *Delete* removes only the highlight: no clip, pattern or
+  follows the mouse; click to finish) and **Delete loop region**. *Delete* removes only the highlight: no clip, pattern or
   note is touched. During *Move* and *Resize* a right click or Escape puts the region back as it was.
 - **Right drag on the region** moves it at once; right drag on one of its **edges** resizes it.
 - The region snaps to the grid of the Grid box (at least a 16th) and is saved in the project. It only applies to live playback in Song mode:
@@ -404,8 +404,8 @@ numbers. The orange vertical line marks the end of the song: in Song mode playba
 | Repeat / shorten | Drag the right edge of the clip: the pattern repeats once per pattern length. |
 | Delete | Right-click the clip > Delete, or select it and press Delete (or use the Erase tool). |
 | Select its pattern | Double-click the clip. |
-| Scroll time | Mouse wheel. |
-| Zoom | Ctrl + wheel. |
+| Zoom in / out | Mouse wheel (up: in, down: out), around the mouse, anywhere on the playlist. |
+| Scroll time | Shift + wheel, a sideways wheel or touchpad swipe, or the scroll bar. |
 
 ### Tools, grid, zoom and undo
 
@@ -421,8 +421,8 @@ The toolbar under the pattern box has five tools (keys **1** - **5** while the m
 
 **Grid** (the box next to the tools) is what audio clips snap to when moved, trimmed, split or cut: from a bar down to a
 single tick (1 beat = 480 ticks); hold **Alt** while dragging to ignore it. Pattern clips always sit on whole patterns.
-**-**, **+** and **Fit** zoom out, in and to the whole song; **Ctrl+wheel** zooms around the mouse and the wheel and the
-scroll bar move in time. The ruler shows **minutes:seconds.milliseconds** and the bar numbers (only as many as fit at the
+**-**, **+** and **Fit** zoom out, in and to the whole song; the **mouse wheel** zooms in and out around the mouse, and
+Shift+wheel and the scroll bar move in time. The ruler shows **minutes:seconds.milliseconds** and the bar numbers (only as many as fit at the
 current zoom), and the two lines under the timeline read out, for the position under the mouse, *time - bar:beat:tick*, and
 for the selected clip its name, start, length and end (each as bar:beat:tick and as a time), for an audio clip also the length and
 sample rate of the file, where in the file the clip starts (in seconds and in samples) and its gain. On an audio clip, *Position,

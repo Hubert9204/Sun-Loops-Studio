@@ -1,6 +1,6 @@
 # Status and roadmap
 
-Version 0.19.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
+Version 0.19.1 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
 what is missing. If something here disagrees with the program, the program is right: please fix the page.
 
 ## What has been verified, and how
@@ -51,6 +51,7 @@ what is missing. If something here disagrees with the program, the program is ri
 | The synth window in the interface: *Synth settings...* in the channel menu, the window with the Classic engine (controls disabled), *Acid Bass* chosen from the menu (engine and every control followed), the export of the soloed channel differing from the classic sound, `Ctrl+Z` bringing the classic sound back | Manual, in a virtual display with a window manager | Worked (the sound itself not heard) |
 | FM synth (0.19.0): one operator giving a pure 440 Hz sine, ratio 2 giving 880 Hz, modulation and feedback adding harmonics, a modulator's envelope making the brightness decay, two heard operators normalised, the amplitude release, tremolo, the eight algorithms, every operator at full depth and ratio 32 on the top key staying bounded, six FM sounds, no allocation over 2000 blocks, hostile values, JSON round trip and partial files | Automated headless tests (1037 checks in total) | All pass |
 | The FM engine in the interface: *FM E-Piano* from the window's menu (engine, four operators and the matrix shown), the algorithm menu setting *4 > 3 > 2 > 1*, a matrix cell dragged (the menu then shows *(your own)*), a WAV export of the soloed channel with the FM sound | Manual, in a virtual display with a window manager | Worked (not heard) |
+| Playlist wheel zoom (0.19.1): wheel up zoomed in and wheel down zoomed out past the starting view, around the mouse; the loop region's menu without *Zoom to region* | Manual, in a virtual display | Worked |
 | A use-after-free when clicking an item that rebuilds the browser tree (crash on *Scan for VST3 plugins...*) | Found in that manual session | Fixed (item actions are deferred); the same click was repeated afterwards |
 
 ## What has not been verified

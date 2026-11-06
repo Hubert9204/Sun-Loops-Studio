@@ -75,7 +75,7 @@ PlaylistView::PlaylistView (Arrangement& arrangementToEdit) : timeline (arrangem
 
     zoomOutButton.setTooltip ("Zoom out (-)");
     zoomOutButton.onClick = [this] { timeline.zoomBy (1.0 / 1.5); };
-    zoomInButton.setTooltip ("Zoom in (+). Ctrl+wheel zooms around the mouse.");
+    zoomInButton.setTooltip ("Zoom in (+). The mouse wheel zooms in and out around the mouse; Shift+wheel scrolls.");
     zoomInButton.onClick = [this] { timeline.zoomBy (1.5); };
     zoomFitButton.setTooltip ("Show the whole song");
     zoomFitButton.onClick = [this] { timeline.zoomToFit(); };

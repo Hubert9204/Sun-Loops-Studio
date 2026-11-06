@@ -400,7 +400,7 @@ loop, sotto).
   modalità Song il brano la ripete: quando il cursore arriva alla fine torna all'inizio della zona; se parti dopo la zona, la fine del brano torna
   alla zona. A brano fermo il cursore va all'inizio della nuova zona.
 - **Clic destro sulla zona di loop** apre il suo menu: **Move** (la zona segue il mouse; clic per posarla), **Resize** (il bordo più vicino segue il
-  mouse; clic per finire), **Zoom to region** e **Delete loop region**. *Delete* toglie solo l'evidenziazione: nessuna clip, pattern o nota viene
+  mouse; clic per finire) e **Delete loop region**. *Delete* toglie solo l'evidenziazione: nessuna clip, pattern o nota viene
   toccata. Durante *Move* e *Resize* un clic destro o Esc rimettono la zona com'era.
 - **Trascinamento col destro sulla zona** la sposta subito; trascinamento col destro su uno dei suoi **bordi** la ridimensiona.
 - La zona si aggancia alla griglia scelta in Grid (almeno un sedicesimo) e viene salvata nel progetto. Vale solo per la riproduzione dal vivo in
@@ -413,8 +413,8 @@ loop, sotto).
 | Ripetere / accorciare | Trascina il bordo destro della clip: il pattern si ripete una volta per ogni lunghezza di pattern. |
 | Eliminare | Tasto destro sulla clip > Delete, oppure selezionala e premi Canc (o usa lo strumento Erase). |
 | Selezionare il suo pattern | Doppio clic sulla clip. |
-| Scorrere nel tempo | Rotella del mouse. |
-| Zoom | Ctrl + rotella. |
+| Ingrandire / rimpicciolire | Rotella del mouse (su: ingrandisce, giù: rimpicciolisce), intorno al mouse, in tutta la playlist. |
+| Scorrere nel tempo | Shift + rotella, rotella laterale o touchpad, oppure la barra di scorrimento. |
 
 ### Strumenti, griglia, zoom e annulla
 
@@ -431,7 +431,7 @@ La barra sotto il menu dei pattern ha cinque strumenti (tasti **1** - **5** con 
 **Grid** (il menu accanto agli strumenti) è la griglia a cui si agganciano le clip audio quando vengono spostate, ritagliate, divise
 o tagliate: da una battuta fino al singolo tick (1 battito = 480 tick); tieni premuto **Alt** mentre trascini per ignorarla. Le clip
 di pattern stanno sempre su pattern interi. **-**, **+** e **Fit** rimpiccioliscono, ingrandiscono e mostrano tutto il brano;
-**Ctrl+rotella** ingrandisce intorno al mouse, la rotella e la barra di scorrimento muovono nel tempo. Il righello mostra
+la **rotella del mouse** ingrandisce e rimpicciolisce intorno al mouse, Shift+rotella e la barra di scorrimento muovono nel tempo. Il righello mostra
 **minuti:secondi.millisecondi** e i numeri di battuta (solo quanti ne stanno allo zoom attuale); le due righe sotto la linea del
 tempo indicano, per la posizione sotto il mouse, *tempo - battuta:battito:tick* e, per la clip selezionata, nome, inizio, durata e fine
 (in battuta:battito:tick e in tempo), per una clip audio anche durata e frequenza di campionamento del file, il punto del file da cui

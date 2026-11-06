@@ -537,7 +537,6 @@ void PlaylistTimeline::showLoopMenu()
     menu.addSectionHeader ("Loop region");
     menu.addItem (1, "Move");
     menu.addItem (2, "Resize");
-    menu.addItem (4, "Zoom to region");
     menu.addSeparator();
     menu.addItem (3, "Delete loop region");
 
@@ -576,8 +575,6 @@ void PlaylistTimeline::showLoopMenu()
             if (self.onLoopChanged)
                 self.onLoopChanged();
         }
-        else if (choice == 4)
-            self.zoomToTicks (self.arrangement.loopStartTick, self.arrangement.loopEndTick);
     });
 }
 
@@ -2008,14 +2005,16 @@ void PlaylistTimeline::mouseDoubleClick (const juce::MouseEvent& e)
 
 void PlaylistTimeline::mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel)
 {
-    const float delta = std::abs (wheel.deltaY) >= std::abs (wheel.deltaX) ? wheel.deltaY : wheel.deltaX;
-
-    if (e.mods.isCtrlDown())
+    // The wheel zooms in (up) and out (down) around the mouse, anywhere on the playlist (0.20.0). Shift+wheel, or a sideways
+    // wheel / touchpad swipe, scrolls along the song.
+    const bool sideways = std::abs (wheel.deltaX) > std::abs (wheel.deltaY);
+    if (! sideways && ! e.mods.isShiftDown())
     {
-        zoomBy (std::pow (1.25, static_cast<double> (delta) * 4.0), e.x);
+        zoomBy (std::pow (1.25, static_cast<double> (wheel.deltaY) * 4.0), e.x);
         return;
     }
 
+    const float delta = sideways ? wheel.deltaX : wheel.deltaY;
     scrollX -= static_cast<double> (delta) * 400.0;
     clampScroll();
     updateScrollBar();
