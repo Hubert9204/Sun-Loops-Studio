@@ -14,6 +14,8 @@ src/audio/                      No UI dependencies except JUCE audio types
   Project.h                     Channel, MixerTrack, Console (aux buses, VCA groups), SampleData, Project: the immutable snapshot the audio thread reads
   Automation.h                  Automation targets, ranges, clips, points, evaluation and editing helpers (plain C++)
   TimeStretch.*                 StretchSettings and stretchSample(): offline time-stretch / pitch-shift of a SampleData with Signalsmith Stretch
+  SampleEdit.*                  Destructive edits of a SampleData (ranges, cut / crop / fades / gain / normalise ...), noise reduction (spectral gating), onset detection, grid slices, 32-bit float WAV writing (plain C++ over SampleData)
+  Auditioner.h                  The editor's preview voice: lock-free hand-over to the audio thread, mixed after the master chain
   Loudness.h                    LoudnessMeter: BS.1770-4 K-weighting, gating, LUFS, loudness range, true peak (plain C++)
   Spectrum.h                    StereoRing (lock-free audio -> GUI hand-over), SpectrumAnalyser (own FFT), stereo correlation
   Effects.*                     EffectSlot (type, bypass, parameters) and EffectUnit: Equalizer, Reverb, Delay, Compressor
@@ -260,6 +262,27 @@ An `AudioClip` has `data` (what plays), `original` (the file's audio, only while
 `clip.data` to the player. The project file keeps `"stretch": {lengthRatio, semitones, keepTimbre}` per audio clip; `loadAudioForClips` (AudioImport.cpp, called
 by `MainComponent::loadAudioClipFiles`) reads the files and renders each distinct (file, settings) pair once.
 
+### Sample editor (0.13.0)
+
+`SampleEdit.*` has only pure functions on `shared_ptr<const SampleData>`: each returns a **new** sample (or `nullptr` when there is nothing to do, or the
+same pointer when nothing changed) and never touches its input, so the editor's undo stack is just a vector of pointers (trimmed by a memory budget and
+40 steps). `reduceNoise` is an STFT (2048 frames, hop 512, Hann analysis and synthesis, normalised by the overlap sum): the threshold per bin is
+mean + sensitivity x standard deviation of the magnitude over the noise selection, a bin is "open" when it is above its threshold, the 0/1 mask is
+averaged over neighbouring bins, and the gain moves to `floor + (1 - floor) x mask` at once upwards but falls only by the release factor per frame; one profile per channel. `detectOnsets` is spectral flux of `log1p(50 x magnitude)`, a local median threshold, peak
+picking within +-3 frames, an energy-growth gate (to reject the truncated tail of a hit) and a refinement to where the waveform really starts to rise.
+`writeSampleWav` writes 32-bit float and refuses to replace a file; `uniqueEditedFile` picks `<name>-edit.wav`, `-edit-2.wav` ... in `Samples/Edited`.
+
+`Auditioner` is a single voice that plays a `shared_ptr<const SampleData>` range, optionally looping. The UI thread writes the request and publishes it with an
+atomic flag; `AudioEngine::audioDeviceIOCallback` calls `audition.mixInto` after the startup sound and the master gain. It takes no lock and allocates nothing;
+`stop()` waits (briefly) until the audio thread has left `mixInto`, so the sample the UI is about to release cannot be in use. The editor window
+(`SampleEditor`) feeds the spectrum from the playing position with the same `SpectrumAnalyser` as the meters.
+
+Applying: `MainComponent::openSampleEditorForClip` opens the editor on exactly the part of the audio the clip plays (`cropToRange`); on Apply it writes the WAV,
+reads nothing back (the sample in memory is used, `source` set to the new path) and calls `PlaylistTimeline::useEditedAudio`, which runs `sls::useEditedAudio`
+(ClipEdit.h, pure, tested) on a copy of the arrangement: the clip gets the new audio from its start, the longest length that fits (binary search on
+`canPlaceAudio`), and `splitAudioClip` at each slice point; only a successful result is committed, as one undo step. `openSampleEditorForChannel` replaces
+the channel's sample instead. The project file is unchanged: clips and channels still store only the path.
+
 ### Aux buses, sends and VCA groups (0.11.0)
 
 `Project::console` holds `aux[2]` (each a `MixerTrack`: name, fader, balance, mute, four effect slots) and `vcaLevel[2]` /
@@ -474,6 +497,8 @@ failed. It covers:
   the offline renderer, Song mode only, the project file round trip and old files;
 - the console: sends (pre / post fader, mute and solo), aux bus effects and fader, bus before the master chain, VCA scaling, two groups, VCA mute,
   hostile values and the project file;
+- the sample editor: every edit operation (ranges, cut / crop, fades, normalise, DC), noise reduction against a tone in noise, onset detection and grid slices,
+  the WAV writer, the preview voice (including stop while the audio thread runs) and `useEditedAudio`;
 - time-stretch: length, pitch and timing of test tones at four sample rates, edge cases, the clip arithmetic, tempo matching and the project file;
 - metering: K-weighting response, the -23 dBFS reference at three sample rates, gating, loudness range, true peak, FFT bin and level, correlation, the ring;
 - the arrangement: placement rules, compilation of pattern and song, and audible results through the offline

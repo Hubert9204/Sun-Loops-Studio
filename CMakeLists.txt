@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(SunLoopsStudio VERSION 0.12.0 LANGUAGES C CXX)
+project(SunLoopsStudio VERSION 0.13.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -44,6 +44,7 @@ set(SLS_CORE_SOURCES
     src/audio/InputRecorder.cpp
     src/audio/MidiImport.cpp
     src/audio/TimeStretch.cpp
+    src/audio/SampleEdit.cpp
     src/library/ChannelPreset.cpp
     src/library/Library.cpp
     src/library/ProjectFile.cpp
@@ -88,8 +89,10 @@ target_sources(SunLoopsStudio PRIVATE
     src/ui/MainComponentBrowser.cpp
     src/ui/MainComponentProject.cpp
     src/ui/MainComponentAutomation.cpp
+    src/ui/MainComponentSampleEditor.cpp
     src/ui/AutomationEditor.cpp
     src/ui/MetersView.cpp
+    src/ui/SampleEditor.cpp
     ${SLS_CORE_SOURCES})
 
 target_include_directories(SunLoopsStudio PRIVATE src)

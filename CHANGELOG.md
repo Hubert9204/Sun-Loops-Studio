@@ -2,6 +2,31 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.13.0 - 2026-11-06
+
+### Added
+- **Sample editor.** Right-click an audio clip in the playlist, or a sampler channel in the Channel Rack, and choose *Edit sample...*. A window
+  shows the waveform (both channels, zoom with the wheel, scroll with Shift + wheel) with a selection and a **preview** that plays through the
+  audio engine (Play / Stop, Space, optional loop of the selection) while a **real-time spectrum analyser** follows what is heard.
+  Edits are destructive on a copy and each one is one step of Undo / Redo (Ctrl+Z, Ctrl+Shift+Z): **cut**, **crop**, **silence**, **reverse**,
+  **invert phase**, **gain** (dB), **normalise** (to a peak level), **remove DC offset** and **fade in / out** (linear, curve or S curve).
+  **Noise reduction by spectral gating:** select a stretch that holds only the noise, choose *Reduce noise...* (reduction in dB, sensitivity)
+  and the rest of the sample is lowered wherever it does not rise above the noise (2048-point STFT, per-channel noise profile, smoothed in
+  frequency and time against "watery" artefacts).
+- **Slicing** (audio clips): *Find hits* puts a marker at the start of every hit, note or word it can find (spectral-flux onset detection with a
+  *Sensitivity* slider), *Equal parts...* puts markers on a grid, double-click on the waveform adds or removes a marker. On *Apply* the clip is cut
+  at the markers into separate clips on the playlist (one Undo step), ready to be rearranged.
+- Applying never touches the original: the result is written as a **new 32-bit float WAV file in `Samples/Edited`** (never overwriting an earlier edit) and
+  that file is what the clip or channel uses, so the project file needs nothing new. A clip that is stretched must first be taken *Back to the original*.
+- `src/audio/SampleEdit.*` (all the editing, noise reduction, onset detection and WAV writing, plain C++ and tested headless), `src/audio/Auditioner.h` (the
+  preview voice mixed after the master chain) and `src/ui/SampleEditor.*`.
+
+### Limits
+- After *Apply* a clip plays the whole edited audio from its start (shortened if a neighbour is in the way); a trimmed clip is edited as the part it plays.
+- Slicing is for playlist clips only (a sampler channel cannot be sliced into notes yet: that belongs to the advanced sampler block); slices are not turned
+  into a pattern or piano-roll notes.
+- Noise reduction and hit detection were measured on synthetic signals only and **not judged by ear on real recordings**; nothing was heard on real hardware.
+
 ## 0.12.0 - 2026-11-06
 
 ### Added

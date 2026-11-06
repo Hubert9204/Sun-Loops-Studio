@@ -27,6 +27,12 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.13.0
+Block E added `SampleEdit.cpp` (pure functions; buffers are `std::vector`s, allocated on the UI thread only), `Auditioner.h` (the only new code on the audio thread:
+no allocation, no lock, a bounded copy loop; covered by a test that runs `mixInto` on a second thread while the UI starts and stops it, but not by the
+"no allocation" test of `Player`) and the editor UI. clang-tidy (the audit's check set) was run on the new files: the two by-value parameters were made `const&`; what is left is `bugprone-misplaced-widening-cast` on `static_cast<size_t> (i + k)`-style index sums (the sums are bounded by the sample length, far below 2^31), the intended `stream.release()` of the WAV writer, and two JUCE `drawHorizontalLine` / `drawVerticalLine` calls whose (int, float, float) signature is JUCE's own. `PlaylistTimeline.cpp` and `SampleEditor.cpp` (~860 lines)
+are the next files to split.
+
 ## After 0.11.0
 The audit was not repeated in full for automation, the console and the metering. Checked while writing them: the new audio code allocates
 nothing in `Player::render` (the "no allocation" test covers automation running; the sends / buses code was only read for allocations (its buffers are `std::array`s in `Player`), not tested; the loudness meter and the ring live in `AudioEngine`, whose callback needs an audio device and is not covered by such a test, only read for allocations); the automation

@@ -1164,6 +1164,22 @@ void PlaylistTimeline::editAudioStretch (int index)
                              true);
 }
 
+juce::String PlaylistTimeline::useEditedAudio (int index, const std::shared_ptr<const SampleData>& expected, std::shared_ptr<const SampleData> edited,
+                                               const std::vector<double>& sliceSeconds)
+{
+    Arrangement trial = arrangement; // try it first: a refusal must leave the playlist and the undo history alone
+    const auto error = sls::useEditedAudio (trial, index, expected, std::move (edited), sliceSeconds, bpm);
+    if (error.empty())
+    {
+        beginEdit();
+        commitPendingUndo();
+        arrangement = std::move (trial);
+        clearSelection();
+        notifyChanged();
+    }
+    return juce::String (error);
+}
+
 void PlaylistTimeline::showClipMenu (const juce::MouseEvent& e)
 {
     const int track = yToTrack (e.y);
@@ -1183,6 +1199,7 @@ void PlaylistTimeline::showClipMenu (const juce::MouseEvent& e)
     {
         menu.addItem (4, "Position, length and gain...");
         menu.addItem (7, "Stretch and pitch...");
+        menu.addItem (8, "Edit sample...");
     }
     else
         menu.addItem (5, "Open this pattern");
@@ -1201,6 +1218,7 @@ void PlaylistTimeline::showClipMenu (const juce::MouseEvent& e)
                                 case 3: safe->copySelected(); break;
                                 case 4: safe->editAudioProperties (audio); break;
                                 case 7: safe->editAudioStretch (audio); break;
+                                case 8: if (safe->onEditSample) safe->onEditSample (audio); break;
                                 case 5:
                                     if (safe->selection.kind == Kind::Pattern && safe->selection.index >= 0
                                         && safe->selection.index < static_cast<int> (safe->arrangement.clips.size()) && safe->onPatternPicked)

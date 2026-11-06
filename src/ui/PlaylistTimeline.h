@@ -86,6 +86,13 @@ public:
     // `onAutomationPicked` is called when one is double-clicked or chosen from its menu (to open it in the editor).
     std::function<juce::String (const AutomationTarget&)> automationLabel;
     std::function<void (int)> onAutomationPicked;
+    // "Edit sample..." in an audio clip's menu: the clip's index (the owner opens the sample editor).
+    std::function<void (int)> onEditSample;
+    // The sample editor saved an edited copy of clip `index`'s audio (`expected` is what the clip played when the editor
+    // opened): the clip plays `edited` from its start, as long as it lasts or as far as fits, and is cut at `sliceSeconds`
+    // (positions in `edited`). One undo step. Returns an error text, or an empty string.
+    juce::String useEditedAudio (int index, const std::shared_ptr<const SampleData>& expected, std::shared_ptr<const SampleData> edited,
+                                 const std::vector<double>& sliceSeconds);
     // Puts a new automation clip on the first lane where it fits at or after `startTick` (it checks the end of the
     // timeline too), selects it and records the step for undo. Returns its index, or -1 if there is no room.
     int addAutomationClip (AutomationClip clip, int startTick);

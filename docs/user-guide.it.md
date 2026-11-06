@@ -336,6 +336,36 @@ estremi (4x, un'ottava o più) il suono si impasta e diventa un po' metallico, s
 perché i transienti non hanno un trattamento separato. È stato misurato su toni di prova (lunghezza, intonazione e tempi sono
 esatti entro pochi millisecondi; un attacco netto si sfuma di circa 10-25 ms) e **non giudicato a orecchio su musica vera**.
 
+### Editor di campioni
+
+Tasto destro su una **clip audio** (playlist) o su un **canale sampler** (Channel Rack) > **Edit sample...** apre l'editor. Per una clip mostra esattamente la parte
+di audio che la clip suona. Lavora su una copia: fuori non cambia nulla finché non premi il pulsante in basso a destra.
+
+- **Forma d'onda.** Trascina per selezionare; Maiusc+clic estende la selezione; la rotella fa zoom, Maiusc+rotella scorre, Home mostra tutto. **Select all** (Ctrl+A).
+- **Anteprima.** *Play* (Spazio) suona la selezione, o dal cursore alla fine se non c'è selezione; *Loop* ripete la selezione. Il suono passa dal motore audio (dopo la catena master,
+  quindi non dipende dalle impostazioni del mixer). Lo **spettro** sotto la forma d'onda segue ciò che suona (FFT a 4096 punti, asse delle frequenze logaritmico).
+- **Modifiche** sulla selezione (o su tutto se non c'è selezione); ognuna si annulla con *Undo* (Ctrl+Z) e si ripristina con *Redo* (Ctrl+Maiusc+Z o Ctrl+Y):
+  **Cut** (Canc; toglie la selezione e chiude il vuoto), **Crop** (tiene solo la selezione), **Silence**, **Reverse**, **Invert** (fase), **Gain...** (dB),
+  **Normalise...** (il punto più forte a un livello, predefinito -0,3 dB), **Remove DC** (centra la forma d'onda sullo zero) e **Fade in / Fade out** con una forma:
+  *Linear*, *Curve* o *S curve*. Cut e Crop richiedono una selezione e, cambiando la lunghezza, cancellano la selezione e i marcatori.
+- **Reduce noise...** Seleziona prima un tratto che contiene **solo il rumore** (almeno circa 0,08 s a 48 kHz, per esempio il silenzio prima dell'inizio della registrazione).
+  Il programma misura il rumore in ogni banda di frequenza e abbassa, in **tutto il campione**, ciò che non supera chiaramente il rumore. *Reduction* (da 0 a 60 dB,
+  predefinito 12) è di quanto si abbassa il rumore; *Sensitivity* (da 0 a 8, predefinito 3) è di quanto un suono deve superare il rumore per essere tenuto.
+  Troppo di entrambi rende il suono "acquoso": prova, ascolta e usa Undo.
+- **Slicing** (solo clip audio). *Find hits* mette un marcatore all'inizio di ogni colpo, nota o parola che trova; il **cursore Sensitivity** accanto (basso = solo i
+  colpi più chiari) decide quanti. *Equal parts...* mette da 2 a 128 marcatori equidistanti. Doppio clic sulla forma d'onda aggiunge un marcatore o toglie quello vicino al clic;
+  *Clear markers* li toglie tutti. Con **Save as new file and use** la clip viene tagliata nei marcatori in clip separate della playlist (un solo passo di Undo), che poi puoi spostare, ripetere o eliminare.
+- Il pulsante in basso a destra (**Save as new file and use**) scrive il risultato come **nuovo file WAV a 32 bit float in `Samples/Edited`**
+  accanto ai tuoi campioni (se il nome esiste si aggiunge un numero: una modifica precedente non viene mai sostituita) e lo mette sulla clip o nel canale. Il file
+  originale non viene mai toccato e il file di progetto punta semplicemente al nuovo. **Cancel** (o chiudere la finestra) scarta la modifica.
+
+Da sapere: una clip **allungata o trasposta** va prima riportata com'era con *Stretch and pitch... > Back to the original*, modificata e poi di nuovo allungata. Dopo il salvataggio una clip
+suona tutto l'audio modificato dall'inizio, finché c'è posto sulla sua traccia (si accorcia se un'altra clip è in mezzo; il tempo è quello attuale). Si può aprire un solo editor alla
+volta. Un canale sampler si può modificare ma non tagliare in parti.
+
+La riduzione del rumore e il rilevamento dei colpi sono stati misurati su segnali di prova (rumore abbassato di circa 18 dB con un tono mantenuto entro 1,5 dB; cinque colpi di prova
+trovati entro 0,2 ms) e **non giudicati ad orecchio su registrazioni reali**: lo spectral gating scambia sempre rumore con una certa perdita del dettaglio più debole del suono.
+
 ### Registrazione
 
 **Record** (barra) registra l'**ingresso audio**: un microfono, una chitarra in un'interfaccia audio, un ingresso di linea.
@@ -603,5 +633,5 @@ occupato più tardi, un brano più pesante o un mixer pieno di effetti possono r
 - I sample sono mono o stereo, al massimo 30 secondi, suonati una volta sola (niente loop né editing
   dell'inviluppo). Clip audio: fino a 5 minuti per file, 64 clip.
 - Non ancora disponibili: suonare le note con la tastiera del computer, annulla per impostazioni dei canali e mixer, incorporare i sample nel progetto,
-  salvataggio automatico e recupero dopo un crash, plugin VST come strumenti o effetti, time-stretch dei campioni nel Sampler (si possono modificare solo le clip audio della playlist), automazione di qualsiasi cosa tranne volumi, pan e parametri degli effetti, trasformare l'altezza di
+  salvataggio automatico e recupero dopo un crash, plugin VST come strumenti o effetti, time-stretch dei campioni nel Sampler (si possono modificare solo le clip audio della playlist), punti di loop e inviluppo per i campioni, trasformare le parti in note, automazione di qualsiasi cosa tranne volumi, pan e parametri degli effetti, trasformare l'altezza di
   chitarra o voce in note, punch-in e conteggio iniziale per la registrazione, dissolvenze ed effetti per clip, spostare il cursore con un clic sul righello. Vedi [roadmap.md](roadmap.md) (in inglese).

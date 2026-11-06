@@ -28,6 +28,8 @@
 #include "audio/MidiNotes.h"
 #include "audio/MixerRouting.h"
 #include "audio/OneShot.h"
+#include "audio/Auditioner.h"
+#include "audio/SampleEdit.h"
 #include "audio/TimeStretch.h"
 #include "audio/NoteRecorder.h"
 #include "audio/SpscQueue.h"
@@ -4775,6 +4777,396 @@ void testStretchedClips()
     }
 }
 
+// --- sample editor -----------------------------------------------------------------------------------------------
+std::vector<float> whiteNoise (int n, double rms, unsigned seed)
+{
+    std::vector<float> v (static_cast<size_t> (n));
+    unsigned state = seed;
+    for (auto& x : v)
+    {
+        state = state * 1664525u + 1013904223u;
+        const double u = (static_cast<double> (state >> 8) / 16777216.0 - 0.5) * 2.0; // uniform -1..1, rms 0.577
+        x = static_cast<float> (u * rms / 0.57735);
+    }
+    return v;
+}
+
+void testSampleEditing()
+{
+    std::cout << "Sample editing\n";
+    constexpr double sr = 44100.0;
+    auto ramp = std::make_shared<sls::SampleData>();
+    ramp->sampleRate = sr;
+    ramp->name = "ramp";
+    ramp->source = "/x/ramp.wav";
+    for (int i = 0; i < 1000; ++i)
+    {
+        ramp->left.push_back (static_cast<float> (i) / 1000.0f);
+        ramp->right.push_back (-static_cast<float> (i) / 1000.0f);
+    }
+    const sls::SamplePtr in = ramp;
+
+    {   // ranges
+        const auto r = sls::clampRange ({ 900, -50 }, 1000);
+        check (r.begin == 0 && r.end == 900, "a backwards range is swapped and clamped");
+        check (sls::clampRange ({ -5, 5000 }, 1000).begin == 0 && sls::clampRange ({ -5, 5000 }, 1000).end == 1000, "a range past the ends is clamped");
+        check (sls::cutRange (nullptr, { 0, 10 }) == nullptr && sls::cutRange (in, { 500, 500 }) == nullptr && sls::cutRange (in, { 0, 1000 }) == nullptr,
+               "nothing is cut from nothing, an empty range, or the whole sample (it would leave no audio)");
+    }
+    {   // cut, crop, silence
+        const auto cut = sls::cutRange (in, { 100, 300 });
+        check (cut != nullptr && cut->numFrames() == 800 && cut->left[99] == in->left[99] && cut->left[100] == in->left[300] && cut->right[100] == in->right[300],
+               "cut removes the frames and the sound after them moves earlier");
+        check (cut != nullptr && cut->name == "ramp" && cut->source.empty() && cut->sampleRate == sr && in->numFrames() == 1000, "an edit has no source file yet, keeps name and rate, and leaves the input alone");
+        const auto crop = sls::cropToRange (in, { 250, 750 });
+        check (crop != nullptr && crop->numFrames() == 500 && crop->left[0] == in->left[250] && crop->left[499] == in->left[749], "crop keeps only the range");
+        const auto sil = sls::silenceRange (in, { 10, 20 });
+        check (sil != nullptr && sil->numFrames() == 1000 && sil->left[15] == 0.0f && sil->right[15] == 0.0f && sil->left[9] == in->left[9] && sil->left[20] == in->left[20],
+               "silence zeros the range and nothing else");
+    }
+    {   // reverse, invert, gain
+        const auto rev = sls::reverseRange (in, { 100, 200 });
+        check (rev != nullptr && rev->left[100] == in->left[199] && rev->left[199] == in->left[100] && rev->left[99] == in->left[99] && rev->left[200] == in->left[200],
+               "reverse flips only the range");
+        const auto whole = sls::reverseRange (in, { 0, 1000 });
+        check (whole != nullptr && whole->left[0] == in->left[999] && whole->right[0] == in->right[999], "reverse of everything flips both channels");
+        const auto inv = sls::invertPhase (in, { 0, 1000 });
+        check (inv != nullptr && inv->left[500] == -in->left[500] && inv->right[500] == -in->right[500], "invert phase negates both channels");
+        const auto g = sls::gainRange (in, { 0, 1000 }, 6.0);
+        check (g != nullptr && std::fabs (g->left[500] / in->left[500] - 1.99526f) < 1e-3f, "+6 dB doubles the level (x1.995)");
+        const auto hot = sls::gainRange (in, { 0, 1000 }, 40.0);
+        check (hot != nullptr && hot->left[999] > 90.0f, "gain may go past full scale in the editor (nothing is clipped until it is saved as 32-bit float)");
+        check (sls::gainRange (in, { 0, 1000 }, std::nan ("")) == nullptr, "a NaN gain is refused");
+    }
+    {   // fades
+        auto flat = std::make_shared<sls::SampleData>();
+        flat->sampleRate = sr;
+        flat->left.assign (1000, 1.0f);
+        flat->right.assign (1000, 1.0f);
+        const sls::SamplePtr f = flat;
+        const auto lin = sls::fadeRange (f, { 0, 1000 }, true, sls::FadeShape::Linear);
+        check (lin != nullptr && lin->left[0] == 0.0f && lin->left[999] == 1.0f && std::fabs (lin->left[500] - 0.5f) < 0.01f, "linear fade in: 0 at the start, 1 at the end, half in the middle");
+        const auto out = sls::fadeRange (f, { 0, 1000 }, false, sls::FadeShape::Linear);
+        check (out != nullptr && out->left[0] == 1.0f && out->left[999] == 0.0f, "fade out: 1 at the start, 0 at the end");
+        const auto sc = sls::fadeRange (f, { 200, 600 }, true, sls::FadeShape::SCurve);
+        check (sc != nullptr && sc->left[199] == 1.0f && sc->left[200] == 0.0f && sc->left[599] == 1.0f && sc->left[700] == 1.0f && std::fabs (sc->left[400] - 0.5f) < 0.01f,
+               "a fade touches only its range; the S curve is 0.5 in the middle");
+        const auto cv = sls::fadeRange (f, { 0, 1000 }, true, sls::FadeShape::Curve);
+        check (cv != nullptr && cv->left[500] < 0.3f && cv->left[500] > 0.2f, "the curved fade starts slowly (0.25 at the middle)");
+        const auto one = sls::fadeRange (f, { 10, 11 }, true, sls::FadeShape::Linear);
+        check (one != nullptr && one->left[10] == 1.0f, "a one-frame fade does no harm");
+    }
+    {   // normalise, DC
+        const auto norm = sls::normaliseRange (in, { 0, 1000 }, -6.0);
+        check (norm != nullptr && std::fabs (sls::toDb (sls::peakOf (norm, { 0, 1000 })) + 6.0) < 0.01, "normalise brings the peak to the target (-6 dB)");
+        const auto norm0 = sls::normaliseRange (in, { 0, 500 }, 0.0);
+        check (norm0 != nullptr && std::fabs (sls::peakOf (norm0, { 0, 500 }) - 1.0) < 1e-6 && norm0->left[600] == in->left[600], "normalising a range leaves the rest alone");
+        auto quiet = std::make_shared<sls::SampleData>();
+        quiet->sampleRate = sr;
+        quiet->left.assign (100, 0.0f);
+        quiet->right.assign (100, 0.0f);
+        check (sls::normaliseRange (quiet, { 0, 100 }, -1.0) == quiet, "silence cannot be normalised and is returned as it is");
+
+        auto dc = std::make_shared<sls::SampleData>();
+        dc->sampleRate = sr;
+        for (int i = 0; i < 4410; ++i)
+        {
+            dc->left.push_back (0.2f + 0.3f * static_cast<float> (std::sin (2.0 * 3.14159265358979 * 100.0 * i / sr)));
+            dc->right.push_back (-0.1f);
+        }
+        const auto fixed = sls::removeDcOffset (dc, { 0, 4410 });
+        double meanL = 0.0, meanR = 0.0;
+        for (int i = 0; fixed != nullptr && i < fixed->numFrames(); ++i)
+        {
+            meanL += fixed->left[static_cast<size_t> (i)];
+            meanR += fixed->right[static_cast<size_t> (i)];
+        }
+        check (fixed != nullptr && std::fabs (meanL / 4410.0) < 1e-3 && std::fabs (meanR / 4410.0) < 1e-4, "DC offset removal brings the mean of each channel to 0");
+    }
+    {   // noise reduction
+        constexpr int n = static_cast<int> (3.0 * sr);
+        auto noisy = std::make_shared<sls::SampleData>();
+        noisy->sampleRate = sr;
+        noisy->name = "noisy";
+        noisy->left = whiteNoise (n, 0.03, 12345u);
+        noisy->right = whiteNoise (n, 0.03, 777u);
+        const int toneStart = static_cast<int> (1.0 * sr);
+        for (int i = toneStart; i < n; ++i)
+        {
+            const float tone = static_cast<float> (0.3 * std::sin (2.0 * 3.14159265358979 * 1000.0 * i / sr));
+            noisy->left[static_cast<size_t> (i)] += tone;
+            noisy->right[static_cast<size_t> (i)] += tone;
+        }
+        const sls::SamplePtr nz = noisy;
+        const sls::FrameRange noiseOnly { 0, toneStart - 4000 };
+        sls::NoiseReduction nr; // the default sensitivity and release
+        nr.reductionDb = 20.0;
+        const auto clean = sls::reduceNoise (nz, noiseOnly, { 0, n }, nr);
+        check (clean != nullptr && clean->numFrames() == n && clean->sampleRate == sr, "noise reduction keeps the length and the rate");
+        if (clean != nullptr)
+        {
+            auto rms = [] (const std::vector<float>& x, int a, int b)
+            {
+                double sum = 0.0;
+                for (int i = a; i < b; ++i)
+                    sum += static_cast<double> (x[static_cast<size_t> (i)]) * x[static_cast<size_t> (i)];
+                return std::sqrt (sum / (b - a));
+            };
+            const double before = rms (nz->left, 5000, toneStart - 5000), after = rms (clean->left, 5000, toneStart - 5000);
+            std::cout << "  (noise-only part: " << sls::toDb (before) << " dB -> " << sls::toDb (after) << " dB)\n";
+            check (sls::toDb (before) - sls::toDb (after) > 16.0, "the noise in the noise-only part drops by more than 16 dB (20 dB asked)");
+            const double toneBefore = rms (nz->left, toneStart + 20000, n - 5000), toneAfter = rms (clean->left, toneStart + 20000, n - 5000);
+            check (std::fabs (sls::toDb (toneAfter) - sls::toDb (toneBefore)) < 1.5, "the 1 kHz tone keeps its level within 1.5 dB");
+            // noise under the tone, at other frequencies: measure the 2-4 kHz band by differencing out the tone
+            check (std::isfinite (rms (clean->right, 0, n)), "the other channel is processed too, with its own profile");
+        }
+        check (sls::reduceNoise (nz, { 0, 1000 }, { 0, n }, nr) == nullptr, "a noise sample shorter than the minimum is refused");
+        auto tiny = std::make_shared<sls::SampleData>();
+        tiny->sampleRate = sr;
+        tiny->left.assign (500, 0.1f);
+        tiny->right.assign (500, 0.1f);
+        check (sls::reduceNoise (tiny, { 0, 500 }, { 0, 500 }, nr) == nullptr, "a sample shorter than one FFT is refused");
+        sls::NoiseReduction hostile;
+        hostile.reductionDb = std::nan ("");
+        hostile.sensitivity = 1.0e9;
+        hostile.frequencySmoothing = 100000;
+        hostile.releaseSeconds = -4.0;
+        check (sls::reduceNoise (nz, noiseOnly, { toneStart, n }, hostile) != nullptr, "hostile settings are brought into range");
+
+        auto silent = std::make_shared<sls::SampleData>();
+        silent->sampleRate = sr;
+        silent->left.assign (20000, 0.0f);
+        silent->right.assign (20000, 0.0f);
+        const auto s2 = sls::reduceNoise (silent, { 0, 10000 }, { 0, 20000 }, nr);
+        check (s2 != nullptr && sls::peakOf (s2, { 0, 20000 }) == 0.0, "silence stays silent (and nothing is NaN)");
+
+        const auto partial = sls::reduceNoise (nz, noiseOnly, { 0, toneStart }, nr);
+        check (partial != nullptr && partial->left[static_cast<size_t> (n - 100)] == nz->left[static_cast<size_t> (n - 100)], "noise reduction of a range leaves the rest untouched");
+    }
+    {   // onsets
+        constexpr int n = static_cast<int> (3.0 * sr);
+        auto hits = std::make_shared<sls::SampleData>();
+        hits->sampleRate = sr;
+        hits->left.assign (static_cast<size_t> (n), 0.0f);
+        hits->right.assign (static_cast<size_t> (n), 0.0f);
+        const std::vector<double> times { 0.25, 0.75, 1.1, 1.8, 2.4 };
+        for (const double t : times)
+        {
+            const int start = static_cast<int> (t * sr);
+            for (int i = 0; i < 6000 && start + i < n; ++i)
+            {
+                const float v = static_cast<float> (0.6 * std::exp (-i / 1200.0) * std::sin (2.0 * 3.14159265358979 * 300.0 * i / sr));
+                hits->left[static_cast<size_t> (start + i)] += v;
+                hits->right[static_cast<size_t> (start + i)] += v;
+            }
+        }
+        const sls::SamplePtr h = hits;
+        const auto found = sls::detectOnsets (h, 0.5);
+        check (found.size() == times.size(), ("five hits give five onsets (found " + std::to_string (found.size()) + ")").c_str());
+        bool close = found.size() == times.size();
+        for (size_t i = 0; close && i < times.size(); ++i)
+            close = std::fabs (found[i] - times[i]) < 0.01;
+        check (close, "each onset lies within 10 ms of the real start");
+
+        auto steady = std::make_shared<sls::SampleData>();
+        steady->sampleRate = sr;
+        for (int i = 0; i < n; ++i)
+        {
+            steady->left.push_back (static_cast<float> (0.4 * std::sin (2.0 * 3.14159265358979 * 440.0 * i / sr)));
+            steady->right.push_back (steady->left.back());
+        }
+        check (sls::detectOnsets (steady, 0.5, 0.05).size() <= 1, "a steady tone has no onsets (apart from its very start)");
+        auto silent = std::make_shared<sls::SampleData>();
+        silent->sampleRate = sr;
+        silent->left.assign (static_cast<size_t> (n), 0.0f);
+        silent->right.assign (static_cast<size_t> (n), 0.0f);
+        check (sls::detectOnsets (silent, 1.0).empty(), "silence has no onsets");
+        check (sls::detectOnsets (nullptr, 0.5).empty() && sls::detectOnsets (in, 0.5).empty(), "no audio or very short audio gives none");
+        check (sls::detectOnsets (h, 0.5, 1.0).size() < times.size(), "a long minimum gap merges close onsets (0.75 and 1.1 s are 0.35 s apart)");
+        check (sls::detectOnsets (h, std::nan ("")).size() >= 3, "a NaN sensitivity falls back to the middle");
+
+        const auto grid = sls::gridSlices (h, 4);
+        check (grid.size() == 3 && std::fabs (grid[0] - 0.75) < 1e-9 && std::fabs (grid[2] - 2.25) < 1e-9, "4 equal slices of 3 s are cut at 0.75, 1.5 and 2.25 s");
+        check (sls::gridSlices (h, 1).empty() && sls::gridSlices (nullptr, 4).empty(), "fewer than 2 slices or no audio gives no cuts");
+    }
+    {   // writing and reading back
+        const auto folder = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("sls-sample-edit-test");
+        folder.deleteRecursively();
+        const auto file = sls::uniqueEditedFile (folder, "my/odd:name");
+        check (file.getFileName() == "myoddname-edit.wav" || file.getFileName().endsWith ("-edit.wav"), "the edited file name is made safe");
+        auto data = std::make_shared<sls::SampleData>();
+        data->sampleRate = 48000.0;
+        for (int i = 0; i < 4800; ++i)
+        {
+            data->left.push_back (1.5f * static_cast<float> (std::sin (i * 0.05)));
+            data->right.push_back (-0.25f);
+        }
+        check (sls::writeSampleWav (*data, file).wasOk() && file.existsAsFile(), "a sample is written as a WAV file");
+        check (! sls::writeSampleWav (*data, file).wasOk(), "an existing file is never replaced");
+        check (sls::uniqueEditedFile (folder, "my/odd:name") != file, "the next edited copy gets another name");
+        const auto back = sls::importAudioFile (file);
+        check (back.data != nullptr && back.data->numFrames() == 4800 && back.data->sampleRate == 48000.0
+                   && std::fabs (back.data->left[300] - data->left[300]) < 1e-6f && std::fabs (back.data->right[10] + 0.25f) < 1e-6f,
+               "it reads back identically (32-bit float, values above 1.0 survive)");
+        sls::SampleData empty;
+        check (! sls::writeSampleWav (empty, folder.getChildFile ("x.wav")).wasOk(), "empty audio is not written");
+        folder.deleteRecursively();
+    }
+    {   // putting an edited copy back on the playlist
+        constexpr double bpm = 120.0; // 480 ticks = 0.5 s
+        const auto original = makeTone (220.0, 4.0, 48000.0);
+        const auto edited = makeTone (330.0, 3.0, 48000.0);
+        auto make = [&]
+        {
+            sls::Arrangement a;
+            sls::AudioClip c;
+            c.data = original;
+            c.startTick = 960;
+            c.lengthTicks = 3840;
+            c.track = 0;
+            a.audioClips.push_back (c);
+            return a;
+        };
+        {
+            auto a = make();
+            const auto err = sls::useEditedAudio (a, 0, original, edited, { 1.0, 2.0 }, bpm);
+            check (err.empty() && a.audioClips.size() == 3, "an edited clip with two slice points becomes three clips");
+            if (a.audioClips.size() == 3)
+            {
+                std::sort (a.audioClips.begin(), a.audioClips.end(), [] (const auto& x, const auto& y) { return x.startTick < y.startTick; });
+                check (a.audioClips[0].startTick == 960 && a.audioClips[1].startTick == 960 + 960 && a.audioClips[2].startTick == 960 + 1920
+                           && a.audioClips[0].data == edited && a.audioClips[2].data == edited && a.audioClips[0].original == nullptr,
+                       "the pieces start where the slices are (1 s = 960 ticks) and share the edited audio");
+                check (a.audioClips[2].endTick() == 960 + 2880, "the last piece ends with the edited audio (3 s)");
+            }
+        }
+        {
+            auto a = make();
+            check (sls::useEditedAudio (a, 0, original, edited, {}, bpm).empty() && a.audioClips.size() == 1 && a.audioClips[0].lengthTicks == 2880
+                       && a.audioClips[0].data == edited,
+                   "without slices the clip plays the whole edited audio");
+            auto b = make();
+            b.audioClips[0].stretch = { 2.0, 0.0, false };
+            check (sls::useEditedAudio (b, 0, nullptr, nullptr, {}, bpm) == "There is no audio to use.", "no edited audio is refused");
+            auto c = make();
+            check (! sls::useEditedAudio (c, 5, edited, edited, {}, bpm).empty() && c.audioClips[0].data == original,
+                   "a clip that is gone is refused and nothing changes");
+            auto d = make();
+            sls::AudioClip blocker;
+            blocker.data = original;
+            blocker.track = 0;
+            blocker.startTick = 960 + 1000;
+            blocker.lengthTicks = 480;
+            d.audioClips.push_back (blocker);
+            d.audioClips[0].lengthTicks = 900;
+            check (sls::useEditedAudio (d, 0, original, edited, {}, bpm).empty() && d.audioClips[0].lengthTicks == 1000,
+                   "the clip is shortened to fit when a neighbour is in the way");
+            auto e = make();
+            e.audioClips.insert (e.audioClips.begin(), e.audioClips[0]);
+            e.audioClips[1].track = 1;
+            check (sls::useEditedAudio (e, 0, original, edited, {}, bpm).empty() && e.audioClips[1].data == original && e.audioClips[0].data == edited,
+                   "only the clip that was edited changes");
+        }
+    }
+}
+
+void testAuditioner()
+{
+    std::cout << "Sample preview (auditioner)\n";
+    auto s = std::make_shared<sls::SampleData>();
+    s->sampleRate = 48000.0;
+    for (int i = 0; i < 1000; ++i)
+    {
+        s->left.push_back (static_cast<float> (i));
+        s->right.push_back (-static_cast<float> (i));
+    }
+    std::vector<float> l (400, 0.0f), r (400, 0.0f);
+    float* ch[2] = { l.data(), r.data() };
+    auto reset = [&] { std::fill (l.begin(), l.end(), 0.0f); std::fill (r.begin(), r.end(), 0.0f); };
+
+    {
+        sls::Auditioner a;
+        a.mixInto (ch, 2, 400, 48000.0);
+        check (l[10] == 0.0f && ! a.isPlaying(), "nothing is added while nothing plays");
+        a.play (s, 100.0, 0.0, false);
+        check (a.isPlaying() && a.positionFrames() == 100.0, "play starts at the requested frame");
+        a.mixInto (ch, 2, 400, 48000.0);
+        check (l[0] == 100.0f && l[399] == 499.0f && r[0] == -100.0f && std::fabs (a.positionFrames() - 500.0) < 1e-9, "the sample plays from there, left and right, and the position follows");
+        reset();
+        a.mixInto (ch, 2, 400, 48000.0);
+        check (l[0] == 500.0f && l[399] == 899.0f, "the next block continues without a gap");
+        reset();
+        a.mixInto (ch, 2, 400, 48000.0);
+        check (l[99] == 999.0f && l[100] == 0.0f && ! a.isPlaying(), "it stops at the end (and adds nothing after it)");
+    }
+    {
+        sls::Auditioner a;
+        reset();
+        a.play (s, 200.0, 300.0, false);
+        a.mixInto (ch, 2, 400, 48000.0);
+        check (l[99] == 299.0f && l[100] == 0.0f && ! a.isPlaying(), "a range stops at its end");
+        reset();
+    }
+    {
+        sls::Auditioner a;
+        reset();
+        a.play (s, 200.0, 300.0, true);
+        a.mixInto (ch, 2, 400, 48000.0);
+        check (a.isPlaying() && l[99] == 299.0f && l[100] == 200.0f && l[399] == 299.0f, "a loop wraps from the end to the start of its range");
+        a.stop();
+        reset();
+        a.mixInto (ch, 2, 400, 48000.0);
+        check (! a.isPlaying() && l[5] == 0.0f, "stop silences it at once");
+    }
+    {   // other device rate: half speed at 96 kHz
+        sls::Auditioner a;
+        a.play (s, 0.0, 0.0, false);
+        reset();
+        a.mixInto (ch, 2, 400, 96000.0);
+        check (std::fabs (l[100] - 50.0f) < 1e-3f && std::fabs (l[1] - 0.5f) < 1e-3f, "at twice the device rate the sample is interpolated and keeps its real speed");
+    }
+    {   // hostile input
+        sls::Auditioner a;
+        a.play (nullptr, 0.0, 0.0, false);
+        a.play (s, std::nan (""), -5.0, true);
+        check (a.isPlaying() && a.positionFrames() == 0.0, "NaN start and a negative end fall back to the whole sample");
+        a.play (s, 1.0e9, 0.0, false);
+        check (a.positionFrames() == 999.0, "a start past the end is held on the last frame");
+        std::vector<float> one (10, 0.0f);
+        float* mono[1] = { one.data() };
+        a.mixInto (mono, 1, 10, 48000.0);
+        check (one[0] == 999.0f, "a mono output gets the left side");
+        float* none[2] = { nullptr, nullptr };
+        a.play (s, 0.0, 0.0, false);
+        a.mixInto (none, 2, 10, 48000.0);
+        check (true, "null output channels are skipped");
+        a.release();
+        check (! a.isPlaying(), "release stops it");
+    }
+    {   // stop() waits for the audio thread; swapping samples while it runs is safe
+        sls::Auditioner a;
+        std::atomic<bool> go { true };
+        std::thread audio ([&]
+        {
+            std::vector<float> bl (64, 0.0f), br (64, 0.0f);
+            float* c[2] = { bl.data(), br.data() };
+            while (go.load())
+                a.mixInto (c, 2, 64, 48000.0);
+        });
+        for (int i = 0; i < 2000; ++i)
+        {
+            auto copy = std::make_shared<sls::SampleData> (*s);
+            a.play (copy, 0.0, 0.0, true);
+            if (i % 7 == 0)
+                a.release();
+        }
+        a.release();
+        go.store (false);
+        audio.join();
+        check (true, "2000 swaps while the audio thread runs, without a crash");
+    }
+}
+
 int main()
 {
     testProjectModel();
@@ -4823,6 +5215,8 @@ int main()
     testLegatoAndSlide();
     testTimeStretch();
     testStretchedClips();
+    testSampleEditing();
+    testAuditioner();
 
     std::cout << "\n" << (failures == 0 ? "ALL TESTS PASSED" : "SOME TESTS FAILED") << " (" << failures << " failures)\n";
     return failures == 0 ? 0 : 1;

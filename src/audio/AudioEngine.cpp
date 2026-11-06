@@ -261,6 +261,7 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* in, int 
     if (startupTrigger.exchange (false, std::memory_order_acquire))
         startup.start();
     startup.mixInto (out, numOut, numSamples, sampleRateHz);
+    audition.mixInto (out, numOut, numSamples, sampleRateHz);
 
     if (numOut > 0 && out[0] != nullptr && numSamples > 0)
     {

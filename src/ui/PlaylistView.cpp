@@ -101,6 +101,7 @@ PlaylistView::PlaylistView (Arrangement& arrangementToEdit) : timeline (arrangem
     timeline.onFilesDropped = [this] (const juce::StringArray& f, int track, int tick) { if (onFilesDropped) onFilesDropped (f, track, tick); };
     timeline.onItemDropped = [this] (const drag::Item& item, int track, int tick) { if (onItemDropped) onItemDropped (item, track, tick); };
     timeline.onTrackSelected = [this] (int track) { if (onTrackSelected) onTrackSelected (track); };
+    timeline.onEditSample = [this] (int index) { if (onEditSample) onEditSample (index); };
 
     for (juce::Component* c : std::initializer_list<juce::Component*> { &patternLabel, &patternBox, &newButton, &renameButton, &deleteButton,
                                                                           &undoButton, &redoButton, &snapLabel, &snapBox, &zoomOutButton,

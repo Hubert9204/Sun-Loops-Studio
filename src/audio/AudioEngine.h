@@ -11,6 +11,7 @@
 #include "audio/LiveNotes.h"
 #include "audio/MidiNotes.h"
 #include "audio/NoteRecorder.h"
+#include "audio/Auditioner.h"
 #include "audio/OneShot.h"
 #include "audio/Player.h"
 #include "audio/Project.h"
@@ -84,6 +85,7 @@ public:
     // loud as the file), whatever the transport is doing. setStartupSound must be called before initialise();
     // playStartupSound can be called from any thread, any number of times (it starts the sound over).
     void setStartupSound (std::shared_ptr<const SampleData> sound) noexcept { startup.setSound (std::move (sound)); }
+    Auditioner& auditioner() noexcept { return audition; } // the sample editor's preview
     void playStartupSound() noexcept { startupTrigger.store (true, std::memory_order_release); }
 
     // Any thread.
@@ -199,6 +201,7 @@ private:
     juce::StringArray knownMidiInputs;
     InputRecorder recorder;
     bool captureStarted = false; // audio thread only: the recorder is armed and the song was rewound for it
+    Auditioner audition;                            // preview of one sample; hand-over rules in Auditioner.h
     OneShot startup;                                // set before the device starts; played by the audio thread only
     std::atomic<bool> startupTrigger { false };
     SpscQueue<MidiTake, 256> midiTakes; // audio thread -> message thread

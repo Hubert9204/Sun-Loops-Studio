@@ -198,6 +198,63 @@ inline double lengthRatioForTempo (double sourceBpm, double projectBpm) noexcept
     return std::clamp (sourceBpm / projectBpm, kMinStretchRatio, kMaxStretchRatio);
 }
 
+// The sample editor saved an edited copy of an audio clip's audio. Clip `index` (found again by its audio, `expected`, if the list changed)
+// now plays `edited` from its start, for as long as it lasts or as far as fits on its track, and is cut at `sliceSeconds` (positions
+// inside `edited`, snapped to ticks at `bpm`). Returns an error text and changes nothing, or an empty string.
+inline std::string useEditedAudio (Arrangement& a, int index, const std::shared_ptr<const SampleData>& expected,
+                                   std::shared_ptr<const SampleData> edited, const std::vector<double>& sliceSeconds, double bpm)
+{
+    if (edited == nullptr || edited->numFrames() < 2)
+        return "There is no audio to use.";
+    if (! (bpm > 0.0))
+        return "The tempo is not valid.";
+    if (index < 0 || index >= static_cast<int> (a.audioClips.size()) || a.audioClips[static_cast<size_t> (index)].data != expected)
+    {
+        index = -1; // the clip moved in the list: look for it by its audio
+        for (size_t i = 0; i < a.audioClips.size(); ++i)
+            if (a.audioClips[i].data == expected)
+                index = static_cast<int> (i);
+        if (index < 0)
+            return "The clip was changed or removed while the editor was open, so the edit could not be put back. The edited file has been saved in the Samples folder.";
+    }
+
+    auto clip = a.audioClips[static_cast<size_t> (index)];
+    clip.data = std::move (edited);
+    clip.original = nullptr;
+    clip.stretch = {};
+    clip.offsetSeconds = 0.0;
+    const int natural = std::max (1, clip.naturalLengthTicks (bpm));
+    int lo = 0, hi = natural; // the longest length that fits (a longer clip never fits where a shorter one does not)
+    while (lo < hi)
+    {
+        const int mid = (lo + hi + 1) / 2;
+        auto probe = clip;
+        probe.lengthTicks = mid;
+        if (a.canPlaceAudio (probe, index))
+            lo = mid;
+        else
+            hi = mid - 1;
+    }
+    if (lo < 1)
+        return "There is no room for the edited clip at its position. The edited file has been saved in the Samples folder.";
+    clip.lengthTicks = lo;
+    a.audioClips[static_cast<size_t> (index)] = clip;
+
+    int last = clip.startTick;
+    for (const double seconds : sliceSeconds)
+    {
+        if (! std::isfinite (seconds))
+            continue;
+        const int tick = clip.startTick + static_cast<int> (std::lround (secondsToTicks (seconds, bpm)));
+        if (tick <= last || tick >= clip.endTick())
+            continue;
+        const int piece = a.audioClipAt (clip.track, tick);
+        if (piece >= 0 && splitAudioClip (a, piece, tick, bpm) >= 0)
+            last = tick;
+    }
+    return {};
+}
+
 // A pattern name as typed by the user: trimmed, never empty, at most 40 characters. Returns false for an empty name.
 inline bool cleanPatternName (std::string& name)
 {

@@ -358,6 +358,7 @@ void ChannelStrip::showContextMenu()
     menu.addSeparator();
     menu.addSubMenu ("Instrument", instrument);
     menu.addItem (4, "Load sample...", channel.instrument == Instrument::Sampler);
+    menu.addItem (8, "Edit sample...", channel.instrument == Instrument::Sampler && channel.sample != nullptr && channel.sample->numFrames() > 1);
     menu.addItem (5, "Rename...");
     menu.addSeparator();
     menu.addItem (7, "Assign free mixer track");
@@ -376,6 +377,7 @@ void ChannelStrip::showContextMenu()
                                 case 2: if (safe->onInstrumentChosen) safe->onInstrumentChosen (i, Instrument::Synth); break;
                                 case 3: if (safe->onInstrumentChosen) safe->onInstrumentChosen (i, Instrument::Sampler); break;
                                 case 4: if (safe->onLoadSample) safe->onLoadSample (i); break;
+                                case 8: if (safe->onEditSample) safe->onEditSample (i); break;
                                 case 5: if (safe->onRename) safe->onRename (i); break;
                                 case 6: if (safe->onSavePreset) safe->onSavePreset (i); break;
                                 case 7: if (safe->onAssignTrack) safe->onAssignTrack (i); break;

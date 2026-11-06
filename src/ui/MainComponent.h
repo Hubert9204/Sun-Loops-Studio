@@ -14,6 +14,7 @@
 #include "audio/Project.h"
 #include "ui/AudioMeter.h"
 #include "ui/AutomationEditor.h"
+#include "ui/SampleEditor.h"
 #include "ui/MetersView.h"
 #include "library/ChannelPreset.h"
 #include "library/Library.h"
@@ -199,6 +200,9 @@ private:
 
     Arrangement arrangement;
     std::unique_ptr<AutomationEditorWindow> automationWindow;
+    std::unique_ptr<SampleEditorWindow> sampleEditorWindow;
+    void openSampleEditorForClip (int audioClipIndex);
+    void openSampleEditorForChannel (int channelIndex);
     int automationEditing = -1;     // index of the clip the window shows
     int currentPattern = 0;
     bool songMode = false;

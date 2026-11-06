@@ -330,6 +330,38 @@ extremes (4x, an octave or more) sounds get smeared and a little metallic, espec
 notes, because there is no separate treatment of transients. It was measured on test tones (the length, the pitch and the timing are
 exact within a few milliseconds; a sharp attack is smeared by about 10 to 25 ms) and **not judged by ear on real music**.
 
+### Sample editor
+
+Right-click an **audio clip** (playlist) or a **sampler channel** (Channel Rack) > **Edit sample...** opens the editor. For a clip it shows exactly the part
+of the audio that the clip plays. It works on a copy: nothing changes outside until you press the button at the bottom right.
+
+- **Waveform.** Drag to select; Shift+click extends the selection; the wheel zooms, Shift+wheel scrolls, Home shows everything. **Select all** (Ctrl+A).
+- **Preview.** *Play* (Space) plays the selection, or from the cursor to the end when nothing is selected; *Loop* repeats the selection. The sound goes through the audio
+  engine (after the master chain, so it does not depend on the mixer settings). The **spectrum** under the waveform follows what is playing (4096-point FFT,
+  logarithmic frequency axis).
+- **Edits** apply to the selection (or to everything when nothing is selected) and each one can be undone with *Undo* (Ctrl+Z) and brought back with *Redo*
+  (Ctrl+Shift+Z or Ctrl+Y): **Cut** (Delete; removes the selection and closes the gap), **Crop** (keeps only the selection), **Silence**, **Reverse**,
+  **Invert** (phase), **Gain...** (dB), **Normalise...** (loudest point to a level, default -0.3 dB), **Remove DC** (centres the waveform on zero) and
+  **Fade in / Fade out** with a shape: *Linear*, *Curve* or *S curve*. Cut and Crop need a selection and, because they change the length, clear the selection and the slice markers.
+- **Reduce noise...** First select a stretch that holds **only the noise** (at least about 0.08 s at 48 kHz, for example the silence before a recording starts). The
+  program measures the noise in every frequency band and lowers everything in the **whole sample** that does not rise clearly above it. *Reduction* (0 to
+  60 dB, default 12) is how much the noise is lowered; *Sensitivity* (0 to 8, default 3) is how far above the noise a sound must be to be kept. Too
+  much of either makes the sound "watery"; try it, listen, and use Undo.
+- **Slicing** (audio clips only). *Find hits* puts a marker at the start of every hit, note or word it finds; the **Sensitivity slider** next to it
+  (low = only the clearest hits) decides how many. *Equal parts...* puts 2 to 128 equally spaced markers. Double-click on the waveform adds a marker or
+  removes the one near the click; *Clear markers* removes all. When you press **Save as new file and use** the clip is cut at the markers into separate clips of the
+  playlist (one Undo step), which you can then move, repeat or delete.
+- The button at the bottom right (**Save as new file and use**) writes the result as a **new 32-bit float WAV file in
+  `Samples/Edited`** next to your other samples (a number is added if the name exists: an earlier edit is never replaced) and puts it on the clip or in the
+  channel. The original file is never touched, and the project file just points to the new one. **Cancel** (or closing the window) throws the edit away.
+
+Things to know: a clip that is **stretched or pitch-shifted** must first be taken back with *Stretch and pitch... > Back to the original*, edited, and
+stretched again. After saving, a clip plays the whole edited audio from its start, as far as there is room on its track (it is shortened if a
+neighbour is in the way, and the tempo is the current one). Only one editor can be open at a time. Undo keeps the last 40 steps (fewer for very long samples). A sampler channel can be edited but not sliced.
+
+Noise reduction and hit detection were measured on test signals (noise lowered by about 18 dB with a tone kept within 1.5 dB; five test hits found to
+within 0.2 ms) and **not judged by ear on real recordings**: spectral gating always trades noise for some loss of the quiet detail of the sound.
+
 ### Recording
 
 **Record** (toolbar) records the **audio input**: a microphone, a guitar into an audio interface, a line input.
@@ -596,5 +628,5 @@ a heavier song or a plugin-heavy mixer can still need a bigger size.
 - Samples are mono or stereo, at most 30 seconds, played one-shot (no looping, no envelope editing). Audio clips: up to
   5 minutes per file, 64 clips.
 - Not available yet: playing notes from the computer keyboard, undo of channel settings and the mixer, embedding samples in the project, automatic saving
-  and crash recovery, VST plugins as instruments or effects, time-stretching of samples in the Sampler (only audio clips on the playlist can be stretched), automation of anything except volumes, pans and effect parameters, turning guitar or voice pitch into notes,
+  and crash recovery, VST plugins as instruments or effects, time-stretching of samples in the Sampler (only audio clips on the playlist can be stretched), loop points and an envelope for samples, turning slices into notes, automation of anything except volumes, pans and effect parameters, turning guitar or voice pitch into notes,
   punch-in and count-in for recording, fades and per-clip effects, seeking by clicking the ruler. See [roadmap.md](roadmap.md).

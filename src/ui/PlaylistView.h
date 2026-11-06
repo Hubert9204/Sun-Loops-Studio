@@ -52,6 +52,12 @@ public:
     std::function<void (const juce::StringArray&, int, int)> onFilesDropped;
     std::function<void (const drag::Item&, int, int)> onItemDropped;
     std::function<void (int)> onTrackSelected;
+    std::function<void (int)> onEditSample; // an audio clip's "Edit sample..." was chosen: its index
+    juce::String useEditedAudio (int index, const std::shared_ptr<const SampleData>& expected, std::shared_ptr<const SampleData> edited,
+                                 const std::vector<double>& sliceSeconds)
+    {
+        return timeline.useEditedAudio (index, expected, std::move (edited), sliceSeconds);
+    }
 
 
     void paint (juce::Graphics&) override;

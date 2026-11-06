@@ -299,6 +299,7 @@ MainComponent::MainComponent()
             publishProject();
     };
     playlistView.onPatternPicked = [this] (int pattern) { selectPattern (pattern); };
+    playlistView.onEditSample = [this] (int index) { openSampleEditorForClip (index); };
     playlistView.setAutomationLabel ([this] (const AutomationTarget& t) { return automationLabelFor (t); });
     playlistView.setAutomationPicked ([this] (int clip) { openAutomationEditor (clip); });
     playlistView.onPatternSelected = [this] (int pattern) { selectPattern (pattern); };
@@ -434,6 +435,7 @@ MainComponent::~MainComponent()
 {
     stopTimer();
     automationWindow.reset();
+    sampleEditorWindow.reset();
     metersWindow.reset();
     engine.getDeviceManager().removeChangeListener (this);
     audioDialog.deleteAndZero(); // it refers to the engine
@@ -742,6 +744,7 @@ void MainComponent::createStrip (size_t channelIndex)
     strip->onAssignTrack = [this] (int idx) { openAssignTrack (idx); };
     strip->onItemDropped = [this] (int idx, const drag::Item& item) { applyBrowserItem (idx, item); };
     strip->onLoadSample = [this] (int idx) { chooseSampleFor (idx); };
+    strip->onEditSample = [this] (int idx) { openSampleEditorForChannel (idx); };
     strip->onOpenPianoRoll = [this] (int idx) { openPianoRoll (idx); };
     strip->onInstrumentChosen = [this] (int idx, Instrument instrument) { setInstrument (idx, instrument); };
     strip->onRename = [this] (int idx) { renameChannel (idx); };

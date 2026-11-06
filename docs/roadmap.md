@@ -1,6 +1,6 @@
 # Status and roadmap
 
-Version 0.12.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
+Version 0.13.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
 what is missing. If something here disagrees with the program, the program is right: please fix the page.
 
 ## What has been verified, and how
@@ -37,9 +37,16 @@ what is missing. If something here disagrees with the program, the program is ri
 | 0.11.0 in the interface: right-click > *Create automation clip* on the channel volume, a mixer fader and an effect slider; the clip in a lane, moved, resized, duplicated and deleted; the point editor (add, move, shape menu, delete); aux strips, send sliders, Pre / V1 / V2 buttons, VCA strips; the Meters window with a signal playing | Manual, in a virtual display with a window manager and a silent (ALSA `null`) device | Worked |
 | Time-stretch and pitch-shift (length and pitch of test tones at 22.05 / 44.1 / 48 / 96 kHz, mono-in-left stays left, silence stays silent, tiny and one-frame inputs, timing of a tone burst, no clicks at the ends, hostile numbers), the clip arithmetic (length, offset, undoing, restretching from the original, splitting), tempo matching, the project file round trip (settings only, shared renderings, missing file, hostile values, older files) | Automated headless tests | All pass |
 | Stretch and pitch in the interface: the menu item, the dialog, a x1.5 / +3 st clip with its label, the longer clip on the timeline, Undo | Manual, in a virtual display | Worked |
+| Sample editing (selection ranges, cut / crop / silence, reverse / invert / gain, linear / curve / S fades, normalise, DC removal, shared-sample immutability), noise reduction (noise 18.4 dB lower, a tone kept within 1.5 dB, too-short profile refused, stereo channels separately), hit detection (5 of 5 synthetic hits within 0.2 ms, no false hits on the truncated test hits), grid slices, the 32-bit float WAV writer / reader round trip (values above 1.0, never overwriting a file), the preview voice (start / stop / loop / range, nothing after the end, thread-safe stop), and putting an edited clip back on the playlist (length that fits, neighbour in the way, slice points to ticks, clip moved in the list, refusal changes nothing) | Automated headless tests (782 checks in total) | All pass |
+| The sample editor in the interface: *Edit sample...* on a clip and on a channel, selecting, cut, markers (slicing controls disabled for a channel), Reverse, Apply writing `Samples/Edited/<name>-edit.wav`, the clip cut into pieces on the playlist, the channel loading the new file, the window closing | Manual, in a virtual display with a window manager and a silent device | Worked (the status-bar text after Apply on a channel was not seen in a screenshot) |
 | A use-after-free when clicking an item that rebuilds the browser tree (crash on *Scan for VST3 plugins...*) | Found in that manual session | Fixed (item actions are deferred); the same click was repeated afterwards |
 
 ## What has not been verified
+
+- **How the sample editor sounds and feels on real material.** Noise reduction (spectral gating) and hit detection were measured on synthetic signals only:
+  the watery artefacts on real noise, and the hits found (or missed) in real drums, voices and loops, were not judged by ear. The preview and the spectrum
+  were run against a silent device, never with real speakers. Large files (minutes of audio) were not timed in the editor; each edit copies the whole sample
+  and the undo history is limited to 40 steps or a memory budget.
 
 - **How stretched audio sounds on real music.** Length, pitch and timing were measured on synthetic tones only; the quality on drums, voices and full mixes
   (smearing of attacks, a metallic tone at 4x or an octave and more) was not judged by ear. There is no separate transient mode and no tempo detection:
@@ -122,13 +129,13 @@ what is missing. If something here disagrees with the program, the program is ri
 | Pattern deletion and renaming | Patterns are created and cloned only; clips cannot be re-pointed to another pattern. |
 | Channel deletion and reordering | Channels can be added (up to 8) but not removed or moved. |
 | Pattern length, time signature, tempo changes | A pattern is always two bars of 4/4 with a 16th grid; one BPM for the whole song. Swing exists per channel (off-beat 16ths only). |
-| Sample editing | Samples play once from the start: no loop points, envelope, trim, or time-stretch (stretching works on audio clips of the playlist only). |
+| Sample editing | The sample editor (0.13.0) edits a copy destructively and saves a new WAV; it has no loop points, envelope, spectral (paint-to-edit) view, resampling, or time-stretch (stretching works on audio clips of the playlist only). A stretched clip must be taken back to the original before editing. After Apply a clip plays the whole edited audio. Slices cut a playlist clip into clips; a sampler channel cannot be sliced, and nothing turns slices into notes (that is in the advanced sampler block). Only one editor window at a time. |
 | Export options | Fixed settings: 48 kHz, 24-bit for WAV/AIFF/FLAC, MP3 and AAC at 192 kbit/s, Ogg Vorbis at about 192 kbit/s. No choice of quality or sample rate, no stems, no tags/metadata. |
 | Packaging | An AppImage can be built (`scripts/build_appimage.sh`, not yet tested on a real Nobara machine); no Flatpak or RPM; install can also be `cmake --install`. |
 
 ## Proposed order of work
 
-The larger feature blocks are in [feature-plan.md](feature-plan.md) (A, B and C are done in 0.11.0, D in 0.12.0; next is the sample editor). Smaller items:
+The larger feature blocks are in [feature-plan.md](feature-plan.md) (A, B and C are done in 0.11.0, D in 0.12.0, E in 0.13.0). Smaller items:
 
 1. **Undo / redo** for channel settings and the Mixer (notes and the Playlist already have it).
 2. **Project extras**: autosave and recovery, embedding samples, a project folder with its samples.
