@@ -35,7 +35,7 @@ std::shared_ptr<const SamplerProgram> loadSoundFont (const juce::File& file, int
 // Where a sampler channel's program comes from, as the project file stores it: a SoundFont preset, or slices of an audio file.
 struct ProgramSpec
 {
-    enum class Kind { None, SoundFont, Slices };
+    enum class Kind { None, SoundFont, Slices, Builtin }; // Builtin (0.22.0): an instrument of the sound library, file = "builtin:program:<id>"
     Kind kind = Kind::None;
     std::string file;        // the .sf2, or the audio file that was sliced
     int preset = -1;         // SoundFont: index of the preset

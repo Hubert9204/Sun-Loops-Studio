@@ -4,11 +4,11 @@
 
 namespace sls
 {
-// The kit a new drum channel starts with: the three synthesised sounds on the first pads (hat in choke group 1).
+// The kit a new drum channel starts with: the "Electronic Punch" kit (16 pads in the General MIDI order, hats in choke group 1).
 std::shared_ptr<const DrumKit> MainComponent::defaultDrumKit()
 {
     juce::StringArray problems;
-    return std::make_shared<const DrumKit> (loadKit (basicKitSpec(), problems));
+    return std::make_shared<const DrumKit> (loadKit (builtinKitSpec ("gen:punch"), problems));
 }
 
 // "Drum machine..." on a drum channel: one window, for one channel at a time. It edits the channel's kit and its notes in the

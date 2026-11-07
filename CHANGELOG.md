@@ -2,6 +2,42 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.22.0 - 2026-11-07
+
+### Added
+- **A sound library built into the program** (`resources/sounds/library`, packed into the program at build time):
+  - **Grand Piano** from the Salamander Grand Piano V3 (Alexander Holm, CC BY 3.0): 30 notes a minor third apart, 4 velocity layers,
+    played with the sampler's envelope (it sounds while the key is held).
+  - **Electric Bass** and **Electric Bass Staccato** from Growlybass (Karoryfer Lecolds, CC0): 14 notes, 4 velocity layers; keys play
+    at their real pitch (E1 = the open E string), a note recorded off pitch is tuned in its zone.
+  - Two **recorded acoustic kits** from the DrumGizmo multi-microphone recordings (CC BY 4.0): **Acoustic Studio** (MuldjordKit) and
+    **Acoustic Rock** (DRSKit), 16 pieces each (kicks, snares, rest and rimshot, toms, closed / half-open / pedal / open hi-hat, crashes,
+    china, rides and bells) with up to 4 velocity layers, mixed to stereo from all their microphones.
+  - The scripts that made them (`tools/sounds`) say exactly what was changed (cutting, levels, the stereo mixdown, Ogg Vorbis).
+- **Kits made by code** (`DrumSynth`): **Electronic Boom** (long analog-style kick, snappy snare, clap, metallic hats, conga, cowbell,
+  clave, shaker), **Electronic Punch** (clicky kick, noisy snare, six toms, crash, ride), **Electronic Modern** (long distorted kick,
+  layered snare, crisp hats, a tuned sub) and **Hand Percussion** (modal synthesis: congas, bongos, timbales, cowbell, agogo, wood
+  blocks, claves, shaker, tambourine, triangle). Four velocity layers each: a harder hit is louder, brighter and, for drums, drops
+  further in pitch. The same sound on every computer.
+- Every built-in kit follows the **General MIDI drum order** (kick on key 36, snare 38, hats 42 / 44 / 46 in choke group 1, crash 49).
+  The drum machine's *Load kit...* lists the seven built-in kits; the browser's *Drum Kits* has a folder per kit.
+- **Factory presets in folders** (Keys, Bass, Synth, Drums); the grand piano and the basses are presets. **Channel presets keep the
+  sampler's settings and a built-in instrument** (older preset files still load).
+- **A new demo project**: drums (Electronic Punch), grand piano, electric bass and a plucked synth, 100 BPM.
+
+### Changed
+- New drum channels start with the *Electronic Punch* kit instead of the three-sound basic kit (still available).
+- Sampler channels that play a multi-sample instrument (the piano, a SoundFont, slices) show their notes in the rack, like synths,
+  instead of a step row for one key.
+- Projects refer to a built-in instrument as `builtin:program:<id>` (program kind `builtin`).
+
+### Removed
+- **The Cyber-Hub sound theme** (sounds, kit, browser folder, docs/cyber-hub.md). A project that used one of its sounds opens with it
+  silent, a message saying it was removed, and the reference kept.
+
+### Fixed
+- Three tests left a folder in `/tmp` on every run; they now remove it.
+
 ## 0.21.0 - 2026-11-07
 
 ### Added

@@ -1,0 +1,342 @@
+{
+ "name": "Acoustic Rock",
+ "credit": "DrumGizmo DRSKit by the DrumGizmo team, CC BY 4.0 (mixed to stereo, trimmed, levelled, Ogg Vorbis)",
+ "pads": [
+  {
+   "name": "Kick",
+   "choke": 0,
+   "pan": 0.0,
+   "layers": [
+    {
+     "sample": "kits/rock/kdrum_without_contact-1",
+     "minVelocity": 1
+    },
+    {
+     "sample": "kits/rock/kdrum_without_contact-2",
+     "minVelocity": 45
+    },
+    {
+     "sample": "kits/rock/kdrum_without_contact-3",
+     "minVelocity": 80
+    },
+    {
+     "sample": "kits/rock/kdrum_without_contact-4",
+     "minVelocity": 110
+    }
+   ]
+  },
+  {
+   "name": "Snare Rest",
+   "choke": 0,
+   "pan": 0.0,
+   "layers": [
+    {
+     "sample": "kits/rock/snare_rest-1",
+     "minVelocity": 1
+    },
+    {
+     "sample": "kits/rock/snare_rest-2",
+     "minVelocity": 80
+    },
+    {
+     "sample": "kits/rock/snare_rest-3",
+     "minVelocity": 110
+    }
+   ]
+  },
+  {
+   "name": "Snare",
+   "choke": 0,
+   "pan": 0.0,
+   "layers": [
+    {
+     "sample": "kits/rock/snare-1",
+     "minVelocity": 1
+    },
+    {
+     "sample": "kits/rock/snare-2",
+     "minVelocity": 45
+    },
+    {
+     "sample": "kits/rock/snare-3",
+     "minVelocity": 80
+    },
+    {
+     "sample": "kits/rock/snare-4",
+     "minVelocity": 110
+    }
+   ]
+  },
+  {
+   "name": "Rimshot",
+   "choke": 0,
+   "pan": 0.0,
+   "layers": [
+    {
+     "sample": "kits/rock/snare_rim-1",
+     "minVelocity": 1
+    },
+    {
+     "sample": "kits/rock/snare_rim-2",
+     "minVelocity": 80
+    },
+    {
+     "sample": "kits/rock/snare_rim-3",
+     "minVelocity": 110
+    }
+   ]
+  },
+  {
+   "name": "Kick Click",
+   "choke": 0,
+   "pan": 0.0,
+   "layers": [
+    {
+     "sample": "kits/rock/kdrum_with_contact-1",
+     "minVelocity": 1
+    },
+    {
+     "sample": "kits/rock/kdrum_with_contact-2",
+     "minVelocity": 45
+    },
+    {
+     "sample": "kits/rock/kdrum_with_contact-3",
+     "minVelocity": 80
+    },
+    {
+     "sample": "kits/rock/kdrum_with_contact-4",
+     "minVelocity": 110
+    }
+   ]
+  },
+  {
+   "name": "Floor Tom",
+   "choke": 0,
+   "pan": 0.0,
+   "layers": [
+    {
+     "sample": "kits/rock/tom3-1",
+     "minVelocity": 1
+    },
+    {
+     "sample": "kits/rock/tom3-2",
+     "minVelocity": 80
+    },
+    {
+     "sample": "kits/rock/tom3-3",
+     "minVelocity": 110
+    }
+   ]
+  },
+  {
+   "name": "Closed Hat",
+   "choke": 1,
+   "pan": 0.0,
+   "layers": [
+    {
+     "sample": "kits/rock/hihat_closed-1",
+     "minVelocity": 1
+    },
+    {
+     "sample": "kits/rock/hihat_closed-2",
+     "minVelocity": 80
+    },
+    {
+     "sample": "kits/rock/hihat_closed-3",
+     "minVelocity": 110
+    }
+   ]
+  },
+  {
+   "name": "Half-open Hat",
+   "choke": 1,
+   "pan": 0.0,
+   "layers": [
+    {
+     "sample": "kits/rock/hihat_semi_open-1",
+     "minVelocity": 1
+    },
+    {
+     "sample": "kits/rock/hihat_semi_open-2",
+     "minVelocity": 45
+    },
+    {
+     "sample": "kits/rock/hihat_semi_open-3",
+     "minVelocity": 80
+    },
+    {
+     "sample": "kits/rock/hihat_semi_open-4",
+     "minVelocity": 110
+    }
+   ]
+  },
+  {
+   "name": "Pedal Hat",
+   "choke": 1,
+   "pan": 0.0,
+   "layers": [
+    {
+     "sample": "kits/rock/hihat_foot-1",
+     "minVelocity": 1
+    },
+    {
+     "sample": "kits/rock/hihat_foot-2",
+     "minVelocity": 80
+    },
+    {
+     "sample": "kits/rock/hihat_foot-3",
+     "minVelocity": 110
+    }
+   ]
+  },
+  {
+   "name": "Low Tom",
+   "choke": 0,
+   "pan": 0.0,
+   "layers": [
+    {
+     "sample": "kits/rock/tom2-1",
+     "minVelocity": 1
+    },
+    {
+     "sample": "kits/rock/tom2-2",
+     "minVelocity": 80
+    },
+    {
+     "sample": "kits/rock/tom2-3",
+     "minVelocity": 110
+    }
+   ]
+  },
+  {
+   "name": "Open Hat",
+   "choke": 1,
+   "pan": 0.0,
+   "layers": [
+    {
+     "sample": "kits/rock/hihat_open-1",
+     "minVelocity": 1
+    },
+    {
+     "sample": "kits/rock/hihat_open-2",
+     "minVelocity": 45
+    },
+    {
+     "sample": "kits/rock/hihat_open-3",
+     "minVelocity": 80
+    },
+    {
+     "sample": "kits/rock/hihat_open-4",
+     "minVelocity": 110
+    }
+   ]
+  },
+  {
+   "name": "Ride Bell",
+   "choke": 0,
+   "pan": 0.0,
+   "layers": [
+    {
+     "sample": "kits/rock/ride_tip_bell-1",
+     "minVelocity": 1
+    },
+    {
+     "sample": "kits/rock/ride_tip_bell-2",
+     "minVelocity": 45
+    },
+    {
+     "sample": "kits/rock/ride_tip_bell-3",
+     "minVelocity": 80
+    },
+    {
+     "sample": "kits/rock/ride_tip_bell-4",
+     "minVelocity": 110
+    }
+   ]
+  },
+  {
+   "name": "High Tom",
+   "choke": 0,
+   "pan": 0.0,
+   "layers": [
+    {
+     "sample": "kits/rock/tom1-1",
+     "minVelocity": 1
+    },
+    {
+     "sample": "kits/rock/tom1-2",
+     "minVelocity": 45
+    },
+    {
+     "sample": "kits/rock/tom1-3",
+     "minVelocity": 80
+    },
+    {
+     "sample": "kits/rock/tom1-4",
+     "minVelocity": 110
+    }
+   ]
+  },
+  {
+   "name": "Crash",
+   "choke": 0,
+   "pan": 0.0,
+   "layers": [
+    {
+     "sample": "kits/rock/crash_left_tip-1",
+     "minVelocity": 1
+    },
+    {
+     "sample": "kits/rock/crash_left_tip-2",
+     "minVelocity": 45
+    },
+    {
+     "sample": "kits/rock/crash_left_tip-3",
+     "minVelocity": 80
+    },
+    {
+     "sample": "kits/rock/crash_left_tip-4",
+     "minVelocity": 110
+    }
+   ]
+  },
+  {
+   "name": "Crash 2",
+   "choke": 0,
+   "pan": 0.0,
+   "layers": [
+    {
+     "sample": "kits/rock/crash_right_tip-1",
+     "minVelocity": 1
+    },
+    {
+     "sample": "kits/rock/crash_right_tip-2",
+     "minVelocity": 80
+    },
+    {
+     "sample": "kits/rock/crash_right_tip-3",
+     "minVelocity": 110
+    }
+   ]
+  },
+  {
+   "name": "Ride",
+   "choke": 0,
+   "pan": 0.0,
+   "layers": [
+    {
+     "sample": "kits/rock/ride_tip-1",
+     "minVelocity": 1
+    },
+    {
+     "sample": "kits/rock/ride_tip-2",
+     "minVelocity": 80
+    },
+    {
+     "sample": "kits/rock/ride_tip-3",
+     "minVelocity": 110
+    }
+   ]
+  }
+ ]
+}

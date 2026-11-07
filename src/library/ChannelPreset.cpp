@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <cmath>
 
+#include "audio/SoundLibrary.h"
 #include "library/JsonRead.h"
+#include "library/SoundFont.h"
 
 namespace sls
 {
@@ -31,6 +33,12 @@ ChannelPreset ChannelPreset::fromChannel (const Channel& channel, const std::str
     p.rootPitch = channel.rootPitch;
     if (channel.instrument == Instrument::Sampler && channel.sample != nullptr)
         p.sampleSource = channel.sample->source;
+    if (channel.instrument == Instrument::Sampler)
+    {
+        p.sampler = channel.sampler;
+        if (channel.program != nullptr && isLibraryProgramSource (channel.program->source))
+            p.programSource = channel.program->source;
+    }
     if (channel.instrument == Instrument::Synth)
         p.synth = channel.synth;
     return p;
@@ -47,6 +55,8 @@ void ChannelPreset::applyTo (Channel& channel) const
     channel.rootPitch = std::clamp (rootPitch, 0, 127);
     if (instrument == Instrument::Synth)
         channel.synth = synth.sanitised();
+    if (instrument == Instrument::Sampler && sampler.has_value())
+        channel.sampler = sampler->sanitised();
 }
 
 juce::String ChannelPreset::toJson() const
@@ -64,6 +74,10 @@ juce::String ChannelPreset::toJson() const
     o->setProperty ("sample", juce::String (sampleSource));
     if (instrument == Instrument::Synth)
         o->setProperty ("synth", synthPatchToVar (synth));
+    if (instrument == Instrument::Sampler && ! programSource.empty())
+        o->setProperty ("program", juce::String (programSource));
+    if (instrument == Instrument::Sampler && sampler.has_value())
+        o->setProperty ("sampler", samplerSettingsToVar (*sampler));
     return juce::JSON::toString (juce::var (o), false);
 }
 
@@ -92,6 +106,10 @@ std::optional<ChannelPreset> ChannelPreset::fromJson (const juce::String& text)
     p.rootPitch = static_cast<int> (readFloat (o->getProperty ("rootPitch"), 60.0f, 0.0f, 127.0f));
     p.sampleSource = o->getProperty ("sample").toString().toStdString();
     p.synth = synthPatchFromVar (o->getProperty ("synth"));
+    if (const auto program = o->getProperty ("program").toString().toStdString(); isLibraryProgramSource (program))
+        p.programSource = program;
+    if (o->hasProperty ("sampler"))
+        p.sampler = samplerSettingsFromVar (o->getProperty ("sampler"));
     return p;
 }
 
@@ -285,10 +303,25 @@ const std::vector<ChannelPreset>& factoryPresets()
     {
         std::vector<ChannelPreset> v;
 
+        // The built-in instruments of the sound library (0.22.0): grand piano, electric bass.
+        for (const auto& info : libraryPrograms())
+        {
+            ChannelPreset p;
+            p.id = "program-" + info.id;
+            p.category = info.category.empty() ? "Instruments" : info.category;
+            p.name = info.name.substr (0, 16);
+            p.instrument = Instrument::Sampler;
+            p.volume = 0.8f;
+            p.programSource = kProgramSourcePrefix + info.id;
+            p.sampler = libraryProgramSettings (info.id);
+            v.push_back (p);
+        }
+
         auto sampler = [&] (const char* id, const char* name, const char* sample, float volume)
         {
             ChannelPreset p;
             p.id = id;
+            p.category = "Drums";
             p.name = name;
             p.instrument = Instrument::Sampler;
             p.volume = volume;
@@ -299,27 +332,30 @@ const std::vector<ChannelPreset>& factoryPresets()
         sampler ("snare", "Snare", "snare", 0.7f);
         sampler ("hat", "Hi-hat", "hat", 0.5f);
 
-        ChannelPreset lead;
-        lead.id = "lead";
-        lead.name = "Soft Lead";
-        lead.volume = 0.55f;
-        v.push_back (lead);
-
-        ChannelPreset bass;
-        bass.id = "bass";
-        bass.name = "Sub Bass";
-        bass.volume = 0.9f;
-        bass.pitch = -12.0f;
-        v.push_back (bass);
-
         ChannelPreset swungHat;
         swungHat.id = "swung-hat";
+        swungHat.category = "Drums";
         swungHat.name = "Swung Hat";
         swungHat.instrument = Instrument::Sampler;
         swungHat.volume = 0.5f;
         swungHat.swing = 0.6f;
         swungHat.sampleSource = "builtin:hat";
         v.push_back (swungHat);
+
+        ChannelPreset lead;
+        lead.id = "lead";
+        lead.category = "Synth";
+        lead.name = "Soft Lead";
+        lead.volume = 0.55f;
+        v.push_back (lead);
+
+        ChannelPreset bass;
+        bass.id = "bass";
+        bass.category = "Synth";
+        bass.name = "Sub Bass";
+        bass.volume = 0.9f;
+        bass.pitch = -12.0f;
+        v.push_back (bass);
 
         // The synth's ready-made sounds (subtractive 0.18.0, FM 0.19.0), as channel presets that can be dragged from the browser.
         for (const auto& named : synthFactoryPatches())
@@ -328,6 +364,7 @@ const std::vector<ChannelPreset>& factoryPresets()
                 continue;
             ChannelPreset p;
             p.id = "synth-" + juce::String (named.name).toLowerCase().replaceCharacter (' ', '-').toStdString();
+            p.category = "Synth";
             p.name = named.name.substr (0, 16);
             p.volume = 0.7f;
             p.synth = named.patch;

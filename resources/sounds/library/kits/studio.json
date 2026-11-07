@@ -1,0 +1,366 @@
+{
+ "name": "Acoustic Studio",
+ "credit": "DrumGizmo MuldjordKit by Lars Muldjord, CC BY 4.0 (mixed to stereo, trimmed, levelled, Ogg Vorbis)",
+ "pads": [
+  {
+   "name": "Kick",
+   "choke": 0,
+   "pan": 0.0,
+   "layers": [
+    {
+     "sample": "kits/studio/kdruml-1",
+     "minVelocity": 1
+    },
+    {
+     "sample": "kits/studio/kdruml-2",
+     "minVelocity": 45
+    },
+    {
+     "sample": "kits/studio/kdruml-3",
+     "minVelocity": 80
+    },
+    {
+     "sample": "kits/studio/kdruml-4",
+     "minVelocity": 110
+    }
+   ]
+  },
+  {
+   "name": "Snare Rest",
+   "choke": 0,
+   "pan": 0.0,
+   "layers": [
+    {
+     "sample": "kits/studio/snarerest-1",
+     "minVelocity": 1
+    },
+    {
+     "sample": "kits/studio/snarerest-2",
+     "minVelocity": 80
+    },
+    {
+     "sample": "kits/studio/snarerest-3",
+     "minVelocity": 110
+    }
+   ]
+  },
+  {
+   "name": "Snare",
+   "choke": 0,
+   "pan": 0.0,
+   "layers": [
+    {
+     "sample": "kits/studio/snare-1",
+     "minVelocity": 1
+    },
+    {
+     "sample": "kits/studio/snare-2",
+     "minVelocity": 45
+    },
+    {
+     "sample": "kits/studio/snare-3",
+     "minVelocity": 80
+    },
+    {
+     "sample": "kits/studio/snare-4",
+     "minVelocity": 110
+    }
+   ]
+  },
+  {
+   "name": "Kick 2",
+   "choke": 0,
+   "pan": 0.0,
+   "layers": [
+    {
+     "sample": "kits/studio/kdrumr-1",
+     "minVelocity": 1
+    },
+    {
+     "sample": "kits/studio/kdrumr-2",
+     "minVelocity": 45
+    },
+    {
+     "sample": "kits/studio/kdrumr-3",
+     "minVelocity": 80
+    },
+    {
+     "sample": "kits/studio/kdrumr-4",
+     "minVelocity": 110
+    }
+   ]
+  },
+  {
+   "name": "China",
+   "choke": 0,
+   "pan": 0.0,
+   "layers": [
+    {
+     "sample": "kits/studio/china-1",
+     "minVelocity": 1
+    },
+    {
+     "sample": "kits/studio/china-2",
+     "minVelocity": 45
+    },
+    {
+     "sample": "kits/studio/china-3",
+     "minVelocity": 80
+    },
+    {
+     "sample": "kits/studio/china-4",
+     "minVelocity": 110
+    }
+   ]
+  },
+  {
+   "name": "Floor Tom",
+   "choke": 0,
+   "pan": 0.0,
+   "layers": [
+    {
+     "sample": "kits/studio/tom4-1",
+     "minVelocity": 1
+    },
+    {
+     "sample": "kits/studio/tom4-2",
+     "minVelocity": 45
+    },
+    {
+     "sample": "kits/studio/tom4-3",
+     "minVelocity": 80
+    },
+    {
+     "sample": "kits/studio/tom4-4",
+     "minVelocity": 110
+    }
+   ]
+  },
+  {
+   "name": "Closed Hat",
+   "choke": 1,
+   "pan": 0.0,
+   "layers": [
+    {
+     "sample": "kits/studio/hihatclosed-1",
+     "minVelocity": 1
+    },
+    {
+     "sample": "kits/studio/hihatclosed-2",
+     "minVelocity": 45
+    },
+    {
+     "sample": "kits/studio/hihatclosed-3",
+     "minVelocity": 80
+    },
+    {
+     "sample": "kits/studio/hihatclosed-4",
+     "minVelocity": 110
+    }
+   ]
+  },
+  {
+   "name": "Crash 2",
+   "choke": 0,
+   "pan": 0.0,
+   "layers": [
+    {
+     "sample": "kits/studio/crashr-1",
+     "minVelocity": 1
+    },
+    {
+     "sample": "kits/studio/crashr-2",
+     "minVelocity": 45
+    },
+    {
+     "sample": "kits/studio/crashr-3",
+     "minVelocity": 80
+    },
+    {
+     "sample": "kits/studio/crashr-4",
+     "minVelocity": 110
+    }
+   ]
+  },
+  {
+   "name": "Ride Bell",
+   "choke": 0,
+   "pan": 0.0,
+   "layers": [
+    {
+     "sample": "kits/studio/riderbell-1",
+     "minVelocity": 1
+    },
+    {
+     "sample": "kits/studio/riderbell-2",
+     "minVelocity": 45
+    },
+    {
+     "sample": "kits/studio/riderbell-3",
+     "minVelocity": 80
+    },
+    {
+     "sample": "kits/studio/riderbell-4",
+     "minVelocity": 110
+    }
+   ]
+  },
+  {
+   "name": "Low Tom",
+   "choke": 0,
+   "pan": 0.0,
+   "layers": [
+    {
+     "sample": "kits/studio/tom3-1",
+     "minVelocity": 1
+    },
+    {
+     "sample": "kits/studio/tom3-2",
+     "minVelocity": 45
+    },
+    {
+     "sample": "kits/studio/tom3-3",
+     "minVelocity": 80
+    },
+    {
+     "sample": "kits/studio/tom3-4",
+     "minVelocity": 110
+    }
+   ]
+  },
+  {
+   "name": "Open Hat",
+   "choke": 1,
+   "pan": 0.0,
+   "layers": [
+    {
+     "sample": "kits/studio/hihatopen-1",
+     "minVelocity": 1
+    },
+    {
+     "sample": "kits/studio/hihatopen-2",
+     "minVelocity": 45
+    },
+    {
+     "sample": "kits/studio/hihatopen-3",
+     "minVelocity": 80
+    },
+    {
+     "sample": "kits/studio/hihatopen-4",
+     "minVelocity": 110
+    }
+   ]
+  },
+  {
+   "name": "Mid Tom",
+   "choke": 0,
+   "pan": 0.0,
+   "layers": [
+    {
+     "sample": "kits/studio/tom2-1",
+     "minVelocity": 1
+    },
+    {
+     "sample": "kits/studio/tom2-2",
+     "minVelocity": 45
+    },
+    {
+     "sample": "kits/studio/tom2-3",
+     "minVelocity": 80
+    },
+    {
+     "sample": "kits/studio/tom2-4",
+     "minVelocity": 110
+    }
+   ]
+  },
+  {
+   "name": "High Tom",
+   "choke": 0,
+   "pan": 0.0,
+   "layers": [
+    {
+     "sample": "kits/studio/tom1-1",
+     "minVelocity": 1
+    },
+    {
+     "sample": "kits/studio/tom1-2",
+     "minVelocity": 45
+    },
+    {
+     "sample": "kits/studio/tom1-3",
+     "minVelocity": 80
+    },
+    {
+     "sample": "kits/studio/tom1-4",
+     "minVelocity": 110
+    }
+   ]
+  },
+  {
+   "name": "Crash",
+   "choke": 0,
+   "pan": 0.0,
+   "layers": [
+    {
+     "sample": "kits/studio/crashl-1",
+     "minVelocity": 1
+    },
+    {
+     "sample": "kits/studio/crashl-2",
+     "minVelocity": 45
+    },
+    {
+     "sample": "kits/studio/crashl-3",
+     "minVelocity": 80
+    },
+    {
+     "sample": "kits/studio/crashl-4",
+     "minVelocity": 110
+    }
+   ]
+  },
+  {
+   "name": "Ride 2",
+   "choke": 0,
+   "pan": 0.0,
+   "layers": [
+    {
+     "sample": "kits/studio/ridel-1",
+     "minVelocity": 1
+    },
+    {
+     "sample": "kits/studio/ridel-2",
+     "minVelocity": 45
+    },
+    {
+     "sample": "kits/studio/ridel-3",
+     "minVelocity": 80
+    },
+    {
+     "sample": "kits/studio/ridel-4",
+     "minVelocity": 110
+    }
+   ]
+  },
+  {
+   "name": "Ride",
+   "choke": 0,
+   "pan": 0.0,
+   "layers": [
+    {
+     "sample": "kits/studio/rider-1",
+     "minVelocity": 1
+    },
+    {
+     "sample": "kits/studio/rider-2",
+     "minVelocity": 80
+    },
+    {
+     "sample": "kits/studio/rider-3",
+     "minVelocity": 110
+    }
+   ]
+  }
+ ]
+}

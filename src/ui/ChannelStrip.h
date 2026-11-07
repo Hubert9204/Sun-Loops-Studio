@@ -39,6 +39,9 @@ private:
     static constexpr int kStepTicks = kSixteenthTicks;
 
     int stepCount() const noexcept { return std::max (1, loopLengthTicks / kStepTicks); }
+    // A sampler with one sample is edited as steps of its root note; every other channel (synths, drum machines, samplers playing a
+    // multi-sample instrument such as the grand piano, a SoundFont or slices) shows its notes, like a small piano roll.
+    bool showsSteps() const noexcept { return channel.instrument == Instrument::Sampler && channel.program == nullptr; }
     int stepAt (int x) const noexcept;
 
     Channel& channel;

@@ -1,6 +1,7 @@
 #include "library/SoundFont.h"
 
 #include "library/JsonRead.h"
+#include "audio/SoundLibrary.h"
 
 #include <algorithm>
 #include <cmath>
@@ -161,7 +162,8 @@ std::shared_ptr<const SamplerProgram> missingProgram (const ProgramSpec& spec)
 {
     auto p = std::make_shared<SamplerProgram>();
     p->source = spec.file;
-    p->name = juce::File (juce::String (spec.file)).getFileNameWithoutExtension().toStdString();
+    p->name = spec.kind == ProgramSpec::Kind::Builtin ? spec.file.substr (std::string (kProgramSourcePrefix).size())
+                                                      : juce::File (juce::String (spec.file)).getFileNameWithoutExtension().toStdString();
     if (spec.kind == ProgramSpec::Kind::SoundFont)
         p->preset = spec.preset;
     else if (spec.kind == ProgramSpec::Kind::Slices)
@@ -182,6 +184,11 @@ ProgramSpec specFromProgram (const SamplerProgram& program)
         spec.preset = program.preset;
         return spec;
     }
+    if (program.sliceStarts.empty() && isLibraryProgramSource (program.source))
+    {
+        spec.kind = ProgramSpec::Kind::Builtin;
+        return spec;
+    }
     spec.kind = program.sliceStarts.empty() || program.source.empty() ? ProgramSpec::Kind::None : ProgramSpec::Kind::Slices;
     spec.firstKey = program.sliceFirstKey;
     spec.starts = program.sliceStarts;
@@ -191,7 +198,8 @@ ProgramSpec specFromProgram (const SamplerProgram& program)
 juce::var programSpecToVar (const ProgramSpec& spec)
 {
     auto* o = new juce::DynamicObject();
-    o->setProperty ("kind", spec.kind == ProgramSpec::Kind::SoundFont ? "soundfont" : spec.kind == ProgramSpec::Kind::Slices ? "slices" : "none");
+    o->setProperty ("kind", spec.kind == ProgramSpec::Kind::SoundFont ? "soundfont" : spec.kind == ProgramSpec::Kind::Slices ? "slices"
+                                : spec.kind == ProgramSpec::Kind::Builtin ? "builtin" : "none");
     o->setProperty ("file", juce::String (spec.file));
     if (spec.kind == ProgramSpec::Kind::SoundFont)
         o->setProperty ("preset", spec.preset);
@@ -229,6 +237,8 @@ ProgramSpec programSpecFromVar (const juce::var& v)
             for (int i = 0; i < std::min (starts->size(), 128); ++i)
                 spec.starts.push_back (readInt ((*starts)[i], 0, 0, 1 << 30));
     }
+    else if (kind == "builtin")
+        spec.kind = isLibraryProgramSource (spec.file) ? ProgramSpec::Kind::Builtin : ProgramSpec::Kind::None;
     if (spec.file.empty())
         spec.kind = ProgramSpec::Kind::None;
     return spec;
@@ -241,6 +251,13 @@ std::shared_ptr<const SamplerProgram> loadProgram (const ProgramSpec& spec, cons
     {
         error = "No program.";
         return nullptr;
+    }
+    if (spec.kind == ProgramSpec::Kind::Builtin)
+    {
+        std::string message;
+        auto program = makeLibraryProgram (spec.file.substr (std::string (kProgramSourcePrefix).size()), nullptr, message);
+        error = message;
+        return program;
     }
     const juce::File file { juce::String (spec.file) };
     if (spec.kind == ProgramSpec::Kind::SoundFont)

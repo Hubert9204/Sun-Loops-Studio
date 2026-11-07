@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <new>
 #include <thread>
 #include <vector>
@@ -20,7 +21,8 @@
 #include "audio/BufferTuning.h"
 #include "audio/BuiltinSamples.h"
 #include "audio/ClipEdit.h"
-#include "audio/CyberHub.h"
+#include "audio/DrumSynth.h"
+#include "audio/SoundLibrary.h"
 #include "audio/TimeFormat.h"
 #include "audio/Effects.h"
 #include "audio/InputRecorder.h"
@@ -1648,11 +1650,14 @@ void testChannelPresets()
     for (const auto& p : sls::factoryPresets())
     {
         bool sourceOk = true;
-        if (p.instrument == sls::Instrument::Sampler)
+        if (p.instrument == sls::Instrument::Sampler && p.programSource.empty())
             sourceOk = p.sampleSource.rfind ("builtin:", 0) == 0 && sls::makeBuiltinSample (p.sampleSource.substr (8)) != nullptr;
+        else if (p.instrument == sls::Instrument::Sampler)
+            sourceOk = sls::isLibraryProgramSource (p.programSource) && p.sampleSource.empty();
+        sourceOk = sourceOk && ! p.category.empty();
         factoryOk = factoryOk && ! p.id.empty() && sourceOk && sls::ChannelPreset::fromJson (p.toJson()).has_value();
     }
-    check (factoryOk, "every factory preset is valid, round-trips and points at an existing built-in sample");
+    check (factoryOk, "every factory preset is valid, round-trips, has a category and points at an existing built-in sample or instrument");
 
     check (sls::makeBuiltinSample ("kick") != nullptr && sls::makeBuiltinSample ("kick")->source == "builtin:kick"
                && sls::makeBuiltinSample ("nope") == nullptr && sls::builtinSampleIds().size() == 3,
@@ -1721,8 +1726,10 @@ void testLibraryScan()
     check (mine != nullptr && mine->children.size() == 1 && mine->children[0].name == "bass" && mine->children[0].kind == NodeKind::Preset,
            "user presets are listed without their extension; other files are ignored");
     const auto* factory = presets != nullptr ? findChild (*presets, "Factory") : nullptr;
-    check (factory != nullptr && factory->children.size() == sls::factoryPresets().size() && factory->children[0].payload.rfind ("builtin:", 0) == 0,
-           "factory presets are listed");
+    check (factory != nullptr && sls::countLeaves (*factory) == static_cast<int> (sls::factoryPresets().size()) && ! factory->children.empty()
+               && factory->children[0].kind == NodeKind::Folder && ! factory->children[0].children.empty()
+               && factory->children[0].children[0].payload.rfind ("builtin:", 0) == 0,
+           "factory presets are listed, in a folder per category");
     const auto* instruments = findChild (tree, "Instruments");
     check (instruments != nullptr && instruments->children.size() == 3 && instruments->children[0].payload == "synth" && instruments->children[2].payload == "drums",
            "instruments: Synth, Sampler and Drum machine");
@@ -3021,6 +3028,7 @@ void testAudioExport()
                    && ! sls::exportFormatForFile (juce::File ("/x/a.txt"), f) && sls::exportFormats().size() == 7,
                "export formats are recognised by extension (seven of them)");
     }
+    dir.deleteRecursively(); // test folders in /tmp are not left behind
 }
 
 std::shared_ptr<const sls::SampleData> sineData (int frames, double sampleRate, double hz, float amplitude, const char* source = "/tmp/sine.wav")
@@ -3393,6 +3401,7 @@ void testAudioImport()
     const auto r3 = sls::importVideoAudio (silentVideo, library);
     check (r3.data == nullptr && r3.error.contains ("no audio"), "a video without sound is reported");
     check (library.getNumberOfChildFiles (juce::File::findFiles) == 2, "and leaves no partial files behind");
+    dir.deleteRecursively(); // test folders in /tmp are not left behind
 }
 
 void testInputRecorder()
@@ -3560,6 +3569,7 @@ void testInputRecorder()
                "stopping while audio is arriving gives a complete file whose length matches the count");
     }
     check (dir.getNumberOfChildFiles (juce::File::findFiles) == 8, "no stray files are left in the recordings folder");
+    dir.deleteRecursively(); // test folders in /tmp are not left behind
 }
 
 void testMidiNotes()
@@ -4129,7 +4139,6 @@ void testNoteRecording()
     check (ok.load(), "200000 values cross between two threads in order, none lost");
 }
 
-// --- the Cyber-Hub sounds built into the program, the start-up sound, time formatting ---------------------------------
 juce::MemoryBlock makeMidiFile (int ppq, const std::vector<juce::MidiMessageSequence>& tracks)
 {
     juce::MidiFile file;
@@ -4656,60 +4665,386 @@ void testOneShot()
     check (! empty.isActive(), "without a sound it stays silent");
 }
 
-void testCyberHub()
+// Brightness of a sound: RMS of its first difference over its RMS (2 sin(pi f / sr) for a sine), over [from, to) seconds.
+double brightnessOf (const sls::SampleData& s, double from = 0.0, double to = 1.0e9)
 {
-    std::cout << "Cyber-Hub sounds, start-up sound, time formats\n";
-
-    const auto& sounds = sls::cyberHubSounds();
-    check (sounds.size() == 30, "all 30 sounds of the Cyber-Hub theme are built in");
-
-    int hits = 0, tones = 0, longs = 0;
-    bool allDecode = true, allStereo = true, allIdsWork = true, nothingSilent = true, namedOk = true;
-    double longest = 0.0, shortest = 1.0e9;
-    for (const auto& s : sounds)
+    const auto a = static_cast<size_t> (std::max (1.0, from * s.sampleRate));
+    const auto b = std::min (s.left.size(), static_cast<size_t> (std::max (0.0, to * s.sampleRate)));
+    double d = 0.0, e = 0.0;
+    for (size_t i = a; i < b; ++i)
     {
-        hits += s.role == sls::CyberRole::Hit ? 1 : 0;
-        tones += s.role == sls::CyberRole::Tone ? 1 : 0;
-        longs += s.role == sls::CyberRole::Long ? 1 : 0;
-        const auto data = sls::makeCyberHubSample (s.id);
-        if (data == nullptr || data->numFrames() < 100)
-        {
-            allDecode = false;
-            continue;
-        }
-        allStereo = allStereo && data->left.size() == data->right.size() && data->sampleRate >= 22050.0;
-        allIdsWork = allIdsWork && sls::makeBuiltinSample (s.id) == data && data->source == "builtin:" + s.id && sls::isCyberHubId (s.id);
-        namedOk = namedOk && ! data->name.empty() && data->name == s.title;
-        float peak = 0.0f;
-        for (float v : data->left)
-            peak = std::max (peak, std::abs (v));
-        nothingSilent = nothingSilent && peak > 0.05f;
-        const double seconds = data->numFrames() / data->sampleRate;
-        longest = std::max (longest, seconds);
-        shortest = std::min (shortest, seconds);
+        const double diff = static_cast<double> (s.left[i]) - s.left[i - 1];
+        d += diff * diff;
+        e += static_cast<double> (s.left[i]) * s.left[i];
     }
-    check (allDecode, "every sound decodes");
-    check (allStereo, "they are stereo with the left and right sides of equal length");
-    check (allIdsWork && namedOk, "makeBuiltinSample finds each by its id and returns the very same shared sample");
-    check (nothingSilent, "none of them is silent");
-    check (hits == 14 && tones == 9 && longs == 7, "14 hits, 9 tones and 7 long sounds are filed in the browser");
-    check (shortest > 0.1 && shortest < 0.25 && longest > 8.0 && longest < 8.8, "lengths match the files (0.16 s volume tick ... 8.4 s phone call)");
+    return e > 0.0 ? std::sqrt (d / e) : 0.0;
+}
 
-    const auto login = sls::makeCyberHubSample ("cyber:desktop-login");
-    check (login != nullptr && std::abs (login->numFrames() / login->sampleRate - 5.5) < 0.1, "desktop-login lasts about 5.5 s");
-    const auto plug = sls::makeCyberHubSample ("cyber:power-plug");
-    double diff = 0.0, energy = 1.0e-12;
-    if (plug != nullptr)
-        for (size_t i = 0; i < plug->left.size(); ++i)
+float samplePeak (const sls::SampleData& s)
+{
+    float p = 0.0f;
+    for (size_t i = 0; i < s.left.size(); ++i)
+        p = std::max ({ p, std::abs (s.left[i]), std::abs (s.right[i]) });
+    return p;
+}
+
+bool allFinite (const sls::SampleData& s)
+{
+    for (size_t i = 0; i < s.left.size(); ++i)
+        if (! std::isfinite (s.left[i]) || ! std::isfinite (s.right[i]))
+            return false;
+    return true;
+}
+
+// The fundamental of a steady part of a sound, from the strongest normalised autocorrelation between `lo` and `hi` Hz.
+double autocorrelationHz (const sls::SampleData& s, double from, double seconds, double lo, double hi)
+{
+    const auto start = static_cast<size_t> (from * s.sampleRate);
+    const auto n = static_cast<size_t> (seconds * s.sampleRate);
+    if (start + 2 * n >= s.left.size())
+        return 0.0;
+    const auto minLag = static_cast<size_t> (s.sampleRate / hi), maxLag = static_cast<size_t> (s.sampleRate / lo);
+    double best = -1.0;
+    size_t bestLag = 0;
+    std::vector<double> score (maxLag + 2, 0.0);
+    for (size_t lag = minLag; lag <= maxLag + 1; ++lag)
+    {
+        double xy = 0.0, xx = 0.0, yy = 0.0;
+        for (size_t i = 0; i < n; ++i)
         {
-            diff += std::pow (static_cast<double> (plug->left[i] - plug->right[i]), 2.0);
-            energy += std::pow (static_cast<double> (plug->left[i]), 2.0);
+            const double x = s.left[start + i], y = s.left[start + i + lag];
+            xy += x * y;
+            xx += x * x;
+            yy += y * y;
         }
-    check (plug != nullptr && diff < 1.0e-4 * energy, "power-plug is a near-mono sub hit (the sides differ by less than -40 dB), as the analysis found");
-    check (sls::makeCyberHubSample ("cyber:nope") == nullptr && sls::makeBuiltinSample ("cyber:nope") == nullptr, "an unknown id gives nothing");
+        score[lag] = xy / std::sqrt (xx * yy + 1e-30);
+    }
+    // the first lag that comes within 3 % of the best one (so an octave below is not taken for the fundamental)
+    for (size_t lag = minLag; lag <= maxLag; ++lag)
+        best = std::max (best, score[lag]);
+    for (size_t lag = minLag; lag <= maxLag; ++lag)
+        if (score[lag] >= 0.97 * best && score[lag] >= score[lag - 1] && score[lag] >= score[lag + 1])
+        {
+            bestLag = lag;
+            break;
+        }
+    if (bestLag == 0)
+        return 0.0;
+    // parabolic interpolation around the peak
+    const double a = score[bestLag - 1], b = score[bestLag], c = score[bestLag + 1];
+    const double shift = (a - 2.0 * b + c) != 0.0 ? 0.5 * (a - c) / (a - 2.0 * b + c) : 0.0;
+    return s.sampleRate / (static_cast<double> (bestLag) + shift);
+}
 
-    for (const auto& piece : sls::cyberHubKit())
-        check (sls::makeCyberHubSample (piece.id) != nullptr, (std::string ("the kit piece ") + piece.label + " exists").c_str());
+// The strongest frequency between `lo` and `hi` Hz (a DFT scanned in 0.02 Hz steps) of the left side over [from, from + seconds).
+double spectralPeakHz (const sls::SampleData& s, double from, double seconds, double lo, double hi)
+{
+    const auto a = static_cast<size_t> (from * s.sampleRate);
+    const auto b = std::min (s.left.size(), static_cast<size_t> ((from + seconds) * s.sampleRate));
+    double best = 0.0, bestHz = 0.0;
+    for (double hz = lo; hz <= hi; hz += 0.02)
+    {
+        double re = 0.0, im = 0.0;
+        const double w = 6.283185307179586 * hz / s.sampleRate;
+        for (size_t i = a; i < b; ++i)
+        {
+            const double win = 0.5 - 0.5 * std::cos (6.283185307179586 * static_cast<double> (i - a) / static_cast<double> (b - a));
+            re += win * s.left[i] * std::cos (w * static_cast<double> (i));
+            im += win * s.left[i] * std::sin (w * static_cast<double> (i));
+        }
+        if (re * re + im * im > best)
+        {
+            best = re * re + im * im;
+            bestHz = hz;
+        }
+    }
+    return bestHz;
+}
+
+const sls::BrowserNode* childNamed (const sls::BrowserNode* node, const std::string& name)
+{
+    if (node != nullptr)
+        for (const auto& c : node->children)
+            if (c.name == name)
+                return &c;
+    return nullptr;
+}
+
+// --- the sound library (0.22.0): sampled instruments and kits, generated kits; the start-up sound, time formatting --------
+void testSoundLibrary()
+{
+    std::cout << "Sound library, generated kits, start-up sound, time formats\n";
+
+    check (sls::soundLibraryAvailable(), "the sound library is built into the program");
+    {   // programs
+        const auto& programs = sls::libraryPrograms();
+        std::map<std::string, const sls::LibraryProgramInfo*> byId;
+        for (const auto& p : programs)
+            byId[p.id] = &p;
+        check (programs.size() == 3 && byId.count ("grand-piano") == 1 && byId.count ("electric-bass") == 1 && byId.count ("electric-bass-staccato") == 1,
+               "it has three instruments: grand piano, electric bass, electric bass staccato");
+        check (byId.count ("grand-piano") == 1 && byId["grand-piano"]->name == "Grand Piano" && byId["grand-piano"]->category == "Keys"
+                   && byId["grand-piano"]->credit.find ("CC BY 3.0") != std::string::npos && byId.count ("electric-bass") == 1
+                   && byId["electric-bass"]->category == "Bass" && byId["electric-bass"]->credit.find ("CC0") != std::string::npos,
+               "each is named, filed and credited with its license");
+
+        sls::SamplerSettings settings;
+        std::string error;
+        const auto started = std::chrono::steady_clock::now();
+        auto piano = sls::makeLibraryProgram ("grand-piano", &settings, error);
+        const double seconds = std::chrono::duration<double> (std::chrono::steady_clock::now() - started).count();
+        std::cout << "    (the grand piano decodes in " << seconds << " s)\n";
+        check (piano != nullptr && piano->zones.size() == 120 && error.empty(), "the grand piano loads: 30 notes, 4 velocity layers");
+        check (settings.envelope && settings.sustain == 1.0f && std::abs (settings.release - 0.35f) < 1e-6f && settings.sustains(),
+               "it is played with its envelope on (it sounds while held, then a 0.35 s release)");
+        bool covered = piano != nullptr;
+        if (piano != nullptr)
+            for (int key = 0; key < 128; ++key)
+                for (const int vel : { 1, 43, 44, 80, 81, 112, 113, 127 })
+                {
+                    int answering = 0;
+                    for (const auto& z : piano->zones)
+                        answering += z.answers (key, vel) ? 1 : 0;
+                    covered = covered && answering == 1;
+                }
+        check (covered, "every key and velocity is answered by exactly one zone");
+        bool sound = piano != nullptr, levels = piano != nullptr, layersBrighter = piano != nullptr;
+        double memory = 0.0;
+        if (piano != nullptr)
+            for (size_t i = 0; i < piano->zones.size(); ++i)
+            {
+                const auto& z = piano->zones[i];
+                memory += 8.0 * static_cast<double> (z.sample->numFrames());
+                sound = sound && z.sample->sampleRate == 44100.0 && allFinite (*z.sample) && z.sample->left.size() == z.sample->right.size()
+                        && z.sample->numFrames() > 44100 / 2 && z.sample->source == "builtin:lib:" + z.sample->source.substr (12);
+                const float peak = samplePeak (*z.sample);
+                levels = levels && peak > 0.05f && peak <= 0.95f; // levelled to 0.89, Ogg Vorbis can overshoot a little
+                if (i % 4 == 3) // the hardest layer of a note is louder and brighter than its softest
+                {
+                    const auto& soft = *piano->zones[i - 3].sample;
+                    levels = levels && samplePeak (soft) < peak;
+                    layersBrighter = layersBrighter && brightnessOf (soft, 0.0, 0.5) < brightnessOf (*z.sample, 0.0, 0.5);
+                }
+            }
+        std::cout << "    (decoded, the grand piano takes " << memory / 1.0e6 << " MB)\n";
+        check (sound, "every sound is finite stereo at 44.1 kHz, half a second or more, with its library source");
+        check (levels && layersBrighter, "levels are below 0.95, and a harder layer is louder and brighter than a softer one");
+        double a4 = 0.0, c4 = 0.0;
+        if (piano != nullptr)
+            for (const auto& z : piano->zones)
+            {
+                if (z.hiVel == 127 && z.rootKey == 69)
+                    a4 = autocorrelationHz (*z.sample, 0.3, 0.1, 200.0, 1000.0);
+                else if (z.hiVel == 127 && z.rootKey == 60)
+                    c4 = autocorrelationHz (*z.sample, 0.3, 0.1, 100.0, 600.0);
+            }
+        std::cout << "    (A4 sample " << a4 << " Hz, C4 sample " << c4 << " Hz)\n";
+        check (std::abs (1200.0 * std::log2 (a4 / 440.0)) < 15.0 && std::abs (1200.0 * std::log2 (c4 / 261.63)) < 15.0,
+               "the samples are on their keys: A4 plays 440 Hz and C4 261.6 Hz (within 15 cents)");
+
+        auto again = sls::makeLibraryProgram ("grand-piano", nullptr, error);
+        check (again == piano, "loading it again while it is in use shares the same program (no second copy in memory)");
+        const auto* first = piano != nullptr ? piano->zones[0].sample.get() : nullptr;
+        std::weak_ptr<const sls::SamplerProgram> watch = piano;
+        piano.reset();
+        again.reset();
+        check (watch.expired(), "when nothing uses it any more, its memory is freed");
+        (void) first;
+
+        auto bass = sls::makeLibraryProgram ("electric-bass", &settings, error);
+        check (bass != nullptr && bass->zones.size() == 56, "the electric bass loads: 14 notes, 4 velocity layers");
+        double openE = 0.0;
+        bool bassCovered = bass != nullptr;
+        if (bass != nullptr)
+        {
+            for (const auto& z : bass->zones)
+                if (z.rootKey == 28 && z.hiVel == 127) // the zone's tuning corrects a note recorded a little sharp
+                    openE = spectralPeakHz (*z.sample, 0.3, 1.5, 36.0, 47.0) * std::pow (2.0, z.tune / 12.0);
+            for (int key = 0; key < 128; ++key)
+                for (const int vel : { 1, 60, 61, 95, 96, 120, 121, 127 })
+                {
+                    int answering = 0;
+                    for (const auto& z : bass->zones)
+                        answering += z.answers (key, vel) ? 1 : 0;
+                    bassCovered = bassCovered && answering == 1;
+                }
+        }
+        std::cout << "    (open E string " << openE << " Hz)\n";
+        check (std::abs (1200.0 * std::log2 (openE / 41.2)) < 30.0, "keys play at their real pitch: the open E string is on E1 (41.2 Hz, within 30 cents)");
+        check (bassCovered, "every key and velocity is answered by exactly one zone of the bass");
+        const auto staccato = sls::makeLibraryProgram ("electric-bass-staccato", nullptr, error);
+        check (staccato != nullptr && staccato->zones.size() == 14, "the staccato bass loads: 14 notes");
+        check (sls::makeLibraryProgram ("nope", nullptr, error) == nullptr && ! error.empty(), "an unknown instrument gives nothing and a message");
+
+        // played by the sampler
+        sls::Channel c;
+        c.instrument = sls::Instrument::Sampler;
+        c.program = bass;
+        c.sampler = settings;
+        c.notes = { { 40, 0, 2 * kBeat, 0.25f } };
+        const auto softProject = sls::Project::make ({ c }, 4 * kBeat);
+        c.notes = { { 40, 0, 2 * kBeat, 1.0f } };
+        const auto loudProject = sls::Project::make ({ c }, 4 * kBeat);
+        sls::Player p1, p2;
+        p1.prepare (kSr);
+        p2.prepare (kSr);
+        const auto soft = renderBlocks (p1, softProject, true, 0.6);
+        const auto loud = renderBlocks (p2, loudProject, true, 0.6);
+        const auto roughness = [] (const std::vector<float>& x, double from, double to)
+        {
+            double d = 0.0, e = 0.0;
+            for (auto i = static_cast<size_t> (from * kSr) + 1; i < static_cast<size_t> (to * kSr) && i < x.size(); ++i)
+            {
+                d += std::pow (static_cast<double> (x[i]) - x[i - 1], 2.0);
+                e += static_cast<double> (x[i]) * x[i];
+            }
+            return e > 0.0 ? std::sqrt (d / e) : 0.0;
+        };
+        const float softPeak = peakOf (soft.data(), 0, static_cast<int> (soft.size()));
+        const float loudPeak = peakOf (loud.data(), 0, static_cast<int> (loud.size()));
+        std::cout << "    (bass E2 at velocity 0.25: peak " << softPeak << ", at 1.0: " << loudPeak << "; roughness " << roughness (soft, 0.05, 0.5)
+                  << " / " << roughness (loud, 0.05, 0.5) << ")\n";
+        check (softPeak > 0.01f && loudPeak > 2.0f * softPeak && roughness (loud, 0.05, 0.5) > roughness (soft, 0.05, 0.5),
+               "the sampler plays it: a hard note is louder and brighter (another layer) than a soft one");
+    }
+
+    {   // generated kits
+        const auto& kits = sls::generatedKits();
+        check (kits.size() == 4, "four kits are made by code: three electronic, one of hand percussion");
+        bool full = kits.size() == 4, hatsChoke = true, valid = true, layered = true, deterministic = true;
+        for (const auto& k : kits)
+        {
+            full = full && k.pads.size() == 16;
+            for (const auto& pad : k.pads)
+            {
+                std::shared_ptr<const sls::SampleData> layers[sls::kGeneratedLayers];
+                for (int l = 0; l < sls::kGeneratedLayers; ++l)
+                {
+                    layers[l] = sls::makeGeneratedSample ("gen:" + k.id + "/" + pad.piece + "/" + std::to_string (l + 1));
+                    valid = valid && layers[l] != nullptr && allFinite (*layers[l]) && samplePeak (*layers[l]) > 0.3f
+                            && samplePeak (*layers[l]) <= 0.9f && layers[l]->sampleRate == 44100.0 && layers[l]->numFrames() > 400;
+                }
+                if (layers[0] != nullptr && layers[3] != nullptr)
+                {
+                    const bool louder = samplePeak (*layers[3]) > samplePeak (*layers[0]);
+                    const bool brighter = brightnessOf (*layers[3], 0.0, 0.05) > brightnessOf (*layers[0], 0.0, 0.05);
+                    if (! louder || ! brighter)
+                        std::cout << "    (" << k.id << "/" << pad.piece << ": hardest layer not louder and brighter)\n";
+                    layered = layered && louder && brighter;
+                    // made again from scratch: the very same sound
+                    const auto copy = layers[3]->left;
+                    const std::string id = layers[3]->source.substr (8);
+                    layers[3].reset();
+                    const auto remade = sls::makeGeneratedSample (id);
+                    deterministic = deterministic && remade != nullptr && remade->left == copy;
+                }
+            }
+            if (k.id != "percussion")
+                hatsChoke = hatsChoke && k.pads[6].chokeGroup == 1 && k.pads[8].chokeGroup == 1 && k.pads[10].chokeGroup == 1
+                            && k.pads[0].name == "Kick" && k.pads[2].name == "Snare" && k.pads[6].name == "Closed Hat" && k.pads[10].name == "Open Hat"
+                            && k.pads[13].name == "Crash";
+        }
+        check (full && valid, "each has 16 pads of 4 layers, every sound finite and between 0.3 and 0.9 at its peak");
+        check (layered, "a harder layer is louder and brighter in its first 50 ms");
+        check (deterministic, "a sound made again is identical, sample for sample");
+        check (hatsChoke, "the electronic kits follow the General MIDI drum order (kick on key 36, snare 38, hats 42 / 44 / 46, crash 49), hats in choke group 1");
+
+        const auto kick = sls::makeGeneratedSample ("gen:boom/kick/4");
+        const auto hat = sls::makeGeneratedSample ("gen:boom/closed-hat/4");
+        const auto low = sls::makeGeneratedSample ("gen:punch/tom-1/3");
+        const auto high = sls::makeGeneratedSample ("gen:punch/tom-5/3");
+        const double kickHz = kick != nullptr ? autocorrelationHz (*kick, 0.15, 0.1, 30.0, 200.0) : 0.0;
+        std::cout << "    (boom kick settles at " << kickHz << " Hz; brightness hat " << (hat ? brightnessOf (*hat) : 0.0) << ", toms "
+                  << (low ? autocorrelationHz (*low, 0.08, 0.05, 50.0, 400.0) : 0.0) << " / " << (high ? autocorrelationHz (*high, 0.08, 0.05, 50.0, 400.0) : 0.0) << " Hz)\n";
+        check (kickHz > 44.0 && kickHz < 56.0, "the boom kick settles at about 49 Hz");
+        check (hat != nullptr && kick != nullptr && brightnessOf (*hat) > 1.0 && brightnessOf (*kick) < 0.05, "the hat is bright, the kick is not");
+        check (low != nullptr && high != nullptr
+                   && autocorrelationHz (*high, 0.08, 0.05, 50.0, 400.0) > 1.6 * autocorrelationHz (*low, 0.08, 0.05, 50.0, 400.0),
+               "the toms are tuned from low to high");
+        check (sls::makeGeneratedSample ("gen:boom/kick/5") == nullptr && sls::makeGeneratedSample ("gen:boom/kick/0") == nullptr
+                   && sls::makeGeneratedSample ("gen:nope/kick/1") == nullptr && sls::makeGeneratedSample ("gen:boom/kick") == nullptr
+                   && sls::makeGeneratedSample ("gen:percussion/kick/1") == nullptr && sls::makeBuiltinSample ("gen:boom/kick/1") != nullptr,
+               "malformed or unknown ids give nothing; a good one works as a built-in sample");
+    }
+
+    {   // every built-in kit
+        const auto& kits = sls::builtinKits();
+        bool allLoad = ! kits.empty(), named = true, ordered = true;
+        int sampled = 0;
+        for (const auto& k : kits)
+        {
+            juce::StringArray problems;
+            const auto spec = sls::builtinKitSpec (k.id);
+            const auto kit = sls::loadKit (spec, problems);
+            allLoad = allLoad && problems.isEmpty() && kit.pads[0].hasSample() && kit.name == k.name;
+            if (! problems.isEmpty())
+                std::cout << "    (" << k.id << ": " << problems.joinIntoString ("; ") << ")\n";
+            sampled += k.id.rfind ("lib:", 0) == 0 ? 1 : 0;
+            for (const auto& pad : spec.pads)
+            {
+                named = named && ! pad.name.empty();
+                for (size_t l = 1; l < pad.sources.size(); ++l)
+                    if (! pad.sources[l].empty())
+                        ordered = ordered && pad.minVelocity[l] > pad.minVelocity[l - 1];
+            }
+        }
+        check (allLoad, "every built-in kit loads without a problem");
+        check (named && ordered, "every pad is named and its layers answer to rising velocities");
+        check (sampled == static_cast<int> (sls::libraryKits().size()), "the sampled kits of the library are among them");
+        check (sls::builtinKitSpec ("nope").pads[0].sources[0].empty(), "an unknown kit id gives an empty kit");
+    }
+
+    {   // the Cyber-Hub sounds are gone
+        check (sls::makeBuiltinSample ("cyber:button-pressed") == nullptr && ! sls::removedBuiltinMessage ("cyber:button-pressed").empty()
+                   && sls::removedBuiltinMessage ("kick").empty(),
+               "the Cyber-Hub sounds were removed, and a project that used one gets a message saying so");
+        auto spec = sls::KitSpec::empty();
+        spec.pads[0].sources[0] = "builtin:cyber:button-pressed";
+        juce::StringArray problems;
+        const auto kit = sls::loadKit (spec, problems);
+        check (problems.size() == 1 && problems[0].contains ("removed in version 0.22.0") && specFromKit (kit).pads[0].sources[0] == "builtin:cyber:button-pressed",
+               "a kit that used one says so and keeps the reference (the pad is silent)");
+    }
+
+    {   // presets and project files with a built-in instrument
+        const sls::ChannelPreset* piano = nullptr;
+        for (const auto& p : sls::factoryPresets())
+            if (p.id == "program-grand-piano")
+                piano = &p;
+        check (piano != nullptr && piano->category == "Keys" && piano->programSource == "builtin:program:grand-piano" && piano->sampler.has_value()
+                   && piano->sampler->envelope,
+               "a factory preset plays the grand piano, with its envelope");
+        if (piano != nullptr)
+        {
+            const auto back = sls::ChannelPreset::fromJson (piano->toJson());
+            check (back.has_value() && back->programSource == piano->programSource && back->sampler.has_value()
+                       && std::abs (back->sampler->release - piano->sampler->release) < 1e-6f,
+                   "a preset keeps its instrument and sampler settings through its file");
+            sls::Channel ch;
+            back->applyTo (ch);
+            check (ch.instrument == sls::Instrument::Sampler && ch.sampler.envelope, "and applying it sets the sampler's settings");
+        }
+        const auto old = sls::ChannelPreset::fromJson (R"({"format":"sun-loops-studio-channel-preset","version":1,"name":"Old","instrument":"sampler","sample":"builtin:kick"})");
+        check (old.has_value() && old->programSource.empty() && ! old->sampler.has_value(), "an older preset file has neither (the channel keeps its own settings)");
+
+        std::string error;
+        sls::Channel ch;
+        ch.instrument = sls::Instrument::Sampler;
+        ch.program = sls::makeLibraryProgram ("electric-bass-staccato", &ch.sampler, error);
+        const auto spec = sls::specFromProgram (*ch.program);
+        check (spec.kind == sls::ProgramSpec::Kind::Builtin && spec.file == "builtin:program:electric-bass-staccato", "a project refers to a built-in instrument by its id");
+        const auto read = sls::programSpecFromVar (sls::programSpecToVar (spec));
+        juce::String loadError;
+        const auto loaded = sls::loadProgram (read, nullptr, loadError);
+        check (read.kind == sls::ProgramSpec::Kind::Builtin && loaded == ch.program && loadError.isEmpty(),
+               "and reading the project back loads the same instrument");
+        sls::ProgramSpec missing;
+        missing.kind = sls::ProgramSpec::Kind::Builtin;
+        missing.file = "builtin:program:harpsichord";
+        check (sls::loadProgram (missing, nullptr, loadError) == nullptr && loadError.isNotEmpty()
+                   && sls::specFromProgram (*sls::missingProgram (missing)).file == missing.file,
+               "an instrument this version does not have is reported and its reference kept");
+    }
 
     const auto intro = sls::makeStartupSample();
     check (intro != nullptr && std::abs (intro->sampleRate - 48000.0) < 1.0 && intro->numFrames() == 240000, "the start-up sound is the 5 s, 48 kHz file");
@@ -4720,37 +5055,29 @@ void testCyberHub()
     check (introPeak > 0.15f && introPeak < 0.25f, "and has the level it was made at (peaks around 0.2, i.e. -14 dB: a quiet sound)");
     check (sls::makeBuiltinSample (sls::kStartupSampleId) != nullptr, "it can be used as a built-in sample too (id \"intro\")");
 
-    // the browser
-    sls::LibraryPaths paths;
-    const auto tree = sls::buildBrowserTree (paths, {}, sls::PluginScanState::NotScanned);
-    const sls::BrowserNode* samples = nullptr;
-    const sls::BrowserNode* kits = nullptr;
-    for (const auto& c : tree.children)
-    {
-        if (c.name == "Samples") samples = &c;
-        if (c.name == "Drum Kits") kits = &c;
+    {   // the browser
+        sls::LibraryPaths paths;
+        const auto tree = sls::buildBrowserTree (paths, {}, sls::PluginScanState::NotScanned);
+        const auto* kits = childNamed (&tree, "Drum Kits");
+        bool everyKit = kits != nullptr, loads = kits != nullptr;
+        for (const auto& k : sls::builtinKits())
+        {
+            const auto* f = childNamed (kits, k.name);
+            everyKit = everyKit && f != nullptr;
+            if (f != nullptr)
+                for (const auto& leaf : f->children)
+                    if (leaf.kind == sls::NodeKind::BuiltinSample)
+                        loads = loads && leaf.isDraggable() && sls::makeBuiltinSample (leaf.payload) != nullptr;
+        }
+        check (everyKit && loads, "the browser has a folder for every built-in kit, and every pad in it can be dragged and loads");
+        const auto* factory = childNamed (childNamed (&tree, "Presets"), "Factory");
+        const auto* keys = childNamed (factory, "Keys");
+        check (keys != nullptr && childNamed (factory, "Bass") != nullptr && childNamed (factory, "Synth") != nullptr && childNamed (factory, "Drums") != nullptr
+                   && childNamed (keys, "Grand Piano") != nullptr && childNamed (keys, "Grand Piano")->payload == "builtin:program-grand-piano",
+               "factory presets are filed in Keys, Bass, Synth and Drums; the grand piano is in Keys");
+        check (sls::countLeaves (sls::filterTree (tree, "cyber")) == 0 && sls::countLeaves (sls::filterTree (tree, "Grand Piano")) == 1,
+               "nothing of Cyber-Hub is left in it; searching finds the piano");
     }
-    const sls::BrowserNode* cyber = nullptr;
-    if (samples != nullptr)
-        for (const auto& c : samples->children)
-            if (c.name == "Cyber-Hub")
-                cyber = &c;
-    check (cyber != nullptr && sls::countLeaves (*cyber) == 30 + 1 + 1, "the browser has a Cyber-Hub folder with the 30 sounds, the intro and the credit");
-    bool draggable = cyber != nullptr;
-    if (cyber != nullptr)
-        for (const auto& group : cyber->children)
-            for (const auto& leaf : group.children)
-                if (leaf.kind == sls::NodeKind::BuiltinSample)
-                    draggable = draggable && leaf.isDraggable() && sls::makeBuiltinSample (leaf.payload) != nullptr;
-    check (draggable, "every sound in it can be dragged and loads");
-    const sls::BrowserNode* kit = nullptr;
-    if (kits != nullptr)
-        for (const auto& c : kits->children)
-            if (c.name == "Cyber-Hub Kit")
-                kit = &c;
-    check (kit != nullptr && kit->children.size() == 5, "and a Cyber-Hub Kit among the drum kits");
-    const auto found = sls::filterTree (tree, "desktop");
-    check (sls::countLeaves (found) == 2, "searching for \"desktop\" finds desktop-login and desktop-logout");
 
     // time formats of the playlist ruler
     check (sls::formatBarsBeatsTicks (0) == "1.1.000" && sls::formatBarsBeatsTicks (480) == "1.2.000" && sls::formatBarsBeatsTicks (1920) == "2.1.000"
@@ -5714,8 +6041,6 @@ void testDrumKitFiles()
         const auto basic = sls::loadKit (sls::basicKitSpec(), problems);
         check (problems.isEmpty() && basic.pads[0].hasSample() && basic.pads[1].hasSample() && basic.pads[2].hasSample() && ! basic.pads[3].hasSample() && basic.pads[2].chokeGroup == 1,
                "the basic kit has kick, snare and hat");
-        const auto cyber = sls::loadKit (sls::cyberHubKitSpec(), problems);
-        check (problems.isEmpty() && cyber.pads[0].hasSample() && cyber.pads[4].hasSample() && ! cyber.pads[5].hasSample() && cyber.pads[2].chokeGroup == 1, "the Cyber-Hub kit loads");
     }
     {   // project file
         auto doc = sls::ProjectDocument::blank();
@@ -7419,7 +7744,7 @@ int main()
     testPlayerRewind();
     testClipEditing();
     testNoteRecording();
-    testCyberHub();
+    testSoundLibrary();
     testOneShot();
     testAutomation();
     testMidiImport();

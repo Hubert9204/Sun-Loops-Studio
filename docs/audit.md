@@ -27,6 +27,14 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.22.0
+New code: `SoundLibrary.cpp` (zip archive in memory, decoding on worker threads, `weak_ptr` caches guarded by mutexes; reading the
+archive is serialised by one mutex) and `DrumSynth.cpp` (generation on the message thread when a kit is loaded). Nothing of it runs in
+the audio callback: the player only sees finished `SampleData`. The test run also found that three tests left folders in `/tmp` on
+every run (`sls-export*`, `sls-import*`, `sls-record*`); they now delete them. clang-tidy (the audit's check set) on the new and
+changed files: one finding fixed (a vector without `reserve`); `Library.cpp:49` ("forming reference to null pointer") is reported
+before these changes too and is a false positive (the pointer is tested on the same line).
+
 ## After 0.21.0
 The eight new effects run inside `Player::render` through `EffectUnit::process`: nothing allocates (tested, 8 effects x 500 blocks), all
 lines and states are sized in `prepare`. The Overdrive is the heaviest (12 biquads at 4x the rate per channel plus a log-cosh per

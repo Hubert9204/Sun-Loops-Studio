@@ -2,6 +2,7 @@
 
 #include <array>
 #include <string>
+#include <vector>
 
 #include <juce_core/juce_core.h>
 
@@ -65,7 +66,18 @@ KitSpec readKitFolder (const juce::File& folder, juce::StringArray& problems);
 
 // The kits that are built into the program.
 KitSpec basicKitSpec();    // kick, snare, hat (the hat in choke group 1)
-KitSpec cyberHubKitSpec(); // the Cyber-Hub drum kit (the hat in choke group 1)
+
+// Every kit built into the program (0.22.0): the sampled kits of the sound library ("lib:<id>"), the kits made by code ("gen:<id>")
+// and the basic kit ("basic"). The id is what builtinKitSpec takes; the spec refers to the sounds as "builtin:..." sources.
+struct BuiltinKit
+{
+    std::string id, name, credit;
+};
+const std::vector<BuiltinKit>& builtinKits();
+KitSpec builtinKitSpec (const std::string& id); // an empty kit for an unknown id
+
+// The lowest velocity of each layer of a generated kit (soft, medium, hard, hardest).
+constexpr std::array<int, kPadLayers> kGeneratedMinVelocity { 1, 45, 80, 110 };
 
 // The spec as it should be shown for a loaded kit whose layers use `source` strings: used by the tests and by saveKitFolder.
 KitSpec resolvedForFolder (const KitSpec& spec, const juce::File& folder);

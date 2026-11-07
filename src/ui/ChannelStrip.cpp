@@ -38,7 +38,7 @@ void StepGrid::paint (juce::Graphics& g)
     const int steps = stepCount();
     const float w = bounds.getWidth() / static_cast<float> (steps);
 
-    if (channel.instrument == Instrument::Sampler)
+    if (showsSteps())
     {
         for (int s = 0; s < steps; ++s)
         {
@@ -89,9 +89,9 @@ void StepGrid::paint (juce::Graphics& g)
 
 void StepGrid::mouseDoubleClick (const juce::MouseEvent& e)
 {
-    // Synth channels show a read-only note preview: double-clicking it opens the piano roll.
-    // Sampler channels toggle steps on every click, so a double click must not be interpreted here.
-    if (channel.instrument != Instrument::Sampler && ! e.mods.isPopupMenu() && onDoubleClicked)
+    // Channels that show their notes have a read-only preview: double-clicking it opens the piano roll.
+    // Step channels toggle steps on every click, so a double click must not be interpreted here.
+    if (! showsSteps() && ! e.mods.isPopupMenu() && onDoubleClicked)
         onDoubleClicked();
 }
 
@@ -104,7 +104,7 @@ void StepGrid::mouseDown (const juce::MouseEvent& e)
         return;
     }
 
-    if (channel.instrument != Instrument::Sampler)
+    if (! showsSteps())
     {
         if (onClickedPreview)
             onClickedPreview();

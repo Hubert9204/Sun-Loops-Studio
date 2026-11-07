@@ -13,7 +13,6 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 
 #include "audio/BuiltinSamples.h"
-#include "audio/CyberHub.h"
 #include "audio/ClipEdit.h"
 #include "audio/MidiImport.h"
 #include "audio/OfflineRenderer.h"
@@ -125,7 +124,9 @@ void MainComponent::applyDocument (ProjectDocument doc, const juce::File& file, 
             doc.channels[i].sample = makeBuiltinSample (source.substr (8));
             if (doc.channels[i].sample == nullptr)
             {
-                problems.add ("Built-in sound \"" + juce::String (source.substr (8)) + "\" is not known to this version.");
+                const auto removed = removedBuiltinMessage (source.substr (8));
+                problems.add (removed.empty() ? "Built-in sound \"" + juce::String (source.substr (8)) + "\" is not known to this version."
+                                              : juce::String (removed));
                 doc.channels[i].sample = makeMissingSample (source); // silent, but saving keeps the reference
             }
         }

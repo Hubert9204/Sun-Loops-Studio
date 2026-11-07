@@ -14,7 +14,6 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 
 #include "audio/BuiltinSamples.h"
-#include "audio/CyberHub.h"
 #include "audio/ClipEdit.h"
 #include "audio/MidiImport.h"
 #include "audio/OfflineRenderer.h"

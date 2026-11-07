@@ -14,7 +14,7 @@ strumento sta in un pannello mobile che puoi spostare, ridimensionare, sovrappor
 Sun Loops Studio si ispira al modo di lavorare dei DAW a loop come FL Studio. È un progetto indipendente: non usa
 codice, nomi, grafica o risorse di altri prodotti e non è affiliato né approvato dai loro produttori.
 
-**Stato: alpha (0.21.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
+**Stato: alpha (0.22.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
 La riproduzione è stata confermata su un vero PC Nobara per la versione 0.3; tutto ciò che è stato aggiunto dopo
 (pannelli, pattern, playlist, browser, pitch/swing, mixer espanso ed effetti, salvataggio dei progetti, AppImage, clip audio, trascinamento
 dei file, registrazione, MIDI, metronomo e formati di esportazione) è stato provato con test automatici e in un display virtuale con un
@@ -31,8 +31,8 @@ plugin commerciali. Vedi [docs/roadmap.md](docs/roadmap.md) per sapere con preci
 - **Browser** (barra laterale a sinistra, `F8` la ripiega) - un albero con *Samples*, *Drum Kits*, *Instruments*,
   *Presets* e *Plugin*, una casella di ricerca rapida e il trascinamento (o il doppio clic) dei suoni su un canale
   del Channel Rack. I tuoi file stanno in `~/Music/Sun Loops Studio/`.
-- **Channel Rack** - fino a 32 canali, ognuno synth, sampler o drum machine. Sequencer a step da 16esimi sui canali sampler,
-  anteprima delle note sui canali synth. Per canale: volume, pan, manopola **Pitch** (semitoni), manopola **Swing** e
+- **Channel Rack** - fino a 32 canali, ognuno synth, sampler o drum machine. Sequencer a step da 16esimi sui canali sampler con un solo
+  campione, anteprima delle note sugli altri (synth, drum machine, strumenti multi-campione come il pianoforte). Per canale: volume, pan, manopola **Pitch** (semitoni), manopola **Swing** e
   un display **Track N** che manda il canale a una traccia del mixer. Tasto destro su un canale: *Piano roll*,
   *Instrument*, *Load sample...*, *Rename...*, *Clone*, *Move up / down*, *Delete*, *Assign free mixer track*, *Save as preset...*.
 - **Piano Roll** - per il canale selezionato: clic per aggiungere una nota, trascina per spostarla, trascina il bordo
@@ -48,9 +48,12 @@ plugin commerciali. Vedi [docs/roadmap.md](docs/roadmap.md) per sapere con preci
 - **Registrazione** - il pulsante **Record** registra un microfono o uno strumento nella traccia di playlist che scegli,
   a tempo con il brano. Le **tastiere MIDI** suonano il canale selezionato e **Rec notes** scrive nel piano roll (quantizzato) ciò che suonano, per
   fare pattern; una registrazione può anche diventare un nuovo canale sampler. Si imposta in **Audio...**.
-- **Suoni Cyber-Hub** - 30 suoni di sistema di Hubert sono incorporati (Browser > Samples > Cyber-Hub e un Cyber-Hub Kit); il progetto
-  dimostrativo è fatto con questi e all'apertura suona un suono di avvio (si disattiva nel menu File). Vedi
-  [docs/cyber-hub.md](docs/cyber-hub.md) (in inglese).
+- **Suoni incorporati** (0.22.0) - un **pianoforte a coda** campionato (Salamander, 4 livelli di velocity), un **basso elettrico**
+  campionato (Growlybass, 4 livelli di velocity, più una versione staccato), due **kit di batteria acustica** campionati (dalle
+  registrazioni DrumGizmo: Acoustic Studio e Acoustic Rock, 16 pezzi con fino a 4 livelli di velocity), tre **kit elettronici** e un
+  kit di **percussioni a mano** generati dal codice del programma, tutti con livelli di velocity e nell'ordine General MIDI. Presets >
+  Factory > Keys / Bass; i kit sono in Drum Kits nel browser e nel menu *Load kit...* della drum machine. Il progetto dimostrativo li
+  usa; all'apertura suona un suono di avvio (si disattiva nel menu File). Licenze: [resources/sounds/README.md](resources/sounds/README.md).
 - **Importazione MIDI, legato e slide, annulla per le note** - un file MIDI standard (menu File, o trascinato sulla Playlist) diventa
   nuovi canali e pattern; le note si possono unire con **legato** o con uno **slide** di altezza (Maiusc+clic nel Piano Roll); **Ctrl+Z / Ctrl+Y**
   annullano e ripristinano qualsiasi modifica (note, canali, kit, mixer, pattern; la Playlist ha anche il suo annulla per le clip).
@@ -116,7 +119,6 @@ applicazioni: `cmake --install build --prefix ~/.local`. Per creare un'unica **A
 | --- | --- |
 | [docs/user-guide.it.md](docs/user-guide.it.md) | Come usare ogni pannello, scorciatoie, limiti ([English](docs/user-guide.md)) |
 | [docs/building.md](docs/building.md) | Dipendenze, build, installazione, test, problemi comuni (inglese) |
-| [docs/cyber-hub.md](docs/cyber-hub.md) | I suoni Cyber-Hub, l'analisi d'ascolto, la demo, il suono di avvio e una nota sulla licenza (inglese) |
 | [docs/architecture.md](docs/architecture.md) | Thread, regole real-time, flusso dei dati, pattern e playlist, pannelli, test (inglese) |
 | [docs/roadmap.md](docs/roadmap.md) | Cosa è verificato, cosa no, cosa viene dopo (inglese) |
 | [CHANGELOG.md](CHANGELOG.md) | Modifiche per versione (inglese) |
@@ -143,3 +145,6 @@ sua AppImage si possono condividere purché siano accompagnati dal codice sorgen
 
 `third_party/signalsmith` contiene Signalsmith Stretch e Signalsmith Linear, entrambe con licenza MIT (le licenze e le revisioni esatte sono in quella cartella).
 `third_party/tinysoundfont` contiene `tsf.h` di TinySoundFont (MIT), usato solo per leggere i file SoundFont.
+Le registrazioni incorporate mantengono le loro licenze: Salamander Grand Piano di Alexander Holm (CC BY 3.0), Growlybass di Karoryfer
+Lecolds (CC0), DrumGizmo MuldjordKit di Lars Muldjord e DRSKit del team DrumGizmo (CC BY 4.0); vedi
+[resources/sounds/README.md](resources/sounds/README.md) e [tools/sounds](tools/sounds/README.md) per come sono state preparate.

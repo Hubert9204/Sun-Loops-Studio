@@ -13,7 +13,7 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 
 #include "audio/BuiltinSamples.h"
-#include "audio/CyberHub.h"
+#include "audio/SoundLibrary.h"
 #include "audio/ClipEdit.h"
 #include "audio/MidiImport.h"
 #include "audio/OfflineRenderer.h"
@@ -133,6 +133,18 @@ bool MainComponent::applyPreset (int channelIndex, const ChannelPreset& preset)
         }
         else
             sampleOk = false; // keep whatever sample the channel had
+    }
+    if (preset.instrument == Instrument::Sampler && ! preset.programSource.empty())
+    {
+        // A built-in instrument (grand piano, bass...): every zone is decoded now, which can take a moment the first time.
+        juce::MouseCursor::showWaitCursor();
+        std::string error;
+        auto program = makeLibraryProgram (preset.programSource.substr (std::string (kProgramSourcePrefix).size()), nullptr, error);
+        juce::MouseCursor::hideWaitCursor();
+        if (program != nullptr)
+            channel.program = std::move (program);
+        else
+            sampleOk = false;
     }
 
     strips[static_cast<size_t> (channelIndex)]->refreshFromChannel();

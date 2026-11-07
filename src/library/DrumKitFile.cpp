@@ -4,7 +4,8 @@
 
 #include "audio/AudioImport.h"
 #include "audio/BuiltinSamples.h"
-#include "audio/CyberHub.h"
+#include "audio/DrumSynth.h"
+#include "audio/SoundLibrary.h"
 #include "library/JsonRead.h"
 #include "library/ProjectFile.h"
 
@@ -120,7 +121,11 @@ std::shared_ptr<const SampleData> loadKitSample (const std::string& source, juce
     {
         auto s = makeBuiltinSample (source.substr (8));
         if (s == nullptr)
-            problem = "Built-in sound \"" + juce::String (source.substr (8)) + "\" is not known to this version.";
+        {
+            const auto removed = removedBuiltinMessage (source.substr (8));
+            problem = removed.empty() ? "Built-in sound \"" + juce::String (source.substr (8)) + "\" is not known to this version."
+                                      : juce::String (removed);
+        }
         return s;
     }
     const auto imported = importAudioFile (juce::File (juce::String (source)));
@@ -330,18 +335,66 @@ KitSpec basicKitSpec()
     return k;
 }
 
-KitSpec cyberHubKitSpec()
+const std::vector<BuiltinKit>& builtinKits()
 {
-    KitSpec k = KitSpec::empty();
-    k.name = "Cyber-Hub Kit";
-    const auto& kit = cyberHubKit();
-    for (size_t i = 0; i < kit.size() && i < k.pads.size(); ++i)
+    static const std::vector<BuiltinKit> kits = []
     {
-        k.pads[i].name = kit[i].label;
-        k.pads[i].sources[0] = std::string ("builtin:") + kit[i].id;
-        if (std::string (kit[i].label) == "Hat")
-            k.pads[i].chokeGroup = 1;
+        std::vector<BuiltinKit> list;
+        for (const auto& k : libraryKits())
+            list.push_back ({ "lib:" + k.id, k.name, k.credit });
+        for (const auto& k : generatedKits())
+            list.push_back ({ "gen:" + k.id, k.name, "Made by the program" });
+        list.push_back ({ "basic", "Sun Loops Basic Kit", "Made by the program" });
+        return list;
+    }();
+    return kits;
+}
+
+KitSpec builtinKitSpec (const std::string& id)
+{
+    if (id == "basic")
+        return basicKitSpec();
+    KitSpec k = KitSpec::empty();
+    if (id.rfind ("lib:", 0) == 0)
+    {
+        for (const auto& kit : libraryKits())
+            if ("lib:" + kit.id == id)
+            {
+                k.name = kit.name;
+                for (size_t p = 0; p < kit.pads.size() && p < k.pads.size(); ++p)
+                {
+                    auto& pad = k.pads[p];
+                    pad.name = kit.pads[p].name;
+                    pad.chokeGroup = kit.pads[p].chokeGroup;
+                    pad.pan = kit.pads[p].pan;
+                    pad.volume = kit.pads[p].volume;
+                    for (size_t l = 0; l < kit.pads[p].layers.size() && l < pad.sources.size(); ++l)
+                    {
+                        pad.sources[l] = "builtin:" + kit.pads[p].layers[l].first;
+                        pad.minVelocity[l] = kit.pads[p].layers[l].second;
+                    }
+                }
+            }
+        return k;
     }
+    if (id.rfind ("gen:", 0) == 0)
+        for (const auto& kit : generatedKits())
+            if ("gen:" + kit.id == id)
+            {
+                k.name = kit.name;
+                for (size_t p = 0; p < kit.pads.size() && p < k.pads.size(); ++p)
+                {
+                    auto& pad = k.pads[p];
+                    pad.name = kit.pads[p].name;
+                    pad.chokeGroup = kit.pads[p].chokeGroup;
+                    pad.pan = kit.pads[p].pan;
+                    for (size_t l = 0; l < pad.sources.size(); ++l)
+                    {
+                        pad.sources[l] = "builtin:gen:" + kit.id + "/" + kit.pads[p].piece + "/" + std::to_string (l + 1);
+                        pad.minVelocity[l] = kGeneratedMinVelocity[l];
+                    }
+                }
+            }
     return k;
 }
 } // namespace sls

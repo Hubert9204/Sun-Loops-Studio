@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(SunLoopsStudio VERSION 0.21.0 LANGUAGES C CXX)
+project(SunLoopsStudio VERSION 0.22.0 LANGUAGES C CXX ASM)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -22,22 +22,41 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(JUCE)
 
-# Sounds built into the program: the Cyber-Hub theme and the start-up sound (used unchanged, see resources/sounds/README.md).
-file(GLOB SLS_SOUND_FILES CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/resources/sounds/cyber-hub/*.oga"
-    "${CMAKE_CURRENT_SOURCE_DIR}/resources/sounds/intro.wav")
+# The start-up sound, built into the program (see resources/sounds/README.md).
 juce_add_binary_data(SunLoopsSounds
     NAMESPACE SunLoopsSoundData
     HEADER_NAME SunLoopsSoundData.h
-    SOURCES ${SLS_SOUND_FILES})
+    SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/resources/sounds/intro.wav")
 set_target_properties(SunLoopsSounds PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+# The sound library (0.22.0): resources/sounds/library (Ogg Vorbis sounds and JSON descriptions, made by tools/sounds) packed into
+# one zip archive and linked in with the assembler's .incbin (a C++ array of this size would be slow to compile).
+set(SLS_LIBRARY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/resources/sounds/library")
+file(GLOB_RECURSE SLS_LIBRARY_FILES CONFIGURE_DEPENDS RELATIVE "${SLS_LIBRARY_DIR}"
+    "${SLS_LIBRARY_DIR}/*.ogg" "${SLS_LIBRARY_DIR}/*.json")
+list(SORT SLS_LIBRARY_FILES)
+set(SLS_LIBRARY_DEPENDS ${SLS_LIBRARY_FILES})
+list(TRANSFORM SLS_LIBRARY_DEPENDS PREPEND "${SLS_LIBRARY_DIR}/")
+set(SLS_LIBRARY_ZIP "${CMAKE_CURRENT_BINARY_DIR}/sound-library.zip")
+add_custom_command(OUTPUT "${SLS_LIBRARY_ZIP}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f "${SLS_LIBRARY_ZIP}"
+    COMMAND "${CMAKE_COMMAND}" -E tar cf "${SLS_LIBRARY_ZIP}" --format=zip -- ${SLS_LIBRARY_FILES}
+    WORKING_DIRECTORY "${SLS_LIBRARY_DIR}"
+    DEPENDS ${SLS_LIBRARY_DEPENDS}
+    COMMENT "Packing the sound library"
+    VERBATIM)
+configure_file(src/audio/SoundLibraryData.S.in "${CMAKE_CURRENT_BINARY_DIR}/SoundLibraryData.S" @ONLY)
+set_source_files_properties("${CMAKE_CURRENT_BINARY_DIR}/SoundLibraryData.S" PROPERTIES OBJECT_DEPENDS "${SLS_LIBRARY_ZIP}")
+add_library(SunLoopsLibraryData STATIC "${CMAKE_CURRENT_BINARY_DIR}/SoundLibraryData.S" "${SLS_LIBRARY_ZIP}")
+set_target_properties(SunLoopsLibraryData PROPERTIES POSITION_INDEPENDENT_CODE ON LINKER_LANGUAGE C)
 
 # Code shared by the app and the tests (no GUI dependencies).
 set(SLS_CORE_SOURCES
     src/audio/Player.cpp
     src/audio/Effects.cpp
     src/audio/BuiltinSamples.cpp
-    src/audio/CyberHub.cpp
+    src/audio/SoundLibrary.cpp
+    src/audio/DrumSynth.cpp
     src/audio/OfflineRenderer.cpp
     src/audio/AudioExport.cpp
     src/audio/AudioImport.cpp
@@ -130,6 +149,7 @@ target_compile_definitions(SunLoopsStudio PRIVATE
 
 target_link_libraries(SunLoopsStudio PRIVATE
     SunLoopsSounds
+    SunLoopsLibraryData
     juce::juce_audio_utils
     juce::juce_audio_processors
     juce::juce_gui_extra
@@ -167,6 +187,7 @@ target_compile_definitions(SunLoopsStudioTests PRIVATE ${SLS_COMMON_DEFINITIONS}
 
 target_link_libraries(SunLoopsStudioTests PRIVATE
     SunLoopsSounds
+    SunLoopsLibraryData
     juce::juce_audio_formats
     juce::juce_audio_processors
     juce::juce_recommended_config_flags

@@ -1,0 +1,13 @@
+/* The built-in sound library (resources/sounds/library packed into one zip by the build), linked into the program as read-only data.
+   Generated from src/audio/SoundLibraryData.S.in by CMake. */
+    .section .rodata
+    .balign 16
+    .global sls_sound_library
+    .type sls_sound_library, @object
+sls_sound_library:
+    .incbin "@SLS_LIBRARY_ZIP@"
+    .global sls_sound_library_end
+    .type sls_sound_library_end, @object
+sls_sound_library_end:
+    .byte 0
+    .section .note.GNU-stack,"",@progbits

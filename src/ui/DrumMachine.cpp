@@ -3,7 +3,6 @@
 #include <algorithm>
 
 #include "audio/BuiltinSamples.h"
-#include "audio/CyberHub.h"
 #include "ui/TextPrompt.h"
 
 namespace sls
@@ -275,9 +274,12 @@ void DrumMachineView::loadKitFromSpec (const KitSpec& spec)
 void DrumMachineView::showKitMenu()
 {
     juce::PopupMenu menu;
-    menu.addItem (1, "Sun Loops Basic Kit");
-    if (! cyberHubSounds().empty())
-        menu.addItem (2, "Cyber-Hub Kit");
+    // The built-in kits (sampled kits first, then the kits made by code), items 1000 + their index.
+    const auto& builtin = builtinKits();
+    menu.addSectionHeader ("Built-in kits");
+    for (size_t i = 0; i < builtin.size(); ++i)
+        menu.addItem (1000 + static_cast<int> (i), builtin[i].name);
+    menu.addSeparator();
     menu.addItem (3, "From a folder...");
     juce::Array<juce::File> folders;
     if (kitsFolder != juce::File())
@@ -297,10 +299,8 @@ void DrumMachineView::showKitMenu()
                         {
                             if (safe == nullptr || result == 0)
                                 return;
-                            if (result == 1)
-                                safe->loadKitFromSpec (basicKitSpec());
-                            else if (result == 2)
-                                safe->loadKitFromSpec (cyberHubKitSpec());
+                            if (result >= 1000 && result < 1000 + static_cast<int> (builtinKits().size()))
+                                safe->loadKitFromSpec (builtinKitSpec (builtinKits()[static_cast<size_t> (result - 1000)].id));
                             else if (result == 3)
                             {
                                 safe->chooser = std::make_unique<juce::FileChooser> ("Choose a kit folder (with a kit.json, or a folder of sounds)",

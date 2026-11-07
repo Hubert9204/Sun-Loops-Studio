@@ -16,7 +16,7 @@ Sun Loops Studio is inspired by the workflow of loop-based DAWs such as FL Studi
 that uses no code, names, graphics or assets from other products, and it is not affiliated with or endorsed by
 their makers.
 
-**Status: alpha (0.21.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
+**Status: alpha (0.22.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
 display. Playback was confirmed on a real Nobara machine for version 0.3; everything added since (panels, patterns,
 playlist, browser, pitch/swing, the expanded mixer and its effects, saving projects, the AppImage, audio clips, drag and
 drop, recording, MIDI, the metronome and the export formats) was tested headless and in a virtual display with a silent
@@ -32,8 +32,8 @@ See [docs/roadmap.md](docs/roadmap.md) for exactly what is and is not verified a
 - **Browser** (left sidebar, `F8` folds it away) - a tree with *Samples*, *Drum Kits*, *Instruments*, *Presets* and
   *Plugin*, a quick-search box, and drag-and-drop (or double-click) of sounds onto a channel of the Channel Rack.
   Your own files live in `~/Music/Sun Loops Studio/`.
-- **Channel Rack** - up to 32 channels, each a synth, a sampler or a drum machine. 16th-note step sequencer on sampler channels,
-  note preview on synth channels. Per channel: volume, pan, a **Pitch** knob (semitones) and a **Swing** knob, and a
+- **Channel Rack** - up to 32 channels, each a synth, a sampler or a drum machine. 16th-note step sequencer on sampler channels with one sample,
+  note preview on the others (synths, drum machines, multi-sample instruments such as the piano). Per channel: volume, pan, a **Pitch** knob (semitones) and a **Swing** knob, and a
   **Track N** display that sends the channel to a mixer track. Right-click a channel for *Piano roll*, *Instrument*,
   *Load sample...*, *Rename...*, *Clone*, *Move up / down*, *Delete*, *Assign free mixer track*, *Save as preset...*.
 - **Piano Roll** - for the selected channel: click to add a note, drag to move, drag the right edge to resize,
@@ -48,9 +48,12 @@ See [docs/roadmap.md](docs/roadmap.md) for exactly what is and is not verified a
 - **Recording** - the **Record** button records a microphone or an instrument into the playlist track you choose, in
   time with the song. **MIDI keyboards** play the selected channel, and **Rec notes** writes what they play into the piano roll
   (quantized) so you can make patterns; a take can also become a new sampler channel. Set up in **Audio...**.
-- **Cyber-Hub sounds** - 30 system sounds by Hubert are built in (Browser > Samples > Cyber-Hub, and a Cyber-Hub Kit); the demo
-  project is made of them and a start-up sound plays when the program opens (switch it off in the File menu). See
-  [docs/cyber-hub.md](docs/cyber-hub.md).
+- **Built-in sounds** (0.22.0) - a sampled **Grand Piano** (Salamander, 4 velocity layers), a sampled **Electric Bass** (Growlybass,
+  4 velocity layers, plus a staccato version), two sampled **acoustic drum kits** (from the DrumGizmo recordings: Acoustic Studio and
+  Acoustic Rock, 16 pieces with up to 4 velocity layers), three **electronic kits** and a **hand percussion** kit made by the
+  program's code, all with velocity layers and in the General MIDI drum order. Presets > Factory > Keys / Bass; Drum Kits in the
+  browser and in the drum machine's *Load kit...* menu. The demo project plays them; a start-up sound plays when the program opens
+  (switch it off in the File menu). Licenses: [resources/sounds/README.md](resources/sounds/README.md).
 - **MIDI import, legato and slide, note undo** - a Standard MIDI File (File menu, or dropped on the Playlist) becomes new
   channels and patterns; notes can be joined with **legato** or a pitch **slide** (Shift+click in the Piano Roll); **Ctrl+Z / Ctrl+Y**
   undo and redo any edit (notes, channels, kits, mixer, patterns; the Playlist also has its own clip undo).
@@ -116,7 +119,6 @@ Press **Space** to play, **F5 / F6 / F7 / F9** to show panels and **F8** for the
 | --- | --- |
 | [docs/user-guide.md](docs/user-guide.md) | How to use every panel, shortcuts, limits ([Italiano](docs/user-guide.it.md)) |
 | [docs/building.md](docs/building.md) | Dependencies, build, install, tests, troubleshooting |
-| [docs/cyber-hub.md](docs/cyber-hub.md) | The Cyber-Hub sounds, the listening analysis, the demo, the start-up sound and a licence note |
 | [docs/architecture.md](docs/architecture.md) | Threads, real-time rules, data flow, patterns and playlist, panels, tests |
 | [docs/roadmap.md](docs/roadmap.md) | What is verified, what is not, what comes next |
 | [CHANGELOG.md](CHANGELOG.md) | Changes per version |
@@ -142,3 +144,6 @@ be shared as long as the source comes with them.
 
 `third_party/signalsmith` holds Signalsmith Stretch and Signalsmith Linear, both MIT-licensed (their licences and the exact revisions are in that folder).
 `third_party/tinysoundfont` holds TinySoundFont's `tsf.h` (MIT), used only to read SoundFont files.
+The built-in recordings keep their own licenses: Salamander Grand Piano by Alexander Holm (CC BY 3.0), Growlybass by Karoryfer Lecolds
+(CC0), DrumGizmo MuldjordKit by Lars Muldjord and DRSKit by the DrumGizmo team (CC BY 4.0); see
+[resources/sounds/README.md](resources/sounds/README.md) and [tools/sounds](tools/sounds/README.md) for how they were prepared.

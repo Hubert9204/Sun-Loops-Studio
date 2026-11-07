@@ -14,7 +14,8 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 
 #include "audio/BuiltinSamples.h"
-#include "audio/CyberHub.h"
+#include "audio/SoundLibrary.h"
+#include "library/DrumKitFile.h"
 #include "audio/ClipEdit.h"
 #include "audio/MidiImport.h"
 #include "audio/OfflineRenderer.h"
@@ -28,7 +29,7 @@ constexpr const char* kAudioStateKey = "audio.device"; // the audio device and b
 
 namespace
 {
-constexpr double kDemoBpm = 112.0;
+constexpr double kDemoBpm = 100.0;
 
 Channel makeSynth (const char* name, float volume)
 {
@@ -39,66 +40,119 @@ Channel makeSynth (const char* name, float volume)
     return c;
 }
 
-Channel makeDrum (const char* name, std::shared_ptr<const SampleData> sample, float volume)
+void addNote (Channel& c, int pitch, int start, int length, float velocity)
 {
-    Channel c;
-    c.name = name;
-    c.instrument = Instrument::Sampler;
-    c.sample = std::move (sample);
-    c.rootPitch = 60;
-    c.volume = volume;
-    return c;
+    c.notes.push_back ({ pitch, start, length, velocity });
 }
 
-void addStep (Channel& c, int step, float velocity = 0.9f)
+const SynthPatch* factoryPatch (const char* name)
 {
-    c.notes.push_back ({ c.rootPitch, step * kSixteenthTicks, kSixteenthTicks, velocity });
+    for (const auto& p : synthFactoryPatches())
+        if (p.name == name)
+            return &p.patch;
+    return nullptr;
 }
 
-// A small groove so there is something to hear and edit on first launch.
+// The demo song (0.22.0): a two-bar groove in A minor at 100 BPM with the built-in sounds: a drum machine with the "Electronic Punch"
+// kit, the grand piano, the electric bass and a plucked synth. If the sound library is not built in, synths stand in for the piano
+// and the bass.
 std::vector<Channel> demoChannels()
 {
-    auto lead = makeSynth ("Lead", 0.55f);
-    const int am[8] = { 57, 60, 64, 69, 64, 60, 64, 60 };
-    const int f[8]  = { 53, 57, 60, 65, 60, 57, 60, 57 };
-    for (int bar = 0; bar < kLoopBars; ++bar)
-        for (int i = 0; i < 8; ++i)
-            lead.notes.push_back ({ (bar == 0 ? am : f)[i], bar * 4 * kTicksPerBeat + i * (kTicksPerBeat / 2),
-                                    kTicksPerBeat / 2 - 20, 0.8f });
+    constexpr int bar = 4 * kTicksPerBeat;
+    constexpr int eighth = kTicksPerBeat / 2;
+    constexpr int sixteenth = kTicksPerBeat / 4;
 
-    auto bass = makeSynth ("Bass", 0.9f);
-    const int bar1[3][3] = { { 45, 0, 900 }, { 45, 960, 420 }, { 48, 1440, 420 } };
-    const int bar2[3][3] = { { 41, 1920, 900 }, { 41, 2880, 420 }, { 43, 3360, 420 } };
-    for (const auto& n : bar1) bass.notes.push_back ({ n[0], n[1], n[2], 0.9f });
-    for (const auto& n : bar2) bass.notes.push_back ({ n[0], n[1], n[2], 0.9f });
-
-    // The drums are Cyber-Hub system sounds (see docs/cyber-hub.md), played at their own pitch. If the sounds were not
-    // built in, the program's own synthesised drums stand in.
-    const auto cyber = [] (const char* id, std::shared_ptr<const SampleData> fallback)
+    // Drums, in the General MIDI order of the kit (key 36 = pad 1).
+    Channel drums;
+    drums.name = "Drums";
+    drums.instrument = Instrument::Drums;
+    drums.volume = 0.85f;
     {
-        auto sample = makeCyberHubSample (id);
-        return sample != nullptr ? sample : fallback;
-    };
-    auto kick = makeDrum ("Kick", cyber ("cyber:button-pressed", makeKickSample()), 0.95f);
-    auto clap = makeDrum ("Clap", cyber ("cyber:trash-empty", makeSnareSample()), 0.5f);
-    auto hat = makeDrum ("Hat", cyber ("cyber:audio-volume-change", makeHatSample()), 0.55f);
-    auto tom = makeDrum ("Tom", cyber ("cyber:button-pressed-modifier", makeSnareSample()), 0.6f);
-    for (int bar = 0; bar < kLoopBars; ++bar)
+        juce::StringArray problems;
+        drums.kit = std::make_shared<const DrumKit> (loadKit (builtinKitSpec ("gen:punch"), problems));
+    }
+    constexpr int kick = 36, rim = 37, snare = 38, clap = 39, closedHat = 42, openHat = 46;
+    for (int b = 0; b < kLoopBars; ++b)
+    {
+        const int at = b * bar;
         for (int beat = 0; beat < 4; ++beat)
+            addNote (drums, kick, at + beat * kTicksPerBeat, sixteenth, beat == 0 ? 1.0f : 0.9f);
+        addNote (drums, clap, at + kTicksPerBeat, sixteenth, 0.9f);
+        addNote (drums, clap, at + 3 * kTicksPerBeat, sixteenth, 0.95f);
+        for (int e = 0; e < 8; ++e)
         {
-            const int base = bar * 16 + beat * 4;
-            addStep (kick, base);
-            addStep (hat, base + 2, 0.7f);
-            if (beat == 1 || beat == 3)
-                addStep (clap, base);
+            if (b == kLoopBars - 1 && e == 7)
+                addNote (drums, openHat, at + e * eighth, eighth, 0.8f);
+            else
+                addNote (drums, closedHat, at + e * eighth, sixteenth, e % 2 == 1 ? 0.85f : 0.45f);
         }
-    for (int bar = 0; bar < kLoopBars; ++bar)
-    {
-        addStep (tom, bar * 16 + 7, 0.8f);
-        addStep (tom, bar * 16 + 14, 0.7f);
+        addNote (drums, rim, at + 3 * kTicksPerBeat + 3 * sixteenth, sixteenth, 0.5f);
+        addNote (drums, snare, at + 2 * kTicksPerBeat + 3 * sixteenth, sixteenth, 0.3f); // a ghost note
     }
 
-    return { lead, bass, kick, clap, hat, tom };
+    // Piano chords: Am9 (bar 1) and Fmaj7 (bar 2) with a G6 pick-up, a short-long syncopated rhythm.
+    Channel piano;
+    piano.name = "Piano";
+    piano.volume = 0.75f;
+    std::string error;
+    if (auto program = makeLibraryProgram ("grand-piano", &piano.sampler, error))
+    {
+        piano.instrument = Instrument::Sampler;
+        piano.program = std::move (program);
+    }
+    else
+    {
+        piano.instrument = Instrument::Synth;
+        if (const auto* patch = factoryPatch ("Soft Pad"))
+            piano.synth = *patch;
+    }
+    const std::vector<std::vector<int>> chords { { 57, 60, 64, 67, 71 }, { 53, 57, 60, 64, 69 } };
+    for (int b = 0; b < kLoopBars; ++b)
+    {
+        const auto& chord = chords[static_cast<size_t> (b % 2)];
+        const int at = b * bar;
+        for (const int pitch : chord)
+        {
+            addNote (piano, pitch, at, 3 * eighth - 20, 0.72f);
+            addNote (piano, pitch, at + 3 * eighth, eighth - 20, 0.55f);
+            if (b < kLoopBars - 1)
+                addNote (piano, pitch, at + 5 * eighth, 3 * eighth - 20, 0.62f);
+        }
+    }
+    for (const int pitch : { 55, 59, 62, 64 })
+        addNote (piano, pitch, (kLoopBars - 1) * bar + 5 * eighth, 3 * eighth - 20, 0.6f);
+
+    // Bass (written at its real pitch: A1 = 33).
+    Channel bass;
+    bass.name = "Bass";
+    bass.volume = 0.85f;
+    if (auto program = makeLibraryProgram ("electric-bass", &bass.sampler, error))
+    {
+        bass.instrument = Instrument::Sampler;
+        bass.program = std::move (program);
+    }
+    else
+    {
+        bass.instrument = Instrument::Synth;
+        if (const auto* patch = factoryPatch ("Square Bass"))
+            bass.synth = *patch;
+    }
+    const int bassLine[][4] = { { 33, 0, 420, 100 },        { 33, 720, 200, 75 },           { 40, 960, 200, 85 },  { 33, 1200, 420, 90 },
+                                { 31, 1680, 200, 80 },      { 29, 1920, 420, 100 },         { 29, 2640, 200, 75 }, { 36, 2880, 200, 85 },
+                                { 29, 3120, 420, 90 },      { 31, 3600, 260, 85 } };
+    for (const auto& n : bassLine)
+        addNote (bass, n[0], n[1], n[2], static_cast<float> (n[3]) / 100.0f);
+
+    // A plucked synth answering the piano.
+    auto pluck = makeSynth ("Pluck", 0.45f);
+    if (const auto* patch = factoryPatch ("Pluck"))
+        pluck.synth = *patch;
+    const int line[][2] = { { 76, 3 }, { 74, 4 }, { 72, 5 }, { 71, 6 }, { 72, 7 }, { 69, 11 }, { 72, 13 }, { 76, 14 },
+                            { 77, 19 }, { 76, 20 }, { 72, 21 }, { 69, 22 }, { 72, 23 }, { 74, 27 }, { 71, 29 }, { 67, 30 } };
+    for (const auto& n : line)
+        addNote (pluck, n[0], n[1] * eighth, eighth - 30, 0.75f);
+
+    return { drums, piano, bass, pluck };
 }
 
 } // namespace
@@ -149,8 +203,8 @@ MainComponent::MainComponent()
 
     library.ensureExists(); // ~/Music/Sun Loops Studio/{Samples,Drum Kits,Presets}: where the browser looks
 
-    // Demo song (Cyber-Hub): "Pattern 1" is the full groove, "Drums" is the same beat without the melodic channels.
-    // The playlist is Drums, two times Pattern 1, Drums, with two Cyber-Hub sounds as audio clips on track 8.
+    // Demo song: "Pattern 1" is the full groove, "Drums" is the drums and the bass alone. The playlist is Drums, three times
+    // Pattern 1, Drums.
     arrangement.patternTicks = kLoopTicks;
     arrangement.patterns.resize (2);
     arrangement.patterns[0].name = "Pattern 1";
@@ -158,22 +212,9 @@ MainComponent::MainComponent()
     arrangement.ensureChannelCount (channels.size());
     commitCurrentPattern();
     for (size_t c = 0; c < channels.size(); ++c)
-        if (channels[c].instrument == Instrument::Sampler)
+        if (channels[c].instrument == Instrument::Drums || channels[c].name == "Bass")
             arrangement.patterns[1].notes[c] = channels[c].notes;
-    arrangement.clips = { { 1, 0, 0, 1 }, { 0, 0, 1, 2 }, { 1, 0, 3, 1 } };
-    for (const auto& piece : { std::pair<const char*, int> { "cyber:desktop-login", 0 },
-                               std::pair<const char*, int> { "cyber:desktop-logout", 3 * kLoopTicks } })
-        if (auto data = makeCyberHubSample (piece.first))
-        {
-            AudioClip clip;
-            clip.data = data;
-            clip.name = data->name;
-            clip.track = 7;
-            clip.startTick = piece.second;
-            clip.gain = 0.6f;
-            clip.lengthTicks = clip.naturalLengthTicks (kDemoBpm);
-            arrangement.audioClips.push_back (clip);
-        }
+    arrangement.clips = { { 1, 0, 0, 1 }, { 0, 0, 1, 3 }, { 1, 0, 4, 1 } };
 
     for (size_t i = 0; i < channels.size(); ++i)
         createStrip (i);

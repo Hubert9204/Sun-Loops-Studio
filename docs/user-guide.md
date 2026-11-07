@@ -113,7 +113,10 @@ keyboard for that field.
 
 ## Browser
 
-*(New in 0.9.0: **Samples > Cyber-Hub** and **Drum Kits > Cyber-Hub Kit** hold the built-in system sounds by Hubert, and the program plays a start-up sound when it opens: switch it off in **File > Play the start-up sound**. See [cyber-hub.md](cyber-hub.md).)*
+*(New in 0.22.0: **Drum Kits** lists every built-in kit (each pad can be dragged), and **Presets > Factory** is filed in **Keys**
+(the Grand Piano), **Bass** (the Electric Bass and its staccato version), **Synth** and **Drums**: drag a preset onto a channel or onto
+the empty part of the rack. The Cyber-Hub sounds of earlier versions were removed: a project that used them opens with those sounds
+silent and a message. The program still plays its start-up sound when it opens: switch it off in **File > Play the start-up sound**.)*
 
 The sidebar on the left lists your sounds as a tree. Click the arrow of a folder to open it.
 
@@ -260,7 +263,24 @@ so you can hear the velocity layers). Right-click a pad for *Load a sound*, *Cle
 Shift+click puts a soft step (velocity 0.45), Ctrl+click an accented one (1.0), a plain click 0.8; the brightness of a step shows its velocity. A click on a row label selects (and plays) that pad.
 The grid edits the channel's notes of the **current pattern** (undo and redo of notes work), shows notes made elsewhere (a note belongs to the step it starts in), and a line follows the playhead in Pattern mode.
 
-**Kits.** *Load kit...* replaces all 16 pads (the steps stay): the *Sun Loops Basic Kit*, the *Cyber-Hub Kit*, *From a folder...* (a folder with a `kit.json`, or simply a folder of audio
+**Built-in kits** (0.22.0). Every kit has its pads in the General MIDI drum order (pad 1 = key 36 = kick, 3 = snare, 7 / 9 / 11 = closed, pedal and open
+hi-hat in choke group 1, 14 = crash), so a General MIDI drum part plays the right sounds, and up to four velocity layers per pad
+(the layer limits are shown next to each layer: a harder note plays a louder and brighter recording):
+
+| Kit | What it is |
+|---|---|
+| Acoustic Studio | Recorded kit (DrumGizmo MuldjordKit, CC BY 4.0): two kicks, snare and snare rest, four toms, hi-hats, two crashes, china, two rides and a ride bell |
+| Acoustic Rock | Recorded kit (DrumGizmo DRSKit, CC BY 4.0): kick and kick with beater click, snare, rest and rimshot, three toms, closed / half-open / pedal / open hi-hat, two crashes, ride and ride bell |
+| Electronic Boom | Made by the program in the manner of the classic analog drum machines: long round kick, snappy snare, hand clap, metallic hats, conga, cowbell, clave, shaker |
+| Electronic Punch | Short clicky kick, noisy snare, six toms, crash and ride: the house and techno kind |
+| Electronic Modern | Long distorted kick, layered snare and clap, crisp hats, a tuned "808" sub on pad 8 |
+| Hand Percussion | Made by the program with modal synthesis: congas (open, muted, low), bongos, timbales, cowbell, agogo, wood blocks, claves, shaker, tambourine, triangle |
+| Sun Loops Basic Kit | The three small synthesised sounds of the first versions |
+
+New drum channels start with *Electronic Punch*. The recorded kits are mixed from all their microphones to stereo (close microphones
+panned, overheads and room wide), so they sound like a whole kit in a room; how they were prepared is in `tools/sounds`.
+
+**Kits.** *Load kit...* replaces all 16 pads (the steps stay): the built-in kits above, *From a folder...* (a folder with a `kit.json`, or simply a folder of audio
 files: its first 16 files in name order fill the pads and name them), and every sub-folder of `~/Music/Sun Loops Studio/Drum Kits` under *My kits*. *Save kit...* asks for a name and writes a
 folder of that name in *Drum Kits* with `kit.json` and copies of the sounds in `samples/` (sounds that are built into the program stay references); it asks before replacing a kit of the same
 name. *Empty kit* clears all pads after asking.
@@ -348,8 +368,8 @@ Channel Rack and the Piano Roll show and edit that pattern. The **+** button nex
 sequencer, the piano roll and the drum machine follow. Pattern clips keep their place in pattern units, so with longer patterns the song
 gets longer. Notes past the end of a shorter pattern are kept but not played, and come back if you make the patterns longer again. The change
 is refused if the playlist would no longer fit in the timeline. New patterns get the next name automatically (Pattern 3, Pattern 4, ...). The demo project starts
-with "Pattern 1" (the full groove) and "Drums" (the drums only), played with the Cyber-Hub sounds (see
-[cyber-hub.md](cyber-hub.md)).
+with "Pattern 1" (the full groove: drums, grand piano, electric bass and a plucked synth, 100 BPM) and "Drums" (the drums and the
+bass), played with the built-in sounds.
 
 The **pattern box** at the top of the Playlist has three buttons: **New** (empty or cloned, like the **+**), **Rename**
 (a name of up to 40 characters) and **Delete**. Delete removes the selected pattern, its notes and **every playlist clip

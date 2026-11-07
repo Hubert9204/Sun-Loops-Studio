@@ -277,12 +277,16 @@ void loadAudioForClips (Arrangement& arrangement, juce::StringArray& problems)
         if (found == loaded.end())
         {
             std::shared_ptr<const SampleData> data;
-            if (source.rfind ("builtin:", 0) == 0) // a sound built into the program (Cyber-Hub, the intro)
+            const bool builtin = source.rfind ("builtin:", 0) == 0; // a sound built into the program (the library, the intro)
+            if (builtin)
                 data = makeBuiltinSample (source.substr (8));
             else
                 data = importAudioFile (juce::File (juce::String (source))).data;
             if (data == nullptr)
-                problems.add ("Audio file not found or unreadable: " + juce::String (source));
+            {
+                const auto removed = builtin ? removedBuiltinMessage (source.substr (8)) : std::string();
+                problems.add (! removed.empty() ? juce::String (removed) : "Audio file not found or unreadable: " + juce::String (source));
+            }
             found = loaded.emplace (source, data != nullptr ? data : clip.data).first;
         }
         const auto base = found->second;

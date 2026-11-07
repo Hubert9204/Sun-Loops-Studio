@@ -1,9 +1,14 @@
 #include "audio/BuiltinSamples.h"
 
-#include "audio/CyberHub.h"
+#include "audio/DrumSynth.h"
+#include "audio/SoundLibrary.h"
 
 #include <algorithm>
 #include <cmath>
+
+#include <juce_audio_formats/juce_audio_formats.h>
+
+#include "SunLoopsSoundData.h"
 
 namespace sls
 {
@@ -102,8 +107,42 @@ std::shared_ptr<const SampleData> makeBuiltinSample (const std::string& id)
     if (id == "kick")  return makeKickSample();
     if (id == "snare") return makeSnareSample();
     if (id == "hat")   return makeHatSample();
-    if (isCyberHubId (id)) return makeCyberHubSample (id);
+    if (isLibraryId (id)) return makeLibrarySample (id);
+    if (isGeneratedId (id)) return makeGeneratedSample (id);
     if (id == kStartupSampleId) return makeStartupSample();
     return nullptr;
+}
+
+std::string removedBuiltinMessage (const std::string& id)
+{
+    if (id.rfind ("cyber:", 0) == 0)
+        return "The Cyber-Hub sounds were removed in version 0.22.0: \"" + id.substr (6) + "\" is silent (load another sound).";
+    return {};
+}
+
+std::shared_ptr<const SampleData> makeStartupSample()
+{
+    int size = 0;
+    const char* data = SunLoopsSoundData::getNamedResource ("intro_wav", size);
+    if (data == nullptr || size <= 0)
+        return nullptr;
+    std::unique_ptr<juce::AudioFormatReader> reader (
+        juce::WavAudioFormat().createReaderFor (new juce::MemoryInputStream (data, static_cast<size_t> (size), false), true));
+    if (reader == nullptr || reader->numChannels < 1 || reader->lengthInSamples < 2)
+        return nullptr;
+    const int frames = static_cast<int> (reader->lengthInSamples);
+    juce::AudioBuffer<float> buffer (2, frames);
+    buffer.clear();
+    if (! reader->read (&buffer, 0, frames, 0, true, true))
+        return nullptr;
+    if (reader->numChannels == 1)
+        buffer.copyFrom (1, 0, buffer, 0, 0, frames);
+    auto sample = std::make_shared<SampleData>();
+    sample->left.assign (buffer.getReadPointer (0), buffer.getReadPointer (0) + frames);
+    sample->right.assign (buffer.getReadPointer (1), buffer.getReadPointer (1) + frames);
+    sample->sampleRate = reader->sampleRate;
+    sample->name = "Sun Loops intro";
+    sample->source = std::string ("builtin:") + kStartupSampleId;
+    return sample;
 }
 } // namespace sls

@@ -117,7 +117,10 @@ rinominare un canale) la tastiera è del campo.
 
 ## Browser
 
-*(Novità della 0.9.0: **Samples > Cyber-Hub** e **Drum Kits > Cyber-Hub Kit** contengono i suoni di sistema incorporati di Hubert, e all'apertura il programma suona un suono di avvio: si disattiva in **File > Play the start-up sound**. Vedi [cyber-hub.md](cyber-hub.md), in inglese.)*
+*(Novità della 0.22.0: **Drum Kits** elenca tutti i kit incorporati (ogni pad si può trascinare) e **Presets > Factory** è diviso in **Keys**
+(il Grand Piano), **Bass** (l'Electric Bass e la sua versione staccato), **Synth** e **Drums**: trascina un preset su un canale o sulla
+parte vuota del rack. I suoni Cyber-Hub delle versioni precedenti sono stati tolti: un progetto che li usava si apre con quei suoni
+muti e un messaggio. All'apertura il programma suona ancora il suono di avvio: si disattiva in **File > Play the start-up sound**.)*
 
 La barra laterale a sinistra elenca i tuoi suoni come un albero. Clic sulla freccia di una cartella per aprirla.
 
@@ -268,7 +271,26 @@ per cancellare. Maiusc+clic mette uno step piano (velocità 0,45), Ctrl+clic uno
 seleziona (e suona) quel pad. La griglia modifica le note del canale nel **pattern corrente** (annulla e ripristina delle note funzionano), mostra le note fatte altrove (una nota appartiene allo step in cui
 inizia) e in modalità Pattern una linea segue il playhead.
 
-**Kit.** *Load kit...* sostituisce tutti i 16 pad (gli step restano): il *Sun Loops Basic Kit*, il *Cyber-Hub Kit*, *From a folder...* (una cartella con un `kit.json`, o semplicemente una cartella di file audio:
+**Kit incorporati** (0.22.0). Ogni kit ha i pad nell'ordine General MIDI della batteria (pad 1 = tasto 36 = cassa, 3 = rullante, 7 / 9 / 11 =
+charleston chiuso, a pedale e aperto nel choke group 1, 14 = crash), così una parte di batteria General MIDI suona i suoni giusti, e fino
+a quattro livelli di velocity per pad (i limiti sono accanto a ogni livello: una nota più forte suona una registrazione più forte e più
+brillante):
+
+| Kit | Cos'è |
+|---|---|
+| Acoustic Studio | Kit registrato (DrumGizmo MuldjordKit, CC BY 4.0): due casse, rullante e rullante con la mano appoggiata, quattro tom, charleston, due crash, china, due ride e campana del ride |
+| Acoustic Rock | Kit registrato (DrumGizmo DRSKit, CC BY 4.0): cassa e cassa col clic del battente, rullante, rest e rimshot, tre tom, charleston chiuso / semiaperto / a pedale / aperto, due crash, ride e campana |
+| Electronic Boom | Fatto dal programma alla maniera delle classiche drum machine analogiche: cassa lunga e rotonda, rullante secco, battimani, charleston metallici, conga, campanaccio, clave, shaker |
+| Electronic Punch | Cassa corta con clic, rullante rumoroso, sei tom, crash e ride: il genere house e techno |
+| Electronic Modern | Cassa lunga distorta, rullante e battimani sovrapposti, charleston nitidi, un sub "808" intonato sul pad 8 |
+| Hand Percussion | Fatto dal programma con la sintesi modale: conga (aperta, smorzata, bassa), bongo, timbales, campanaccio, agogo, wood block, claves, shaker, tamburello, triangolo |
+| Sun Loops Basic Kit | I tre piccoli suoni sintetizzati delle prime versioni |
+
+I nuovi canali di batteria partono con *Electronic Punch*. I kit registrati sono mixati in stereo da tutti i loro microfoni (microfoni
+ravvicinati panoramicati, overhead e ambiente larghi), quindi suonano come un kit intero in una stanza; come sono stati preparati è in
+`tools/sounds`.
+
+**Kit.** *Load kit...* sostituisce tutti i 16 pad (gli step restano): i kit incorporati qui sopra, *From a folder...* (una cartella con un `kit.json`, o semplicemente una cartella di file audio:
 i primi 16 file in ordine di nome riempiono i pad e li battezzano) e ogni sottocartella di `~/Music/Sun Loops Studio/Drum Kits` sotto *My kits*. *Save kit...* chiede un nome e scrive in *Drum Kits* una cartella con quel
 nome, con `kit.json` e copie dei suoni in `samples/` (i suoni inclusi nel programma restano riferimenti); chiede conferma prima di sostituire un kit con lo stesso nome. *Empty kit* svuota tutti i pad dopo conferma.
 
@@ -354,8 +376,8 @@ Channel Rack e il Piano Roll mostrano e modificano quello. Il pulsante **+** acc
 **Clone current pattern** e **Pattern length (all patterns)**: 1, 2 (predefinito), 4 o 8 battute. La lunghezza vale per tutti i pattern; step
 sequencer, piano roll e drum machine si adeguano. Le clip dei pattern mantengono la loro posizione in unità di pattern, quindi con pattern più lunghi
 il brano si allunga. Le note oltre la fine di un pattern più corto restano conservate ma non suonano, e tornano se allunghi di nuovo i pattern. Il
-cambio viene rifiutato se la playlist non entrerebbe più nella linea del tempo. I nuovi pattern prendono da soli il nome successivo (Pattern 3, Pattern 4, ...). Il progetto dimostrativo parte con "Pattern 1" (il groove completo) e "Drums" (solo la
-batteria), suonati con i suoni Cyber-Hub (vedi [cyber-hub.md](cyber-hub.md), in inglese).
+cambio viene rifiutato se la playlist non entrerebbe più nella linea del tempo. I nuovi pattern prendono da soli il nome successivo (Pattern 3, Pattern 4, ...). Il progetto dimostrativo parte con "Pattern 1" (il groove completo: batteria,
+pianoforte a coda, basso elettrico e un synth pizzicato, 100 BPM) e "Drums" (batteria e basso), suonati con i suoni incorporati.
 
 Il **menu dei pattern** in cima alla Playlist ha tre pulsanti: **New** (vuoto o copia, come il **+**), **Rename** (un nome di
 al massimo 40 caratteri) e **Delete**. Delete elimina il pattern selezionato, le sue note e **tutte le clip della playlist che lo

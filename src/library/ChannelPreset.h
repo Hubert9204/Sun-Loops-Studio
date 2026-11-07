@@ -14,7 +14,8 @@ namespace sls
 // Stored as a small JSON file (.slspreset); dropping one on a channel applies it.
 struct ChannelPreset
 {
-    std::string id;   // factory presets only
+    std::string id;       // factory presets only
+    std::string category; // factory presets only: the browser folder ("Keys", "Bass", "Synth", "Drums")
     std::string name = "Preset";
     Instrument instrument = Instrument::Synth;
     float volume = 0.8f;
@@ -24,11 +25,13 @@ struct ChannelPreset
     int rootPitch = 60;
     std::string sampleSource; // "builtin:<id>", an absolute path, or empty
     SynthPatch synth;         // synth presets (0.18.0): the engine and its settings; older preset files give the Classic engine
+    std::string programSource; // sampler (0.22.0): a built-in multi-sample instrument ("builtin:program:<id>"), used instead of the sample
+    std::optional<SamplerSettings> sampler; // sampler (0.22.0): envelope, loop, filter; older preset files leave the channel's own
 
     static ChannelPreset fromChannel (const Channel& channel, const std::string& presetName);
 
-    // Applies everything except the sample, which the caller resolves from sampleSource. Notes, routing and
-    // mute/solo are left alone.
+    // Applies everything except the sample and the program, which the caller resolves from sampleSource and programSource.
+    // Notes, routing and mute/solo are left alone.
     void applyTo (Channel& channel) const;
 
     juce::String toJson() const;

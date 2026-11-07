@@ -1,0 +1,518 @@
+{
+ "name": "Electric Bass",
+ "category": "Bass",
+ "credit": "Growlybass by Karoryfer Lecolds, CC0 1.0 (trimmed, levelled, Ogg Vorbis)",
+ "settings": {
+  "envelope": true,
+  "attack": 0.0,
+  "decay": 1.0,
+  "sustain": 1.0,
+  "release": 0.12
+ },
+ "zones": [
+  {
+   "sample": "bass/db2-1",
+   "root": 25,
+   "loKey": 0,
+   "hiKey": 26,
+   "loVel": 1,
+   "hiVel": 60,
+   "tune": 0.0
+  },
+  {
+   "sample": "bass/db2-2",
+   "root": 25,
+   "loKey": 0,
+   "hiKey": 26,
+   "loVel": 61,
+   "hiVel": 95,
+   "tune": 0.0
+  },
+  {
+   "sample": "bass/db2-3",
+   "root": 25,
+   "loKey": 0,
+   "hiKey": 26,
+   "loVel": 96,
+   "hiVel": 120,
+   "tune": 0.0
+  },
+  {
+   "sample": "bass/db2-4",
+   "root": 25,
+   "loKey": 0,
+   "hiKey": 26,
+   "loVel": 121,
+   "hiVel": 127,
+   "tune": 0.0
+  },
+  {
+   "sample": "bass/e2-1",
+   "root": 28,
+   "loKey": 27,
+   "hiKey": 28,
+   "loVel": 1,
+   "hiVel": 60,
+   "tune": -0.163
+  },
+  {
+   "sample": "bass/e2-2",
+   "root": 28,
+   "loKey": 27,
+   "hiKey": 28,
+   "loVel": 61,
+   "hiVel": 95,
+   "tune": -0.163
+  },
+  {
+   "sample": "bass/e2-3",
+   "root": 28,
+   "loKey": 27,
+   "hiKey": 28,
+   "loVel": 96,
+   "hiVel": 120,
+   "tune": -0.163
+  },
+  {
+   "sample": "bass/e2-4",
+   "root": 28,
+   "loKey": 27,
+   "hiKey": 28,
+   "loVel": 121,
+   "hiVel": 127,
+   "tune": -0.163
+  },
+  {
+   "sample": "bass/gb2-1",
+   "root": 30,
+   "loKey": 29,
+   "hiKey": 31,
+   "loVel": 1,
+   "hiVel": 60,
+   "tune": 0.0
+  },
+  {
+   "sample": "bass/gb2-2",
+   "root": 30,
+   "loKey": 29,
+   "hiKey": 31,
+   "loVel": 61,
+   "hiVel": 95,
+   "tune": 0.0
+  },
+  {
+   "sample": "bass/gb2-3",
+   "root": 30,
+   "loKey": 29,
+   "hiKey": 31,
+   "loVel": 96,
+   "hiVel": 120,
+   "tune": 0.0
+  },
+  {
+   "sample": "bass/gb2-4",
+   "root": 30,
+   "loKey": 29,
+   "hiKey": 31,
+   "loVel": 121,
+   "hiVel": 127,
+   "tune": 0.0
+  },
+  {
+   "sample": "bass/a2-1",
+   "root": 33,
+   "loKey": 32,
+   "hiKey": 34,
+   "loVel": 1,
+   "hiVel": 60,
+   "tune": 0.0
+  },
+  {
+   "sample": "bass/a2-2",
+   "root": 33,
+   "loKey": 32,
+   "hiKey": 34,
+   "loVel": 61,
+   "hiVel": 95,
+   "tune": 0.0
+  },
+  {
+   "sample": "bass/a2-3",
+   "root": 33,
+   "loKey": 32,
+   "hiKey": 34,
+   "loVel": 96,
+   "hiVel": 120,
+   "tune": 0.0
+  },
+  {
+   "sample": "bass/a2-4",
+   "root": 33,
+   "loKey": 32,
+   "hiKey": 34,
+   "loVel": 121,
+   "hiVel": 127,
+   "tune": 0.0
+  },
+  {
+   "sample": "bass/c3-1",
+   "root": 36,
+   "loKey": 35,
+   "hiKey": 37,
+   "loVel": 1,
+   "hiVel": 60,
+   "tune": 0.0
+  },
+  {
+   "sample": "bass/c3-2",
+   "root": 36,
+   "loKey": 35,
+   "hiKey": 37,
+   "loVel": 61,
+   "hiVel": 95,
+   "tune": 0.0
+  },
+  {
+   "sample": "bass/c3-3",
+   "root": 36,
+   "loKey": 35,
+   "hiKey": 37,
+   "loVel": 96,
+   "hiVel": 120,
+   "tune": 0.0
+  },
+  {
+   "sample": "bass/c3-4",
+   "root": 36,
+   "loKey": 35,
+   "hiKey": 37,
+   "loVel": 121,
+   "hiVel": 127,
+   "tune": 0.0
+  },
+  {
+   "sample": "bass/eb3-1",
+   "root": 39,
+   "loKey": 38,
+   "hiKey": 40,
+   "loVel": 1,
+   "hiVel": 60,
+   "tune": 0.0
+  },
+  {
+   "sample": "bass/eb3-2",
+   "root": 39,
+   "loKey": 38,
+   "hiKey": 40,
+   "loVel": 61,
+   "hiVel": 95,
+   "tune": 0.0
+  },
+  {
+   "sample": "bass/eb3-3",
+   "root": 39,
+   "loKey": 38,
+   "hiKey": 40,
+   "loVel": 96,
+   "hiVel": 120,
+   "tune": 0.0
+  },
+  {
+   "sample": "bass/eb3-4",
+   "root": 39,
+   "loKey": 38,
+   "hiKey": 40,
+   "loVel": 121,
+   "hiVel": 127,
+   "tune": 0.0
+  },
+  {
+   "sample": "bass/gb3-1",
+   "root": 42,
+   "loKey": 41,
+   "hiKey": 43,
+   "loVel": 1,
+   "hiVel": 60,
+   "tune": 0.082
+  },
+  {
+   "sample": "bass/gb3-2",
+   "root": 42,
+   "loKey": 41,
+   "hiKey": 43,
+   "loVel": 61,
+   "hiVel": 95,
+   "tune": 0.082
+  },
+  {
+   "sample": "bass/gb3-3",
+   "root": 42,
+   "loKey": 41,
+   "hiKey": 43,
+   "loVel": 96,
+   "hiVel": 120,
+   "tune": 0.082
+  },
+  {
+   "sample": "bass/gb3-4",
+   "root": 42,
+   "loKey": 41,
+   "hiKey": 43,
+   "loVel": 121,
+   "hiVel": 127,
+   "tune": 0.082
+  },
+  {
+   "sample": "bass/a3-1",
+   "root": 45,
+   "loKey": 44,
+   "hiKey": 46,
+   "loVel": 1,
+   "hiVel": 60,
+   "tune": 0.0
+  },
+  {
+   "sample": "bass/a3-2",
+   "root": 45,
+   "loKey": 44,
+   "hiKey": 46,
+   "loVel": 61,
+   "hiVel": 95,
+   "tune": 0.0
+  },
+  {
+   "sample": "bass/a3-3",
+   "root": 45,
+   "loKey": 44,
+   "hiKey": 46,
+   "loVel": 96,
+   "hiVel": 120,
+   "tune": 0.0
+  },
+  {
+   "sample": "bass/a3-4",
+   "root": 45,
+   "loKey": 44,
+   "hiKey": 46,
+   "loVel": 121,
+   "hiVel": 127,
+   "tune": 0.0
+  },
+  {
+   "sample": "bass/c4-1",
+   "root": 48,
+   "loKey": 47,
+   "hiKey": 49,
+   "loVel": 1,
+   "hiVel": 60,
+   "tune": -0.054
+  },
+  {
+   "sample": "bass/c4-2",
+   "root": 48,
+   "loKey": 47,
+   "hiKey": 49,
+   "loVel": 61,
+   "hiVel": 95,
+   "tune": -0.054
+  },
+  {
+   "sample": "bass/c4-3",
+   "root": 48,
+   "loKey": 47,
+   "hiKey": 49,
+   "loVel": 96,
+   "hiVel": 120,
+   "tune": -0.054
+  },
+  {
+   "sample": "bass/c4-4",
+   "root": 48,
+   "loKey": 47,
+   "hiKey": 49,
+   "loVel": 121,
+   "hiVel": 127,
+   "tune": -0.054
+  },
+  {
+   "sample": "bass/eb4-1",
+   "root": 51,
+   "loKey": 50,
+   "hiKey": 52,
+   "loVel": 1,
+   "hiVel": 60,
+   "tune": 0.0
+  },
+  {
+   "sample": "bass/eb4-2",
+   "root": 51,
+   "loKey": 50,
+   "hiKey": 52,
+   "loVel": 61,
+   "hiVel": 95,
+   "tune": 0.0
+  },
+  {
+   "sample": "bass/eb4-3",
+   "root": 51,
+   "loKey": 50,
+   "hiKey": 52,
+   "loVel": 96,
+   "hiVel": 120,
+   "tune": 0.0
+  },
+  {
+   "sample": "bass/eb4-4",
+   "root": 51,
+   "loKey": 50,
+   "hiKey": 52,
+   "loVel": 121,
+   "hiVel": 127,
+   "tune": 0.0
+  },
+  {
+   "sample": "bass/gb4-1",
+   "root": 54,
+   "loKey": 53,
+   "hiKey": 55,
+   "loVel": 1,
+   "hiVel": 60,
+   "tune": 0.075
+  },
+  {
+   "sample": "bass/gb4-2",
+   "root": 54,
+   "loKey": 53,
+   "hiKey": 55,
+   "loVel": 61,
+   "hiVel": 95,
+   "tune": 0.075
+  },
+  {
+   "sample": "bass/gb4-3",
+   "root": 54,
+   "loKey": 53,
+   "hiKey": 55,
+   "loVel": 96,
+   "hiVel": 120,
+   "tune": 0.075
+  },
+  {
+   "sample": "bass/gb4-4",
+   "root": 54,
+   "loKey": 53,
+   "hiKey": 55,
+   "loVel": 121,
+   "hiVel": 127,
+   "tune": 0.075
+  },
+  {
+   "sample": "bass/a4-1",
+   "root": 57,
+   "loKey": 56,
+   "hiKey": 58,
+   "loVel": 1,
+   "hiVel": 60,
+   "tune": 0.0
+  },
+  {
+   "sample": "bass/a4-2",
+   "root": 57,
+   "loKey": 56,
+   "hiKey": 58,
+   "loVel": 61,
+   "hiVel": 95,
+   "tune": 0.0
+  },
+  {
+   "sample": "bass/a4-3",
+   "root": 57,
+   "loKey": 56,
+   "hiKey": 58,
+   "loVel": 96,
+   "hiVel": 120,
+   "tune": 0.0
+  },
+  {
+   "sample": "bass/a4-4",
+   "root": 57,
+   "loKey": 56,
+   "hiKey": 58,
+   "loVel": 121,
+   "hiVel": 127,
+   "tune": 0.0
+  },
+  {
+   "sample": "bass/c5-1",
+   "root": 60,
+   "loKey": 59,
+   "hiKey": 61,
+   "loVel": 1,
+   "hiVel": 60,
+   "tune": -0.068
+  },
+  {
+   "sample": "bass/c5-2",
+   "root": 60,
+   "loKey": 59,
+   "hiKey": 61,
+   "loVel": 61,
+   "hiVel": 95,
+   "tune": -0.068
+  },
+  {
+   "sample": "bass/c5-3",
+   "root": 60,
+   "loKey": 59,
+   "hiKey": 61,
+   "loVel": 96,
+   "hiVel": 120,
+   "tune": -0.068
+  },
+  {
+   "sample": "bass/c5-4",
+   "root": 60,
+   "loKey": 59,
+   "hiKey": 61,
+   "loVel": 121,
+   "hiVel": 127,
+   "tune": -0.068
+  },
+  {
+   "sample": "bass/eb5-1",
+   "root": 63,
+   "loKey": 62,
+   "hiKey": 127,
+   "loVel": 1,
+   "hiVel": 60,
+   "tune": -0.125
+  },
+  {
+   "sample": "bass/eb5-2",
+   "root": 63,
+   "loKey": 62,
+   "hiKey": 127,
+   "loVel": 61,
+   "hiVel": 95,
+   "tune": -0.125
+  },
+  {
+   "sample": "bass/eb5-3",
+   "root": 63,
+   "loKey": 62,
+   "hiKey": 127,
+   "loVel": 96,
+   "hiVel": 120,
+   "tune": -0.125
+  },
+  {
+   "sample": "bass/eb5-4",
+   "root": 63,
+   "loKey": 62,
+   "hiKey": 127,
+   "loVel": 121,
+   "hiVel": 127,
+   "tune": -0.125
+  }
+ ]
+}

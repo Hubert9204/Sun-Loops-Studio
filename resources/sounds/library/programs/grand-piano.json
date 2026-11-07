@@ -1,0 +1,974 @@
+{
+ "name": "Grand Piano",
+ "category": "Keys",
+ "credit": "Salamander Grand Piano V3 by Alexander Holm, CC BY 3.0 (trimmed, levelled, Ogg Vorbis)",
+ "settings": {
+  "envelope": true,
+  "attack": 0.0,
+  "decay": 1.0,
+  "sustain": 1.0,
+  "release": 0.35
+ },
+ "zones": [
+  {
+   "sample": "piano/n021-1",
+   "root": 21,
+   "loKey": 0,
+   "hiKey": 22,
+   "loVel": 1,
+   "hiVel": 43
+  },
+  {
+   "sample": "piano/n021-2",
+   "root": 21,
+   "loKey": 0,
+   "hiKey": 22,
+   "loVel": 44,
+   "hiVel": 80
+  },
+  {
+   "sample": "piano/n021-3",
+   "root": 21,
+   "loKey": 0,
+   "hiKey": 22,
+   "loVel": 81,
+   "hiVel": 112
+  },
+  {
+   "sample": "piano/n021-4",
+   "root": 21,
+   "loKey": 0,
+   "hiKey": 22,
+   "loVel": 113,
+   "hiVel": 127
+  },
+  {
+   "sample": "piano/n024-1",
+   "root": 24,
+   "loKey": 23,
+   "hiKey": 25,
+   "loVel": 1,
+   "hiVel": 43
+  },
+  {
+   "sample": "piano/n024-2",
+   "root": 24,
+   "loKey": 23,
+   "hiKey": 25,
+   "loVel": 44,
+   "hiVel": 80
+  },
+  {
+   "sample": "piano/n024-3",
+   "root": 24,
+   "loKey": 23,
+   "hiKey": 25,
+   "loVel": 81,
+   "hiVel": 112
+  },
+  {
+   "sample": "piano/n024-4",
+   "root": 24,
+   "loKey": 23,
+   "hiKey": 25,
+   "loVel": 113,
+   "hiVel": 127
+  },
+  {
+   "sample": "piano/n027-1",
+   "root": 27,
+   "loKey": 26,
+   "hiKey": 28,
+   "loVel": 1,
+   "hiVel": 43
+  },
+  {
+   "sample": "piano/n027-2",
+   "root": 27,
+   "loKey": 26,
+   "hiKey": 28,
+   "loVel": 44,
+   "hiVel": 80
+  },
+  {
+   "sample": "piano/n027-3",
+   "root": 27,
+   "loKey": 26,
+   "hiKey": 28,
+   "loVel": 81,
+   "hiVel": 112
+  },
+  {
+   "sample": "piano/n027-4",
+   "root": 27,
+   "loKey": 26,
+   "hiKey": 28,
+   "loVel": 113,
+   "hiVel": 127
+  },
+  {
+   "sample": "piano/n030-1",
+   "root": 30,
+   "loKey": 29,
+   "hiKey": 31,
+   "loVel": 1,
+   "hiVel": 43
+  },
+  {
+   "sample": "piano/n030-2",
+   "root": 30,
+   "loKey": 29,
+   "hiKey": 31,
+   "loVel": 44,
+   "hiVel": 80
+  },
+  {
+   "sample": "piano/n030-3",
+   "root": 30,
+   "loKey": 29,
+   "hiKey": 31,
+   "loVel": 81,
+   "hiVel": 112
+  },
+  {
+   "sample": "piano/n030-4",
+   "root": 30,
+   "loKey": 29,
+   "hiKey": 31,
+   "loVel": 113,
+   "hiVel": 127
+  },
+  {
+   "sample": "piano/n033-1",
+   "root": 33,
+   "loKey": 32,
+   "hiKey": 34,
+   "loVel": 1,
+   "hiVel": 43
+  },
+  {
+   "sample": "piano/n033-2",
+   "root": 33,
+   "loKey": 32,
+   "hiKey": 34,
+   "loVel": 44,
+   "hiVel": 80
+  },
+  {
+   "sample": "piano/n033-3",
+   "root": 33,
+   "loKey": 32,
+   "hiKey": 34,
+   "loVel": 81,
+   "hiVel": 112
+  },
+  {
+   "sample": "piano/n033-4",
+   "root": 33,
+   "loKey": 32,
+   "hiKey": 34,
+   "loVel": 113,
+   "hiVel": 127
+  },
+  {
+   "sample": "piano/n036-1",
+   "root": 36,
+   "loKey": 35,
+   "hiKey": 37,
+   "loVel": 1,
+   "hiVel": 43
+  },
+  {
+   "sample": "piano/n036-2",
+   "root": 36,
+   "loKey": 35,
+   "hiKey": 37,
+   "loVel": 44,
+   "hiVel": 80
+  },
+  {
+   "sample": "piano/n036-3",
+   "root": 36,
+   "loKey": 35,
+   "hiKey": 37,
+   "loVel": 81,
+   "hiVel": 112
+  },
+  {
+   "sample": "piano/n036-4",
+   "root": 36,
+   "loKey": 35,
+   "hiKey": 37,
+   "loVel": 113,
+   "hiVel": 127
+  },
+  {
+   "sample": "piano/n039-1",
+   "root": 39,
+   "loKey": 38,
+   "hiKey": 40,
+   "loVel": 1,
+   "hiVel": 43
+  },
+  {
+   "sample": "piano/n039-2",
+   "root": 39,
+   "loKey": 38,
+   "hiKey": 40,
+   "loVel": 44,
+   "hiVel": 80
+  },
+  {
+   "sample": "piano/n039-3",
+   "root": 39,
+   "loKey": 38,
+   "hiKey": 40,
+   "loVel": 81,
+   "hiVel": 112
+  },
+  {
+   "sample": "piano/n039-4",
+   "root": 39,
+   "loKey": 38,
+   "hiKey": 40,
+   "loVel": 113,
+   "hiVel": 127
+  },
+  {
+   "sample": "piano/n042-1",
+   "root": 42,
+   "loKey": 41,
+   "hiKey": 43,
+   "loVel": 1,
+   "hiVel": 43
+  },
+  {
+   "sample": "piano/n042-2",
+   "root": 42,
+   "loKey": 41,
+   "hiKey": 43,
+   "loVel": 44,
+   "hiVel": 80
+  },
+  {
+   "sample": "piano/n042-3",
+   "root": 42,
+   "loKey": 41,
+   "hiKey": 43,
+   "loVel": 81,
+   "hiVel": 112
+  },
+  {
+   "sample": "piano/n042-4",
+   "root": 42,
+   "loKey": 41,
+   "hiKey": 43,
+   "loVel": 113,
+   "hiVel": 127
+  },
+  {
+   "sample": "piano/n045-1",
+   "root": 45,
+   "loKey": 44,
+   "hiKey": 46,
+   "loVel": 1,
+   "hiVel": 43
+  },
+  {
+   "sample": "piano/n045-2",
+   "root": 45,
+   "loKey": 44,
+   "hiKey": 46,
+   "loVel": 44,
+   "hiVel": 80
+  },
+  {
+   "sample": "piano/n045-3",
+   "root": 45,
+   "loKey": 44,
+   "hiKey": 46,
+   "loVel": 81,
+   "hiVel": 112
+  },
+  {
+   "sample": "piano/n045-4",
+   "root": 45,
+   "loKey": 44,
+   "hiKey": 46,
+   "loVel": 113,
+   "hiVel": 127
+  },
+  {
+   "sample": "piano/n048-1",
+   "root": 48,
+   "loKey": 47,
+   "hiKey": 49,
+   "loVel": 1,
+   "hiVel": 43
+  },
+  {
+   "sample": "piano/n048-2",
+   "root": 48,
+   "loKey": 47,
+   "hiKey": 49,
+   "loVel": 44,
+   "hiVel": 80
+  },
+  {
+   "sample": "piano/n048-3",
+   "root": 48,
+   "loKey": 47,
+   "hiKey": 49,
+   "loVel": 81,
+   "hiVel": 112
+  },
+  {
+   "sample": "piano/n048-4",
+   "root": 48,
+   "loKey": 47,
+   "hiKey": 49,
+   "loVel": 113,
+   "hiVel": 127
+  },
+  {
+   "sample": "piano/n051-1",
+   "root": 51,
+   "loKey": 50,
+   "hiKey": 52,
+   "loVel": 1,
+   "hiVel": 43
+  },
+  {
+   "sample": "piano/n051-2",
+   "root": 51,
+   "loKey": 50,
+   "hiKey": 52,
+   "loVel": 44,
+   "hiVel": 80
+  },
+  {
+   "sample": "piano/n051-3",
+   "root": 51,
+   "loKey": 50,
+   "hiKey": 52,
+   "loVel": 81,
+   "hiVel": 112
+  },
+  {
+   "sample": "piano/n051-4",
+   "root": 51,
+   "loKey": 50,
+   "hiKey": 52,
+   "loVel": 113,
+   "hiVel": 127
+  },
+  {
+   "sample": "piano/n054-1",
+   "root": 54,
+   "loKey": 53,
+   "hiKey": 55,
+   "loVel": 1,
+   "hiVel": 43
+  },
+  {
+   "sample": "piano/n054-2",
+   "root": 54,
+   "loKey": 53,
+   "hiKey": 55,
+   "loVel": 44,
+   "hiVel": 80
+  },
+  {
+   "sample": "piano/n054-3",
+   "root": 54,
+   "loKey": 53,
+   "hiKey": 55,
+   "loVel": 81,
+   "hiVel": 112
+  },
+  {
+   "sample": "piano/n054-4",
+   "root": 54,
+   "loKey": 53,
+   "hiKey": 55,
+   "loVel": 113,
+   "hiVel": 127
+  },
+  {
+   "sample": "piano/n057-1",
+   "root": 57,
+   "loKey": 56,
+   "hiKey": 58,
+   "loVel": 1,
+   "hiVel": 43
+  },
+  {
+   "sample": "piano/n057-2",
+   "root": 57,
+   "loKey": 56,
+   "hiKey": 58,
+   "loVel": 44,
+   "hiVel": 80
+  },
+  {
+   "sample": "piano/n057-3",
+   "root": 57,
+   "loKey": 56,
+   "hiKey": 58,
+   "loVel": 81,
+   "hiVel": 112
+  },
+  {
+   "sample": "piano/n057-4",
+   "root": 57,
+   "loKey": 56,
+   "hiKey": 58,
+   "loVel": 113,
+   "hiVel": 127
+  },
+  {
+   "sample": "piano/n060-1",
+   "root": 60,
+   "loKey": 59,
+   "hiKey": 61,
+   "loVel": 1,
+   "hiVel": 43
+  },
+  {
+   "sample": "piano/n060-2",
+   "root": 60,
+   "loKey": 59,
+   "hiKey": 61,
+   "loVel": 44,
+   "hiVel": 80
+  },
+  {
+   "sample": "piano/n060-3",
+   "root": 60,
+   "loKey": 59,
+   "hiKey": 61,
+   "loVel": 81,
+   "hiVel": 112
+  },
+  {
+   "sample": "piano/n060-4",
+   "root": 60,
+   "loKey": 59,
+   "hiKey": 61,
+   "loVel": 113,
+   "hiVel": 127
+  },
+  {
+   "sample": "piano/n063-1",
+   "root": 63,
+   "loKey": 62,
+   "hiKey": 64,
+   "loVel": 1,
+   "hiVel": 43
+  },
+  {
+   "sample": "piano/n063-2",
+   "root": 63,
+   "loKey": 62,
+   "hiKey": 64,
+   "loVel": 44,
+   "hiVel": 80
+  },
+  {
+   "sample": "piano/n063-3",
+   "root": 63,
+   "loKey": 62,
+   "hiKey": 64,
+   "loVel": 81,
+   "hiVel": 112
+  },
+  {
+   "sample": "piano/n063-4",
+   "root": 63,
+   "loKey": 62,
+   "hiKey": 64,
+   "loVel": 113,
+   "hiVel": 127
+  },
+  {
+   "sample": "piano/n066-1",
+   "root": 66,
+   "loKey": 65,
+   "hiKey": 67,
+   "loVel": 1,
+   "hiVel": 43
+  },
+  {
+   "sample": "piano/n066-2",
+   "root": 66,
+   "loKey": 65,
+   "hiKey": 67,
+   "loVel": 44,
+   "hiVel": 80
+  },
+  {
+   "sample": "piano/n066-3",
+   "root": 66,
+   "loKey": 65,
+   "hiKey": 67,
+   "loVel": 81,
+   "hiVel": 112
+  },
+  {
+   "sample": "piano/n066-4",
+   "root": 66,
+   "loKey": 65,
+   "hiKey": 67,
+   "loVel": 113,
+   "hiVel": 127
+  },
+  {
+   "sample": "piano/n069-1",
+   "root": 69,
+   "loKey": 68,
+   "hiKey": 70,
+   "loVel": 1,
+   "hiVel": 43
+  },
+  {
+   "sample": "piano/n069-2",
+   "root": 69,
+   "loKey": 68,
+   "hiKey": 70,
+   "loVel": 44,
+   "hiVel": 80
+  },
+  {
+   "sample": "piano/n069-3",
+   "root": 69,
+   "loKey": 68,
+   "hiKey": 70,
+   "loVel": 81,
+   "hiVel": 112
+  },
+  {
+   "sample": "piano/n069-4",
+   "root": 69,
+   "loKey": 68,
+   "hiKey": 70,
+   "loVel": 113,
+   "hiVel": 127
+  },
+  {
+   "sample": "piano/n072-1",
+   "root": 72,
+   "loKey": 71,
+   "hiKey": 73,
+   "loVel": 1,
+   "hiVel": 43
+  },
+  {
+   "sample": "piano/n072-2",
+   "root": 72,
+   "loKey": 71,
+   "hiKey": 73,
+   "loVel": 44,
+   "hiVel": 80
+  },
+  {
+   "sample": "piano/n072-3",
+   "root": 72,
+   "loKey": 71,
+   "hiKey": 73,
+   "loVel": 81,
+   "hiVel": 112
+  },
+  {
+   "sample": "piano/n072-4",
+   "root": 72,
+   "loKey": 71,
+   "hiKey": 73,
+   "loVel": 113,
+   "hiVel": 127
+  },
+  {
+   "sample": "piano/n075-1",
+   "root": 75,
+   "loKey": 74,
+   "hiKey": 76,
+   "loVel": 1,
+   "hiVel": 43
+  },
+  {
+   "sample": "piano/n075-2",
+   "root": 75,
+   "loKey": 74,
+   "hiKey": 76,
+   "loVel": 44,
+   "hiVel": 80
+  },
+  {
+   "sample": "piano/n075-3",
+   "root": 75,
+   "loKey": 74,
+   "hiKey": 76,
+   "loVel": 81,
+   "hiVel": 112
+  },
+  {
+   "sample": "piano/n075-4",
+   "root": 75,
+   "loKey": 74,
+   "hiKey": 76,
+   "loVel": 113,
+   "hiVel": 127
+  },
+  {
+   "sample": "piano/n078-1",
+   "root": 78,
+   "loKey": 77,
+   "hiKey": 79,
+   "loVel": 1,
+   "hiVel": 43
+  },
+  {
+   "sample": "piano/n078-2",
+   "root": 78,
+   "loKey": 77,
+   "hiKey": 79,
+   "loVel": 44,
+   "hiVel": 80
+  },
+  {
+   "sample": "piano/n078-3",
+   "root": 78,
+   "loKey": 77,
+   "hiKey": 79,
+   "loVel": 81,
+   "hiVel": 112
+  },
+  {
+   "sample": "piano/n078-4",
+   "root": 78,
+   "loKey": 77,
+   "hiKey": 79,
+   "loVel": 113,
+   "hiVel": 127
+  },
+  {
+   "sample": "piano/n081-1",
+   "root": 81,
+   "loKey": 80,
+   "hiKey": 82,
+   "loVel": 1,
+   "hiVel": 43
+  },
+  {
+   "sample": "piano/n081-2",
+   "root": 81,
+   "loKey": 80,
+   "hiKey": 82,
+   "loVel": 44,
+   "hiVel": 80
+  },
+  {
+   "sample": "piano/n081-3",
+   "root": 81,
+   "loKey": 80,
+   "hiKey": 82,
+   "loVel": 81,
+   "hiVel": 112
+  },
+  {
+   "sample": "piano/n081-4",
+   "root": 81,
+   "loKey": 80,
+   "hiKey": 82,
+   "loVel": 113,
+   "hiVel": 127
+  },
+  {
+   "sample": "piano/n084-1",
+   "root": 84,
+   "loKey": 83,
+   "hiKey": 85,
+   "loVel": 1,
+   "hiVel": 43
+  },
+  {
+   "sample": "piano/n084-2",
+   "root": 84,
+   "loKey": 83,
+   "hiKey": 85,
+   "loVel": 44,
+   "hiVel": 80
+  },
+  {
+   "sample": "piano/n084-3",
+   "root": 84,
+   "loKey": 83,
+   "hiKey": 85,
+   "loVel": 81,
+   "hiVel": 112
+  },
+  {
+   "sample": "piano/n084-4",
+   "root": 84,
+   "loKey": 83,
+   "hiKey": 85,
+   "loVel": 113,
+   "hiVel": 127
+  },
+  {
+   "sample": "piano/n087-1",
+   "root": 87,
+   "loKey": 86,
+   "hiKey": 88,
+   "loVel": 1,
+   "hiVel": 43
+  },
+  {
+   "sample": "piano/n087-2",
+   "root": 87,
+   "loKey": 86,
+   "hiKey": 88,
+   "loVel": 44,
+   "hiVel": 80
+  },
+  {
+   "sample": "piano/n087-3",
+   "root": 87,
+   "loKey": 86,
+   "hiKey": 88,
+   "loVel": 81,
+   "hiVel": 112
+  },
+  {
+   "sample": "piano/n087-4",
+   "root": 87,
+   "loKey": 86,
+   "hiKey": 88,
+   "loVel": 113,
+   "hiVel": 127
+  },
+  {
+   "sample": "piano/n090-1",
+   "root": 90,
+   "loKey": 89,
+   "hiKey": 91,
+   "loVel": 1,
+   "hiVel": 43
+  },
+  {
+   "sample": "piano/n090-2",
+   "root": 90,
+   "loKey": 89,
+   "hiKey": 91,
+   "loVel": 44,
+   "hiVel": 80
+  },
+  {
+   "sample": "piano/n090-3",
+   "root": 90,
+   "loKey": 89,
+   "hiKey": 91,
+   "loVel": 81,
+   "hiVel": 112
+  },
+  {
+   "sample": "piano/n090-4",
+   "root": 90,
+   "loKey": 89,
+   "hiKey": 91,
+   "loVel": 113,
+   "hiVel": 127
+  },
+  {
+   "sample": "piano/n093-1",
+   "root": 93,
+   "loKey": 92,
+   "hiKey": 94,
+   "loVel": 1,
+   "hiVel": 43
+  },
+  {
+   "sample": "piano/n093-2",
+   "root": 93,
+   "loKey": 92,
+   "hiKey": 94,
+   "loVel": 44,
+   "hiVel": 80
+  },
+  {
+   "sample": "piano/n093-3",
+   "root": 93,
+   "loKey": 92,
+   "hiKey": 94,
+   "loVel": 81,
+   "hiVel": 112
+  },
+  {
+   "sample": "piano/n093-4",
+   "root": 93,
+   "loKey": 92,
+   "hiKey": 94,
+   "loVel": 113,
+   "hiVel": 127
+  },
+  {
+   "sample": "piano/n096-1",
+   "root": 96,
+   "loKey": 95,
+   "hiKey": 97,
+   "loVel": 1,
+   "hiVel": 43
+  },
+  {
+   "sample": "piano/n096-2",
+   "root": 96,
+   "loKey": 95,
+   "hiKey": 97,
+   "loVel": 44,
+   "hiVel": 80
+  },
+  {
+   "sample": "piano/n096-3",
+   "root": 96,
+   "loKey": 95,
+   "hiKey": 97,
+   "loVel": 81,
+   "hiVel": 112
+  },
+  {
+   "sample": "piano/n096-4",
+   "root": 96,
+   "loKey": 95,
+   "hiKey": 97,
+   "loVel": 113,
+   "hiVel": 127
+  },
+  {
+   "sample": "piano/n099-1",
+   "root": 99,
+   "loKey": 98,
+   "hiKey": 100,
+   "loVel": 1,
+   "hiVel": 43
+  },
+  {
+   "sample": "piano/n099-2",
+   "root": 99,
+   "loKey": 98,
+   "hiKey": 100,
+   "loVel": 44,
+   "hiVel": 80
+  },
+  {
+   "sample": "piano/n099-3",
+   "root": 99,
+   "loKey": 98,
+   "hiKey": 100,
+   "loVel": 81,
+   "hiVel": 112
+  },
+  {
+   "sample": "piano/n099-4",
+   "root": 99,
+   "loKey": 98,
+   "hiKey": 100,
+   "loVel": 113,
+   "hiVel": 127
+  },
+  {
+   "sample": "piano/n102-1",
+   "root": 102,
+   "loKey": 101,
+   "hiKey": 103,
+   "loVel": 1,
+   "hiVel": 43
+  },
+  {
+   "sample": "piano/n102-2",
+   "root": 102,
+   "loKey": 101,
+   "hiKey": 103,
+   "loVel": 44,
+   "hiVel": 80
+  },
+  {
+   "sample": "piano/n102-3",
+   "root": 102,
+   "loKey": 101,
+   "hiKey": 103,
+   "loVel": 81,
+   "hiVel": 112
+  },
+  {
+   "sample": "piano/n102-4",
+   "root": 102,
+   "loKey": 101,
+   "hiKey": 103,
+   "loVel": 113,
+   "hiVel": 127
+  },
+  {
+   "sample": "piano/n105-1",
+   "root": 105,
+   "loKey": 104,
+   "hiKey": 106,
+   "loVel": 1,
+   "hiVel": 43
+  },
+  {
+   "sample": "piano/n105-2",
+   "root": 105,
+   "loKey": 104,
+   "hiKey": 106,
+   "loVel": 44,
+   "hiVel": 80
+  },
+  {
+   "sample": "piano/n105-3",
+   "root": 105,
+   "loKey": 104,
+   "hiKey": 106,
+   "loVel": 81,
+   "hiVel": 112
+  },
+  {
+   "sample": "piano/n105-4",
+   "root": 105,
+   "loKey": 104,
+   "hiKey": 106,
+   "loVel": 113,
+   "hiVel": 127
+  },
+  {
+   "sample": "piano/n108-1",
+   "root": 108,
+   "loKey": 107,
+   "hiKey": 127,
+   "loVel": 1,
+   "hiVel": 43
+  },
+  {
+   "sample": "piano/n108-2",
+   "root": 108,
+   "loKey": 107,
+   "hiKey": 127,
+   "loVel": 44,
+   "hiVel": 80
+  },
+  {
+   "sample": "piano/n108-3",
+   "root": 108,
+   "loKey": 107,
+   "hiKey": 127,
+   "loVel": 81,
+   "hiVel": 112
+  },
+  {
+   "sample": "piano/n108-4",
+   "root": 108,
+   "loKey": 107,
+   "hiKey": 127,
+   "loVel": 113,
+   "hiVel": 127
+  }
+ ]
+}

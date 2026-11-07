@@ -24,6 +24,8 @@ src/audio/                      No UI dependencies except JUCE audio types
   Loudness.h                    LoudnessMeter: BS.1770-4 K-weighting, gating, LUFS, loudness range, true peak (plain C++)
   Spectrum.h                    StereoRing (lock-free audio -> GUI hand-over), SpectrumAnalyser (own FFT), stereo correlation
   Effects.*                     EffectSlot (type, bypass, parameters) and EffectUnit: the twelve built-in effects
+  SoundLibrary.*                The built-in sampled instruments and kits (a zip linked into the program)
+  DrumSynth.*                   The drum and percussion kits made by code
   Arrangement.h                 Patterns, clips, and compilation of pattern / song into a plain Project
   SnapshotExchange.h            Lock-free hand-over of snapshots from the UI thread to the audio thread
   Player.*                      Transport, synth and sampler voices, channels, mixer tracks and effects (real-time safe)
@@ -169,16 +171,26 @@ LiveNoteQueue (wait-free SPSC, 64 events)  -->  audio callback  -->  Player::liv
   is hidden or its notes are replaced). `MainComponent` remembers which channel got the "on" so the "off" goes to the
   same one even if the selection changes in between.
 
-## Recording notes, Cyber-Hub and the start-up sound
+## Recording notes, built-in sounds and the start-up sound
 
 - **Note recording.** The audio thread stamps every keyboard note (`LiveNoteEvent::fromMidi`) with the song position minus the
   output latency and half a block (`makeTake`) and pushes a `MidiTake` into a `SpscQueue`; a message-thread timer drains it into
   `NoteRecorder` (quantize, wrap across the loop end, closing held notes on stop), whose notes `MainComponent` writes into the
   selected channel's current pattern. Nothing on the audio thread allocates or locks.
-- **Cyber-Hub.** `resources/sounds/` is turned into C++ data by `juce_add_binary_data` (target `SunLoopsSounds`, namespace
-  `SunLoopsSoundData`) and decoded by `CyberHub.cpp` with JUCE's Ogg Vorbis / WAV readers from memory, once, then cached. Ids are
-  `cyber:<name>`; `BuiltinSamples` forwards them, so projects store `builtin:cyber:<name>`.
-- **Start-up sound.** `OneShot` (header only) plays a `SampleData` once with linear interpolation; `AudioEngine` owns one, started by
+- **Sound library (0.22.0).** `resources/sounds/library` (Ogg Vorbis files and JSON descriptions, made by `tools/sounds/*.py`) is packed
+  by the build into `sound-library.zip` (`cmake -E tar --format=zip`) and linked in by `SoundLibraryData.S` with the assembler's
+  `.incbin` (target `SunLoopsLibraryData`; a C++ array of 12 MB would be slow to compile). `SoundLibrary.cpp` reads it with
+  `juce::ZipFile` from memory: `programs/<id>.json` are multi-sample instruments (`makeLibraryProgram`, decoded on up to 8 threads),
+  `kits/<id>.json` sampled kits. Sound ids are `lib:<path>`, program sources `builtin:program:<id>` (a `ProgramSpec` of kind `Builtin`
+  in project files, `programSource` in presets). Decoded audio is cached through `weak_ptr`: shared while used, freed after.
+- **Generated drums (0.22.0).** `DrumSynth.cpp` makes the electronic and percussion kits: sines with pitch envelopes, band-limited
+  square banks (the six oscillators of the analog hats), filtered noise, saturation and, for hand percussion, modal synthesis (decaying
+  partials at membrane / bar / bell ratios). Fixed seeds per kit, piece and layer make every sound identical on every computer; ids are
+  `gen:<kit>/<piece>/<layer>`. `DrumKitFile::builtinKits` / `builtinKitSpec` list all built-in kits (library, generated, basic).
+- **Start-up sound.** `intro.wav` is the only file left in `juce_add_binary_data` (target `SunLoopsSounds`); `makeStartupSample` in
+  `BuiltinSamples.cpp` decodes it. The Cyber-Hub theme was removed in 0.22.0: `removedBuiltinMessage` explains `builtin:cyber:*`
+  sources found in older projects, which load as silent placeholders that keep their reference.
+  `OneShot` (header only) plays a `SampleData` once with linear interpolation; `AudioEngine` owns one, started by
   an atomic flag (`playStartupSound`) and mixed after the master volume.
 
 ## Audio clips
