@@ -36,6 +36,8 @@ All notable changes to Sun Loops Studio. Newest first.
   silent, a message saying it was removed, and the reference kept.
 
 ### Fixed
+- The piano roll showed only C2 to C7: notes below C2 (a bass at its real pitch) or above C7 could not be seen or edited. It now
+  covers every MIDI key (C-1 to G9).
 - Three tests left a folder in `/tmp` on every run; they now remove it.
 
 ## 0.21.0 - 2026-11-07

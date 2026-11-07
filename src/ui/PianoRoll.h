@@ -82,8 +82,8 @@ private:
     void showLoopMenu();
     void followLoopMode (int x);
 
-    static constexpr int kLowPitch = 36;   // C2
-    static constexpr int kHighPitch = 96;  // C7
+    static constexpr int kLowPitch = 0;    // C-1: every MIDI key (0.22.0; before, C2 to C7 only, so low bass notes were off the roll)
+    static constexpr int kHighPitch = 127; // G9
     static constexpr int kKeyboardWidth = 64;
     static constexpr int kRulerHeight = 22;
     static constexpr int kRowHeight = 16;
