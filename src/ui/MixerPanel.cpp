@@ -20,6 +20,14 @@ juce::String shortEffectName (EffectType t)
         case EffectType::Delay:      return "Delay";
         case EffectType::Compressor: return "Comp";
         case EffectType::Plugin:     return "Plugin";
+        case EffectType::Overdrive:  return "Drive";
+        case EffectType::Chorus:     return "Chorus";
+        case EffectType::Phaser:     return "Phaser";
+        case EffectType::Filter:     return "Filter";
+        case EffectType::ParametricEq: return "P-EQ";
+        case EffectType::Maximizer:  return "Maxim";
+        case EffectType::Transient:  return "Trans";
+        case EffectType::Imager:     return "Imager";
         case EffectType::None:       break;
     }
     return juce::String::fromUTF8 ("\xe2\x80\x94");
@@ -513,7 +521,7 @@ FxPanel::FxPanel()
     styleSmallLabel (notePlaceholder, 11.0f, false, juce::Justification::topLeft);
     notePlaceholder.setColour (juce::Label::textColourId, juce::Colour (0xff9aa0ab));
     notePlaceholder.setText ("Click a slot to add an effect to this track's chain "
-                             "(Equalizer, Reverb, Delay, Compressor). Effects run in order, before the fader.\n\n"
+                             "(EQ and filters, dynamics, drive, modulation, reverb, delay, stereo). Effects run in order, before the fader.\n\n"
                              "Plugin effects (VST3, LV2, LADSPA) are in the slot menu once the browser's Plugin folder was scanned.",
                              juce::dontSendNotification);
 
@@ -521,6 +529,8 @@ FxPanel::FxPanel()
     addAndMakeVisible (effectLabel);
     addAndMakeVisible (notePlaceholder);
     addChildComponent (pluginButton);
+    addChildComponent (presetButton);
+    presetButton.setTooltip ("Ready-made settings of this effect");
 
     for (size_t s = 0; s < slotButtons.size(); ++s)
     {
@@ -590,16 +600,16 @@ void FxPanel::refresh()
                                              : "Effects - Track " + juce::String (trackIndex + 1)),
                         juce::dontSendNotification);
     notePlaceholder.setText (isAuxBus
-        ? "Click a slot to add an effect to this aux bus (Equalizer, Reverb, Delay, Compressor). "
+        ? "Click a slot to add an effect to this aux bus (EQ and filters, dynamics, drive, modulation, reverb, delay, stereo). "
           "The bus processes what the tracks send to it (set the send level on each track's strip); its output goes to the master.\n\n"
           "Tip: a reverb or delay here, set to 100 % mix, gives every track the same space.\n"
           "Effect parameters of aux buses cannot be automated yet."
         : (isMaster
-        ? "Click a slot to add an effect to the master chain (Equalizer, Reverb, Delay, Compressor). "
+        ? "Click a slot to add an effect to the master chain (EQ and filters, dynamics, drive, modulation, reverb, delay, stereo). "
           "These effects process the sum of all tracks, in order, before the master fader.\n\n"
           "Plugin effects (VST3, LV2, LADSPA) are in the slot menu once the browser's Plugin folder was scanned."
         : "Click a slot to add an effect to this track's chain "
-          "(Equalizer, Reverb, Delay, Compressor). Effects run in order, before the fader.\n\n"
+          "(EQ and filters, dynamics, drive, modulation, reverb, delay, stereo). Effects run in order, before the fader.\n\n"
           "Plugin effects (VST3, LV2, LADSPA) are in the slot menu once the browser's Plugin folder was scanned."),
         juce::dontSendNotification);
 
@@ -625,6 +635,8 @@ void FxPanel::rebuildParameters()
                          juce::dontSendNotification);
     notePlaceholder.setVisible (slot.type == EffectType::None);
     pluginButton.setVisible (isPlugin);
+    presetButton.setVisible (! effectPresets (slot.type).empty());
+    presetButton.onClick = [this] { showPresetMenu(); };
     if (isPlugin)
         pluginButton.onClick = [this, plugin = slot.plugin] { if (openPluginWindow) openPluginWindow (plugin); };
 
@@ -644,15 +656,34 @@ void FxPanel::rebuildParameters()
         const int decimals = range >= 100.0 ? 0 : (range >= 10.0 ? 1 : 2);
 
         row.name.setText (info.name, juce::dontSendNotification);
-        row.slider.setRange (info.min, info.max, 0.0);
         row.slider.setSkewFactor (1.0);
-        if (unit == "Hz" || unit == "ms" || unit == ":1")
-            row.slider.setSkewFactorFromMidPoint (std::sqrt (static_cast<double> (info.min) * static_cast<double> (info.max)));
-        row.slider.setDoubleClickReturnValue (true, info.def);
-        row.slider.textFromValueFunction = [decimals, unit] (double v)
+        if (info.choices != nullptr)
         {
-            return juce::String (v, decimals) + (unit.isEmpty() ? juce::String() : " " + unit);
-        };
+            // A choice (Type, Mode, Stages...): whole steps, shown by name.
+            row.slider.setRange (info.min, info.max, 1.0);
+            const auto names = juce::StringArray::fromTokens (info.choices, "|", "");
+            const auto first = static_cast<int> (info.min);
+            row.slider.textFromValueFunction = [names, first] (double v) { return names[juce::roundToInt (v) - first]; };
+            row.slider.valueFromTextFunction = [names, first] (const juce::String& text)
+            {
+                const int found = names.indexOf (text.trim(), true);
+                return static_cast<double> (found >= 0 ? found + first : first);
+            };
+        }
+        else
+        {
+            row.slider.setRange (info.min, info.max, 0.0);
+            if ((unit == "Hz" || unit == "ms" || unit == ":1") && info.min > 0.0f)
+                row.slider.setSkewFactorFromMidPoint (std::sqrt (static_cast<double> (info.min) * static_cast<double> (info.max)));
+            else if (unit == "Hz" || unit == "ms")
+                row.slider.setSkewFactorFromMidPoint (std::max (1.0, static_cast<double> (info.max) / 8.0));
+            row.slider.textFromValueFunction = [decimals, unit] (double v)
+            {
+                return juce::String (v, decimals) + (unit.isEmpty() ? juce::String() : " " + unit);
+            };
+            row.slider.valueFromTextFunction = nullptr;
+        }
+        row.slider.setDoubleClickReturnValue (true, info.def);
         row.slider.setValue (slot.params[static_cast<size_t> (i)], juce::dontSendNotification);
         row.slider.updateText();
         row.slider.onAutomate = [this, i]
@@ -672,6 +703,35 @@ void FxPanel::rebuildParameters()
         };
     }
     resized();
+}
+
+void FxPanel::showPresetMenu()
+{
+    if (track == nullptr)
+        return;
+    const auto current = track->slots[static_cast<size_t> (selectedSlot)];
+    const auto& presets = effectPresets (current.type);
+    if (presets.empty())
+        return;
+    juce::PopupMenu menu;
+    menu.addSectionHeader (juce::String (effectName (current.type)) + " presets");
+    for (size_t i = 0; i < presets.size(); ++i)
+        menu.addItem (static_cast<int> (i) + 1, presets[i].name, true, presets[i].params == current.params);
+    menu.addSeparator();
+    menu.addItem (1000, "Default settings");
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&presetButton),
+                        [safe = juce::Component::SafePointer<FxPanel> (this), slot = selectedSlot, current] (int result)
+                        {
+                            if (safe == nullptr || result == 0 || safe->track == nullptr
+                                || safe->track->slots[static_cast<size_t> (slot)].type != current.type)
+                                return;
+                            auto s = EffectSlot::make (current.type);
+                            s.bypass = current.bypass;
+                            const auto& list = effectPresets (current.type);
+                            if (result >= 1 && result <= static_cast<int> (list.size()))
+                                s.params = list[static_cast<size_t> (result - 1)].params;
+                            safe->applySlot (slot, s.sanitised());
+                        });
 }
 
 void FxPanel::applySlot (int slot, const EffectSlot& newSlot)
@@ -694,8 +754,12 @@ void FxPanel::showSlotMenu (int slot)
 
     juce::PopupMenu menu;
     menu.addSectionHeader ("Slot " + juce::String (slot + 1));
-    for (int t = 1; t < kBuiltinEffectTypeCount; ++t)
-        menu.addItem (t, effectName (static_cast<EffectType> (t)), true, current.type == static_cast<EffectType> (t));
+    for (const auto& entry : kEffectMenu)
+    {
+        if (entry.group != nullptr)
+            menu.addSectionHeader (entry.group);
+        menu.addItem (static_cast<int> (entry.type), effectName (entry.type), true, current.type == entry.type);
+    }
     menu.addSeparator();
     const auto plugins = listEffectPlugins ? listEffectPlugins() : std::vector<PluginChoice> {};
     juce::PopupMenu pluginMenu;
@@ -734,7 +798,7 @@ void FxPanel::showSlotMenu (int slot)
                                 if (safe->openPluginWindow)
                                     safe->openPluginWindow (current.plugin);
                             }
-                            else if (result >= 1 && result < kBuiltinEffectTypeCount)
+                            else if (result >= 1 && result < kEffectTypeCount && static_cast<EffectType> (result) != EffectType::Plugin)
                             {
                                 const auto type = static_cast<EffectType> (result);
                                 if (type != current.type)
@@ -774,8 +838,13 @@ void FxPanel::resized()
         area.removeFromTop (4);
     }
 
-    area.removeFromTop (8);
-    effectLabel.setBounds (area.removeFromTop (20));
+    area.removeFromTop (6);
+    {
+        auto head = area.removeFromTop (22);
+        if (presetButton.isVisible())
+            presetButton.setBounds (head.removeFromRight (82));
+        effectLabel.setBounds (head);
+    }
     area.removeFromTop (4);
     notePlaceholder.setBounds (area);
     pluginButton.setBounds (area.getX(), area.getY(), std::min (200, area.getWidth()), 26);
@@ -784,8 +853,8 @@ void FxPanel::resized()
     {
         if (! row.slider.isVisible())
             continue;
-        auto r = area.removeFromTop (26);
-        row.name.setBounds (r.removeFromLeft (60));
+        auto r = area.removeFromTop (23);
+        row.name.setBounds (r.removeFromLeft (64));
         row.slider.setBounds (r);
         area.removeFromTop (2);
     }

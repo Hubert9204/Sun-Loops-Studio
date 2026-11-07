@@ -654,17 +654,29 @@ Clic su una traccia per selezionarla: il pannello effetti mostra allora i suoi s
 
 ### Effetti
 
-Clic su uno slot vuoto (o tasto destro su uno slot qualsiasi) per il menu: **Equalizer**, **Reverb**, **Delay**,
-**Compressor**, **Bypass**, **Remove effect**. Gli effetti agiscono in ordine, dall'alto in basso, prima del fader
-della traccia. Il pannello effetti ha un pulsante di accensione per slot (bypass) e un cursore per ogni parametro dello
-slot selezionato.
+Clic su uno slot per il menu: gli effetti, a gruppi (**EQ and filter**, **Dynamics**, **Drive**, **Modulation**, **Space and time**,
+**Stereo**), poi **Plugin effects**, **Bypass** e **Remove effect**. Gli effetti agiscono in ordine, dall'alto in basso, prima del
+fader della traccia. Il pannello effetti ha un pulsante di accensione per slot (bypass), un cursore per ogni parametro dello slot
+selezionato (una scelta come *Type* o *Mode* scorre tra i suoi nomi; doppio clic su un cursore per il valore predefinito) e, per
+quasi tutti gli effetti, **Presets...** con impostazioni pronte.
 
-| Effetto | Parametri |
-| --- | --- |
-| Equalizer | Shelf basso (120 Hz), Mid (una campana con frequenza propria, 200-5000 Hz), shelf alto (6 kHz); ciascuno da -15 a +15 dB |
-| Reverb | Size, Damping, Width, Mix |
-| Delay | Time (10-1000 ms), Feedback, Tone, Mix |
-| Compressor | Threshold (da -60 a 0 dB), Ratio (1-20:1), Attack, Release, Makeup |
+| Effetto | Parametri | Preset |
+| --- | --- | --- |
+| Equalizer | Shelf basso (120 Hz), Mid (una campana con frequenza propria, 200-5000 Hz), shelf alto (6 kHz); ciascuno da -15 a +15 dB | |
+| Parametric EQ | Shelf basso (frequenza, guadagno), una campana (frequenza, guadagno, Q), shelf alto (frequenza, guadagno), ciascuno da -18 a +18 dB; uscita | Vocal presence, Kick punch, Warm master |
+| Filter | Tipo (passa-basso, passa-alto, passa-banda, notch), Cutoff, Risonanza, Pendenza (12 o 24 dB), Drive, velocità e profondità dell'LFO (sposta il cutoff fino a 3 ottave), Mix | Low-pass 24 dB, High-pass, Wobble, Telephone |
+| Compressor | Threshold (da -60 a 0 dB), Ratio (1-20:1), Attack, Release, Makeup | Gentle, Drum bus, Vocal |
+| Maximizer | Un limiter da mastering in tre stadi: guadagno d'ingresso, Soft clip facoltativo, Glue (un compressore morbido a ginocchio dolce), poi un limiter con look-ahead che tiene ogni picco sotto il **Ceiling**; Release. Ritarda il suono di 1,5 ms (il suo look-ahead). | Transparent, Loud, Streaming (-1 dB) |
+| Transient | Divide ogni suono in attacco e sustain: guadagno di Attack e Sustain (da -24 a +24 dB), Speed (quanto dura un attacco), Listen (entrambi, solo transienti, solo sustain), Mix, Output | Punchy drums, Tighten, More room, Transients only |
+| Overdrive | Drive, Boost (x10), Color (più scuro / più brillante prima della saturazione), Tone (dopo), Character (aggiunge armoniche pari), Mix, Output. Lavora a 4 volte la frequenza di campionamento con anti-aliasing. | Warm, Crunch, Fuzz, Parallel grit |
+| Chorus | Rate, Depth, Delay, Feedback (feedback alto e delay corto fanno un flanger), Voci (1-3), Width, Mix | Subtle, Wide, Ensemble, Flanger |
+| Phaser | Rate, Depth, frequenza centrale, Feedback, Stadi (4, 6, 8, 12), Width, Mix | Slow sweep, Fast, Deep 12 |
+| Reverb | Size, Damping, Width, Mix, **Type** (Hall, Room, Plate), Pre-delay (0-250 ms) | Hall, Large hall, Room, Small room, Plate, Vocal plate |
+| Delay | Time (10-1000 ms), Feedback, Tone, Mix, **Mode** (Stereo, Ping-pong: le ripetizioni rimbalzano tra i lati, Tape: ripetizioni più scure e sature), Spread (il lato destro fino a 1,5 volte più tardi), Wobble (wow e flutter da nastro) | Stereo 1/8, Ping-pong 1/4, Tape echo, Slapback, Dub space |
+| Stereo Imager | Width (0-200 %), guadagno di Mid e Side, Mono bass (sotto questa frequenza il suono diventa mono), Balance | Wider, Mono bass, Mono |
+
+I progetti fatti prima della 0.21.0 suonano uguali: i loro riverberi sono Hall senza pre-delay e i delay sono Stereo. I file con i
+nuovi effetti non si possono leggere con le versioni precedenti (lì lo slot torna vuoto).
 
 Sono effetti propri di Sun Loops Studio. Il menu dello slot ha anche **Plugin effects** (i plugin effetto trovati dall'ultima
 scansione, vedi *Plugin*) e **Open plugin window** per uno slot con un plugin; i parametri di un plugin sono nella sua finestra, non nel pannello effetti.
@@ -672,7 +684,7 @@ scansione, vedi *Plugin*) e **Open plugin window** per uno slot con un plugin; i
 ### Effetti sul master
 
 La **strip master** (a destra delle tracce) ha gli stessi quattro slot effetti di una traccia. Clicca uno slot per
-scegliere un effetto (Equalizer, Reverb, Delay, Compressor); cliccando la strip o uno slot lo vedi nel pannello
+scegliere un effetto (tutti quelli sopra, un Maximizer in fondo per il mastering); cliccando la strip o uno slot lo vedi nel pannello
 effetti, intitolato *Effects - Master*. La catena master elabora la **somma di tutte le tracce**, in ordine, **prima
 del fader master** e del limitatore morbido finale, quindi un compressore o un equalizzatore lì modella tutto il mix,
 e il WAV esportato lo include. Serve per compressione di insieme, un EQ finale o un filo di riverbero su tutto. Gli

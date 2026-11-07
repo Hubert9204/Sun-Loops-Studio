@@ -27,6 +27,12 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.21.0
+The eight new effects run inside `Player::render` through `EffectUnit::process`: nothing allocates (tested, 8 effects x 500 blocks), all
+lines and states are sized in `prepare`. The Overdrive is the heaviest (12 biquads at 4x the rate per channel plus a log-cosh per
+oversampled sample); its CPU cost on a real computer was not measured. clang-tidy (the audit's check set) on `Effects.cpp`,
+`MixerPanel.cpp` and `ProjectFile.cpp`: no findings.
+
 ## After 0.20.0
 clang-tidy (the audit's check set) on `PianoRoll.cpp` reports four `bugprone-swapped-arguments` warnings, all on `drawHorizontalLine` /
 `drawVerticalLine` calls that were there before 0.20.0: the order is JUCE's `(int position, float start, float end)` and the casts are

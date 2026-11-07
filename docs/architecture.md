@@ -23,7 +23,7 @@ src/audio/                      No UI dependencies except JUCE audio types
   DrumKit.h                     The drum machine model: 16 pads, 4 velocity layers, choke groups, swing; layerFor(), padForPitch(), sanitised() (plain C++)
   Loudness.h                    LoudnessMeter: BS.1770-4 K-weighting, gating, LUFS, loudness range, true peak (plain C++)
   Spectrum.h                    StereoRing (lock-free audio -> GUI hand-over), SpectrumAnalyser (own FFT), stereo correlation
-  Effects.*                     EffectSlot (type, bypass, parameters) and EffectUnit: Equalizer, Reverb, Delay, Compressor
+  Effects.*                     EffectSlot (type, bypass, parameters) and EffectUnit: the twelve built-in effects
   Arrangement.h                 Patterns, clips, and compilation of pattern / song into a plain Project
   SnapshotExchange.h            Lock-free hand-over of snapshots from the UI thread to the audio thread
   Player.*                      Transport, synth and sampler voices, channels, mixer tracks and effects (real-time safe)
@@ -273,6 +273,11 @@ voices -> channel (smoothed gain, equal-power pan, channel mute/solo)
   is active in the audio callback and the feedback loops flush tiny values.
 - The piano roll's loop region (0.20.0) lives in `Pattern::loopStartTick / loopEndTick`; in Pattern mode `publishProject` copies the current
   pattern's region into the snapshot's `loopStartTick / loopEndTick`, which the `Player` already handles for the playlist's region.
+- Built-in effects (0.21.0): twelve types in `Effects.h` (tables of up to 8 parameters; a parameter with `choices` is a whole-number
+  choice shown by name), the DSP in `EffectUnit` (`Effects.cpp`), all memory taken in `prepare`. Overdrive: 4x oversampling with
+  12th-order Butterworth filters and first-order antiderivative anti-aliasing of tanh. Maximizer: soft clip, soft-knee glue compressor,
+  1.5 ms look-ahead limiter and a final clamp at the ceiling (`latencySamples`). New types are appended to the enum so numbers stay
+  stable; new parameters are appended to existing effects with defaults that keep their old sound. `effectPresets` lists the presets.
 - Plugin effects (0.17.0): `EffectType::Plugin` with `EffectSlot::plugin` (a `shared_ptr<HostedPlugin>`). `EffectUnit::process` hands the
   chunk to the plugin; bypass leaves the signal alone. See *Plugins* below.
 

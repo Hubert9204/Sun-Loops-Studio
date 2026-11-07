@@ -2,6 +2,28 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.21.0 - 2026-11-07
+
+### Added
+- **Eight new mixer effects**, with ready-made presets (a *Presets...* button in the effects panel; 42 presets in all):
+  - **Overdrive**: Drive, x10 Boost, Color, Tone, Character (even harmonics), Mix, Output; runs at 4x the sample rate between
+    12th-order anti-aliasing filters, with antiderivative anti-aliasing of the curve (aliases of a 5 kHz sine driven into a square
+    measured more than 50 dB down).
+  - **Chorus** (1-3 voices, feedback for flanging, width), **Phaser** (4/6/8/12 stages, feedback, stereo width).
+  - **Filter** (low-pass, high-pass, band-pass, notch; 12 or 24 dB; drive; LFO) and **Parametric EQ** (low shelf, bell with Q,
+    high shelf, output).
+  - **Maximizer**, a mastering limiter in three stages (soft clip, glue compressor, 1.5 ms look-ahead brick-wall limiter with a
+    ceiling no sample passes), and **Transient**, an attack / sustain splitter with *Listen* for each part.
+  - **Stereo Imager**: width 0-200 %, mid and side gain, mono bass, balance.
+- **Reverb**: Type (Hall, Room, Plate) and Pre-delay. **Delay**: Mode (Stereo, Ping-pong, Tape with saturated, darker repeats),
+  Spread and Wobble. Both keep their old sound by default, so older projects are unchanged.
+- The slot menu groups the effects (EQ and filter, Dynamics, Drive, Modulation, Space and time, Stereo); choice parameters show
+  their names. Effects can have up to 8 parameters (was 5); automation works on all of them.
+
+### Notes
+- The Maximizer delays its track by 1.5 ms (there is no delay compensation between tracks yet).
+- Measured on test signals (frequency responses, harmonics, aliasing, timing, levels, ceilings); not heard.
+
 ## 0.20.0 - 2026-11-07
 
 ### Added

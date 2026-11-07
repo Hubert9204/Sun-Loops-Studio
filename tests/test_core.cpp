@@ -1171,11 +1171,283 @@ void testEffects()
                     slot.params[static_cast<size_t> (i)] = extreme == 0 ? info.min : info.max;
                 }
                 const auto out = runEffect (slot, noise);
+                bool fine = true;
+                float worst = 0.0f;
                 for (float v : out)
-                    ok = ok && std::isfinite (v) && std::abs (v) < 100.0f;
+                {
+                    // (the parametric EQ at its maximum adds up to +54 dB to this +6 dBFS noise on purpose: 500 is still "bounded")
+                    fine = fine && std::isfinite (v) && std::abs (v) < (type == sls::EffectType::ParametricEq ? 1000.0f : 100.0f);
+                    worst = std::max (worst, std::isfinite (v) ? std::abs (v) : 1.0e30f);
+                }
+                if (! fine)
+                    std::cout << "    (" << sls::effectName (type) << (extreme == 0 ? " at its minimum" : " at its maximum") << ": peak " << worst << ")\n";
+                ok = ok && fine;
             }
         }
         check (ok, "all effects stay finite and bounded at their minimum and maximum settings");
+    }
+}
+
+// ------------------------------------------------------------------------- 0.21.0: the new effects
+
+std::pair<std::vector<float>, std::vector<float>> runEffectStereo (const sls::EffectSlot& slot, std::vector<float> l, std::vector<float> r)
+{
+    sls::EffectUnit unit;
+    unit.prepare (kSr);
+    for (size_t i = 0; i < l.size(); i += 64)
+        unit.process (slot, l.data() + i, r.data() + i, static_cast<int> (std::min<size_t> (64, l.size() - i)));
+    return { std::move (l), std::move (r) };
+}
+
+double gainAt (const sls::EffectSlot& slot, double hz)
+{
+    const auto in = sineWave (hz, 0.25, 24000);
+    const auto out = runEffect (slot, in);
+    return toneEnergy (out.data(), 12000, 24000, hz) / toneEnergy (in.data(), 12000, 24000, hz);
+}
+
+int firstAbove (const std::vector<float>& x, float level, int from = 0)
+{
+    for (int i = from; i < static_cast<int> (x.size()); ++i)
+        if (std::abs (x[static_cast<size_t> (i)]) > level)
+            return i;
+    return -1;
+}
+
+void testNewEffects()
+{
+    std::cout << "New effects (0.21.0)\n";
+    using T = sls::EffectType;
+    std::vector<float> impulse (48000, 0.0f);
+    impulse[100] = 1.0f;
+
+    // --- Reverb: pre-delay, Room shorter than Hall, Plate brighter than Room
+    {
+        const auto hall = runEffect (slotWith (T::Reverb, { 0.6f, 0.4f, 1.0f, 1.0f, 0.0f, 0.0f }), impulse);
+        const auto pre = runEffect (slotWith (T::Reverb, { 0.6f, 0.4f, 1.0f, 1.0f, 0.0f, 100.0f }), impulse);
+        const int onsetHall = firstAbove (hall, 1.0e-4f, 101), onsetPre = firstAbove (pre, 1.0e-4f, 101);
+        check (onsetPre - onsetHall > 4700 && onsetPre - onsetHall < 4900, "reverb: 100 ms pre-delay starts the tail 100 ms later");
+        const auto room = runEffect (slotWith (T::Reverb, { 0.6f, 0.4f, 1.0f, 1.0f, 1.0f, 0.0f }), impulse);
+        const auto plate = runEffect (slotWith (T::Reverb, { 0.6f, 0.4f, 1.0f, 1.0f, 2.0f, 0.0f }), impulse);
+        check (rmsOf (room, 24000, 36000) < 0.5 * rmsOf (hall, 24000, 36000), "reverb: Room dies away sooner than Hall");
+        double roughRoom = 0.0, roughPlate = 0.0, eRoom = 0.0, ePlate = 0.0;
+        for (int i = 2001; i < 20000; ++i)
+        {
+            roughRoom += std::pow (room[static_cast<size_t> (i)] - room[static_cast<size_t> (i - 1)], 2.0);
+            roughPlate += std::pow (plate[static_cast<size_t> (i)] - plate[static_cast<size_t> (i - 1)], 2.0);
+            eRoom += std::pow (room[static_cast<size_t> (i)], 2.0);
+            ePlate += std::pow (plate[static_cast<size_t> (i)], 2.0);
+        }
+        check (roughPlate / ePlate > roughRoom / eRoom, "reverb: Plate is brighter than Room");
+    }
+
+    // --- Delay: ping-pong alternates sides, spread delays the right side, tape wobbles but stays near its time
+    {
+        auto pp = slotWith (T::Delay, { 100.0f, 0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f });
+        const auto [l, r] = runEffectStereo (pp, impulse, impulse);
+        const int t = 4800;
+        check (std::abs (l[static_cast<size_t> (100 + t)]) > 0.3f && std::abs (r[static_cast<size_t> (100 + t)]) < 0.05f,
+               "ping-pong: the first repeat is on the left");
+        check (peakOf (r.data(), 100 + 2 * t - 4, 100 + 2 * t + 4) > 0.15f && peakOf (l.data(), 100 + 2 * t - 4, 100 + 2 * t + 4) < 0.05f,
+               "ping-pong: the second repeat is on the right");
+        const auto [sl, sr] = runEffectStereo (slotWith (T::Delay, { 100.0f, 0.0f, 1.0f, 1.0f, 0.0f, 0.5f, 0.0f }), impulse, impulse);
+        check (std::abs (sl[static_cast<size_t> (100 + t)]) > 0.5f && firstAbove (sr, 0.3f, 101) - 100 > 7150 && firstAbove (sr, 0.3f, 101) - 100 < 7250,
+               "stereo delay: spread 0.5 puts the right repeat at 1.5 x the time");
+        const auto tape = runEffect (slotWith (T::Delay, { 200.0f, 0.6f, 0.6f, 1.0f, 2.0f, 0.0f, 1.0f }), impulse);
+        const int echo = firstAbove (tape, 0.02f, 101) - 100;
+        check (echo > 9600 && echo < 9600 + 650, "tape delay: the first repeat comes within the wobble's few ms of its time");
+        bool finite = true;
+        for (float v : tape)
+            finite = finite && std::isfinite (v) && std::abs (v) < 2.0f;
+        check (finite, "tape delay: the saturated feedback stays bounded");
+    }
+
+    // --- Overdrive: adds harmonics, little aliasing, drive 0 is close to clean
+    {
+        const auto clean = runEffect (slotWith (T::Overdrive, { 0.0f, 0.0f, 0.5f, 1.0f, 0.0f, 1.0f, 0.0f }), sineWave (200.0, 0.1, 24000));
+        check (std::abs (toneEnergy (clean.data(), 12000, 24000, 200.0) / (0.05) - 1.0) < 0.1, "overdrive at drive 0, open tone: the level of a quiet sine is kept");
+        const auto hot = runEffect (slotWith (T::Overdrive, { 0.8f, 0.0f, 0.5f, 1.0f, 0.0f, 1.0f, 0.0f }), sineWave (200.0, 0.5, 24000));
+        check (toneEnergy (hot.data(), 12000, 24000, 600.0) > 0.05 * toneEnergy (hot.data(), 12000, 24000, 200.0),
+               "overdrive: strong odd harmonics (the 3rd)");
+        const auto asym = runEffect (slotWith (T::Overdrive, { 0.8f, 0.0f, 0.5f, 1.0f, 1.0f, 1.0f, 0.0f }), sineWave (200.0, 0.5, 24000));
+        check (toneEnergy (asym.data(), 12000, 24000, 400.0) > 4.0 * toneEnergy (hot.data(), 12000, 24000, 400.0) + 1.0e-4,
+               "overdrive: Character adds even harmonics (the 2nd)");
+        // 5 kHz driven hard: its 5th harmonic (25 kHz) would alias to 23 kHz, the 7th (35 kHz) to 13 kHz; at 4x the 39th and 41st
+        // (195 and 205 kHz) fold back to 3 and 13 kHz.
+        const auto bright = runEffect (slotWith (T::Overdrive, { 1.0f, 1.0f, 0.5f, 1.0f, 0.0f, 1.0f, 0.0f }), sineWave (5000.0, 0.5, 24000));
+        const double fundamental = toneEnergy (bright.data(), 12000, 24000, 5000.0);
+        std::cout << "    (relative to 5 kHz: 13 kHz " << 20.0 * std::log10 (toneEnergy (bright.data(), 12000, 24000, 13000.0) / fundamental)
+                  << " dB, 3 kHz " << 20.0 * std::log10 (toneEnergy (bright.data(), 12000, 24000, 3000.0) / fundamental) << " dB, 23 kHz "
+                  << 20.0 * std::log10 (toneEnergy (bright.data(), 12000, 24000, 23000.0) / fundamental) << " dB)\n";
+        check (toneEnergy (bright.data(), 12000, 24000, 13000.0) < 0.01 * fundamental && toneEnergy (bright.data(), 12000, 24000, 23000.0) < 0.01 * fundamental
+                   && toneEnergy (bright.data(), 12000, 24000, 3000.0) < 0.01 * fundamental,
+               "overdrive: oversampling and anti-aliasing keep the aliases of a 5 kHz sine driven into a square 40 dB down (3, 13, 23 kHz)");
+    }
+
+    // --- Chorus: mix 0 is dry, a mono input becomes stereo
+    {
+        const auto in = sineWave (440.0, 0.3, 24000);
+        const auto dry = runEffect (slotWith (T::Chorus, { 0.8f, 3.0f, 15.0f, 0.0f, 2.0f, 1.0f, 0.0f }), in);
+        check (dry == in, "chorus at mix 0 leaves the sound alone");
+        const auto [l, r] = runEffectStereo (slotWith (T::Chorus, { 0.8f, 5.0f, 15.0f, 0.0f, 2.0f, 1.0f, 0.5f }), in, in);
+        double diff = 0.0;
+        for (size_t i = 4800; i < 24000; ++i)
+            diff += std::abs (l[i] - r[i]);
+        check (diff / 19200.0 > 0.01, "chorus with width: a mono input comes out different on the two sides");
+    }
+
+    // --- Phaser: a deep notch somewhere in the spectrum, none at mix 0
+    {
+        const auto phaser = slotWith (T::Phaser, { 0.02f, 0.0f, 1000.0f, 0.0f, 0.0f, 0.0f, 0.5f });
+        double lowest = 1.0, highest = 0.0;
+        for (double hz = 100.0; hz < 10000.0; hz *= 1.06)
+        {
+            const double g = gainAt (phaser, hz);
+            lowest = std::min (lowest, g);
+            highest = std::max (highest, g);
+        }
+        check (lowest < 0.15 && highest > 0.9, "phaser: notches (below -16 dB) between frequencies that pass");
+    }
+
+    // --- Filter: low-pass, high-pass, notch, 24 dB steeper than 12
+    {
+        check (gainAt (slotWith (T::Filter, { 0.0f, 500.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.5f, 1.0f }), 5000.0) < 0.02,
+               "filter low-pass 500 Hz, 12 dB: 5 kHz is more than 34 dB down");
+        check (gainAt (slotWith (T::Filter, { 0.0f, 500.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.5f, 1.0f }), 5000.0) < 0.001,
+               "filter low-pass 500 Hz, 24 dB: 5 kHz is more than 60 dB down");
+        check (gainAt (slotWith (T::Filter, { 1.0f, 2000.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.5f, 1.0f }), 100.0) < 0.001
+                   && gainAt (slotWith (T::Filter, { 1.0f, 2000.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.5f, 1.0f }), 15000.0) > 0.9,
+               "filter high-pass 2 kHz: 100 Hz gone, 15 kHz kept");
+        check (gainAt (slotWith (T::Filter, { 3.0f, 1000.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.5f, 1.0f }), 1000.0) < 0.02,
+               "filter notch at 1 kHz takes 1 kHz out");
+        check (gainAt (slotWith (T::Filter, { 0.0f, 500.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.5f, 0.0f }), 5000.0) > 0.99, "filter at mix 0 is dry");
+    }
+
+    // --- Parametric EQ
+    {
+        const auto peq = slotWith (T::ParametricEq, { 100.0f, 0.0f, 1000.0f, 12.0f, 1.0f, 8000.0f, 0.0f, 0.0f });
+        check (std::abs (20.0 * std::log10 (gainAt (peq, 1000.0)) - 12.0) < 0.5, "parametric EQ: +12 dB at the mid frequency");
+        check (std::abs (20.0 * std::log10 (gainAt (peq, 100.0))) < 1.0, "parametric EQ: two octaves and more away, almost nothing");
+        const auto shelf = slotWith (T::ParametricEq, { 200.0f, 6.0f, 1000.0f, 0.0f, 1.0f, 8000.0f, 0.0f, -6.0f });
+        check (std::abs (20.0 * std::log10 (gainAt (shelf, 40.0))) < 0.6, "parametric EQ: +6 dB low shelf and -6 dB output cancel in the bass");
+    }
+
+    // --- Maximizer: never over the ceiling, quiet sounds untouched, the look-ahead is its latency
+    {
+        const auto loud = sineWave (1000.0, 2.0, 48000);
+        const auto out = runEffect (slotWith (T::Maximizer, { 6.0f, -1.0f, 100.0f, 0.3f, 0.3f }), loud);
+        const float ceiling = std::pow (10.0f, -1.0f / 20.0f);
+        check (peakOf (out.data(), 0, 48000) <= ceiling + 1.0e-6f, "maximizer: +12 dB over full scale never passes the -1 dB ceiling");
+        check (rmsOf (out, 24000, 48000) > 0.5 * ceiling, "maximizer: and the level stays up (not crushed)");
+        const auto quiet = sineWave (1000.0, 0.03, 48000);
+        const auto q = runEffect (slotWith (T::Maximizer, { 0.0f, -1.0f, 100.0f, 0.0f, 0.0f }), quiet);
+        const int lat = static_cast<int> (std::lround (0.0015 * kSr));
+        double err = 0.0;
+        for (int i = 2000; i < 48000; ++i)
+            err = std::max (err, static_cast<double> (std::abs (q[static_cast<size_t> (i)] - quiet[static_cast<size_t> (i - lat)])));
+        check (err < 1.0e-6, "maximizer: a quiet sound comes out unchanged, 1.5 ms late (the look-ahead)");
+        sls::EffectUnit unit;
+        unit.prepare (kSr);
+        check (unit.latencySamples (T::Maximizer) == lat && unit.latencySamples (T::Reverb) == 0, "the maximizer reports its latency");
+    }
+
+    // --- Transient: attack and sustain apart
+    {
+        std::vector<float> hits (48000, 0.0f);
+        for (int hit = 0; hit < 4; ++hit)
+            for (int i = 0; i < 9000; ++i)
+                hits[static_cast<size_t> (hit * 12000 + i)] = static_cast<float> (0.5 * std::exp (-i / 1500.0) * std::sin (2.0 * 3.14159265 * 150.0 * i / kSr));
+        const auto attackLoud = runEffect (slotWith (T::Transient, { 12.0f, 0.0f, 0.3f, 0.0f, 1.0f, 0.0f }), hits);
+        const auto sustainLow = runEffect (slotWith (T::Transient, { 0.0f, -12.0f, 0.3f, 0.0f, 1.0f, 0.0f }), hits);
+        const int h = 24000; // the third hit
+        check (rmsOf (attackLoud, h, h + 300) > 1.8 * rmsOf (hits, h, h + 300), "transient: +12 dB attack makes the start of a hit much louder");
+        check (rmsOf (sustainLow, h + 4000, h + 8000) < 0.6 * rmsOf (hits, h + 4000, h + 8000), "transient: -12 dB sustain makes the tail quieter");
+        check (rmsOf (sustainLow, h, h + 200) > 0.8 * rmsOf (hits, h, h + 200), "transient: and leaves the attack alone");
+        const auto onlyAttack = runEffect (slotWith (T::Transient, { 0.0f, 0.0f, 0.3f, 1.0f, 1.0f, 0.0f }), hits);
+        check (rmsOf (onlyAttack, h + 4000, h + 8000) < 0.2 * rmsOf (hits, h + 4000, h + 8000), "transient: Listen Transients drops the tail");
+    }
+
+    // --- Stereo imager
+    {
+        const auto l = sineWave (440.0, 0.4, 24000);
+        const auto r = sineWave (660.0, 0.4, 24000);
+        const auto [ml, mr] = runEffectStereo (slotWith (T::Imager, { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f }), l, r);
+        check (ml == mr, "imager: width 0 makes the sound mono");
+        const auto [wl, wr] = runEffectStereo (slotWith (T::Imager, { 200.0f, 0.0f, 0.0f, 0.0f, 0.0f }), l, r);
+        double sideIn = 0.0, sideOut = 0.0;
+        for (size_t i = 0; i < 24000; ++i)
+        {
+            sideIn += std::abs (l[i] - r[i]);
+            sideOut += std::abs (wl[i] - wr[i]);
+        }
+        check (std::abs (sideOut / sideIn - 2.0) < 0.01, "imager: width 200 % doubles the difference between the sides");
+        auto bassL = sineWave (40.0, 0.4, 48000), bassR = bassL;
+        for (auto& v : bassR)
+            v = -v; // all side, no middle
+        const auto [bl, br] = runEffectStereo (slotWith (T::Imager, { 100.0f, 0.0f, 0.0f, 200.0f, 0.0f }), bassL, bassR);
+        check (rmsOf (bl, 24000, 48000) < 0.25 * rmsOf (bassL, 24000, 48000), "imager: Mono bass 200 Hz takes a 40 Hz out-of-phase bass out of the sides");
+    }
+
+    // --- Presets, files, allocation
+    {
+        bool presetsOk = true;
+        int presetCount = 0;
+        for (int t = 1; t < sls::kEffectTypeCount; ++t)
+            for (const auto& preset : sls::effectPresets (static_cast<T> (t)))
+            {
+                ++presetCount;
+                sls::EffectSlot slot = sls::EffectSlot::make (static_cast<T> (t));
+                slot.params = preset.params;
+                presetsOk = presetsOk && slot.sanitised().params == slot.params;
+                const auto out = runEffect (slot, sineWave (220.0, 0.5, 9600));
+                for (float v : out)
+                    presetsOk = presetsOk && std::isfinite (v) && std::abs (v) < 4.0f;
+            }
+        check (presetsOk && presetCount >= 35, "every effect preset is within its ranges and sounds finite (35 or more presets)");
+
+        auto doc = sls::ProjectDocument::blank();
+        const T types[] = { T::Overdrive, T::Chorus, T::Phaser, T::Filter, T::ParametricEq, T::Maximizer, T::Transient, T::Imager };
+        for (size_t i = 0; i < 8; ++i)
+        {
+            auto slot = sls::EffectSlot::make (types[i]);
+            slot.params[0] = sls::effectParamInfo (types[i], 0).max;
+            doc.tracks[i].slots[static_cast<size_t> (i % 4)] = slot;
+        }
+        doc.tracks[0].slots[3] = slotWith (T::Delay, { 200.0f, 0.5f, 0.5f, 0.4f, 2.0f, 0.25f, 0.5f });
+        const auto parsed = sls::ProjectDocument::fromJson (doc.toJson());
+        bool same = parsed.document.has_value();
+        for (size_t i = 0; same && i < 8; ++i)
+            same = parsed.document->tracks[i].slots[static_cast<size_t> (i % 4)] == doc.tracks[i].slots[static_cast<size_t> (i % 4)];
+        check (same && parsed.document->tracks[0].slots[3] == doc.tracks[0].slots[3], "the new effects and the delay's modes are saved and read back");
+
+        auto v = juce::JSON::parse (sls::ProjectDocument::blank().toJson());
+        auto* track = v.getDynamicObject()->getProperty ("tracks").getArray()->getReference (0).getDynamicObject();
+        juce::Array<juce::var> effects;
+        auto* old = new juce::DynamicObject();
+        old->setProperty ("type", "reverb");
+        old->setProperty ("params", juce::Array<juce::var> { 0.7, 0.3, 0.9, 0.4 });
+        effects.add (juce::var (old));
+        track->setProperty ("effects", effects);
+        const auto oldRead = sls::ProjectDocument::fromJson (juce::JSON::toString (v));
+        check (oldRead.document && oldRead.document->tracks[0].slots[0].type == T::Reverb && oldRead.document->tracks[0].slots[0].params[4] == 0.0f
+                   && oldRead.document->tracks[0].slots[0].params[5] == 0.0f && std::abs (oldRead.document->tracks[0].slots[0].params[0] - 0.7f) < 1.0e-6f,
+               "a reverb saved by an older version (4 values) reads as Hall without pre-delay");
+
+        std::vector<sls::EffectUnit> units (8);
+        for (auto& u : units)
+            u.prepare (kSr);
+        std::array<float, 64> bl {}, br {};
+        gAllocs = 0;
+        gCounting = true;
+        for (int block = 0; block < 500; ++block)
+            for (size_t i = 0; i < 8; ++i)
+            {
+                for (size_t k = 0; k < 64; ++k)
+                    bl[k] = br[k] = std::sin (static_cast<float> (block * 64 + static_cast<int> (k)) * 0.05f) * 0.8f;
+                units[i].process (sls::EffectSlot::make (types[i]), bl.data(), br.data(), 64);
+            }
+        gCounting = false;
+        check (gAllocs.load() == 0, "the new effects allocate nothing while processing (8 effects, 500 blocks)");
     }
 }
 
@@ -7127,6 +7399,7 @@ int main()
     testConsole();
     testMetering();
     testEffects();
+    testNewEffects();
     testEffectsInPlayer();
     testBrowserModel();
     testChannelPresets();

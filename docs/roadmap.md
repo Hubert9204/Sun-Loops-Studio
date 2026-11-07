@@ -1,6 +1,6 @@
 # Status and roadmap
 
-Version 0.20.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
+Version 0.21.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
 what is missing. If something here disagrees with the program, the program is right: please fix the page.
 
 ## What has been verified, and how
@@ -54,10 +54,14 @@ what is missing. If something here disagrees with the program, the program is ri
 | Playlist wheel zoom (0.19.1): wheel up zoomed in and wheel down zoomed out past the starting view, around the mouse; the loop region's menu without *Zoom to region* | Manual, in a virtual display | Worked |
 | Piano roll ruler and loop region (0.20.0): a pattern's region (inside / shorter pattern), Pattern mode staying inside the region, the region in the project file and broken or out-of-range regions left out | Automated headless tests (1044 checks in total) | All pass |
 | The piano roll's ruler in the interface: a right drag drew a region (Play then started at it and stayed in it), a left click while playing moved the position (the engine sought there, then came back into the region at the end of the pattern), a click while stopped moved the start marker, right drag inside moved and on an edge resized the region, the menu's Move (follows the mouse, click places it) and Delete (notes untouched) | Manual, in a virtual display | Worked |
+| New effects (0.21.0): reverb pre-delay timing, Room shorter than Hall, Plate brighter than Room; ping-pong sides, delay spread, tape timing and bounded feedback; overdrive level at drive 0, 3rd and 2nd harmonics, aliases of a 5 kHz sine driven into a square at least 40 dB down (measured 51 dB); chorus dry at mix 0 and stereo with width; phaser notches; filter slopes (12 / 24 dB), high-pass, notch, dry at mix 0; parametric EQ gains; maximizer ceiling never passed, level kept, quiet sound unchanged and 1.5 ms late; transient attack / sustain / listen; imager mono, double width, mono bass; 42 presets in range and finite; files (new types, old reverbs as Hall); no allocation; every effect finite at its extremes | Automated headless tests (1082 checks in total) | All pass |
+| The new effects in the interface: the grouped slot menu, Overdrive in a slot with its seven parameters (Boost shown as Off / x10), the *Presets...* menu applying a preset | Manual, in a virtual display | Worked (not heard) |
 | A use-after-free when clicking an item that rebuilds the browser tree (crash on *Scan for VST3 plugins...*) | Found in that manual session | Fixed (item actions are deferred); the same click was repeated afterwards |
 
 ## What has not been verified
 
+- **How the new effects sound (0.21.0).** Only measured. The presets were set by numbers, the reverb types and the tape delay by their
+  structure, not by ear; the Maximizer was not compared with a commercial limiter, and true peaks between samples are not measured by it.
 - **How the FM synth sounds (0.19.0).** Only measured (pitch, brightness, envelopes, bounds); the factory FM sounds were set by numbers.
 - **How the subtractive synth sounds (0.18.0).** Pitch, filter, envelopes and LFO were measured on single notes; the factory sounds were
   shaped by numbers (levels, cutoffs, times), not by ear. Aliasing at very high notes with the square wave's pulse-width modulation, the

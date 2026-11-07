@@ -46,6 +46,14 @@ const char* effectKey (EffectType t)
         case EffectType::Delay:      return "delay";
         case EffectType::Compressor: return "compressor";
         case EffectType::Plugin:     return "plugin";
+        case EffectType::Overdrive:    return "overdrive";
+        case EffectType::Chorus:       return "chorus";
+        case EffectType::Phaser:       return "phaser";
+        case EffectType::Filter:       return "filter";
+        case EffectType::ParametricEq: return "parametric-eq";
+        case EffectType::Maximizer:    return "maximizer";
+        case EffectType::Transient:    return "transient";
+        case EffectType::Imager:       return "imager";
         case EffectType::None:       break;
     }
     return "none";

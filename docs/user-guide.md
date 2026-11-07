@@ -647,16 +647,29 @@ Click a track to select it; the effects panel then shows its slots.
 
 ### Effects
 
-Click an empty slot (or right-click any slot) for the menu: **Equalizer**, **Reverb**, **Delay**, **Compressor**,
-**Bypass**, **Remove effect**. The effects run in order, top to bottom, before the track fader. The effects panel has
-a power button per slot (bypass) and a slider per parameter of the selected slot.
+Click a slot for the menu: the effects, grouped (**EQ and filter**, **Dynamics**, **Drive**, **Modulation**, **Space and time**,
+**Stereo**), then **Plugin effects**, **Bypass** and **Remove effect**. The effects run in order, top to bottom, before the track
+fader. The effects panel has a power button per slot (bypass), a slider per parameter of the selected slot (a choice such as
+*Type* or *Mode* steps through its names; double-click a slider for its default) and, for most effects, **Presets...** with
+ready-made settings.
 
-| Effect | Parameters |
-| --- | --- |
-| Equalizer | Low shelf (120 Hz), Mid (a bell with its own frequency, 200-5000 Hz), High shelf (6 kHz); each -15 to +15 dB |
-| Reverb | Size, Damping, Width, Mix |
-| Delay | Time (10-1000 ms), Feedback, Tone, Mix |
-| Compressor | Threshold (-60 to 0 dB), Ratio (1-20:1), Attack, Release, Makeup gain |
+| Effect | Parameters | Presets |
+| --- | --- | --- |
+| Equalizer | Low shelf (120 Hz), Mid (a bell with its own frequency, 200-5000 Hz), High shelf (6 kHz); each -15 to +15 dB | |
+| Parametric EQ | Low shelf (frequency, gain), a bell (frequency, gain, Q), high shelf (frequency, gain), each -18 to +18 dB; output | Vocal presence, Kick punch, Warm master |
+| Filter | Type (low-pass, high-pass, band-pass, notch), Cutoff, Resonance, Slope (12 or 24 dB), Drive, LFO rate and depth (sweeps the cutoff up to 3 octaves), Mix | Low-pass 24 dB, High-pass, Wobble, Telephone |
+| Compressor | Threshold (-60 to 0 dB), Ratio (1-20:1), Attack, Release, Makeup gain | Gentle, Drum bus, Vocal |
+| Maximizer | A mastering limiter in three stages: Input gain, optional Soft clip, Glue (a gentle soft-knee compressor), then a look-ahead limiter that keeps every peak at or below the **Ceiling**; Release. It delays the sound by 1.5 ms (its look-ahead). | Transparent, Loud, Streaming (-1 dB) |
+| Transient | Splits each sound into its attack and its sustain: Attack and Sustain gain (-24 to +24 dB), Speed (how long an attack lasts), Listen (both, transients only, sustain only), Mix, Output | Punchy drums, Tighten, More room, Transients only |
+| Overdrive | Drive, Boost (x10), Color (darker / brighter before the drive), Tone (after it), Character (adds even harmonics), Mix, Output. Runs at 4x the sample rate with anti-aliasing. | Warm, Crunch, Fuzz, Parallel grit |
+| Chorus | Rate, Depth, Delay, Feedback (high feedback and a short delay make a flanger), Voices (1-3), Width, Mix | Subtle, Wide, Ensemble, Flanger |
+| Phaser | Rate, Depth, Center frequency, Feedback, Stages (4, 6, 8, 12), Width, Mix | Slow sweep, Fast, Deep 12 |
+| Reverb | Size, Damping, Width, Mix, **Type** (Hall, Room, Plate), Pre-delay (0-250 ms) | Hall, Large hall, Room, Small room, Plate, Vocal plate |
+| Delay | Time (10-1000 ms), Feedback, Tone, Mix, **Mode** (Stereo, Ping-pong: the repeats bounce between the sides, Tape: darker, saturated repeats), Spread (the right side up to 1.5 x later), Wobble (tape wow and flutter) | Stereo 1/8, Ping-pong 1/4, Tape echo, Slapback, Dub space |
+| Stereo Imager | Width (0-200 %), Mid and Side gain, Mono bass (below this frequency the sound becomes mono), Balance | Wider, Mono bass, Mono |
+
+Projects made before 0.21.0 sound the same: their reverbs are Halls without pre-delay and their delays are Stereo.
+Files with the new effects cannot be read by older versions (the slot comes back empty there).
 
 These are Sun Loops Studio's own effects. The slot menu also has **Plugin effects** (the effect plugins found by the last
 scan, see *Plugins*) and **Open plugin window** for a plugin slot; a plugin's parameters are in its own window, not in the effects panel.
@@ -664,7 +677,7 @@ scan, see *Plugins*) and **Open plugin window** for a plugin slot; a plugin's pa
 ### Master effects
 
 The **master strip** (right of the tracks) has the same four effect slots as a track. Click a slot to pick an effect
-(Equalizer, Reverb, Delay, Compressor); click the strip or a slot to show it in the effects panel, which is titled
+(all the effects above, a Maximizer at the end for mastering); click the strip or a slot to show it in the effects panel, which is titled
 *Effects - Master*. The master chain processes the **sum of all tracks**, in order, **before the master fader** and
 the final soft limiter, so a compressor or equalizer there shapes the whole mix, and the exported WAV includes it. Use
 it for glue compression, a final EQ, or a touch of reverb on everything. Slots can be bypassed or removed like those

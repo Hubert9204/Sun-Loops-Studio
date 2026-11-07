@@ -190,6 +190,7 @@ public:
 private:
     void applySlot (int slot, const EffectSlot& newSlot);
     void rebuildParameters();
+    void showPresetMenu();
 
     MixerTrack* track = nullptr;
     int trackIndex = 0;
@@ -201,6 +202,7 @@ private:
     juce::Label effectLabel;
     juce::Label notePlaceholder;
     juce::TextButton pluginButton { "Open plugin window" };
+    juce::TextButton presetButton { "Presets..." }; // the built-in effect's ready-made settings (0.21.0)
     struct ParamRow
     {
         juce::Label name;
