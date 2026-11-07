@@ -30,6 +30,7 @@
 #include "ui/PanelWindow.h"
 #include "ui/RightClickButton.h"
 #include "ui/PianoRoll.h"
+#include "ui/PianoRollToolbar.h"
 #include "ui/PluginWindow.h"
 #include "plugins/PluginHost.h"
 #include "ui/PlaylistView.h"
@@ -310,6 +311,8 @@ private:
     // Members are destroyed in reverse order, so a panel never outlives the content it points to.
     RackView rackView;
     PianoRoll pianoRoll;
+    PianoRollToolbar pianoToolbar { pianoRoll };
+    PianoRollEditor pianoEditor { pianoToolbar, pianoRoll }; // the toolbar above the roll: the piano roll panel's content
     int liveChannel = 0; // the channel that is sounding a note played by hand
     MixerPanel mixerPanel;
     PlaylistView playlistView { arrangement };

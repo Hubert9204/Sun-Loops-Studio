@@ -336,9 +336,12 @@ chiuso all'avvio e si apre da un canale, come sopra.
 | --- | --- |
 | Suonare una nota | Pulsante sinistro su un tasto della tastiera (tenuto premuto = suona). |
 | Aggiungere una nota | Clic su una cella vuota; tieni premuto e trascina a destra per scegliere la lunghezza. Suona finché tieni premuto. |
-| Spostare una nota | Trascinala. |
-| Cambiare la lunghezza | Trascina il bordo destro. |
-| Eliminare una nota | Tasto destro sulla nota. |
+| Spostare una nota | Trascinala (Alt mentre trascini: senza snap). Trascinando una nota **selezionata** si spostano tutte le note selezionate. |
+| Cambiare la lunghezza | Trascina il bordo destro (su una nota selezionata: tutte le selezionate cambiano della stessa quantità). |
+| Eliminare una nota | Tasto destro sulla nota (su una nota selezionata: tutta la selezione). |
+| Selezionare note | **Ctrl + trascinamento** su una parte vuota disegna un rettangolo (con Maiusc aggiunge alla selezione); **Ctrl + clic** su una nota la aggiunge o la toglie; **Ctrl + A** seleziona tutto, **Esc** niente. Le note selezionate sono chiare con il bordo bianco. |
+| Copiare, tagliare, incollare, duplicare | **Ctrl + C / X / V** (incolla mettendo la prima nota sotto il mouse), **Ctrl + D** (una copia subito dopo la selezione). **Canc** elimina la selezione. |
+| Spostare con i tasti | **Su / Giù**: un semitono (Maiusc: un'ottava, Ctrl: un grado della scala); **Sinistra / Destra**: un passo dello snap (Maiusc: un movimento). |
 | Legato / slide | Maiusc + clic su una nota: normale -> **legato** (blu, "L") -> **slide** (arancione, "S") -> normale. |
 | Scorrere in altezza | Rotella del mouse. |
 | Scorrere nel tempo | Maiusc + rotella. |
@@ -347,6 +350,26 @@ chiuso all'avvio e si apre da un canale, come sopra.
 | Ripetere una parte del pattern | **Trascinamento col destro sul righello**: disegna una zona di loop (blu, "LOOP") e la modalità Pattern ripete solo quella parte. A riproduzione ferma Play parte dalla zona. |
 | Spostare / ridimensionare la zona | Trascinamento col destro dentro la zona la sposta; su uno dei suoi bordi la ridimensiona. |
 | Menu della zona | **Clic destro sulla zona**: **Move** (la zona segue il mouse; clic per posarla), **Resize** (il bordo più vicino segue il mouse; clic per finire), **Delete loop region** (toglie solo l'evidenziazione: nessuna nota viene toccata). Durante Move e Resize un clic destro o Esc la rimettono com'era. |
+
+**La barra degli strumenti** (0.23.0), sopra le note:
+
+- **Snap**: Bar, Beat, 1/8, 1/16 (predefinito), 1/32, terzine di 1/8 e 1/16, None. Le note si disegnano, spostano e ridimensionano su questa griglia.
+- **Scale**: una tonalità e una scala (maggiore, le minori, i modi, le pentatoniche, blues). Le righe delle note fuori scala sono più
+  scure e la tonica è scritta in verde sulla tastiera. **Snap to scale** fa cadere le note nuove e spostate sulla scala.
+- **Chord**: scelto un accordo (maggiore, minore, settime, none, sus, sesta, power...) e il suo rivolto, un clic posa l'accordo intero
+  con la fondamentale sul tasto cliccato; trascina per la lunghezza di tutte le sue note.
+- **Velocity**: mostra la **corsia della velocity** sotto le note, una barretta per nota. Trascina su di essa per disegnare le velocity
+  (solo delle note selezionate, se ce ne sono).
+- **Tools** agisce sulle note selezionate (o su tutte se nessuna è selezionata): Quantize (inizi; inizi e fini; a metà), Humanize
+  (leggero / medio / forte), Legato, Staccato, Strum degli accordi (su / giù, veloce / lento), Arpeggio degli accordi (su, giù, su e
+  giù, casuale; ottavi o sedicesimi), Chop (ottavi, sedicesimi, trentaduesimi), Flip, trasposizione di un'ottava, Snap alla scala,
+  Velocity (crescendo, diminuendo, casuale, fissa).
+- **Generate** scrive nel pattern di questo canale (sostituendo le sue note; **Ctrl+Z** annulla), nella tonalità scelta in Scale:
+  una **progressione di accordi** (dodici, dal pop I-V-vi-IV al jazz ii-V-I e a quelle minori; accordi tenuti, stab sincopati, pulsazione
+  di ottavi o arpeggio; uno o due accordi per battuta, disposti in modo che ogni voce si muova il meno possibile) oppure una **linea di
+  basso** (fondamentali, ottavi, ottave, fondamentale e quinta, walking, sincopata) su una di quelle progressioni o **seguendo gli
+  accordi di un altro canale**: il programma riconosce l'accordo suonato in ogni mezza battuta (la nota più bassa decide fra due che
+  vanno ugualmente bene).
 
 **Suonare le note.** La tastiera a sinistra e le note che disegni si possono suonare:
 

@@ -23,6 +23,7 @@
 #include "audio/ClipEdit.h"
 #include "audio/DrumSynth.h"
 #include "audio/SoundLibrary.h"
+#include "audio/MusicTheory.h"
 #include "audio/TimeFormat.h"
 #include "audio/Effects.h"
 #include "audio/InputRecorder.h"
@@ -4665,6 +4666,211 @@ void testOneShot()
     check (! empty.isActive(), "without a sound it stays silent");
 }
 
+// --- music theory: scales, chords, the piano roll's tools and generators (0.23.0) ---------------------------------------------
+std::vector<int> pitchesOf (const std::vector<sls::Note>& notes)
+{
+    std::vector<int> p;
+    for (const auto& n : notes)
+        p.push_back (n.pitch);
+    return p;
+}
+
+void testMusicTheory()
+{
+    namespace th = sls::theory;
+    std::cout << "Music theory: scales, chords, note tools, generators\n";
+
+    {   // scales
+        th::Scale cMajor { 0, 1 }, aMinor { 9, 2 }, chromatic { 0, 0 }, dBlues { 2, 12 };
+        check (th::scales().size() == 13 && std::string (th::scales()[1].name) == "Major" && std::string (th::scales()[12].name) == "Blues",
+               "thirteen scales, from Chromatic to Blues");
+        check (cMajor.contains (60) && cMajor.contains (64) && ! cMajor.contains (61) && cMajor.contains (71) && ! cMajor.contains (70)
+                   && aMinor.contains (57) && aMinor.contains (60) && ! aMinor.contains (61) && cMajor.size() == 7 && dBlues.size() == 6,
+               "membership: C major has no black keys, A minor is C major from A");
+        check (cMajor.pitchClasses() == std::vector<int> { 0, 2, 4, 5, 7, 9, 11 } && aMinor.pitchClasses() == std::vector<int> { 9, 11, 0, 2, 4, 5, 7 },
+               "the notes of a scale from its root");
+        check (cMajor.snap (61) == 60 && cMajor.snap (63) == 62 && cMajor.snap (66) == 65 && cMajor.snap (60) == 60 && chromatic.snap (61) == 61,
+               "snapping goes to the nearest note of the scale (the lower one on a tie)");
+        check (cMajor.step (60, 1) == 62 && cMajor.step (60, 2) == 64 && cMajor.step (64, 1) == 65 && cMajor.step (60, -1) == 59 && cMajor.step (60, 7) == 72
+                   && cMajor.step (127, 3) == 127 && cMajor.step (0, -2) == 0,
+               "stepping through the scale (seven steps = an octave), stopping at the ends of the keyboard");
+        check (th::noteName (60) == "C4" && th::noteName (21) == "A0" && th::noteName (61) == "C#4" && th::noteName (0) == "C-1",
+               "note names: middle C is C4");
+    }
+    {   // chords
+        check (th::chords().size() == 18 && th::chordPitches (60, 0) == std::vector<int> { 60, 64, 67 } && th::chordPitches (60, 1) == std::vector<int> { 60, 63, 67 }
+                   && th::chordPitches (60, 10) == std::vector<int> { 60, 64, 67, 71 } && th::chordPitches (57, 17) == std::vector<int> { 57, 60, 64, 67, 71 },
+               "chords on a root: C major, C minor, C major 7, A minor 9");
+        check (th::chordPitches (60, 0, 1) == std::vector<int> { 64, 67, 72 } && th::chordPitches (60, 0, 2) == std::vector<int> { 67, 72, 76 }
+                   && th::chordPitches (60, 0, 9) == std::vector<int> { 67, 72, 76 } && th::chordPitches (126, 0) == std::vector<int> { 126, 127, 127 },
+               "inversions move the lowest notes up an octave; pitches stay on the keyboard");
+        th::Scale cMajor { 0, 1 }, aMinor { 9, 2 }, aPenta { 9, 11 };
+        check (th::diatonicChord (cMajor, 0, 3) == std::vector<int> { 60, 64, 67 } && th::diatonicChord (cMajor, 1, 3) == std::vector<int> { 62, 65, 69 }
+                   && th::diatonicChord (cMajor, 4, 4) == std::vector<int> { 67, 71, 74, 77 } && th::diatonicChord (cMajor, 6, 3) == std::vector<int> { 71, 74, 77 },
+               "chords of the scale: I = C, ii = Dm, V7 = G7, vii = B diminished");
+        check (th::diatonicChord (aMinor, 0, 3, 3) == std::vector<int> { 57, 60, 64 } && th::diatonicChord (aPenta, 0, 3, 3) == std::vector<int> { 57, 60, 64 },
+               "in A minor (and the A minor pentatonic, which borrows the natural minor) the first chord is A minor");
+    }
+    const int bar = 4 * kBeat;
+    {   // tools
+        std::vector<sls::Note> notes { { 60, 10, 200, 0.5f }, { 64, 470, 230, 0.5f }, { 67, 965, 100, 0.5f } };
+        std::vector<bool> sel;
+        th::transpose (notes, sel, 2);
+        check (pitchesOf (notes) == std::vector<int> { 62, 66, 69 } && sel.size() == 3, "transposing with nothing selected moves every note");
+        sel = { true, false, false };
+        th::transpose (notes, sel, -2);
+        check (pitchesOf (notes) == std::vector<int> { 60, 66, 69 }, "and with a selection only the selected ones");
+        sel.assign (3, false);
+        th::snapToScale (notes, sel, { 0, 1 });
+        check (pitchesOf (notes) == std::vector<int> { 60, 65, 69 }, "snap to scale (F# goes down to F in C major)");
+        th::transposeInScale (notes, sel, { 0, 1 }, 2);
+        check (pitchesOf (notes) == std::vector<int> { 64, 69, 72 }, "moving two steps in the scale (a third up)");
+
+        th::quantize (notes, sel, kBeat / 4, 1.0f, false, bar);
+        check (notes[0].startTick == 0 && notes[1].startTick == 480 && notes[2].startTick == 960 && notes[0].lengthTicks == 200, "quantizing moves starts onto the grid, keeping lengths");
+        notes[0].startTick = 30;
+        th::quantize (notes, sel, kBeat / 4, 0.5f, true, bar);
+        check (notes[0].startTick == 15 && notes[1].lengthTicks > 230 && notes[1].lengthTicks <= 240, "half strength goes half way; ends move towards the grid too");
+        th::legato (notes, sel, bar);
+        check (notes[0].lengthTicks == 480 - 15 && notes[1].lengthTicks == 480, "legato: every note lasts until the next starts");
+        th::staccato (notes, sel, 0.5f, 30);
+        check (notes[1].lengthTicks == 240, "staccato halves the lengths");
+
+        std::vector<sls::Note> chord { { 60, 0, 960, 0.8f }, { 64, 0, 960, 0.6f }, { 67, 0, 960, 0.7f } };
+        std::vector<bool> csel;
+        auto strummed = chord;
+        th::strum (strummed, csel, 20, true);
+        check (strummed[0].startTick == 0 && strummed[1].startTick == 20 && strummed[2].startTick == 40 && strummed[2].startTick + strummed[2].lengthTicks == 960,
+               "strum up: each higher note 20 ticks later, every note still ends together");
+        auto down = chord;
+        csel.clear();
+        th::strum (down, csel, 20, false);
+        check (down[2].startTick == 0 && down[0].startTick == 40, "strum down starts from the top");
+
+        auto arp = chord;
+        csel.clear();
+        th::arpeggiate (arp, csel, kBeat / 2, th::ArpPattern::Up, 1);
+        std::sort (arp.begin(), arp.end(), [] (const sls::Note& a, const sls::Note& b) { return a.startTick < b.startTick; });
+        check (arp.size() == 4 && pitchesOf (arp) == std::vector<int> { 60, 64, 67, 60 } && arp[3].startTick == 720 && arp[3].lengthTicks == 240
+                   && std::abs (arp[0].velocity - 0.7f) < 1e-5f && csel.size() == 4 && csel[0],
+               "arpeggio up: a chord of a half note becomes four eighths C E G C, with the chord's average velocity");
+        auto updown = std::vector<sls::Note> { { 60, 0, 1920, 0.8f }, { 64, 0, 1920, 0.8f }, { 67, 0, 1920, 0.8f }, { 72, 0, 1920, 0.8f } };
+        csel.clear();
+        th::arpeggiate (updown, csel, kBeat / 2, th::ArpPattern::UpDown, 1);
+        std::sort (updown.begin(), updown.end(), [] (const sls::Note& a, const sls::Note& b) { return a.startTick < b.startTick; });
+        check (pitchesOf (updown) == std::vector<int> { 60, 64, 67, 72, 67, 64, 60, 64 }, "arpeggio up-down does not repeat the turning notes");
+        auto same = std::vector<sls::Note> { { 60, 0, 480, 0.8f }, { 60, 0, 480, 0.8f } };
+        csel.clear();
+        th::arpeggiate (same, csel, 120, th::ArpPattern::Random, 7);
+        check (same.size() == 4, "a random arpeggio of two identical notes finishes (no endless search for a different note)");
+        auto single = std::vector<sls::Note> { { 60, 0, 480, 0.8f } };
+        csel.clear();
+        th::arpeggiate (single, csel, 120, th::ArpPattern::Up, 1);
+        check (single.size() == 1 && single[0].lengthTicks == 480, "a single note is not arpeggiated");
+
+        auto chopped = std::vector<sls::Note> { { 60, 0, 500, 0.8f, sls::NoteLink::Legato } };
+        csel.clear();
+        th::chop (chopped, csel, 120);
+        check (chopped.size() == 5 && chopped[4].lengthTicks == 20 && chopped[0].link == sls::NoteLink::Legato && chopped[1].link == sls::NoteLink::None,
+               "chop cuts a note into 16ths (the last piece shorter; only the first keeps its link)");
+
+        auto flipped = chord;
+        csel.clear();
+        th::flip (flipped, csel);
+        check (pitchesOf (flipped) == std::vector<int> { 67, 63, 60 }, "flip turns the notes upside down within their range");
+
+        std::vector<sls::Note> run { { 60, 0, 100, 0.5f }, { 60, 480, 100, 0.5f }, { 60, 960, 100, 0.5f } };
+        std::vector<bool> rsel;
+        th::velocityRamp (run, rsel, 0.2f, 1.0f);
+        check (std::abs (run[0].velocity - 0.2f) < 1e-5f && std::abs (run[1].velocity - 0.6f) < 1e-5f && std::abs (run[2].velocity - 1.0f) < 1e-5f,
+               "a velocity ramp goes from the first to the last note in time");
+        th::randomizeVelocity (run, rsel, 0.4f, 0.6f, 3);
+        bool inRange = true;
+        for (const auto& n : run)
+            inRange = inRange && n.velocity >= 0.4f && n.velocity <= 0.6f;
+        auto again = run;
+        th::randomizeVelocity (again, rsel, 0.4f, 0.6f, 3);
+        check (inRange && again[0].velocity == run[0].velocity && again[2].velocity == run[2].velocity, "random velocities stay in their range and repeat with the same seed");
+        auto human = run;
+        th::humanize (human, rsel, 10, 0.1f, 9, bar);
+        bool close = true;
+        for (size_t i = 0; i < human.size(); ++i)
+            close = close && std::abs (human[i].startTick - run[i].startTick) <= 10 && human[i].startTick >= 0 && std::abs (human[i].velocity - run[i].velocity) <= 0.1001f;
+        check (close, "humanize moves notes by at most the amounts asked for, never before the start");
+    }
+    {   // generators
+        th::Scale cMajor { 0, 1 };
+        const auto spans = th::progressionChords (cMajor, 0, bar, 4 * bar);
+        check (spans.size() == 4 && spans[0].root == 0 && spans[1].root == 7 && spans[2].root == 9 && spans[3].root == 5
+                   && spans[2].pitchClasses == std::vector<int> { 9, 0, 4 },
+               "the pop progression in C: C, G, Am, F, one per bar");
+        const auto twice = th::progressionChords (cMajor, 0, bar, 2 * bar);
+        check (twice.size() == 2 && twice[1].startTick == bar, "a two-bar pattern takes the first two chords");
+        const auto held = th::progressionNotes (cMajor, 0, th::ChordRhythm::Held, bar, 4 * bar);
+        bool voiced = held.size() == 12, chordTones = true;
+        int maxJump = 0;
+        for (size_t c = 0; c < 4 && voiced; ++c)
+        {
+            std::vector<int> p;
+            for (size_t k = 0; k < 3; ++k)
+            {
+                const auto& n = held[c * 3 + k];
+                p.push_back (n.pitch);
+                const auto& pcs = spans[c].pitchClasses;
+                chordTones = chordTones && std::find (pcs.begin(), pcs.end(), n.pitch % 12) != pcs.end() && n.startTick == static_cast<int> (c) * bar;
+            }
+            std::sort (p.begin(), p.end());
+            voiced = voiced && p.front() >= 52 && p.back() <= 79;
+            if (c > 0)
+                for (size_t k = 0; k < 3; ++k)
+                    maxJump = std::max (maxJump, std::abs (held[c * 3 + k].pitch - held[(c - 1) * 3 + k].pitch));
+        }
+        std::cout << "    (largest move of one voice between chords: " << maxJump << " semitones)\n";
+        check (voiced && chordTones && maxJump <= 5, "held chords use only chord notes, around middle C, and no voice jumps more than a fourth");
+        const auto stabs = th::progressionNotes (cMajor, 0, th::ChordRhythm::Stabs, bar, bar);
+        const auto pulse = th::progressionNotes (cMajor, 0, th::ChordRhythm::Pulse, bar, bar);
+        const auto arp = th::progressionNotes (cMajor, 0, th::ChordRhythm::Arpeggio, bar, bar);
+        bool inside = true;
+        for (const auto* list : { &held, &stabs, &pulse, &arp })
+            for (const auto& n : *list)
+                inside = inside && n.startTick >= 0 && n.startTick + n.lengthTicks <= 4 * bar && n.lengthTicks > 0 && n.velocity > 0.0f && n.velocity <= 1.0f;
+        check (stabs.size() == 9 && pulse.size() == 24 && arp.size() == 8 && inside, "stabs (3 hits), pulse (8 eighths), arpeggio (8 notes) of a bar, all inside the pattern");
+        check (th::progressions().size() == 12, "twelve progressions to choose from");
+
+        // chords found in notes: the demo's piano (Am9 then Fmaj7) and a C major triad in first inversion with E in the bass
+        std::vector<sls::Note> piano;
+        for (const int p : { 57, 60, 64, 67, 71 })
+            piano.push_back ({ p, 0, bar - 20, 0.7f });
+        for (const int p : { 53, 57, 60, 64, 69 })
+            piano.push_back ({ p, bar, bar - 20, 0.7f });
+        const auto found = th::detectChords (piano, 2 * kBeat, 2 * bar);
+        check (found.size() == 2 && found[0].root == 9 && found[1].root == 5 && found[0].lengthTicks == bar, "detecting chords: A minor (9) and F major (7) from the demo's piano, one span per bar");
+        const auto inverted = th::detectChords ({ { 64, 0, 960, 0.7f }, { 67, 0, 960, 0.7f }, { 72, 0, 960, 0.7f } }, kBeat, 2 * kBeat);
+        check (inverted.size() == 1 && inverted[0].root == 0 && inverted[0].pitchClasses == std::vector<int> { 0, 4, 7 }, "a C major chord with E in the bass is still C");
+        const auto gap = th::detectChords ({ { 62, bar, 480, 0.7f }, { 65, bar, 480, 0.7f }, { 69, bar, 480, 0.7f } }, kBeat * 2, 2 * bar);
+        check (gap.size() == 1 && gap[0].root == 2 && gap[0].startTick == 0 && gap[0].lengthTicks == 2 * bar, "a silent start takes the first chord found");
+        check (th::detectChords ({}, kBeat, bar).empty(), "no notes: no chords");
+        const auto sixth = th::detectChords ({ { 55, 0, 960, 0.7f }, { 59, 0, 960, 0.7f }, { 62, 0, 960, 0.7f }, { 64, 0, 960, 0.7f } }, 2 * kBeat, 2 * kBeat);
+        check (sixth.size() == 1 && sixth[0].root == 7, "G B D E with G in the bass is G6 (not E minor 7)");
+
+        const auto roots = th::basslineNotes (spans, th::BassStyle::Roots, cMajor);
+        check (pitchesOf (roots) == std::vector<int> { 36, 31, 33, 29 } && roots[1].startTick == bar, "roots: C2, G1, A1, F1 (from E1 up), one per bar");
+        const auto octaves = th::basslineNotes (spans, th::BassStyle::Octaves, cMajor);
+        check (octaves.size() == 32 && octaves[0].pitch == 36 && octaves[1].pitch == 48, "octaves: eighths alternating root and octave");
+        const auto rootFifth = th::basslineNotes (spans, th::BassStyle::RootFifth, cMajor);
+        check (rootFifth.size() == 16 && rootFifth[1].pitch == 43, "root and fifth: quarters, C then G");
+        const auto walking = th::basslineNotes (spans, th::BassStyle::Walking, cMajor);
+        check (walking.size() == 16 && walking[0].pitch == 36 && walking[1].pitch == 40 && walking[2].pitch == 43 && (walking[3].pitch == 30 || walking[3].pitch == 32),
+               "walking: root, third, fifth and a note next to the next chord's root (G1)");
+        const auto sync = th::basslineNotes (spans, th::BassStyle::Syncopated, cMajor);
+        bool allIn = true;
+        for (const auto* list : { &roots, &octaves, &rootFifth, &walking, &sync })
+            for (const auto& n : *list)
+                allIn = allIn && n.lengthTicks > 0 && n.startTick >= 0 && n.startTick + n.lengthTicks <= 4 * bar && n.pitch >= 28 && n.pitch <= 60;
+        check (sync.size() == 24 && allIn, "syncopated: six hits a bar; every bassline note stays in its chord's time and in the bass range");
+    }
+}
+
 // Brightness of a sound: RMS of its first difference over its RMS (2 sin(pi f / sr) for a sine), over [from, to) seconds.
 double brightnessOf (const sls::SampleData& s, double from = 0.0, double to = 1.0e9)
 {
@@ -7745,6 +7951,7 @@ int main()
     testClipEditing();
     testNoteRecording();
     testSoundLibrary();
+    testMusicTheory();
     testOneShot();
     testAutomation();
     testMidiImport();

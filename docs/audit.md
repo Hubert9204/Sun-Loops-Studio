@@ -27,6 +27,14 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.23.0
+The piano roll's new code runs on the message thread only (`PianoRoll`, `PianoRollToolbar`, `MusicTheory`); the player sees the
+notes through the usual project snapshot. clang-tidy (the audit's check set) on `MusicTheory.cpp`, `PianoRoll.cpp` and
+`PianoRollToolbar.cpp`: four findings in `MusicTheory.cpp` fixed (three vectors filled without `reserve`, a rounding by
+`+ 0.5`) and one in `PianoRoll.cpp` (an integer division in a floating-point expression, harmless but rewritten). The remaining
+`bugprone-swapped-arguments` reports in `PianoRoll.cpp` are the false positive described after 0.20.0 (JUCE's
+`drawVerticalLine (int, float, float)` / `drawHorizontalLine` called with explicit casts), now five of them.
+
 ## After 0.22.0
 New code: `SoundLibrary.cpp` (zip archive in memory, decoding on worker threads, `weak_ptr` caches guarded by mutexes; reading the
 archive is serialised by one mutex) and `DrumSynth.cpp` (generation on the message thread when a kit is loaded). Nothing of it runs in

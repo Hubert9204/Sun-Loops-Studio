@@ -2,6 +2,25 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.23.0 - 2026-11-07
+
+### Added
+- **Piano roll toolbar**: **Snap** (bar, beat, 1/8, 1/16, 1/32, 1/8 and 1/16 triplets, none), **Scale** (key and 12 scales: the rows of
+  notes outside it are darker, its root is named on the keyboard; *Snap to scale* puts new and moved notes on it), **Chord** (18 chords
+  and their inversions placed with one click), **Velocity** (a velocity lane under the notes: drag across it to draw velocities).
+- **Selections**: Ctrl+drag draws a selection rectangle (Shift adds), Ctrl+click adds or removes a note, Ctrl+A / Escape; selected
+  notes move and resize together; right click deletes the selection; **Ctrl+C / X / V** (paste under the mouse) and **Ctrl+D**
+  (duplicate after itself); **arrow keys** move by a semitone, an octave (Shift), a step of the scale (Ctrl), a snap step or a beat.
+  Alt while dragging turns the snap off.
+- **Tools** on the selection (or every note): quantize (starts, ends, half way), humanize, legato, staccato, strum (up / down),
+  arpeggiate chords (up, down, up and down, random; 8ths or 16ths), chop, flip, octave up / down, snap to scale, velocity crescendo /
+  decrescendo / random / fixed.
+- **Generators**: 12 chord progressions in the chosen key (held, syncopated stabs, eighth-note pulse or arpeggio; one or two chords a
+  bar; smooth voice leading) and basslines in six styles (roots, eighths, octaves, root and fifth, walking, syncopated) on a
+  progression or **following the chords of another channel** (chord recognition every half bar). They replace the channel's notes in
+  the pattern; Ctrl+Z undoes them.
+- `MusicTheory` (scales, chords, the tools and generators) with 44 new automated checks.
+
 ## 0.22.0 - 2026-11-07
 
 ### Added

@@ -26,6 +26,7 @@ src/audio/                      No UI dependencies except JUCE audio types
   Effects.*                     EffectSlot (type, bypass, parameters) and EffectUnit: the twelve built-in effects
   SoundLibrary.*                The built-in sampled instruments and kits (a zip linked into the program)
   DrumSynth.*                   The drum and percussion kits made by code
+  MusicTheory.*                 Scales, chords, the piano roll's note tools and generators (plain C++, tested)
   Arrangement.h                 Patterns, clips, and compilation of pattern / song into a plain Project
   SnapshotExchange.h            Lock-free hand-over of snapshots from the UI thread to the audio thread
   Player.*                      Transport, synth and sampler voices, channels, mixer tracks and effects (real-time safe)
@@ -74,7 +75,8 @@ src/ui/
   RackView.h  ChannelStrip.*    Channel Rack panel body and its rows (step grid, knobs, context menu, drop target)
   Knob.*  TrackSelector.*       Rotary knob with caption; the "Track N" display
   FileBrowser.*  DragItems.h    The browser sidebar; the text format of dragged items
-  PianoRoll.*                   Note editor
+  PianoRoll.*                   Note editor (selection, clipboard, velocity lane, scale and chord stamp; tools from MusicTheory)
+  PianoRollToolbar.*            The bar above it: snap, scale, chord, velocity lane, Tools and Generate menus
   PlaylistView.*                Playlist panel body: pattern box with New / Rename / Delete, tool buttons, grid, zoom, undo, readouts
   PlaylistTimeline.*            The timeline: ruler, clips with waveforms, the five tools, undo snapshots, file and browser drops, track arming
   MetronomePanel.*  RightClickButton.h   The metronome pop-up (tempo, volume, tap); a button with a right-click action

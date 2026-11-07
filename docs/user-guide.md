@@ -327,9 +327,12 @@ It is closed at start and opens from a channel, as above.
 | --- | --- |
 | Play a note | Left button on a key of the keyboard (held = sounds). |
 | Add a note | Click an empty cell; keep the button down and drag to the right to set its length. It sounds while you hold. |
-| Move a note | Drag it. |
-| Change its length | Drag its right edge. |
-| Delete a note | Right-click it. |
+| Move a note | Drag it (Alt while dragging: no snap). Dragging a **selected** note moves every selected note. |
+| Change its length | Drag its right edge (on a selected note: every selected note changes by the same amount). |
+| Delete a note | Right-click it (a selected note: the whole selection). |
+| Select notes | **Ctrl + drag** on an empty part draws a rectangle (with Shift it adds to the selection); **Ctrl + click** a note adds or removes it; **Ctrl + A** selects all, **Escape** none. Selected notes are bright with a white border. |
+| Copy, cut, paste, duplicate | **Ctrl + C / X / V** (paste puts the first note under the mouse), **Ctrl + D** (a copy right after the selection). **Delete** removes the selection. |
+| Move with the keys | **Up / Down**: a semitone (Shift: an octave, Ctrl: a step of the scale); **Left / Right**: a snap step (Shift: a beat). |
 | Legato / slide | Shift + click a note: normal -> **legato** (blue, "L") -> **slide** (amber, "S") -> normal. |
 | Scroll pitch | Mouse wheel. |
 | Scroll time | Shift + wheel. |
@@ -338,6 +341,24 @@ It is closed at start and opens from a channel, as above.
 | Loop part of the pattern | **Right drag on the ruler** draws a loop region (blue, "LOOP"): Pattern mode then repeats only that part. Stopped, Play starts at the region. |
 | Move / resize the region | Right drag inside it moves it; right drag on one of its edges resizes it. |
 | Region menu | **Right click on the region**: **Move** (it follows the mouse; click to place it), **Resize** (the nearest edge follows the mouse; click to finish), **Delete loop region** (removes only the highlight: no note is touched). During Move and Resize a right click or Escape puts it back. |
+
+**The toolbar** (0.23.0), above the notes:
+
+- **Snap**: Bar, Beat, 1/8, 1/16 (the default), 1/32, 1/8 and 1/16 triplets, None. Notes are drawn, moved and resized on it.
+- **Scale**: a key and a scale (major, the minors, the modes, the pentatonics, blues). The rows of the notes outside the scale are
+  darker and the root is named in green on the keyboard. **Snap to scale** makes new and moved notes land on the scale.
+- **Chord**: with a chord chosen (major, minor, sevenths, ninths, sus, 6, power ...) and its inversion, one click places the whole
+  chord, its root on the clicked key; drag to set the length of all its notes.
+- **Velocity**: shows the **velocity lane** under the notes: a stalk per note. Drag across it to draw the velocities (only of the
+  selected notes, when some are selected).
+- **Tools** works on the selected notes (or all when none is selected): Quantize (starts; starts and ends; half way), Humanize (light /
+  medium / strong), Legato, Staccato, Strum chords (up / down, fast / slow), Arpeggiate chords (up, down, up and down, random; 8ths
+  or 16ths), Chop (8ths, 16ths, 32nds), Flip, Transpose an octave, Snap to the scale, Velocity (crescendo, decrescendo, random, fixed).
+- **Generate** writes into this channel's pattern (replacing its notes; **Ctrl+Z** undoes it), in the key chosen under Scale:
+  a **chord progression** (twelve, from pop I-V-vi-IV to jazz ii-V-I and minor ones; held, syncopated stabs, eighth-note pulse or
+  arpeggio; one or two chords a bar, voiced so that each voice moves as little as possible), or a **bassline** (roots, eighths,
+  octaves, root and fifth, walking, syncopated) either on one of those progressions or **following the chords of another channel**:
+  the program finds the chord played in every half bar (the lowest note decides between two that fit equally).
 
 **Playing the notes.** The keyboard on the left and the notes you draw are playable:
 

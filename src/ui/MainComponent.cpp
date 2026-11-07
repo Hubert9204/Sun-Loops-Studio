@@ -372,6 +372,15 @@ MainComponent::MainComponent()
             statusLabel.setText ("Piano roll loop region deleted", juce::dontSendNotification);
         publishProject();
     };
+    pianoToolbar.getOtherChannels = [this]
+    {
+        // the other channels' notes in the current pattern, for a bassline that follows their chords (drum machines left out)
+        std::vector<PianoRollToolbar::OtherChannel> list;
+        for (size_t i = 0; i < channels.size(); ++i)
+            if (static_cast<int> (i) != selected && channels[i].instrument != Instrument::Drums)
+                list.push_back ({ juce::String (channels[i].name), channels[i].notes });
+        return list;
+    };
     pianoRoll.onNotesChanged = [this]
     {
         channels[static_cast<size_t> (selected)].notes = pianoRoll.getNotes();
@@ -418,8 +427,8 @@ MainComponent::MainComponent()
     // Panels
     rackPanel.setContent (&rackView);
     rackPanel.setMinimumSize (420, 130);
-    pianoPanel.setContent (&pianoRoll);
-    pianoPanel.setMinimumSize (360, 220);
+    pianoPanel.setContent (&pianoEditor);
+    pianoPanel.setMinimumSize (420, 260);
     mixerPanelWindow.setContent (&mixerPanel);
     mixerPanelWindow.setMinimumSize (720, 440);
     playlistPanel.setContent (&playlistView);
@@ -661,6 +670,10 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
         return true;
 
     if (key == juce::KeyPress::escapeKey && pianoRoll.cancelLoopMode())
+        return true;
+
+    // With the mouse over the piano roll its keys (Delete, Ctrl+A/C/X/V/D, arrows, Escape) work on its selection.
+    if (pianoPanel.isOpen() && pianoRoll.isShowing() && pianoRoll.isMouseOver (true) && pianoRoll.handleKey (key))
         return true;
 
     if (key == juce::KeyPress::spaceKey)
