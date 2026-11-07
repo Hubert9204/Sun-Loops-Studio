@@ -1,3 +1,5 @@
+#include <cstdio>
+
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include "ui/MainComponent.h"
@@ -11,6 +13,16 @@ public:
 
     void initialise (const juce::String&) override
     {
+       #if JUCE_LINUX
+        // JUCE draws through X11 (XWayland under Wayland): without a display it would crash, so say so and stop instead.
+        if (juce::SystemStats::getEnvironmentVariable ("DISPLAY", {}).isEmpty())
+        {
+            std::fputs ("Sun Loops Studio: no graphical display (DISPLAY is not set). Start it from a desktop session.\n", stderr);
+            setApplicationReturnValue (1);
+            quit();
+            return;
+        }
+       #endif
         mainWindow = std::make_unique<MainWindow> (getApplicationName());
 
         // "sun-loops-studio song.slp" (or a double-click on a project file) opens that project.

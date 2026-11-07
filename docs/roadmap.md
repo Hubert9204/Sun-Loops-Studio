@@ -1,6 +1,6 @@
 # Status and roadmap
 
-Version 0.23.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
+Version 0.24.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
 what is missing. If something here disagrees with the program, the program is right: please fix the page.
 
 ## What has been verified, and how
@@ -60,10 +60,14 @@ what is missing. If something here disagrees with the program, the program is ri
 | 0.22.0 in the interface: the demo (drums, piano, bass and pluck in the rack, the piano and bass shown as note previews; the bass notes, A1 to E2, visible in the piano roll now that it covers every key), Drum Kits in the browser (Acoustic Studio opened, 16 pads and the credit), the drum machine's *Load kit...* menu with the seven built-in kits, Acoustic Studio loaded (four layers, 1+ / 45+ / 80+ / 110+), the Grand Piano preset dragged onto the rack (a new channel) | Manual, in a virtual display | Worked (not heard) |
 | Music theory for the piano roll (0.23.0): 13 scales (membership, snapping to the nearest note, steps through the scale, pitch classes), note names; 18 chords and their inversions, chords built from the scale (I, ii, V7, vii in C; i in A minor and A minor pentatonic); transpose / in the scale / snap to scale with and without a selection; quantize (full, half, ends), legato, staccato; strum up and down keeping the ends; arpeggios (up, up-down without repeated turning notes, random on identical notes ending, single notes left alone); chop; flip; velocity ramp, random and humanize (within their amounts, repeatable by seed); the progressions (pop in C = C G Am F, voices moving at most a fourth, 2 semitones measured), stabs / pulse / arpeggio inside the pattern; chord detection (Am and F from the demo's piano, an inverted C, G6 with G in the bass, a silent start, no notes); the six bass styles (pitches, counts, all notes in their chord's time and the bass range) | Automated headless tests (1148 checks in total) | All pass |
 | The piano roll in the interface (0.23.0): the toolbar (snap, scale A natural minor shown with darker rows and the green A roots, chord, velocity lane), the Generate menu (chords by rhythm, basslines by style, *Follow the chords of Piano*), a walking bassline generated on the demo's piano (A F E found), Ctrl+A then Up and Shift+Up moving every note, Ctrl+Z undoing | Manual, in a virtual display | Worked |
+| Additive and physical engines (0.24.0): the default timbre is a saw (harmonic n at 1/n) on pitch; odd-only; brightness; one harmonic = a sine (2nd harmonic 80 dB down); morph to B, the morph envelope; the filter on the harmonics; no aliasing at C8 (fold-back -172 dB); the master limiter linear below -3 dBFS (3rd harmonic -164 dB) and never above 1; the string in tune from E2 to E6 with and without stiffness (within 5 cents); decay, hardness, release damping, velocity, body; marimba's 3.99 mode, the bell's hum; every model finite at its extremes; the 14 new sounds; files (and older files without the settings); no allocation | Automated headless tests (1173 checks in total) | All pass |
+| The synth window with the new engines: the engine menu, the additive layout (timbre A and B, morph, morph envelope, filter, envelopes, LFO), Nylon Guitar loaded (model, resonance, envelope), the sound menu grouped by engine | Manual, in a virtual display | Worked (not heard) |
 | A use-after-free when clicking an item that rebuilds the browser tree (crash on *Scan for VST3 plugins...*) | Found in that manual session | Fixed (item actions are deferred); the same click was repeated afterwards |
 
 ## What has not been verified
 
+- **How the additive and physical sounds sound (0.24.0).** Measured only (pitch, spectrum, decay): the 14 new sounds were set by
+  numbers and were not listened to. The string's tuning is exact to 5 cents; its timbre and the body's resonances were not judged.
 - **The piano roll's tools by hand (0.23.0).** Rubber-band selection, copy / paste at the mouse, duplicate, drawing velocities in the
   lane, the chord stamp and every Tools item were written and the theory under them is tested, but only some were clicked in the
   interface (above); whether the generated progressions and basslines *sound* good was not heard.

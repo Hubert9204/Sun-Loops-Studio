@@ -220,6 +220,28 @@ operatore e la colonna **Out** (verde) è quanto di ogni operatore si sente. Tra
 tre, feedback, tutti udibili); dopo una modifica a mano mostra *(your own)*. L'inviluppo di ampiezza, l'LFO (pitch o livello) e il livello
 d'uscita valgono come per il motore sottrattivo. Suoni FM pronti: *FM E-Piano, FM Bell, FM Bass, FM Brass, FM Drawbars, FM Growl*.
 
+### Motore additivo (0.24.0)
+
+**Engine > Additive** costruisce il suono con fino a 64 armoniche. **Timbre A** e **Timbre B** le impostano: quante (**Harmonics**),
+**Bright** (la pendenza: 60 % è una dente di sega, 100 % piatta, 0 % molto scura), **Even** (il livello delle armoniche pari: 0 % dà un
+suono vuoto, tipo onda quadra), **Stretch** (inarmonicità: le armoniche alte crescono di intonazione, come nelle campane e nelle corde acute
+del pianoforte) e un **Formant** (un picco simile a una vocale: quantità, **Freq** 150 Hz - 6 kHz, **Width**). **Morph** dice dove sta il
+suono fra A e B, e l'**inviluppo del morph** (con la sua quantità, anche negativa) lo sposta nel tempo; anche l'LFO lo può muovere
+(target *Morph*). Il **filtro** e il suo inviluppo agiscono sulle armoniche stesse, quindi non producono aliasing. Le armoniche oltre metà
+della frequenza di campionamento vengono tolte. Suoni pronti: *Additive Organ, Morph Pad, Vowel Choir, Glass Keys, Additive Bass*.
+
+### Motore fisico (0.24.0)
+
+**Engine > Physical model** modella lo strumento invece di una forma d'onda. **Model**: una **corda pizzicata** (Karplus-Strong: un
+periodo di rumore che risuona in un anello e perde un po' di acuti a ogni giro), **marimba**, **vibrafono**, **vetro**, **campana** o
+**lastra di metallo** (risonatori sui modi della barra, del vetro, della campana o della lastra, eccitati da un battente). **Hardness** è il
+plettro o il battente (morbido e scuro, duro e brillante; la velocity si aggiunge e rende la nota più forte), **Position** dove si pizzica o
+si colpisce. **Decay** è quanto risuona (da 0,15 a 15 s), **Damping** quanto più in fretta si spengono gli acuti, **Stiffness** (corde)
+rende crescenti le parziali alte come in una corda d'acciaio, **Body** (corde) aggiunge le risonanze di una cassa di legno, **Rel. damp**
+quanto in fretta si smorza una nota rilasciata (0: continua a suonare, come un'arpa o una campana). L'inviluppo ha solo attacco e
+rilascio: il modello decade da solo. Suoni pronti: *Nylon Guitar, Steel Guitar, Harp, Plucked Bass, Marimba, Vibraphone, Glass Harmonics,
+Church Bell, Metal Hit*.
+
 Legato e slide (Shift+clic nel Piano Roll) funzionano come con il motore classico. Un preset di synth (*Save as preset...*) salva anche il
 suono. Ogni modifica si annulla con `Ctrl+Z`.
 

@@ -16,7 +16,7 @@ Sun Loops Studio is inspired by the workflow of loop-based DAWs such as FL Studi
 that uses no code, names, graphics or assets from other products, and it is not affiliated with or endorsed by
 their makers.
 
-**Status: alpha (0.23.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
+**Status: alpha (0.24.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
 display. Playback was confirmed on a real Nobara machine for version 0.3; everything added since (panels, patterns,
 playlist, browser, pitch/swing, the expanded mixer and its effects, saving projects, the AppImage, audio clips, drag and
 drop, recording, MIDI, the metronome and the export formats) was tested headless and in a virtual display with a silent
@@ -70,7 +70,10 @@ See [docs/roadmap.md](docs/roadmap.md) for exactly what is and is not verified a
   right has the same 4 effect slots, applied to the whole mix. Several channels can share a track.
 - **Synth** - every synth channel can switch from the classic sine to a **subtractive synth**: two band-limited oscillators and noise, a 12 or
   24 dB filter with its own envelope, an amplitude envelope and an LFO, or to an **FM synth** with four operators and a modulation matrix
-  (feedback, eight classic algorithms); fifteen ready-made sounds (also as browser presets).
+  (feedback, eight classic algorithms), to an **additive synth** (0.24.0: up to 64 harmonics, two timbres with formants and a morph
+  between them, a filter acting on the harmonics so it never aliases) or to a **physical model** (0.24.0: a plucked string with damping,
+  stiffness and a wooden body; marimba, vibraphone, glass, bell, metal plate); 29 ready-made sounds, grouped by engine (also as browser
+  presets).
 - **Plugins** - VST3, LV2 and LADSPA instruments and effects: scan them from the browser, double-click or drag an instrument for a channel,
   pick an effect in a mixer slot, open the plugin's own window; their settings are saved in the project, and a missing plugin keeps them.
 - **Automation** - right-click a volume, pan, fader or effect parameter > *Create automation clip*; clips live on four lanes under the

@@ -7417,6 +7417,258 @@ void testSubtractiveSynth()
     }
 }
 
+// The strongest frequency within a semitone of `hz` (a DFT scanned in steps of 0.05 %) over [from, to) seconds of a render at kSr.
+double peakNear (const std::vector<float>& x, double fromSeconds, double toSeconds, double hz)
+{
+    const int a = static_cast<int> (fromSeconds * kSr), b = std::min (static_cast<int> (x.size()), static_cast<int> (toSeconds * kSr));
+    double best = 0.0, bestHz = 0.0;
+    for (double f = hz * 0.944; f <= hz * 1.059; f *= 1.0005)
+    {
+        const double e = toneEnergy (x.data(), a, b, f);
+        if (e > best)
+        {
+            best = e;
+            bestHz = f;
+        }
+    }
+    return bestHz;
+}
+
+double centsOff (double measured, double expected) { return 1200.0 * std::log2 (measured / expected); }
+
+// toneEnergy with a Hann window: a strong neighbour does not leak into a weak component.
+double windowedEnergy (const std::vector<float>& x, int begin, int end, double hz)
+{
+    double re = 0.0, im = 0.0;
+    for (int i = begin; i < end; ++i)
+    {
+        const double win = 0.5 - 0.5 * std::cos (6.283185307179586 * (i - begin) / (end - begin));
+        const double w = 6.283185307179586 * hz * i / kSr;
+        re += win * x[static_cast<size_t> (i)] * std::cos (w);
+        im += win * x[static_cast<size_t> (i)] * std::sin (w);
+    }
+    return std::sqrt (re * re + im * im) / (end - begin);
+}
+
+void testAdditiveAndPhysical()
+{
+    std::cout << "Additive and physical synth engines (0.24.0)\n";
+    const auto play = [] (const sls::SynthPatch& patch, double seconds, int pitch = 60, int lengthTicks = 2 * kBeat, float velocity = 0.8f)
+    {
+        auto c = synthChannel ({ { pitch, 0, lengthTicks, velocity } });
+        c.synth = patch;
+        sls::Player p;
+        p.prepare (kSr);
+        return renderBlocks (p, sls::Project::make ({ c }, 16 * kBeat), true, seconds);
+    };
+    const auto finite = [] (const std::vector<float>& x) { return std::all_of (x.begin(), x.end(), [] (float v) { return std::isfinite (v); }); };
+    const auto rms = [] (const std::vector<float>& x, double from, double to)
+    {
+        double e = 0.0;
+        const auto a = static_cast<size_t> (from * kSr), b = std::min (x.size(), static_cast<size_t> (to * kSr));
+        for (size_t i = a; i < b; ++i)
+            e += static_cast<double> (x[i]) * x[i];
+        return b > a ? std::sqrt (e / static_cast<double> (b - a)) : 0.0;
+    };
+    const int w0 = 9600, w1 = 19200; // 0.2 .. 0.4 s
+    const double c4 = 261.6256;
+
+    // --- additive ---
+    sls::SynthPatch add;
+    add.engine = sls::SynthEngine::Additive;
+    add.filter = sls::SamplerFilter::Off;
+    add.amp = { 0.001f, 0.1f, 1.0f, 0.05f };
+    const auto saw = play (add, 0.5);
+    const double h1 = toneEnergy (saw.data(), w0, w1, c4), h2 = toneEnergy (saw.data(), w0, w1, 2 * c4), h3 = toneEnergy (saw.data(), w0, w1, 3 * c4);
+    std::cout << "    (additive saw-like timbre: harmonics 1, 2, 3 at " << h1 << ", " << h2 << ", " << h3 << ")\n";
+    check (finite (saw) && h1 > 0.02 && std::abs (h2 / h1 - 0.5) < 0.05 && std::abs (h3 / h1 - 1.0 / 3.0) < 0.04,
+           "the default timbre is a saw: harmonic n at 1/n");
+    check (std::abs (centsOff (peakNear (saw, 0.2, 0.4, c4), c4)) < 2.0, "and plays the note's pitch (C4 within 2 cents)");
+
+    auto odd = add;
+    odd.timbreA.evenLevel = 0.0f;
+    const auto o = play (odd, 0.5);
+    check (toneEnergy (o.data(), w0, w1, 2 * c4) < 0.01 * toneEnergy (o.data(), w0, w1, c4) && toneEnergy (o.data(), w0, w1, 3 * c4) > 0.2 * toneEnergy (o.data(), w0, w1, c4),
+           "even harmonics at 0: only odd ones (square-like)");
+    auto dark = add, flat = add;
+    dark.timbreA.brightness = 0.0f;
+    flat.timbreA.brightness = 1.0f;
+    check (roughness (play (flat, 0.5), 0.2, 0.4) > 2.0f * roughness (play (dark, 0.5), 0.2, 0.4), "brightness: a flat spectrum is far brighter than a dark one");
+
+    auto one = add;
+    one.timbreA.partials = 1;
+    one.timbreB = add.timbreA;
+    const auto pureA = play (one, 0.5);
+    check (windowedEnergy (pureA, w0, w1, 2 * c4) < 1e-4 * windowedEnergy (pureA, w0, w1, c4), "one harmonic: a sine (the 2nd harmonic 80 dB down)");
+    auto toB = one;
+    toB.morph = 1.0f;
+    const auto pureB = play (toB, 0.5);
+    check (toneEnergy (pureB.data(), w0, w1, 2 * c4) > 0.4 * toneEnergy (pureB.data(), w0, w1, c4), "morph at 100 %: timbre B (the saw) instead");
+    auto swept = one;
+    swept.morphEnvAmount = 1.0f;
+    swept.morphEnv = { 0.6f, 0.1f, 1.0f, 0.1f };
+    const auto sw = play (swept, 0.9);
+    check (roughness (sw, 0.65, 0.85) > 2.0f * roughness (sw, 0.02, 0.06), "the morph envelope moves from A to B over its attack");
+
+    auto filtered = add;
+    filtered.filter = sls::SamplerFilter::LowPass;
+    filtered.cutoff = 0.3f; // about 160 Hz
+    filtered.envAmount = 0.0f;
+    filtered.keyTrack = 0.0f;
+    filtered.resonance = 0.0f;
+    const auto lp = play (filtered, 0.5);
+    check (toneEnergy (lp.data(), w0, w1, 4 * c4) < 0.1 * toneEnergy (saw.data(), w0, w1, 4 * c4), "the filter acts on the harmonics: low-pass removes the upper ones");
+
+    // C8 (4186 Hz): the 6th harmonic (25.1 kHz) is above the limit; nothing may fold back to 22.9 kHz.
+    const auto high = play (add, 0.5, 108);
+    const double fundamental = windowedEnergy (high, w0, w1, 4186.009), fold = windowedEnergy (high, w0, w1, 48000.0 - 6 * 4186.009);
+    std::cout << "    (C8: fold-back of the 6th harmonic " << 20.0 * std::log10 (fold / fundamental + 1e-12) << " dB)\n";
+    check (fold < 1e-4 * fundamental && finite (high), "no aliasing: harmonics above the limit are left out (fold-back below -80 dB)");
+
+    {   // the master's soft limiter (0.24.0): linear below -3 dBFS, never above 1
+        auto sine = one;
+        sine.gain = 1.5f;
+        const auto clean = play (sine, 0.5, 69, 2 * kBeat, 1.0f);
+        const float level = peakOf (clean.data(), w0, w1);
+        const double third = windowedEnergy (clean, w0, w1, 3 * 440.0) / windowedEnergy (clean, w0, w1, 440.0);
+        std::cout << "    (a sine peaking at " << level << ": 3rd harmonic " << 20.0 * std::log10 (third + 1e-15) << " dB)\n";
+        check (level > 0.3f && level < 0.7f && third < 1e-5, "the master limiter leaves a sine below -3 dBFS untouched (no distortion, 3rd harmonic below -100 dB)");
+        std::vector<sls::Channel> many;
+        for (int i = 0; i < 12; ++i)
+        {
+            auto c = synthChannel ({ { 69, 0, 2 * kBeat, 1.0f } });
+            c.synth = sine;
+            many.push_back (c);
+        }
+        sls::Player p;
+        p.prepare (kSr);
+        const auto loudMix = renderBlocks (p, sls::Project::make (many, 16 * kBeat), true, 0.5);
+        const float loudPeak = peakOf (loudMix.data(), 0, static_cast<int> (loudMix.size()));
+        check (loudPeak > 0.9f && loudPeak <= 1.0f, "twelve of them at once: limited, never above 1");
+    }
+
+    // --- physical: string ---
+    sls::SynthPatch str;
+    str.engine = sls::SynthEngine::Physical;
+    str.amp = { 0.001f, 0.0f, 1.0f, 0.05f };
+    str.physical = { sls::PhysicalModel::String, 0.6f, 0.2f, 0.6f, 0.3f, 0.0f, 0.0f, 0.7f };
+    bool tuned = true;
+    for (const int pitch : { 40, 52, 64, 76, 88 })
+        for (const float stiff : { 0.0f, 0.5f })
+        {
+            auto s = str;
+            s.physical.stiffness = stiff;
+            const double hz = 440.0 * std::pow (2.0, (pitch - 69) / 12.0);
+            const auto x = play (s, 0.5, pitch);
+            const double cents = centsOff (peakNear (x, 0.1, 0.45, hz), hz);
+            if (std::abs (cents) >= 5.0)
+                std::cout << "    (string " << pitch << " stiffness " << stiff << ": " << cents << " cents)\n";
+            tuned = tuned && std::abs (cents) < 5.0 && finite (x);
+        }
+    check (tuned, "the string is in tune (E2 to E6, with and without stiffness, within 5 cents)");
+    const auto plucked = play (str, 1.0);
+    check (rms (plucked, 0.0, 0.1) > 0.02 && rms (plucked, 0.0, 0.1) > 1.5 * rms (plucked, 0.6, 0.9), "a plucked string starts strong and dies away");
+    auto shortRing = str, longRing = str;
+    shortRing.physical.decay = 0.15f;
+    longRing.physical.decay = 0.9f;
+    const auto sr = play (shortRing, 1.0), lr = play (longRing, 1.0);
+    check (rms (lr, 0.7, 0.9) / rms (lr, 0.0, 0.1) > 4.0 * rms (sr, 0.7, 0.9) / rms (sr, 0.0, 0.1), "a longer decay rings longer");
+    auto bright = str, soft = str;
+    bright.physical.hardness = 1.0f;
+    soft.physical.hardness = 0.1f;
+    check (roughness (play (bright, 0.3), 0.01, 0.1) > 1.5f * roughness (play (soft, 0.3), 0.01, 0.1), "a hard pluck is brighter than a soft one");
+    auto damped = longRing, ringing = longRing;
+    damped.physical.releaseDamp = 1.0f;
+    ringing.physical.releaseDamp = 0.0f;
+    ringing.amp.release = 4.0f;
+    damped.amp.release = 4.0f;
+    const auto dm = play (damped, 1.0, 60, kBeat / 2), rg = play (ringing, 1.0, 60, kBeat / 2); // released at 0.25 s
+    check (rms (dm, 0.5, 0.7) < 0.1 * rms (rg, 0.5, 0.7), "release damping stops a released note quickly; without it, it rings on");
+    const auto loud = play (str, 0.3, 60, 2 * kBeat, 1.0f), quiet = play (str, 0.3, 60, 2 * kBeat, 0.2f);
+    check (rms (loud, 0.0, 0.2) > 1.8 * rms (quiet, 0.0, 0.2), "a harder note (velocity) is louder");
+    auto withBody = str;
+    withBody.physical.body = 1.0f;
+    const auto bd = play (withBody, 0.5, 40);
+    check (finite (bd) && toneEnergy (bd.data(), w0, w1, 98.0) > 0.0 && peakOf (bd.data(), 0, static_cast<int> (bd.size())) < 2.0f, "the body adds its resonances and stays bounded");
+
+    // --- physical: struck models ---
+    auto marimba = str;
+    marimba.physical.model = sls::PhysicalModel::Marimba;
+    const auto mr = play (marimba, 0.5, 60);
+    const double m1 = toneEnergy (mr.data(), 480, 9600, c4), m2 = toneEnergy (mr.data(), 480, 9600, 3.99 * c4), between = toneEnergy (mr.data(), 480, 9600, 2.0 * c4);
+    check (std::abs (centsOff (peakNear (mr, 0.01, 0.3, c4), c4)) < 3.0 && m2 > 5.0 * between && m1 > m2, "marimba: the fundamental, and the bar's second mode at 3.99 times it");
+    auto bell = str;
+    bell.physical.model = sls::PhysicalModel::Bell;
+    const auto bl = play (bell, 0.6, 72);
+    check (toneEnergy (bl.data(), 4800, 24000, 523.25 * 0.5) > 0.2 * toneEnergy (bl.data(), 4800, 24000, 523.25), "bell: the hum an octave below the strike note");
+    bool modelsOk = true;
+    for (int m = 0; m < sls::kPhysicalModels; ++m)
+        for (const int pitch : { 24, 60, 108 })
+        {
+            auto s = str;
+            s.physical.model = static_cast<sls::PhysicalModel> (m);
+            s.physical.stiffness = 1.0f;
+            s.physical.body = 1.0f;
+            const auto x = play (s, 0.3, pitch, 2 * kBeat, 1.0f);
+            modelsOk = modelsOk && finite (x) && peakOf (x.data(), 0, static_cast<int> (x.size())) < 3.0f;
+        }
+    check (modelsOk, "every model at its extremes (C1, C4, C8; full stiffness and body) stays finite and bounded");
+
+    // --- factory sounds, files, no allocation ---
+    bool soundsOk = true;
+    int newSounds = 0;
+    for (const auto& named : sls::synthFactoryPatches())
+        if (named.patch.engine == sls::SynthEngine::Additive || named.patch.engine == sls::SynthEngine::Physical)
+        {
+            ++newSounds;
+            const auto x = play (named.patch, 1.0);
+            const float peak = peakOf (x.data(), 0, static_cast<int> (x.size()));
+            if (! (finite (x) && peak > 0.02f && peak < 1.5f))
+                std::cout << "    (" << named.name << ": peak " << peak << ")\n";
+            soundsOk = soundsOk && finite (x) && peak > 0.02f && peak < 1.5f;
+        }
+    check (newSounds == 14 && soundsOk, "fourteen new ready-made sounds (5 additive, 9 physical) all play, finite, with a sensible level");
+
+    auto patch = add;
+    patch.timbreB.formant = 0.7f;
+    patch.morph = 0.4f;
+    patch.morphEnvAmount = -0.3f;
+    patch.lfoTarget = sls::LfoTarget::Morph;
+    patch.physical = { sls::PhysicalModel::Glass, 0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 0.6f, 0.7f };
+    const auto back = sls::synthPatchFromVar (sls::synthPatchToVar (patch));
+    check (back == patch.sanitised(), "the additive and physical settings go through a file and come back the same");
+    auto var = sls::synthPatchToVar (patch);
+    var.getDynamicObject()->removeProperty ("timbreA");
+    var.getDynamicObject()->removeProperty ("physical");
+    var.getDynamicObject()->setProperty ("engine", "physical");
+    const auto older = sls::synthPatchFromVar (var);
+    check (older.engine == sls::SynthEngine::Physical && older.timbreA == sls::SynthPatch {}.timbreA && older.physical == sls::PhysicalSettings {},
+           "missing settings (older files) read as the defaults");
+
+    {
+        sls::Channel a = synthChannel ({ { 60, 0, 2 * kBeat, 0.8f }, { 64, 0, 2 * kBeat, 0.8f }, { 67, kBeat, kBeat, 0.8f } });
+        a.synth = sls::synthFactoryPatches()[0].patch;
+        for (const auto& named : sls::synthFactoryPatches())
+            if (named.name == "Morph Pad")
+                a.synth = named.patch;
+        sls::Channel b = synthChannel ({ { 48, 0, 2 * kBeat, 0.8f }, { 55, kBeat / 2, kBeat, 0.8f }, { 72, kBeat, kBeat, 0.8f } });
+        b.synth = str;
+        sls::Channel m = b;
+        m.synth = bell;
+        const auto project = sls::Project::make ({ a, b, m }, 4 * kBeat);
+        sls::Player player;
+        player.prepare (kSr);
+        std::vector<float> l (256), r (256);
+        float* ch[2] = { l.data(), r.data() };
+        gAllocs = 0;
+        gCounting = true;
+        for (int i = 0; i < 1000; ++i)
+            player.render (project, 120.0, true, ch, 2, 256);
+        gCounting = false;
+        check (gAllocs.load() == 0, "the new engines allocate nothing while playing (1000 blocks, chords, strings, bells)");
+    }
+}
+
 void testFmSynth()
 {
     std::cout << "FM synth (0.19.0)\n";
@@ -7974,6 +8226,7 @@ int main()
     testSubtractiveSynth();
     testSynthPatchFiles();
     testFmSynth();
+    testAdditiveAndPhysical();
     testPluginProjectFile();
     testPluginHosting();
 #endif

@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cmath>
+#include <vector>
 
 #include "audio/Effects.h"
 #include "audio/Project.h"
@@ -144,6 +145,33 @@ private:
         std::array<double, kFmOperators> opPhase {};
         std::array<float, kFmOperators> opOut {}, opEnv {}, opAttack {}, opDecay {}, opSustain {}, opRelease {};
         std::array<std::uint8_t, kFmOperators> opStage {}; // 0 attack, 1 decay / sustain, 2 release
+
+        // Additive voices (0.24.0): a rotating phasor (re, im) per harmonic, turned by (cos, sin) every sample; the levels and the
+        // rotations are computed again every kControlInterval samples and the levels move there in a straight line.
+        bool additive = false;
+        std::array<float, kAdditivePartials> partRe {}, partIm {}, partCos {}, partSin {}, partAmp {}, partStep {};
+        float menv = 0.0f;                  // morph envelope, 0..1
+        std::uint8_t mstage = 0;
+        float mAttackStep = 1.0f, mDecayStep = 0.0f, mSustain = 0.0f, mRelStep = 0.0f;
+
+        // Physical voices (0.24.0). String: a delay line (owned by the Player, one per voice) with a loss filter, an all-pass for
+        // stiffness and a body; struck models: up to kModes resonators excited by a short pulse.
+        bool physical = false;
+        bool modal = false;
+        float* line = nullptr;
+        int lineMask = 0, writePos = 0;
+        double delaySamples = 2.0;          // the loop's delay for the current pitch
+        float loopGain = 0.0f, loopBlend = 0.5f, lossState = 0.0f;
+        float apCoef = 0.0f, apIn = 0.0f, apOut = 0.0f, apDelay = 0.0f;
+        float bodyAmount = 0.0f, dcIn = 0.0f, dcOut = 0.0f;
+        std::array<float, 6> bodyState {}; // three band-pass filters, two states each
+        float sustainGain = 0.0f, releaseGain = 0.0f; // loop gains while held and once released
+        static constexpr int kModes = 12;
+        int modeCount = 0;
+        std::array<float, kModes> modeRatio {}, modeB0 {}, modeA1 {}, modeA2 {}, modeY1 {}, modeY2 {}, modeR {}, modeRelR {}, modeAmp {};
+        int strikeLeft = 0, strikeLength = 1;
+        float strikeNorm = 1.0f;
+        bool released = false;
     };
     static constexpr int kControlInterval = 16; // samples between two updates of a subtractive voice's modulation
     void subtractiveVoiceOn (Voice& v, const SynthPatch& patch, int pitch) noexcept;
@@ -151,6 +179,15 @@ private:
     void fmVoiceOn (Voice& v, const SynthPatch& patch) noexcept;
     float renderFm (Voice& v, const SynthPatch& patch) noexcept;
     void updateModulation (Voice& v, const SynthPatch& patch) noexcept; // the LFO and what it drives, every kControlInterval samples
+    void additiveVoiceOn (Voice& v, const SynthPatch& patch, int pitch) noexcept;
+    void updateAdditive (Voice& v, const SynthPatch& patch) noexcept;
+    float renderAdditive (Voice& v, const SynthPatch& patch) noexcept;
+    void physicalVoiceOn (Voice& v, const SynthPatch& patch, size_t voiceIndex) noexcept;
+    void updatePhysical (Voice& v, const SynthPatch& patch) noexcept;
+    float renderPhysical (Voice& v, const SynthPatch& patch) noexcept;
+    std::vector<float> stringLines; // kMaxVoices delay lines of stringLineLength samples (a power of two), made in prepare()
+    int stringLineLength = 0;
+    std::array<std::array<float, 5>, 3> bodyCoefs {}; // the body's band-pass filters (b0, b1, b2, a1, a2) at this sample rate
 
     // Audio clips of the playlist (recordings, imported files): one voice each, played straight through.
     struct ClipVoice

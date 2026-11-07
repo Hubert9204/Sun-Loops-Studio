@@ -21,7 +21,7 @@ juce::String secondsText (double s)
 const juce::StringArray kWaves { "Sine", "Triangle", "Saw", "Square" };
 } // namespace
 
-SynthPanel::Section& SynthPanel::addSection (const juce::String& title, std::array<int, 3> columns)
+SynthPanel::Section& SynthPanel::addSection (const juce::String& title, std::array<int, kSynthEngines> columns)
 {
     sections.push_back (std::make_unique<Section>());
     sections.back()->title = title;
@@ -132,8 +132,15 @@ SynthPanel::SynthPanel()
     addAndMakeVisible (noteLabel);
 
     patchBox.setTextWhenNothingSelected ("Load a sound...");
+    // grouped by engine (the headings are not items: indexes still count only the sounds)
+    const char* const headings[] = { "Classic", "Subtractive", "FM", "Additive", "Physical model" };
     for (size_t i = 0; i < synthFactoryPatches().size(); ++i)
+    {
+        const auto engine = synthFactoryPatches()[i].patch.engine;
+        if (i == 0 || synthFactoryPatches()[i - 1].patch.engine != engine)
+            patchBox.addSectionHeading (headings[static_cast<size_t> (engine)]);
         patchBox.addItem (synthFactoryPatches()[i].name, static_cast<int> (i) + 1);
+    }
     patchBox.onChange = [this]
     {
         const int i = patchBox.getSelectedItemIndex();
@@ -157,14 +164,14 @@ SynthPanel::SynthPanel()
     };
     addAndMakeVisible (previewButton);
 
-    auto& top = addSection ({}, { -1, -1, -1 });
-    engineChoice = &addChoice (top, "Engine", { "Classic (the original sine sound)", "Subtractive", "FM (4 operators)" },
+    auto& top = addSection ({}, { -1, -1, -1, -1, -1 });
+    engineChoice = &addChoice (top, "Engine", { "Classic (the original sine sound)", "Subtractive", "FM (4 operators)", "Additive (morphing harmonics)", "Physical model" },
                                [] (const SynthPatch& p) { return static_cast<int> (p.engine); },
-                               [] (SynthPatch& p, int i) { p.engine = static_cast<SynthEngine> (std::clamp (i, 0, 2)); });
+                               [] (SynthPatch& p, int i) { p.engine = static_cast<SynthEngine> (std::clamp (i, 0, kSynthEngines - 1)); });
 
     for (int o = 0; o < 2; ++o)
     {
-        auto& s = addSection ("OSCILLATOR " + juce::String (o + 1), { 0, 0, -1 });
+        auto& s = addSection ("OSCILLATOR " + juce::String (o + 1), { 0, 0, -1, -1, -1 });
         const auto osc = static_cast<size_t> (o);
         addChoice (s, "Wave", kWaves, [osc] (const SynthPatch& p) { return static_cast<int> (p.osc[osc].wave); },
                    [osc] (SynthPatch& p, int i) { p.osc[osc].wave = static_cast<Waveform> (std::clamp (i, 0, 3)); });
@@ -181,12 +188,12 @@ SynthPanel::SynthPanel()
     }
 
     {
-        auto& s = addSection ("NOISE", { 1, 1, -1 });
+        auto& s = addSection ("NOISE", { 1, 1, -1, -1, -1 });
         addParam (s, "Level", 0.0, 100.0, 1.0, " %", [] (const SynthPatch& p) { return p.noise * 100.0; },
                   [] (SynthPatch& p, double v) { p.noise = static_cast<float> (v / 100.0); });
     }
     {
-        auto& s = addSection ("FILTER", { 1, 1, -1 });
+        auto& s = addSection ("FILTER", { 1, 1, -1, 2, -1 });
         addChoice (s, "Type", { "Off", "Low-pass", "High-pass", "Band-pass" }, [] (const SynthPatch& p) { return static_cast<int> (p.filter); },
                    [] (SynthPatch& p, int i) { p.filter = static_cast<SamplerFilter> (std::clamp (i, 0, 3)); });
         steepToggle.setColour (juce::ToggleButton::textColourId, kPanelText);
@@ -208,7 +215,7 @@ SynthPanel::SynthPanel()
                   [] (SynthPatch& p, double v) { p.keyTrack = static_cast<float> (v / 100.0); });
     }
 
-    const auto envelope = [this] (const juce::String& title, Adsr SynthPatch::* member, std::array<int, 3> columns)
+    const auto envelope = [this] (const juce::String& title, Adsr SynthPatch::* member, std::array<int, kSynthEngines> columns)
     {
         auto& s = addSection (title, columns);
         auto& a = addParam (s, "Attack", 0.0, 10.0, 0.001, {}, [member] (const SynthPatch& p) { return (p.*member).attack; },
@@ -225,13 +232,86 @@ SynthPanel::SynthPanel()
             x->textFromValueFunction = secondsText;
         }
     };
-    envelope ("AMPLIFIER ENVELOPE", &SynthPatch::amp, { 2, 2, 3 });
-    envelope ("FILTER ENVELOPE", &SynthPatch::filterEnv, { 2, 2, -1 });
+    envelope ("AMPLIFIER ENVELOPE", &SynthPatch::amp, { 2, 2, 3, 3, -1 });
+    envelope ("FILTER ENVELOPE", &SynthPatch::filterEnv, { 2, 2, -1, 2, -1 });
+
+    // Additive (0.24.0): two timbres, the morph between them and its envelope.
+    for (int t = 0; t < 2; ++t)
+    {
+        auto& s = addSection (t == 0 ? "TIMBRE A" : "TIMBRE B", { -1, -1, -1, t, -1 });
+        const auto timbre = t == 0 ? &SynthPatch::timbreA : &SynthPatch::timbreB;
+        addParam (s, "Harmonics", 1.0, 64.0, 1.0, {}, [timbre] (const SynthPatch& p) { return (p.*timbre).partials; },
+                  [timbre] (SynthPatch& p, double v) { (p.*timbre).partials = juce::roundToInt (v); });
+        const auto percent = [&] (const juce::String& name, float AdditiveTimbre::* field)
+        {
+            addParam (s, name, 0.0, 100.0, 1.0, " %", [timbre, field] (const SynthPatch& p) { return (p.*timbre).*field * 100.0; },
+                      [timbre, field] (SynthPatch& p, double v) { (p.*timbre).*field = static_cast<float> (v / 100.0); });
+        };
+        percent ("Bright", &AdditiveTimbre::brightness);
+        percent ("Even", &AdditiveTimbre::evenLevel);
+        percent ("Stretch", &AdditiveTimbre::stretch);
+        percent ("Formant", &AdditiveTimbre::formant);
+        auto& freq = addParam (s, "Freq", 0.0, 1.0, 0.001, {}, [timbre] (const SynthPatch& p) { return (p.*timbre).formantFreq; },
+                               [timbre] (SynthPatch& p, double v) { (p.*timbre).formantFreq = static_cast<float> (v); });
+        freq.slider.textFromValueFunction = [] (double v)
+        {
+            const double hz = AdditiveTimbre::formantHz (static_cast<float> (v));
+            return hz >= 1000.0 ? juce::String (hz / 1000.0, 2) + " kHz" : juce::String (juce::roundToInt (hz)) + " Hz";
+        };
+        percent ("Width", &AdditiveTimbre::formantWidth);
+    }
+    {
+        auto& s = addSection ("MORPH (A TO B)", { -1, -1, -1, 1, -1 });
+        addParam (s, "Position", 0.0, 100.0, 1.0, " %", [] (const SynthPatch& p) { return p.morph * 100.0; },
+                  [] (SynthPatch& p, double v) { p.morph = static_cast<float> (v / 100.0); });
+        addParam (s, "Env amt", -100.0, 100.0, 1.0, " %", [] (const SynthPatch& p) { return p.morphEnvAmount * 100.0; },
+                  [] (SynthPatch& p, double v) { p.morphEnvAmount = static_cast<float> (v / 100.0); });
+    }
+    envelope ("MORPH ENVELOPE", &SynthPatch::morphEnv, { -1, -1, -1, 1, -1 });
+
+    // Physical (0.24.0).
+    {
+        auto& s = addSection ("MODEL", { -1, -1, -1, -1, 0 });
+        addChoice (s, "Model", { "Plucked string", "Marimba", "Vibraphone", "Glass", "Bell", "Metal plate" },
+                   [] (const SynthPatch& p) { return static_cast<int> (p.physical.model); },
+                   [] (SynthPatch& p, int i) { p.physical.model = static_cast<PhysicalModel> (std::clamp (i, 0, kPhysicalModels - 1)); });
+        addParam (s, "Hardness", 0.0, 100.0, 1.0, " %", [] (const SynthPatch& p) { return p.physical.hardness * 100.0; },
+                  [] (SynthPatch& p, double v) { p.physical.hardness = static_cast<float> (v / 100.0); });
+        addParam (s, "Position", 0.0, 100.0, 1.0, " %", [] (const SynthPatch& p) { return p.physical.position * 100.0; },
+                  [] (SynthPatch& p, double v) { p.physical.position = static_cast<float> (v / 100.0); });
+    }
+    {
+        auto& s = addSection ("RESONANCE", { -1, -1, -1, -1, 1 });
+        auto& decay = addParam (s, "Decay", 0.0, 1.0, 0.001, {}, [] (const SynthPatch& p) { return p.physical.decay; },
+                                [] (SynthPatch& p, double v) { p.physical.decay = static_cast<float> (v); });
+        decay.slider.textFromValueFunction = [] (double v) { return secondsText (PhysicalSettings::decaySeconds (static_cast<float> (v))); };
+        const auto percent = [&] (const juce::String& name, float PhysicalSettings::* field)
+        {
+            addParam (s, name, 0.0, 100.0, 1.0, " %", [field] (const SynthPatch& p) { return p.physical.*field * 100.0; },
+                      [field] (SynthPatch& p, double v) { p.physical.*field = static_cast<float> (v / 100.0); });
+        };
+        percent ("Damping", &PhysicalSettings::damping);
+        percent ("Stiffness", &PhysicalSettings::stiffness);
+        percent ("Body", &PhysicalSettings::body);
+        percent ("Rel. damp", &PhysicalSettings::releaseDamp);
+    }
+    {
+        auto& s = addSection ("ENVELOPE", { -1, -1, -1, -1, 2 });
+        auto& a = addParam (s, "Attack", 0.0, 10.0, 0.001, {}, [] (const SynthPatch& p) { return p.amp.attack; },
+                            [] (SynthPatch& p, double v) { p.amp.attack = static_cast<float> (v); });
+        auto& r = addParam (s, "Release", 0.0, 10.0, 0.001, {}, [] (const SynthPatch& p) { return p.amp.release; },
+                            [] (SynthPatch& p, double v) { p.amp.release = static_cast<float> (v); });
+        for (auto* x : { &a.slider, &r.slider })
+        {
+            x->setSkewFactorFromMidPoint (0.5);
+            x->textFromValueFunction = secondsText;
+        }
+    }
 
     // FM (0.19.0): four operators, the algorithm menu and the matrix.
     for (int o = 0; o < kFmOperators; ++o)
     {
-        auto& s = addSection ("OPERATOR " + juce::String (o + 1), { -1, -1, o / 2 });
+        auto& s = addSection ("OPERATOR " + juce::String (o + 1), { -1, -1, o / 2, -1, -1 });
         const auto op = static_cast<size_t> (o);
         auto& ratio = addParam (s, "Ratio", 0.125, 32.0, 0.001, {}, [op] (const SynthPatch& p) { return p.op[op].ratio; },
                                 [op] (SynthPatch& p, double v) { p.op[op].ratio = static_cast<float> (v); });
@@ -254,7 +334,7 @@ SynthPanel::SynthPanel()
         }
     }
     {
-        auto& s = addSection ("ALGORITHM AND MATRIX", { -1, -1, 2 });
+        auto& s = addSection ("ALGORITHM AND MATRIX", { -1, -1, 2, -1, -1 });
         juce::StringArray names;
         for (const auto& a : fmAlgorithms())
             names.add (a.name);
@@ -290,10 +370,10 @@ SynthPanel::SynthPanel()
     }
 
     {
-        auto& s = addSection ("LFO", { 3, 3, 3 });
-        addChoice (s, "Target", { "Off", "Pitch (vibrato)", "Cutoff", "Level (tremolo)", "Pulse width" },
+        auto& s = addSection ("LFO", { 3, 3, 3, 3, 3 });
+        addChoice (s, "Target", { "Off", "Pitch (vibrato)", "Cutoff", "Level (tremolo)", "Pulse width", "Morph (additive)" },
                    [] (const SynthPatch& p) { return static_cast<int> (p.lfoTarget); },
-                   [] (SynthPatch& p, int i) { p.lfoTarget = static_cast<LfoTarget> (std::clamp (i, 0, 4)); });
+                   [] (SynthPatch& p, int i) { p.lfoTarget = static_cast<LfoTarget> (std::clamp (i, 0, 5)); });
         addChoice (s, "Wave", kWaves, [] (const SynthPatch& p) { return static_cast<int> (p.lfoWave); },
                    [] (SynthPatch& p, int i) { p.lfoWave = static_cast<Waveform> (std::clamp (i, 0, 3)); });
         auto& rate = addParam (s, "Rate", 0.05, 20.0, 0.01, " Hz", [] (const SynthPatch& p) { return p.lfoRate; },
@@ -303,12 +383,12 @@ SynthPanel::SynthPanel()
                   [] (SynthPatch& p, double v) { p.lfoDepth = static_cast<float> (v / 100.0); });
     }
     {
-        auto& s = addSection ("OUTPUT", { 3, 3, 3 });
+        auto& s = addSection ("OUTPUT", { 3, 3, 3, 3, 3 });
         addParam (s, "Level", 0.0, 150.0, 1.0, " %", [] (const SynthPatch& p) { return p.gain * 100.0; },
                   [] (SynthPatch& p, double v) { p.gain = static_cast<float> (v / 100.0); });
     }
 
-    setSize (1080, 500);
+    setSize (1080, 640);
 }
 
 void SynthPanel::edit (const std::function<void (SynthPatch&)>& change)
@@ -340,6 +420,8 @@ void SynthPanel::refresh()
     titleLabel.setText (juce::String (c->name), juce::dontSendNotification);
     noteLabel.setText (p.engine == SynthEngine::Subtractive ? "Two oscillators and noise, a filter with its own envelope, an amplitude envelope and an LFO."
                        : p.engine == SynthEngine::FM ? "Four sine operators: the matrix says which operator modulates which (the diagonal is feedback) and how much of each is heard."
+                       : p.engine == SynthEngine::Additive ? "Up to 64 harmonics: two timbres and a morph between them, with a filter acting on the harmonics themselves (it never aliases)."
+                       : p.engine == SynthEngine::Physical ? "A model of a plucked string (pluck, loss, stiffness, wooden body) or of a struck bar, glass, bell or plate."
                        : "The original sound of Sun Loops Studio (a sine with two harmonics). Choose Subtractive or FM, or load a sound, to shape it.",
                        juce::dontSendNotification);
     if (shownEngine != p.engine)
@@ -418,7 +500,7 @@ void SynthPanel::resized()
         const bool shown = column >= 0;
         for (auto& row : s->rows)
         {
-            if (s->columns == std::array<int, 3> { -1, -1, -1 })
+            if (s->columns == std::array<int, kSynthEngines> { -1, -1, -1, -1, -1 })
                 break; // the top bar: placed above
             if (row.label != nullptr)
                 row.label->setVisible (shown);

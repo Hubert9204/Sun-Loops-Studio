@@ -69,7 +69,7 @@ private:
     struct Section
     {
         juce::String title;
-        std::array<int, 3> columns { 0, 0, -1 }; // per engine (Classic, Subtractive, FM): the column, or -1 when the section is hidden
+        std::array<int, kSynthEngines> columns { 0, 0, -1, -1, -1 }; // per engine (Classic, Subtractive, FM, Additive, Physical): the column, or -1 when hidden
         std::vector<Row> rows;
         juce::Rectangle<int> header;
         int column (SynthEngine e) const noexcept { return columns[static_cast<size_t> (e)]; }
@@ -79,7 +79,7 @@ private:
                      std::function<double (const SynthPatch&)> read, std::function<void (SynthPatch&, double)> write);
     Choice& addChoice (Section& section, const juce::String& name, const juce::StringArray& items,
                        std::function<int (const SynthPatch&)> read, std::function<void (SynthPatch&, int)> write);
-    Section& addSection (const juce::String& title, std::array<int, 3> columns);
+    Section& addSection (const juce::String& title, std::array<int, kSynthEngines> columns);
     SynthEngine shownEngine = SynthEngine::Classic;
     void edit (const std::function<void (SynthPatch&)>& change);
 

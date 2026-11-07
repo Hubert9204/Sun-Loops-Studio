@@ -151,6 +151,7 @@ const char* targetKey (LfoTarget t)
         case LfoTarget::Cutoff:     return "cutoff";
         case LfoTarget::Amp:        return "amp";
         case LfoTarget::PulseWidth: return "pulsewidth";
+        case LfoTarget::Morph:      return "morph";
         case LfoTarget::Off:        break;
     }
     return "off";
@@ -159,7 +160,39 @@ const char* targetKey (LfoTarget t)
 LfoTarget targetFromKey (const juce::String& k)
 {
     return k == "pitch" ? LfoTarget::Pitch : k == "cutoff" ? LfoTarget::Cutoff : k == "amp" ? LfoTarget::Amp : k == "pulsewidth" ? LfoTarget::PulseWidth
-         : LfoTarget::Off;
+         : k == "morph" ? LfoTarget::Morph : LfoTarget::Off;
+}
+
+constexpr const char* kPhysicalModelKeys[] = { "string", "marimba", "vibraphone", "glass", "bell", "metal" };
+static_assert (std::size (kPhysicalModelKeys) == kPhysicalModels);
+
+juce::var timbreToVar (const AdditiveTimbre& t)
+{
+    auto* o = new juce::DynamicObject();
+    o->setProperty ("partials", t.partials);
+    o->setProperty ("brightness", static_cast<double> (t.brightness));
+    o->setProperty ("evenLevel", static_cast<double> (t.evenLevel));
+    o->setProperty ("stretch", static_cast<double> (t.stretch));
+    o->setProperty ("formant", static_cast<double> (t.formant));
+    o->setProperty ("formantFreq", static_cast<double> (t.formantFreq));
+    o->setProperty ("formantWidth", static_cast<double> (t.formantWidth));
+    return juce::var (o);
+}
+
+AdditiveTimbre timbreFromVar (const juce::var& v, const AdditiveTimbre& d)
+{
+    AdditiveTimbre t = d;
+    if (auto* o = v.getDynamicObject())
+    {
+        t.partials = readInt (o->getProperty ("partials"), d.partials, 1, kAdditivePartials);
+        t.brightness = static_cast<float> (readNumber (o->getProperty ("brightness"), d.brightness, 0.0, 1.0));
+        t.evenLevel = static_cast<float> (readNumber (o->getProperty ("evenLevel"), d.evenLevel, 0.0, 1.0));
+        t.stretch = static_cast<float> (readNumber (o->getProperty ("stretch"), d.stretch, 0.0, 1.0));
+        t.formant = static_cast<float> (readNumber (o->getProperty ("formant"), d.formant, 0.0, 1.0));
+        t.formantFreq = static_cast<float> (readNumber (o->getProperty ("formantFreq"), d.formantFreq, 0.0, 1.0));
+        t.formantWidth = static_cast<float> (readNumber (o->getProperty ("formantWidth"), d.formantWidth, 0.0, 1.0));
+    }
+    return t;
 }
 
 juce::var adsrToVar (const Adsr& a)
@@ -190,7 +223,8 @@ juce::var synthPatchToVar (const SynthPatch& patch)
 {
     const auto p = patch.sanitised();
     auto* o = new juce::DynamicObject();
-    o->setProperty ("engine", p.engine == SynthEngine::Subtractive ? "subtractive" : p.engine == SynthEngine::FM ? "fm" : "classic");
+    o->setProperty ("engine", p.engine == SynthEngine::Subtractive ? "subtractive" : p.engine == SynthEngine::FM ? "fm"
+                              : p.engine == SynthEngine::Additive ? "additive" : p.engine == SynthEngine::Physical ? "physical" : "classic");
     juce::Array<juce::var> oscs;
     for (const auto& osc : p.osc)
     {
@@ -237,6 +271,23 @@ juce::var synthPatchToVar (const SynthPatch& patch)
     o->setProperty ("operators", ops);
     o->setProperty ("fmMatrix", rows);
     o->setProperty ("fmOutputs", outs);
+
+    // Additive and physical (0.24.0)
+    o->setProperty ("timbreA", timbreToVar (p.timbreA));
+    o->setProperty ("timbreB", timbreToVar (p.timbreB));
+    o->setProperty ("morph", static_cast<double> (p.morph));
+    o->setProperty ("morphEnvAmount", static_cast<double> (p.morphEnvAmount));
+    o->setProperty ("morphEnvelope", adsrToVar (p.morphEnv));
+    auto* ph = new juce::DynamicObject();
+    ph->setProperty ("model", kPhysicalModelKeys[static_cast<size_t> (p.physical.model)]);
+    ph->setProperty ("hardness", static_cast<double> (p.physical.hardness));
+    ph->setProperty ("position", static_cast<double> (p.physical.position));
+    ph->setProperty ("decay", static_cast<double> (p.physical.decay));
+    ph->setProperty ("damping", static_cast<double> (p.physical.damping));
+    ph->setProperty ("stiffness", static_cast<double> (p.physical.stiffness));
+    ph->setProperty ("body", static_cast<double> (p.physical.body));
+    ph->setProperty ("releaseDamp", static_cast<double> (p.physical.releaseDamp));
+    o->setProperty ("physical", juce::var (ph));
     return juce::var (o);
 }
 
@@ -248,7 +299,8 @@ SynthPatch synthPatchFromVar (const juce::var& v)
     if (o == nullptr)
         return p;
     const auto engine = o->getProperty ("engine").toString();
-    p.engine = engine == "subtractive" ? SynthEngine::Subtractive : engine == "fm" ? SynthEngine::FM : SynthEngine::Classic;
+    p.engine = engine == "subtractive" ? SynthEngine::Subtractive : engine == "fm" ? SynthEngine::FM : engine == "additive" ? SynthEngine::Additive
+             : engine == "physical" ? SynthEngine::Physical : SynthEngine::Classic;
     if (auto* oscs = o->getProperty ("oscillators").getArray())
         for (int i = 0; i < std::min (oscs->size(), 2); ++i)
             if (auto* x = (*oscs)[i].getDynamicObject())
@@ -294,6 +346,27 @@ SynthPatch synthPatchFromVar (const juce::var& v)
     if (auto* outs = o->getProperty ("fmOutputs").getArray())
         for (int t = 0; t < std::min (outs->size(), kFmOperators); ++t)
             p.matrix.out[static_cast<size_t> (t)] = static_cast<float> (readNumber ((*outs)[t], d.matrix.out[static_cast<size_t> (t)], 0.0, 1.0));
+    // Additive and physical (0.24.0): older files have neither and keep the defaults.
+    p.timbreA = timbreFromVar (o->getProperty ("timbreA"), d.timbreA);
+    p.timbreB = timbreFromVar (o->getProperty ("timbreB"), d.timbreB);
+    p.morph = static_cast<float> (readNumber (o->getProperty ("morph"), d.morph, 0.0, 1.0));
+    p.morphEnvAmount = static_cast<float> (readNumber (o->getProperty ("morphEnvAmount"), d.morphEnvAmount, -1.0, 1.0));
+    p.morphEnv = adsrFromVar (o->getProperty ("morphEnvelope"), d.morphEnv);
+    if (auto* ph = o->getProperty ("physical").getDynamicObject())
+    {
+        const auto model = ph->getProperty ("model").toString();
+        for (size_t i = 0; i < std::size (kPhysicalModelKeys); ++i)
+            if (model == kPhysicalModelKeys[i])
+                p.physical.model = static_cast<PhysicalModel> (i);
+        const auto& pd = d.physical;
+        p.physical.hardness = static_cast<float> (readNumber (ph->getProperty ("hardness"), pd.hardness, 0.0, 1.0));
+        p.physical.position = static_cast<float> (readNumber (ph->getProperty ("position"), pd.position, 0.0, 1.0));
+        p.physical.decay = static_cast<float> (readNumber (ph->getProperty ("decay"), pd.decay, 0.0, 1.0));
+        p.physical.damping = static_cast<float> (readNumber (ph->getProperty ("damping"), pd.damping, 0.0, 1.0));
+        p.physical.stiffness = static_cast<float> (readNumber (ph->getProperty ("stiffness"), pd.stiffness, 0.0, 1.0));
+        p.physical.body = static_cast<float> (readNumber (ph->getProperty ("body"), pd.body, 0.0, 1.0));
+        p.physical.releaseDamp = static_cast<float> (readNumber (ph->getProperty ("releaseDamp"), pd.releaseDamp, 0.0, 1.0));
+    }
     return p.sanitised();
 }
 

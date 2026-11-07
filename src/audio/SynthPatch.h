@@ -17,14 +17,18 @@ namespace sls
 // 0.18.0 sound the same; the "Subtractive" engine is a two-oscillator synth with noise, a filter with its own envelope, an amplitude
 // envelope and an LFO. The "FM" engine (0.19.0) has four sine operators, each with its frequency ratio, level and envelope, and a
 // modulation matrix (who modulates whom, the diagonal being feedback) with an output level per operator, like a small Sytrus.
+// The "Additive" engine (0.24.0) adds up to 64 harmonics whose levels come from two timbres (A and B) and a morph between them, shaped by
+// a filter applied to the partials themselves (so it never aliases), like a small Harmor. The "Physical" engine (0.24.0) models a
+// plucked string (Karplus-Strong with damping, stiffness and a body) or a struck bar, bell or plate (modal synthesis), like Sakura or Ogun.
 // Plain C++: the Player reads it from the channel of the snapshot, the UI edits it, the files store it.
 
 // Exact equality of two stored settings (bit for bit: what was saved is what is read back).
 inline bool sameValue (float a, float b) noexcept { return std::memcmp (&a, &b, sizeof (float)) == 0; }
 
-enum class SynthEngine : std::uint8_t { Classic, Subtractive, FM };
+enum class SynthEngine : std::uint8_t { Classic, Subtractive, FM, Additive, Physical };
+constexpr int kSynthEngines = 5;
 enum class Waveform : std::uint8_t { Sine, Triangle, Saw, Square };
-enum class LfoTarget : std::uint8_t { Off, Pitch, Cutoff, Amp, PulseWidth };
+enum class LfoTarget : std::uint8_t { Off, Pitch, Cutoff, Amp, PulseWidth, Morph }; // Morph (0.24.0): the additive timbre morph
 
 struct Adsr
 {
@@ -66,6 +70,71 @@ struct SynthOsc
 };
 
 constexpr int kFmOperators = 4;
+constexpr int kAdditivePartials = 64;
+
+// One timbre of the additive engine: the level of every harmonic n (1..partials).
+struct AdditiveTimbre
+{
+    int partials = 48;          // 1..64 (harmonics above half the sample rate are left out anyway)
+    float brightness = 0.6f;    // 0..1: the slope of the levels, n^-(2.5 (1 - brightness)): 0.6 is a saw (1/n), 1 is flat, 0 very dark
+    float evenLevel = 1.0f;     // 0..1: the level of the even harmonics (0 = odd only, square-like)
+    float stretch = 0.0f;       // 0..1: inharmonicity, f_n = n f0 sqrt(1 + B n^2) (bells, pianos' upper notes)
+    float formant = 0.0f;       // 0..1: a resonant peak over the harmonics (a vowel)
+    float formantFreq = 0.45f;  // 0..1, logarithmic from 150 Hz to 6 kHz
+    float formantWidth = 0.35f; // 0..1: the width of the peak, from a fifth to three octaves
+
+    static double formantHz (float f) noexcept { return 150.0 * std::pow (40.0, std::clamp (static_cast<double> (f), 0.0, 1.0)); }
+    AdditiveTimbre sanitised (const AdditiveTimbre& d) const noexcept
+    {
+        AdditiveTimbre t = *this;
+        t.partials = std::clamp (t.partials, 1, kAdditivePartials);
+        t.brightness = std::clamp (finiteOr (t.brightness, d.brightness), 0.0f, 1.0f);
+        t.evenLevel = std::clamp (finiteOr (t.evenLevel, d.evenLevel), 0.0f, 1.0f);
+        t.stretch = std::clamp (finiteOr (t.stretch, d.stretch), 0.0f, 1.0f);
+        t.formant = std::clamp (finiteOr (t.formant, d.formant), 0.0f, 1.0f);
+        t.formantFreq = std::clamp (finiteOr (t.formantFreq, d.formantFreq), 0.0f, 1.0f);
+        t.formantWidth = std::clamp (finiteOr (t.formantWidth, d.formantWidth), 0.0f, 1.0f);
+        return t;
+    }
+    bool operator== (const AdditiveTimbre& o) const noexcept
+    {
+        return partials == o.partials && sameValue (brightness, o.brightness) && sameValue (evenLevel, o.evenLevel) && sameValue (stretch, o.stretch)
+            && sameValue (formant, o.formant) && sameValue (formantFreq, o.formantFreq) && sameValue (formantWidth, o.formantWidth);
+    }
+};
+
+// What the physical engine models.
+enum class PhysicalModel : std::uint8_t { String, Marimba, Vibraphone, Glass, Bell, Metal };
+constexpr int kPhysicalModels = 6;
+
+struct PhysicalSettings
+{
+    PhysicalModel model = PhysicalModel::String;
+    float hardness = 0.6f;    // 0..1: a soft finger / mallet (dull) to a hard pick / mallet (bright)
+    float position = 0.2f;    // 0..1: where it is plucked or struck, from the end to the middle (the middle loses the even modes)
+    float decay = 0.5f;       // 0..1: how long it rings, 0.15 s to 15 s
+    float damping = 0.4f;     // 0..1: how much faster the high frequencies die than the low ones
+    float stiffness = 0.0f;   // 0..1: strings only, a stiff string's upper partials run sharp
+    float body = 0.3f;        // 0..1: strings only, the resonance of a wooden body
+    float releaseDamp = 0.7f; // 0..1: how quickly a released note is damped (0: it rings on)
+
+    PhysicalSettings sanitised (const PhysicalSettings& d) const noexcept
+    {
+        PhysicalSettings s = *this;
+        if (static_cast<int> (s.model) >= kPhysicalModels)
+            s.model = PhysicalModel::String;
+        for (auto [v, def] : { std::pair<float*, float> { &s.hardness, d.hardness }, { &s.position, d.position }, { &s.decay, d.decay },
+                               { &s.damping, d.damping }, { &s.stiffness, d.stiffness }, { &s.body, d.body }, { &s.releaseDamp, d.releaseDamp } })
+            *v = std::clamp (finiteOr (*v, def), 0.0f, 1.0f);
+        return s;
+    }
+    bool operator== (const PhysicalSettings& o) const noexcept
+    {
+        return model == o.model && sameValue (hardness, o.hardness) && sameValue (position, o.position) && sameValue (decay, o.decay)
+            && sameValue (damping, o.damping) && sameValue (stiffness, o.stiffness) && sameValue (body, o.body) && sameValue (releaseDamp, o.releaseDamp);
+    }
+    static double decaySeconds (float d) noexcept { return 0.15 * std::pow (100.0, std::clamp (static_cast<double> (d), 0.0, 1.0)); }
+};
 
 struct FmOperator
 {
@@ -162,11 +231,22 @@ struct SynthPatch
                                               FmOperator { 3.0f, 0.0f, { 0.002f, 0.6f, 0.7f, 0.3f } } };
     FmMatrix matrix = fmAlgorithms().front().matrix;
 
+    // Additive engine (0.24.0): timbre A, timbre B, where between them it sits (0 = A) and how far its envelope moves it. The filter,
+    // its envelope, the amplitude envelope, the LFO (pitch, cutoff, level or morph) and `gain` apply too.
+    AdditiveTimbre timbreA {};
+    AdditiveTimbre timbreB { 64, 0.25f, 0.15f, 0.0f, 0.6f, 0.35f, 0.25f };
+    float morph = 0.0f;          // 0..1
+    float morphEnvAmount = 0.0f; // -1..+1
+    Adsr morphEnv { 0.5f, 1.0f, 0.5f, 0.5f };
+
+    // Physical engine (0.24.0). The amplitude envelope's attack and release, the LFO (pitch or level) and `gain` apply too.
+    PhysicalSettings physical {};
+
     SynthPatch sanitised() const noexcept
     {
         const SynthPatch d;
         SynthPatch p = *this;
-        if (static_cast<int> (p.engine) > static_cast<int> (SynthEngine::FM))
+        if (static_cast<int> (p.engine) >= kSynthEngines)
             p.engine = SynthEngine::Classic;
         for (auto& o : p.osc)
         {
@@ -190,7 +270,7 @@ struct SynthPatch
         if (static_cast<int> (p.lfoWave) > static_cast<int> (Waveform::Square))
             p.lfoWave = Waveform::Sine;
         p.lfoRate = std::clamp (finiteOr (p.lfoRate, d.lfoRate), 0.05f, 20.0f);
-        if (static_cast<int> (p.lfoTarget) > static_cast<int> (LfoTarget::PulseWidth))
+        if (static_cast<int> (p.lfoTarget) > static_cast<int> (LfoTarget::Morph))
             p.lfoTarget = LfoTarget::Off;
         p.lfoDepth = std::clamp (finiteOr (p.lfoDepth, d.lfoDepth), 0.0f, 1.0f);
         p.gain = std::clamp (finiteOr (p.gain, d.gain), 0.0f, 1.5f);
@@ -204,6 +284,12 @@ struct SynthPatch
             for (auto& m : p.matrix.fm[i])
                 m = std::clamp (finiteOr (m, 0.0f), 0.0f, 1.0f);
         }
+        p.timbreA = p.timbreA.sanitised (d.timbreA);
+        p.timbreB = p.timbreB.sanitised (d.timbreB);
+        p.morph = std::clamp (finiteOr (p.morph, d.morph), 0.0f, 1.0f);
+        p.morphEnvAmount = std::clamp (finiteOr (p.morphEnvAmount, d.morphEnvAmount), -1.0f, 1.0f);
+        p.morphEnv = p.morphEnv.sanitised (d.morphEnv);
+        p.physical = p.physical.sanitised (d.physical);
         return p;
     }
 
@@ -213,7 +299,8 @@ struct SynthPatch
             && sameValue (cutoff, o.cutoff) && sameValue (resonance, o.resonance) && sameValue (envAmount, o.envAmount)
             && sameValue (keyTrack, o.keyTrack) && amp == o.amp && filterEnv == o.filterEnv && lfoWave == o.lfoWave
             && sameValue (lfoRate, o.lfoRate) && lfoTarget == o.lfoTarget && sameValue (lfoDepth, o.lfoDepth) && sameValue (gain, o.gain)
-            && op == o.op && matrix == o.matrix;
+            && op == o.op && matrix == o.matrix && timbreA == o.timbreA && timbreB == o.timbreB && sameValue (morph, o.morph)
+            && sameValue (morphEnvAmount, o.morphEnvAmount) && morphEnv == o.morphEnv && physical == o.physical;
     }
 };
 
@@ -398,6 +485,89 @@ inline const std::vector<NamedSynthPatch>& synthFactoryPatches()
         growl.lfoRate = 4.0f;
         growl.lfoDepth = 0.4f;
         v.push_back ({ "FM Growl", growl });
+
+        // Additive (0.24.0).
+        const auto additive = []
+        {
+            SynthPatch p;
+            p.engine = SynthEngine::Additive;
+            p.filter = SamplerFilter::Off;
+            p.envAmount = 0.0f;
+            p.amp = { 0.01f, 0.2f, 1.0f, 0.2f };
+            return p;
+        };
+        auto addOrgan = additive();
+        addOrgan.timbreA = { 16, 0.78f, 1.0f, 0.0f, 0.0f, 0.45f, 0.35f };
+        addOrgan.amp = { 0.008f, 0.1f, 1.0f, 0.08f };
+        v.push_back ({ "Additive Organ", addOrgan });
+
+        auto morphPad = additive();
+        morphPad.timbreA = { 64, 0.62f, 1.0f, 0.0f, 0.0f, 0.45f, 0.35f };
+        morphPad.morphEnvAmount = 0.85f;
+        morphPad.morphEnv = { 1.5f, 2.0f, 0.6f, 1.2f };
+        morphPad.filter = SamplerFilter::LowPass;
+        morphPad.cutoff = 0.85f;
+        morphPad.resonance = 0.1f;
+        morphPad.amp = { 0.6f, 1.0f, 0.9f, 1.2f };
+        morphPad.lfoTarget = LfoTarget::Morph;
+        morphPad.lfoRate = 0.2f;
+        morphPad.lfoDepth = 0.25f;
+        morphPad.gain = 0.7f;
+        v.push_back ({ "Morph Pad", morphPad });
+
+        auto choir = additive();
+        choir.timbreA = { 48, 0.55f, 1.0f, 0.0f, 0.85f, 0.436f, 0.3f }; // "ah": a peak near 750 Hz
+        choir.timbreB = { 48, 0.55f, 1.0f, 0.0f, 0.85f, 0.74f, 0.25f };  // "ee": near 2.3 kHz
+        choir.lfoTarget = LfoTarget::Morph;
+        choir.lfoRate = 0.15f;
+        choir.lfoDepth = 0.5f;
+        choir.morph = 0.3f;
+        choir.amp = { 0.4f, 1.0f, 0.9f, 0.8f };
+        choir.gain = 0.75f;
+        v.push_back ({ "Vowel Choir", choir });
+
+        auto glassKeys = additive();
+        glassKeys.timbreA = { 24, 0.7f, 0.6f, 0.35f, 0.0f, 0.45f, 0.35f };
+        glassKeys.filter = SamplerFilter::LowPass;
+        glassKeys.cutoff = 0.5f;
+        glassKeys.envAmount = 0.5f;
+        glassKeys.filterEnv = { 0.001f, 1.0f, 0.2f, 0.5f };
+        glassKeys.amp = { 0.002f, 2.0f, 0.0f, 1.0f };
+        v.push_back ({ "Glass Keys", glassKeys });
+
+        auto addBass = additive();
+        addBass.timbreA = { 32, 0.5f, 0.4f, 0.0f, 0.0f, 0.45f, 0.35f };
+        addBass.filter = SamplerFilter::LowPass;
+        addBass.cutoff = 0.45f;
+        addBass.resonance = 0.3f;
+        addBass.envAmount = 0.45f;
+        addBass.filterEnv = { 0.001f, 0.25f, 0.1f, 0.15f };
+        addBass.amp = { 0.002f, 0.3f, 0.8f, 0.12f };
+        v.push_back ({ "Additive Bass", addBass });
+
+        // Physical modelling (0.24.0).
+        const auto physical = [] (PhysicalModel model, PhysicalSettings s, float release)
+        {
+            SynthPatch p;
+            p.engine = SynthEngine::Physical;
+            s.model = model;
+            p.physical = s;
+            p.amp = { 0.001f, 0.0f, 1.0f, release };
+            return p;
+        };
+        v.push_back ({ "Nylon Guitar", physical (PhysicalModel::String, { PhysicalModel::String, 0.35f, 0.18f, 0.55f, 0.55f, 0.05f, 0.55f, 0.6f }, 0.08f) });
+        v.push_back ({ "Steel Guitar", physical (PhysicalModel::String, { PhysicalModel::String, 0.7f, 0.12f, 0.65f, 0.3f, 0.15f, 0.4f, 0.6f }, 0.08f) });
+        v.push_back ({ "Harp", physical (PhysicalModel::String, { PhysicalModel::String, 0.45f, 0.4f, 0.7f, 0.45f, 0.0f, 0.25f, 0.15f }, 1.5f) });
+        v.push_back ({ "Plucked Bass", physical (PhysicalModel::String, { PhysicalModel::String, 0.5f, 0.15f, 0.5f, 0.65f, 0.1f, 0.2f, 0.8f }, 0.06f) });
+        v.push_back ({ "Marimba", physical (PhysicalModel::Marimba, { PhysicalModel::Marimba, 0.45f, 0.3f, 0.35f, 0.6f, 0.0f, 0.0f, 0.3f }, 0.6f) });
+        auto vibes = physical (PhysicalModel::Vibraphone, { PhysicalModel::Vibraphone, 0.55f, 0.3f, 0.7f, 0.35f, 0.0f, 0.0f, 0.5f }, 1.0f);
+        vibes.lfoTarget = LfoTarget::Amp; // the motor's tremolo
+        vibes.lfoRate = 5.0f;
+        vibes.lfoDepth = 0.2f;
+        v.push_back ({ "Vibraphone", vibes });
+        v.push_back ({ "Glass Harmonics", physical (PhysicalModel::Glass, { PhysicalModel::Glass, 0.7f, 0.25f, 0.6f, 0.4f, 0.0f, 0.0f, 0.3f }, 1.2f) });
+        v.push_back ({ "Church Bell", physical (PhysicalModel::Bell, { PhysicalModel::Bell, 0.75f, 0.2f, 0.85f, 0.3f, 0.0f, 0.0f, 0.0f }, 8.0f) });
+        v.push_back ({ "Metal Hit", physical (PhysicalModel::Metal, { PhysicalModel::Metal, 0.8f, 0.35f, 0.7f, 0.25f, 0.0f, 0.0f, 0.2f }, 3.0f) });
         return v;
     }();
     return list;

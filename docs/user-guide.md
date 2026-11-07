@@ -200,7 +200,7 @@ to shape the sound. **Play C4** sounds the channel while you hold it. The same s
 | Filter | Off, low-pass, high-pass or band-pass; **24 dB / octave** puts two filters in a row; cutoff, resonance, how far the filter envelope moves the cutoff (up to 6 octaves up or down) and key tracking (the cutoff follows the note, from C4). |
 | Amplifier envelope | Attack, decay, sustain, release: the note sounds while it is held, then fades with the release. |
 | Filter envelope | Attack, decay, sustain, release of the cutoff movement. |
-| LFO | Target (pitch: vibrato up to 2 semitones; cutoff: up to 3 octaves; level: tremolo; pulse width), wave, rate (0.05-20 Hz), depth. The LFO starts again with every note. |
+| LFO | Target (pitch: vibrato up to 2 semitones; cutoff: up to 3 octaves; level: tremolo; pulse width; morph: additive only), wave, rate (0.05-20 Hz), depth. The LFO starts again with every note. |
 | Output | The level of the synth before the channel's volume. |
 
 ### FM engine
@@ -212,6 +212,27 @@ whom: the row is the operator being modulated, the column the modulator, the dia
 classic arrangement (*2 > 1*, stacks of three and four, two pairs, three modulators into one, one into three, feedback, all heard);
 after a change by hand it shows *(your own)*. The amplitude envelope, the LFO (pitch or level) and the output level apply as for the
 subtractive engine. Ready-made FM sounds: *FM E-Piano, FM Bell, FM Bass, FM Brass, FM Drawbars, FM Growl*.
+
+### Additive engine (0.24.0)
+
+**Engine > Additive** builds the sound from up to 64 harmonics. **Timbre A** and **Timbre B** each set them: how many (**Harmonics**),
+**Bright** (the slope: 60 % is a saw, 100 % flat, 0 % very dark), **Even** (the level of the even harmonics: 0 % gives a square-like,
+hollow sound), **Stretch** (inharmonicity: the upper harmonics run sharp, as in bells and a piano's high strings) and a **Formant** (a
+vowel-like peak: amount, **Freq** 150 Hz - 6 kHz, **Width**). **Morph** sets where the sound sits between A and B, and the **morph
+envelope** (with its amount, also negative) moves it over time; the LFO can move it too (target *Morph*). The **filter** and its envelope
+act on the harmonics themselves, so they never alias, and a resonant peak is exact. Harmonics above half the sample rate are left out.
+Ready-made: *Additive Organ, Morph Pad, Vowel Choir, Glass Keys, Additive Bass*.
+
+### Physical engine (0.24.0)
+
+**Engine > Physical model** models the instrument instead of a waveform. **Model**: a **plucked string** (Karplus-Strong: one period of
+noise rings in a loop that loses its highs a little on every trip), **marimba**, **vibraphone**, **glass**, **bell** or **metal plate**
+(resonators at the modes of the bar, glass, bell or plate, rung by a mallet). **Hardness** is the pick or the mallet (soft and dull to
+hard and bright; the velocity adds to it, and makes the note louder), **Position** where it is plucked or struck. **Decay** is how long it
+rings (0.15 to 15 s), **Damping** how much faster the highs die, **Stiffness** (strings) makes the upper partials sharp like a steel
+string, **Body** (strings) adds the resonances of a wooden body, **Rel. damp** how quickly a released note is damped (0: it rings on, like
+a harp or a bell). The envelope has an attack and a release only: the model decays by itself. Ready-made: *Nylon Guitar, Steel Guitar,
+Harp, Plucked Bass, Marimba, Vibraphone, Glass Harmonics, Church Bell, Metal Hit*.
 
 Legato and slide (Shift+click in the Piano Roll) work as with the classic engine. A synth preset (*Save as preset...*) stores the sound too.
 Every change can be undone with `Ctrl+Z`.

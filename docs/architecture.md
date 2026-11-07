@@ -124,7 +124,8 @@ song copies the channels, a sample stays the same object across edits and its vo
 
 `Player::render` does everything for one block: advances the transport, starts notes sample-accurately, runs up to
 32 voices (synth or sampler), mixes them per channel with smoothed gain and equal-power pan, sends each channel to its
-mixer track, runs the track effects and fader, tracks per-track peaks and RMS and soft-limits the master with `tanh`.
+mixer track, runs the track effects and fader, tracks per-track peaks and RMS and soft-limits the master (linear up to 0.7, then a
+`tanh` knee; until 0.23.0 a plain `tanh`).
 It works in chunks of 64 samples so that note starts stay sample-accurate while the per-track buffers stay small.
 
 - Resolution is 480 ticks per beat; the editors snap to 16th notes (120 ticks).
@@ -260,7 +261,7 @@ voices -> channel (smoothed gain, equal-power pan, channel mute/solo)
        -> track fader (0..1.5, smoothed) x balance (centre = unity), track mute/solo
        -> peak + RMS measurement -> master sum
        -> master insert chain: slot 1 -> 2 -> 3 -> 4   (Project::masterSlots, on the sum, before the master fader)
-       -> tanh -> master gain (AudioEngine)
+       -> soft limiter -> master gain (AudioEngine)
 ```
 
 - `MixerTrack { name, volume, pan, mute, solo, slots[4] }`; `Project::make` always yields exactly 8 tracks and clamps
@@ -287,6 +288,11 @@ voices -> channel (smoothed gain, equal-power pan, channel mute/solo)
   is active in the audio callback and the feedback loops flush tiny values.
 - The piano roll's loop region (0.20.0) lives in `Pattern::loopStartTick / loopEndTick`; in Pattern mode `publishProject` copies the current
   pattern's region into the snapshot's `loopStartTick / loopEndTick`, which the `Player` already handles for the playlist's region.
+- Synth engines (0.24.0): **Additive** keeps a rotating phasor per harmonic (64) in the voice; every 16 samples it recomputes the
+  levels (timbres A / B, morph, the filter's magnitude at each harmonic) and rotations, and the levels move there linearly. **Physical**:
+  a string is a delay line per voice (owned by the Player, sized in `prepare` for 20 Hz) with a two-tap loss filter, a first-order
+  all-pass (stiffness) and the tuning corrected by both filters' phase delay; struck models are up to 12 two-pole resonators rung by a
+  raised-cosine pulse. Nothing allocates while playing.
 - Built-in effects (0.21.0): twelve types in `Effects.h` (tables of up to 8 parameters; a parameter with `choices` is a whole-number
   choice shown by name), the DSP in `EffectUnit` (`Effects.cpp`), all memory taken in `prepare`. Overdrive: 4x oversampling with
   12th-order Butterworth filters and first-order antiderivative anti-aliasing of tanh. Maximizer: soft clip, soft-knee glue compressor,

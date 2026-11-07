@@ -2,6 +2,24 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.24.0 - 2026-11-07
+
+### Added
+- **Additive synth engine**: up to 64 harmonics from two timbres (harmonics, brightness, even harmonics, inharmonic stretch, a formant)
+  and a **morph** between them with its own envelope (and the LFO's new *Morph* target); the filter and its envelope act on the
+  harmonics themselves, so nothing aliases. Sounds: Additive Organ, Morph Pad, Vowel Choir, Glass Keys, Additive Bass.
+- **Physical-model synth engine**: a plucked string (Karplus-Strong with hardness, pluck position, decay, damping, stiffness, a wooden
+  body, release damping; velocity-sensitive) and struck models (marimba, vibraphone, glass, bell, metal plate) made of resonators at
+  their modes. Sounds: Nylon Guitar, Steel Guitar, Harp, Plucked Bass, Marimba, Vibraphone, Glass Harmonics, Church Bell, Metal Hit.
+- The synth window's sound menu is grouped by engine.
+
+### Changed
+- **The master limiter is transparent below -3 dBFS**: it was a plain `tanh`, which slightly distorted every level; now it is linear up
+  to 0.7 and soft above, never passing 1.
+
+### Fixed
+- Started without a graphical display, the program crashed; it now prints why and exits.
+
 ## 0.23.0 - 2026-11-07
 
 ### Added

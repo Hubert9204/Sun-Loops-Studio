@@ -27,6 +27,13 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.24.0
+Measuring the additive engine's aliasing found a quality problem elsewhere: the master's plain `tanh` bent every level (a sine at
+-10 dBFS got a 3rd harmonic, and mixes got intermodulation that aliased: -69 dB at 22.9 kHz in the test). The limiter is now exactly
+linear up to 0.7 (-3 dBFS) with a `tanh` knee above, which never passes 1 (tested both ways). The program also crashed when started
+without a display (no `DISPLAY`): it now says so and exits with status 1. clang-tidy (the audit's check set) on `Player.cpp`,
+`SynthPanel.cpp`, `ChannelPreset.cpp` and `main.cpp`: no findings.
+
 ## After 0.23.0
 The piano roll's new code runs on the message thread only (`PianoRoll`, `PianoRollToolbar`, `MusicTheory`); the player sees the
 notes through the usual project snapshot. clang-tidy (the audit's check set) on `MusicTheory.cpp`, `PianoRoll.cpp` and

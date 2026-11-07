@@ -12,6 +12,8 @@ constexpr double kTwoPi = 6.283185307179586476925286766559;
 constexpr float kSynthGain = 0.25f;
 constexpr float kSubtractiveGain = 0.35f; // a full saw through an open filter about as loud as the classic synth's fundamental
 constexpr float kFmGain = 0.5f;           // a single full sine operator about as loud as the classic synth
+constexpr float kAdditiveGain = 0.35f;    // like the subtractive engine: a saw-like spectrum through no filter
+constexpr float kPhysicalGain = 0.6f;
 const SynthPatch defaultPatch {};
 constexpr float kSampleGain = 0.5f;
 constexpr float kWaveNorm = 1.0f / 1.35f;
@@ -30,6 +32,22 @@ void Player::prepare (double newSampleRate) noexcept
 {
     sampleRate = newSampleRate > 0.0 ? newSampleRate : 48000.0;
     releaseStep = static_cast<float> (1.0 / (0.080 * sampleRate)); // 80 ms release
+
+    // Physical strings (0.24.0): a delay line per voice, long enough for 20 Hz, and the body's three resonances.
+    stringLineLength = 1;
+    while (stringLineLength < static_cast<int> (sampleRate / 20.0) + 16)
+        stringLineLength *= 2;
+    stringLines.assign (static_cast<size_t> (stringLineLength) * kMaxVoices, 0.0f);
+    {
+        const double body[3][2] = { { 98.0, 3.0 }, { 204.0, 3.5 }, { 410.0, 2.5 } }; // a guitar's air and top-plate resonances (Hz, Q)
+        for (size_t i = 0; i < 3; ++i)
+        {
+            const double w = 2.0 * 3.14159265358979323846 * body[i][0] / sampleRate, alpha = std::sin (w) / (2.0 * body[i][1]);
+            const double a0 = 1.0 + alpha;
+            bodyCoefs[i] = { static_cast<float> (alpha / a0), 0.0f, static_cast<float> (-alpha / a0), static_cast<float> (-2.0 * std::cos (w) / a0),
+                             static_cast<float> ((1.0 - alpha) / a0) };
+        }
+    }
     liveLimitSamples = static_cast<std::uint64_t> (kMaxLiveSeconds * sampleRate);
 
     for (auto& v : voices)
@@ -438,6 +456,10 @@ void Player::noteOn (const Channel& channel, int channelIndex, const Note& n, in
         subtractiveVoiceOn (v, channel.synth, n.pitch);
     else if (channel.synth.engine == SynthEngine::FM)
         fmVoiceOn (v, channel.synth);
+    else if (channel.synth.engine == SynthEngine::Additive)
+        additiveVoiceOn (v, channel.synth, n.pitch);
+    else if (channel.synth.engine == SynthEngine::Physical)
+        physicalVoiceOn (v, channel.synth, static_cast<size_t> (target - voices.data()));
 
     *target = v;
 }
@@ -676,6 +698,403 @@ float Player::renderSubtractive (Voice& v, const SynthPatch& patch) noexcept
             y = svf (y, v.s1R, v.s2R);
     }
     return y * v.ampMod * patch.gain;
+}
+
+// --- Additive engine (0.24.0) ---------------------------------------------------------------------------------------------
+namespace
+{
+// The level of harmonic n (1-based) of a timbre at `hz`, before normalisation.
+inline float timbreLevel (const AdditiveTimbre& t, int n, double hz) noexcept
+{
+    if (n > t.partials)
+        return 0.0f;
+    double a = std::pow (static_cast<double> (n), -2.5 * (1.0 - static_cast<double> (t.brightness)));
+    if (n % 2 == 0)
+        a *= t.evenLevel;
+    if (t.formant > 0.0f)
+    {
+        const double width = 0.6 + 2.4 * static_cast<double> (t.formantWidth); // octaves (a fifth to three octaves)
+        const double d = std::log2 (std::max (hz, 1.0) / AdditiveTimbre::formantHz (t.formantFreq)) / (0.5 * width);
+        a *= 1.0 + 9.0 * static_cast<double> (t.formant) * std::exp (-0.5 * d * d);
+    }
+    return static_cast<float> (a);
+}
+
+// The magnitude of a 2-pole filter at f / fc = x (resonance 0..1).
+inline double filterMagnitude (SamplerFilter type, double x, float resonance, bool steep) noexcept
+{
+    if (type == SamplerFilter::Off)
+        return 1.0;
+    const double q = 0.707 + 9.0 * static_cast<double> (resonance) * static_cast<double> (resonance);
+    const double denominator = std::sqrt ((1.0 - x * x) * (1.0 - x * x) + (x / q) * (x / q));
+    double m = type == SamplerFilter::LowPass ? 1.0 / denominator : type == SamplerFilter::HighPass ? x * x / denominator : (x / q) / denominator;
+    if (steep)
+        m *= m;
+    return m;
+}
+} // namespace
+
+void Player::additiveVoiceOn (Voice& v, const SynthPatch& patch, int pitch) noexcept
+{
+    v.additive = true;
+    const auto seconds = [this] (float s, double minimum) { return std::max (minimum, static_cast<double> (s)) * sampleRate; };
+    v.attackStep = static_cast<float> (1.0 / seconds (patch.amp.attack, 0.0005));
+    v.sustainLevel = patch.amp.sustain;
+    v.decayStep = static_cast<float> ((1.0 - patch.amp.sustain) / seconds (patch.amp.decay, 0.001));
+    v.relStep = static_cast<float> (1.0 / seconds (patch.amp.release, 0.002));
+    v.fenv = 0.0f;
+    v.fstage = 0;
+    v.fAttackStep = static_cast<float> (kControlInterval / seconds (patch.filterEnv.attack, 0.0005));
+    v.fSustain = patch.filterEnv.sustain;
+    v.fDecayStep = static_cast<float> (kControlInterval * (1.0 - patch.filterEnv.sustain) / seconds (patch.filterEnv.decay, 0.001));
+    v.fRelStep = static_cast<float> (kControlInterval / seconds (patch.filterEnv.release, 0.002));
+    v.menv = 0.0f;
+    v.mstage = 0;
+    v.mAttackStep = static_cast<float> (kControlInterval / seconds (patch.morphEnv.attack, 0.0005));
+    v.mSustain = patch.morphEnv.sustain;
+    v.mDecayStep = static_cast<float> (kControlInterval * (1.0 - patch.morphEnv.sustain) / seconds (patch.morphEnv.decay, 0.001));
+    v.mRelStep = static_cast<float> (kControlInterval / seconds (patch.morphEnv.release, 0.002));
+    v.keyOctaves = patch.keyTrack * static_cast<float> (pitch - 60) / 12.0f;
+    v.lfoPhase = 0.0f;
+    v.lfoInc = static_cast<float> (patch.lfoRate / sampleRate);
+    v.controlLeft = 0;
+    for (size_t i = 0; i < static_cast<size_t> (kAdditivePartials); ++i)
+    {
+        v.partRe[i] = 1.0f; // every harmonic starts at phase 0 (a sine), so a render is the same every time
+        v.partIm[i] = 0.0f;
+        v.partAmp[i] = 0.0f;
+        v.partStep[i] = 0.0f;
+        v.partCos[i] = 1.0f;
+        v.partSin[i] = 0.0f;
+    }
+}
+
+void Player::updateAdditive (Voice& v, const SynthPatch& patch) noexcept
+{
+    // The envelopes of the filter and the morph move once per control interval (their steps are per interval).
+    const auto advance = [] (float& env, std::uint8_t& stage, bool releasing, float attack, float decay, float sustain, float release)
+    {
+        if (releasing)
+            stage = 2;
+        if (stage == 0)
+        {
+            env += attack;
+            if (env >= 1.0f) { env = 1.0f; stage = 1; }
+        }
+        else if (stage == 1)
+            env = std::max (sustain, env - decay);
+        else
+            env = std::max (0.0f, env - release);
+    };
+    const bool releasing = v.state == State::Release;
+    advance (v.fenv, v.fstage, releasing, v.fAttackStep, v.fDecayStep, v.fSustain, v.fRelStep);
+    advance (v.menv, v.mstage, releasing, v.mAttackStep, v.mDecayStep, v.mSustain, v.mRelStep);
+
+    updateModulation (v, patch);
+    const float lfo = patch.lfoTarget == LfoTarget::Off ? 0.0f : lfoValue (patch.lfoWave, v.lfoPhase) * patch.lfoDepth;
+    const float morph = std::clamp (patch.morph + patch.morphEnvAmount * v.menv + (patch.lfoTarget == LfoTarget::Morph ? 0.5f * lfo : 0.0f), 0.0f, 1.0f);
+    const double f0 = v.increment / kTwoPi * v.pitchMod; // cycles per sample
+    const double octaves = 6.0 * patch.envAmount * v.fenv + v.keyOctaves + (patch.lfoTarget == LfoTarget::Cutoff ? 3.0 * lfo : 0.0);
+    const double fc = std::clamp (SamplerSettings::cutoffHz (patch.cutoff) * std::pow (2.0, octaves), 20.0, 20000.0);
+    const double stretch = 0.0008 * ((1.0 - morph) * patch.timbreA.stretch + morph * patch.timbreB.stretch);
+
+    std::array<float, kAdditivePartials> a {}, b {};
+    std::array<double, kAdditivePartials> freq {};
+    double normA = 0.0, normB = 0.0;
+    for (int n = 1; n <= kAdditivePartials; ++n)
+    {
+        const auto i = static_cast<size_t> (n - 1);
+        freq[i] = f0 * n * std::sqrt (1.0 + stretch * n * n);
+        if (freq[i] >= 0.45)
+            continue; // above the limit: silent (no aliasing)
+        const double hz = freq[i] * sampleRate;
+        a[i] = timbreLevel (patch.timbreA, n, hz);
+        b[i] = timbreLevel (patch.timbreB, n, hz);
+        normA += static_cast<double> (a[i]) * a[i];
+        normB += static_cast<double> (b[i]) * b[i];
+    }
+    const float ka = normA > 0.0 ? static_cast<float> (0.82 / std::sqrt (normA)) : 0.0f;
+    const float kb = normB > 0.0 ? static_cast<float> (0.82 / std::sqrt (normB)) : 0.0f;
+    constexpr float step = 1.0f / static_cast<float> (kControlInterval);
+    for (size_t i = 0; i < static_cast<size_t> (kAdditivePartials); ++i)
+    {
+        float target = 0.0f;
+        if (freq[i] < 0.45)
+        {
+            const double gain = filterMagnitude (patch.filter, freq[i] * sampleRate / fc, patch.resonance, patch.steep);
+            target = static_cast<float> (((1.0f - morph) * a[i] * ka + morph * b[i] * kb) * std::min (gain, 8.0));
+            const double w = kTwoPi * freq[i];
+            v.partCos[i] = static_cast<float> (std::cos (w));
+            v.partSin[i] = static_cast<float> (std::sin (w));
+        }
+        v.partStep[i] = (target - v.partAmp[i]) * step;
+        // keep the phasor on the unit circle (rounding makes it drift slowly)
+        const float m = v.partRe[i] * v.partRe[i] + v.partIm[i] * v.partIm[i];
+        const float k = 1.5f - 0.5f * m;
+        v.partRe[i] *= k;
+        v.partIm[i] *= k;
+    }
+}
+
+float Player::renderAdditive (Voice& v, const SynthPatch& patch) noexcept
+{
+    if (--v.controlLeft <= 0)
+    {
+        v.controlLeft = kControlInterval;
+        updateAdditive (v, patch);
+    }
+    v.lfoPhase += v.lfoInc;
+    if (v.lfoPhase >= 1.0f)
+        v.lfoPhase -= 1.0f;
+
+    float x = 0.0f;
+    for (size_t i = 0; i < static_cast<size_t> (kAdditivePartials); ++i)
+    {
+        x += v.partAmp[i] * v.partIm[i];
+        const float re = v.partRe[i] * v.partCos[i] - v.partIm[i] * v.partSin[i];
+        v.partIm[i] = v.partRe[i] * v.partSin[i] + v.partIm[i] * v.partCos[i];
+        v.partRe[i] = re;
+        v.partAmp[i] += v.partStep[i];
+    }
+    return x * v.ampMod * patch.gain;
+}
+
+// --- Physical engine (0.24.0) ---------------------------------------------------------------------------------------------
+namespace
+{
+struct ModalModel
+{
+    std::array<float, 12> ratio, amp, decay; // frequency / fundamental, level, decay time relative to the fundamental's
+    int count;
+    float length; // the fundamental's ring time relative to PhysicalSettings::decaySeconds
+};
+
+const ModalModel& modalModel (PhysicalModel m) noexcept
+{
+    static const ModalModel marimba { { 1.0f, 3.99f, 10.65f }, { 1.0f, 0.5f, 0.25f }, { 1.0f, 0.3f, 0.1f }, 3, 0.6f };
+    static const ModalModel vibraphone { { 1.0f, 4.0f, 10.1f }, { 1.0f, 0.35f, 0.15f }, { 1.0f, 0.45f, 0.2f }, 3, 1.0f };
+    static const ModalModel glass { { 1.0f, 2.32f, 4.25f, 6.63f, 9.38f, 12.9f }, { 1.0f, 0.7f, 0.5f, 0.35f, 0.25f, 0.15f },
+                                    { 1.0f, 0.8f, 0.6f, 0.5f, 0.4f, 0.3f }, 6, 0.8f };
+    // a church bell: hum, prime, tierce, quint, nominal and the upper partials
+    static const ModalModel bell { { 0.5f, 1.0f, 1.183f, 1.506f, 2.0f, 2.514f, 2.662f, 3.011f, 4.166f, 5.433f },
+                                   { 0.6f, 1.0f, 0.8f, 0.5f, 0.7f, 0.4f, 0.35f, 0.3f, 0.25f, 0.2f },
+                                   { 1.3f, 1.0f, 0.8f, 0.7f, 0.6f, 0.5f, 0.45f, 0.4f, 0.3f, 0.25f }, 10, 1.4f };
+    // a struck plate: dense, inharmonic
+    static const ModalModel metal { { 1.0f, 1.594f, 2.136f, 2.296f, 2.653f, 2.918f, 3.156f, 3.501f, 3.6f, 3.652f, 4.06f, 4.6f },
+                                    { 1.0f, 0.85f, 0.72f, 0.61f, 0.52f, 0.44f, 0.38f, 0.32f, 0.27f, 0.23f, 0.2f, 0.17f },
+                                    { 1.0f, 0.87f, 0.77f, 0.69f, 0.63f, 0.57f, 0.53f, 0.49f, 0.45f, 0.43f, 0.4f, 0.38f }, 12, 1.0f };
+    switch (m)
+    {
+        case PhysicalModel::Marimba: return marimba;
+        case PhysicalModel::Vibraphone: return vibraphone;
+        case PhysicalModel::Glass: return glass;
+        case PhysicalModel::Bell: return bell;
+        case PhysicalModel::Metal:
+        case PhysicalModel::String: break;
+    }
+    return metal;
+}
+
+// The phase delay (in samples) of the first-order all-pass (a + z^-1) / (1 + a z^-1) at `w` radians per sample.
+inline double allpassDelay (double a, double w) noexcept
+{
+    const double phase = std::atan2 (-std::sin (w), a + std::cos (w)) - std::atan2 (-a * std::sin (w), 1.0 + a * std::cos (w));
+    return -phase / w;
+}
+} // namespace
+
+void Player::physicalVoiceOn (Voice& v, const SynthPatch& patch, size_t voiceIndex) noexcept
+{
+    const auto& ph = patch.physical;
+    v.physical = true;
+    v.modal = ph.model != PhysicalModel::String;
+    v.released = false;
+    const auto seconds = [this] (float s, double minimum) { return std::max (minimum, static_cast<double> (s)) * sampleRate; };
+    v.attackStep = static_cast<float> (1.0 / seconds (patch.amp.attack, 0.0003));
+    v.sustainLevel = 1.0f; // the model decays by itself
+    v.decayStep = 0.0f;
+    v.relStep = static_cast<float> (1.0 / seconds (patch.amp.release, 0.002));
+    v.lfoPhase = 0.0f;
+    v.lfoInc = static_cast<float> (patch.lfoRate / sampleRate);
+    v.controlLeft = 0;
+    v.pitchMod = 1.0;
+    v.noise = 0x9e3779b9u ^ static_cast<std::uint32_t> (v.age * 2654435761u);
+    const double f0 = std::max (20.0, v.increment / kTwoPi * sampleRate); // Hz
+    const double ring = PhysicalSettings::decaySeconds (ph.decay);
+    const double releaseTime = 0.03 + 3.0 * (1.0 - ph.releaseDamp) * (1.0 - ph.releaseDamp);
+    const float strength = 0.25f + 0.75f * v.velocity; // a harder hit is louder (and, for strings, brighter below)
+
+    if (! v.modal)
+    {
+        // Karplus-Strong: the loop delays one period minus what its filters delay; the loss filter (1 - S) + S z^-1 darkens every
+        // round trip, the loop gain sets the ring time, a first-order all-pass makes a stiff string's upper partials sharp.
+        v.line = stringLines.data() + voiceIndex * static_cast<size_t> (stringLineLength);
+        v.lineMask = stringLineLength - 1;
+        v.writePos = 0;
+        v.loopBlend = 0.02f + 0.48f * ph.damping;
+        v.apCoef = -0.85f * ph.stiffness;
+        v.apIn = v.apOut = v.lossState = 0.0f;
+        v.sustainGain = static_cast<float> (std::pow (10.0, -3.0 / (ring * f0)));
+        v.releaseGain = ph.releaseDamp > 0.0f ? static_cast<float> (std::pow (10.0, -3.0 / (releaseTime * f0))) : v.sustainGain;
+        v.loopGain = v.sustainGain;
+        v.bodyAmount = ph.body;
+        v.bodyState.fill (0.0f);
+        v.dcIn = v.dcOut = 0.0f;
+        updatePhysical (v, patch);
+
+        // The pluck: one period of noise, low-passed by the hardness (and the velocity), with the comb of the pluck position.
+        const int period = std::clamp (static_cast<int> (v.delaySamples), 2, stringLineLength - 8);
+        const int start = (v.writePos - period) & v.lineMask;
+        const float c = std::clamp (0.04f + 0.9f * ph.hardness * ph.hardness * (0.5f + 0.5f * v.velocity), 0.02f, 0.98f);
+        float lp = 0.0f, peak = 0.0f;
+        for (int k = 0; k < period; ++k)
+        {
+            v.noise ^= v.noise << 13;
+            v.noise ^= v.noise >> 17;
+            v.noise ^= v.noise << 5;
+            const float white = static_cast<float> (static_cast<double> (v.noise) / 2147483648.0 - 1.0);
+            lp += c * (white - lp);
+            v.line[(start + k) & v.lineMask] = lp;
+        }
+        const int offset = std::clamp (static_cast<int> ((0.05 + 0.45 * ph.position) * period), 1, period - 1);
+        for (int k = period - 1; k >= offset; --k) // the comb, from the end so the original values are still there
+            v.line[(start + k) & v.lineMask] -= v.line[(start + k - offset) & v.lineMask];
+        float mean = 0.0f;
+        for (int k = 0; k < period; ++k)
+            mean += v.line[(start + k) & v.lineMask] / static_cast<float> (period);
+        for (int k = 0; k < period; ++k)
+        {
+            auto& x = v.line[(start + k) & v.lineMask];
+            x -= mean; // no DC in the loop
+            peak = std::max (peak, std::abs (x));
+        }
+        const float norm = peak > 0.0f ? 0.8f * strength / peak : 0.0f;
+        for (int k = 0; k < period; ++k)
+            v.line[(start + k) & v.lineMask] *= norm;
+        for (int k = 1; k <= 4; ++k)
+            v.line[(start - k) & v.lineMask] = 0.0f;
+        return;
+    }
+
+    // Struck models: resonators at the model's ratios, rung by a raised-cosine pulse whose length is the mallet's softness.
+    const auto& model = modalModel (ph.model);
+    v.modeCount = std::min (model.count, Voice::kModes);
+    double sumSquares = 0.0;
+    for (size_t k = 0; k < static_cast<size_t> (v.modeCount); ++k)
+    {
+        const double position = std::abs (std::sin (3.14159265358979323846 * (static_cast<double> (k) + 1.0) * (0.08 + 0.42 * ph.position)));
+        v.modeRatio[k] = model.ratio[k];
+        v.modeAmp[k] = static_cast<float> (model.amp[k] * (0.35 + 0.65 * position));
+        const double t60 = ring * model.length * std::pow (static_cast<double> (model.decay[k]), 0.5 + 1.5 * static_cast<double> (ph.damping));
+        v.modeR[k] = static_cast<float> (std::pow (10.0, -3.0 / (std::max (0.01, t60) * sampleRate)));
+        v.modeRelR[k] = ph.releaseDamp > 0.0f ? std::min (v.modeR[k], static_cast<float> (std::pow (10.0, -3.0 / (releaseTime * sampleRate)))) : v.modeR[k];
+        v.modeY1[k] = v.modeY2[k] = 0.0f;
+        sumSquares += static_cast<double> (v.modeAmp[k]) * v.modeAmp[k];
+    }
+    const double softness = (1.0 - static_cast<double> (ph.hardness)) * (1.0 - 0.5 * static_cast<double> (v.velocity));
+    v.strikeLength = std::max (2, static_cast<int> ((0.0003 + 0.006 * softness * softness) * sampleRate));
+    v.strikeLeft = v.strikeLength;
+    v.strikeNorm = static_cast<float> (strength * 0.7 / std::sqrt (std::max (sumSquares, 1e-6)) / (0.5 * v.strikeLength));
+    updatePhysical (v, patch);
+}
+
+void Player::updatePhysical (Voice& v, const SynthPatch& patch) noexcept
+{
+    updateModulation (v, patch);
+    if (v.state == State::Release && ! v.released)
+        v.released = true;
+    const double w0 = v.increment * v.pitchMod; // radians per sample of the fundamental
+    if (! v.modal)
+    {
+        const double period = kTwoPi / std::max (w0, 1e-6);
+        v.apDelay = static_cast<float> (allpassDelay (v.apCoef, w0));
+        v.delaySamples = std::clamp (period - v.loopBlend - v.apDelay, 2.0, static_cast<double> (stringLineLength - 8));
+        v.loopGain = v.released ? v.releaseGain : v.sustainGain;
+        return;
+    }
+    for (size_t k = 0; k < static_cast<size_t> (v.modeCount); ++k)
+    {
+        const double w = w0 * v.modeRatio[k];
+        if (w >= 0.45 * kTwoPi)
+        {
+            v.modeB0[k] = v.modeA1[k] = v.modeA2[k] = 0.0f; // above the limit: silent
+            continue;
+        }
+        const float r = v.released ? v.modeRelR[k] : v.modeR[k];
+        v.modeA1[k] = static_cast<float> (2.0 * r * std::cos (w));
+        v.modeA2[k] = r * r;
+        v.modeB0[k] = static_cast<float> (std::sin (w)) * v.modeAmp[k];
+    }
+}
+
+float Player::renderPhysical (Voice& v, const SynthPatch& patch) noexcept
+{
+    if (--v.controlLeft <= 0)
+    {
+        v.controlLeft = kControlInterval;
+        updatePhysical (v, patch);
+    }
+    v.lfoPhase += v.lfoInc;
+    if (v.lfoPhase >= 1.0f)
+        v.lfoPhase -= 1.0f;
+
+    float out = 0.0f;
+    if (! v.modal)
+    {
+        // read one loop delay back (linear interpolation), filter, write
+        const double readPos = static_cast<double> (v.writePos) - v.delaySamples;
+        const double floorPos = std::floor (readPos);
+        const auto i0 = static_cast<int> (floorPos);
+        const auto frac = static_cast<float> (readPos - floorPos);
+        const float a = v.line[i0 & v.lineMask], b = v.line[(i0 + 1) & v.lineMask];
+        const float y = a + frac * (b - a);
+        const float lossy = v.loopGain * ((1.0f - v.loopBlend) * y + v.loopBlend * v.lossState);
+        v.lossState = y;
+        const float dispersed = v.apCoef * (lossy - v.apOut) + v.apIn; // first-order all-pass
+        v.apIn = lossy;
+        v.apOut = dispersed;
+        v.line[v.writePos] = dispersed;
+        v.writePos = (v.writePos + 1) & v.lineMask;
+        out = y;
+        if (v.bodyAmount > 0.0f)
+        {
+            float body = 0.0f;
+            for (size_t f = 0; f < 3; ++f)
+            {
+                const auto& c = bodyCoefs[f];
+                float& z1 = v.bodyState[2 * f];
+                float& z2 = v.bodyState[2 * f + 1];
+                const float o = c[0] * y + z1;
+                z1 = c[1] * y - c[3] * o + z2;
+                z2 = c[2] * y - c[4] * o;
+                body += o;
+            }
+            out += 1.6f * v.bodyAmount * body;
+        }
+        // no DC
+        const float hp = out - v.dcIn + 0.995f * v.dcOut;
+        v.dcIn = out;
+        v.dcOut = hp;
+        out = hp;
+    }
+    else
+    {
+        float x = 0.0f;
+        if (v.strikeLeft > 0)
+        {
+            const float t = static_cast<float> (v.strikeLength - v.strikeLeft) / static_cast<float> (v.strikeLength);
+            x = 0.5f * (1.0f - std::cos (static_cast<float> (kTwoPi) * t)) * v.strikeNorm;
+            --v.strikeLeft;
+        }
+        for (size_t k = 0; k < static_cast<size_t> (v.modeCount); ++k)
+        {
+            const float y = v.modeB0[k] * x + v.modeA1[k] * v.modeY1[k] - v.modeA2[k] * v.modeY2[k];
+            v.modeY2[k] = v.modeY1[k];
+            v.modeY1[k] = y;
+            out += y;
+        }
+    }
+    return out * v.ampMod * patch.gain;
 }
 
 void Player::pluginEvent (int channelIndex, std::uint8_t status, int data1, int data2) noexcept
@@ -1180,6 +1599,18 @@ void Player::render (const Project& project, double bpm, bool playing,
                                                                                                   : defaultPatch;
                     l = r = renderFm (v, patch) * v.env * v.velocity * kFmGain;
                 }
+                else if (v.additive)
+                {
+                    const auto& patch = static_cast<size_t> (v.channel) < project.channels.size() ? project.channels[static_cast<size_t> (v.channel)].synth
+                                                                                                  : defaultPatch;
+                    l = r = renderAdditive (v, patch) * v.env * v.velocity * kAdditiveGain;
+                }
+                else if (v.physical)
+                {
+                    const auto& patch = static_cast<size_t> (v.channel) < project.channels.size() ? project.channels[static_cast<size_t> (v.channel)].synth
+                                                                                                  : defaultPatch;
+                    l = r = renderPhysical (v, patch) * v.env * kPhysicalGain; // the velocity is in the strike already
+                }
                 else
                 {
                     const double p = v.phase;
@@ -1346,10 +1777,18 @@ void Player::render (const Project& project, double bpm, bool playing,
         for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
             masterEffects[s].process (automated ? masterSlotsNow[s] : project.masterSlots[s], mixL.data(), mixR.data(), n);
 
+        // The soft limiter (0.24.0): exactly linear up to 0.7 (-3 dBFS), then a tanh knee that never passes 1 and has the same slope
+        // where it starts. Until 0.23.0 it was a plain tanh, which bent (and so distorted, by about -40 dB at -10 dBFS) every level.
+        const auto limit = [] (float x) noexcept
+        {
+            constexpr float t = 0.7f;
+            const float a = std::abs (x);
+            return a <= t ? x : std::copysign (t + (1.0f - t) * std::tanh ((a - t) / (1.0f - t)), x);
+        };
         for (int i = 0; i < n; ++i)
         {
-            const float outL = std::tanh (mixL[static_cast<size_t> (i)]);
-            const float outR = std::tanh (mixR[static_cast<size_t> (i)]);
+            const float outL = limit (mixL[static_cast<size_t> (i)]);
+            const float outR = limit (mixR[static_cast<size_t> (i)]);
             const float clickSample = click[static_cast<size_t> (i)];
             for (int ch = 0; ch < numChannels; ++ch)
                 if (out[ch] != nullptr)
