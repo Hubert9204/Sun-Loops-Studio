@@ -58,6 +58,11 @@ struct AudioClip
     int lengthTicks = kTicksPerBeat;
     float gain = 1.0f; // 0..2
     double offsetSeconds = 0.0; // the clip plays the audio from this point (0 unless the clip was cut or trimmed at its start)
+    // 0.27.0: per-clip pan, reverse and fades.
+    float pan = 0.0f;           // -1 (left) .. 1 (right): a balance, like a mixer track's (the centre leaves the sound alone)
+    bool reverse = false;       // plays the audio backwards; offsetSeconds then counts from the end of the audio (see setAudioReverse)
+    double fadeInSeconds = 0.0; // fades over the clip's first and last seconds (sine curves); 0 = none
+    double fadeOutSeconds = 0.0;
 
     int endTick() const noexcept { return startTick + lengthTicks; }
 
@@ -418,6 +423,10 @@ inline Project compileSong (const std::vector<Channel>& channelSettings, const A
         e.mixerTrack = a.track; // playlist track n plays through mixer track n
         e.gain = a.gain;
         e.offsetSeconds = a.offsetSeconds;
+        e.pan = a.pan;
+        e.reverse = a.reverse;
+        e.fadeInSeconds = a.fadeInSeconds;
+        e.fadeOutSeconds = a.fadeOutSeconds;
         events.push_back (std::move (e));
     }
     return Project::make (std::move (channels), units * arrangement.patternTicks, std::move (tracks), masterSlots,

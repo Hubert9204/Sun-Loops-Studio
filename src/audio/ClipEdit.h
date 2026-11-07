@@ -39,6 +39,9 @@ inline int splitAudioClip (Arrangement& a, int index, int tick, double bpm)
     right.lengthTicks = left.endTick() - tick;
     right.offsetSeconds = left.offsetSeconds + ticksToSeconds (tick - left.startTick, bpm);
     left.lengthTicks = tick - left.startTick;
+    // The fades stay at the outer edges: the left piece keeps the fade-in, the right one the fade-out.
+    left.fadeOutSeconds = 0.0;
+    right.fadeInSeconds = 0.0;
 
     a.audioClips.push_back (std::move (right));
     return static_cast<int> (a.audioClips.size()) - 1;
@@ -65,16 +68,18 @@ inline int cutAudioRange (Arrangement& a, int index, int from, int to, double bp
     }
 
     auto& stored = a.audioClips[static_cast<size_t> (index)];
-    if (from <= clip.startTick) // the beginning is cut away
+    if (from <= clip.startTick) // the beginning is cut away (and its fade-in with it)
     {
         stored.offsetSeconds = clip.offsetSeconds + ticksToSeconds (to - clip.startTick, bpm);
         stored.startTick = to;
         stored.lengthTicks = clip.endTick() - to;
+        stored.fadeInSeconds = 0.0;
         return 1;
     }
-    if (to >= clip.endTick()) // the end is cut away
+    if (to >= clip.endTick()) // the end is cut away (and its fade-out)
     {
         stored.lengthTicks = from - clip.startTick;
+        stored.fadeOutSeconds = 0.0;
         return 1;
     }
 
@@ -82,9 +87,39 @@ inline int cutAudioRange (Arrangement& a, int index, int from, int to, double bp
     right.startTick = to;
     right.lengthTicks = clip.endTick() - to;
     right.offsetSeconds = clip.offsetSeconds + ticksToSeconds (to - clip.startTick, bpm);
+    right.fadeInSeconds = 0.0;
     stored.lengthTicks = from - clip.startTick;
+    stored.fadeOutSeconds = 0.0;
     a.audioClips.push_back (std::move (right));
     return 2;
+}
+
+// Turns the playing direction of an audio clip around (0.27.0). The clip keeps playing the same part of the audio, now the other
+// way: that part starts `offsetSeconds` from the beginning of the audio going forwards, and as far from its end going backwards.
+inline void setAudioReverse (AudioClip& clip, bool reverse, double bpm) noexcept
+{
+    if (clip.reverse == reverse)
+        return;
+    clip.reverse = reverse;
+    if (clip.data == nullptr || clip.data->sampleRate <= 0.0 || bpm <= 0.0)
+        return;
+    const double duration = clip.data->numFrames() / clip.data->sampleRate;
+    const double played = std::min (ticksToSeconds (clip.lengthTicks, bpm), std::max (0.0, duration - clip.offsetSeconds));
+    clip.offsetSeconds = std::max (0.0, duration - clip.offsetSeconds - played);
+}
+
+// Fades no longer than the clip (0.27.0): a fade-in and a fade-out that would overlap share the clip in proportion.
+inline void limitFades (AudioClip& clip, double bpm) noexcept
+{
+    const double length = ticksToSeconds (clip.lengthTicks, bpm);
+    clip.fadeInSeconds = std::isfinite (clip.fadeInSeconds) ? std::max (0.0, clip.fadeInSeconds) : 0.0;
+    clip.fadeOutSeconds = std::isfinite (clip.fadeOutSeconds) ? std::max (0.0, clip.fadeOutSeconds) : 0.0;
+    const double total = clip.fadeInSeconds + clip.fadeOutSeconds;
+    if (length > 0.0 && total > length)
+    {
+        clip.fadeInSeconds *= length / total;
+        clip.fadeOutSeconds *= length / total;
+    }
 }
 
 // `clip` with its start edge moved to `newStart` and the audio left where it was (so the sound does not move, only

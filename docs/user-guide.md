@@ -479,7 +479,7 @@ The toolbar under the pattern box has five tools (keys **1** - **5** while the m
 
 | Tool | What it does |
 | --- | --- |
-| **Select** (1) | The normal tool described above and below: click a clip to select it, drag to move it, drag its **left or right edge** to trim or lengthen it (an audio clip keeps its sound in place: only more or less of it is heard), right-click for a menu (*Split here, Duplicate, Copy, Delete*, plus *Position, length and gain...* and *Stretch and pitch...* on an audio clip or *Open this pattern* on a pattern clip), double-click a pattern clip to open that pattern. |
+| **Select** (1) | The normal tool described above and below: click a clip to select it, drag to move it, drag its **left or right edge** to trim or lengthen it (an audio clip keeps its sound in place: only more or less of it is heard), right-click for a menu (*Split here, Duplicate, Copy, Delete*, plus *Position, gain, pan and fades...*, *Reverse* and *Stretch and pitch...* on an audio clip or *Open this pattern* on a pattern clip), double-click a pattern clip to open that pattern. |
 | **Split** (2) | Click a clip to cut it in two at that point (snapped to the grid). Key **S** splits the selected clip at the mouse. |
 | **Cut** (3) | Drag across a clip to remove that stretch of it: the sound after the gap stays where it was. |
 | **Erase** (4) | Click a clip to delete it, or drag across several. |
@@ -492,7 +492,15 @@ Shift+wheel and the scroll bar move in time. The ruler shows **minutes:seconds.m
 current zoom), and the two lines under the timeline read out, for the position under the mouse, *time - bar:beat:tick*, and
 for the selected clip its name, start, length and end (each as bar:beat:tick and as a time), for an audio clip also the length and
 sample rate of the file, where in the file the clip starts (in seconds and in samples) and its gain. On an audio clip, *Position,
-length and gain...* (right-click) lets you type exact values.
+gain, pan and fades...* (right-click) lets you type exact values.
+
+**Per-clip settings (0.27.0).** Each audio clip has its own **pan** (-100 left to 100 right: a balance like a mixer track's, the
+centre leaves the sound alone), **fade in** and **fade out** (seconds, sine curves, drawn on the clip and shaping its waveform)
+and **direction**: *Reverse* in the right-click menu (or *Direction* in the dialog) plays the same part of the audio backwards,
+and the waveform turns round with it. Together with *Stretch and pitch...* (below) that gives every audio clip its own pitch,
+length, direction, pan and fades. Splitting or cutting a clip keeps the fades at its outer edges (the left piece keeps the
+fade-in, the right one the fade-out). Fades longer than the clip share it in proportion. A reversed clip cannot be opened in the
+sample editor: switch *Reverse* off first. These settings are saved with the project; older projects open with none.
 
 **Undo / Redo** (buttons, **Ctrl+Z** and **Ctrl+Y**) cover everything done to clips in the Playlist. **Ctrl+C / X / V** copy,
 cut and paste the selected clip at the mouse and **Ctrl+D** duplicates it; **Delete** removes it. The undo history is

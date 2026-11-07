@@ -25,6 +25,12 @@ void MainComponent::openSampleEditorForClip (int index)
                                                 "edit it here, then stretch it again.");
         return;
     }
+    if (clip.reverse)
+    {
+        juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::InfoIcon, "Sample editor",
+                                                "This clip plays its audio backwards. Switch Reverse off (right-click the clip), edit the sound, then reverse it again.");
+        return;
+    }
     if (sampleEditorWindow != nullptr)
     {
         sampleEditorWindow->toFront (true);

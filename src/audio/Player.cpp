@@ -180,6 +180,20 @@ void Player::startClip (const AudioEvent& e, double extraSeconds) noexcept
     v.data = e.data.get();
     v.step = e.data->sampleRate / sampleRate;
     v.pos = startFrame;
+    if (e.reverse)
+    {
+        // The audio backwards: position p of the reversed audio is frame (frames - 1 - p) of the audio.
+        v.reverse = true;
+        v.pos = static_cast<double> (e.data->numFrames() - 1) - startFrame;
+        v.step = -v.step;
+    }
+    const float pan = std::clamp (e.pan, -1.0f, 1.0f);
+    v.balanceLeft = pan > 0.0f ? 1.0f - pan : 1.0f;
+    v.balanceRight = pan < 0.0f ? 1.0f + pan : 1.0f;
+    v.startTick = e.startTick;
+    v.fadeInSeconds = static_cast<float> (e.fadeInSeconds);
+    v.fadeOutSeconds = static_cast<float> (e.fadeOutSeconds);
+    v.fade = 0.0f; // set from the song position at the first sample
     v.endTick = e.endTick;
     v.track = std::clamp (e.mixerTrack, 0, kMaxTracks - 1);
     v.gain = e.gain;
@@ -1560,18 +1574,34 @@ void Player::render (const Project& project, double bpm, bool playing,
                 if (! v.active)
                     continue;
 
-                const int idx = static_cast<int> (v.pos);
-                if (idx + 1 >= v.data->numFrames())
+                const int frames = v.data->numFrames();
+                if (v.pos < 0.0 || static_cast<int> (v.pos) + 1 >= frames + (v.reverse ? 1 : 0))
                 {
-                    v = ClipVoice {};
+                    v = ClipVoice {}; // the end of the audio (its beginning, played backwards)
                     continue;
                 }
+                const int idx = static_cast<int> (v.pos);
+                const int next = std::min (idx + 1, frames - 1);
                 const float frac = static_cast<float> (v.pos - idx);
                 const float* sl = v.data->left.data();
                 const float* sr = v.data->right.data();
-                const float gain = v.env * v.gain;
-                trackL[static_cast<size_t> (v.track)][static_cast<size_t> (i)] += (sl[idx] + frac * (sl[idx + 1] - sl[idx])) * gain;
-                trackR[static_cast<size_t> (v.track)][static_cast<size_t> (i)] += (sr[idx] + frac * (sr[idx + 1] - sr[idx])) * gain;
+                if (playing && (v.fadeInSeconds > 0.0f || v.fadeOutSeconds > 0.0f))
+                {
+                    // Sine fades over the clip's first and last seconds, from where the song is.
+                    const double sinceStart = (tickPos - v.startTick) / ticksPerSecond;
+                    const double untilEnd = (v.endTick - tickPos) / ticksPerSecond;
+                    double f = 1.0;
+                    if (v.fadeInSeconds > 0.0f)
+                        f *= std::sin (0.25 * kTwoPi * std::clamp (sinceStart / v.fadeInSeconds, 0.0, 1.0));
+                    if (v.fadeOutSeconds > 0.0f)
+                        f *= std::sin (0.25 * kTwoPi * std::clamp (untilEnd / v.fadeOutSeconds, 0.0, 1.0));
+                    v.fade = static_cast<float> (f);
+                }
+                else if (playing)
+                    v.fade = 1.0f;
+                const float gain = v.env * v.gain * v.fade;
+                trackL[static_cast<size_t> (v.track)][static_cast<size_t> (i)] += (sl[idx] + frac * (sl[next] - sl[idx])) * gain * v.balanceLeft;
+                trackR[static_cast<size_t> (v.track)][static_cast<size_t> (i)] += (sr[idx] + frac * (sr[next] - sr[idx])) * gain * v.balanceRight;
                 v.pos += v.step;
 
                 if (v.releasing)

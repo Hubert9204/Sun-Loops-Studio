@@ -220,6 +220,7 @@ private:
     void showClipMenu (const juce::MouseEvent& e);
     void editAudioProperties (int index);
     void editAudioStretch (int index);
+    void toggleAudioReverse (int index); // 0.27.0
     void showAutomationMenu (int index);
     void duplicateSelected();
     void copySelected();

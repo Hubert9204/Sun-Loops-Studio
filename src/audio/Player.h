@@ -202,6 +202,12 @@ private:
         float gain = 1.0f;
         float env = 0.0f;
         std::uint64_t age = 0;
+        // 0.27.0: balance, direction and fades (in seconds of the clip, measured on the song position while it plays)
+        float balanceLeft = 1.0f, balanceRight = 1.0f;
+        bool reverse = false;
+        int startTick = 0;
+        float fadeInSeconds = 0.0f, fadeOutSeconds = 0.0f;
+        float fade = 1.0f; // the fades' gain at the last sample played (kept while the transport is stopped)
     };
 
     void startClip (const AudioEvent& e, double extraSeconds = 0.0) noexcept;

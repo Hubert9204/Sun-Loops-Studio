@@ -27,6 +27,13 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.27.0
+Audio clips gained pan, reverse and fades. Reading backwards never goes outside the audio (the voice ends below position 0, the
+next frame is clamped to the last one); a clip with every setting on renders without allocation. Loading takes nonsense values
+(NaN pan, negative or infinite fades) as none, and the snapshot clamps them again. clang-tidy is clean on the files changed,
+after two older findings in the playlist were fixed (the ruler's time labels counted with a floating-point loop counter, and the
+record marker's position used an integer division).
+
 ## After 0.26.0
 The Pitch Corrector allocates nothing: its analysis arrays are fixed members and its recordings are buffers `prepare` already makes
 for the delay and the reverb (tested: 2000 blocks without allocation). Every access stays inside its buffers: AddressSanitizer and

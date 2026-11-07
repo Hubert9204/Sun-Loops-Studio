@@ -493,7 +493,7 @@ La barra sotto il menu dei pattern ha cinque strumenti (tasti **1** - **5** con 
 
 | Strumento | Cosa fa |
 | --- | --- |
-| **Select** (1) | Lo strumento normale: clic su una clip per selezionarla, trascina per spostarla, trascina il **bordo sinistro o destro** per accorciarla o allungarla (una clip audio mantiene il suono al suo posto: se ne sente solo di più o di meno), tasto destro per un menu (*Split here, Duplicate, Copy, Delete*, più *Position, length and gain...* e *Stretch and pitch...* su una clip audio oppure *Open this pattern* su una clip di pattern), doppio clic su una clip di pattern per aprirla. |
+| **Select** (1) | Lo strumento normale: clic su una clip per selezionarla, trascina per spostarla, trascina il **bordo sinistro o destro** per accorciarla o allungarla (una clip audio mantiene il suono al suo posto: se ne sente solo di più o di meno), tasto destro per un menu (*Split here, Duplicate, Copy, Delete*, più *Position, gain, pan and fades...*, *Reverse* e *Stretch and pitch...* su una clip audio oppure *Open this pattern* su una clip di pattern), doppio clic su una clip di pattern per aprirla. |
 | **Split** (2) | Clic su una clip per tagliarla in due in quel punto (agganciato alla griglia). Il tasto **S** divide la clip selezionata dove si trova il mouse. |
 | **Cut** (3) | Trascina su una clip per togliere quel tratto: il suono dopo il vuoto resta dov'era. |
 | **Erase** (4) | Clic su una clip per eliminarla, o trascina su più clip. |
@@ -506,8 +506,16 @@ la **rotella del mouse** ingrandisce e rimpicciolisce intorno al mouse, Shift+ro
 **minuti:secondi.millisecondi** e i numeri di battuta (solo quanti ne stanno allo zoom attuale); le due righe sotto la linea del
 tempo indicano, per la posizione sotto il mouse, *tempo - battuta:battito:tick* e, per la clip selezionata, nome, inizio, durata e fine
 (in battuta:battito:tick e in tempo), per una clip audio anche durata e frequenza di campionamento del file, il punto del file da cui
-parte la clip (in secondi e in campioni) e il guadagno. Su una clip audio, *Position, length and gain...* (tasto destro) permette di
+parte la clip (in secondi e in campioni) e il guadagno. Su una clip audio, *Position, gain, pan and fades...* (tasto destro) permette di
 scrivere valori esatti.
+
+**Impostazioni per clip (0.27.0).** Ogni clip audio ha il suo **pan** (da -100 sinistra a 100 destra: un bilanciamento come quello di
+una traccia del mixer, al centro il suono resta com'è), **fade in** e **fade out** (secondi, curve sinusoidali, disegnate sulla clip e
+applicate alla forma d'onda) e la **direzione**: *Reverse* nel menu del tasto destro (o *Direction* nella finestra) suona la stessa
+parte dell'audio al contrario, e la forma d'onda si gira con lei. Insieme a *Stretch and pitch...* ogni clip audio ha quindi la sua
+intonazione, durata, direzione, pan e dissolvenze. Dividere o tagliare una clip lascia i fade ai bordi esterni (il pezzo di sinistra
+tiene il fade in, quello di destra il fade out). Fade più lunghi della clip se la dividono in proporzione. Una clip al contrario non
+si apre nell'editor dei campioni: prima togli *Reverse*. Le impostazioni si salvano col progetto; i progetti precedenti si aprono senza.
 
 **Annulla / Ripristina** (pulsanti, **Ctrl+Z** e **Ctrl+Y**) coprono tutto ciò che si fa alle clip nella Playlist. **Ctrl+C / X / V**
 copiano, tagliano e incollano la clip selezionata dove sta il mouse, **Ctrl+D** la duplica, **Canc** la elimina. La cronologia viene

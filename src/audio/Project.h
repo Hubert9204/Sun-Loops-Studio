@@ -90,6 +90,9 @@ struct AudioEvent
     int mixerTrack = 0;
     float gain = 1.0f; // 0..2
     double offsetSeconds = 0.0; // where in the audio the clip starts playing (a clip cut from a longer one starts later)
+    float pan = 0.0f;           // balance, -1..1
+    bool reverse = false;       // read backwards: offsetSeconds counts from the end of the audio
+    double fadeInSeconds = 0.0, fadeOutSeconds = 0.0;
 };
 
 // Immutable snapshot of everything the audio thread needs.
@@ -210,6 +213,9 @@ struct Project
             e.offsetSeconds = std::isfinite (e.offsetSeconds) ? std::max (0.0, e.offsetSeconds) : 0.0;
             e.mixerTrack = std::clamp (e.mixerTrack, 0, kMaxTracks - 1);
             e.gain = std::clamp (finiteOr (e.gain, 1.0f), 0.0f, 2.0f);
+            e.pan = std::clamp (finiteOr (e.pan, 0.0f), -1.0f, 1.0f);
+            e.fadeInSeconds = std::isfinite (e.fadeInSeconds) ? std::clamp (e.fadeInSeconds, 0.0, 3600.0) : 0.0;
+            e.fadeOutSeconds = std::isfinite (e.fadeOutSeconds) ? std::clamp (e.fadeOutSeconds, 0.0, 3600.0) : 0.0;
         }
         std::stable_sort (audioEvents.begin(), audioEvents.end(),
                           [] (const AudioEvent& a, const AudioEvent& b) { return a.startTick < b.startTick; });

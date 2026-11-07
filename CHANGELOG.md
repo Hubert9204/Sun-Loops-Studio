@@ -2,6 +2,15 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.27.0 - 2026-11-07
+
+### Added
+- **Per-clip editing of audio clips**: pan (a balance, -100 to 100), fade in and fade out (sine curves, drawn on the clip) and
+  reverse (the same part of the audio, played backwards; the waveform turns round). With the existing per-clip stretch and pitch,
+  every audio clip now has its own pitch, length, direction, pan and fades. In the right-click menu (*Reverse*) and the clip
+  dialog (*Position, gain, pan and fades...*); saved with the project (only when set, so older versions still open the files).
+- Splitting and cutting keep the fades at the outer edges; fades longer than the clip share it in proportion.
+
 ## 0.26.0 - 2026-11-07
 
 ### Added

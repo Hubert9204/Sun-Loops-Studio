@@ -342,12 +342,30 @@ void PlaylistTimeline::paintAudioClip (juce::Graphics& g, const AudioClip& clip,
         const int xFrom = std::max (r.getX(), kNameWidth);
         const int xTo = std::min (r.getRight(), getWidth());
         const int nBins = static_cast<int> (peaks.lows.size());
+        const double clipSeconds = ticksToSeconds (clip.lengthTicks, bpm);
+        const auto fadeAt = [&] (double seconds) // the clip's fades at this point (0.27.0)
+        {
+            double f = 1.0;
+            if (clip.fadeInSeconds > 0.0)
+                f *= std::sin (0.5 * juce::MathConstants<double>::pi * std::clamp (seconds / clip.fadeInSeconds, 0.0, 1.0));
+            if (clip.fadeOutSeconds > 0.0)
+                f *= std::sin (0.5 * juce::MathConstants<double>::pi * std::clamp ((clipSeconds - seconds) / clip.fadeOutSeconds, 0.0, 1.0));
+            return static_cast<float> (f);
+        };
         for (int x = xFrom; x < xTo; ++x)
         {
-            const double f0 = firstFrame + (x - r.getX()) * framesPerPixel;
-            const double f1 = f0 + framesPerPixel;
+            double f0 = firstFrame + (x - r.getX()) * framesPerPixel;
+            double f1 = f0 + framesPerPixel;
             if (f0 >= frames)
                 break;
+            if (clip.reverse)
+            {
+                // the reversed audio: its position p is frame (frames - 1 - p) of the audio
+                const double from = frames - 1 - f1, to = frames - 1 - f0;
+                f0 = std::max (0.0, from);
+                f1 = std::max (f0 + 1.0, to);
+            }
+            const float fade = fadeAt (ticksToSeconds ((x - r.getX()) / pxPerTick, bpm));
 
             float lo = 0.0f, hi = 0.0f;
             if (framesPerPixel < kFramesPerPeak)
@@ -371,16 +389,50 @@ void PlaylistTimeline::paintAudioClip (juce::Graphics& g, const AudioClip& clip,
                     hi = std::max (hi, peaks.highs[static_cast<size_t> (b)]);
                 }
             }
-            g.drawVerticalLine (x, mid - std::clamp (hi * clip.gain, 0.0f, 1.0f) * half - 0.5f,
-                                mid - std::clamp (lo * clip.gain, -1.0f, 0.0f) * half + 0.5f);
+            g.drawVerticalLine (x, mid - std::clamp (hi * clip.gain * fade, 0.0f, 1.0f) * half - 0.5f,
+                                mid - std::clamp (lo * clip.gain * fade, -1.0f, 0.0f) * half + 0.5f);
+        }
+
+        // The fade curves, from the bottom corner to the top.
+        if (clip.fadeInSeconds > 0.0 || clip.fadeOutSeconds > 0.0)
+        {
+            juce::Path in, out;
+            const float top = static_cast<float> (r.getY()) + 2.0f, bottom = static_cast<float> (r.getBottom()) - 2.0f;
+            const auto curve = [&] (juce::Path& path, double fromSeconds, double toSeconds)
+            {
+                for (int k = 0; k <= 24; ++k)
+                {
+                    const double t = fromSeconds + (toSeconds - fromSeconds) * k / 24.0;
+                    const auto px = static_cast<float> (r.getX() + secondsToTicks (t, bpm) * pxPerTick);
+                    const float py = bottom - (bottom - top) * fadeAt (t);
+                    if (k == 0)
+                        path.startNewSubPath (px, py);
+                    else
+                        path.lineTo (px, py);
+                }
+            };
+            if (clip.fadeInSeconds > 0.0)
+                curve (in, 0.0, std::min (clip.fadeInSeconds, clipSeconds));
+            if (clip.fadeOutSeconds > 0.0)
+                curve (out, std::max (0.0, clipSeconds - clip.fadeOutSeconds), clipSeconds);
+            g.setColour (juce::Colours::white.withAlpha (0.75f));
+            g.strokePath (in, juce::PathStrokeType (1.2f));
+            g.strokePath (out, juce::PathStrokeType (1.2f));
         }
         g.restoreState();
     }
 
     g.setColour (juce::Colours::white.withAlpha (0.92f));
     g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
-    g.drawText (juce::String (clip.name) + (clip.stretch.isNeutral() ? juce::String() : "  [" + describeStretch (clip.stretch) + "]") + (missing ? "  (file not found)" : ""), r.reduced (5, 0).withHeight (14).translated (0, 1),
-                juce::Justification::centredLeft, true);
+    juce::StringArray tags;
+    if (! clip.stretch.isNeutral())
+        tags.add (describeStretch (clip.stretch));
+    if (clip.reverse)
+        tags.add ("reversed");
+    if (std::abs (clip.pan) > 0.005f)
+        tags.add ("pan " + juce::String (clip.pan < 0.0f ? "L" : "R") + juce::String (juce::roundToInt (std::abs (clip.pan) * 100.0f)));
+    g.drawText (juce::String (clip.name) + (tags.isEmpty() ? juce::String() : "  [" + tags.joinIntoString (", ") + "]") + (missing ? "  (file not found)" : ""),
+                r.reduced (5, 0).withHeight (14).translated (0, 1), juce::Justification::centredLeft, true);
 
     if (selected)
     {
@@ -475,8 +527,11 @@ void PlaylistTimeline::paintRuler (juce::Graphics& g)
     const double firstSecond = firstTick / ticksPerSecond;
     const double lastSecond = lastTick / ticksPerSecond;
     g.setFont (juce::FontOptions (10.0f));
-    for (double t = std::floor (firstSecond / step) * step; t <= lastSecond + step; t += step)
+    const auto firstIndex = static_cast<long long> (std::floor (firstSecond / step));
+    const auto lastIndex = static_cast<long long> (std::ceil (lastSecond / step)) + 1;
+    for (long long k = firstIndex; k <= lastIndex; ++k)
     {
+        const double t = static_cast<double> (k) * step; // a whole number of steps: no drift from adding up
         const int x = tickToX (static_cast<int> (std::lround (t * ticksPerSecond)));
         g.setColour (kTextDim);
         g.drawVerticalLine (x, static_cast<float> (rowH + 1), static_cast<float> (kRulerHeight));
@@ -770,7 +825,7 @@ void PlaylistTimeline::paint (juce::Graphics& g)
         {
             // the track Record writes to
             g.setColour (juce::Colour (0xffd9433b));
-            g.fillEllipse (static_cast<float> (kNameWidth - 14), static_cast<float> (kRulerHeight + t * th + th / 2 - 4), 8.0f, 8.0f);
+            g.fillEllipse (static_cast<float> (kNameWidth - 14), static_cast<float> (kRulerHeight + t * th) + 0.5f * static_cast<float> (th) - 4.0f, 8.0f, 8.0f);
             g.setColour (juce::Colours::white);
         }
         else
@@ -1216,12 +1271,18 @@ void PlaylistTimeline::editAudioProperties (int index)
         return;
 
     const auto clip = arrangement.audioClips[static_cast<size_t> (index)];
-    auto* window = new juce::AlertWindow ("Audio clip", juce::String (clip.name) + "\nEnter the start and the length in seconds, and the gain in dB.\nTempo " + juce::String (bpm, 1) + " BPM: one beat = "
-                                                          + juce::String (60.0 / bpm, 3) + " s.",
+    auto* window = new juce::AlertWindow ("Audio clip", juce::String (clip.name) + "\nStart, length and fades in seconds, gain in dB, pan from -100 (left) to 100 (right).\nTempo "
+                                                          + juce::String (bpm, 1) + " BPM: one beat = " + juce::String (60.0 / bpm, 3) + " s.",
                                           juce::MessageBoxIconType::NoIcon);
     window->addTextEditor ("start", juce::String (ticksToSeconds (clip.startTick, bpm), 4), "Start (seconds)");
     window->addTextEditor ("length", juce::String (ticksToSeconds (clip.lengthTicks, bpm), 4), "Length (seconds)");
     window->addTextEditor ("gain", juce::String (juce::Decibels::gainToDecibels (clip.gain), 1), "Gain (dB, at most +6)");
+    window->addTextEditor ("pan", juce::String (juce::roundToInt (clip.pan * 100.0f)), "Pan (-100 left, 0 centre, 100 right)");
+    window->addTextEditor ("fadeIn", juce::String (clip.fadeInSeconds, 3), "Fade in (seconds, 0 = none)");
+    window->addTextEditor ("fadeOut", juce::String (clip.fadeOutSeconds, 3), "Fade out (seconds, 0 = none)");
+    window->addComboBox ("direction", { "Forwards", "Reversed (the same part of the audio, backwards)" }, "Direction");
+    if (auto* direction = window->getComboBoxComponent ("direction"))
+        direction->setSelectedItemIndex (clip.reverse ? 1 : 0, juce::dontSendNotification);
     window->addButton ("OK", 1, juce::KeyPress (juce::KeyPress::returnKey));
     window->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
 
@@ -1241,6 +1302,19 @@ void PlaylistTimeline::editAudioProperties (int index)
                                      edited.lengthTicks = std::clamp (static_cast<int> (std::lround (secondsToTicks (lengthSeconds, bpmNow))), 1,
                                                                       std::max (1, edited.naturalLengthTicks (bpmNow)));
                                      edited.gain = std::clamp (juce::Decibels::decibelsToGain (static_cast<float> (std::min (gainDb, 6.0))), 0.0f, 2.0f);
+                                     const double panNumber = window->getTextEditorContents ("pan").getDoubleValue();
+                                     edited.pan = std::isfinite (panNumber) ? static_cast<float> (std::clamp (panNumber, -100.0, 100.0) / 100.0) : 0.0f;
+                                     edited.fadeInSeconds = window->getTextEditorContents ("fadeIn").getDoubleValue();
+                                     edited.fadeOutSeconds = window->getTextEditorContents ("fadeOut").getDoubleValue();
+                                     if (auto* direction = window->getComboBoxComponent ("direction"))
+                                     {
+                                         // turned around with the length it has now, then trimmed to what that audio allows
+                                         const int wantedLength = edited.lengthTicks;
+                                         edited.lengthTicks = clip.lengthTicks;
+                                         setAudioReverse (edited, direction->getSelectedItemIndex() == 1, bpmNow);
+                                         edited.lengthTicks = std::clamp (wantedLength, 1, std::max (1, edited.naturalLengthTicks (bpmNow)));
+                                     }
+                                     limitFades (edited, bpmNow);
 
                                      if (! safe->arrangement.canPlaceAudio (edited, index))
                                      {
@@ -1254,6 +1328,18 @@ void PlaylistTimeline::editAudioProperties (int index)
                                      safe->notifyChanged();
                                  }),
                              true);
+}
+
+// The clip plays the same part of its audio the other way round (0.27.0).
+void PlaylistTimeline::toggleAudioReverse (int index)
+{
+    if (index < 0 || index >= static_cast<int> (arrangement.audioClips.size()))
+        return;
+    beginEdit();
+    commitPendingUndo();
+    auto& clip = arrangement.audioClips[static_cast<size_t> (index)];
+    setAudioReverse (clip, ! clip.reverse, bpm);
+    notifyChanged();
 }
 
 // Time-stretch and pitch-shift of one audio clip: the settings are typed in, the audio is rendered again at once (a few
@@ -1363,7 +1449,9 @@ void PlaylistTimeline::showClipMenu (const juce::MouseEvent& e)
     menu.addItem (3, "Copy (Ctrl+C)");
     if (audio >= 0)
     {
-        menu.addItem (4, "Position, length and gain...");
+        const auto& clip = arrangement.audioClips[static_cast<size_t> (audio)];
+        menu.addItem (4, "Position, gain, pan and fades...");
+        menu.addItem (9, "Reverse", true, clip.reverse);
         menu.addItem (7, "Stretch and pitch...");
         menu.addItem (8, "Edit sample...");
     }
@@ -1384,6 +1472,7 @@ void PlaylistTimeline::showClipMenu (const juce::MouseEvent& e)
                                 case 3: safe->copySelected(); break;
                                 case 4: safe->editAudioProperties (audio); break;
                                 case 7: safe->editAudioStretch (audio); break;
+                                case 9: safe->toggleAudioReverse (audio); break;
                                 case 8: if (safe->onEditSample) safe->onEditSample (audio); break;
                                 case 5:
                                     if (safe->selection.kind == Kind::Pattern && safe->selection.index >= 0

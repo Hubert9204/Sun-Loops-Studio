@@ -288,6 +288,10 @@ voices -> channel (smoothed gain, equal-power pan, channel mute/solo)
   is active in the audio callback and the feedback loops flush tiny values.
 - The piano roll's loop region (0.20.0) lives in `Pattern::loopStartTick / loopEndTick`; in Pattern mode `publishProject` copies the current
   pattern's region into the snapshot's `loopStartTick / loopEndTick`, which the `Player` already handles for the playlist's region.
+- Audio clips (0.27.0): `AudioClip` / `AudioEvent` carry pan, reverse and fades. A reversed clip is read backwards by its clip
+  voice (position p of the reversed audio is frame frames - 1 - p), so no reversed copy of the audio is made; `offsetSeconds`
+  then counts from the end of the audio, and `setAudioReverse` keeps the played part when the direction changes. Fades are
+  computed from the song position while playing (and held while stopped).
 - Pitch Corrector (0.26.0): YIN pitch detection every 64 samples of a copy decimated to about 12 kHz (two biquads before
   decimation), refined at the full rate with a parabola; two read heads with Hann windows over a stereo recording, each restarting
   at the delay of best normalised cross-correlation with the other head, so crossfades are in phase. The heads' mean delay equals the

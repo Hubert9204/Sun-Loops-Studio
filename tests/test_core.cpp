@@ -3396,6 +3396,238 @@ void testAudioClips()
     }
 }
 
+// --- per-clip pan, reverse and fades (0.27.0) -------------------------------------------------------------------------------
+void testClipPanReverseFades()
+{
+    std::cout << "Audio clips: pan, reverse and fades (0.27.0)\n";
+    const auto empty = std::vector<sls::Channel> { synthChannel ({}) };
+    // 1 s of a ramp: frame i holds 0.5 * i / 48000 on both sides, so a sample says where in the audio it came from
+    auto rampData = std::make_shared<sls::SampleData>();
+    rampData->sampleRate = kSr;
+    rampData->source = "/tmp/ramp.wav";
+    rampData->left.resize (48000);
+    for (size_t i = 0; i < rampData->left.size(); ++i)
+        rampData->left[i] = 0.5f * static_cast<float> (i) / 48000.0f;
+    rampData->right = rampData->left;
+    const std::shared_ptr<const sls::SampleData> ramp = rampData;
+    const auto sine = sineData (48000, kSr, 440.0, 0.5f);
+
+    const auto clipOf = [] (std::shared_ptr<const sls::SampleData> data, int start, int length)
+    {
+        sls::AudioClip c;
+        c.data = std::move (data);
+        c.startTick = start;
+        c.lengthTicks = length;
+        return c;
+    };
+    // renders an arrangement with one clip at 120 BPM (480 ticks = 0.5 s): left and right
+    const auto render = [&] (const sls::AudioClip& clip, int blocks)
+    {
+        sls::Arrangement a;
+        a.patterns.resize (1);
+        a.audioClips.push_back (clip);
+        const auto project = sls::compileSong (empty, a);
+        sls::Player p;
+        p.prepare (kSr);
+        std::vector<float> l (256), r (256), allL, allR;
+        float* ch[2] = { l.data(), r.data() };
+        for (int i = 0; i < blocks; ++i)
+        {
+            std::fill (l.begin(), l.end(), 0.0f);
+            std::fill (r.begin(), r.end(), 0.0f);
+            p.render (project, 120.0, true, ch, 2, 256);
+            allL.insert (allL.end(), l.begin(), l.end());
+            allR.insert (allR.end(), r.begin(), r.end());
+        }
+        return std::make_pair (allL, allR);
+    };
+    const auto peakIn = [] (const std::vector<float>& x, double fromSeconds, double toSeconds)
+    {
+        const int size = static_cast<int> (x.size());
+        return peakOf (x.data(), std::min (size, static_cast<int> (fromSeconds * kSr)), std::min (size, static_cast<int> (toSeconds * kSr)));
+    };
+    // the master's pan law and level are the same for every case: compare with the clip at its defaults
+    const auto plain = render (clipOf (sine, 0, 960), 220);
+    const float level = peakIn (plain.first, 0.2, 0.6);
+
+    // pan
+    {
+        auto c = clipOf (sine, 0, 960);
+        c.pan = -1.0f;
+        const auto left = render (c, 220);
+        c.pan = 0.5f;
+        const auto half = render (c, 220);
+        check (peakIn (left.second, 0.0, 1.0) == 0.0f && std::abs (peakIn (left.first, 0.2, 0.6) - level) < 1e-4f,
+               "pan -100: only the left side, at its level");
+        check (std::abs (peakIn (half.first, 0.2, 0.6) - 0.5f * level) < 1e-3f && std::abs (peakIn (half.second, 0.2, 0.6) - peakIn (plain.second, 0.2, 0.6)) < 1e-4f,
+               "pan +50: the left side at half, the right side untouched (a balance, like the mixer's)");
+    }
+
+    // reverse
+    {
+        auto c = clipOf (ramp, 0, 960);
+        c.reverse = true;
+        const auto out = render (c, 200).first;
+        const auto ref = render (clipOf (ramp, 0, 960), 200).first; // forwards: sample k is 0.5 k / 48000 times the master's gain
+        const double gain = ref[24000] / (0.5 * 24000.0 / 48000.0);
+        double worst = 0.0;
+        for (int k = 200; k < 47000; k += 101)
+            worst = std::max (worst, std::abs (out[static_cast<size_t> (k)] - gain * 0.5 * (47999.0 - k) / 48000.0));
+        check (worst < 1e-4, "reversed: the clip plays its audio from the end backwards, sample by sample");
+        check (peakIn (out, 1.1, 1.5) == 0.0f, "and stops at the clip's end");
+
+        // the same part of the audio, the other way round
+        auto part = clipOf (ramp, 0, 480); // 0.5 s
+        part.offsetSeconds = 0.25;
+        sls::setAudioReverse (part, true, 120.0);
+        check (part.reverse && std::abs (part.offsetSeconds - 0.25) < 1e-9, "turning a clip around keeps the part it plays (0.25-0.75 s of 1 s: offset 0.25 from the end)");
+        auto shifted = clipOf (ramp, 0, 240); // 0.25 s from 0.1 s
+        shifted.offsetSeconds = 0.1;
+        sls::setAudioReverse (shifted, true, 120.0);
+        check (std::abs (shifted.offsetSeconds - 0.65) < 1e-9, "0.1-0.35 s reversed starts 0.65 s from the end");
+        const auto played = render (shifted, 100).first;
+        check (std::abs (played[2400] - gain * 0.5 * (0.35 * 48000.0 - 1.0 - 2400.0) / 48000.0) < 1e-4,
+               "and plays it backwards from 0.35 s");
+        sls::setAudioReverse (shifted, false, 120.0);
+        check (! shifted.reverse && std::abs (shifted.offsetSeconds - 0.1) < 1e-9, "turning it back restores the offset");
+
+        // started in the middle (the transport set inside the clip)
+        sls::Arrangement a;
+        a.patterns.resize (1);
+        a.audioClips.push_back (c);
+        const auto project = sls::compileSong (empty, a);
+        sls::Player p;
+        p.prepare (kSr);
+        std::vector<float> l (256), r (256);
+        float* ch[2] = { l.data(), r.data() };
+        p.render (project, 120.0, true, ch, 2, 256);
+        p.seek (project, 480.0, 120.0); // while playing: 0.5 s into the clip
+        for (int i = 0; i < 20; ++i) // past the 80 ms release of the voice the seek cut
+        {
+            std::fill (l.begin(), l.end(), 0.0f);
+            p.render (project, 120.0, true, ch, 2, 256);
+        }
+        check (std::abs (l[200] - gain * 0.5 * (47999.0 - 24000.0 - 19.0 * 256.0 - 200.0) / 48000.0) < 1e-4,
+               "started half-way, it plays from half-way back (the right sample)");
+    }
+
+    // fades
+    {
+        auto c = clipOf (sine, 0, 960);
+        c.fadeInSeconds = 0.2;
+        c.fadeOutSeconds = 0.3;
+        const auto out = render (c, 200).first;
+        check (peakIn (out, 0.0, 0.002) < 0.02f * level, "fade in: silent at the start");
+        check (std::abs (peakIn (out, 0.097, 0.103) - 0.7071f * level) < 0.02f * level, "half-way through the fade-in: -3 dB (a sine fade)");
+        check (std::abs (peakIn (out, 0.4, 0.6) - level) < 1e-4f, "full level between the fades");
+        check (std::abs (peakIn (out, 0.847, 0.853) - 0.7071f * level) < 0.02f * level, "half-way through the fade-out: -3 dB");
+        check (peakIn (out, 0.997, 1.0) < 0.02f * level, "and silent at the clip's end");
+    }
+
+    // editing keeps the fades at the outer edges
+    {
+        sls::Arrangement a;
+        a.patterns.resize (1);
+        auto c = clipOf (sine, 0, 960);
+        c.fadeInSeconds = 0.1;
+        c.fadeOutSeconds = 0.2;
+        c.pan = 0.3f;
+        a.audioClips.push_back (c);
+        const int right = sls::splitAudioClip (a, 0, 480, 120.0);
+        check (right == 1 && a.audioClips[0].fadeInSeconds == 0.1 && a.audioClips[0].fadeOutSeconds == 0.0
+                   && a.audioClips[1].fadeInSeconds == 0.0 && a.audioClips[1].fadeOutSeconds == 0.2 && a.audioClips[1].pan == 0.3f,
+               "split: the left piece keeps the fade-in, the right one the fade-out; both keep the pan");
+        sls::Arrangement b;
+        b.patterns.resize (1);
+        b.audioClips.push_back (c);
+        sls::cutAudioRange (b, 0, 0, 240, 120.0);
+        check (b.audioClips[0].fadeInSeconds == 0.0 && b.audioClips[0].fadeOutSeconds == 0.2, "cutting the start away removes the fade-in");
+        sls::cutAudioRange (b, 0, 720, 960, 120.0);
+        check (b.audioClips[0].fadeOutSeconds == 0.0, "cutting the end away removes the fade-out");
+        sls::Arrangement m;
+        m.patterns.resize (1);
+        m.audioClips.push_back (c);
+        sls::cutAudioRange (m, 0, 300, 600, 120.0);
+        check (m.audioClips.size() == 2 && m.audioClips[0].fadeInSeconds == 0.1 && m.audioClips[0].fadeOutSeconds == 0.0
+                   && m.audioClips[1].fadeInSeconds == 0.0 && m.audioClips[1].fadeOutSeconds == 0.2,
+               "cutting out the middle: the same as a split");
+        auto longFades = clipOf (sine, 0, 480); // 0.5 s
+        longFades.fadeInSeconds = 0.6;
+        longFades.fadeOutSeconds = 0.4;
+        sls::limitFades (longFades, 120.0);
+        check (std::abs (longFades.fadeInSeconds - 0.3) < 1e-9 && std::abs (longFades.fadeOutSeconds - 0.2) < 1e-9,
+               "fades longer than the clip share it in proportion");
+    }
+
+    // the snapshot and the project file
+    {
+        sls::Arrangement a;
+        a.patterns.resize (1);
+        auto c = clipOf (sine, 0, 960);
+        c.pan = std::numeric_limits<float>::quiet_NaN();
+        c.fadeInSeconds = -1.0;
+        c.fadeOutSeconds = std::numeric_limits<double>::infinity();
+        a.audioClips.push_back (c);
+        const auto project = sls::compileSong (empty, a);
+        const auto& e = project.audioEvents[0];
+        check (e.pan == 0.0f && e.fadeInSeconds == 0.0 && e.fadeOutSeconds == 0.0, "nonsense pan and fades become none");
+
+        auto doc = sls::ProjectDocument::blank();
+        auto saved = clipOf (sineData (100, kSr, 440.0, 0.1f, "/home/x/a.wav"), 0, 960);
+        saved.pan = -0.4f;
+        saved.reverse = true;
+        saved.fadeInSeconds = 0.25;
+        saved.fadeOutSeconds = 1.5;
+        auto plainClip = clipOf (sineData (100, kSr, 440.0, 0.1f, "/home/x/b.wav"), 1920, 960);
+        doc.arrangement.audioClips = { saved, plainClip };
+        const auto parsed = sls::ProjectDocument::fromJson (doc.toJson());
+        check (parsed.document.has_value() && parsed.document->arrangement.audioClips.size() == 2, "clips with pan, reverse and fades load");
+        if (parsed.document)
+        {
+            const auto& r = parsed.document->arrangement.audioClips;
+            check (std::abs (r[0].pan + 0.4f) < 1e-6f && r[0].reverse && std::abs (r[0].fadeInSeconds - 0.25) < 1e-9
+                       && std::abs (r[0].fadeOutSeconds - 1.5) < 1e-9,
+                   "with their pan, direction and fades");
+            check (r[1].pan == 0.0f && ! r[1].reverse && r[1].fadeInSeconds == 0.0 && r[1].fadeOutSeconds == 0.0,
+                   "a clip without them (and every older file) loads centred, forwards, without fades");
+        }
+        const auto written = juce::JSON::parse (doc.toJson());
+        const auto* list = written.getDynamicObject()->getProperty ("audioClips").getArray();
+        const auto* second = list != nullptr && list->size() == 2 ? (*list)[1].getDynamicObject() : nullptr;
+        check (second != nullptr && ! second->hasProperty ("pan") && ! second->hasProperty ("reverse") && ! second->hasProperty ("fadeIn")
+                   && ! second->hasProperty ("fadeOut"),
+               "and they are only written when set");
+    }
+
+    // real-time safety with everything on
+    {
+        auto c = clipOf (ramp, 0, 960);
+        c.reverse = true;
+        c.pan = 0.7f;
+        c.fadeInSeconds = 0.3;
+        c.fadeOutSeconds = 0.3;
+        sls::Arrangement a;
+        a.patterns.resize (1);
+        a.audioClips.push_back (c);
+        const auto project = sls::compileSong (empty, a);
+        sls::Player p;
+        p.prepare (kSr);
+        std::vector<float> l (256), r (256);
+        float* ch[2] = { l.data(), r.data() };
+        bool finite = true;
+        gAllocs = 0;
+        gCounting = true;
+        for (int i = 0; i < 400; ++i)
+        {
+            p.render (project, 120.0, true, ch, 2, 256);
+            for (int k = 0; k < 256; ++k)
+                finite = finite && std::isfinite (l[static_cast<size_t> (k)]) && std::isfinite (r[static_cast<size_t> (k)]);
+        }
+        gCounting = false;
+        check (gAllocs.load() == 0 && finite, "a reversed, panned, faded clip renders without allocating");
+    }
+}
+
 void testAudioImport()
 {
     std::cout << "Audio import\n";
@@ -8559,6 +8791,7 @@ int main()
     testMetronome();
     testTapTempo();
     testAudioClips();
+    testClipPanReverseFades();
     testAudioImport();
     testInputRecorder();
     testMidiNotes();
