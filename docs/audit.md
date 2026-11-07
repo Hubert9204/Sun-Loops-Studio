@@ -27,6 +27,11 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.25.0
+The Time Shaper's recordings (8.5 s, two channels) come from a pool of four made in `Player::prepare`; `lendTimeBuffers` hands them
+out and takes them back by pointer once per block, without allocating (tested with five Time Shapers). `prepare` takes every buffer
+back before it reallocates the pool, so no unit keeps a pointer into freed memory.
+
 ## After 0.24.0
 Measuring the additive engine's aliasing found a quality problem elsewhere: the master's plain `tanh` bent every level (a sine at
 -10 dBFS got a 3rd harmonic, and mixes got intermodulation that aliased: -69 dB at 22.9 kHz in the test). The limiter is now exactly

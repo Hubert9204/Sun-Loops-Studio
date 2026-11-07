@@ -83,11 +83,59 @@ void Player::prepare (double newSampleRate) noexcept
         for (auto& unit : chain)
             unit.prepare (sampleRate);
 
+    // The Time Shaper's recordings: made here, lent out while rendering (every unit gives its buffer back first).
+    const auto timeFrames = static_cast<size_t> (kTimeBufferSeconds * sampleRate);
+    for (auto& b : timeBuffers)
+        b.assign (timeFrames, 0.0f);
+    timeBufferOwner.fill (nullptr);
+    for (auto& chain : effects)
+        for (auto& unit : chain)
+            unit.attachTimeBuffer (nullptr, nullptr, 0);
+    for (auto& chain : auxEffects)
+        for (auto& unit : chain)
+            unit.attachTimeBuffer (nullptr, nullptr, 0);
+    for (auto& unit : masterEffects)
+        unit.attachTimeBuffer (nullptr, nullptr, 0);
+
     tickPos = 0.0;
     startPosition = 0.0;
     projectRevision = ~std::uint64_t { 0 };
     ageCounter = 0;
     wasPlaying = false;
+}
+
+void Player::lendTimeBuffers (const Project& project) noexcept
+{
+    // Every unit whose slot is a Time Shaper gets a recording while one is free; a unit whose slot is something else gives its back.
+    const auto visit = [this] (EffectUnit& unit, const EffectSlot& slot)
+    {
+        const bool wants = slot.type == EffectType::TimeShaper;
+        if (wants == unit.hasTimeBuffer())
+            return;
+        if (! wants)
+        {
+            for (auto& owner : timeBufferOwner)
+                if (owner == &unit)
+                    owner = nullptr;
+            unit.attachTimeBuffer (nullptr, nullptr, 0);
+            return;
+        }
+        for (size_t b = 0; b < timeBufferOwner.size(); ++b)
+            if (timeBufferOwner[b] == nullptr && ! timeBuffers[2 * b].empty())
+            {
+                timeBufferOwner[b] = &unit;
+                unit.attachTimeBuffer (timeBuffers[2 * b].data(), timeBuffers[2 * b + 1].data(), static_cast<int> (timeBuffers[2 * b].size()));
+                return;
+            }
+    };
+    for (size_t t = 0; t < static_cast<size_t> (kMaxTracks); ++t)
+        for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
+            visit (effects[t][s], (t < project.tracks.size() ? project.tracks[t] : kDefaultTrack).slots[s]);
+    for (size_t a = 0; a < static_cast<size_t> (kAuxBuses); ++a)
+        for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
+            visit (auxEffects[a][s], project.console.aux[a].slots[s]);
+    for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
+        visit (masterEffects[s], project.masterSlots[s]);
 }
 
 void Player::releaseVoices (bool includeSamplers) noexcept
@@ -1409,9 +1457,11 @@ void Player::render (const Project& project, double bpm, bool playing,
     trackPeaks.fill (0.0f);
     auxPeaks.fill (0.0f);
 
+    lendTimeBuffers (project);
     for (int done = 0; done < numSamples; done += kChunk)
     {
         const int n = std::min (kChunk, numSamples - done);
+        const EffectTransport transport { playing ? tickPos : -1.0, ticksPerSample }; // where the song is at this chunk's start
 
         if (automated)
             applyAutomation (project, tickPos, numMixerChannels, setChannel, setTrack, channelVolume, channelPan, trackVolume, trackPan,
@@ -1721,7 +1771,7 @@ void Player::render (const Project& project, double bpm, bool playing,
             const auto& tr = trackAt (t);
 
             for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
-                effects[t][s].process (automated ? trackSlotsNow[t][s] : tr.slots[s], l, r, n);
+                effects[t][s].process (automated ? trackSlotsNow[t][s] : tr.slots[s], l, r, n, transport);
 
             const float gateTarget = trackAudible[t] ? 1.0f : 0.0f;
             for (int i = 0; i < n; ++i)
@@ -1757,7 +1807,7 @@ void Player::render (const Project& project, double bpm, bool playing,
             float* l = auxL[a].data();
             float* r = auxR[a].data();
             for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
-                auxEffects[a][s].process (bus.slots[s], l, r, n);
+                auxEffects[a][s].process (bus.slots[s], l, r, n, transport);
 
             for (int i = 0; i < n; ++i)
             {
@@ -1775,7 +1825,7 @@ void Player::render (const Project& project, double bpm, bool playing,
 
         // 3. Master bus: insert effects on the sum of all tracks, then a soft limiter, added to the output.
         for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
-            masterEffects[s].process (automated ? masterSlotsNow[s] : project.masterSlots[s], mixL.data(), mixR.data(), n);
+            masterEffects[s].process (automated ? masterSlotsNow[s] : project.masterSlots[s], mixL.data(), mixR.data(), n, transport);
 
         // The soft limiter (0.24.0): exactly linear up to 0.7 (-3 dBFS), then a tanh knee that never passes 1 and has the same slope
         // where it starts. Until 0.23.0 it was a plain tanh, which bent (and so distorted, by about -40 dB at -10 dBFS) every level.

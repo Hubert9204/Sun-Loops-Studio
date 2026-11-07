@@ -170,10 +170,34 @@ void EffectUnit::reset() noexcept
     svf1a = svf1b = svf2a = svf2b = {};
     controlLeft = 0;
     sideLow = {};
+    if (timeL != nullptr)
+    {
+        std::fill_n (timeL, timeFrames, 0.0f);
+        std::fill_n (timeR, timeFrames, 0.0f);
+    }
+    timeWrite = 0;
+    lastLag = fadeLag = 0.0;
+    fadeLeft = 0;
+    volume = 1.0f;
     dirty = false;
 }
 
-void EffectUnit::process (const EffectSlot& requested, float* left, float* right, int numSamples) noexcept
+void EffectUnit::attachTimeBuffer (float* left, float* right, int frames) noexcept
+{
+    timeL = frames > 0 ? left : nullptr;
+    timeR = frames > 0 ? right : nullptr;
+    timeFrames = timeL != nullptr ? frames : 0;
+    if (timeL != nullptr)
+    {
+        std::fill_n (timeL, timeFrames, 0.0f);
+        std::fill_n (timeR, timeFrames, 0.0f);
+    }
+    timeWrite = 0;
+    lastLag = fadeLag = 0.0;
+    fadeLeft = 0;
+}
+
+void EffectUnit::process (const EffectSlot& requested, float* left, float* right, int numSamples, const EffectTransport& transport) noexcept
 {
     if (requested.type == EffectType::Plugin)
     {
@@ -216,6 +240,7 @@ void EffectUnit::process (const EffectSlot& requested, float* left, float* right
         case EffectType::Maximizer:    runMaximizer (slot, left, right, numSamples); break;
         case EffectType::Transient:    runTransient (slot, left, right, numSamples); break;
         case EffectType::Imager:       runImager (slot, left, right, numSamples); break;
+        case EffectType::TimeShaper:   runTimeShaper (slot, left, right, numSamples, transport); break;
         case EffectType::Plugin:
         case EffectType::None:         break;
     }
@@ -909,6 +934,23 @@ const std::vector<EffectPreset>& effectPresets (EffectType t)
             };
             return list;
         }
+        case EffectType::TimeShaper:
+        {
+            // Time, Volume, Cycle (0 beat, 1 two beats, 2 bar, 3 two bars), Depth, Smooth, Mix
+            static const std::vector<EffectPreset> list {
+                make ("Half-time bar", { 1.0f, 0.0f, 2.0f, 100.0f, 3.0f, 100.0f }),
+                make ("Reverse every bar", { 2.0f, 0.0f, 2.0f, 100.0f, 4.0f, 100.0f }),
+                make ("Tape stop", { 3.0f, 0.0f, 2.0f, 100.0f, 3.0f, 100.0f }),
+                make ("Stutter 1/16", { 6.0f, 0.0f, 0.0f, 100.0f, 2.0f, 100.0f }),
+                make ("Beat repeat", { 7.0f, 0.0f, 2.0f, 100.0f, 3.0f, 100.0f }),
+                make ("Scratch", { 8.0f, 0.0f, 0.0f, 100.0f, 2.0f, 100.0f }),
+                make ("Trance gate", { 0.0f, 4.0f, 2.0f, 100.0f, 2.0f, 100.0f }),
+                make ("Gate 1/16", { 0.0f, 2.0f, 2.0f, 100.0f, 1.5f, 100.0f }),
+                make ("Sidechain pump", { 0.0f, 5.0f, 2.0f, 85.0f, 2.0f, 100.0f }),
+                make ("Half-time gated", { 1.0f, 2.0f, 2.0f, 60.0f, 2.0f, 100.0f }),
+            };
+            return list;
+        }
         case EffectType::Imager:
         {
             static const std::vector<EffectPreset> list {
@@ -933,5 +975,115 @@ const std::vector<EffectPreset>& effectPresets (EffectType t)
             break;
     }
     return empty;
+}
+
+// ------------------------------------------------------------------------- time shaper (0.25.0)
+// Every sample goes into a recording of the last few seconds; the output reads it `lag` samples back, where the lag follows the
+// time pattern over a cycle of the song (1 beat to 2 bars): half speed reads at half the speed from the start of the cycle, reverse
+// reads the cycle before backwards, tape stop slows to a halt, stutter repeats the cycle's first slice. A jump of the lag (a new
+// cycle, a new slice) is crossfaded over the Smooth time. The volume pattern (gates, pump, fades) is smoothed by the same time.
+void EffectUnit::runTimeShaper (const EffectSlot& slot, float* left, float* right, int n, const EffectTransport& transport) noexcept
+{
+    const auto& p = slot.params;
+    const int timeMode = timeL != nullptr ? effectChoice (EffectType::TimeShaper, 0, p[0]) : 0;
+    const int volumeMode = effectChoice (EffectType::TimeShaper, 1, p[1]);
+    constexpr double cycleBeatsOf[] = { 1.0, 2.0, 4.0, 8.0 };
+    const double cycleBeats = cycleBeatsOf[effectChoice (EffectType::TimeShaper, 2, p[2])];
+    const float depth = p[3] / 100.0f;
+    const double smoothSamples = std::max (1.0, static_cast<double> (p[4]) * 0.001 * sampleRate);
+    const float mix = p[5] / 100.0f;
+    const double ticksPerSample = transport.ticksPerSample > 0.0 ? transport.ticksPerSample : 120.0 * 480.0 / (60.0 * sampleRate);
+    const double samplesPerBeat = 480.0 / ticksPerSample;
+    const double cycle = cycleBeats * samplesPerBeat;
+    const bool following = transport.tick >= 0.0;
+    const auto volumeCoef = static_cast<float> (1.0 - std::exp (-1.0 / smoothSamples));
+    fadeLength = static_cast<int> (smoothSamples);
+    constexpr bool trance[16] = { true, false, true, true, false, true, true, false, true, true, false, true, true, false, true, true };
+
+    for (int i = 0; i < n; ++i)
+    {
+        const double tick = following ? transport.tick + i * ticksPerSample : freeTick + i * ticksPerSample;
+        const double beats = tick / 480.0;
+        const double inCycle = beats / cycleBeats;
+        const double phase = inCycle - std::floor (inCycle); // 0..1 through the cycle
+        const float dryL = left[i], dryR = right[i];
+        float wetL = dryL, wetR = dryR;
+
+        if (timeMode != 0)
+        {
+            timeL[timeWrite] = dryL;
+            timeR[timeWrite] = dryR;
+            const double done = phase * cycle; // samples since the cycle began
+            double lag = 0.0;
+            switch (timeMode)
+            {
+                case 1: lag = 0.5 * done; break;                                   // half speed
+                case 2: lag = 2.0 * done; break;                                   // reverse (the cycle before, backwards)
+                case 3: lag = 0.5 * done * phase; break;                           // tape stop: speed 1 - phase
+                case 4: lag = 0.25 * done * phase; break;                          // slow down to half speed
+                case 5: lag = done - std::fmod (done, 0.5 * samplesPerBeat); break;  // stutter 1/8
+                case 6: lag = done - std::fmod (done, 0.25 * samplesPerBeat); break; // stutter 1/16
+                case 7: lag = done - std::fmod (done, 0.25 * cycle); break;          // repeat the first quarter of the cycle
+                case 8: lag = 0.125 * samplesPerBeat * (1.0 - std::cos (8.0 * 3.14159265358979 * phase)); break; // scratch back and forth
+                default: break;
+            }
+            lag = std::clamp (lag, 0.0, static_cast<double> (timeFrames - 4));
+            if (std::abs (lag - lastLag) > 8.0) // a jump: fade the old stream (read at normal speed) out
+            {
+                fadeLag = lastLag;
+                fadeLeft = fadeLength;
+            }
+            lastLag = lag;
+            const auto read = [this] (const float* buf, double back) noexcept
+            {
+                double pos = static_cast<double> (timeWrite) - back;
+                if (pos < 0.0)
+                    pos += timeFrames;
+                const auto i0 = static_cast<int> (pos);
+                const auto frac = static_cast<float> (pos - i0);
+                const int i1 = i0 + 1 >= timeFrames ? 0 : i0 + 1;
+                return buf[i0] + frac * (buf[i1] - buf[i0]);
+            };
+            wetL = read (timeL, lag);
+            wetR = read (timeR, lag);
+            if (fadeLeft > 0)
+            {
+                const float g = static_cast<float> (fadeLeft) / static_cast<float> (fadeLength);
+                wetL = (1.0f - g) * wetL + g * read (timeL, fadeLag);
+                wetR = (1.0f - g) * wetR + g * read (timeR, fadeLag);
+                --fadeLeft;
+            }
+            if (++timeWrite >= timeFrames)
+                timeWrite = 0;
+            if (timeMode == 3) // a stopping tape also fades
+            {
+                const auto fade = static_cast<float> (1.0 - phase * phase);
+                wetL *= fade;
+                wetR *= fade;
+            }
+        }
+
+        float target = 1.0f;
+        const auto fraction = [] (double x) { return x - std::floor (x); };
+        switch (volumeMode)
+        {
+            case 1: target = fraction (beats * 2.0) < 0.5 ? 1.0f : 0.0f; break;
+            case 2: target = fraction (beats * 4.0) < 0.5 ? 1.0f : 0.0f; break;
+            case 3: target = fraction (beats * 8.0) < 0.5 ? 1.0f : 0.0f; break;
+            case 4: target = trance[static_cast<int> (std::floor (beats * 4.0)) & 15] && fraction (beats * 4.0) < 0.75 ? 1.0f : 0.0f; break;
+            case 5: target = static_cast<float> (std::min (1.0, std::pow (fraction (beats) / 0.45, 1.5))); break; // sidechain-like pump
+            case 6: target = static_cast<float> (phase); break;
+            case 7: target = static_cast<float> (1.0 - phase); break;
+            default: break;
+        }
+        volume += (target - volume) * volumeCoef;
+        const float v = 1.0f - depth * (1.0f - volume);
+        left[i] = dryL * (1.0f - mix) + wetL * v * mix;
+        right[i] = dryR * (1.0f - mix) + wetR * v * mix;
+    }
+    if (! following)
+        freeTick += n * ticksPerSample;
+    else
+        freeTick = transport.tick + n * ticksPerSample;
 }
 } // namespace sls

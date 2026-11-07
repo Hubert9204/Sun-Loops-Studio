@@ -1217,6 +1217,146 @@ int firstAbove (const std::vector<float>& x, float level, int from = 0)
     return -1;
 }
 
+// --- the Time Shaper (0.25.0) -----------------------------------------------------------------------------------------------
+// Runs the Time Shaper over a mono signal (both sides the same) at 120 BPM from tick `startTick`, with its own 8.5 s recording.
+std::vector<float> runTimeShaper (const sls::EffectSlot& slot, std::vector<float> x, double startTick = 0.0, bool attach = true, bool playing = true)
+{
+    sls::EffectUnit unit;
+    unit.prepare (kSr);
+    std::vector<float> bl, br;
+    if (attach)
+    {
+        bl.assign (static_cast<size_t> (8.5 * kSr), 0.0f);
+        br = bl;
+        unit.attachTimeBuffer (bl.data(), br.data(), static_cast<int> (bl.size()));
+    }
+    auto r = x;
+    const double tps = 120.0 * 480.0 / (60.0 * kSr); // 0.02 ticks per sample: a beat is 24000 samples
+    for (size_t i = 0; i < x.size(); i += 64)
+    {
+        const sls::EffectTransport t { playing ? startTick + static_cast<double> (i) * tps : -1.0, tps };
+        unit.process (slot, x.data() + i, r.data() + i, static_cast<int> (std::min<size_t> (64, x.size() - i)), t);
+    }
+    return x;
+}
+
+void testTimeShaper()
+{
+    std::cout << "Time Shaper (0.25.0)\n";
+    using T = sls::EffectType;
+    constexpr int beat = 24000; // samples at 120 BPM
+    // a signal that is easy to follow: a slow ramp (each sample says where it came from) plus nothing else
+    std::vector<float> ramp (8 * beat);
+    for (size_t i = 0; i < ramp.size(); ++i)
+        ramp[i] = static_cast<float> (i) / static_cast<float> (ramp.size());
+
+    const auto same = runTimeShaper (slotWith (T::TimeShaper, { 0.0f, 0.0f, 2.0f, 100.0f, 3.0f, 100.0f }), ramp);
+    check (same == ramp, "no time pattern and no volume pattern: the sound passes unchanged");
+
+    // Half speed, cycle 1 bar: in bar 2 (from sample 4 beats), the output at n is the input at barStart + (n - barStart) / 2.
+    const auto half = runTimeShaper (slotWith (T::TimeShaper, { 1.0f, 0.0f, 2.0f, 100.0f, 3.0f, 100.0f }), ramp);
+    double worst = 0.0;
+    for (int n = 4 * beat + 2000; n < 8 * beat - 10; n += 97)
+        worst = std::max (worst, std::abs (static_cast<double> (half[static_cast<size_t> (n)]) - ramp[static_cast<size_t> (4 * beat + (n - 4 * beat) / 2)]));
+    check (worst < 2e-5, "half speed: through the bar it plays the bar's start at half the speed");
+
+    // Reverse, cycle 1 beat: in the third beat, the output at barStart + k is the input at barStart - k (the beat before, backwards).
+    const auto rev = runTimeShaper (slotWith (T::TimeShaper, { 2.0f, 0.0f, 0.0f, 100.0f, 3.0f, 100.0f }), ramp);
+    worst = 0.0;
+    for (int k = 1000; k < beat - 10; k += 101)
+        worst = std::max (worst, std::abs (static_cast<double> (rev[static_cast<size_t> (2 * beat + k)]) - ramp[static_cast<size_t> (2 * beat - k)]));
+    check (worst < 2e-5, "reverse: each beat plays the beat before it backwards");
+
+    // Stutter 1/16 (a 16th is 6000 samples), cycle 1 beat: every 16th of the beat repeats its first 16th.
+    const auto stut = runTimeShaper (slotWith (T::TimeShaper, { 6.0f, 0.0f, 0.0f, 100.0f, 3.0f, 100.0f }), ramp);
+    worst = 0.0;
+    for (int k = 500; k < 6000; k += 53)
+        for (int slice = 1; slice < 4; ++slice)
+            worst = std::max (worst, std::abs (static_cast<double> (stut[static_cast<size_t> (beat + slice * 6000 + k)]) - ramp[static_cast<size_t> (beat + k)]));
+    check (worst < 2e-5, "stutter 1/16: the first 16th of the beat four times");
+
+    // Tape stop: the speed falls to 0 over the bar, and the sound fades.
+    const auto tape = runTimeShaper (slotWith (T::TimeShaper, { 3.0f, 0.0f, 2.0f, 100.0f, 3.0f, 100.0f }), sineWave (1000.0, 0.5, 8 * beat));
+    const auto crossingsHz = [&tape] (int from, int to)
+    {
+        int crossings = 0;
+        for (int i = from + 1; i < to; ++i)
+            crossings += (tape[static_cast<size_t> (i - 1)] < 0.0f) != (tape[static_cast<size_t> (i)] < 0.0f) ? 1 : 0;
+        return crossings * kSr / (2.0 * (to - from));
+    };
+    check (crossingsHz (4 * beat + 2000, 4 * beat + 8000) > 900.0 && crossingsHz (7 * beat, 7 * beat + 12000) < 300.0
+               && peakOf (tape.data(), 8 * beat - 3000, 8 * beat) < 0.1f,
+           "tape stop: the pitch falls from 1 kHz to a low growl and the sound fades out by the bar's end");
+
+    // Gate 1/8: the first half of every eighth sounds, the second half is silent (after the smoothing).
+    const std::vector<float> ones (4 * beat, 0.5f);
+    const auto gated = runTimeShaper (slotWith (T::TimeShaper, { 0.0f, 1.0f, 2.0f, 100.0f, 1.0f, 100.0f }), ones);
+    check (std::abs (gated[static_cast<size_t> (beat + 4000)] - 0.5f) < 0.01f && std::abs (gated[static_cast<size_t> (beat + 10000)]) < 0.01f
+               && std::abs (gated[static_cast<size_t> (beat + 12000 + 4000)] - 0.5f) < 0.01f,
+           "gate 1/8: on for the first half of each eighth, off for the second");
+    const auto halfDepth = runTimeShaper (slotWith (T::TimeShaper, { 0.0f, 1.0f, 2.0f, 50.0f, 1.0f, 100.0f }), ones);
+    check (std::abs (halfDepth[static_cast<size_t> (beat + 10000)] - 0.25f) < 0.01f, "depth 50 %: the closed gate is at half the level");
+    const auto smoothFast = runTimeShaper (slotWith (T::TimeShaper, { 0.0f, 1.0f, 2.0f, 100.0f, 0.5f, 100.0f }), ones);
+    const auto smoothSlow = runTimeShaper (slotWith (T::TimeShaper, { 0.0f, 1.0f, 2.0f, 100.0f, 20.0f, 100.0f }), ones);
+    check (smoothSlow[static_cast<size_t> (beat + 6000 + 200)] > smoothFast[static_cast<size_t> (beat + 6000 + 200)] + 0.1f, "the smoothing softens the gate's edges");
+    const auto trance = runTimeShaper (slotWith (T::TimeShaper, { 0.0f, 4.0f, 2.0f, 100.0f, 0.5f, 100.0f }), ones);
+    check (trance[static_cast<size_t> (2000)] > 0.45f && trance[static_cast<size_t> (6000 + 2000)] < 0.01f && trance[static_cast<size_t> (12000 + 2000)] > 0.45f,
+           "trance gate: its 16th pattern (on, off, on, on...)");
+    const auto stopped = runTimeShaper (slotWith (T::TimeShaper, { 0.0f, 1.0f, 2.0f, 100.0f, 1.0f, 100.0f }), ones, 0.0, true, false);
+    check (std::abs (stopped[static_cast<size_t> (beat + 4000)] - 0.5f) < 0.01f && std::abs (stopped[static_cast<size_t> (beat + 10000)]) < 0.01f,
+           "with the transport stopped it follows its own clock at the song's tempo");
+
+    const auto dry = runTimeShaper (slotWith (T::TimeShaper, { 2.0f, 1.0f, 0.0f, 100.0f, 3.0f, 0.0f }), ramp);
+    check (dry == ramp, "mix 0 %: the dry sound");
+    const auto noBuffer = runTimeShaper (slotWith (T::TimeShaper, { 2.0f, 0.0f, 0.0f, 100.0f, 3.0f, 100.0f }), ramp, 0.0, false);
+    check (noBuffer == ramp, "without a recording (none free) the time pattern is skipped, safely");
+
+    // Every time pattern, with every volume pattern, on noise: finite and bounded.
+    bool bounded = true;
+    std::vector<float> noise (static_cast<size_t> (2 * beat));
+    std::uint32_t seed = 7u;
+    for (auto& v : noise)
+    {
+        seed = seed * 1664525u + 1013904223u;
+        v = static_cast<float> (seed >> 8) / 16777216.0f * 1.6f - 0.8f;
+    }
+    for (int tm = 0; tm <= 8; ++tm)
+        for (int vm = 0; vm <= 7; ++vm)
+        {
+            const auto out = runTimeShaper (slotWith (T::TimeShaper, { static_cast<float> (tm), static_cast<float> (vm), 0.0f, 100.0f, 0.5f, 100.0f }), noise, 333.0);
+            for (const float v : out)
+                bounded = bounded && std::isfinite (v) && std::abs (v) <= 1.0001f;
+        }
+    check (bounded, "every time pattern with every volume pattern stays finite and never louder than its input");
+
+    // The Player lends its recordings (four) to the Time Shapers of the project; playing allocates nothing.
+    {
+        auto c = synthChannel ({ { 60, 0, 2 * kBeat, 0.8f }, { 64, 2 * kBeat, 2 * kBeat, 0.8f } });
+        std::vector<sls::MixerTrack> tracks (static_cast<size_t> (sls::kMaxTracks));
+        for (size_t s = 0; s < static_cast<size_t> (sls::kSlotsPerTrack); ++s)
+            tracks[0].slots[s] = slotWith (T::TimeShaper, { static_cast<float> (s + 1), 2.0f, 0.0f, 100.0f, 3.0f, 100.0f });
+        tracks[1].slots[0] = slotWith (T::TimeShaper, { 1.0f, 0.0f, 2.0f, 100.0f, 3.0f, 100.0f }); // a fifth: none left for it
+        auto project = sls::Project::make ({ c }, 16 * kBeat);
+        project.tracks = tracks;
+        sls::Player player;
+        player.prepare (kSr);
+        std::vector<float> l (256), r (256);
+        float* ch[2] = { l.data(), r.data() };
+        player.render (project, 120.0, true, ch, 2, 256); // the lending happens here
+        bool fine = true;
+        gAllocs = 0;
+        gCounting = true;
+        for (int i = 0; i < 1500; ++i)
+        {
+            player.render (project, 120.0, true, ch, 2, 256);
+            for (int k = 0; k < 256; ++k)
+                fine = fine && std::isfinite (l[static_cast<size_t> (k)]);
+        }
+        gCounting = false;
+        check (gAllocs.load() == 0 && fine, "five Time Shapers in a project (four get a recording): finite, and no allocation while playing");
+    }
+}
+
 void testNewEffects()
 {
     std::cout << "New effects (0.21.0)\n";
@@ -8183,6 +8323,7 @@ int main()
     testMetering();
     testEffects();
     testNewEffects();
+    testTimeShaper();
     testEffectsInPlayer();
     testBrowserModel();
     testChannelPresets();

@@ -28,6 +28,7 @@ juce::String shortEffectName (EffectType t)
         case EffectType::Maximizer:  return "Maxim";
         case EffectType::Transient:  return "Trans";
         case EffectType::Imager:     return "Imager";
+        case EffectType::TimeShaper: return "Time";
         case EffectType::None:       break;
     }
     return juce::String::fromUTF8 ("\xe2\x80\x94");

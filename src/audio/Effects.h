@@ -19,10 +19,11 @@ namespace sls
 enum class EffectType : std::uint8_t
 {
     None, Equalizer, Reverb, Delay, Compressor, Plugin,
-    Overdrive, Chorus, Phaser, Filter, ParametricEq, Maximizer, Transient, Imager
+    Overdrive, Chorus, Phaser, Filter, ParametricEq, Maximizer, Transient, Imager,
+    TimeShaper // 0.25.0: tempo-synced time and volume patterns (half speed, reverse, tape stop, stutter, gates), like Gross Beat
 };
 
-constexpr int kEffectTypeCount = 14;
+constexpr int kEffectTypeCount = 15;
 constexpr int kMaxEffectParams = 8;
 constexpr int kSlotsPerTrack = 4;
 
@@ -37,7 +38,7 @@ inline constexpr EffectMenuEntry kEffectMenu[] = {
     { EffectType::Compressor, "Dynamics" },     { EffectType::Maximizer, nullptr },    { EffectType::Transient, nullptr },
     { EffectType::Overdrive, "Drive" },
     { EffectType::Chorus, "Modulation" },       { EffectType::Phaser, nullptr },
-    { EffectType::Reverb, "Space and time" },   { EffectType::Delay, nullptr },
+    { EffectType::Reverb, "Space and time" },   { EffectType::Delay, nullptr },          { EffectType::TimeShaper, nullptr },
     { EffectType::Imager, "Stereo" },
 };
 
@@ -66,6 +67,7 @@ inline const char* effectName (EffectType t) noexcept
         case EffectType::Maximizer:    return "Maximizer";
         case EffectType::Transient:    return "Transient";
         case EffectType::Imager:       return "Stereo Imager";
+        case EffectType::TimeShaper:   return "Time Shaper";
         case EffectType::None:         break;
     }
     return "Empty";
@@ -151,6 +153,15 @@ inline constexpr EffectParamInfo imager[] = { { "Width", "%", 0.0f, 200.0f, 100.
                                               { "Mono bass", "Hz", 0.0f, 500.0f, 0.0f },
                                               { "Balance", "", -1.0f, 1.0f, 0.0f } };
 
+// Time Shaper (0.25.0): a time pattern (where in the recent past it reads) and a volume pattern, over a cycle synced to the song.
+inline constexpr EffectParamInfo timeshaper[] = {
+    { "Time", "", 0.0f, 8.0f, 0.0f, "None|Half speed|Reverse|Tape stop|Slow down|Stutter 1/8|Stutter 1/16|Repeat 1/4|Scratch" },
+    { "Volume", "", 0.0f, 7.0f, 0.0f, "None|Gate 1/8|Gate 1/16|Gate 1/32|Trance gate|Pump|Fade in|Fade out" },
+    { "Cycle", "", 0.0f, 3.0f, 2.0f, "1 beat|2 beats|1 bar|2 bars" },
+    { "Depth", "%", 0.0f, 100.0f, 100.0f },
+    { "Smooth", "ms", 0.5f, 20.0f, 3.0f },
+    { "Mix", "%", 0.0f, 100.0f, 100.0f } };
+
 template <size_t N>
 constexpr int count (const EffectParamInfo (&)[N]) noexcept { return static_cast<int> (N); }
 } // namespace effect_tables
@@ -172,6 +183,7 @@ inline int effectParamCount (EffectType t) noexcept
         case EffectType::Maximizer:    return count (maxim);
         case EffectType::Transient:    return count (trans);
         case EffectType::Imager:       return count (imager);
+        case EffectType::TimeShaper:   return count (timeshaper);
         case EffectType::Plugin:
         case EffectType::None:         break;
     }
@@ -199,6 +211,7 @@ inline EffectParamInfo effectParamInfo (EffectType t, int index) noexcept
         case EffectType::Maximizer:    return maxim[i];
         case EffectType::Transient:    return trans[i];
         case EffectType::Imager:       return imager[i];
+        case EffectType::TimeShaper:   return timeshaper[i];
         case EffectType::Plugin:
         case EffectType::None:         break;
     }
@@ -268,13 +281,26 @@ struct EffectPreset
 };
 const std::vector<EffectPreset>& effectPresets (EffectType t);
 
+// Where the song is, for effects that follow it (the Time Shaper): the tick at the first sample of the block (negative when the
+// transport is stopped: the effect then runs on its own clock) and how many ticks pass per sample (the tempo).
+struct EffectTransport
+{
+    double tick = -1.0;
+    double ticksPerSample = 0.0;
+};
+
 // The DSP behind one slot. All memory is allocated in prepare(); process() never allocates, locks or
 // does I/O. If the slot's type changes, the previous state is discarded and the new effect starts clean.
 class EffectUnit
 {
 public:
     void prepare (double sampleRate);
-    void process (const EffectSlot& slot, float* left, float* right, int numSamples) noexcept;
+    void process (const EffectSlot& slot, float* left, float* right, int numSamples, const EffectTransport& transport = {}) noexcept;
+
+    // The Time Shaper's recording of the recent past (two channels of `frames` samples). It is lent by the Player from a small pool,
+    // since a few seconds per slot of every track would be far too much memory; without one the Time Shaper only shapes the volume.
+    void attachTimeBuffer (float* left, float* right, int frames) noexcept;
+    bool hasTimeBuffer() const noexcept { return timeL != nullptr; }
 
     // Samples by which the effect delays the sound (the Maximizer looks ahead); 0 for the others.
     int latencySamples (EffectType t) const noexcept { return t == EffectType::Maximizer ? lookahead : 0; }
@@ -323,6 +349,7 @@ private:
     void runMaximizer (const EffectSlot&, float*, float*, int) noexcept;
     void runTransient (const EffectSlot&, float*, float*, int) noexcept;
     void runImager (const EffectSlot&, float*, float*, int) noexcept;
+    void runTimeShaper (const EffectSlot&, float*, float*, int, const EffectTransport&) noexcept;
     void setReverbType (int type) noexcept;
 
     double sampleRate = 48000.0;
@@ -374,5 +401,15 @@ private:
 
     // imager
     std::array<float, 2> sideLow {};
+
+    // time shaper
+    float* timeL = nullptr;
+    float* timeR = nullptr;
+    int timeFrames = 0, timeWrite = 0;
+    double freeTick = 0.0;     // its own clock while the transport is stopped
+    double lastLag = 0.0;      // samples
+    double fadeLag = 0.0;      // the stream being faded out after a jump
+    int fadeLeft = 0, fadeLength = 1;
+    float volume = 1.0f;       // the smoothed volume pattern
 };
 } // namespace sls

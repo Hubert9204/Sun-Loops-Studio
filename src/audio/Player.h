@@ -262,6 +262,13 @@ private:
     std::array<std::array<EffectUnit, kSlotsPerTrack>, kMaxTracks> effects;
     std::array<EffectUnit, kSlotsPerTrack> masterEffects; // on the master bus
 
+    // The Time Shaper's recordings (0.25.0): a few, lent to the units that need one (see EffectUnit::attachTimeBuffer).
+    static constexpr int kTimeBuffers = 4;
+    static constexpr double kTimeBufferSeconds = 8.5; // two bars down to 57 BPM
+    std::array<std::vector<float>, 2 * kTimeBuffers> timeBuffers;
+    std::array<EffectUnit*, kTimeBuffers> timeBufferOwner {};
+    void lendTimeBuffers (const Project& project) noexcept;
+
     // Aux buses: the sends of every track are summed here, run through the bus's effects and fader, and added to the master bus.
     std::array<std::array<EffectUnit, kSlotsPerTrack>, kAuxBuses> auxEffects;
     std::array<std::array<float, kChunk>, kAuxBuses> auxL {}, auxR {};

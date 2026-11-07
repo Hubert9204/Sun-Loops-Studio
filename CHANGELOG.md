@@ -2,6 +2,15 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.25.0 - 2026-11-07
+
+### Added
+- **Time Shaper**, a mixer effect in the manner of Gross Beat, synced to the song: time patterns (half speed, reverse, tape stop,
+  slow down, stutter 1/8 and 1/16, repeat 1/4, scratch) over a cycle of 1 beat to 2 bars, volume patterns (gates 1/8, 1/16, 1/32,
+  trance gate, sidechain-like pump, fades) with depth, smoothing (crossfaded jumps, soft gate edges) and mix; ten presets. With the
+  transport stopped it keeps time on its own clock. Up to four per project play their time patterns.
+- Effects can now follow the song position and tempo (`EffectTransport`).
+
 ## 0.24.0 - 2026-11-07
 
 ### Added

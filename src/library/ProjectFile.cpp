@@ -54,6 +54,7 @@ const char* effectKey (EffectType t)
         case EffectType::Maximizer:    return "maximizer";
         case EffectType::Transient:    return "transient";
         case EffectType::Imager:       return "imager";
+        case EffectType::TimeShaper:   return "time-shaper";
         case EffectType::None:       break;
     }
     return "none";
