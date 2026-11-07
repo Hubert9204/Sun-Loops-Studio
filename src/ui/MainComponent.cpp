@@ -318,7 +318,8 @@ MainComponent::MainComponent()
     noteRecordButton.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xffd9433b));
     noteRecordButton.setTooltip ("Record the notes of a MIDI keyboard into the piano roll: switch it on, press Play and play. "
                                  "The notes go to the selected channel, in the current pattern, and are quantized "
-                                 "(right-click to choose how).");
+                                 "(right-click to choose how). Right-click also for the score log: whatever the keyboard "
+                                 "played in the last 5 minutes, even without recording, can be put into the pattern.");
     noteRecordButton.onClick = [this] { toggleNoteRecording(); };
     noteRecordButton.onRightClick = [this] { openNoteRecordMenu(); };
 
@@ -759,6 +760,7 @@ void MainComponent::timerCallback()
         showRecordProgress();
 
     drainMidiTakes();
+    drainScoreEvents();
 
     // When the window is active but keyboard focus is outside this component (e.g. on the window
     // itself), take it so Space and F5/F6/F7/F9 work without a click first.

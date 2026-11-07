@@ -16,6 +16,7 @@
 #include "audio/OneShot.h"
 #include "audio/Player.h"
 #include "audio/Project.h"
+#include "audio/ScoreLog.h"
 #include "audio/SnapshotExchange.h"
 #include "audio/Spectrum.h"
 #include "audio/SpscQueue.h"
@@ -66,6 +67,10 @@ public:
     // with the song position and queued for popMidiTake(), which the message thread empties (see NoteRecorder).
     void setNoteRecording (bool on) noexcept { noteRecording.store (on, std::memory_order_relaxed); }
     bool popMidiTake (MidiTake& take) noexcept { return midiTakes.pop (take); } // message thread only
+
+    // The score log (0.28.0): every note a MIDI keyboard plays, at any time, stamped with when it was played (seconds of the audio
+    // clock, corrected for latency) and queued for the message thread's ScoreLog.
+    bool popScoreEvent (ScoreEvent& e) noexcept { return scoreEvents.pop (e); } // message thread only
 
     // Audio input. The input is only opened when the user chooses one in the Audio dialog or presses Record.
     int getNumActiveInputChannels() const;
@@ -216,6 +221,8 @@ private:
     OneShot startup;                                // set before the device starts; played by the audio thread only
     std::atomic<bool> startupTrigger { false };
     SpscQueue<MidiTake, 256> midiTakes; // audio thread -> message thread
+    SpscQueue<ScoreEvent, 1024> scoreEvents; // audio thread -> message thread
+    double audioClockSeconds = 0.0;          // audio thread only: time played since the engine was made (only goes forwards)
     std::atomic<bool> noteRecording { false };
     std::atomic<double> outputLatencySamples { 0.0 };
     std::atomic<int> midiTarget { 0 };

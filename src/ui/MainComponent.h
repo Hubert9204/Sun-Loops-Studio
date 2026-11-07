@@ -169,6 +169,8 @@ private:
     void applyNoteRecording();
     void openNoteRecordMenu();
     void drainMidiTakes();
+    void drainScoreEvents();               // 0.28.0: into scoreLog
+    void dumpScoreLog (bool lastPhraseOnly); // the score log's notes into the current pattern
     void endNoteTake();
 
     // Project files
@@ -345,6 +347,7 @@ private:
     bool noteRecordOn = false;                                       // MIDI keyboard notes are written into the pattern
     int noteQuantize = kTicksPerBeat / 4;                            // ticks; 0 = do not quantize
     NoteRecorder noteRecorder;
+    ScoreLog scoreLog; // what a MIDI keyboard played in the last five minutes (0.28.0)
     bool metronomeOn = false;
     float metronomeVolume = 0.5f;
     bool restoringLayout = false;

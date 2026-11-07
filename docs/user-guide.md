@@ -639,6 +639,14 @@ Right-click **Rec notes** to choose the **quantize** (1/4, 1/8, **1/16** by defa
 pattern at the same place with the same pitch are not duplicated, so recording over a loop several times adds only new notes.
 The pitch of a guitar or a voice is **not** turned into notes: use *Record* (below) for audio.
 
+**Score log (0.28.0).** Everything you play on a MIDI keyboard is remembered for **five minutes**, also when nothing is
+recording and the song is stopped, so an idea you played while trying things out is not lost. Right-click **Rec notes**:
+*Put the last phrase into the pattern* takes what you played after your last pause of 3 seconds or more (with no key held),
+*Put all of it into the pattern* takes the whole log, and *Clear the score log* forgets it. The notes go into the **current
+pattern**, each on the channel it was played on, starting at the pattern's beginning and keeping your timing at the current
+tempo (starts are put on the quantize grid chosen in the same menu). Notes that start after the end of the pattern are left out
+and counted in the status line: make the pattern longer, or take the last phrase only. Undo takes the whole insertion back.
+
 The arrow next to **Record** has *The recording becomes*: **A clip on a playlist track** (the default) or **A new sampler
 channel**. With the second, an audio take from a microphone or guitar becomes the sample of a new channel, ready to be played with
 a MIDI keyboard or sequenced in the piano roll (with no free channel it is put on the playlist instead).

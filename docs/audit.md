@@ -27,6 +27,10 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.28.0
+The score log adds one push to a fixed-size lock-free queue per MIDI note on the audio thread (nothing is allocated there; a full
+queue drops the event). The log on the message thread is bounded (five minutes, 20000 events).
+
 ## After 0.27.0
 Audio clips gained pan, reverse and fades. Reading backwards never goes outside the audio (the voice ends below position 0, the
 next frame is clamped to the last one); a clip with every setting on renders without allocation. Loading takes nonsense values

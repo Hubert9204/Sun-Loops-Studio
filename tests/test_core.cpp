@@ -41,6 +41,7 @@
 #include "audio/SampleEdit.h"
 #include "audio/TimeStretch.h"
 #include "audio/NoteRecorder.h"
+#include "audio/ScoreLog.h"
 #include "audio/SpscQueue.h"
 #include "audio/LiveNotes.h"
 #include "audio/OfflineRenderer.h"
@@ -3397,6 +3398,110 @@ void testAudioClips()
 }
 
 // --- per-clip pan, reverse and fades (0.27.0) -------------------------------------------------------------------------------
+// --- the score log (0.28.0) ------------------------------------------------------------------------------------------------
+void testScoreLog()
+{
+    std::cout << "Score log (0.28.0)\n";
+    const auto on = [] (int pitch, double seconds, float velocity = 0.8f, int channel = 0)
+    { return sls::ScoreEvent { true, static_cast<std::uint8_t> (channel), static_cast<std::uint8_t> (pitch), velocity, seconds }; };
+    const auto off = [] (int pitch, double seconds, int channel = 0)
+    { return sls::ScoreEvent { false, static_cast<std::uint8_t> (channel), static_cast<std::uint8_t> (pitch), 0.0f, seconds }; };
+    const auto same = [] (const sls::Note& n, int pitch, int start, int length)
+    { return n.pitch == pitch && n.startTick == start && n.lengthTicks == length; };
+
+    sls::ScoreLog log;
+    check (log.empty() && log.notes (120.0).empty(), "an empty log gives no notes");
+
+    // 120 BPM: 960 ticks a second
+    log.add (on (60, 10.0, 0.7f));
+    log.add (off (60, 10.5));
+    log.add (on (64, 11.0));
+    log.add (off (64, 11.25));
+    auto notes = log.notes (120.0);
+    check (notes.size() == 2 && same (notes[0].note, 60, 0, 480) && same (notes[1].note, 64, 960, 240)
+               && std::abs (notes[0].note.velocity - 0.7f) < 1e-6f,
+           "notes keep their timing from the first one (at tick 0), length and velocity");
+    check (log.notes (60.0).size() == 2 && same (log.notes (60.0)[1].note, 64, 480, 120), "at the tempo asked for (60 BPM: half the ticks)");
+
+    log.add (on (67, 11.27));
+    log.add (off (67, 11.4));
+    notes = log.notes (120.0, sls::kTicksPerBeat / 4);
+    check (notes.size() == 3 && notes[2].note.startTick == 1200 && notes[2].note.lengthTicks == 125,
+           "quantize: a start 1.27 s after the first note (1219 ticks) goes to the 1/16 grid (1200); the length stays");
+
+    {
+        sls::ScoreLog held;
+        held.add (on (48, 1.0));
+        held.add (on (52, 1.5));
+        held.add (off (52, 2.0));
+        const auto n = held.notes (120.0);
+        check (n.size() == 2 && same (n[0].note, 48, 0, 960), "a key still held ends with the last event");
+        sls::ScoreLog repeated;
+        repeated.add (on (60, 0.0));
+        repeated.add (on (60, 0.25));
+        repeated.add (off (60, 0.5));
+        const auto r = repeated.notes (120.0);
+        check (r.size() == 2 && same (r[0].note, 60, 0, 240) && same (r[1].note, 60, 240, 240), "a repeated note on ends the note before");
+        sls::ScoreLog orphan;
+        orphan.add (off (60, 0.0));
+        orphan.add (on (62, 0.5));
+        orphan.add (off (62, 1.0));
+        check (orphan.notes (120.0).size() == 1 && orphan.notes (120.0)[0].note.pitch == 62, "a note off without its note on is ignored");
+    }
+    {
+        sls::ScoreLog channels;
+        channels.add (on (60, 0.0, 0.8f, 2));
+        channels.add (on (60, 0.1, 0.8f, 5));
+        channels.add (off (60, 0.5, 2));
+        channels.add (off (60, 1.0, 5));
+        const auto n = channels.notes (120.0);
+        check (n.size() == 2 && n[0].channel == 2 && n[0].note.lengthTicks == 480 && n[1].channel == 5 && n[1].note.lengthTicks == 864,
+               "the same key on two channels is two notes, each on its channel");
+    }
+    {
+        sls::ScoreLog phrases;
+        phrases.add (on (60, 0.0));
+        phrases.add (off (60, 1.0));
+        phrases.add (on (62, 1.5));
+        phrases.add (off (62, 2.0));
+        phrases.add (on (64, 6.0)); // after a 4 s pause
+        phrases.add (off (64, 6.5));
+        phrases.add (on (65, 7.0));
+        phrases.add (off (65, 7.5));
+        const auto last = phrases.notes (120.0, 0, 3.0);
+        check (last.size() == 2 && same (last[0].note, 64, 0, 480) && same (last[1].note, 65, 960, 480),
+               "the last phrase: what came after the last pause of 3 s, from tick 0");
+        check (phrases.notes (120.0, 0, 5.0).size() == 4 && phrases.notes (120.0).size() == 4, "a shorter pause, or no phrase asked for: everything");
+        phrases.add (on (36, 7.5));    // a long note bridging the next pause
+        phrases.add (on (67, 12.0));
+        phrases.add (off (36, 12.5));
+        phrases.add (off (67, 12.5));
+        check (phrases.notes (120.0, 0, 3.0).size() == 4, "a pause while a key is held is not a pause");
+    }
+    {
+        sls::ScoreLog old;
+        old.add (on (60, 0.0));
+        old.add (off (60, 1.0));
+        old.add (on (62, 400.0));
+        old.add (off (62, 401.0));
+        check (old.size() == 2 && old.notes (120.0).size() == 1 && old.notes (120.0)[0].note.pitch == 62, "events older than five minutes are forgotten");
+        sls::ScoreLog odd;
+        odd.add (on (60, std::numeric_limits<double>::quiet_NaN()));
+        odd.add (on (200, 1.0));
+        odd.add (on (60, 5.0, 3.0f));
+        odd.add (off (60, 4.0)); // stamped earlier than the event before (the latency changed): taken as the same time
+        const auto n = odd.notes (120.0);
+        check (odd.size() == 2 && n.size() == 1 && n[0].note.lengthTicks == 1 && n[0].note.velocity == 1.0f,
+               "a time that is not a number and a pitch above 127 are refused; time never goes back; velocity at most 1");
+        sls::ScoreLog full;
+        for (int i = 0; i < 25000; ++i)
+            full.add (on (60 + i % 12, i * 0.001));
+        check (full.size() == sls::ScoreLog::kMaxEvents, "at most 20000 events are kept");
+        full.clear();
+        check (full.empty() && full.notes (120.0).empty(), "clearing empties it");
+    }
+}
+
 void testClipPanReverseFades()
 {
     std::cout << "Audio clips: pan, reverse and fades (0.27.0)\n";
@@ -8792,6 +8897,7 @@ int main()
     testTapTempo();
     testAudioClips();
     testClipPanReverseFades();
+    testScoreLog();
     testAudioImport();
     testInputRecorder();
     testMidiNotes();

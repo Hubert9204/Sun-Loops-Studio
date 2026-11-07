@@ -2,6 +2,14 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.28.0 - 2026-11-07
+
+### Added
+- **Score log**, as in FL Studio: everything played on a MIDI keyboard in the last five minutes is kept, also when nothing is
+  recording, and can be put into the current pattern from the Rec notes right-click menu (the last phrase, after a pause of 3 s
+  with no key held, or all of it), each note on the channel it was played on, at the current tempo and on the quantize grid.
+  One undo step; notes past the pattern's end are counted in the status line.
+
 ## 0.27.0 - 2026-11-07
 
 ### Added

@@ -154,16 +154,23 @@ void MainComponent::toggleNoteRecording()
 
 void MainComponent::openNoteRecordMenu()
 {
-    struct Option { int id; const char* label; int ticks; };
-    static constexpr Option options[] = { { 1, "Off (keep the exact timing)", 0 },
-                                          { 2, "1/4 note", kTicksPerBeat },
-                                          { 3, "1/8 note", kTicksPerBeat / 2 },
-                                          { 4, "1/16 note", kTicksPerBeat / 4 },
-                                          { 5, "1/32 note", kTicksPerBeat / 8 } };
+    struct Option { const char* label; int id; int ticks; };
+    static constexpr Option options[] = { { "Off (keep the exact timing)", 1, 0 },
+                                          { "1/4 note", 2, kTicksPerBeat },
+                                          { "1/8 note", 3, kTicksPerBeat / 2 },
+                                          { "1/16 note", 4, kTicksPerBeat / 4 },
+                                          { "1/32 note", 5, kTicksPerBeat / 8 } };
     juce::PopupMenu menu;
     menu.addSectionHeader ("Quantize the start of recorded notes to");
     for (const auto& o : options)
         menu.addItem (o.id, o.label, true, noteQuantize == o.ticks);
+    menu.addSeparator();
+    // 0.28.0: what was played without recording
+    menu.addSectionHeader ("Score log: what the MIDI keyboard played in the last 5 minutes");
+    const bool logged = ! scoreLog.empty();
+    menu.addItem (20, "Put the last phrase into the pattern", logged);
+    menu.addItem (21, "Put all of it into the pattern", logged);
+    menu.addItem (22, "Clear the score log", logged);
     menu.addSeparator();
     menu.addItem (10, "Audio and MIDI devices...");
 
@@ -175,6 +182,17 @@ void MainComponent::openNoteRecordMenu()
                             if (result == 10)
                             {
                                 safe->openAudioSettings();
+                                return;
+                            }
+                            if (result == 20 || result == 21)
+                            {
+                                safe->dumpScoreLog (result == 20);
+                                return;
+                            }
+                            if (result == 22)
+                            {
+                                safe->scoreLog.clear();
+                                safe->statusLabel.setText ("Score log cleared", juce::dontSendNotification);
                                 return;
                             }
                             for (const auto& o : options)
@@ -235,6 +253,70 @@ void MainComponent::drainMidiTakes()
             strips[c]->repaint();
     pianoRoll.setNotes (channels[static_cast<size_t> (selected)].notes);
     publishProject();
+}
+
+// Called from the timer: what the MIDI keyboard played goes into the score log (whatever the transport is doing).
+void MainComponent::drainScoreEvents()
+{
+    ScoreEvent e;
+    while (engine.popScoreEvent (e))
+        scoreLog.add (e);
+}
+
+// The score log's notes into the current pattern, each on the channel it was played on, from the pattern's start. The timing is
+// kept at the current tempo (starts on the Rec notes grid if one is chosen); what does not fit in the pattern's length is left out.
+void MainComponent::dumpScoreLog (bool lastPhraseOnly)
+{
+    constexpr double kPhraseGapSeconds = 3.0;
+    constexpr size_t kMaxNotesPerChannel = 5000;
+    const auto logged = scoreLog.notes (bpmSlider.getValue(), noteQuantize, lastPhraseOnly ? kPhraseGapSeconds : 0.0);
+    if (logged.empty())
+    {
+        statusLabel.setText ("The score log is empty: play something on a MIDI keyboard first", juce::dontSendNotification);
+        return;
+    }
+
+    const int patternLength = arrangement.patternTicks;
+    int added = 0, tooLate = 0, noChannel = 0;
+    std::array<bool, kMaxChannels> touched {};
+    for (const auto& l : logged)
+    {
+        if (l.channel < 0 || l.channel >= static_cast<int> (channels.size()))
+        {
+            ++noChannel;
+            continue;
+        }
+        if (l.note.startTick >= patternLength)
+        {
+            ++tooLate;
+            continue;
+        }
+        auto n = l.note;
+        n.lengthTicks = std::clamp (n.lengthTicks, 1, patternLength - n.startTick);
+        auto& notes = channels[static_cast<size_t> (l.channel)].notes;
+        if (notes.size() < kMaxNotesPerChannel && addRecordedNote (notes, n))
+        {
+            ++added;
+            touched[static_cast<size_t> (l.channel)] = true;
+        }
+    }
+
+    if (added > 0)
+    {
+        for (size_t c = 0; c < channels.size(); ++c)
+            if (touched[c])
+                strips[c]->repaint();
+        pianoRoll.setNotes (channels[static_cast<size_t> (selected)].notes);
+        publishProject();
+        recordNoteChange(); // one undo step
+    }
+    juce::String text = juce::String (added) + (added == 1 ? " note" : " notes") + " from the score log put into "
+                      + juce::String (arrangement.patterns[static_cast<size_t> (currentPattern)].name);
+    if (tooLate > 0)
+        text << "; " << tooLate << " did not fit in the pattern's length (make the pattern longer, or put in the last phrase only)";
+    if (noChannel > 0)
+        text << "; " << noChannel << " were played on a channel that no longer exists";
+    statusLabel.setText (text, juce::dontSendNotification);
 }
 
 // Tells every mixer strip which channels play through it.

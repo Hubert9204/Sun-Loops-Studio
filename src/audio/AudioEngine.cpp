@@ -198,6 +198,7 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* in, int 
     inCallback.store (true, std::memory_order_seq_cst);
     if (suspended.load (std::memory_order_seq_cst))
     {
+        audioClockSeconds += numSamples / sampleRateHz;
         inCallback.store (false, std::memory_order_seq_cst);
         return;
     }
@@ -242,6 +243,8 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* in, int 
     {
         if (takeNotes && live.fromMidi)
             midiTakes.push (makeTake (live, blockStartTick, latencyTicks, project->lengthTicks));
+        if (live.fromMidi)
+            scoreEvents.push ({ live.on, live.channel, live.pitch, live.velocity, audioClockSeconds - latencySamples / sampleRateHz });
 
         if (live.on)
             player.liveNoteOn (*project, live.channel, live.pitch, live.velocity);
@@ -253,6 +256,7 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* in, int 
         player.seek (*project, seekTo, currentBpm);
     player.setMetronome (metronomeOn.load (std::memory_order_relaxed), metronomeVolume.load (std::memory_order_relaxed));
     player.render (*project, currentBpm, isPlaying, out, numOut, numSamples);
+    audioClockSeconds += numSamples / sampleRateHz;
     playheadTick.store (static_cast<int> (player.getPositionTicks()), std::memory_order_relaxed);
 
     const float g = gain.load (std::memory_order_relaxed);

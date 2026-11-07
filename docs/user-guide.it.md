@@ -652,6 +652,14 @@ Tasto destro su **Rec notes** per scegliere la **quantizzazione** (1/4, 1/8, **1
 nello stesso punto e con la stessa altezza non vengono duplicate, quindi registrando più volte sul loop si aggiungono solo note nuove.
 L'altezza di una chitarra o di una voce **non** viene trasformata in note: per l'audio usa *Record* (sopra).
 
+**Score log (0.28.0).** Tutto ciò che suoni su una tastiera MIDI viene ricordato per **cinque minuti**, anche quando non si sta
+registrando e il brano è fermo, così un'idea suonata mentre provavi non va persa. Tasto destro su **Rec notes**: *Put the last
+phrase into the pattern* prende ciò che hai suonato dopo l'ultima pausa di almeno 3 secondi (senza tasti premuti), *Put all of it
+into the pattern* prende tutto il registro e *Clear the score log* lo cancella. Le note vanno nel **pattern corrente**, ognuna sul
+canale su cui è stata suonata, a partire dall'inizio del pattern e con il tuo tempo al BPM attuale (gli attacchi vanno sulla griglia
+di quantizzazione scelta nello stesso menu). Le note che iniziano dopo la fine del pattern vengono lasciate fuori e contate nella
+riga di stato: allunga il pattern o prendi solo l'ultima frase. Annulla toglie tutto l'inserimento in un colpo.
+
 La freccia accanto a **Record** ha *The recording becomes*: **A clip on a playlist track** (predefinito) oppure **A new sampler
 channel**. Con la seconda, una registrazione da microfono o chitarra diventa il sample di un nuovo canale, pronto da suonare con una
 tastiera MIDI o da sequenziare nel piano roll (senza canali liberi viene messa nella playlist).

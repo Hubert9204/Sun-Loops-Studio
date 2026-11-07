@@ -288,6 +288,9 @@ voices -> channel (smoothed gain, equal-power pan, channel mute/solo)
   is active in the audio callback and the feedback loops flush tiny values.
 - The piano roll's loop region (0.20.0) lives in `Pattern::loopStartTick / loopEndTick`; in Pattern mode `publishProject` copies the current
   pattern's region into the snapshot's `loopStartTick / loopEndTick`, which the `Player` already handles for the playlist's region.
+- Score log (0.28.0): the audio thread stamps every MIDI keyboard note with its own clock (`audioClockSeconds`, minus the output
+  latency) and queues it (`scoreEvents`, lock-free); the message thread's timer moves them into `ScoreLog` (`src/audio/ScoreLog.h`,
+  JUCE-free), which keeps five minutes and turns them into pattern notes at a tempo when asked.
 - Audio clips (0.27.0): `AudioClip` / `AudioEvent` carry pan, reverse and fades. A reversed clip is read backwards by its clip
   voice (position p of the reversed audio is frame frames - 1 - p), so no reversed copy of the audio is made; `offsetSeconds`
   then counts from the end of the audio, and `setAudioReverse` keeps the played part when the direction changes. Fades are
