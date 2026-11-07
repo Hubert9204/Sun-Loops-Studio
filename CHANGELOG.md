@@ -2,6 +2,18 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.26.0 - 2026-11-07
+
+### Added
+- **Pitch Corrector**, a mixer effect in the manner of Pitcher: follows the pitch of one voice or instrument and pulls it to the
+  nearest note of a key and scale (the piano roll's 13 scales), with Speed (0 ms hard tune to 500 ms), Amount, Shift (+-12
+  semitones), Range (low, voice, high) and Mix; eight presets. YIN pitch detection on a decimated copy refined at the full rate;
+  shifting by two crossfaded read heads that restart where the sound matches (in phase), aligned with the analysis so fast
+  corrections land on the sound they were measured on. About 1-2 % of one core.
+
+### Changed
+- The effects panel shows choice parameters (scales, modes) in a wider box, so long names are not cut.
+
 ## 0.25.0 - 2026-11-07
 
 ### Added

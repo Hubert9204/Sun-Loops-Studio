@@ -7590,6 +7590,228 @@ double windowedEnergy (const std::vector<float>& x, int begin, int end, double h
     return std::sqrt (re * re + im * im) / (end - begin);
 }
 
+// --- the Pitch Corrector (0.26.0) -------------------------------------------------------------------------------------------
+// The strongest frequency between lo and hi Hz (steps of 0.05 %) over [from, to) seconds, Hann-windowed.
+double strongestHz (const std::vector<float>& x, double fromSeconds, double toSeconds, double lo, double hi)
+{
+    const int a = static_cast<int> (fromSeconds * kSr), b = std::min (static_cast<int> (x.size()), static_cast<int> (toSeconds * kSr));
+    double best = 0.0, bestHz = 0.0;
+    for (double f = lo; f <= hi; f *= 1.0005)
+    {
+        const double e = windowedEnergy (x, a, b, f);
+        if (e > best)
+        {
+            best = e;
+            bestHz = f;
+        }
+    }
+    return bestHz;
+}
+
+// A tone with `harmonics` harmonics (amplitude 1/k), its frequency given per sample by `hzAt`.
+template <typename F>
+std::vector<float> toneOf (F hzAt, double seconds, int harmonics = 1, double amp = 0.5)
+{
+    std::vector<float> x (static_cast<size_t> (seconds * kSr));
+    double phase = 0.0;
+    for (size_t i = 0; i < x.size(); ++i)
+    {
+        double v = 0.0;
+        for (int k = 1; k <= harmonics; ++k)
+            v += std::sin (k * phase) / k;
+        x[i] = static_cast<float> (amp * v);
+        phase += 6.283185307179586 * hzAt (static_cast<double> (i) / kSr) / kSr;
+    }
+    return x;
+}
+
+void testPitchCorrector()
+{
+    std::cout << "Pitch Corrector (0.26.0)\n";
+    using T = sls::EffectType;
+    // Key, Scale, Speed, Amount, Shift, Range, Mix
+    const auto slot = [] (float key, float scale, float speed, float amount, float shift, float range = 1.0f, float mix = 100.0f)
+    { return slotWith (T::PitchCorrector, { key, scale, speed, amount, shift, range, mix }); };
+    const auto steady = [] (double hz, int harmonics = 1, double seconds = 1.5)
+    { return toneOf ([hz] (double) { return hz; }, seconds, harmonics); };
+
+    {
+        bool same = true;
+        const auto& theoryScales = sls::theory::scales();
+        same = same && static_cast<int> (theoryScales.size()) == static_cast<int> (std::size (sls::effect_tables::kPitchScaleMasks));
+        const juce::StringArray names = juce::StringArray::fromTokens (sls::effectParamInfo (T::PitchCorrector, 1).choices, "|", "");
+        for (size_t i = 0; same && i < theoryScales.size(); ++i)
+            same = theoryScales[i].mask == sls::effect_tables::kPitchScaleMasks[i] && names[static_cast<int> (i)] == theoryScales[i].name;
+        check (same, "its scales are the piano roll's (same names, same notes, same order)");
+    }
+
+    // A note already in tune stays where it is, at the same level.
+    {
+        const auto in = steady (440.0);
+        sls::EffectUnit unit;
+        unit.prepare (kSr);
+        auto l = in, r = in;
+        for (size_t i = 0; i < l.size(); i += 64)
+            unit.process (slot (0, 0, 0, 100, 0), l.data() + i, r.data() + i, static_cast<int> (std::min<size_t> (64, l.size() - i)));
+        check (std::abs (centsOff (unit.detectedPitchHz(), 440.0)) < 1.0 && unit.targetNote() == 69,
+               "it finds the pitch of a 440 Hz tone (within 1 cent) and its note (A4)");
+        check (std::abs (centsOff (strongestHz (l, 0.5, 1.5, 415.0, 466.0), 440.0)) < 2.0, "an A4 in tune comes out at 440 Hz (within 2 cents)");
+        const double ratio = rmsOf (l, static_cast<int> (0.5 * kSr), static_cast<int> (1.5 * kSr)) / rmsOf (in, static_cast<int> (0.5 * kSr), static_cast<int> (1.5 * kSr));
+        check (ratio > 0.97 && ratio < 1.03, "and at the same level (within 0.3 dB)");
+        check (l == r, "the same input on both sides gives the same output on both sides");
+    }
+
+    // Out of tune: pulled to the nearest note.
+    const auto sharp = steady (452.0); // A4 + 47 cents
+    check (std::abs (centsOff (strongestHz (runEffect (slot (0, 0, 0, 100, 0), sharp), 0.5, 1.5, 415.0, 480.0), 440.0)) < 3.0,
+           "A4 + 47 cents, chromatic, speed 0: comes out at A4 (within 3 cents)");
+    check (std::abs (centsOff (strongestHz (runEffect (slot (0, 0, 0, 50, 0), sharp), 0.5, 1.5, 415.0, 480.0), 440.0) - 23.4) < 3.0,
+           "amount 50 %: half the correction (+23 cents, within 3)");
+    check (std::abs (centsOff (strongestHz (runEffect (slot (0, 0, 0, 0, 0), sharp), 0.5, 1.5, 415.0, 480.0), 452.0)) < 2.0,
+           "amount 0: no correction");
+    const auto flat = steady (427.0); // A4 - 52 cents: nearest note is G#4 chromatically, A4 in C major
+    check (std::abs (centsOff (strongestHz (runEffect (slot (0, 0, 0, 100, 0), flat), 0.5, 1.5, 400.0, 460.0), 415.30)) < 3.0,
+           "A4 - 52 cents, chromatic: to G#4");
+    check (std::abs (centsOff (strongestHz (runEffect (slot (0, 1, 0, 100, 0), flat), 0.5, 1.5, 400.0, 460.0), 440.0)) < 3.0,
+           "the same in C major (no G#): to A4");
+    check (std::abs (centsOff (strongestHz (runEffect (slot (10, 1, 0, 100, 0), steady (470.0)), 0.5, 1.5, 440.0, 500.0), 466.16)) < 3.0,
+           "A#4 + 14 cents in A# major: to A#4 (the key moves the scale)");
+    check (std::abs (centsOff (strongestHz (runEffect (slot (9, 11, 0, 100, 0), steady (470.0)), 0.5, 1.5, 420.0, 540.0), 440.0)) < 3.0,
+           "A#4 + 14 cents in A minor pentatonic (no A#, no B): to A4, the nearer of A4 and C5");
+
+    // Tones with harmonics, in each range.
+    check (std::abs (centsOff (strongestHz (runEffect (slot (0, 0, 0, 100, 0), steady (196.0 * std::pow (2.0, 30.0 / 1200.0), 6)), 0.5, 1.5, 185.0, 210.0), 196.0)) < 3.0,
+           "a tone with six harmonics at G3 + 30 cents: to G3");
+    check (std::abs (centsOff (strongestHz (runEffect (slot (0, 0, 0, 100, 0, 0), steady (55.0 * std::pow (2.0, 40.0 / 1200.0), 6, 2.0)), 1.0, 2.0, 52.0, 60.0), 55.0)) < 3.0,
+           "range Low: A1 + 40 cents (with harmonics) to A1");
+    check (std::abs (centsOff (strongestHz (runEffect (slot (0, 0, 0, 100, 0, 2), steady (1500.0, 3)), 0.5, 1.5, 1420.0, 1560.0), 1479.98)) < 3.0,
+           "range High: F#6 + 23 cents to F#6");
+
+    // Shift.
+    check (std::abs (centsOff (strongestHz (runEffect (slot (0, 0, 20, 0, 12), steady (300.0)), 0.5, 1.5, 560.0, 640.0), 600.0)) < 3.0,
+           "shift +12: an octave up");
+    check (std::abs (centsOff (strongestHz (runEffect (slot (0, 0, 20, 0, -7), steady (300.0)), 0.5, 1.5, 180.0, 220.0), 300.0 * std::pow (2.0, -7.0 / 12.0))) < 3.0,
+           "shift -7: a fifth down");
+    {
+        const auto up = runEffect (slot (0, 0, 20, 0, 12), steady (300.0));
+        const double kept = windowedEnergy (up, static_cast<int> (0.5 * kSr), static_cast<int> (1.5 * kSr), 600.0);
+        const double left = windowedEnergy (up, static_cast<int> (0.5 * kSr), static_cast<int> (1.5 * kSr), 300.0);
+        check (left < 0.01 * kept, "and the original pitch is gone (40 dB down)");
+    }
+
+    // Speed: a jump from A4 to A4 + 47 cents at 1 s, measured over the next 100 ms.
+    {
+        const auto jump = toneOf ([] (double t) { return t < 1.0 ? 440.0 : 452.0; }, 1.6);
+        const double fast = strongestHz (runEffect (slot (0, 0, 0, 100, 0), jump), 1.04, 1.14, 415.0, 480.0);
+        const double slow = strongestHz (runEffect (slot (0, 0, 300, 100, 0), jump), 1.04, 1.14, 415.0, 480.0);
+        const double settled = strongestHz (runEffect (slot (0, 0, 300, 100, 0), jump), 2.0 - 0.45, 1.6, 415.0, 480.0);
+        check (std::abs (centsOff (fast, 440.0)) < 6.0, "speed 0: the new note is corrected at once");
+        check (centsOff (slow, 440.0) > 15.0, "speed 300 ms: still mostly uncorrected 40-140 ms later");
+        check (std::abs (centsOff (settled, 440.0)) < 8.0, "and corrected half a second later");
+    }
+
+    // Vibrato survives a slow speed and is flattened by a fast one.
+    {
+        const auto vibrato = toneOf ([] (double t) { return 440.0 * std::pow (2.0, 0.3 / 12.0 * std::sin (6.283185307179586 * 5.5 * t)); }, 2.0);
+        const auto spread = [] (const std::vector<float>& y)
+        {
+            // the pitch every 20 ms from zero crossings: its range in cents
+            double lo = 1e9, hi = -1e9;
+            for (double t = 0.6; t < 1.9; t += 0.02)
+            {
+                const int a = static_cast<int> (t * kSr), b = static_cast<int> ((t + 0.02) * kSr);
+                int first = -1, last = -1, crossings = 0;
+                for (int i = a; i < b; ++i)
+                    if (y[static_cast<size_t> (i - 1)] < 0.0f && y[static_cast<size_t> (i)] >= 0.0f)
+                    {
+                        if (first < 0)
+                            first = i;
+                        last = i;
+                        ++crossings;
+                    }
+                if (crossings > 2)
+                {
+                    const double hz = (crossings - 1) * kSr / (last - first);
+                    lo = std::min (lo, centsOff (hz, 440.0));
+                    hi = std::max (hi, centsOff (hz, 440.0));
+                }
+            }
+            return hi - lo;
+        };
+        const double natural = spread (vibrato);
+        const double fast = spread (runEffect (slot (0, 0, 0, 100, 0), vibrato));
+        const double slow = spread (runEffect (slot (0, 0, 400, 100, 0), vibrato));
+        check (fast < 0.15 * natural, "vibrato of +-30 cents: speed 0 flattens it (the corrections meet the sound they were measured on)");
+        check (slow > 0.6 * natural, "speed 400 ms lets it through");
+    }
+
+    // Latency and the edges.
+    {
+        std::vector<float> burst (static_cast<size_t> (kSr), 0.0f);
+        const auto tone = steady (220.0, 1, 0.5);
+        std::copy (tone.begin(), tone.end(), burst.begin() + static_cast<long> (0.5 * kSr));
+        const auto out = runEffect (slot (0, 0, 0, 100, 0), burst);
+        const int onset = firstAbove (out, 0.05f);
+        check (onset >= static_cast<int> (0.5 * kSr) && onset < static_cast<int> (0.515 * kSr), "the sound comes out less than 15 ms late (range Voice)");
+        check (peakOf (out.data(), 0, static_cast<int> (0.5 * kSr)) == 0.0f, "silence stays silent");
+    }
+    {
+        const auto in = steady (330.0);
+        check (runEffect (slot (0, 0, 0, 100, 5, 1, 0), in) == in, "mix 0 is bit-exact");
+        std::vector<float> noise (static_cast<size_t> (kSr));
+        std::uint32_t seed = 12345;
+        for (auto& v : noise)
+        {
+            seed = seed * 1664525u + 1013904223u;
+            v = 0.3f * (static_cast<float> (seed >> 8) / 8388608.0f - 1.0f);
+        }
+        const auto out = runEffect (slot (0, 1, 0, 100, 0), noise);
+        bool finite = true;
+        for (float v : out)
+            finite = finite && std::isfinite (v);
+        const double ratio = rmsOf (out, 12000, 48000) / rmsOf (noise, 12000, 48000);
+        check (finite && ratio > 0.6 && ratio < 1.4, "noise (no pitch): passes, finite and at about its level");
+    }
+    {
+        // every scale, speed, shift and range on a gliding tone with harmonics: finite and bounded
+        const auto glide = toneOf ([] (double t) { return 80.0 * std::pow (2.0, 4.0 * t); }, 1.2, 4);
+        bool fine = true;
+        float worst = 0.0f;
+        for (float scale : { 0.0f, 1.0f, 12.0f })
+            for (float speed : { 0.0f, 500.0f })
+                for (float shift : { -12.0f, 0.0f, 12.0f })
+                    for (float range : { 0.0f, 1.0f, 2.0f })
+                    {
+                        const auto out = runEffect (slot (3, scale, speed, 100, shift, range), glide);
+                        for (float v : out)
+                        {
+                            fine = fine && std::isfinite (v);
+                            worst = std::max (worst, std::abs (v));
+                        }
+                    }
+        check (fine && worst < 2.0f * peakOf (glide.data(), 0, static_cast<int> (glide.size())), "a glide over five octaves with every scale, speed, shift and range: finite, bounded");
+    }
+    {
+        sls::EffectUnit unit;
+        unit.prepare (kSr);
+        const auto in = steady (452.0, 1, 0.5);
+        std::vector<float> l (64), r (64);
+        const auto s = slot (0, 1, 30, 100, 3);
+        bool fine = true;
+        tAllocs = 0;
+        tCounting = true;
+        for (int block = 0; block < 2000; ++block)
+        {
+            for (int k = 0; k < 64; ++k)
+                l[static_cast<size_t> (k)] = r[static_cast<size_t> (k)] = in[static_cast<size_t> ((block * 64 + k) % static_cast<int> (in.size()))];
+            unit.process (s, l.data(), r.data(), 64);
+            fine = fine && std::isfinite (l[0]);
+        }
+        tCounting = false;
+        check (tAllocs == 0 && fine, "no allocation on the audio thread (2000 blocks)");
+    }
+}
+
 void testAdditiveAndPhysical()
 {
     std::cout << "Additive and physical synth engines (0.24.0)\n";
@@ -8368,6 +8590,7 @@ int main()
     testSynthPatchFiles();
     testFmSynth();
     testAdditiveAndPhysical();
+    testPitchCorrector();
     testPluginProjectFile();
     testPluginHosting();
 #endif

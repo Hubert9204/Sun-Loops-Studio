@@ -97,6 +97,28 @@ void EffectUnit::prepare (double newSampleRate)
         downFilter[stage] = q;
     }
 
+    // Pitch Corrector: the analysis runs at the rate divided by pcFactor (about 12 kHz), after a fourth-order Butterworth low-pass at
+    // 0.38 x the decimated rate.
+    pcFactor = std::max (1, static_cast<int> (std::lround (sampleRate / 12000.0)));
+    {
+        const double cutoff = 0.38 * sampleRate / pcFactor;
+        const double qs[2] = { 0.54119610, 1.30656296 };
+        for (int stage = 0; stage < 2; ++stage)
+        {
+            const double w0 = 2.0 * kPi * cutoff / sampleRate;
+            const double alpha = std::sin (w0) / (2.0 * qs[stage]);
+            const double cw = std::cos (w0);
+            const double a0 = 1.0 + alpha;
+            Biquad q;
+            q.b0 = (1.0 - cw) / 2.0 / a0;
+            q.b1 = (1.0 - cw) / a0;
+            q.b2 = (1.0 - cw) / 2.0 / a0;
+            q.a1 = -2.0 * cw / a0;
+            q.a2 = (1.0 - alpha) / a0;
+            (stage == 0 ? pcAa1 : pcAa2) = q;
+        }
+    }
+
     active = EffectType::None;
     reverbType = -1;
     setReverbType (0);
@@ -179,6 +201,20 @@ void EffectUnit::reset() noexcept
     lastLag = fadeLag = 0.0;
     fadeLeft = 0;
     volume = 1.0f;
+
+    pcDecim.fill (0.0f);
+    pcAa1.clearState();
+    pcAa2.clearState();
+    pcPhase = pcDecimWrite = pcControl = 0;
+    pcHopLeft = kPitchHop;
+    pcPeriod = 0.0;
+    pcNote = -1;
+    pcTarget = pcOffset = 0.0f;
+    pcRatio = 1.0;
+    pcAlign = 0.01 * sampleRate; // until the first analysis says how far back it looks
+    const int life = std::max (16, static_cast<int> (0.03 * sampleRate));
+    pcHeads[0] = { pcAlign, 0, life };
+    pcHeads[1] = { pcAlign, life / 2, life };
     dirty = false;
 }
 
@@ -241,6 +277,7 @@ void EffectUnit::process (const EffectSlot& requested, float* left, float* right
         case EffectType::Transient:    runTransient (slot, left, right, numSamples); break;
         case EffectType::Imager:       runImager (slot, left, right, numSamples); break;
         case EffectType::TimeShaper:   runTimeShaper (slot, left, right, numSamples, transport); break;
+        case EffectType::PitchCorrector: runPitchCorrector (slot, left, right, numSamples); break;
         case EffectType::Plugin:
         case EffectType::None:         break;
     }
@@ -951,6 +988,21 @@ const std::vector<EffectPreset>& effectPresets (EffectType t)
             };
             return list;
         }
+        case EffectType::PitchCorrector:
+        {
+            // Key, Scale (1 major, 2 natural minor, 11 minor pentatonic), Speed, Amount, Shift, Range (0 low, 1 voice, 2 high), Mix
+            static const std::vector<EffectPreset> list {
+                make ("Natural (chromatic)", { 0.0f, 0.0f, 60.0f, 80.0f, 0.0f, 1.0f, 100.0f }),
+                make ("Hard tune (chromatic)", { 0.0f, 0.0f, 0.0f, 100.0f, 0.0f, 1.0f, 100.0f }),
+                make ("C major, fast", { 0.0f, 1.0f, 10.0f, 100.0f, 0.0f, 1.0f, 100.0f }),
+                make ("A minor, natural", { 9.0f, 2.0f, 50.0f, 90.0f, 0.0f, 1.0f, 100.0f }),
+                make ("A minor pentatonic, hard", { 9.0f, 11.0f, 0.0f, 100.0f, 0.0f, 1.0f, 100.0f }),
+                make ("Bass, chromatic", { 0.0f, 0.0f, 30.0f, 100.0f, 0.0f, 0.0f, 100.0f }),
+                make ("Octave up", { 0.0f, 0.0f, 20.0f, 0.0f, 12.0f, 1.0f, 100.0f }),
+                make ("Fifth harmony", { 0.0f, 0.0f, 20.0f, 0.0f, 7.0f, 1.0f, 50.0f }),
+            };
+            return list;
+        }
         case EffectType::Imager:
         {
             static const std::vector<EffectPreset> list {
@@ -1085,5 +1137,303 @@ void EffectUnit::runTimeShaper (const EffectSlot& slot, float* left, float* righ
         freeTick += n * ticksPerSample;
     else
         freeTick = transport.tick + n * ticksPerSample;
+}
+// ------------------------------------------------------------------------- pitch corrector (0.26.0)
+// The input's pitch is found every 5 ms with YIN (de Cheveigné and Kawahara, 2002) on a copy decimated to about 12 kHz, refined at
+// the full rate; the nearest note of the scale (with a little hysteresis) gives the correction, which Speed smooths. The sound is
+// then read from a recording by two heads that move at the corrected speed, each faded in and out with a Hann window; a head that
+// ends its window starts again at the delay where the recording best matches what the other head is playing (normalised
+// cross-correlation), so the crossfades join in phase (the way WSOLA does). Formants move with the pitch.
+namespace
+{
+constexpr double kPitchMinDelay = 3.0; // samples: the cubic reading needs two samples after the read position
+constexpr float kPitchRanges[3][2] = { { 40.0f, 400.0f }, { 70.0f, 900.0f }, { 150.0f, 2000.0f } };
+constexpr float kPitchSilence = 0.003f; // RMS (-50 dBFS) below which there is no pitch to find
+constexpr float kYinThreshold = 0.2f;
+constexpr float kNoteHysteresis = 0.15f; // semitones: the current note is kept until another is this much nearer
+
+inline float hermite (float xm1, float x0, float x1, float x2, float t) noexcept
+{
+    const float c1 = 0.5f * (x1 - xm1);
+    const float c2 = xm1 - 2.5f * x0 + 2.0f * x1 - 0.5f * x2;
+    const float c3 = 0.5f * (x2 - xm1) + 1.5f * (x0 - x1);
+    return ((c3 * t + c2) * t + c1) * t + x0;
+}
+} // namespace
+
+double EffectUnit::headPosition (double delay) const noexcept
+{
+    const double size = static_cast<double> (delayLine[0].size());
+    double pos = static_cast<double> (delayWrite) - delay;
+    while (pos < 0.0)
+        pos += size;
+    return pos;
+}
+
+void EffectUnit::analysePitch (int range, int key, int scale, float amount) noexcept
+{
+    const double decRate = sampleRate / pcFactor;
+    const float minHz = kPitchRanges[range][0], maxHz = kPitchRanges[range][1];
+    const int tauMax = std::min (kPitchDecimated / 2 - 2, static_cast<int> (std::ceil (decRate / minHz)) + 2);
+    const int tauMin = std::max (2, static_cast<int> (std::floor (decRate / maxHz)) - 1);
+    const int window = std::max (tauMax, 96);
+    const int total = window + tauMax;
+    // The pitch found describes the middle of the window, on average half a hop ago: the heads read the sound that far back, so
+    // each correction meets the sound it was measured on.
+    pcAlign = 0.5 * (window + kPitchHop) * pcFactor;
+
+    // The latest `total` decimated samples, oldest first.
+    for (int j = 0; j < total; ++j)
+        pcScratch[static_cast<size_t> (j)] = pcDecim[static_cast<size_t> ((pcDecimWrite - total + j) & (kPitchDecimated - 1))];
+
+    double energy = 0.0;
+    for (int j = tauMax; j < total; ++j)
+    {
+        const double v = pcScratch[static_cast<size_t> (j)];
+        energy += v * v;
+    }
+    int found = -1;
+    if (std::sqrt (energy / window) >= kPitchSilence)
+    {
+        // The difference function and its cumulative mean normalised form, on the newest `window` samples.
+        const float* x = pcScratch.data() + tauMax;
+        double running = 0.0;
+        for (int tau = 1; tau <= tauMax; ++tau)
+        {
+            double d = 0.0;
+            for (int j = 0; j < window; ++j)
+            {
+                const double diff = static_cast<double> (x[j]) - x[j - tau];
+                d += diff * diff;
+            }
+            running += d;
+            pcDiff[static_cast<size_t> (tau)] = running > 0.0 ? static_cast<float> (d * tau / running) : 1.0f;
+        }
+        for (int tau = tauMin; tau < tauMax; ++tau)
+            if (pcDiff[static_cast<size_t> (tau)] < kYinThreshold)
+            {
+                for (int next = tau + 1; next < tauMax && pcDiff[static_cast<size_t> (next)] < pcDiff[static_cast<size_t> (tau)]; ++next)
+                    tau = next;
+                found = tau;
+                break;
+            }
+    }
+
+    double period = 0.0;
+    if (found > 0)
+    {
+        // Refined at the full rate: the plain difference around the decimated lag, its minimum interpolated with a parabola.
+        const int monoSize = static_cast<int> (preDelay.size());
+        const int fullWindow = window * pcFactor;
+        const int centre = found * pcFactor;
+        const int lo = std::max (2, centre - pcFactor - 1), hi = centre + pcFactor + 1;
+        auto at = [&] (int back) // `back` < monoSize samples before the newest
+        {
+            const int index = preDelayWrite - back;
+            return preDelay[static_cast<size_t> (index < 0 ? index + monoSize : index)];
+        };
+        auto difference = [&] (int tau)
+        {
+            double d = 0.0;
+            for (int j = 0; j < fullWindow; ++j)
+            {
+                const double diff = static_cast<double> (at (j)) - at (j + tau);
+                d += diff * diff;
+            }
+            return d;
+        };
+        int best = centre;
+        double bestValue = difference (centre);
+        double prev = 0.0, next = 0.0;
+        for (int tau = lo; tau <= hi; ++tau)
+            if (tau != centre)
+            {
+                const double v = difference (tau);
+                if (v < bestValue)
+                {
+                    bestValue = v;
+                    best = tau;
+                }
+            }
+        prev = difference (best - 1);
+        next = difference (best + 1);
+        const double curvature = prev - 2.0 * bestValue + next;
+        const double shift = curvature > 0.0 ? std::clamp (0.5 * (prev - next) / curvature, -0.5, 0.5) : 0.0;
+        period = best + shift;
+        const double hz = sampleRate / period;
+        if (hz < minHz * 0.97 || hz > maxHz * 1.03)
+            period = 0.0;
+    }
+
+    pcPeriod = period;
+    if (period <= 0.0)
+    {
+        pcNote = -1;
+        pcTarget = 0.0f; // no pitch (silence, breath, consonants): leave the sound alone
+        return;
+    }
+
+    const double midi = 69.0 + 12.0 * std::log2 (sampleRate / period / 440.0);
+    const auto mask = effect_tables::kPitchScaleMasks[scale];
+    auto inScale = [&] (int note) { return (mask & (1u << static_cast<unsigned> (((note - key) % 12 + 12) % 12))) != 0; };
+    int nearest = -1;
+    double nearestDistance = 1.0e9;
+    const int base = static_cast<int> (std::floor (midi));
+    for (int note = base - 6; note <= base + 7; ++note)
+        if (inScale (note) && std::fabs (note - midi) < nearestDistance)
+        {
+            nearestDistance = std::fabs (note - midi);
+            nearest = note;
+        }
+    if (pcNote >= 0 && inScale (pcNote) && std::fabs (pcNote - midi) < nearestDistance + kNoteHysteresis)
+        nearest = pcNote;
+    pcNote = nearest;
+    pcTarget = static_cast<float> (amount * (nearest - midi));
+}
+
+void EffectUnit::rebirthHead (PitchHead& head, const PitchHead& other, double ratio) noexcept
+{
+    const int target = std::max (16, static_cast<int> (0.03 * sampleRate));
+    const int remaining = std::max (1, other.life - other.age);
+    head.life = std::clamp (2 * remaining, target / 2, target + target / 2);
+    head.age = 0;
+
+    // The delay changes by (1 - ratio) per sample: room is left for the whole window (with a margin for a changing ratio).
+    const int monoSize = static_cast<int> (preDelay.size());
+    const int window = std::clamp (pcPeriod > 0.0 ? static_cast<int> (pcPeriod) : 0, static_cast<int> (0.005 * sampleRate),
+                                   static_cast<int> (0.02 * sampleRate));
+    const double maxDelay = static_cast<double> (std::min (static_cast<int> (delayLine[0].size()), monoSize) - window - 8);
+    const double drift = (1.0 - ratio) * head.life;
+    const double hardLowest = kPitchMinDelay + 1.0 + std::max (0.0, -drift) * 1.25;
+    const double highest = maxDelay - std::max (0.0, drift) * 1.25;
+    const int span = pcPeriod > 0.0 ? static_cast<int> (std::ceil (pcPeriod)) + 2 : static_cast<int> (0.01 * sampleRate);
+    // Over its window the head's delay averages pcAlign, unless that is too close to now for the drift.
+    const double lowest = std::max (hardLowest, pcAlign - 0.5 * drift - 0.5 * span);
+
+    // Candidates keep the other head's fraction of a sample, so a match is exact to the sample.
+    const int firstLag = static_cast<int> (std::ceil (lowest - other.delay));
+    const int finalLag = std::min (firstLag + span, static_cast<int> (std::floor (highest - other.delay)));
+    if (finalLag < firstLag)
+    {
+        head.delay = std::clamp (lowest, kPitchMinDelay, std::max (kPitchMinDelay, maxDelay));
+        return;
+    }
+
+    auto at = [&] (int back) // `back` < monoSize samples before the newest
+        {
+            const int index = preDelayWrite - back;
+            return preDelay[static_cast<size_t> (index < 0 ? index + monoSize : index)];
+        };
+    const int otherBack = static_cast<int> (std::lround (other.delay));
+    const int step = std::max (1, pcFactor / 2);
+    auto score = [&] (int lag, int stride)
+    {
+        double ab = 0.0, aa = 0.0, bb = 0.0;
+        for (int k = 0; k < window; k += stride)
+        {
+            const double a = at (otherBack + k), b = at (otherBack + lag + k);
+            ab += a * b;
+            aa += a * a;
+            bb += b * b;
+        }
+        return ab / std::sqrt (aa * bb + 1.0e-12);
+    };
+    int bestLag = firstLag;
+    double bestScore = -2.0;
+    for (int lag = firstLag; lag <= finalLag; lag += step)
+    {
+        const double v = score (lag, step);
+        if (v > bestScore + 1.0e-9)
+        {
+            bestScore = v;
+            bestLag = lag;
+        }
+    }
+    const int coarse = bestLag;
+    bestScore = -2.0;
+    for (int lag = std::max (firstLag, coarse - step); lag <= std::min (finalLag, coarse + step); ++lag)
+    {
+        const double v = score (lag, 1);
+        if (v > bestScore + 1.0e-9)
+        {
+            bestScore = v;
+            bestLag = lag;
+        }
+    }
+    head.delay = other.delay + bestLag;
+}
+
+void EffectUnit::runPitchCorrector (const EffectSlot& slot, float* left, float* right, int n) noexcept
+{
+    const auto& p = slot.params;
+    const int key = effectChoice (EffectType::PitchCorrector, 0, p[0]);
+    const int scale = effectChoice (EffectType::PitchCorrector, 1, p[1]);
+    const float speedMs = p[2];
+    const float amount = p[3] / 100.0f;
+    const float shift = p[4];
+    const int range = effectChoice (EffectType::PitchCorrector, 5, p[5]);
+    const float mix = p[6] / 100.0f;
+    const float follow = speedMs <= 0.0f ? 1.0f : 1.0f - std::exp (-1000.0f / (speedMs * static_cast<float> (sampleRate)));
+
+    const int lineSize = static_cast<int> (delayLine[0].size());
+    const int monoSize = static_cast<int> (preDelay.size());
+    const double maxDelay = static_cast<double> (std::min (lineSize, monoSize) - 8);
+    auto& lineL = delayLine[0];
+    auto& lineR = delayLine[1];
+
+    for (int i = 0; i < n; ++i)
+    {
+        const float inL = left[i], inR = right[i];
+        const float mono = 0.5f * (inL + inR);
+        lineL[static_cast<size_t> (delayWrite)] = inL;
+        lineR[static_cast<size_t> (delayWrite)] = inR;
+        preDelay[static_cast<size_t> (preDelayWrite)] = mono;
+
+        const auto filtered = static_cast<float> (pcAa2.tickL (pcAa1.tickL (mono)));
+        if (++pcPhase >= pcFactor)
+        {
+            pcPhase = 0;
+            pcDecim[static_cast<size_t> (pcDecimWrite)] = flush (filtered);
+            pcDecimWrite = (pcDecimWrite + 1) & (kPitchDecimated - 1);
+            if (--pcHopLeft <= 0)
+            {
+                pcHopLeft = kPitchHop;
+                analysePitch (range, key, scale, amount);
+            }
+        }
+
+        pcOffset += follow * (pcTarget - pcOffset);
+        if (--pcControl <= 0)
+        {
+            pcControl = 16;
+            pcRatio = std::exp2 (static_cast<double> (pcOffset + shift) / 12.0);
+        }
+
+        float wetL = 0.0f, wetR = 0.0f, gains = 0.0f;
+        for (size_t h = 0; h < 2; ++h)
+        {
+            auto& head = pcHeads[h];
+            const float phase = static_cast<float> (head.age) / static_cast<float> (head.life);
+            const float s = std::sin (static_cast<float> (kPi) * phase);
+            const float g = s * s;
+            const double pos = headPosition (head.delay);
+            const int i0 = static_cast<int> (pos);
+            const auto t = static_cast<float> (pos - i0);
+            auto idx = [&] (int k) { return static_cast<size_t> (((i0 + k) % lineSize + lineSize) % lineSize); };
+            wetL += g * hermite (lineL[idx (-1)], lineL[idx (0)], lineL[idx (1)], lineL[idx (2)], t);
+            wetR += g * hermite (lineR[idx (-1)], lineR[idx (0)], lineR[idx (1)], lineR[idx (2)], t);
+            gains += g;
+
+            head.delay = std::clamp (head.delay + (1.0 - pcRatio), kPitchMinDelay, maxDelay);
+            if (++head.age >= head.life)
+                rebirthHead (head, pcHeads[1 - h], pcRatio);
+        }
+        const float norm = 1.0f / std::max (gains, 0.25f);
+        left[i] = inL + mix * (wetL * norm - inL);
+        right[i] = inR + mix * (wetR * norm - inR);
+
+        delayWrite = (delayWrite + 1) % lineSize;
+        preDelayWrite = (preDelayWrite + 1) % monoSize;
+    }
 }
 } // namespace sls

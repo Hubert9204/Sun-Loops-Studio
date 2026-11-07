@@ -29,6 +29,7 @@ juce::String shortEffectName (EffectType t)
         case EffectType::Transient:  return "Trans";
         case EffectType::Imager:     return "Imager";
         case EffectType::TimeShaper: return "Time";
+        case EffectType::PitchCorrector: return "Pitch";
         case EffectType::None:       break;
     }
     return juce::String::fromUTF8 ("\xe2\x80\x94");
@@ -522,7 +523,7 @@ FxPanel::FxPanel()
     styleSmallLabel (notePlaceholder, 11.0f, false, juce::Justification::topLeft);
     notePlaceholder.setColour (juce::Label::textColourId, juce::Colour (0xff9aa0ab));
     notePlaceholder.setText ("Click a slot to add an effect to this track's chain "
-                             "(EQ and filters, dynamics, drive, modulation, reverb, delay, stereo). Effects run in order, before the fader.\n\n"
+                             "(EQ and filters, dynamics, drive, modulation, reverb, delay, time, pitch, stereo). Effects run in order, before the fader.\n\n"
                              "Plugin effects (VST3, LV2, LADSPA) are in the slot menu once the browser's Plugin folder was scanned.",
                              juce::dontSendNotification);
 
@@ -601,16 +602,16 @@ void FxPanel::refresh()
                                              : "Effects - Track " + juce::String (trackIndex + 1)),
                         juce::dontSendNotification);
     notePlaceholder.setText (isAuxBus
-        ? "Click a slot to add an effect to this aux bus (EQ and filters, dynamics, drive, modulation, reverb, delay, stereo). "
+        ? "Click a slot to add an effect to this aux bus (EQ and filters, dynamics, drive, modulation, reverb, delay, time, pitch, stereo). "
           "The bus processes what the tracks send to it (set the send level on each track's strip); its output goes to the master.\n\n"
           "Tip: a reverb or delay here, set to 100 % mix, gives every track the same space.\n"
           "Effect parameters of aux buses cannot be automated yet."
         : (isMaster
-        ? "Click a slot to add an effect to the master chain (EQ and filters, dynamics, drive, modulation, reverb, delay, stereo). "
+        ? "Click a slot to add an effect to the master chain (EQ and filters, dynamics, drive, modulation, reverb, delay, time, pitch, stereo). "
           "These effects process the sum of all tracks, in order, before the master fader.\n\n"
           "Plugin effects (VST3, LV2, LADSPA) are in the slot menu once the browser's Plugin folder was scanned."
         : "Click a slot to add an effect to this track's chain "
-          "(EQ and filters, dynamics, drive, modulation, reverb, delay, stereo). Effects run in order, before the fader.\n\n"
+          "(EQ and filters, dynamics, drive, modulation, reverb, delay, time, pitch, stereo). Effects run in order, before the fader.\n\n"
           "Plugin effects (VST3, LV2, LADSPA) are in the slot menu once the browser's Plugin folder was scanned."),
         juce::dontSendNotification);
 
@@ -660,7 +661,8 @@ void FxPanel::rebuildParameters()
         row.slider.setSkewFactor (1.0);
         if (info.choices != nullptr)
         {
-            // A choice (Type, Mode, Stages...): whole steps, shown by name.
+            // A choice (Type, Mode, Scale...): whole steps, shown by name in a wider box (names like "Major pentatonic").
+            row.slider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 118, 20);
             row.slider.setRange (info.min, info.max, 1.0);
             const auto names = juce::StringArray::fromTokens (info.choices, "|", "");
             const auto first = static_cast<int> (info.min);
@@ -673,6 +675,7 @@ void FxPanel::rebuildParameters()
         }
         else
         {
+            row.slider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 64, 20);
             row.slider.setRange (info.min, info.max, 0.0);
             if ((unit == "Hz" || unit == "ms" || unit == ":1") && info.min > 0.0f)
                 row.slider.setSkewFactorFromMidPoint (std::sqrt (static_cast<double> (info.min) * static_cast<double> (info.max)));

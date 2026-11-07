@@ -55,6 +55,7 @@ const char* effectKey (EffectType t)
         case EffectType::Transient:    return "transient";
         case EffectType::Imager:       return "imager";
         case EffectType::TimeShaper:   return "time-shaper";
+        case EffectType::PitchCorrector: return "pitch-corrector";
         case EffectType::None:       break;
     }
     return "none";

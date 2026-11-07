@@ -20,10 +20,11 @@ enum class EffectType : std::uint8_t
 {
     None, Equalizer, Reverb, Delay, Compressor, Plugin,
     Overdrive, Chorus, Phaser, Filter, ParametricEq, Maximizer, Transient, Imager,
-    TimeShaper // 0.25.0: tempo-synced time and volume patterns (half speed, reverse, tape stop, stutter, gates), like Gross Beat
+    TimeShaper, // 0.25.0: tempo-synced time and volume patterns (half speed, reverse, tape stop, stutter, gates), like Gross Beat
+    PitchCorrector // 0.26.0: pulls a monophonic voice or instrument to the notes of a scale, like Pitcher
 };
 
-constexpr int kEffectTypeCount = 15;
+constexpr int kEffectTypeCount = 16;
 constexpr int kMaxEffectParams = 8;
 constexpr int kSlotsPerTrack = 4;
 
@@ -39,6 +40,7 @@ inline constexpr EffectMenuEntry kEffectMenu[] = {
     { EffectType::Overdrive, "Drive" },
     { EffectType::Chorus, "Modulation" },       { EffectType::Phaser, nullptr },
     { EffectType::Reverb, "Space and time" },   { EffectType::Delay, nullptr },          { EffectType::TimeShaper, nullptr },
+    { EffectType::PitchCorrector, "Pitch" },
     { EffectType::Imager, "Stereo" },
 };
 
@@ -68,6 +70,7 @@ inline const char* effectName (EffectType t) noexcept
         case EffectType::Transient:    return "Transient";
         case EffectType::Imager:       return "Stereo Imager";
         case EffectType::TimeShaper:   return "Time Shaper";
+        case EffectType::PitchCorrector: return "Pitch Corrector";
         case EffectType::None:         break;
     }
     return "Empty";
@@ -162,6 +165,20 @@ inline constexpr EffectParamInfo timeshaper[] = {
     { "Smooth", "ms", 0.5f, 20.0f, 3.0f },
     { "Mix", "%", 0.0f, 100.0f, 100.0f } };
 
+// Pitch Corrector (0.26.0): the pitch of one voice is followed and moved towards the nearest note of the scale. The scales are those
+// of the piano roll (theory::scales(), in the same order).
+inline constexpr EffectParamInfo pitch[] = {
+    { "Key", "", 0.0f, 11.0f, 0.0f, "C|C#|D|D#|E|F|F#|G|G#|A|A#|B" },
+    { "Scale", "", 0.0f, 12.0f, 0.0f, "Chromatic|Major|Natural minor|Harmonic minor|Melodic minor|Dorian|Phrygian|Lydian|Mixolydian|Locrian|Major pentatonic|Minor pentatonic|Blues" },
+    { "Speed", "ms", 0.0f, 500.0f, 20.0f },
+    { "Amount", "%", 0.0f, 100.0f, 100.0f },
+    { "Shift", "st", -12.0f, 12.0f, 0.0f },
+    { "Range", "", 0.0f, 2.0f, 1.0f, "Low (40-400 Hz)|Voice (70-900 Hz)|High (150-2000 Hz)" },
+    { "Mix", "%", 0.0f, 100.0f, 100.0f } };
+
+// The scales' notes as bit masks (bit n: n semitones above the key), in the order of the Scale choice; equal to theory::scales().
+inline constexpr std::uint16_t kPitchScaleMasks[] = { 0x0fff, 0x0ab5, 0x05ad, 0x09ad, 0x0aad, 0x06ad, 0x05ab, 0x0ad5, 0x06b5, 0x056b, 0x0295, 0x04a9, 0x04e9 };
+
 template <size_t N>
 constexpr int count (const EffectParamInfo (&)[N]) noexcept { return static_cast<int> (N); }
 } // namespace effect_tables
@@ -184,6 +201,7 @@ inline int effectParamCount (EffectType t) noexcept
         case EffectType::Transient:    return count (trans);
         case EffectType::Imager:       return count (imager);
         case EffectType::TimeShaper:   return count (timeshaper);
+        case EffectType::PitchCorrector: return count (pitch);
         case EffectType::Plugin:
         case EffectType::None:         break;
     }
@@ -212,6 +230,7 @@ inline EffectParamInfo effectParamInfo (EffectType t, int index) noexcept
         case EffectType::Transient:    return trans[i];
         case EffectType::Imager:       return imager[i];
         case EffectType::TimeShaper:   return timeshaper[i];
+        case EffectType::PitchCorrector: return pitch[i];
         case EffectType::Plugin:
         case EffectType::None:         break;
     }
@@ -302,6 +321,11 @@ public:
     void attachTimeBuffer (float* left, float* right, int frames) noexcept;
     bool hasTimeBuffer() const noexcept { return timeL != nullptr; }
 
+    // What the Pitch Corrector last found: the input's pitch in Hz (0 when it found none) and the note it moves it to (MIDI, -1 for
+    // none). For tests and a future display; read on the audio thread only.
+    float detectedPitchHz() const noexcept { return pcPeriod > 0.0 ? static_cast<float> (sampleRate / pcPeriod) : 0.0f; }
+    int targetNote() const noexcept { return pcNote; }
+
     // Samples by which the effect delays the sound (the Maximizer looks ahead); 0 for the others.
     int latencySamples (EffectType t) const noexcept { return t == EffectType::Maximizer ? lookahead : 0; }
 
@@ -350,6 +374,7 @@ private:
     void runTransient (const EffectSlot&, float*, float*, int) noexcept;
     void runImager (const EffectSlot&, float*, float*, int) noexcept;
     void runTimeShaper (const EffectSlot&, float*, float*, int, const EffectTransport&) noexcept;
+    void runPitchCorrector (const EffectSlot&, float*, float*, int) noexcept;
     void setReverbType (int type) noexcept;
 
     double sampleRate = 48000.0;
@@ -411,5 +436,29 @@ private:
     double fadeLag = 0.0;      // the stream being faded out after a jump
     int fadeLeft = 0, fadeLength = 1;
     float volume = 1.0f;       // the smoothed volume pattern
+
+    // pitch corrector. Its stereo recording is `delayLine` and its mono recording (for the analysis) `preDelay`, which only the delay
+    // and the reverb use otherwise; the pitch is found on a copy decimated to about 12 kHz and refined at the full rate.
+    struct PitchHead
+    {
+        double delay = 0.0; // samples
+        int age = 0, life = 1;
+    };
+    void analysePitch (int range, int key, int scale, float amount) noexcept;
+    void rebirthHead (PitchHead& head, const PitchHead& other, double ratio) noexcept;
+    double headPosition (double delay) const noexcept; // read position in delayLine for a delay
+
+    static constexpr int kPitchDecimated = 1024; // the decimated history (a power of two)
+    static constexpr int kPitchHop = 64;         // analysis every 64 decimated samples (about 5 ms)
+    std::array<float, kPitchDecimated> pcDecim {}, pcScratch {}, pcDiff {};
+    Biquad pcAa1, pcAa2; // the decimation's low-pass (fourth-order Butterworth), left channel state only
+    int pcFactor = 4, pcPhase = 0, pcDecimWrite = 0, pcHopLeft = kPitchHop, pcControl = 0;
+    double pcPeriod = 0.0;        // the input's period in samples, 0 = no pitch
+    int pcNote = -1;              // the note it is pulled to (MIDI), -1 = none
+    float pcTarget = 0.0f;        // correction in semitones the analysis asks for
+    float pcOffset = 0.0f;        // the correction applied, smoothed by Speed
+    double pcRatio = 1.0;         // playback speed of the heads
+    double pcAlign = 0.0;         // samples: how far back the analysed sound is, on average (the heads' mean delay)
+    std::array<PitchHead, 2> pcHeads {};
 };
 } // namespace sls

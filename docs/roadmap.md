@@ -1,6 +1,6 @@
 # Status and roadmap
 
-Version 0.25.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
+Version 0.26.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
 what is missing. If something here disagrees with the program, the program is right: please fix the page.
 
 ## What has been verified, and how
@@ -63,11 +63,16 @@ what is missing. If something here disagrees with the program, the program is ri
 | Additive and physical engines (0.24.0): the default timbre is a saw (harmonic n at 1/n) on pitch; odd-only; brightness; one harmonic = a sine (2nd harmonic 80 dB down); morph to B, the morph envelope; the filter on the harmonics; no aliasing at C8 (fold-back -172 dB); the master limiter linear below -3 dBFS (3rd harmonic -164 dB) and never above 1; the string in tune from E2 to E6 with and without stiffness (within 5 cents); decay, hardness, release damping, velocity, body; marimba's 3.99 mode, the bell's hum; every model finite at its extremes; the 14 new sounds; files (and older files without the settings); no allocation | Automated headless tests (1173 checks in total) | All pass |
 | The synth window with the new engines: the engine menu, the additive layout (timbre A and B, morph, morph envelope, filter, envelopes, LFO), Nylon Guitar loaded (model, resonance, envelope), the sound menu grouped by engine | Manual, in a virtual display | Worked (not heard) |
 | Time Shaper (0.25.0): no pattern = unchanged; half speed, reverse, stutter 1/16 sample-exact against the input; tape stop (1 kHz falling below 300 Hz, faded out); gate 1/8, depth, smoothing, trance gate; its own clock when stopped; mix 0; no recording = pattern skipped safely; every time x volume pattern finite and never louder than the input; five in a project (four with a recording) without allocation | Automated headless tests (1187 checks in total) | All pass |
+| Pitch Corrector (0.26.0): finds a 440 Hz tone within 1 cent; an A4 in tune stays (2 cents, level within 0.3 dB); +47 cents to A4 (3 cents); amount 50 % = half; scale and key respected (chromatic, C major, A# major, A minor pentatonic); tones with harmonics in the three ranges (A1, G3, F#6); shift +12 and -7 (the original 40 dB down); speed 0 at once, 300 ms slow; vibrato flattened at speed 0 (to 8 %), kept at 400 ms; less than 15 ms late; silence silent; mix 0 bit-exact; noise passes at its level; a five-octave glide with every setting finite and bounded; no allocation | Automated headless tests (1216 checks in total) | All pass |
+| The Pitch Corrector in the mixer: under Pitch in the slot menu, its seven parameters, scale names in full, presets applied | Manual, in a virtual display | Worked (not heard) |
 | The Time Shaper in the mixer: in the slot menu under Space and time, its six parameters with choices shown by name | Manual, in a virtual display | Worked (not heard) |
 | A use-after-free when clicking an item that rebuilds the browser tree (crash on *Scan for VST3 plugins...*) | Found in that manual session | Fixed (item actions are deferred); the same click was repeated afterwards |
 
 ## What has not been verified
 
+- **The Pitch Corrector by ear (0.26.0).** Tested on synthetic tones (sines, harmonics, vibrato, glides, noise), not on a real
+  voice: how natural it sounds on singing, and how it copes with breathy or rough voices, was not heard. It does not keep the
+  formants (Pitcher has an option for that) and cannot take its target notes from MIDI yet.
 - **The Time Shaper by ear (0.25.0).** The patterns are exact to the sample (tested), but how the presets feel in music was not heard.
   Only four Time Shapers per project get a recording (memory); a fifth only shapes the volume, and the interface does not say so yet.
 - **How the additive and physical sounds sound (0.24.0).** Measured only (pitch, spectrum, decay): the 14 new sounds were set by

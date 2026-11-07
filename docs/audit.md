@@ -27,6 +27,14 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.26.0
+The Pitch Corrector allocates nothing: its analysis arrays are fixed members and its recordings are buffers `prepare` already makes
+for the delay and the reverb (tested: 2000 blocks without allocation). Every access stays inside its buffers: AddressSanitizer and
+UndefinedBehaviorSanitizer found nothing over 540 runs (every range, shift, speed and three scales; tones gliding over six octaves,
+noise, a noisy right channel, mix and amount at 50 %, 48 and 96 kHz, blocks of 37 samples). Valgrind found an overrun in the
+Pitch Corrector test's own code (a tone longer than its buffer), now fixed. clang-tidy is clean on
+`Effects.cpp` and `MixerPanel.cpp`.
+
 ## After 0.25.0
 The Time Shaper's recordings (8.5 s, two channels) come from a pool of four made in `Player::prepare`; `lendTimeBuffers` hands them
 out and takes them back by pointer once per block, without allocating (tested with five Time Shapers). `prepare` takes every buffer

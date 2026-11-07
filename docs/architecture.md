@@ -288,6 +288,11 @@ voices -> channel (smoothed gain, equal-power pan, channel mute/solo)
   is active in the audio callback and the feedback loops flush tiny values.
 - The piano roll's loop region (0.20.0) lives in `Pattern::loopStartTick / loopEndTick`; in Pattern mode `publishProject` copies the current
   pattern's region into the snapshot's `loopStartTick / loopEndTick`, which the `Player` already handles for the playlist's region.
+- Pitch Corrector (0.26.0): YIN pitch detection every 64 samples of a copy decimated to about 12 kHz (two biquads before
+  decimation), refined at the full rate with a parabola; two read heads with Hann windows over a stereo recording, each restarting
+  at the delay of best normalised cross-correlation with the other head, so crossfades are in phase. The heads' mean delay equals the
+  analysis's look-back (`pcAlign`), so corrections land on the sound that was measured. It reuses the delay's and the reverb's
+  buffers (`delayLine`, `preDelay`), since one slot runs one effect.
 - Time Shaper (0.25.0): `EffectUnit::process` takes an `EffectTransport` (the song's tick at the chunk's start, or -1 when stopped, and
   ticks per sample). The effect reads a recording of the last 8.5 s at a lag given by the time pattern; the recordings are a pool of four
   in the Player (`timeBuffers`), lent to Time Shaper slots once per block (`lendTimeBuffers`), since one per slot would cost hundreds of MB.
