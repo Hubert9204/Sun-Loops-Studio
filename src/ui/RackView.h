@@ -143,14 +143,17 @@ public:
         setPatternBeats (4);
     }
 
-    void setPatternBeats (int newBeats)
+    // `minBeats` and `meter` (0.46.0): the shortest pattern, and the time signature the bars are counted in.
+    void setPatternBeats (int newBeats, int minBeats = kMinPatternBeats, TimeSignature meter = {})
     {
         beats = newBeats;
-        const int bars = beats / 4, rest = beats % 4;
+        const int perBar = std::max (1, meter.barQuarters());
+        const int bars = beats / perBar, rest = beats % perBar;
         lengthLabel.setText ("Pattern: " + juce::String (beats) + " quarters (" + juce::String (bars) + (bars == 1 ? " bar" : " bars")
-                                 + (rest > 0 ? " + " + juce::String (rest) + "/4" : juce::String()) + ") - " + juce::String (beats * 4) + " steps",
+                                 + (rest > 0 ? " + " + juce::String (rest) + "/4" : juce::String()) + " of " + juce::String (meter.text())
+                                 + ") - " + juce::String (beats * 4) + " steps",
                              juce::dontSendNotification);
-        shorterButton.setEnabled (beats > kMinPatternBeats);
+        shorterButton.setEnabled (beats > minBeats);
         longerButton.setEnabled (beats < kMaxPatternBeats);
     }
 

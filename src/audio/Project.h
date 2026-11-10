@@ -16,6 +16,7 @@
 #include "audio/SampleData.h"
 #include "audio/SamplerProgram.h"
 #include "audio/SynthPatch.h"
+#include "audio/TempoMap.h"
 
 namespace sls
 {
@@ -109,6 +110,9 @@ struct Project
     Console console = Console::defaults(); // aux buses and VCA groups
     std::vector<AudioEvent> audioEvents; // song mode only; sorted by startTick, validated by make()
     std::vector<AutomationEvent> automation; // song mode only; sorted by parameter and start, validated by make()
+    std::vector<TempoMarker> tempoMarkers;   // song mode only (0.46.0): tempo changes after the start, tidy (see TempoMap.h)
+    int beatsPerBar = 4;                     // the time signature (0.46.0): beats per bar, for the metronome's accent
+    int beatUnit = 4;                        // ... and the note value of a beat (4 = quarter, 8 = eighth)
     int lengthTicks = 8 * kTicksPerBeat;
     // The playlist's loop region (song mode, live playback only): when the transport reaches loopEndTick it goes back to
     // loopStartTick, and the end of the song goes back to it too. -1 / -1 when there is none (always so in exports).

@@ -108,6 +108,7 @@ void MainComponent::showNewPatternMenu (juce::Component& target)
 
 void MainComponent::showPatternLength()
 {
+    showMeter(); // the time signature first: the rack and the rolls count bars with it (0.46.0)
     const int ticks = arrangement.patternTicks;
     pianoRoll.setLoopLengthTicks (ticks);
     for (auto& strip : strips)
@@ -118,7 +119,7 @@ void MainComponent::showPatternLength()
     if (drumWindow != nullptr)
         drumWindow->view().setLoopTicks (ticks);
     noteRecorder.configure (ticks, noteQuantize);
-    rackBody.setPatternBeats (ticks / kTicksPerBeat);
+    rackBody.setPatternBeats (ticks / kTicksPerBeat, arrangement.minPatternBeats(), arrangement.meter);
 }
 
 // Every pattern gets the new length, counted in quarter notes (0.42.0): the Channel Rack's + and - change it one quarter at a time,
@@ -132,7 +133,7 @@ void MainComponent::setPatternLength (int bars)
 
 void MainComponent::setPatternBeats (int beats)
 {
-    beats = std::clamp (beats, kMinPatternBeats, kMaxPatternBeats);
+    beats = std::clamp (beats, arrangement.minPatternBeats(), kMaxPatternBeats);
     const int ticks = beats * kTicksPerBeat;
     if (ticks == arrangement.patternTicks)
         return;

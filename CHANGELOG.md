@@ -2,6 +2,19 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.46.0 - 2026-11-10
+
+### Added
+- **Time signature**: a button next to the BPM chooses 2/4, 3/4, 4/4, 5/4, 6/4, 7/4, 6/8 or 12/8. The Playlist's and the Piano
+  Roll's bars, the bar.beat.tick positions, the *Bar* snap and the metronome's accent follow it; in 3/4, 2/4 and 6/8 a pattern can
+  be one bar long (3, 2 or 3 quarters).
+- **Tempo changes**: from the same button, add a tempo change at the song position, change, move or delete one, or delete them
+  all. Song mode plays them as steps (like FL Studio's tempo markers); orange flags in the ruler, the seconds row and exports
+  follow them; undoable and saved with the project. Audio clips do not follow them yet.
+
+### Changed
+- The snap value *Bar* means one bar of the time signature, so a 3/4 project snaps to 3 quarters.
+
 ## 0.45.0 - 2026-11-10
 
 ### Added

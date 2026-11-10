@@ -1,5 +1,7 @@
 #include "ui/PlaylistTimeline.h"
 
+#include "audio/TempoMap.h"
+
 #include "audio/MidiImport.h"
 
 #include <cmath>
@@ -612,8 +614,8 @@ void PlaylistTimeline::paintGrid (juce::Graphics& g)
     lines (60, kGridFine);
     lines (120, kGridFine.brighter (0.05f));
     lines (240, kGridBeat);
-    lines (kTicksPerBeat, kGridBeat.brighter (0.1f));
-    lines (kTicksPerBar, kGridBar);
+    lines (interfaceMeter().beatTicks(), kGridBeat.brighter (0.1f));
+    lines (interfaceMeter().barTicks(), kGridBar);
     lines (arrangement.patternTicks, kGridUnit);
 }
 
@@ -641,42 +643,61 @@ void PlaylistTimeline::paintRuler (juce::Graphics& g)
     };
     marks (30, 3, kTextDim.darker (0.4f));
     marks (120, 5, kTextDim.darker (0.2f));
-    marks (kTicksPerBeat, 8, kTextDim);
-    marks (kTicksPerBar, rowH - 2, kText);
+    const int beatTicks = interfaceMeter().beatTicks(), barTicks = interfaceMeter().barTicks(); // the time signature (0.46.0)
+    marks (beatTicks, 8, kTextDim);
+    marks (barTicks, rowH - 2, kText);
 
-    const double pxPerBar = kTicksPerBar * ppt;
+    const double pxPerBar = barTicks * ppt;
     const int every = barLabelEvery (pxPerBar, 34.0);
     g.setColour (kText);
-    for (int bar = (firstTick / kTicksPerBar / every) * every; bar * kTicksPerBar <= lastTick; bar += every)
-        g.drawText (juce::String (bar + 1), tickToX (bar * kTicksPerBar) + 3, 0, 42, rowH, juce::Justification::centredLeft);
+    for (int bar = (firstTick / barTicks / every) * every; bar * barTicks <= lastTick; bar += every)
+        g.drawText (juce::String (bar + 1), tickToX (bar * barTicks) + 3, 0, 42, rowH, juce::Justification::centredLeft);
 
-    if (kTicksPerBeat * ppt >= 44.0) // beat numbers "bar.beat" when there is room
+    if (beatTicks * ppt >= 44.0) // beat numbers "bar.beat" when there is room
     {
         g.setColour (kTextDim);
         g.setFont (juce::FontOptions (10.0f));
-        for (int t = (firstTick / kTicksPerBeat) * kTicksPerBeat; t <= lastTick; t += kTicksPerBeat)
-            if (t % kTicksPerBar != 0)
-                g.drawText (juce::String (t / kTicksPerBar + 1) + "." + juce::String ((t % kTicksPerBar) / kTicksPerBeat + 1),
+        for (int t = (firstTick / beatTicks) * beatTicks; t <= lastTick; t += beatTicks)
+            if (t % barTicks != 0)
+                g.drawText (juce::String (t / barTicks + 1) + "." + juce::String ((t % barTicks) / beatTicks + 1),
                             tickToX (t) + 3, 0, 36, rowH, juce::Justification::centredLeft);
     }
 
-    // Lower row: time in minutes:seconds.milliseconds, with marks at a round step that fits the zoom.
+    // Lower row: time in minutes:seconds.milliseconds, with marks at a round step that fits the zoom; with tempo changes
+    // (0.46.0) the seconds follow them.
+    const auto& tempos = arrangement.tempoMarkers;
     const double ticksPerSecond = secondsToTicks (1.0, bpm);
     const double pxPerSecond = ticksPerSecond * ppt;
     const double step = niceTimeStepSeconds (pxPerSecond, 70.0);
-    const double firstSecond = firstTick / ticksPerSecond;
-    const double lastSecond = lastTick / ticksPerSecond;
+    const double firstSecond = tickToSeconds (tempos, bpm, firstTick);
+    const double lastSecond = tickToSeconds (tempos, bpm, lastTick);
     g.setFont (juce::FontOptions (10.0f));
     const auto firstIndex = static_cast<long long> (std::floor (firstSecond / step));
     const auto lastIndex = static_cast<long long> (std::ceil (lastSecond / step)) + 1;
     for (long long k = firstIndex; k <= lastIndex; ++k)
     {
         const double t = static_cast<double> (k) * step; // a whole number of steps: no drift from adding up
-        const int x = tickToX (static_cast<int> (std::lround (t * ticksPerSecond)));
+        const int x = tickToX (static_cast<int> (std::lround (secondsToTick (tempos, bpm, t))));
         g.setColour (kTextDim);
         g.drawVerticalLine (x, static_cast<float> (rowH + 1), static_cast<float> (kRulerHeight));
         g.setColour (kTextDim.brighter (0.2f));
         g.drawText (jstr (formatSeconds (t)), x + 3, rowH, 70, rowH, juce::Justification::centredLeft);
+    }
+
+    // Tempo changes (0.46.0): an orange flag with the new tempo.
+    g.setFont (juce::FontOptions (10.5f, juce::Font::bold));
+    for (const auto& m : tempos)
+    {
+        if (m.tick < firstTick || m.tick > lastTick)
+            continue;
+        const int x = tickToX (m.tick);
+        g.setColour (juce::Colour (0xfff0a33a));
+        g.fillRect (x, rowH, 2, rowH);
+        const auto label = juce::String (m.bpm, std::abs (m.bpm - std::round (m.bpm)) < 0.05 ? 0 : 1) + " BPM";
+        const auto box = juce::Rectangle<int> (x + 2, rowH + 1, 52, rowH - 2);
+        g.fillRect (box);
+        g.setColour (juce::Colours::black);
+        g.drawText (label, box, juce::Justification::centred, false);
     }
 }
 
@@ -1333,13 +1354,13 @@ void PlaylistTimeline::updateReadout (int x, int y)
     if (x >= kNameWidth && inTracks (y))
     {
         const int tick = xToTick (x);
-        position = "Position " + jstr (formatBarsBeatsTicks (tick)) + "  =  " + jstr (formatSeconds (ticksToSeconds (tick, bpm)))
+        position = "Position " + jstr (formatBarsBeatsTicks (tick)) + "  =  " + jstr (formatSeconds (tickToSeconds (arrangement.tempoMarkers, bpm, tick)))
                  + "   " + trackName (yToTrack (y));
     }
     else if (x >= kNameWidth && inLanes (y))
     {
         const int tick = xToTick (x);
-        position = "Position " + jstr (formatBarsBeatsTicks (tick)) + "  =  " + jstr (formatSeconds (ticksToSeconds (tick, bpm)))
+        position = "Position " + jstr (formatBarsBeatsTicks (tick)) + "  =  " + jstr (formatSeconds (tickToSeconds (arrangement.tempoMarkers, bpm, tick)))
                  + "   Automation lane " + juce::String (yToLane (y) + 1);
     }
     else if (x >= kNameWidth && y >= 0 && y < kRulerHeight)

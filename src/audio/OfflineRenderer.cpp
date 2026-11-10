@@ -12,7 +12,10 @@ juce::AudioBuffer<float> renderToBuffer (const Project& project, const RenderOpt
     const double bpm = std::clamp (options.bpm, 20.0, 400.0);
     const double secondsPerTick = 60.0 / (bpm * kTicksPerBeat);
 
-    const auto loopSamples = static_cast<int> (std::llround (project.lengthTicks * secondsPerTick * options.sampleRate));
+    // With tempo changes (0.46.0) the song lasts as long as its tempos say.
+    const double loopSeconds = project.tempoMarkers.empty() ? project.lengthTicks * secondsPerTick
+                                                            : tickToSeconds (project.tempoMarkers, bpm, project.lengthTicks);
+    const auto loopSamples = static_cast<int> (std::llround (loopSeconds * options.sampleRate));
     const auto tailSamples = static_cast<int> (std::llround (std::max (0.0, options.tailSeconds) * options.sampleRate));
     const int total = loopSamples + tailSamples;
 
@@ -63,7 +66,7 @@ juce::Result renderToWavFile (const Project& project, const RenderOptions& optio
     if (writer == nullptr)
         return juce::Result::fail ("Cannot create WAV writer");
 
-    stream.release(); // the writer owns the stream now
+    [[maybe_unused]] auto* owned = stream.release(); // the writer owns the stream now
 
     if (! writer->writeFromAudioSampleBuffer (buffer, 0, buffer.getNumSamples()))
         return juce::Result::fail ("Failed while writing audio data");

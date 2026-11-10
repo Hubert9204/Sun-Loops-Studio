@@ -1,5 +1,7 @@
 #include "ui/PlaylistView.h"
 
+#include "audio/TimeSignature.h"
+
 #include "audio/TimeFormat.h"
 
 namespace sls
@@ -54,7 +56,8 @@ PlaylistView::PlaylistView (Arrangement& arrangementToEdit) : timeline (arrangem
     selectTool.setToggleState (true, juce::dontSendNotification);
 
     struct SnapOption { const char* label; int ticks; };
-    static constexpr SnapOption options[] = { { "Bar", kTicksPerBar }, { "1/2", kTicksPerBar / 2 }, { "Beat (1/4)", kTicksPerBeat }, { "1/8", kTicksPerBeat / 2 },
+    // "Bar" and "1/2" follow the time signature (0.46.0): 0 and -1 stand for them.
+    static constexpr SnapOption options[] = { { "Bar", 0 }, { "1/2", -1 }, { "Beat (1/4)", kTicksPerBeat }, { "1/8", kTicksPerBeat / 2 },
                                               { "1/16", kTicksPerBeat / 4 }, { "1/32", kTicksPerBeat / 8 }, { "1/64", kTicksPerBeat / 16 },
                                               { "Off (1 tick)", 1 } };
     for (const auto& o : options)
@@ -67,9 +70,7 @@ PlaylistView::PlaylistView (Arrangement& arrangementToEdit) : timeline (arrangem
     snapBox.setWantsKeyboardFocus (false);
     snapBox.onChange = [this]
     {
-        const int index = snapBox.getSelectedId() - 1;
-        if (index >= 0 && index < static_cast<int> (snapValues.size()))
-            timeline.setSnapTicks (snapValues[static_cast<size_t> (index)]);
+        applySnap();
     };
     snapLabel.setFont (juce::FontOptions (12.0f));
 
@@ -197,5 +198,13 @@ void PlaylistView::resized()
     selectionLabel.setBounds (status.reduced (4, 0));
 
     timeline.setBounds (area);
+}
+void PlaylistView::applySnap()
+{
+    const int index = snapBox.getSelectedId() - 1;
+    if (index < 0 || index >= static_cast<int> (snapValues.size()))
+        return;
+    const int v = snapValues[static_cast<size_t> (index)];
+    timeline.setSnapTicks (v == 0 ? interfaceMeter().barTicks() : v == -1 ? interfaceMeter().barTicks() / 2 : v);
 }
 } // namespace sls

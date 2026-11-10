@@ -4,7 +4,7 @@ Each block is a release of its own, in the order chosen by the maintainer. "Done
 Effort is a rough size: S = a few days of work, M = about two weeks, L = a month or more, XL = a long project of its own.
 
 ## Already in the program
-**0.45.0** (from the list of what is missing: compressor sidechain, 10 effect slots, effect-chain presets, export options and
+**0.46.0** (from the list of what is missing: time signatures and tempo changes in the song). **0.45.0** (from the list of what is missing: compressor sidechain, 10 effect slots, effect-chain presets, export options and
 stems). **0.44.0** (requested on 2026-11-10: 4 free playlist tracks plus one per pattern, - / + for tracks, rubber-band selection
 and copy / cut / paste between piano rolls, .slsproj dropped). **0.43.0** (requested on 2026-11-10: session log with spdlog, crash handler and crash reports to GitHub issues with libcurl, update
 check with Semantic Versioning). **0.42.0** (correction requested on 2026-11-10: the Channel Rack grid is the pattern, one bar of 4/4 by default, with - / + buttons

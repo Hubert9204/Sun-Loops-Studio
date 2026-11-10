@@ -27,6 +27,12 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.46.0
+Tempo markers come from the file as data: `tidyTempoMarkers` drops markers at or before tick 0 or with a non-finite tempo,
+clamps tempos to 20-400 BPM and keeps at most 256, so the Player's per-chunk lookup is bounded; it allocates nothing (the
+markers live in the published Project). An unknown time signature reads as 4/4. The pattern length is clamped again when the
+time signature changes.
+
 ## After 0.45.0
 The sidechain adds one scan of the compressor slots per 64-sample chunk (500 tracks x 10 slots at most, comparisons only) and a
 copy of 64 samples per source track; no allocation (the key buffers are made in the constructor). Ten slots per track raise the

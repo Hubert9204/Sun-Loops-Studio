@@ -1483,7 +1483,9 @@ void Player::render (const Project& project, double bpm, bool playing,
                      float* const* out, int numChannels, int numSamples) noexcept
 {
     bpm = std::clamp (bpm, 20.0, 400.0);
-    const double ticksPerSample = bpm * kTicksPerBeat / (60.0 * sampleRate);
+    // Tempo changes (0.46.0): the tempo where the song is, recomputed for every chunk below when the song has markers.
+    const bool tempoChanges = ! project.tempoMarkers.empty();
+    double ticksPerSample = (tempoChanges ? tempoAt (project.tempoMarkers, bpm, tickPos) : bpm) * kTicksPerBeat / (60.0 * sampleRate);
     ticksPerSampleNow = ticksPerSample;
     const int loopLength = std::max (1, project.lengthTicks);
     const size_t numMixerChannels = std::min (project.channels.size(), static_cast<size_t> (kMaxChannels));
@@ -1495,7 +1497,7 @@ void Player::render (const Project& project, double bpm, bool playing,
         onProjectChanged (project);
     }
 
-    const double ticksPerSecond = ticksPerSample * sampleRate;
+    double ticksPerSecond = ticksPerSample * sampleRate;
     if (! playing && wasPlaying)
     {
         releaseVoices (releaseSamplesOnStop);
@@ -1641,6 +1643,12 @@ void Player::render (const Project& project, double bpm, bool playing,
     for (int done = 0; done < numSamples; done += kChunk)
     {
         const int n = std::min (kChunk, numSamples - done);
+        if (tempoChanges)
+        {
+            ticksPerSample = tempoAt (project.tempoMarkers, bpm, tickPos) * kTicksPerBeat / (60.0 * sampleRate);
+            ticksPerSecond = ticksPerSample * sampleRate;
+            ticksPerSampleNow = ticksPerSample;
+        }
         // The highest note each channel sounds now, for a Pitch Corrector that follows one (0.41.0).
         heldNotes.fill (-1);
         for (const auto& v : voices)
@@ -1665,7 +1673,10 @@ void Player::render (const Project& project, double bpm, bool playing,
 
         // 1. Sequencer, voices and channel strips: everything lands on the mixer tracks.
         std::array<float, kChunk> click {};
-        const double samplesPerBeat = 60.0 * sampleRate / std::max (bpm, 1.0);
+        // The time signature (0.46.0): a beat is a quarter or an eighth, and the accent comes every `beatsPerBar` beats.
+        const int meterBeatTicks = kTicksPerBeat * 4 / (project.beatUnit == 8 ? 8 : 4);
+        const int meterBeats = std::clamp (project.beatsPerBar, 1, 16);
+        const double samplesPerBeat = 60.0 * sampleRate / std::max (bpm, 1.0) * meterBeatTicks / kTicksPerBeat;
 
         for (int i = 0; i < n; ++i)
         {
@@ -1673,14 +1684,14 @@ void Player::render (const Project& project, double bpm, bool playing,
             {
                 if (playing)
                 {
-                    const int beat = static_cast<int> (tickPos / kTicksPerBeat);
+                    const int beat = static_cast<int> (tickPos / meterBeatTicks);
                     if (beat != lastClickBeat)
                     {
                         // switched on in the middle of a beat: wait for the next one instead of clicking off the beat
-                        const bool joinedMidBeat = lastClickBeat < 0 && std::fmod (tickPos, static_cast<double> (kTicksPerBeat)) > 0.5;
+                        const bool joinedMidBeat = lastClickBeat < 0 && std::fmod (tickPos, static_cast<double> (meterBeatTicks)) > 0.5;
                         lastClickBeat = beat;
                         if (! joinedMidBeat)
-                            startClick (beat % 4 == 0);
+                            startClick (beat % meterBeats == 0);
                     }
                     freeBeatSamples = 1.0e18; // when it stops, the free-running click starts at once
                     freeBeatCount = 0;
@@ -1691,7 +1702,7 @@ void Player::render (const Project& project, double bpm, bool playing,
                     if (freeBeatSamples >= samplesPerBeat)
                     {
                         freeBeatSamples -= freeBeatSamples > 1.0e17 ? freeBeatSamples : samplesPerBeat;
-                        startClick (freeBeatCount % 4 == 0);
+                        startClick (freeBeatCount % meterBeats == 0);
                         ++freeBeatCount;
                     }
                     freeBeatSamples += 1.0;
@@ -1973,7 +1984,7 @@ void Player::render (const Project& project, double bpm, bool playing,
         {
             for (const auto& slot : slots)
                 if (slot.type == EffectType::Compressor && ! slot.bypass)
-                    if (const auto k = static_cast<long> (std::lround (slot.params[5])) - 1; k >= 0 && k < static_cast<long> (numTracks))
+                    if (const auto k = std::lround (slot.params[5]) - 1; k >= 0 && k < static_cast<long> (numTracks))
                     {
                         keyWanted[static_cast<size_t> (k)] = 1;
                         anyKey = true;

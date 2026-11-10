@@ -11,6 +11,7 @@
 #include "audio/Automation.h"
 #include "audio/TimeStretch.h"
 #include "audio/Project.h"
+#include "audio/TimeSignature.h"
 #include "audio/StepSequence.h"
 
 namespace sls
@@ -119,6 +120,11 @@ struct Arrangement
     // back to its start when it reaches its end.
     int loopStartTick = -1;
     int loopEndTick = -1;
+    // Tempo changes in the song (0.46.0, see TempoMap.h); the song starts at the toolbar's BPM.
+    std::vector<TempoMarker> tempoMarkers;
+    TimeSignature meter; // the time signature (0.46.0)
+    // The shortest pattern: 4 quarters, or one bar when the bar is shorter (2/4, 3/4, 6/8) (0.46.0).
+    int minPatternBeats() const noexcept { return std::min (kMinPatternBeats, meter.barQuarters()); }
     // The playlist tracks, in order (0.44.0: as many as the project has; names and colours since 0.33.0).
     std::vector<PlaylistTrack> playlistTracks = std::vector<PlaylistTrack> (kDefaultGenericTracks);
 
@@ -354,7 +360,7 @@ struct Arrangement
     void setPatternLengthKeepingClips (int newTicks)
     {
         const int old = std::max (1, patternTicks);
-        newTicks = std::clamp (newTicks, kMinPatternBeats * kTicksPerBeat, kMaxPatternBeats * kTicksPerBeat);
+        newTicks = std::clamp (newTicks, minPatternBeats() * kTicksPerBeat, kMaxPatternBeats * kTicksPerBeat);
         for (auto& c : clips)
         {
             if (c.lengthTicks % old == 0)
@@ -447,7 +453,10 @@ inline Project compilePattern (const std::vector<Channel>& channelSettings, cons
                 channels[c].notes = steps::playedNotes (notes[c], arrangement.patternTicks);
         }
     }
-    return Project::make (std::move (channels), arrangement.patternTicks, std::move (tracks), masterSlots, {}, {}, std::move (console));
+    auto project = Project::make (std::move (channels), arrangement.patternTicks, std::move (tracks), masterSlots, {}, {}, std::move (console));
+    project.beatsPerBar = arrangement.meter.beats; // the metronome's accent (0.46.0)
+    project.beatUnit = arrangement.meter.unit;
+    return project;
 }
 
 // Channels were deleted, moved or cloned: `newToOld[n]` is the old index of new channel n (an old index may appear twice, a
@@ -548,7 +557,11 @@ inline Project compileSong (const std::vector<Channel>& channelSettings, const A
         e.fadeOutSeconds = a.fadeOutSeconds;
         events.push_back (std::move (e));
     }
-    return Project::make (std::move (channels), songTicks, std::move (tracks), masterSlots,
-                          std::move (events), arrangement.automationClips, std::move (console));
+    auto project = Project::make (std::move (channels), songTicks, std::move (tracks), masterSlots,
+                                  std::move (events), arrangement.automationClips, std::move (console));
+    project.tempoMarkers = tidyTempoMarkers (arrangement.tempoMarkers); // 0.46.0
+    project.beatsPerBar = arrangement.meter.beats;
+    project.beatUnit = arrangement.meter.unit;
+    return project;
 }
 } // namespace sls

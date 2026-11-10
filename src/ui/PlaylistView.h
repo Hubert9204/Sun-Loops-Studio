@@ -35,6 +35,9 @@ public:
     void clearHistory() { timeline.clearHistory(); timeline.tracksChanged(); updateUndoButtons(); } // the arrangement was replaced
     // The arrangement's tracks were added or removed from outside (a new pattern, an import): scroll bar and drawing (0.44.0).
     void tracksChanged() { timeline.tracksChanged(); }
+    // The time signature or the tempo changes were changed (0.46.0): the grid's "Bar" and the ruler follow.
+    void meterChanged() { applySnap(); timeline.repaint(); }
+    void applySnap();
     void addTrack() { timeline.addTrack(); }
     void showTrack (int track) { timeline.showTrack (track); }
 

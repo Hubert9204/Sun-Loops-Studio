@@ -902,6 +902,25 @@ The **Pattern / Song** button decides what Play does.
 
 You can edit while playing in either mode; the change is heard immediately.
 
+### Time signature and tempo changes (0.46.0)
+
+The button next to the BPM shows the **time signature** (4/4 to start with). Click it:
+
+- **Time signature**: 2/4, 3/4, 4/4, 5/4, 6/4, 7/4, 6/8 or 12/8. The bars of the Playlist, the Piano Roll and the positions
+  (bar.beat.tick) follow it, the metronome accents the first beat of every bar of it, and the snap value **Bar** is one bar of
+  it. In 6/8 and 12/8 a beat is an eighth. A pattern is at least one bar of 4/4, or one bar when the bar is shorter (2/4 allows 2
+  quarters, 3/4 and 6/8 allow 3); the rack's label says how many bars of the time signature it is.
+- **Tempo changes**: *Add a tempo change at the song position...* (where you clicked the ruler, on its beat; at bar 2 when the
+  song position is at the start) asks for a BPM. From there on the song plays at that tempo, until the next change. Each change
+  is an orange flag with its tempo in the ruler, and the seconds under the ruler follow the tempos. In the menu each change can
+  be given another tempo, moved to the song position or deleted; *Delete every tempo change* goes back to one tempo. A `*` on
+  the button means the song has tempo changes.
+
+The changes are steps, as with FL Studio's tempo markers (no gradual ramps), and only **Song mode** plays them: a pattern
+plays at the toolbar's BPM, which is also the tempo the song starts with. Undo and redo include them, they are saved with the
+project, and exports take them into account. **Audio clips** are still drawn and stretched for the song's starting tempo:
+after a tempo change, an audio clip does not follow it (keep audio before the first change, or use patterns there).
+
 ## Automation
 
 Automation makes a control move by itself while the song plays. It works on:
@@ -1096,7 +1115,7 @@ square. The bar shows the correlation of the two channels (+1 mono, 0 unrelated,
 
 The **Metronome** button turns a click on or off. Right-click it for a small panel with the **tempo** (the same BPM as
 the toolbar), the **volume** and a **Tap tempo** button: tap it in time with a song (four or more taps) and the BPM
-follows. The click is a higher, louder one on the first beat of every bar and a lower one on the other three. While the
+follows. The click is a higher, louder one on the first beat of every bar and a lower one on the other beats (the bar of the time signature, 0.46.0). While the
 song plays it follows the song; while it is stopped it keeps time by itself at the BPM, so you can practise or record.
 The metronome is never part of an export. It is remembered between runs.
 
@@ -1169,7 +1188,7 @@ a heavier song or a plugin-heavy mixer can still need a bigger size.
   at least 32 patterns and 64 bars, 4 automation lanes, 64 automation clips of up to 256 points each, 32 simultaneous voices.
 - The effects use about 15 MB of memory at 48 kHz to start with, plus about 0.8 MB for every reverb, delay, chorus and Pitch Corrector beyond
   the sixteenth (more at higher sample rates). Memory made for them stays until the audio device restarts.
-- Patterns are 4 to 64 quarters long (the same for all patterns), 4/4, 16th-note grid; one tempo for the whole song.
+- Patterns are 4 to 64 quarters long (the same for all patterns; 2 or 3 in a short time signature); one time signature for the whole song; up to 256 tempo changes, in steps, played in Song mode only; audio clips do not follow them.
 - Samples are mono or stereo, at most 30 seconds. The sampler has one envelope and one filter per channel (no filter envelope, LFO or modulation);
   at most four zones sound per note. Audio clips: up to 5 minutes per file, 64 clips.
 - The synth: one LFO and one filter per channel, two oscillators, no unison, no additive engine yet, no modulation of the envelopes by

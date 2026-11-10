@@ -1,5 +1,7 @@
 #include "ui/PianoRoll.h"
 
+#include "audio/TimeSignature.h"
+
 #include <algorithm>
 #include <cmath>
 
@@ -435,13 +437,13 @@ void PianoRoll::paint (juce::Graphics& g)
             const float x = tickToX (t);
             if (x > grid.getRight())
                 break;
-            g.setColour (t % (4 * kTicksPerBeat) == 0 ? kLineBar : t % kTicksPerBeat == 0 ? kLineBeat : kLineSub);
+            g.setColour (t % interfaceMeter().barTicks() == 0 ? kLineBar : t % interfaceMeter().beatTicks() == 0 ? kLineBeat : kLineSub);
             g.drawVerticalLine (static_cast<int> (x), static_cast<float> (grid.getY()), static_cast<float> (grid.getBottom()));
         }
         if (lineStep != kTicksPerBeat && kTicksPerBeat % lineStep != 0) // triplets: the beats too
             for (int t = 0; t <= loopLengthTicks; t += kTicksPerBeat)
             {
-                g.setColour (t % (4 * kTicksPerBeat) == 0 ? kLineBar : kLineBeat);
+                g.setColour (t % interfaceMeter().barTicks() == 0 ? kLineBar : kLineBeat);
                 g.drawVerticalLine (static_cast<int> (tickToX (t)), static_cast<float> (grid.getY()), static_cast<float> (grid.getBottom()));
             }
 
@@ -564,11 +566,12 @@ void PianoRoll::paint (juce::Graphics& g)
         }
         g.setColour (juce::Colours::white.withAlpha (0.75f));
         g.setFont (11.0f);
-        for (int t = 0; t < loopLengthTicks; t += 4 * kTicksPerBeat)
+        const int barTicks = interfaceMeter().barTicks(); // the time signature (0.46.0)
+        for (int t = 0; t < loopLengthTicks; t += barTicks)
         {
             const float x = tickToX (t);
             g.drawVerticalLine (static_cast<int> (x), static_cast<float> (ruler.getY() + 4), static_cast<float> (ruler.getBottom()));
-            g.drawText (juce::String (t / (4 * kTicksPerBeat) + 1), static_cast<int> (x) + 4, ruler.getY(), 40, ruler.getHeight(),
+            g.drawText (juce::String (t / barTicks + 1), static_cast<int> (x) + 4, ruler.getY(), 40, ruler.getHeight(),
                         juce::Justification::centredLeft);
         }
         // Where Play starts (stopped) or the playhead (playing).
@@ -1055,7 +1058,8 @@ void PianoRoll::mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWhee
 // --- toolbar settings and editing (0.23.0) -----------------------------------------------------------------------------------
 void PianoRoll::setGridTicks (int ticks)
 {
-    gridTicks = std::clamp (ticks, 1, 4 * kTicksPerBeat);
+    // 0 or less: one bar of the time signature (0.46.0)
+    gridTicks = ticks <= 0 ? interfaceMeter().barTicks() : std::clamp (ticks, 1, interfaceMeter().barTicks());
     repaint();
 }
 

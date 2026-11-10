@@ -935,6 +935,25 @@ Il pulsante **Pattern / Song** decide cosa fa Play.
 
 In entrambe le modalità puoi modificare mentre suona; il cambiamento si sente subito.
 
+### Metro e cambi di tempo (0.46.0)
+
+Il pulsante accanto ai BPM mostra il **metro** (4/4 all'inizio). Cliccalo:
+
+- **Time signature**: 2/4, 3/4, 4/4, 5/4, 6/4, 7/4, 6/8 o 12/8. Le battute di Playlist e Piano Roll e le posizioni
+  (battuta.battito.tick) lo seguono, il metronomo accenta il primo battito di ogni sua battuta e lo snap **Bar** vale una sua
+  battuta. In 6/8 e 12/8 un battito è un ottavo. Un pattern dura almeno una battuta di 4/4, oppure una battuta se la battuta è
+  più corta (2/4 permette 2 quarti, 3/4 e 6/8 ne permettono 3); l'etichetta del rack dice quante battute del metro sono.
+- **Cambi di tempo**: *Add a tempo change at the song position...* (dove hai cliccato il righello, sul suo battito; alla battuta
+  2 se la posizione è all'inizio) chiede i BPM. Da lì il brano suona a quel tempo, fino al cambio successivo. Ogni cambio è una
+  bandierina arancione con il suo tempo nel righello, e i secondi sotto il righello seguono i tempi. Nel menu ogni cambio si può
+  modificare, spostare alla posizione del brano o eliminare; *Delete every tempo change* torna a un solo tempo. Un `*` sul
+  pulsante indica che il brano ha cambi di tempo.
+
+I cambi sono a gradino, come i tempo marker di FL Studio (niente rampe graduali), e li suona solo la **modalità Song**: un
+pattern suona ai BPM della barra, che sono anche il tempo con cui parte il brano. Annulla e ripeti li comprendono, si salvano
+con il progetto e le esportazioni ne tengono conto. Le **clip audio** sono ancora disegnate e allungate per il tempo iniziale
+del brano: dopo un cambio di tempo una clip audio non lo segue (tieni l'audio prima del primo cambio, o usa lì dei pattern).
+
 ## Automazione
 
 L'automazione fa muovere un controllo da solo mentre il brano suona. Funziona su:
@@ -1126,7 +1145,7 @@ la correlazione dei due canali (+1 mono, 0 non correlati, -1 fasi opposte: una b
 
 Il pulsante **Metronome** accende o spegne un click. Tasto destro per un piccolo pannello con il **tempo** (lo stesso BPM
 della barra), il **volume** e il pulsante **Tap tempo**: battilo a tempo con un brano (quattro o più colpi) e il BPM lo
-segue. Il click è più alto e più forte sul primo battito di ogni battuta e più basso sugli altri tre. Mentre il brano
+segue. Il click è più alto e più forte sul primo battito di ogni battuta e più basso sugli altri (la battuta del metro, 0.46.0). Mentre il brano
 suona segue il brano; da fermo tiene il tempo da solo al BPM, così puoi esercitarti o registrare. Il metronomo non fa mai
 parte di un'esportazione. Viene ricordato tra una sessione e l'altra.
 
@@ -1202,7 +1221,7 @@ occupato più tardi, un brano più pesante o un mixer pieno di effetti possono r
   tempo di almeno 32 pattern e 64 battute, 4 corsie di automazione, 64 clip di automazione di al massimo 256 punti, 32 voci simultanee.
 - Gli effetti usano circa 15 MB di memoria a 48 kHz all'inizio, più circa 0,8 MB per ogni riverbero, delay, chorus e Pitch Corrector oltre
   il sedicesimo (di più a frequenze di campionamento maggiori). La memoria preparata resta finché il dispositivo audio non riparte.
-- I pattern durano da 4 a 64 quarti (uguale per tutti), 4/4, griglia di sedicesimi; un solo tempo per tutto il brano.
+- I pattern durano da 4 a 64 quarti (uguale per tutti; 2 o 3 con un metro corto); un solo metro per tutto il brano; fino a 256 cambi di tempo, a gradino, suonati solo in modalità Song; le clip audio non li seguono.
 - I sample sono mono o stereo, al massimo 30 secondi. Il sampler ha un inviluppo e un filtro per canale (niente inviluppo del filtro, LFO o
   modulazione); al massimo quattro zone suonano per nota. Clip audio: fino a 5 minuti per file, 64 clip.
 - Il synth: un LFO e un filtro per canale, due oscillatori, niente unisono, ancora niente motore additivo, la velocity non modula gli

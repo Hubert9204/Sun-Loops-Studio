@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(SunLoopsStudio VERSION 0.45.0 LANGUAGES C CXX ASM)
+project(SunLoopsStudio VERSION 0.46.0 LANGUAGES C CXX ASM)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -198,6 +198,7 @@ target_sources(SunLoopsStudio PRIVATE
     src/ui/MainComponentHelios.cpp
     src/ui/MainComponentSupport.cpp
     src/ui/MainComponentChains.cpp
+    src/ui/MainComponentTempo.cpp
     src/ui/CrashReportDialog.cpp
     src/ui/MetersView.cpp
     src/ui/SampleEditor.cpp

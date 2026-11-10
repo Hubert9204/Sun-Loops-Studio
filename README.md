@@ -16,7 +16,7 @@ Sun Loops Studio is inspired by the workflow of loop-based DAWs such as FL Studi
 that uses no code, names, graphics or assets from other products, and it is not affiliated with or endorsed by
 their makers.
 
-**Status: alpha (0.45.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
+**Status: alpha (0.46.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
 display. Playback was confirmed on a real Nobara machine for version 0.3; everything added since (panels, patterns,
 playlist, browser, pitch/swing, the expanded mixer and its effects, saving projects, the AppImage, audio clips, drag and
 drop, recording, MIDI, the metronome and the export formats) was tested headless and in a virtual display with a silent
@@ -75,6 +75,8 @@ See [docs/roadmap.md](docs/roadmap.md) for exactly what is and is not verified a
 - **Safety** - autosave every minute, recovery after a crash, a `.bak` of the previous version, and *Export project with samples* to move a
   project to another computer.
 - **Metronome** - a click with adjustable tempo (and tap tempo) and volume, on its own button.
+- **Time signature and tempo changes** (0.46.0) - 2/4 to 7/4, 6/8 and 12/8 for the bars, the grid and the metronome's accent; tempo
+  changes in the song (steps, like FL Studio's tempo markers) shown as flags in the ruler and followed by Song mode and exports.
 - **Mixer** (`F9`) - 8 vertical tracks to start with and up to **500** (0.29.0: the **+** after the last track adds more), each with a fader and dB read-out, stereo balance, mute, solo, a Peak/RMS
   meter and 10 insert-effect slots (0.45.0; with effect-chain presets) (14 built-in effects with presets: Equalizer, Parametric EQ, Filter, Compressor, Maximizer, Transient, Overdrive, Chorus, Phaser, Reverb with Hall/Room/Plate, Delay with Stereo/Ping-pong/Tape, Time Shaper (like Gross Beat), Pitch Corrector (like Pitcher), Stereo Imager; each with bypass), two **sends** (pre or post fader)
   and two **VCA** switches. Two **aux buses** with their own effects and two **VCA groups** sit beside the tracks. The master strip on the

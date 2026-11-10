@@ -368,6 +368,9 @@ MainComponent::MainComponent()
     bpmSlider.setValue (kDemoBpm, juce::dontSendNotification);
     engine.setBpm (kDemoBpm);
     bpmSlider.onValueChange = [this] { engine.setBpm (bpmSlider.getValue()); playlistView.setBpm (bpmSlider.getValue()); markDirty(); recordHistory(); };
+    meterButton.onClick = [this] { showTempoMenu(); };
+    meterButton.setMouseClickGrabsKeyboardFocus (false);
+    meterButton.setWantsKeyboardFocus (false);
 
     volumeSlider.setRange (0.0, 1.0, 0.01);
     volumeSlider.setValue (0.8, juce::dontSendNotification);
@@ -471,7 +474,7 @@ MainComponent::MainComponent()
     // Panels
     rackPanel.setContent (&rackBody);
     rackBody.onPatternBeats = [this] (int beats) { setPatternBeats (beats); };
-    rackBody.setPatternBeats (arrangement.patternTicks / kTicksPerBeat);
+    rackBody.setPatternBeats (arrangement.patternTicks / kTicksPerBeat, arrangement.minPatternBeats(), arrangement.meter);
     rackPanel.setMinimumSize (420, 130);
     pianoPanel.setContent (&pianoEditor);
     pianoPanel.setMinimumSize (420, 260);
@@ -541,7 +544,7 @@ MainComponent::MainComponent()
     for (auto* c : std::initializer_list<juce::Component*> { &fileButton, &playButton, &modeButton, &patternBox, &patternAddButton,
                                                               &clearButton, &deviceButton, &metronomeButton, &recordButton, &recordMenuButton, &noteRecordButton,
                                                               &browserToggle, &rackToggle, &playlistToggle, &pianoToggle,
-                                                              &mixerToggle, &resetButton, &metersButton, &typingButton, &heliosButton, &bpmSlider, &volumeSlider,
+                                                              &mixerToggle, &resetButton, &metersButton, &typingButton, &heliosButton, &bpmSlider, &volumeSlider, &meterButton,
                                                               &bpmLabel, &volumeLabel, &deviceLabel, &statusLabel, &meter,
                                                               &browser, &browserTab, &workspace })
         addAndMakeVisible (c);
@@ -673,7 +676,9 @@ void MainComponent::resized()
     patternAddButton.setBounds (top.removeFromLeft (30));
     top.removeFromLeft (16);
     bpmLabel.setBounds (top.removeFromLeft (34));
-    bpmSlider.setBounds (top.removeFromLeft (150));
+    bpmSlider.setBounds (top.removeFromLeft (112));
+    top.removeFromLeft (4);
+    meterButton.setBounds (top.removeFromLeft (46));
     top.removeFromLeft (12);
     volumeLabel.setBounds (top.removeFromLeft (50));
     volumeSlider.setBounds (top.removeFromLeft (120));

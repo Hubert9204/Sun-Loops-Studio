@@ -14,7 +14,7 @@ strumento sta in un pannello mobile che puoi spostare, ridimensionare, sovrappor
 Sun Loops Studio si ispira al modo di lavorare dei DAW a loop come FL Studio. È un progetto indipendente: non usa
 codice, nomi, grafica o risorse di altri prodotti e non è affiliato né approvato dai loro produttori.
 
-**Stato: alpha (0.45.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
+**Stato: alpha (0.46.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
 La riproduzione è stata confermata su un vero PC Nobara per la versione 0.3; tutto ciò che è stato aggiunto dopo
 (pannelli, pattern, playlist, browser, pitch/swing, mixer espanso ed effetti, salvataggio dei progetti, AppImage, clip audio, trascinamento
 dei file, registrazione, MIDI, metronomo e formati di esportazione) è stato provato con test automatici e in un display virtuale con un
@@ -73,6 +73,8 @@ plugin commerciali. Vedi [docs/roadmap.md](docs/roadmap.md) per sapere con preci
 - **Sicurezza** - salvataggio automatico ogni minuto, recupero dopo un crash, un `.bak` della versione precedente ed *Export project with samples*
   per portare un progetto su un altro computer.
 - **Metronomo** - un click con tempo (anche tap tempo) e volume regolabili, su un pulsante a parte.
+- **Metro e cambi di tempo** (0.46.0) - da 2/4 a 7/4, 6/8 e 12/8 per le battute, la griglia e l'accento del metronomo; cambi di
+  tempo nel brano (a gradino, come i tempo marker di FL Studio) mostrati come bandierine nel righello e seguiti dalla modalità Song e dalle esportazioni.
 - **Synth** - ogni canale synth può passare dal seno classico a un **synth sottrattivo**: due oscillatori a banda limitata e rumore, un filtro
   da 12 o 24 dB con il suo inviluppo, un inviluppo di ampiezza e un LFO, oppure a un **synth FM** con quattro operatori e una matrice di
   modulazione (feedback, otto algoritmi classici), a un **synth additivo** (0.24.0: fino a 64 armoniche, due timbri con formanti e un

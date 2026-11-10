@@ -548,6 +548,20 @@ and ranks with BM25 (k1 1.4, b 0.75) plus a title bonus, a bonus for sections ho
 question's language. The index is built the first time Helios opens. Commands are `HeliosCommand`s (name, keywords, a function)
 made by `MainComponent::heliosCommands`, matched by the share of the question's words they contain.
 
+### Tempo changes and time signatures (0.46.0)
+
+- `TempoMap.h` (no JUCE): `TempoMarker { tick, bpm }`, `tidyTempoMarkers`, `tempoAt`, `tickToSeconds`, `secondsToTick`; steps,
+  no ramps. `TimeSignature.h`: `TimeSignature { beats, unit }` with `beatTicks` (a quarter, or an eighth in /8), `barTicks`,
+  `choices()`; `interfaceMeter()` is the message thread's copy that the views draw with (bars, ruler, `formatBarsBeatsTicks`).
+- `Arrangement` holds `tempoMarkers` and `meter`; `compileSong` puts the tidied markers and the meter in the `Project`
+  (`compilePattern` only the meter). The `Player` reads the tempo at the transport's tick at the start of every 64-sample chunk
+  (a change lands at most 64 samples late), and the metronome counts beats of `beatTicks` and accents every `beatsPerBar`.
+  `OfflineRenderer` gets the loop's length in seconds through `tickToSeconds`. Audio clips are still placed and stretched for
+  the starting BPM.
+- `MainComponentTempo.cpp`: the toolbar's time-signature button and its menu; `showMeter()` (called from `showPatternLength`, so
+  after undo, loading and length changes) sets `interfaceMeter()` and refreshes the views. Saved as `timeSignature` ("3/4", only
+  when not 4/4) and `tempoChanges` (`[tick, bpm]` pairs).
+
 ### Sidechain, effect chains and export options (0.45.0)
 
 - `kSlotsPerTrack` is 10. The Compressor's sixth parameter is a mixer track (1-based, 0 = off). Before the tracks' effects run,

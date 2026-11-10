@@ -12,7 +12,8 @@ struct SnapChoice
     int ticks;
 };
 // Note values (0.32.0: 1/2 and 1/64 added): 1/4 is a beat.
-constexpr SnapChoice kSnaps[] = { { "Bar", 4 * kTicksPerBeat },         { "1/2", 2 * kTicksPerBeat },       { "1/4 (beat)", kTicksPerBeat },
+constexpr SnapChoice kSnaps[] = { { "Bar", 0 }, // 0 = a bar of the time signature (0.46.0)
+                                           { "1/2", 2 * kTicksPerBeat },       { "1/4 (beat)", kTicksPerBeat },
                                   { "1/8", kTicksPerBeat / 2 },         { "1/16", kTicksPerBeat / 4 },      { "1/32", kTicksPerBeat / 8 },
                                   { "1/64", kTicksPerBeat / 16 },       { "1/8 triplet", kTicksPerBeat / 3 }, { "1/16 triplet", kTicksPerBeat / 6 },
                                   { "None", 1 } };

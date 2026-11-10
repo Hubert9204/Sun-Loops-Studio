@@ -3537,7 +3537,10 @@ void testAudioClips()
         with.audioClips.push_back (audio (0, 0, 1920));
         auto p1 = sls::compileSong (empty, with);
         auto p2 = sls::compileSong (empty, with); // same audio: keeps playing
-        auto p3 = sls::compileSong (empty, sls::Arrangement { { sls::Pattern {} }, {}, {}, 8 * kBeat, {} }); // clip removed
+        sls::Arrangement removed;
+        removed.patterns = { sls::Pattern {} };
+        removed.patternTicks = 8 * kBeat;
+        auto p3 = sls::compileSong (empty, removed); // clip removed
         p1.revision = 1;
         p2.revision = 2;
         p3.revision = 3;
@@ -3956,6 +3959,123 @@ void testTypingKeyboard()
 
 
 
+
+void testTempoAndMeter046()
+{
+    std::cout << "Tempo changes and time signatures (0.46.0)\n";
+    using sls::TempoMarker;
+    constexpr double kSr = 48000.0;
+
+    // The tempo map.
+    const auto tidy = sls::tidyTempoMarkers ({ { 8 * kBeat, 90.0 }, { 0, 50.0 }, { 4 * kBeat, 60.0 }, { 8 * kBeat, 100.0 }, { 12 * kBeat, 9999.0 } });
+    check (tidy.size() == 3 && tidy[0] == TempoMarker { 4 * kBeat, 60.0 } && tidy[1] == TempoMarker { 8 * kBeat, 100.0 } && tidy[2].bpm == sls::kMaxBpm,
+           "tempo changes are sorted, one per tick (the last wins), none at the start of the song, tempos kept in range");
+    const std::vector<TempoMarker> markers { { 4 * kBeat, 60.0 }, { 8 * kBeat, 240.0 } };
+    check (sls::tempoAt (markers, 120.0, 0) == 120.0 && sls::tempoAt (markers, 120.0, 4 * kBeat - 1) == 120.0 && sls::tempoAt (markers, 120.0, 4 * kBeat) == 60.0
+               && sls::tempoAt (markers, 120.0, 100 * kBeat) == 240.0 && sls::tempoAt ({}, 120.0, 50 * kBeat) == 120.0,
+           "the tempo at a tick is the last change before it, else the song's own");
+    check (std::abs (sls::tickToSeconds (markers, 120.0, 4 * kBeat) - 2.0) < 1e-9 && std::abs (sls::tickToSeconds (markers, 120.0, 8 * kBeat) - 6.0) < 1e-9
+               && std::abs (sls::tickToSeconds (markers, 120.0, 12 * kBeat) - 7.0) < 1e-9,
+           "seconds add up through each tempo (4 beats at 120 = 2 s, 4 at 60 = 4 s, 4 at 240 = 1 s)");
+    bool roundTrip = true;
+    for (int tick = 0; tick < 20 * kBeat; tick += 77)
+        roundTrip = roundTrip && std::abs (sls::secondsToTick (markers, 120.0, sls::tickToSeconds (markers, 120.0, tick)) - tick) < 1e-6;
+    check (roundTrip, "seconds go back to the same tick");
+
+    // Time signatures.
+    const sls::TimeSignature threeFour { 3, 4 }, sixEight { 6, 8 }, twoFour { 2, 4 }, sevenFour { 7, 4 };
+    check (threeFour.barTicks() == 3 * kBeat && sixEight.beatTicks() == kBeat / 2 && sixEight.barTicks() == 3 * kBeat && sixEight.barQuarters() == 3
+               && sixEight.text() == "6/8" && sls::TimeSignature::choices().size() == 8,
+           "a bar of 3/4 is 3 quarters, a bar of 6/8 is 6 eighths");
+    check (sls::TimeSignature::valid (5, 4) == sls::TimeSignature { 5, 4 } && sls::TimeSignature::valid (9, 7) == sls::TimeSignature {},
+           "an unknown time signature becomes 4/4");
+    check (sls::formatBarsBeatsTicks (3 * kBeat, threeFour) == "2.1.000" && sls::formatBarsBeatsTicks (3 * kBeat + kBeat / 2, sixEight) == "2.2.000"
+               && sls::formatBarsBeatsTicks (4 * kBeat, {}) == "2.1.000",
+           "bars and beats are counted in the time signature");
+
+    // The patterns' length: at least one bar of 4/4, or one bar when the bar is shorter.
+    sls::Arrangement arr;
+    arr.meter = threeFour;
+    check (arr.minPatternBeats() == 3, "in 3/4 a pattern can be 3 beats long");
+    arr.setPatternLengthKeepingClips (2 * kBeat);
+    check (arr.patternTicks == 3 * kBeat, "but not shorter than a bar");
+    arr.meter = twoFour;
+    const int twoFourMin = arr.minPatternBeats();
+    arr.meter = sevenFour;
+    check (twoFourMin == 2 && arr.minPatternBeats() == 4, "2/4 allows 2 beats; a long bar still allows 4");
+
+    // Song mode carries the tempo changes and the time signature.
+    arr.meter = sixEight;
+    arr.tempoMarkers = { { 8 * kBeat, 90.0 }, { 2 * kBeat, 100.0 } };
+    const auto song = sls::compileSong ({}, arr);
+    check (song.tempoMarkers.size() == 2 && song.tempoMarkers[0].tick == 2 * kBeat && song.beatsPerBar == 6 && song.beatUnit == 8,
+           "the song plays its tempo changes (sorted) and counts in 6/8");
+    check (sls::compilePattern ({}, arr, 0).tempoMarkers.empty(), "a pattern plays at one tempo");
+
+    // Rendering: 4 beats at 120, then 60 BPM. A note on beat 8 starts at 2 s + 4 s.
+    {
+        auto project = sls::Project::make ({ synthChannel ({ { 60, 8 * kBeat, kBeat, 1.0f } }) }, 12 * kBeat);
+        project.tempoMarkers = { { 4 * kBeat, 60.0 } };
+        const auto out = sls::renderToBuffer (project, {});
+        check (out.getNumSamples() == static_cast<int> ((2.0 + 8.0 + 1.0) * kSr), "the export lasts as long as the tempos say (4 beats = 2 s, 8 beats at 60 = 8 s, the 1 s tail)");
+        check (out.getMagnitude (0, 0, static_cast<int> (5.95 * kSr)) == 0.0f && out.getMagnitude (0, static_cast<int> (6.0 * kSr), 4800) > 0.01f,
+               "a note after a tempo change starts at its time in the new tempo");
+    }
+
+    // The metronome: accents every bar of the time signature, and follows the tempo changes.
+    const auto clicks = [] (sls::Project project, int samples)
+    {
+        sls::Player player;
+        player.prepare (kSr);
+        player.setMetronome (true, 0.8f);
+        std::vector<float> l (256), r (256), all;
+        float* ch[2] = { l.data(), r.data() };
+        while (static_cast<int> (all.size()) < samples)
+        {
+            std::fill (l.begin(), l.end(), 0.0f);
+            std::fill (r.begin(), r.end(), 0.0f);
+            player.render (project, 120.0, true, ch, 2, 256);
+            all.insert (all.end(), l.begin(), l.end());
+        }
+        return all;
+    };
+    const auto peak = [] (const std::vector<float>& x, int from, int to)
+    {
+        float p = 0.0f;
+        for (int i = std::max (0, from); i < std::min (to, static_cast<int> (x.size())); ++i)
+            p = std::max (p, std::abs (x[static_cast<size_t> (i)]));
+        return p;
+    };
+    {
+        auto project = sls::Project::make ({}, 12 * kBeat);
+        project.beatsPerBar = 3;
+        const auto x = clicks (project, 4 * 24000 + 2000);
+        const float b0 = peak (x, 0, 1500), b1 = peak (x, 24000, 25500), b2 = peak (x, 48000, 49500), b3 = peak (x, 72000, 73500);
+        check (b0 > b1 * 1.2f && std::abs (b1 - b2) < 1e-4f && std::abs (b3 - b0) < 1e-4f, "in 3/4 the metronome accents every third beat");
+    }
+    {
+        auto project = sls::Project::make ({}, 12 * kBeat);
+        project.tempoMarkers = { { 2 * kBeat, 60.0 } }; // beats at 0, 0.5 s, then 1 s, 2 s, 3 s
+        const auto x = clicks (project, static_cast<int> (3.1 * kSr));
+        check (peak (x, 24000, 25000) > 0.05f && peak (x, 48000, 49000) > 0.05f && peak (x, 96000, 97000) > 0.05f
+                   && peak (x, 72000 - 500, 72000 + 1000) == 0.0f,
+               "after a tempo change the clicks come at the new tempo");
+    }
+
+    // Saving and loading.
+    {
+        auto doc = sls::ProjectDocument::blank();
+        check (doc.toJson().indexOf ("timeSignature") < 0 && doc.toJson().indexOf ("tempoChanges") < 0, "a 4/4 project with one tempo saves as before");
+        doc.arrangement.meter = sixEight;
+        doc.arrangement.tempoMarkers = { { 4 * kBeat, 87.5 }, { 16 * kBeat, 140.0 } };
+        const auto back = sls::ProjectDocument::fromJson (doc.toJson());
+        check (back.document.has_value() && back.document->arrangement.meter == sixEight && back.document->arrangement.tempoMarkers == doc.arrangement.tempoMarkers,
+               "the time signature and the tempo changes are saved and loaded");
+        auto json = doc.toJson().replace ("\"6/8\"", "\"11/3\"");
+        const auto odd = sls::ProjectDocument::fromJson (json);
+        check (odd.document.has_value() && odd.document->arrangement.meter == sls::TimeSignature {}, "an unknown time signature loads as 4/4");
+    }
+}
 
 void testMixerAndExport045()
 {
@@ -10926,6 +11046,7 @@ int main()
     testFreePlaylist();
     testPlaylistTracks();
     testMixerAndExport045();
+    testTempoAndMeter046();
     testSemVerAndUpdates();
     testCrashReports();
     testSessionLog();

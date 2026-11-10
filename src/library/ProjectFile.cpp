@@ -443,6 +443,17 @@ juce::String ProjectDocument::toJson() const
         root->setProperty ("loopRegion", juce::var (loop));
     }
 
+    // Time signature and tempo changes (0.46.0); older files are 4/4 at one tempo.
+    if (! (arrangement.meter == TimeSignature {}))
+        root->setProperty ("timeSignature", juce::String (arrangement.meter.text()));
+    if (! arrangement.tempoMarkers.empty())
+    {
+        juce::Array<juce::var> tempos;
+        for (const auto& m : tidyTempoMarkers (arrangement.tempoMarkers))
+            tempos.add (juce::Array<juce::var> { m.tick, number (m.bpm) });
+        root->setProperty ("tempoChanges", tempos);
+    }
+
     return juce::JSON::toString (juce::var (root), false);
 }
 
@@ -614,7 +625,7 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
 
     // --- pattern length (0.15.0 in bars, older files: two bars; 0.42.0 in quarter notes)
     if (root->hasProperty ("patternBeats"))
-        d.arrangement.patternTicks = readInt (root->getProperty ("patternBeats"), kMinPatternBeats, kMinPatternBeats, kMaxPatternBeats) * kTicksPerBeat;
+        d.arrangement.patternTicks = readInt (root->getProperty ("patternBeats"), kMinPatternBeats, 2, kMaxPatternBeats) * kTicksPerBeat;
     else
     {
         const int bars = readInt (root->getProperty ("patternBars"), 2, 1, 8);
@@ -839,6 +850,25 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
         if (! d.arrangement.setLoop (readInt (loop->getProperty ("start"), -1, -1, 100000000),
                                      readInt (loop->getProperty ("end"), -1, -1, 100000000)))
             r.warnings.push_back ("The loop region did not fit in the playlist and was left out.");
+
+    // --- time signature and tempo changes (0.46.0)
+    if (const auto meterText = root->getProperty ("timeSignature").toString(); meterText.containsChar ('/'))
+    {
+        const auto meter = TimeSignature::valid (meterText.upToFirstOccurrenceOf ("/", false, false).getIntValue(),
+                                                 meterText.fromFirstOccurrenceOf ("/", false, false).getIntValue());
+        if (meter.text() != meterText.trim().toStdString())
+            r.warnings.push_back ("The time signature " + meterText.toStdString() + " is not one this program has; 4/4 is used.");
+        d.arrangement.meter = meter;
+        d.arrangement.patternTicks = std::max (d.arrangement.patternTicks, d.arrangement.minPatternBeats() * kTicksPerBeat);
+    }
+    if (auto* tempos = root->getProperty ("tempoChanges").getArray())
+    {
+        std::vector<TempoMarker> markers;
+        for (const auto& t : *tempos)
+            if (auto* pair = t.getArray(); pair != nullptr && pair->size() == 2)
+                markers.push_back ({ readInt ((*pair)[0], 0, 0, d.arrangement.timelineTicks()), readNumber ((*pair)[1], 120.0, kMinBpm, kMaxBpm) });
+        d.arrangement.tempoMarkers = tidyTempoMarkers (std::move (markers));
+    }
 
     d.arrangement.ensureChannelCount (numChannels);
 

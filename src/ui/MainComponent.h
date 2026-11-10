@@ -150,6 +150,10 @@ private:
     // Crash reports, updates and the session log (0.43.0, MainComponentSupport.cpp).
     bool offerCrashReport (std::function<void()> then);
     void showEffectChainMenu (juce::Component& button, MixerTrack& track, int trackIndex); // 0.45.0
+    // Time signature and tempo changes (0.46.0, MainComponentTempo.cpp).
+    void showMeter();
+    void showTempoMenu();
+    void tempoChanged (const juce::String& message);
     void exportWithOptions (ExportFormat format, RenderOptions options, const ExportSettings& exportSettings, bool stems); // 0.45.0
     void checkForUpdates (bool manual);
     void showUpdateResult (const updates::Result& result, bool manual);
@@ -468,6 +472,7 @@ private:
     juce::Slider bpmSlider { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
     juce::Slider volumeSlider { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
     juce::Label bpmLabel { {}, "BPM" };
+    juce::TextButton meterButton { "4/4" }; // the time signature and the tempo changes (0.46.0)
     juce::Label volumeLabel { {}, "Master" };
     juce::Label deviceLabel;
     juce::Label statusLabel;
