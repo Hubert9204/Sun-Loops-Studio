@@ -407,9 +407,20 @@ void testCrashReports()
         auto report = sls::crash::load (sls::crash::crashFile (dir));
         if (report)
             sls::crash::symbolize (*report, fs::read_symlink ("/proc/self/exe"));
-        supportCheck (sig == SIGABRT && report && report->signalName == "SIGABRT" && report->exception == "uncaught exception: test exception 7"
-                   && report->where() == "sls::crashtest::throwUncaught",
-               "an uncaught exception: SIGABRT, its message, and the function that threw (std::terminate and abort skipped)");
+        const bool ok = sig == SIGABRT && report && report->signalName == "SIGABRT" && report->exception == "uncaught exception: test exception 7"
+                        && report->where() == "sls::crashtest::throwUncaught";
+        if (! ok) // the frames differ between systems: show them
+        {
+            std::cout << "    signal " << sig << ", report " << (report ? "read" : "missing");
+            if (report)
+            {
+                std::cout << ", exception \"" << report->exception << "\", crash frame " << report->crashFrame << ", where " << report->where() << "\n";
+                for (const auto& f : report->frames)
+                    std::cout << "    | " << f.raw << "  =>  " << f.symbol << " " << f.offset << "\n";
+            }
+            std::cout << "\n";
+        }
+        supportCheck (ok, "an uncaught exception: SIGABRT, its message, and the function that threw (std::terminate and abort skipped)");
     }
     {
         const auto dir = freshFolder ("fpe");
