@@ -20,6 +20,7 @@
 #include "ui/SamplerPanel.h"
 #include "ui/SlicerWindow.h"
 #include "ui/PitchEditor.h"
+#include "audio/StemSplit.h"
 #include "ui/SynthPanel.h"
 #include "ui/SampleEditor.h"
 #include "ui/MetersView.h"
@@ -333,6 +334,8 @@ private:
     std::unique_ptr<SampleEditorWindow> sampleEditorWindow;
     void openSampleEditorForClip (int audioClipIndex);
     void openPitchEditorForClip (int audioClipIndex);                 // 0.38.0, MainComponentPitch.cpp
+    void splitClipIntoStems (int audioClipIndex);                     // 0.39.0, MainComponentStems.cpp
+    void useStems (int audioClipIndex, const AudioClip& clip, Stems stems);
     juce::String pitchNotesToPattern (const std::vector<pitchtrack::Note>& notes);
     void openSampleEditorForChannel (int channelIndex);
     std::unique_ptr<DrumMachineWindow> drumWindow;

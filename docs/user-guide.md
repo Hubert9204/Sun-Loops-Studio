@@ -722,6 +722,23 @@ pitch-shifted on its own (same length, 10 ms crossfades at its edges); the audio
 chords or several voices at once, very noisy recordings, flattening vibrato or drifts inside a note (a note moves as a whole),
 or changing a note's length. A stretched, pitched or reversed clip must be put back first (as for the sample editor).
 
+### Stems: drums, bass and the rest (0.39.0)
+
+Right-click an audio clip > **Split into stems...** splits a mix into three parts, **without AI** and on your computer:
+
+- **Drums**: what is short and wide in frequency (hits);
+- **Bass**: what is steady and low (below about 150 Hz);
+- **Other**: what is steady and higher (voices, chords, leads).
+
+A progress window shows how far it is (a few seconds per minute of audio; *Cancel* stops it). The three parts are saved as WAV
+files in `Samples/Stems` and replace the clip: Drums on the clip's own track, Bass and Other on the next two (above it at the bottom
+of the playlist), all at the same place. **They add up exactly to the original**, so playing the three sounds like the clip did;
+**Ctrl+Z** brings the original clip back.
+
+How it works: harmonic-percussive separation by median filtering of the spectrum (Fitzgerald, 2010), then a crossover for the
+steady part. What it cannot do: tell a voice from a guitar (both go to Other), or take the attack of a plucked bass out of Drums.
+It works best on clear electronic or acoustic mixes; a neural network does better, but it is not what this program uses.
+
 ### Recording
 
 **Record** (toolbar) records the **audio input**: a microphone, a guitar into an audio interface, a line input - on one track or,

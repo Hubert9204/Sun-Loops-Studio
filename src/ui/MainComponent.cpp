@@ -410,6 +410,7 @@ MainComponent::MainComponent()
     playlistView.onPatternPicked = [this] (int pattern) { selectPattern (pattern); };
     playlistView.onEditSample = [this] (int index) { openSampleEditorForClip (index); };
     playlistView.onEditPitch = [this] (int index) { openPitchEditorForClip (index); };
+    playlistView.onSplitStems = [this] (int index) { splitClipIntoStems (index); };
     playlistView.onSeek = [this] (int tick) { seekSong (tick); };
     playlistView.onLoopChanged = [this]
     {

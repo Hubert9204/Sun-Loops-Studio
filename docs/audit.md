@@ -27,6 +27,11 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.39.0
+The stem split runs on a worker thread that touches only its own copy of the audio; the results go back to the message thread
+through `callAsync`, and the playlist checks that the clip still holds the same audio before replacing it. Cancelling stops the
+thread at the next 64 frames. Memory: three output buffers of the clip's length in doubles plus a ring of 17 frames.
+
 ## After 0.38.0
 The pitch editor analyses and renders on the message thread (a second or two for a few minutes of audio; the window waits). It
 allocates freely and never touches the audio thread except through the auditioner, which plays a finished buffer.

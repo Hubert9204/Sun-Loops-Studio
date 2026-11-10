@@ -2,6 +2,17 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.39.0 - 2026-11-10
+
+### Added
+- **Stems without AI**: right-click an audio clip > *Split into stems...* splits it into Drums, Bass and Other by
+  harmonic-percussive separation (median filtering of the spectrum) and a bass crossover, on a background thread with a progress
+  window. Three WAV files in `Samples/Stems` replace the clip on three tracks; they add up to the original, and Undo brings it
+  back.
+
+### Changed
+- The FFT of the sample editor moved to `src/audio/Fft.h`, shared with the stem split.
+
 ## 0.38.0 - 2026-11-10
 
 ### Added

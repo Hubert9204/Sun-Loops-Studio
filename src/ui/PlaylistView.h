@@ -58,6 +58,13 @@ public:
     std::function<void (int)> onTrackInputMenu;  // the track menu's "Recording input..."
     std::function<void (int)> onEditSample; // an audio clip's "Edit sample..." was chosen: its index
     std::function<void (int)> onEditPitch;  // ... "Edit pitch..."
+    std::function<void (int)> onSplitStems; // ... "Split into stems..."
+    juce::String replaceAudioClip (int index, const std::shared_ptr<const SampleData>& expected, const std::vector<AudioClip>& with)
+    {
+        auto error = timeline.replaceAudioClip (index, expected, with);
+        updateUndoButtons();
+        return error;
+    }
     std::function<void (int)> onSeek;       // the ruler was clicked: the song position (ticks)
     std::function<void()> onLoopChanged;    // the loop region was made, changed or deleted
     juce::String useEditedAudio (int index, const std::shared_ptr<const SampleData>& expected, std::shared_ptr<const SampleData> edited,

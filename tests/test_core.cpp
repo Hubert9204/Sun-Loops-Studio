@@ -32,6 +32,7 @@
 #include "audio/RecordSetup.h"
 #include "audio/Slicer.h"
 #include "audio/PitchTrack.h"
+#include "audio/StemSplit.h"
 #include "audio/Loudness.h"
 #include "audio/Spectrum.h"
 #include "audio/MidiImport.h"
@@ -4789,6 +4790,94 @@ void testAudioImport()
     check (r3.data == nullptr && r3.error.contains ("no audio"), "a video without sound is reported");
     check (library.getNumberOfChildFiles (juce::File::findFiles) == 2, "and leaves no partial files behind");
     dir.deleteRecursively(); // test folders in /tmp are not left behind
+}
+
+double energyOf (const sls::SampleData& s, int from, int to)
+{
+    double e = 0.0;
+    for (int i = std::max (0, from); i < std::min (to, s.numFrames()); ++i)
+        e += static_cast<double> (s.left[static_cast<size_t> (i)]) * s.left[static_cast<size_t> (i)]
+           + static_cast<double> (s.right[static_cast<size_t> (i)]) * s.right[static_cast<size_t> (i)];
+    return e;
+}
+
+void testStemSplit()
+{
+    std::cout << "Stem separation by filters (no AI)\n";
+    const int n = static_cast<int> (4.0 * kSr);
+    // Three sources: a steady 55 Hz bass, a steady chord at 440 / 554 / 659 Hz, and clicks every half second (a decaying burst).
+    sls::SampleData bass, chord, clicks, mix;
+    for (auto* s : { &bass, &chord, &clicks, &mix })
+    {
+        s->sampleRate = kSr;
+        s->left.assign (static_cast<size_t> (n), 0.0f);
+        s->right.assign (static_cast<size_t> (n), 0.0f);
+        s->name = "mix";
+    }
+    std::uint32_t seed = 7;
+    for (int i = 0; i < n; ++i)
+    {
+        const double t = i / kSr;
+        const auto b = static_cast<float> (0.3 * std::sin (2.0 * 3.14159265358979 * 55.0 * t));
+        const auto c = static_cast<float> (0.1 * (std::sin (2.0 * 3.14159265358979 * 440.0 * t) + std::sin (2.0 * 3.14159265358979 * 554.37 * t)
+                                                + std::sin (2.0 * 3.14159265358979 * 659.26 * t)));
+        const int inBeat = i % static_cast<int> (0.5 * kSr);
+        seed = seed * 1664525u + 1013904223u;
+        const auto k = static_cast<float> (inBeat < 1200 ? 0.6 * std::exp (-inBeat / 200.0) * (static_cast<double> (seed >> 8) / 8388608.0 - 1.0) : 0.0);
+        bass.left[static_cast<size_t> (i)] = bass.right[static_cast<size_t> (i)] = b;
+        chord.left[static_cast<size_t> (i)] = c;
+        chord.right[static_cast<size_t> (i)] = 0.5f * c; // a little to the left
+        clicks.left[static_cast<size_t> (i)] = clicks.right[static_cast<size_t> (i)] = k;
+        mix.left[static_cast<size_t> (i)] = b + c + k;
+        mix.right[static_cast<size_t> (i)] = b + 0.5f * c + k;
+    }
+
+    double lastProgress = -1.0;
+    bool rising = true;
+    const auto stems = sls::splitStems (mix, {}, [&] (double p) { rising = rising && p >= lastProgress; lastProgress = p; return true; });
+    check (stems.drums != nullptr && stems.bass != nullptr && stems.other != nullptr && stems.drums->numFrames() == n
+               && stems.bass->numFrames() == n && stems.other->numFrames() == n,
+           "three stems as long as the mix");
+    check (rising && lastProgress == 1.0, "progress goes from 0 to 1");
+    float worst = 0.0f;
+    for (int i = 0; i < n; ++i)
+        worst = std::max (worst, std::abs (stems.drums->left[static_cast<size_t> (i)] + stems.bass->left[static_cast<size_t> (i)]
+                                           + stems.other->left[static_cast<size_t> (i)] - mix.left[static_cast<size_t> (i)]));
+    check (worst < 1e-5f, "the stems add up to the mix");
+
+    // How much of each stem is the source it should be: compare with each source by correlation of energy (projection).
+    const auto share = [n] (const sls::SampleData& stem, const sls::SampleData& source)
+    {
+        // the part of `source` found in `stem`: <stem, source> / <source, source>, over the middle (away from the edges)
+        double dot = 0.0, self = 0.0;
+        for (int i = n / 8; i < n - n / 8; ++i)
+        {
+            dot += static_cast<double> (stem.left[static_cast<size_t> (i)]) * source.left[static_cast<size_t> (i)];
+            self += static_cast<double> (source.left[static_cast<size_t> (i)]) * source.left[static_cast<size_t> (i)];
+        }
+        return self > 0.0 ? dot / self : 0.0;
+    };
+    const double bassInBass = share (*stems.bass, bass), chordInOther = share (*stems.other, chord), clicksInDrums = share (*stems.drums, clicks);
+    std::cout << "    bass in Bass " << bassInBass << ", chord in Other " << chordInOther << ", clicks in Drums " << clicksInDrums << "\n";
+    check (bassInBass > 0.9, "the bass line goes to Bass (more than 90 %)");
+    check (chordInOther > 0.9, "the chord goes to Other (more than 90 %)");
+    check (clicksInDrums > 0.6, "the clicks go to Drums (more than 60 %)");
+    check (share (*stems.drums, bass) < 0.1 && share (*stems.drums, chord) < 0.1, "little of the steady sounds in Drums");
+    check (share (*stems.bass, chord) < 0.05, "and no chord in Bass");
+    check (stems.other->name == "mix other" && stems.drums->sampleRate == kSr, "named after the mix, at its rate");
+
+    const auto stopped = sls::splitStems (mix, {}, [] (double p) { return p < 0.3; });
+    check (stopped.drums == nullptr && stopped.bass == nullptr, "a split can be stopped");
+    sls::SampleData empty;
+    empty.sampleRate = kSr;
+    check (sls::splitStems (empty).drums == nullptr, "nothing to split gives nothing");
+    sls::StemSettings odd;
+    odd.timeSpan = -4;
+    odd.frequencySpan = 1000;
+    odd.hardness = std::nan ("");
+    odd.bassCrossoverHz = 1.0e9;
+    const auto weird = sls::splitStems (mix, odd);
+    check (weird.drums != nullptr && std::isfinite (weird.drums->left[static_cast<size_t> (n / 2)]), "settings out of range are brought in range");
 }
 
 // A "sung" line: tones with harmonics at the given MIDI pitches (with cents), each `seconds` long, with short silences between.
@@ -10285,6 +10374,7 @@ int main()
     testMultitrackRecorders();
     testSlicer();
     testPitchTools();
+    testStemSplit();
     testMidiNotes();
     testPlayerRewind();
     testClipEditing();

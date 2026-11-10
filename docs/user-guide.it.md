@@ -748,6 +748,25 @@ trasposta da sola (stessa lunghezza, dissolvenze di 10 ms ai bordi); l'audio tra
 voci insieme, registrazioni molto rumorose, appiattire il vibrato o le derive dentro una nota (una nota si sposta tutta insieme),
 cambiare la durata di una nota. Una clip allungata, trasposta o invertita va prima riportata all'originale (come per l'editor di campioni).
 
+### Stem: batteria, basso e il resto (0.39.0)
+
+Tasto destro su una clip audio > **Split into stems...** divide un mix in tre parti, **senza intelligenza artificiale** e sul tuo
+computer:
+
+- **Drums**: ciò che è breve e largo in frequenza (i colpi);
+- **Bass**: ciò che è stabile e basso (sotto circa 150 Hz);
+- **Other**: ciò che è stabile e più alto (voci, accordi, soli).
+
+Una finestra mostra l'avanzamento (pochi secondi per minuto di audio; *Cancel* la ferma). Le tre parti vengono salvate come WAV in
+`Samples/Stems` e sostituiscono la clip: Drums sulla traccia della clip, Bass e Other sulle due successive (quelle sopra, in fondo
+alla playlist), tutte nello stesso punto. **Sommate danno esattamente l'originale**, quindi suonando le tre si sente quello che
+suonava la clip; **Ctrl+Z** riporta la clip originale.
+
+Come funziona: separazione armonico-percussiva con filtri mediani sullo spettro (Fitzgerald, 2010), poi un incrocio di frequenza
+per la parte stabile. Cosa non sa fare: distinguere una voce da una chitarra (vanno entrambe in Other), o togliere da Drums
+l'attacco di un basso pizzicato. Rende meglio su mix chiari, elettronici o acustici; una rete neurale fa di meglio, ma non è ciò che
+usa questo programma.
+
 ### Registrazione
 
 **Record** (barra) registra l'**ingresso audio**: un microfono, una chitarra in un'interfaccia audio, un ingresso di linea - su una

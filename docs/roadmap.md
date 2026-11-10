@@ -1,6 +1,6 @@
 # Status and roadmap
 
-Version 0.38.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
+Version 0.39.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
 what is missing. If something here disagrees with the program, the program is right: please fix the page.
 
 ## What has been verified, and how
@@ -63,6 +63,8 @@ what is missing. If something here disagrees with the program, the program is ri
 | Additive and physical engines (0.24.0): the default timbre is a saw (harmonic n at 1/n) on pitch; odd-only; brightness; one harmonic = a sine (2nd harmonic 80 dB down); morph to B, the morph envelope; the filter on the harmonics; no aliasing at C8 (fold-back -172 dB); the master limiter linear below -3 dBFS (3rd harmonic -164 dB) and never above 1; the string in tune from E2 to E6 with and without stiffness (within 5 cents); decay, hardness, release damping, velocity, body; marimba's 3.99 mode, the bell's hum; every model finite at its extremes; the 14 new sounds; files (and older files without the settings); no allocation | Automated headless tests (1173 checks in total) | All pass |
 | The synth window with the new engines: the engine menu, the additive layout (timbre A and B, morph, morph envelope, filter, envelopes, LFO), Nylon Guitar loaded (model, resonance, envelope), the sound menu grouped by engine | Manual, in a virtual display | Worked (not heard) |
 | Time Shaper (0.25.0): no pattern = unchanged; half speed, reverse, stutter 1/16 sample-exact against the input; tape stop (1 kHz falling below 300 Hz, faded out); gate 1/8, depth, smoothing, trance gate; its own clock when stopped; mix 0; no recording = pattern skipped safely; every time x volume pattern finite and never louder than the input; five in a project (four with a recording) without allocation | Automated headless tests (1187 checks in total) | All pass |
+| Stems (0.39.0): a mix of a steady 55 Hz bass, a steady chord (440 / 554 / 659 Hz, panned) and noise clicks every half second: three stems as long as the mix that add up to it (within 1e-5); the bass 99.8 % in Bass, the chord 95.6 % in Other, the clicks 98.8 % in Drums, little steady sound in Drums and no chord in Bass; progress from 0 to 1, stopping, empty input, settings out of range | Automated headless tests (1477 checks in total) | All pass |
+| In the app (0.39.0): *Split into stems...* on a clip of a generated mix: the progress window, three clips (drums on Track 7, bass on 8, other on 6) and three WAV files; the saved files add up to the original within 2e-8, their levels as expected (bass 0.17, chord 0.08); Undo brought the original clip back | Manual, in a virtual display | Worked (not heard) |
 | Pitch editor (0.38.0): a generated "sung" line (A4 +30 cents, C4, E5 -20 cents, G2, with 25 cents of vibrato): a frame every 5 ms, four notes found, each centre within 8 cents and its edges within 40 ms, nearest key and cents; correction all the way, half way and to a scale; rendered with the first note tuned and the third a tone up, then measured again (A4 in tune, the third two semitones higher, the others unchanged; an unmoved note sample for sample, the length kept); silence, white noise and too little audio give no notes | Automated headless tests (1465 checks in total) | All pass |
 | In the app (0.38.0): *Edit pitch...* on a clip of a generated line: four notes with their cents; *Correct* (all to their keys), one note dragged three semitones up (the sung line shown); *Save as new file and use* (the clip plays the new WAV), opened again: A5 -1, D#5 +1, F5 0, G5 +1 cents; *Notes to pattern* on the Pluck channel (four notes in the rack) | Manual, in a virtual display | Worked (not heard) |
 | Slicer (0.37.0): slices on consecutive keys from C5 with their own pitch, level, pan (kept in range) and direction (a reversed slice plays its part backwards); default settings not kept; slices past key 127 left out; settings, cutting and the loop's tempo saved, read back and played the same after a reload; hostile values brought in range; the loop's tempo guessed (whole bars nearest the project's tempo); a 16th grid; markers added, moved and found; the score (one note per slice at the loop's tempo, cut at the pattern's end, half as long at half the tempo); with cutting on, a slice ends the one before it (the output then equals the second slice alone), off both sound | Automated headless tests (1449 checks in total) | All pass |
@@ -97,6 +99,8 @@ what is missing. If something here disagrees with the program, the program is ri
 
 ## What has not been verified
 
+- **Stems on real music (0.39.0).** Measured on a generated mix only: how much bleed and how many artefacts (a "watery" Other)
+  real songs give was not heard.
 - **The pitch editor on real voices (0.38.0).** Tested on generated tones with harmonics and vibrato: breathy or noisy singing,
   consonants and slides between notes were not tried, nor how the shifted notes sound.
 - **How the Slicer sounds (0.37.0).** Slices, cutting and the score are measured, not heard: whether the 5 ms fade of a cut

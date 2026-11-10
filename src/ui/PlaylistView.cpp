@@ -105,6 +105,7 @@ PlaylistView::PlaylistView (Arrangement& arrangementToEdit) : timeline (arrangem
     timeline.onTrackInputMenu = [this] (int track) { if (onTrackInputMenu) onTrackInputMenu (track); };
     timeline.onEditSample = [this] (int index) { if (onEditSample) onEditSample (index); };
     timeline.onEditPitch = [this] (int index) { if (onEditPitch) onEditPitch (index); };
+    timeline.onSplitStems = [this] (int index) { if (onSplitStems) onSplitStems (index); };
     timeline.onSeek = [this] (int tick) { if (onSeek) onSeek (tick); };
     timeline.onLoopChanged = [this] { if (onLoopChanged) onLoopChanged(); };
 

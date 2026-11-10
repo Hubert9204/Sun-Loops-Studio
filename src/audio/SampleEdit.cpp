@@ -1,4 +1,5 @@
 #include "audio/SampleEdit.h"
+#include "audio/Fft.h"
 
 #include <algorithm>
 #include <cmath>
@@ -43,56 +44,6 @@ SamplePtr mapRange (const SamplePtr& in, FrameRange r, F&& f)
     return out;
 }
 
-// In-place iterative radix-2 FFT of a power-of-two length.
-class Fft
-{
-public:
-    explicit Fft (int sizeIn) : size (sizeIn), twiddle (static_cast<size_t> (sizeIn / 2))
-    {
-        for (int i = 0; i < size / 2; ++i)
-            twiddle[static_cast<size_t> (i)] = std::polar (1.0, -2.0 * kPi * i / size);
-    }
-
-    void forward (std::vector<std::complex<double>>& x) const { run (x); }
-
-    void inverse (std::vector<std::complex<double>>& x) const
-    {
-        for (auto& v : x)
-            v = std::conj (v);
-        run (x);
-        for (auto& v : x)
-            v = std::conj (v) / static_cast<double> (size);
-    }
-
-private:
-    void run (std::vector<std::complex<double>>& x) const
-    {
-        for (int i = 1, j = 0; i < size; ++i)
-        {
-            int bit = size >> 1;
-            for (; j & bit; bit >>= 1)
-                j ^= bit;
-            j ^= bit;
-            if (i < j)
-                std::swap (x[static_cast<size_t> (i)], x[static_cast<size_t> (j)]);
-        }
-        for (int len = 2; len <= size; len <<= 1)
-        {
-            const int step = size / len;
-            for (int i = 0; i < size; i += len)
-                for (int k = 0; k < len / 2; ++k)
-                {
-                    const auto u = x[static_cast<size_t> (i + k)];
-                    const auto v = x[static_cast<size_t> (i + k + len / 2)] * twiddle[static_cast<size_t> (k * step)];
-                    x[static_cast<size_t> (i + k)] = u + v;
-                    x[static_cast<size_t> (i + k + len / 2)] = u - v;
-                }
-        }
-    }
-
-    int size;
-    std::vector<std::complex<double>> twiddle;
-};
 
 std::vector<double> hann (int n)
 {
@@ -111,7 +62,7 @@ std::vector<std::vector<double>> frameMagnitudes (const std::vector<float>& x, i
     for (int start = begin; start + fftSize <= end; start += hop)
     {
         for (int i = 0; i < fftSize; ++i)
-            work[static_cast<size_t> (i)] = x[static_cast<size_t> (start + i)] * window[static_cast<size_t> (i)];
+            work[static_cast<size_t> (i)] = x[static_cast<size_t> (start) + static_cast<size_t> (i)] * window[static_cast<size_t> (i)];
         fft.forward (work);
         std::vector<double> mags (static_cast<size_t> (fftSize / 2 + 1));
         for (size_t b = 0; b < mags.size(); ++b)
@@ -309,7 +260,7 @@ SamplePtr reduceNoise (const SamplePtr& in, FrameRange noise, FrameRange range, 
         const int padded = length + 2 * n;
         std::vector<double> src (static_cast<size_t> (padded), 0.0);
         for (int i = 0; i < length; ++i)
-            src[static_cast<size_t> (n + i)] = x[static_cast<size_t> (range.begin + i)];
+            src[static_cast<size_t> (n) + static_cast<size_t> (i)] = x[static_cast<size_t> (range.begin) + static_cast<size_t> (i)];
         std::vector<double> acc (static_cast<size_t> (padded), 0.0);
 
         std::vector<std::complex<double>> work (static_cast<size_t> (n));
@@ -317,7 +268,7 @@ SamplePtr reduceNoise (const SamplePtr& in, FrameRange noise, FrameRange range, 
         for (int start = 0; start + n <= padded; start += hop)
         {
             for (int i = 0; i < n; ++i)
-                work[static_cast<size_t> (i)] = src[static_cast<size_t> (start + i)] * window[static_cast<size_t> (i)];
+                work[static_cast<size_t> (i)] = src[static_cast<size_t> (start) + static_cast<size_t> (i)] * window[static_cast<size_t> (i)];
             fft.forward (work);
 
             for (int b = 0; b < bins; ++b)
@@ -345,12 +296,12 @@ SamplePtr reduceNoise (const SamplePtr& in, FrameRange noise, FrameRange range, 
             }
             fft.inverse (work);
             for (int i = 0; i < n; ++i)
-                acc[static_cast<size_t> (start + i)] += work[static_cast<size_t> (i)].real() * window[static_cast<size_t> (i)] * synthesisScale;
+                acc[static_cast<size_t> (start) + static_cast<size_t> (i)] += work[static_cast<size_t> (i)].real() * window[static_cast<size_t> (i)] * synthesisScale;
         }
 
         auto& y = channel == 0 ? out->left : out->right;
         for (int i = 0; i < length; ++i)
-            y[static_cast<size_t> (range.begin + i)] = static_cast<float> (acc[static_cast<size_t> (n + i)]);
+            y[static_cast<size_t> (range.begin) + static_cast<size_t> (i)] = static_cast<float> (acc[static_cast<size_t> (n) + static_cast<size_t> (i)]);
     }
     return out;
 }
@@ -468,7 +419,7 @@ juce::Result writeSampleWav (const SampleData& sample, const juce::File& file)
         file.deleteFile();
         return juce::Result::fail ("Cannot create a WAV file at " + file.getFullPathName());
     }
-    stream.release(); // the writer owns it now
+    [[maybe_unused]] auto* owned = stream.release(); // the writer owns it now
 
     const float* channels[2] = { sample.left.data(), sample.right.data() };
     const bool ok = writer->writeFromFloatArrays (channels, 2, sample.numFrames());

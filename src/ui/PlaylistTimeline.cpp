@@ -1565,6 +1565,22 @@ juce::String PlaylistTimeline::useEditedAudio (int index, const std::shared_ptr<
     return juce::String (error);
 }
 
+juce::String PlaylistTimeline::replaceAudioClip (int index, const std::shared_ptr<const SampleData>& expected, const std::vector<AudioClip>& with)
+{
+    if (index < 0 || index >= static_cast<int> (arrangement.audioClips.size()) || arrangement.audioClips[static_cast<size_t> (index)].data != expected)
+        return "The clip changed meanwhile: nothing was replaced.";
+    if (arrangement.audioClips.size() - 1 + with.size() > static_cast<size_t> (kMaxAudioClips))
+        return "There is no room for more audio clips.";
+    beginEdit();
+    commitPendingUndo();
+    arrangement.audioClips.erase (arrangement.audioClips.begin() + index);
+    for (const auto& c : with)
+        arrangement.audioClips.push_back (c);
+    clearSelection();
+    notifyChanged();
+    return {};
+}
+
 void PlaylistTimeline::showClipMenu (const juce::MouseEvent& e)
 {
     const int track = yToTrack (e.y);
@@ -1588,6 +1604,7 @@ void PlaylistTimeline::showClipMenu (const juce::MouseEvent& e)
         menu.addItem (7, "Stretch and pitch...");
         menu.addItem (8, "Edit sample...");
         menu.addItem (10, "Edit pitch...", onEditPitch != nullptr);
+        menu.addItem (11, "Split into stems...", onSplitStems != nullptr);
     }
     else
         menu.addItem (5, "Open this pattern");
@@ -1609,6 +1626,7 @@ void PlaylistTimeline::showClipMenu (const juce::MouseEvent& e)
                                 case 9: safe->toggleAudioReverse (audio); break;
                                 case 8: if (safe->onEditSample) safe->onEditSample (audio); break;
                                 case 10: if (safe->onEditPitch) safe->onEditPitch (audio); break;
+                                case 11: if (safe->onSplitStems) safe->onSplitStems (audio); break;
                                 case 5:
                                     if (safe->selection.kind == Kind::Pattern && safe->selection.index >= 0
                                         && safe->selection.index < static_cast<int> (safe->arrangement.clips.size()) && safe->onPatternPicked)

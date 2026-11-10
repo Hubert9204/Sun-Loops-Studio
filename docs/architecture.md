@@ -528,6 +528,15 @@ scale) by an amount; `render` pitch-shifts each moved note's span (plus 10 ms ea
 leaving everything else bit for bit. `PitchEditor` holds the frames and notes, renders on demand for Play and Apply, and hands the
 notes to `MainComponent::pitchNotesToPattern` for pitch to MIDI.
 
+### Stems (0.39.0)
+
+`src/audio/StemSplit.{h,cpp}`: a 2048-point STFT (Hann, hop 512) of each side, masks from the mid signal's magnitude: steady
+= median across 17 frames, short = median across 17 bins, a soft mask p^h / (h^h + p^h) (h = 2). Drums = X x mask, Bass = X x (1 -
+mask) x a raised-cosine crossover around 150 Hz; Other = input - Drums - Bass in the time domain, so the three always add up.
+Frames are computed lazily into a ring of 17, so memory does not grow with the length. `MainComponentStems.cpp` runs it on a
+`ThreadWithProgressWindow` (asynchronous; the job deletes itself), writes three WAVs and calls `PlaylistTimeline::replaceAudioClip`
+(one undo step, refused if the clip changed meanwhile). `src/audio/Fft.h` is the radix-2 FFT, shared with the sample editor.
+
 ### Metering (0.11.0)
 
 The audio callback feeds the final stereo output to `LoudnessMeter` (BS.1770-4: stage-1 shelf and RLB high-pass K-weighting coefficients
