@@ -709,7 +709,10 @@ void PlaylistTimeline::paint (juce::Graphics& g)
 
         for (int t = 0; t < kPlaylistTracks; ++t)
         {
-            g.setColour (t % 2 == 0 ? kTrackA : kTrackB);
+            auto row = t % 2 == 0 ? kTrackA : kTrackB;
+            if (const auto colour = arrangement.playlistTracks[static_cast<size_t> (t)].colour; colour != 0)
+                row = row.interpolatedWith (juce::Colour (colour).withAlpha (1.0f), 0.14f); // a coloured track (0.33.0)
+            g.setColour (row);
             g.fillRect (kNameWidth, kRulerHeight + t * th, getWidth() - kNameWidth, th);
         }
 
@@ -738,6 +741,8 @@ void PlaylistTimeline::paint (juce::Graphics& g)
             const auto colour = colourForPattern (clip.pattern);
             g.setColour (colour);
             g.fillRoundedRectangle (r.toFloat(), 3.0f);
+            g.setColour (colour.darker (0.7f)); // an outline, so clips laid over each other (0.33.0) stay apart
+            g.drawRoundedRectangle (r.toFloat().reduced (0.5f), 3.0f, 1.0f);
 
             // One tick per repeat of the pattern.
             g.setColour (colour.darker (0.5f));
@@ -830,7 +835,13 @@ void PlaylistTimeline::paint (juce::Graphics& g)
         }
         else
             g.setColour (kText);
-        g.drawText ("Track " + juce::String (t + 1), 6, kRulerHeight + t * th, kNameWidth - 20, th, juce::Justification::centredLeft);
+        if (const auto colour = arrangement.playlistTracks[static_cast<size_t> (t)].colour; colour != 0)
+        {
+            g.setColour (juce::Colour (colour).withAlpha (1.0f)); // the track's colour (0.33.0)
+            g.fillRect (0, kRulerHeight + t * th + 1, 4, th - 2);
+        }
+        g.setColour (t == armedTrack ? juce::Colours::white : kText);
+        g.drawText (trackName (t), 8, kRulerHeight + t * th, kNameWidth - 22, th, juce::Justification::centredLeft, true);
     }
 
     g.setColour (kAutomationColour.brighter (0.3f));
@@ -890,9 +901,109 @@ void PlaylistTimeline::paintAutomationClip (juce::Graphics& g, const AutomationC
 
 // ------------------------------------------------------------------------- history
 
+// --- playlist tracks' names and colours (0.33.0) --------------------------------------------------------------------------------
+
+juce::String PlaylistTimeline::trackName (int track) const
+{
+    if (track < 0 || track >= kPlaylistTracks)
+        return {};
+    const auto& name = arrangement.playlistTracks[static_cast<size_t> (track)].name;
+    return name.empty() ? "Track " + juce::String (track + 1) : juce::String (name);
+}
+
+const std::vector<std::pair<const char*, std::uint32_t>>& PlaylistTimeline::trackColours()
+{
+    static const std::vector<std::pair<const char*, std::uint32_t>> colours {
+        { "Red", 0xffe0524a },    { "Orange", 0xffe8943a }, { "Yellow", 0xffe3c84b }, { "Lime", 0xff9ccc4a },
+        { "Green", 0xff4cc38a },  { "Teal", 0xff3fb7b0 },   { "Blue", 0xff4a90e2 },   { "Indigo", 0xff6c6ee0 },
+        { "Purple", 0xffa66be0 }, { "Pink", 0xffe06bb5 },   { "Brown", 0xffa8774f },  { "Grey", 0xff9aa1ab },
+    };
+    return colours;
+}
+
+void PlaylistTimeline::showTrackMenu (int track)
+{
+    if (track < 0 || track >= kPlaylistTracks)
+        return;
+    juce::PopupMenu colours;
+    const auto current = arrangement.playlistTracks[static_cast<size_t> (track)].colour;
+    colours.addItem (100, "None", true, current == 0);
+    const auto& list = trackColours();
+    for (size_t i = 0; i < list.size(); ++i)
+    {
+        juce::PopupMenu::Item item (list[i].first);
+        item.itemID = 101 + static_cast<int> (i);
+        item.colour = juce::Colour (list[i].second);
+        item.isTicked = current == list[i].second;
+        colours.addItem (item);
+    }
+    juce::PopupMenu menu;
+    menu.addSectionHeader (trackName (track));
+    menu.addItem (1, "Rename...");
+    menu.addSubMenu ("Colour", colours);
+    menu.addItem (2, "Default name and colour", arrangement.playlistTracks[static_cast<size_t> (track)] != PlaylistTrack {});
+    menu.showMenuAsync (juce::PopupMenu::Options().withMousePosition(),
+                        [safe = juce::Component::SafePointer<PlaylistTimeline> (this), track] (int choice)
+                        {
+                            if (safe == nullptr || choice == 0)
+                                return;
+                            if (choice == 1)
+                                safe->renameTrack (track);
+                            else if (choice == 2)
+                            {
+                                safe->beginEdit();
+                                safe->arrangement.playlistTracks[static_cast<size_t> (track)] = {};
+                                safe->commitPendingUndo();
+                                safe->notifyChanged();
+                            }
+                            else if (choice == 100)
+                                safe->setTrackColour (track, 0);
+                            else if (choice > 100 && choice - 101 < static_cast<int> (trackColours().size()))
+                                safe->setTrackColour (track, trackColours()[static_cast<size_t> (choice - 101)].second);
+                        });
+}
+
+void PlaylistTimeline::setTrackColour (int track, std::uint32_t colour)
+{
+    if (track < 0 || track >= kPlaylistTracks || arrangement.playlistTracks[static_cast<size_t> (track)].colour == colour)
+        return;
+    beginEdit();
+    arrangement.playlistTracks[static_cast<size_t> (track)].colour = colour;
+    commitPendingUndo();
+    notifyChanged();
+}
+
+void PlaylistTimeline::renameTrack (int track)
+{
+    if (track < 0 || track >= kPlaylistTracks)
+        return;
+    auto* window = new juce::AlertWindow ("Rename track", "A name for the playlist track (empty: \"Track " + juce::String (track + 1) + "\").",
+                                          juce::MessageBoxIconType::NoIcon);
+    window->addTextEditor ("name", juce::String (arrangement.playlistTracks[static_cast<size_t> (track)].name));
+    window->addButton ("OK", 1, juce::KeyPress (juce::KeyPress::returnKey));
+    window->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+    window->enterModalState (true, juce::ModalCallbackFunction::create (
+                                       [safe = juce::Component::SafePointer<PlaylistTimeline> (this), window, track] (int result)
+                                       {
+                                           if (safe == nullptr || result != 1)
+                                               return;
+                                           const auto name = window->getTextEditorContents ("name").trim().substring (0, 32).toStdString();
+                                           auto& t = safe->arrangement.playlistTracks[static_cast<size_t> (track)];
+                                           if (name == t.name)
+                                               return;
+                                           safe->beginEdit();
+                                           t.name = name;
+                                           safe->commitPendingUndo();
+                                           safe->notifyChanged();
+                                       }),
+                             true);
+    if (auto* editor = window->getTextEditor ("name"))
+        editor->grabKeyboardFocus();
+}
+
 PlaylistTimeline::Snapshot PlaylistTimeline::takeSnapshot() const
 {
-    return { arrangement.clips, arrangement.audioClips, arrangement.automationClips };
+    return { arrangement.clips, arrangement.audioClips, arrangement.automationClips, arrangement.playlistTracks };
 }
 
 void PlaylistTimeline::restore (const Snapshot& s)
@@ -900,6 +1011,7 @@ void PlaylistTimeline::restore (const Snapshot& s)
     arrangement.clips = s.clips;
     arrangement.audioClips = s.audioClips;
     arrangement.automationClips = s.automationClips;
+    arrangement.playlistTracks = s.tracks;
 }
 
 void PlaylistTimeline::beginEdit()
@@ -1021,7 +1133,7 @@ void PlaylistTimeline::updateReadout (int x, int y)
     {
         const int tick = xToTick (x);
         position = "Position " + jstr (formatBarsBeatsTicks (tick)) + "  =  " + jstr (formatSeconds (ticksToSeconds (tick, bpm)))
-                 + "   Track " + juce::String (yToTrack (y) + 1);
+                 + "   " + trackName (yToTrack (y));
     }
     else if (x >= kNameWidth && inLanes (y))
     {
@@ -1666,6 +1778,11 @@ void PlaylistTimeline::mouseDown (const juce::MouseEvent& e)
         return;
     }
 
+    if (e.x < kNameWidth && e.y >= kRulerHeight && e.y < kRulerHeight + kPlaylistTracks * trackHeight() && e.mods.isPopupMenu())
+    {
+        showTrackMenu (yToTrack (e.y)); // rename, colour (0.33.0)
+        return;
+    }
     if (e.x < kNameWidth && e.y >= kRulerHeight)
     {
         const int track = yToTrack (e.y);
@@ -2068,6 +2185,11 @@ void PlaylistTimeline::mouseUp (const juce::MouseEvent& e)
 
 void PlaylistTimeline::mouseDoubleClick (const juce::MouseEvent& e)
 {
+    if (e.x < kNameWidth && e.y >= kRulerHeight && e.y < kRulerHeight + kPlaylistTracks * trackHeight() && ! e.mods.isPopupMenu())
+    {
+        renameTrack (yToTrack (e.y)); // a double click on a track's name renames it (0.33.0)
+        return;
+    }
     if (e.x < kNameWidth || e.y < kRulerHeight || tool != PlaylistTool::Select)
         return;
 

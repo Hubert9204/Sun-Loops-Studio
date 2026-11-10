@@ -698,7 +698,7 @@ void testArrangement()
     // song with two clips on one track, a gap between them
     a.clips = { { 0, 0, 0, 1 }, { 0, 0, 2, 1 } };
     check (a.songLengthUnits() == 3, "song length is the end of the last clip");
-    check (! a.canPlace ({ 1, 0, 1, 2 }), "overlapping a clip on the same track is refused");
+    check (a.canPlace ({ 1, 0, 1, 2 }), "a clip may overlap another on its track (0.33.0: layering)");
     check (a.canPlace ({ 1, 0, 1, 1 }), "filling the gap exactly is accepted");
     check (a.canPlace ({ 1, 1, 0, 3 }), "the same time on another track is accepted");
     check (a.canPlace (a.clips[0], 0), "a clip does not collide with itself when moved");
@@ -2981,7 +2981,8 @@ void testProjectFile()
             const auto& notes = d.arrangement.patterns[0].notes[0];
             check (notes.size() == 4 && notes.back().startTick == 3800 && notes.back().lengthTicks == 40 && notes.back().velocity == 1.0f,
                    "bad notes are dropped; a note that is too long is trimmed to its pattern");
-            check (d.arrangement.clips.size() == 2 && r.warnings.size() == 2, "clips that cannot be placed are dropped, and both repairs are reported");
+            check (d.arrangement.clips.size() == 3 && r.warnings.size() == 2,
+                   "a clip that cannot be placed is dropped (one overlapping another is kept: layering), and both repairs are reported");
         }
     }
     {
@@ -3406,21 +3407,21 @@ void testAudioClips()
 
     check (a.canPlaceAudio (audio (0, 0, 960)), "an audio clip fits on an empty track");
     a.audioClips.push_back (audio (0, 0, 960));
-    check (! a.canPlaceAudio (audio (0, 480, 960)), "audio clips on one track cannot overlap");
+    check (a.canPlaceAudio (audio (0, 480, 960)), "audio clips may overlap on a track (0.33.0: layering)");
     check (a.canPlaceAudio (audio (1, 480, 960)), "but may on another track");
     check (a.canPlaceAudio (audio (0, 960, 960)), "an audio clip can start where the previous one ends");
     check (a.canPlaceAudio (audio (0, 1060, 960)), "audio clips may start on any tick (they are no longer tied to the beat grid)");
     check (! a.canPlaceAudio (audio (0, a.timelineTicks() - 480, 960)), "an audio clip cannot run past the end of the timeline");
     check (! a.canPlaceAudio (audio (sls::kPlaylistTracks, 0, 480)), "or sit on a track that does not exist");
     check (a.canPlaceAudio (audio (0, 0, 480), 0), "a clip being moved does not collide with itself");
-    check (! a.canPlace ({ 0, 0, 0, 1 }), "a pattern clip cannot cover an audio clip");
+    check (a.canPlace ({ 0, 0, 0, 1 }), "a pattern clip may cover an audio clip");
     check (a.canPlace ({ 0, 0, 1, 1 }), "but can sit after it");
     a.clips.push_back ({ 0, 2, 1, 1 });
-    check (! a.canPlaceAudio (audio (2, a.patternTicks + 480, 480)), "an audio clip cannot cover a pattern clip");
+    check (a.canPlaceAudio (audio (2, a.patternTicks + 480, 480)), "and an audio clip a pattern clip");
     check (a.audioClipAt (0, 0) == 0 && a.audioClipAt (0, 959) == 0 && a.audioClipAt (0, 960) == -1, "audioClipAt finds the clip under a tick");
-    check (a.findFreeAudioStart (0, 0, 960) == 960 && a.findFreeAudioStart (1, 100, 480) == 100 && a.findFreeAudioStart (0, 100, 480) == 960,
-           "findFreeAudioStart uses the wanted tick if free, else the next free beat");
-    check (a.findFreeAudioStart (0, 0, a.timelineTicks()) == -1, "and gives up when nothing fits");
+    check (a.findFreeAudioStart (0, 0, 960) == 0 && a.findFreeAudioStart (1, 100, 480) == 100 && a.findFreeAudioStart (0, 100, 480) == 100,
+           "findFreeAudioStart uses the wanted tick (clips may overlap)");
+    check (a.findFreeAudioStart (0, 1, a.timelineTicks()) == -1, "and gives up when the clip would run past the timeline");
 
     sls::Arrangement b;
     b.patterns.resize (1);
@@ -3588,8 +3589,8 @@ void testAudioClips()
         bad->setProperty ("track", 99);
         list->add (juce::var (bad));
         const auto repaired = sls::ProjectDocument::fromJson (juce::JSON::toString (var));
-        check (repaired.document.has_value() && repaired.document->arrangement.audioClips.size() == 2 && ! repaired.warnings.empty(),
-               "clips that overlap or have an impossible position are dropped with a warning");
+        check (repaired.document.has_value() && repaired.document->arrangement.audioClips.size() == 3 && ! repaired.warnings.empty(),
+               "a clip with an impossible position is dropped with a warning; one overlapping another is kept (layering)");
 
         var.getDynamicObject()->removeProperty ("audioClips"); // a file from before audio clips existed
         const auto old = sls::ProjectDocument::fromJson (juce::JSON::toString (var));
@@ -3601,6 +3602,108 @@ void testAudioClips()
 // --- per-clip pan, reverse and fades (0.27.0) -------------------------------------------------------------------------------
 // --- the score log (0.28.0) ------------------------------------------------------------------------------------------------
 // --- the Loop Starter (0.30.0) ----------------------------------------------------------------------------------------------
+static int st_whole (int patternTicks) { return sls::steps::patternSteps (patternTicks); }
+
+void testPlaylistLayering()
+{
+    std::cout << "Playlist tracks and layering (0.33.0)\n";
+    sls::Arrangement a;
+    a.patterns.resize (2);
+    a.ensureChannelCount (1);
+    a.patterns[0].notes[0] = { { 60, 0, 240, 0.8f } };
+    a.patterns[1].notes[0] = { { 72, 120, 240, 0.8f } };
+    a.patterns[0].steps = { st_whole (a.patternTicks) };
+    a.patterns[1].steps = { st_whole (a.patternTicks) };
+    a.clips = { { 0, 0, 0, 2 }, { 1, 0, 1, 1 } }; // the second lies over the first's second repeat, on the same track
+    const std::vector<sls::Channel> channels { synthChannel ({}) };
+    const auto song = sls::compileSong (channels, a);
+    int at60 = 0, at72 = 0;
+    for (const auto& n : song.channels[0].notes)
+    {
+        at60 += n.pitch == 60 ? 1 : 0;
+        at72 += n.pitch == 72 && n.startTick == a.patternTicks + 120 ? 1 : 0;
+    }
+    check (at60 == 2 && at72 == 1, "pattern clips laid over each other on a track all play");
+    check (a.clipAt (0, 1) == 1 && a.clipAt (0, 0) == 0, "the clip on top (the later one) is the one picked under the mouse");
+
+    // Two audio clips over each other on one track are both heard.
+    const auto tone = [] (double hz)
+    {
+        auto s = std::make_shared<sls::SampleData>();
+        s->sampleRate = 48000.0;
+        s->left.resize (48000);
+        for (size_t i = 0; i < s->left.size(); ++i)
+            s->left[i] = 0.3f * static_cast<float> (std::sin (2.0 * 3.14159265358979 * hz * static_cast<double> (i) / 48000.0));
+        s->right = s->left;
+        return std::shared_ptr<const sls::SampleData> (s);
+    };
+    sls::Arrangement b;
+    b.patterns.resize (1);
+    sls::AudioClip low, high;
+    low.data = tone (220.0);
+    high.data = tone (880.0);
+    low.track = high.track = 2;
+    low.lengthTicks = high.lengthTicks = 960;
+    check (b.canPlaceAudio (low) && (b.audioClips.push_back (low), b.canPlaceAudio (high)), "an audio clip may lie over another");
+    b.audioClips.push_back (high);
+    const auto project = sls::compileSong (std::vector<sls::Channel> { synthChannel ({}) }, b);
+    check (project.audioEvents.size() == 2, "both are in the song");
+    sls::Player player;
+    player.prepare (48000.0);
+    std::vector<float> l (256), r (256), all;
+    float* ch[2] = { l.data(), r.data() };
+    for (int i = 0; i < 60; ++i)
+    {
+        std::fill (l.begin(), l.end(), 0.0f);
+        std::fill (r.begin(), r.end(), 0.0f);
+        player.render (project, 120.0, true, ch, 2, 256);
+        all.insert (all.end(), l.begin(), l.end());
+    }
+    // The mix of 220 Hz and 880 Hz: correlate with each.
+    double c220 = 0.0, c880 = 0.0;
+    for (size_t i = 4800; i < 14400 && i < all.size(); ++i)
+    {
+        const double t = static_cast<double> (i) / 48000.0;
+        c220 += all[i] * std::sin (2.0 * 3.14159265358979 * 220.0 * t);
+        c880 += all[i] * std::sin (2.0 * 3.14159265358979 * 880.0 * t);
+    }
+    // (phase is unknown: compare energies at both frequencies with their cosines too)
+    double s220 = 0.0, s880 = 0.0;
+    for (size_t i = 4800; i < 14400 && i < all.size(); ++i)
+    {
+        const double t = static_cast<double> (i) / 48000.0;
+        s220 += all[i] * std::cos (2.0 * 3.14159265358979 * 220.0 * t);
+        s880 += all[i] * std::cos (2.0 * 3.14159265358979 * 880.0 * t);
+    }
+    const double e220 = std::hypot (c220, s220), e880 = std::hypot (c880, s880);
+    check (e220 > 100.0 && e880 > 100.0 && e220 / e880 > 0.5 && e220 / e880 < 2.0, "and both are heard, at their level");
+
+    // Names and colours.
+    {
+        auto doc = richDocument();
+        doc.arrangement.playlistTracks[1] = { "Drums", 0xffe0524au };
+        doc.arrangement.playlistTracks[5].colour = 0xff4a90e2u;
+        const auto back = sls::ProjectDocument::fromJson (doc.toJson());
+        check (back.document.has_value() && back.document->arrangement.playlistTracks == doc.arrangement.playlistTracks,
+               "the playlist tracks' names and colours survive a round trip");
+        auto v = juce::JSON::parse (doc.toJson());
+        auto* list = v.getDynamicObject()->getProperty ("playlistTracks").getArray();
+        check (list != nullptr && list->size() == 2, "only the tracks with their own name or colour are written");
+        list->getReference (0).getDynamicObject()->setProperty ("colour", "zz");
+        list->getReference (1).getDynamicObject()->setProperty ("track", 99);
+        const auto odd = sls::ProjectDocument::fromJson (juce::JSON::toString (v));
+        check (odd.document.has_value() && odd.document->arrangement.playlistTracks[1].name == "Drums"
+                   && odd.document->arrangement.playlistTracks[1].colour == 0 && odd.document->arrangement.playlistTracks[5] == sls::PlaylistTrack {},
+               "a bad colour or a track that does not exist is ignored");
+        v.getDynamicObject()->removeProperty ("playlistTracks");
+        const auto old = sls::ProjectDocument::fromJson (juce::JSON::toString (v));
+        bool plain = old.document.has_value();
+        for (const auto& t : old.document->arrangement.playlistTracks)
+            plain = plain && t == sls::PlaylistTrack {};
+        check (plain, "an older file opens with the default names and colours");
+    }
+}
+
 void testTypingKeyboard()
 {
     std::cout << "Typing keyboard (0.32.0)\n";
@@ -6962,8 +7065,10 @@ void testSampleEditing()
             blocker.lengthTicks = 480;
             d.audioClips.push_back (blocker);
             d.audioClips[0].lengthTicks = 900;
-            check (sls::useEditedAudio (d, 0, original, edited, {}, bpm).empty() && d.audioClips[0].lengthTicks == 1000,
-                   "the clip is shortened to fit when a neighbour is in the way");
+            check (sls::useEditedAudio (d, 0, original, edited, {}, bpm).empty()
+                       && d.audioClips[0].lengthTicks == d.audioClips[0].naturalLengthTicks (bpm) && d.audioClips[0].lengthTicks > 1000
+                       && d.audioClips.size() == 2,
+                   "a neighbour no longer shortens the clip: since 0.33.0 clips may lie over each other");
             auto e = make();
             e.audioClips.insert (e.audioClips.begin(), e.audioClips[0]);
             e.audioClips[1].track = 1;
@@ -9513,6 +9618,7 @@ int main()
     testLoopStarter();
     testStepSequencer();
     testTypingKeyboard();
+    testPlaylistLayering();
     testAudioImport();
     testInputRecorder();
     testMidiNotes();

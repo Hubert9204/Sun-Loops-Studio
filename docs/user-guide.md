@@ -560,9 +560,13 @@ Split and Cut also work on pattern clips, but only on whole pattern lengths. A c
 starts in the sound **in seconds, at the BPM it was cut at**: if you change the BPM afterwards the sound still plays at its
 original speed, so the cut points no longer fall on the beat they were cut on.
 
-Clips cannot overlap on the same track; a move or resize that would overlap is simply not applied. Clips on
-different tracks play together. Clicking a track's **name** chooses the track that **Record** writes to (marked with a
-red dot).
+**Clips may lie over each other on a track** (0.33.0, as in FL Studio): pattern clips, recordings and audio files can be layered
+freely and they all play; the one added or moved last is drawn on top and is the one a click picks (every clip has an outline,
+so the edges of the ones underneath stay visible). Clips on different tracks play together too.
+
+**Track names** (0.33.0): clicking a track's **name** chooses the track that **Record** writes to (marked with a red dot);
+**double-click** it to rename the track, **right-click** it for *Rename...*, **Colour** (twelve colours, or none: the colour marks
+the name and tints the track) and *Default name and colour*. Names and colours are saved with the project and undone with Ctrl+Z.
 
 ### Audio clips
 
@@ -604,7 +608,7 @@ Right-click an audio clip > **Stretch and pitch...** to change its length or its
 **Apply** renders the audio again, once (a few seconds for a long file) and the clip becomes longer or shorter by the same factor;
 **Back to the original** returns to the file's own sound and length; the playlist's **Undo** works too. The file on disk is never changed.
 A clip with a change shows it in its name: `[x1.50, +3 st]`. The result is always made from the original audio, so stretching twice by 150 % is
-150 %, not 225 %. If the longer clip would overlap its neighbour or pass the end of the playlist, nothing changes and you are told.
+150 %, not 225 %. If the longer clip would pass the end of the playlist, nothing changes and you are told.
 
 The project file stores only the numbers; the audio is processed again when the project is opened (clips with the same file and the same
 numbers share one rendering). Splitting a stretched clip leaves both halves stretched.

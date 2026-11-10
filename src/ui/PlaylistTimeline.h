@@ -156,6 +156,7 @@ private:
         std::vector<Clip> clips;
         std::vector<AudioClip> audioClips;
         std::vector<AutomationClip> automationClips;
+        std::array<PlaylistTrack, kPlaylistTracks> tracks {}; // names and colours (0.33.0)
     };
 
     struct Peaks
@@ -218,6 +219,13 @@ private:
     bool eraseAt (int track, int tick);
     bool splitAt (int track, int tick, bool noSnap);
     void showClipMenu (const juce::MouseEvent& e);
+    void showTrackMenu (int track);   // right click on a track's name (0.33.0): rename, colour
+    void renameTrack (int track);
+    void setTrackColour (int track, std::uint32_t colour);
+public:
+    juce::String trackName (int track) const; // its own name, or "Track N"
+    static const std::vector<std::pair<const char*, std::uint32_t>>& trackColours(); // the colour menu (0 = default)
+private:
     void editAudioProperties (int index);
     void editAudioStretch (int index);
     void toggleAudioReverse (int index); // 0.27.0

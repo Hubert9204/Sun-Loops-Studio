@@ -27,6 +27,11 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.33.0
+Clips may overlap on a playlist track: `Arrangement::canPlace` / `canPlaceAudio` only check the timeline, the hit tests pick the
+last clip (drawn on top). The player already gave every audio clip its own voice (16 at once) and summed pattern notes, so
+nothing changed there; more than 16 audio clips sounding at the same moment are still cut to 16.
+
 ## After 0.32.0
 The typing keyboard goes through `AudioEngine::handleMidi`, the path a MIDI keyboard takes (the same lock-free queue), so it
 adds nothing to the audio thread. Keys let go are found with `KeyPress::isKeyCurrentlyDown` on every key change and on every

@@ -351,6 +351,24 @@ juce::String ProjectDocument::toJson() const
     }
     root->setProperty ("clips", clipList);
 
+    // Playlist tracks with their own name or colour (0.33.0); the others are not written.
+    juce::Array<juce::var> playlistTrackList;
+    for (size_t t = 0; t < arrangement.playlistTracks.size(); ++t)
+    {
+        const auto& pt = arrangement.playlistTracks[t];
+        if (pt == PlaylistTrack {})
+            continue;
+        auto* o = new juce::DynamicObject();
+        o->setProperty ("track", static_cast<int> (t));
+        if (! pt.name.empty())
+            o->setProperty ("name", juce::String (pt.name));
+        if (pt.colour != 0)
+            o->setProperty ("colour", juce::String::toHexString (static_cast<juce::int64> (pt.colour)).paddedLeft ('0', 8));
+        playlistTrackList.add (juce::var (o));
+    }
+    if (! playlistTrackList.isEmpty())
+        root->setProperty ("playlistTracks", playlistTrackList);
+
     // Recordings and imported audio: only the path of the file is stored, never the audio itself.
     juce::Array<juce::var> audioList;
     for (const auto& a : arrangement.audioClips)
@@ -668,7 +686,22 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
 
     d.currentPattern = readInt (root->getProperty ("currentPattern"), 0, 0, static_cast<int> (d.arrangement.patterns.size()) - 1);
 
-    // --- clips (each must fit, in order; the rest are dropped)
+    // --- playlist tracks' names and colours (0.33.0)
+    if (auto* trackList = root->getProperty ("playlistTracks").getArray())
+        for (const auto& tv : *trackList)
+            if (auto* o = tv.getDynamicObject())
+            {
+                const int t = readInt (o->getProperty ("track"), -1, -1, kPlaylistTracks - 1);
+                if (t < 0)
+                    continue;
+                auto& pt = d.arrangement.playlistTracks[static_cast<size_t> (t)];
+                pt.name = juce::String (readName (o->getProperty ("name"), "")).substring (0, 32).toStdString();
+                const auto hex = o->getProperty ("colour").toString().trim();
+                if (hex.length() == 8 && hex.containsOnly ("0123456789abcdefABCDEF"))
+                    pt.colour = static_cast<std::uint32_t> (hex.getHexValue64()) | 0xff000000u;
+            }
+
+    // --- clips (each must fit, in order; the rest are dropped; since 0.33.0 they may overlap)
     int droppedClips = 0;
     if (auto* clipList = root->getProperty ("clips").getArray())
         for (const auto& cv : *clipList)

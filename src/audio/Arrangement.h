@@ -1,6 +1,8 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
+#include <cstdint>
 #include <cmath>
 #include <memory>
 #include <string>
@@ -82,6 +84,14 @@ struct AudioClip
     }
 };
 
+// A playlist track's own name and colour (0.33.0). An empty name shows "Track N"; colour 0 is the default look.
+struct PlaylistTrack
+{
+    std::string name;
+    std::uint32_t colour = 0; // 0xAARRGGBB
+    bool operator== (const PlaylistTrack&) const = default;
+};
+
 struct Arrangement
 {
     std::vector<Pattern> patterns;
@@ -93,6 +103,7 @@ struct Arrangement
     // back to its start when it reaches its end.
     int loopStartTick = -1;
     int loopEndTick = -1;
+    std::array<PlaylistTrack, kPlaylistTracks> playlistTracks {}; // the playlist tracks' names and colours (0.33.0)
 
     bool hasLoop() const noexcept { return loopStartTick >= 0 && loopEndTick > loopStartTick && loopEndTick <= timelineTicks(); }
     // Sets the loop region; false (and no region) when it does not fit in the timeline or is shorter than one 16th.
@@ -113,26 +124,14 @@ struct Arrangement
     int timelineUnits() const noexcept { return std::max (kPlaylistUnits, kPlaylistUnits * 8 * kTicksPerBeat / std::max (1, patternTicks)); }
     int timelineTicks() const noexcept { return timelineUnits() * patternTicks; }
 
-    // Does an audio clip fit: inside the timeline, on an existing track, and clear of every other clip
-    // (pattern or audio) on that track? (Audio clips start on any tick: the playlist's snap setting decides how coarse
-    // the positions you can drag them to are.) `ignoreIndex` is the audio clip being moved/resized (or -1).
-    bool canPlaceAudio (const AudioClip& c, int ignoreIndex = -1) const
+    // Does an audio clip fit: inside the timeline, on an existing track? (Audio clips start on any tick: the playlist's snap
+    // setting decides how coarse the positions you can drag them to are.) Since 0.33.0 clips may overlap on a track, pattern and
+    // audio clips alike (layering, as in FL Studio): they all play. `ignoreIndex` is kept for the callers (the clip being moved).
+    bool canPlaceAudio (const AudioClip& c, [[maybe_unused]] int ignoreIndex = -1) const
     {
         if (c.data == nullptr || c.track < 0 || c.track >= kPlaylistTracks)
             return false;
-        if (c.startTick < 0 || c.lengthTicks < 1 || c.endTick() > timelineTicks() || ! std::isfinite (c.offsetSeconds) || c.offsetSeconds < 0.0)
-            return false;
-
-        for (int i = 0; i < static_cast<int> (audioClips.size()); ++i)
-        {
-            const auto& o = audioClips[static_cast<size_t> (i)];
-            if (i != ignoreIndex && o.track == c.track && c.startTick < o.endTick() && o.startTick < c.endTick())
-                return false;
-        }
-        for (const auto& o : clips)
-            if (o.track == c.track && c.startTick < o.endUnit() * patternTicks && o.startUnit * patternTicks < c.endTick())
-                return false;
-        return true;
+        return c.startTick >= 0 && c.lengthTicks >= 1 && c.endTick() <= timelineTicks() && std::isfinite (c.offsetSeconds) && c.offsetSeconds >= 0.0;
     }
 
     // Does an automation clip fit: on an existing lane, inside the timeline, with at least one point, and clear of the other
@@ -180,10 +179,10 @@ struct Arrangement
         return -1;
     }
 
-    // Index of the audio clip covering (track, tick), or -1.
+    // Index of the audio clip covering (track, tick), or -1; of overlapping clips, the one drawn on top (the last).
     int audioClipAt (int track, int tick) const
     {
-        for (int i = 0; i < static_cast<int> (audioClips.size()); ++i)
+        for (int i = static_cast<int> (audioClips.size()) - 1; i >= 0; --i)
         {
             const auto& c = audioClips[static_cast<size_t> (i)];
             if (c.track == track && tick >= c.startTick && tick < c.endTick())
@@ -234,33 +233,21 @@ struct Arrangement
         return -1;
     }
 
-    // A clip is valid when it lies inside the timeline, refers to an existing pattern and does not
-    // overlap another clip on the same track. `ignoreIndex` is the clip being moved/resized (or -1).
-    bool canPlace (const Clip& c, int ignoreIndex = -1) const
+    // A clip is valid when it lies inside the timeline and refers to an existing pattern. Since 0.33.0 it may overlap other
+    // clips on its track (layering): they all play. `ignoreIndex` is kept for the callers (the clip being moved).
+    bool canPlace (const Clip& c, [[maybe_unused]] int ignoreIndex = -1) const
     {
         if (c.pattern < 0 || c.pattern >= static_cast<int> (patterns.size()))
             return false;
         if (c.track < 0 || c.track >= kPlaylistTracks)
             return false;
-        if (c.startUnit < 0 || c.lengthUnits < 1 || c.endUnit() > timelineUnits())
-            return false;
-
-        for (int i = 0; i < static_cast<int> (clips.size()); ++i)
-        {
-            const auto& o = clips[static_cast<size_t> (i)];
-            if (i != ignoreIndex && o.track == c.track && c.startUnit < o.endUnit() && o.startUnit < c.endUnit())
-                return false;
-        }
-        for (const auto& a : audioClips)
-            if (a.track == c.track && c.startUnit * patternTicks < a.endTick() && a.startTick < c.endUnit() * patternTicks)
-                return false;
-        return true;
+        return c.startUnit >= 0 && c.lengthUnits >= 1 && c.endUnit() <= timelineUnits();
     }
 
-    // Index of the clip covering (track, unit), or -1.
+    // Index of the clip covering (track, unit), or -1; of overlapping clips, the one drawn on top (the last).
     int clipAt (int track, int unit) const
     {
-        for (int i = 0; i < static_cast<int> (clips.size()); ++i)
+        for (int i = static_cast<int> (clips.size()) - 1; i >= 0; --i)
         {
             const auto& c = clips[static_cast<size_t> (i)];
             if (c.track == track && unit >= c.startUnit && unit < c.endUnit())

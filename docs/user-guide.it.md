@@ -583,9 +583,15 @@ l'eliminazione di un pattern). Split e Cut funzionano anche sulle clip di patter
 ottenuta dividendo una clip audio ricorda dove inizia nel suono **in secondi, al BPM a cui è stata tagliata**: se in seguito cambi il
 BPM il suono continua a suonare alla velocità originale, quindi i punti di taglio non cadono più sul battito su cui erano stati fatti.
 
-Le clip non possono sovrapporsi sulla stessa traccia: uno spostamento o un ridimensionamento che si sovrapporrebbe
-semplicemente non viene applicato. Le clip su tracce diverse suonano insieme. Un clic sul **nome** di una traccia sceglie la
-traccia in cui scrive **Record** (segnata da un punto rosso).
+**Le clip possono stare una sopra l'altra sulla stessa traccia** (0.33.0, come in FL Studio): clip di pattern, registrazioni e
+file audio si sovrappongono liberamente e suonano tutti; quella aggiunta o spostata per ultima è disegnata sopra ed è quella
+che un clic prende (ogni clip ha un contorno, così i bordi di quelle sotto restano visibili). Anche le clip su tracce diverse
+suonano insieme.
+
+**Nomi delle tracce** (0.33.0): un clic sul **nome** di una traccia sceglie la traccia in cui scrive **Record** (segnata da un
+punto rosso); un **doppio clic** la rinomina, il **tasto destro** apre *Rename...*, **Colour** (dodici colori, o nessuno: il
+colore segna il nome e tinge la traccia) e *Default name and colour*. Nomi e colori si salvano con il progetto e si annullano
+con Ctrl+Z.
 
 ### Clip audio
 
@@ -628,7 +634,7 @@ Tasto destro su una clip audio > **Stretch and pitch...** per cambiarne la lungh
 **Apply** elabora di nuovo l'audio, una volta sola (qualche secondo per un file lungo) e la clip diventa più lunga o più corta dello stesso fattore;
 **Back to the original** torna al suono e alla lunghezza del file; funziona anche **Undo** della playlist. Il file su disco non viene mai modificato.
 Una clip modificata lo mostra nel nome: `[x1.50, +3 st]`. Il risultato parte sempre dall'audio originale, quindi due volte 150 % fanno
-150 %, non 225 %. Se la clip più lunga si sovrappone alla vicina o supera la fine della playlist, non cambia nulla e il programma te lo dice.
+150 %, non 225 %. Se la clip più lunga supera la fine della playlist, non cambia nulla e il programma te lo dice.
 
 Il file di progetto salva solo i numeri; l'audio viene elaborato di nuovo all'apertura (le clip con lo stesso file e gli stessi
 numeri condividono un'unica elaborazione). Dividere una clip modificata lascia entrambe le metà modificate.

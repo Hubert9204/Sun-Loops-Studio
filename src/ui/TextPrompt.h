@@ -30,5 +30,7 @@ inline void promptForText (juce::Component& owner,
                                          accepted (window->getTextEditorContents ("text"));
                                  }),
                              true);
+    if (auto* editor = window->getTextEditor ("text"))
+        editor->grabKeyboardFocus(); // type at once (0.33.0)
 }
 } // namespace sls

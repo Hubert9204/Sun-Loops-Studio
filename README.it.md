@@ -14,7 +14,7 @@ strumento sta in un pannello mobile che puoi spostare, ridimensionare, sovrappor
 Sun Loops Studio si ispira al modo di lavorare dei DAW a loop come FL Studio. È un progetto indipendente: non usa
 codice, nomi, grafica o risorse di altri prodotti e non è affiliato né approvato dai loro produttori.
 
-**Stato: alpha (0.32.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
+**Stato: alpha (0.33.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
 La riproduzione è stata confermata su un vero PC Nobara per la versione 0.3; tutto ciò che è stato aggiunto dopo
 (pannelli, pattern, playlist, browser, pitch/swing, mixer espanso ed effetti, salvataggio dei progetti, AppImage, clip audio, trascinamento
 dei file, registrazione, MIDI, metronomo e formati di esportazione) è stato provato con test automatici e in un display virtuale con un
@@ -48,7 +48,7 @@ plugin commerciali. Vedi [docs/roadmap.md](docs/roadmap.md) per sapere con preci
 - **Loop Starter** (0.30.0) - un loop di partenza in uno di dieci generi (house, techno, hip-hop, trap, drum & bass, pop, lo-fi,
   reggaeton, rock, synthwave): batteria, basso, accordi e una melodia che stanno insieme, nella tonalità scelta, al tempo del genere, con
   i suoni incorporati, come nuovo pattern. Fatto con regole e caso (niente IA, niente in rete); ogni variante è diversa.
-- **Pattern e Playlist** - più pattern (nuovi, copiati, rinominati o eliminati con i pulsanti sopra la playlist) disposti come clip su 8 tracce. Il pulsante *Pattern / Song*
+- **Pattern e Playlist** - più pattern (nuovi, copiati, rinominati o eliminati con i pulsanti sopra la playlist) disposti come clip su 8 tracce (ognuna con nome e colore propri, e le clip possono stare una sopra l'altra: 0.33.0). Il pulsante *Pattern / Song*
   sceglie se ripetere il pattern selezionato o suonare tutta la playlist; i pattern durano 1, 2, 4 o 8 battute. **Clic sul righello per spostare il
   cursore, anche in riproduzione; trascinamento col destro per disegnare una zona di loop** (tasto destro sulla zona per spostarla, ridimensionarla o eliminarla).
 - **Audio nella Playlist** - trascina file audio (`.wav .aiff .flac .ogg .oga .mp3 .aac`) o video (ne viene presa la

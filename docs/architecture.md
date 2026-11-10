@@ -297,6 +297,9 @@ voices -> channel (smoothed gain, equal-power pan, channel mute/solo)
   is active in the audio callback and the feedback loops flush tiny values.
 - The piano roll's loop region (0.20.0) lives in `Pattern::loopStartTick / loopEndTick`; in Pattern mode `publishProject` copies the current
   pattern's region into the snapshot's `loopStartTick / loopEndTick`, which the `Player` already handles for the playlist's region.
+- Playlist tracks (0.33.0): `Arrangement::playlistTracks` holds a name and an ARGB colour per track (written to the project only
+  when set, under `playlistTracks`), part of the playlist's undo snapshots. Overlap is allowed: the placement checks only test the
+  timeline, and `clipAt` / `audioClipAt` search from the end so the top clip wins.
 - Typing keyboard (0.32.0): `src/audio/TypingKeyboard.h` maps characters to notes (A = MIDI 60) and commands (Z / X / C / V);
   `MainComponent::handleTypingKey` sends `juce::MidiMessage` note ons through `AudioEngine::handleMidi`, so the notes reach the
   selected channel, Rec notes and the score log exactly as a MIDI keyboard's; `keyStateChanged` and the timer send the note offs.

@@ -2,6 +2,19 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.33.0 - 2026-11-10
+
+### Added
+- **Playlist track names and colours**: double-click a track's name to rename it; right-click it for *Rename...*, a **Colour**
+  (twelve, or none: it marks the name and tints the track) and *Default name and colour*. Saved in the project, undoable.
+- **Layering**: clips may lie over each other on a playlist track - pattern clips, recordings and audio files alike - and all
+  play. The clip added or moved last is on top and is the one a click picks; every pattern clip now has an outline.
+
+### Changed
+- Nothing refuses a clip for overlapping any more: moves, resizes, pastes, recordings, imports, stretches and edited audio take
+  the place and length asked for (only the end of the timeline still limits them). Older projects open as before.
+- Text prompts (rename a channel, a pattern, a track) put the cursor in the text box at once.
+
 ## 0.32.0 - 2026-11-10
 
 ### Added
