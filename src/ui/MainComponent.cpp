@@ -478,6 +478,9 @@ MainComponent::MainComponent()
     pianoToggle.onClick = [this] { togglePanel (pianoPanel); };
     mixerToggle.onClick = [this] { togglePanel (mixerPanelWindow); };
     metersButton.onClick = [this] { toggleMeters(); };
+    heliosButton.onClick = [this] { openHelios(); };
+    heliosButton.setTooltip ("Helios (F1): ask how to do something; searches the manual on this computer (no AI, no internet)");
+    heliosButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff5a3d1e));
     typingButton.setClickingTogglesState (false);
     typingButton.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xffe8943a));
     typingButton.setTooltip ("Play the selected channel from the computer keyboard: A S D F G H J K L are the white keys from C5, "
@@ -498,7 +501,7 @@ MainComponent::MainComponent()
 
     // Space and F5/F6/F7/F9 are handled by this component, so these controls must not steal keyboard focus.
     for (juce::Button* b : std::initializer_list<juce::Button*> { &fileButton, &playButton, &clearButton, &modeButton, &patternAddButton, &deviceButton, &metronomeButton, &recordButton, &recordMenuButton, &noteRecordButton,
-                     &browserToggle, &browserTab, &rackToggle, &playlistToggle, &pianoToggle, &mixerToggle, &resetButton, &metersButton, &typingButton })
+                     &browserToggle, &browserTab, &rackToggle, &playlistToggle, &pianoToggle, &mixerToggle, &resetButton, &metersButton, &typingButton, &heliosButton })
         b->setMouseClickGrabsKeyboardFocus (false);
     patternBox.setMouseClickGrabsKeyboardFocus (false);
     patternBox.setWantsKeyboardFocus (false);
@@ -506,7 +509,7 @@ MainComponent::MainComponent()
     for (auto* c : std::initializer_list<juce::Component*> { &fileButton, &playButton, &modeButton, &patternBox, &patternAddButton,
                                                               &clearButton, &deviceButton, &metronomeButton, &recordButton, &recordMenuButton, &noteRecordButton,
                                                               &browserToggle, &rackToggle, &playlistToggle, &pianoToggle,
-                                                              &mixerToggle, &resetButton, &metersButton, &typingButton, &bpmSlider, &volumeSlider,
+                                                              &mixerToggle, &resetButton, &metersButton, &typingButton, &heliosButton, &bpmSlider, &volumeSlider,
                                                               &bpmLabel, &volumeLabel, &deviceLabel, &statusLabel, &meter,
                                                               &browser, &browserTab, &workspace })
         addAndMakeVisible (c);
@@ -592,6 +595,7 @@ MainComponent::~MainComponent()
     automationWindow.reset();
     sampleEditorWindow.reset();
     pitchEditorWindow.reset(); // before the engine it plays through
+    heliosWindow.reset();
     slicerWindow.reset();
     drumWindow.reset();
     samplerWindow.reset();
@@ -662,6 +666,8 @@ void MainComponent::resized()
     metersButton.setBounds (views.removeFromLeft (80));
     views.removeFromLeft (4);
     typingButton.setBounds (views.removeFromLeft (96));
+    views.removeFromLeft (4);
+    heliosButton.setBounds (views.removeFromLeft (72));
 
     area.removeFromTop (6);
     auto info = area.removeFromTop (20);
@@ -726,6 +732,7 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
     if (key == juce::KeyPress::F7Key) { togglePanel (pianoPanel); return true; }
     if (key == juce::KeyPress::F8Key) { setBrowserOpen (! browserOpen); return true; }
     if (key == juce::KeyPress::F9Key) { togglePanel (mixerPanelWindow); return true; }
+    if (key == juce::KeyPress::F1Key) { openHelios(); return true; }
     return false;
 }
 

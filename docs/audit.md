@@ -27,6 +27,10 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.40.0
+Helios reads only text built into the program; it opens no files and no network connection. The two manuals add about 200 KB to the
+binary. Commands run on the message thread exactly as their buttons and menu items do.
+
 ## After 0.39.0
 The stem split runs on a worker thread that touches only its own copy of the audio; the results go back to the message thread
 through `callAsync`, and the playlist checks that the clip still holds the same audio before replacing it. Cancelling stops the

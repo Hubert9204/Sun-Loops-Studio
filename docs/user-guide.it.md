@@ -99,6 +99,21 @@ Playlist sotto; Piano Roll e Mixer chiusi. Il Mixer si apre grande, sopra tutto 
 Le disposizioni salvate da versioni precedenti alla 0.5 vengono ignorate una volta (le impostazioni dei pannelli sono
 state rinominate); **Reset**, o semplicemente spostare i pannelli, salva quelle nuove.
 
+## Helios: chiedere aiuto (0.40.0)
+
+Premi **F1** o il pulsante **Helios** e scrivi cosa vuoi fare, in italiano o in inglese ("come aggiungo un riverbero?", "how do I
+record two microphones?"). Helios cerca in **questo manuale** e tra i **comandi** del programma, sul tuo computer: niente IA, niente
+internet, non viene inviato nulla.
+
+- I risultati con **Do:** sono comandi (aprire il Mixer, registrare, esportare, aprire un progetto FL Studio, tagliare un loop...):
+  doppio clic, **Invio** o **Do it** e Helios lo fa.
+- Gli altri sono sezioni del manuale (in italiano, segnate *(italiano)*, o in inglese): clicca per leggerle a destra.
+
+Come trova le cose: cerca le parole della domanda (senza accenti, plurali e desinenze comuni, ignorando parole come "come", "un",
+"how", "the"), dà più peso ai titoli, capisce alcuni nomi di FL Studio (insert = mixer, Slicex = Slicer, Newtone = editor di
+intonazione, VST = plugin) e preferisce il manuale nella lingua della domanda. Non capisce le frasi: se non esce nulla di utile, prova
+con meno parole o con altre.
+
 ## Tastiera
 
 | Tasto | Azione |

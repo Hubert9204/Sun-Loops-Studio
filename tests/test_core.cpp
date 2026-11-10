@@ -33,6 +33,7 @@
 #include "audio/Slicer.h"
 #include "audio/PitchTrack.h"
 #include "audio/StemSplit.h"
+#include "library/HelpIndex.h"
 #include "audio/Loudness.h"
 #include "audio/Spectrum.h"
 #include "audio/MidiImport.h"
@@ -4790,6 +4791,49 @@ void testAudioImport()
     check (r3.data == nullptr && r3.error.contains ("no audio"), "a video without sound is reported");
     check (library.getNumberOfChildFiles (juce::File::findFiles) == 2, "and leaves no partial files behind");
     dir.deleteRecursively(); // test folders in /tmp are not left behind
+}
+
+void testHelios()
+{
+    std::cout << "Helios: searching the manual offline\n";
+    const std::string en = "# Guide\n\nIntro text.\n\n## Mixer\n\nPress **F9** to open the mixer.\n\n### Effects\n\nClick a slot to add an effect: "
+                           "reverb, delay, compressor.\n\n## Playlist\n\nClips and tracks.\n\n### The ruler: song position and loop region\n\n"
+                           "Right-drag on the ruler draws a loop region. Click to move the song position.\n\n### Recording\n\nPress Record to record "
+                           "the audio input on the armed tracks.\n";
+    const std::string it = "# Guida\n\n## Mixer\n\nPremi **F9** per aprire il mixer.\n\n### Registrazione\n\n**Record** registra l'ingresso "
+                           "audio: più tracce insieme, ognuna dal proprio ingresso.\n\n### Città e perché\n\nUna sezione con accenti.\n";
+    sls::HelpIndex index;
+    index.add (en, "en");
+    index.add (it, "it");
+    check (index.sections().size() == 8, "the manuals are cut into sections at their ## and ### headings");
+    check (index.sections()[1].title == "Mixer > Effects" && index.sections()[0].title == "Mixer", "a sub-section's title names its parent");
+    check (index.sections()[1].plain.find ("**") == std::string::npos && index.sections()[1].language == "en", "the plain text has no markup");
+
+    auto hits = index.search ("loop region");
+    check (! hits.empty() && index.sections()[static_cast<size_t> (hits[0].section)].heading == "The ruler: song position and loop region",
+           "\"loop region\" finds the ruler's section first");
+    check (! hits.empty() && hits[0].snippet.find ("loop region") != std::string::npos, "with the sentence that says it");
+    hits = index.search ("How do I add a reverb?");
+    check (! hits.empty() && index.sections()[static_cast<size_t> (hits[0].section)].heading == "Effects", "a question in words finds the effects");
+    hits = index.search ("insert effects");
+    check (! hits.empty() && index.sections()[static_cast<size_t> (hits[0].section)].title.find ("Mixer") == 0, "FL Studio's \"insert\" means the mixer");
+    hits = index.search ("registrare più tracce");
+    check (! hits.empty() && index.sections()[static_cast<size_t> (hits[0].section)].heading == "Registrazione"
+               && index.sections()[static_cast<size_t> (hits[0].section)].language == "it",
+           "an Italian question finds the Italian section");
+    hits = index.search ("CITTA PERCHE");
+    check (! hits.empty() && index.sections()[static_cast<size_t> (hits[0].section)].heading == "Città e perché", "accents and case do not matter");
+    hits = index.search ("recording tracks");
+    check (hits.size() >= 2, "several sections can match");
+    check (index.search ("").empty() && index.search ("   ?! ").empty() && index.search ("zzzqqq").empty() && index.search ("the and of").empty(),
+           "nothing to look for, or no such word: no results");
+    check (index.search ("mixer", 1).size() == 1, "the number of results is limited");
+    const auto w = sls::HelpIndex::words ("Effects, EFFECT; effetti!");
+    check (w.size() >= 3 && w[0] == w[1], "\"effects\" and \"effect\" are the same word");
+    sls::HelpIndex hostile;
+    hostile.add (std::string ("## \xff\xfe\n\n\xc3\n## \n###\n") + std::string (1000, '#'), "en");
+    hostile.search ("\xc3");
+    check (true, "broken text does not crash");
 }
 
 double energyOf (const sls::SampleData& s, int from, int to)
@@ -10375,6 +10419,7 @@ int main()
     testSlicer();
     testPitchTools();
     testStemSplit();
+    testHelios();
     testMidiNotes();
     testPlayerRewind();
     testClipEditing();

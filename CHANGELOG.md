@@ -2,6 +2,14 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.40.0 - 2026-11-10
+
+### Added
+- **Helios** (F1, or the Helios button): ask how to do something in English or Italian. It searches the user guides, built into
+  the program, with BM25 ranking (titles count more; accents, plurals and common endings ignored; a few FL Studio names
+  understood; the question's language preferred), and a list of the program's commands, which it can run (Enter, double-click or
+  *Do it*). Offline: no AI, no network. (The request called it "Elio"; renamed Helios on 2026-11-10.)
+
 ## 0.39.0 - 2026-11-10
 
 ### Added

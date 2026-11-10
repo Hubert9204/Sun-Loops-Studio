@@ -95,6 +95,21 @@ below it; Piano Roll and Mixer closed. The Mixer opens large, over everything el
 Layouts saved by versions before 0.5 are ignored once (the panel settings were renamed); **Reset** or just moving
 the panels saves the new ones.
 
+## Helios: ask for help (0.40.0)
+
+Press **F1** or the **Helios** button and type what you want to do, in English or Italian ("how do I record two microphones?",
+"come aggiungo un riverbero?"). Helios searches **this manual** and the program's **commands** on your computer: no AI, no internet,
+nothing is sent anywhere.
+
+- Results marked **Do:** are commands (open the Mixer, record, export, open an FL Studio project, slice a loop...): double-click one,
+  press **Enter** or **Do it** and Helios does it.
+- The others are sections of the manual (English, or marked *(italiano)*): click one to read it on the right.
+
+How it finds things: it looks for the words of your question (without accents, plurals and common endings, and ignoring words like
+"how", "the", "come", "un"), counts titles more, understands a few FL Studio names (insert = mixer, Slicex = Slicer, Newtone = pitch
+editor, VST = plugin) and prefers the manual in the language of the question. It does not understand sentences: if nothing useful
+comes up, try fewer or other words.
+
 ## Keyboard
 
 | Key | Action |

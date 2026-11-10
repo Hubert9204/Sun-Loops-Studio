@@ -21,6 +21,7 @@
 #include "ui/SlicerWindow.h"
 #include "ui/PitchEditor.h"
 #include "audio/StemSplit.h"
+#include "ui/HeliosWindow.h"
 #include "ui/SynthPanel.h"
 #include "ui/SampleEditor.h"
 #include "ui/MetersView.h"
@@ -336,6 +337,10 @@ private:
     void openPitchEditorForClip (int audioClipIndex);                 // 0.38.0, MainComponentPitch.cpp
     void splitClipIntoStems (int audioClipIndex);                     // 0.39.0, MainComponentStems.cpp
     void useStems (int audioClipIndex, const AudioClip& clip, Stems stems);
+    // Helios (0.40.0, MainComponentHelios.cpp): the manual searched offline, and commands it can run.
+    void openHelios (const juce::String& question = {});
+    const HelpIndex& helpIndex();
+    std::vector<HeliosCommand> heliosCommands();
     juce::String pitchNotesToPattern (const std::vector<pitchtrack::Note>& notes);
     void openSampleEditorForChannel (int channelIndex);
     std::unique_ptr<DrumMachineWindow> drumWindow;
@@ -343,6 +348,8 @@ private:
     int samplerWindowChannel = -1;
     std::unique_ptr<SlicerWindow> slicerWindow;
     std::unique_ptr<PitchEditorWindow> pitchEditorWindow;
+    std::unique_ptr<HeliosWindow> heliosWindow;
+    std::unique_ptr<HelpIndex> help; // built the first time Helios opens
     int slicerWindowChannel = -1;
     std::unique_ptr<SynthWindow> synthWindow;
     int synthWindowChannel = -1;
@@ -417,6 +424,7 @@ private:
     juce::TextButton mixerToggle { "Mixer F9" };
     juce::TextButton resetButton { "Reset" };
     juce::TextButton metersButton { "Meters" };
+    juce::TextButton heliosButton { "Helios" };
     // The computer keyboard as a MIDI keyboard (0.32.0, see TypingKeyboard.h): notes go to the selected channel like a MIDI
     // keyboard's (so Rec notes and the score log take them too).
     juce::TextButton typingButton { "Typing keys" };

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(SunLoopsStudio VERSION 0.39.0 LANGUAGES C CXX ASM)
+project(SunLoopsStudio VERSION 0.40.0 LANGUAGES C CXX ASM)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -75,6 +75,7 @@ set(SLS_CORE_SOURCES
     src/library/ProjectFile.cpp
     src/library/FlpFile.cpp
     src/library/FlpProject.cpp
+    src/library/HelpIndex.cpp
     src/plugins/PluginScanner.cpp
     src/plugins/PluginHost.cpp)
 
@@ -95,6 +96,11 @@ set(SLS_COMMON_DEFINITIONS
     JUCE_PLUGINHOST_VST3=1
     JUCE_PLUGINHOST_LV2=1
     JUCE_PLUGINHOST_LADSPA=${SLS_LADSPA})
+
+# The user guides, built into the program for Helios (0.40.0), the offline help.
+juce_add_binary_data(SunLoopsHelp HEADER_NAME HelpData.h NAMESPACE HelpData
+    SOURCES docs/user-guide.md docs/user-guide.it.md)
+set_target_properties(SunLoopsHelp PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # --- Application -------------------------------------------------------------
 juce_add_gui_app(SunLoopsStudio
@@ -149,6 +155,8 @@ target_sources(SunLoopsStudio PRIVATE
     src/ui/PitchEditor.cpp
     src/ui/MainComponentPitch.cpp
     src/ui/MainComponentStems.cpp
+    src/ui/HeliosWindow.cpp
+    src/ui/MainComponentHelios.cpp
     src/ui/MetersView.cpp
     src/ui/SampleEditor.cpp
     ${SLS_CORE_SOURCES})
@@ -164,6 +172,7 @@ target_compile_definitions(SunLoopsStudio PRIVATE
 target_link_libraries(SunLoopsStudio PRIVATE
     SunLoopsSounds
     SunLoopsLibraryData
+    SunLoopsHelp
     juce::juce_audio_utils
     juce::juce_audio_processors
     juce::juce_gui_extra

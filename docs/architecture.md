@@ -67,6 +67,8 @@ src/ui/
   AutomationEditor.*            The point editor window for one automation clip
   SlicerWindow.*                The Slicer (0.37.0): the loop with its markers, per-slice settings; MainComponentSlicer.cpp wires it
   PitchEditor.*                 The pitch editor (0.38.0) over src/audio/PitchTrack.*; MainComponentPitch.cpp wires it to audio clips
+  HeliosWindow.*                Helios (0.40.0): search box, results (commands and manual sections), reader; MainComponentHelios.cpp
+                                builds the commands and the index of the built-in user guides
   PluginParameterPicker.*       The list a plugin parameter to automate is chosen from (0.35.0): filter, current values, last-touched preselected
   MetersView.*                  The Meters window: loudness read-outs, true peak, spectrum, goniometer, correlation
   SamplerPanel.*                The sampler settings window (MainComponentSampler.cpp opens and wires it, loads SoundFonts, makes slice channels)
@@ -536,6 +538,15 @@ mask) x a raised-cosine crossover around 150 Hz; Other = input - Drums - Bass in
 Frames are computed lazily into a ring of 17, so memory does not grow with the length. `MainComponentStems.cpp` runs it on a
 `ThreadWithProgressWindow` (asynchronous; the job deletes itself), writes three WAVs and calls `PlaylistTimeline::replaceAudioClip`
 (one undo step, refused if the clip changed meanwhile). `src/audio/Fft.h` is the radix-2 FFT, shared with the sample editor.
+
+### Helios (0.40.0)
+
+`docs/user-guide.md` and `docs/user-guide.it.md` are built into the program (`juce_add_binary_data`, target `SunLoopsHelp`), so
+the help is always the manual of the version that runs. `src/library/HelpIndex.{h,cpp}` (plain C++, tested) cuts them into
+sections at `##` / `###`, folds accents and case, drops stop words, maps a few synonyms and strips common English / Italian endings,
+and ranks with BM25 (k1 1.4, b 0.75) plus a title bonus, a bonus for sections holding every word and a small one for the
+question's language. The index is built the first time Helios opens. Commands are `HeliosCommand`s (name, keywords, a function)
+made by `MainComponent::heliosCommands`, matched by the share of the question's words they contain.
 
 ### Metering (0.11.0)
 
