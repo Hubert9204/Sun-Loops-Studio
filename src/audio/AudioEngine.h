@@ -72,6 +72,11 @@ public:
     // clock, corrected for latency) and queued for the message thread's ScoreLog.
     bool popScoreEvent (ScoreEvent& e) noexcept { return scoreEvents.pop (e); } // message thread only
 
+    // Effect memory (0.29.0): call from the message thread's timer. Makes the big buffers that reverbs, delays, choruses and Pitch
+    // Correctors in more slots than the player's pool covers are waiting for (see Player::effectMemoryShortfall).
+    void serviceEffectMemory();
+    int effectSlotsWaitingForMemory() const noexcept { return player.effectMemoryShortfall(); }
+
     // Audio input. The input is only opened when the user chooses one in the Audio dialog or presses Record.
     int getNumActiveInputChannels() const;
     // Switches on the device's first input channels (up to two) if none is on. Returns an error message, empty on success.
@@ -222,6 +227,8 @@ private:
     std::atomic<bool> startupTrigger { false };
     SpscQueue<MidiTake, 256> midiTakes; // audio thread -> message thread
     SpscQueue<ScoreEvent, 1024> scoreEvents; // audio thread -> message thread
+    int offeredMemory = 0;   // message thread: effect memory handed to the player and not yet counted in its pool
+    int lastMemoryCount = 0; // message thread: the pool's size at the last look
     double audioClockSeconds = 0.0;          // audio thread only: time played since the engine was made (only goes forwards)
     std::atomic<bool> noteRecording { false };
     std::atomic<double> outputLatencySamples { 0.0 };

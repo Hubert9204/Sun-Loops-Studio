@@ -61,6 +61,31 @@ void AudioEngine::watchMidiDevices()
     });
 }
 
+void AudioEngine::serviceEffectMemory()
+{
+    // The player says how many effect slots wait for memory; it is made here (allocating is fine on this thread) for the rate the
+    // device runs at, and handed over. A few per call keep the message thread responsive; the next call makes the rest.
+    const double rate = deviceRate.load (std::memory_order_relaxed);
+    if (rate <= 0.0)
+        return;
+    const int wanted = std::min (8, player.effectMemoryShortfall() - offeredMemory);
+    for (int i = 0; i < wanted; ++i)
+    {
+        auto memory = std::make_unique<EffectMemory>();
+        memory->prepare (rate);
+        if (! player.offerEffectMemory (std::move (memory)))
+            break;
+        ++offeredMemory;
+    }
+    // Once the player's count has caught up with what was offered, nothing is in flight any more.
+    const int count = player.effectMemoryCount();
+    if (count < lastMemoryCount)
+        offeredMemory = 0; // the pool was made again (a new device or rate): what was in flight was freed with it
+    else if (count > lastMemoryCount)
+        offeredMemory = std::max (0, offeredMemory - (count - lastMemoryCount));
+    lastMemoryCount = count;
+}
+
 juce::String AudioEngine::describeMidiInputs() const
 {
     juce::StringArray names;
@@ -274,7 +299,8 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* in, int 
     for (int ch = 0; ch < kMaxChannels; ++ch)
         raiseTo (channelPeaks[static_cast<size_t> (ch)], player.getChannelPeak (ch) * g);
 
-    for (int t = 0; t < kMaxTracks; ++t)
+    const int tracksNow = static_cast<int> (std::min (project->tracks.size(), static_cast<size_t> (kMaxTracks)));
+    for (int t = 0; t < tracksNow; ++t)
     {
         raiseTo (trackPeaks[static_cast<size_t> (t)], player.getTrackPeak (t) * g);
         trackRms[static_cast<size_t> (t)].store (player.getTrackRms (t) * g, std::memory_order_relaxed);

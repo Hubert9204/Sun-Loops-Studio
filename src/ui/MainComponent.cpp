@@ -198,6 +198,7 @@ MainComponent::MainComponent()
     // reserve the maximum up front and never grow past it.
     channels = demoChannels();
     channels.reserve (static_cast<size_t> (kMaxChannels));
+    tracks.reserve (static_cast<size_t> (kMaxTracks)); // grows in place: the mixer strips refer to the tracks
     for (size_t i = 0; i < channels.size(); ++i)
         channels[i].mixerTrack = static_cast<int> (i); // every channel on its own mixer track to start with
 
@@ -240,6 +241,8 @@ MainComponent::MainComponent()
     rackView.onItemDroppedOnEmptyArea = [this] (const drag::Item& item) { applyBrowserItem (-1, item); };
 
     mixerPanel.setTracks (tracks);
+    mixerPanel.onAddTracks = [this] (int howMany) { addMixerTracks (howMany); };
+    mixerPanel.onRemoveLastTrack = [this] { removeLastMixerTrack(); };
     mixerPanel.setMaster (masterTrack);
     mixerPanel.setConsole (console);
     mixerPanel.onTrackChanged = [this] (int) { publishProject(); };
@@ -709,7 +712,7 @@ void MainComponent::timerCallback()
     // Mixer tracks: peak since the last tick, plus RMS. Only drawn while the mixer is open.
     const bool mixerShown = mixerPanelWindow.isOpen();
     mixerPanel.setMasterLevels (mixerShown ? masterPeak : 0.0f, mixerShown ? engine.getMasterRms() : 0.0f);
-    for (int t = 0; t < kMaxTracks; ++t)
+    for (int t = 0; t < static_cast<int> (tracks.size()); ++t)
     {
         const float trackPeak = engine.consumeTrackPeak (t);
         if (mixerShown)
@@ -761,6 +764,7 @@ void MainComponent::timerCallback()
 
     drainMidiTakes();
     drainScoreEvents();
+    engine.serviceEffectMemory();
 
     // When the window is active but keyboard focus is outside this component (e.g. on the window
     // itself), take it so Space and F5/F6/F7/F9 work without a click first.
@@ -877,6 +881,7 @@ void MainComponent::saveLayout()
 void MainComponent::createStrip (size_t channelIndex)
 {
     auto strip = std::make_unique<ChannelStrip> (channels[channelIndex], static_cast<int> (channelIndex));
+    strip->setTrackCount (static_cast<int> (tracks.size()));
     strip->setLoopLengthTicks (arrangement.patternTicks);
     strip->onSelect = [this] (int idx) { selectChannel (idx); };
     strip->onChanged = [this] (int idx)
@@ -934,7 +939,7 @@ int MainComponent::addChannel (Instrument instrument, bool askForSample)
            + std::to_string (channels.size() + 1);
     if (instrument == Instrument::Drums)
         c.kit = defaultDrumKit();
-    c.mixerTrack = std::min (static_cast<int> (channels.size()), kMaxTracks - 1); // next free track
+    c.mixerTrack = std::min (static_cast<int> (channels.size()), static_cast<int> (tracks.size()) - 1); // next track
     jassert (channels.size() < channels.capacity()); // push_back must not reallocate (strips hold references)
     channels.push_back (std::move (c));
     arrangement.ensureChannelCount (channels.size());
@@ -1095,7 +1100,7 @@ void MainComponent::openAssignTrack (int channelIndex)
         return;
 
     juce::DialogWindow::LaunchOptions options;
-    options.content.setOwned (new AssignTrackComponent (channels, channelIndex,
+    options.content.setOwned (new AssignTrackComponent (channels, static_cast<int> (tracks.size()), channelIndex,
                                                         [safe = juce::Component::SafePointer<MainComponent> (this), channelIndex] (int track)
                                                         {
                                                             if (safe != nullptr)
@@ -1109,10 +1114,78 @@ void MainComponent::openAssignTrack (int channelIndex)
     assignDialog = options.launchAsync();
 }
 
+void MainComponent::setTrackCount (size_t count)
+{
+    count = std::clamp (count, static_cast<size_t> (kDefaultTracks), static_cast<size_t> (kMaxTracks));
+    jassert (tracks.capacity() >= static_cast<size_t> (kMaxTracks)); // no reallocation: the strips refer to the tracks
+    if (count == tracks.size())
+        return;
+    if (count < tracks.size())
+        mixerPanel.setTracks (tracks, count); // the strips of the tracks that go are removed first
+    while (tracks.size() > count)
+        tracks.pop_back();
+    while (tracks.size() < count)
+        tracks.emplace_back().name = "Track " + std::to_string (tracks.size());
+    mixerPanel.setTracks (tracks);
+    for (auto& strip : strips)
+    {
+        strip->setTrackCount (static_cast<int> (tracks.size()));
+        strip->refreshFromChannel();
+    }
+    for (auto& c : channels)
+        c.mixerTrack = std::clamp (c.mixerTrack, 0, static_cast<int> (tracks.size()) - 1);
+    updateTrackRouting();
+}
+
+void MainComponent::addMixerTracks (int howMany)
+{
+    const int room = kMaxTracks - static_cast<int> (tracks.size());
+    if (room <= 0)
+    {
+        statusLabel.setText ("The mixer already has " + juce::String (kMaxTracks) + " tracks, the most it can have", juce::dontSendNotification);
+        return;
+    }
+    const int added = std::clamp (howMany, 1, room);
+    setTrackCount (tracks.size() + static_cast<size_t> (added));
+    mixerPanel.setSelectedTrack (static_cast<int> (tracks.size()) - 1); // the newest, with the "+" next to it
+    statusLabel.setText (juce::String (added) + (added == 1 ? " mixer track" : " mixer tracks") + " added: " + juce::String (tracks.size()) + " in all",
+                         juce::dontSendNotification);
+    publishProject();
+}
+
+void MainComponent::removeLastMixerTrack()
+{
+    const int last = static_cast<int> (tracks.size()) - 1;
+    juce::String reason;
+    if (last < kDefaultTracks)
+        reason = "the mixer keeps at least " + juce::String (kDefaultTracks) + " tracks";
+    for (const auto& c : channels)
+        if (reason.isEmpty() && c.mixerTrack == last)
+            reason = juce::String (c.name) + " plays through it";
+    for (const auto& s : tracks.back().slots)
+        if (reason.isEmpty() && s.type != EffectType::None)
+            reason = "it has effects";
+    for (const auto& a : arrangement.automationClips)
+        if (reason.isEmpty() && (a.target.kind == AutomationKind::TrackVolume || a.target.kind == AutomationKind::TrackPan
+                                 || a.target.kind == AutomationKind::TrackEffect)
+            && a.target.index == last)
+            reason = "an automation clip controls it";
+    if (reason.isNotEmpty())
+    {
+        statusLabel.setText ("Track " + juce::String (last + 1) + " was kept: " + reason, juce::dontSendNotification);
+        return;
+    }
+    setTrackCount (tracks.size() - 1);
+    statusLabel.setText ("Track " + juce::String (last + 1) + " removed: " + juce::String (tracks.size()) + " tracks", juce::dontSendNotification);
+    publishProject();
+}
+
 void MainComponent::assignChannelToTrack (int channelIndex, int track)
 {
     if (channelIndex < 0 || channelIndex >= static_cast<int> (channels.size()) || track < 0 || track >= kMaxTracks)
         return;
+    if (track >= static_cast<int> (tracks.size())) // "a new track" in the dialog
+        setTrackCount (static_cast<size_t> (track) + 1);
 
     auto& channel = channels[static_cast<size_t> (channelIndex)];
     if (channel.mixerTrack == track)

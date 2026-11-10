@@ -308,12 +308,61 @@ struct EffectTransport
     double ticksPerSample = 0.0;
 };
 
-// The DSP behind one slot. All memory is allocated in prepare(); process() never allocates, locks or
-// does I/O. If the slot's type changes, the previous state is discarded and the new effect starts clean.
+// The big buffers some effects need (0.29.0): the reverb's combs and all-passes, the pre-delay, the delay lines (also the chorus's
+// and the Pitch Corrector's recordings) and the Pitch Corrector's analysis. About 0.8 MB at 48 kHz, so with up to 500 mixer tracks
+// of four slots each they are not part of every slot: the Player lends one to each slot whose effect needs it (see
+// effectNeedsMemory) from a pool that grows as more are needed. Without one such an effect lets the sound through unchanged.
+struct EffectMemory
+{
+    struct Comb
+    {
+        std::vector<float> buf;
+        int idx = 0;
+        int len = 1; // the part of `buf` in use (Room and Plate use shorter lines than Hall)
+        float store = 0.0f;
+    };
+
+    struct Allpass
+    {
+        std::vector<float> buf;
+        int idx = 0;
+        int len = 1;
+    };
+
+    static constexpr int kCombs = 8;
+    static constexpr int kAllpasses = 4;
+    static constexpr int kPitchDecimated = 1024; // the Pitch Corrector's decimated history (a power of two)
+
+    void prepare (double sampleRate); // allocates for this rate
+    void clear() noexcept;            // silence, positions to the start
+    double preparedRate() const noexcept { return rate; }
+
+    std::array<std::array<Comb, kCombs>, 2> combs;          // reverb (Freeverb layout), channel 0 = left, 1 = right
+    std::array<std::array<Allpass, kAllpasses>, 2> allpasses;
+    std::vector<float> preDelay;                           // mono: the reverb's input, the Pitch Corrector's analysis copy
+    std::array<std::vector<float>, 2> delayLine;           // the delay's, the chorus's and the Pitch Corrector's recordings
+    std::array<float, kPitchDecimated> pcDecim {}, pcScratch {}, pcDiff {};
+
+private:
+    double rate = 0.0;
+};
+
+// True for the effects that need an EffectMemory to work.
+inline bool effectNeedsMemory (EffectType t) noexcept
+{
+    return t == EffectType::Reverb || t == EffectType::Delay || t == EffectType::Chorus || t == EffectType::PitchCorrector;
+}
+
+// The DSP behind one slot. All memory is allocated in prepare() (or lent: attachMemory, attachTimeBuffer); process() never
+// allocates, locks or does I/O. If the slot's type changes, the previous state is discarded and the new effect starts clean.
 class EffectUnit
 {
 public:
     void prepare (double sampleRate);
+
+    // The big buffers (see EffectMemory), lent by the Player; the effect starts clean with them. Null takes them back.
+    void attachMemory (EffectMemory* m) noexcept;
+    EffectMemory* attachedMemory() const noexcept { return memory; }
     void process (const EffectSlot& slot, float* left, float* right, int numSamples, const EffectTransport& transport = {}) noexcept;
 
     // The Time Shaper's recording of the recent past (two channels of `frames` samples). It is lent by the Player from a small pool,
@@ -340,23 +389,10 @@ private:
         void clearState() noexcept { z1l = z2l = z1r = z2r = 0.0; }
     };
 
-    struct Comb
-    {
-        std::vector<float> buf;
-        int idx = 0;
-        int len = 1; // the part of `buf` in use (Room and Plate use shorter lines than Hall)
-        float store = 0.0f;
-    };
-
-    struct Allpass
-    {
-        std::vector<float> buf;
-        int idx = 0;
-        int len = 1;
-    };
-
-    static constexpr int kCombs = 8;
-    static constexpr int kAllpasses = 4;
+    using Comb = EffectMemory::Comb;
+    using Allpass = EffectMemory::Allpass;
+    static constexpr int kCombs = EffectMemory::kCombs;
+    static constexpr int kAllpasses = EffectMemory::kAllpasses;
     static constexpr int kMaxPhaserStages = 12;
     static constexpr int kOversample = 4;
 
@@ -386,15 +422,13 @@ private:
     std::array<float, kMaxEffectParams> eqCached {};
     bool eqValid = false;
 
-    // reverb (Freeverb layout), channel 0 = left, 1 = right
-    std::array<std::array<Comb, kCombs>, 2> combs;
-    std::array<std::array<Allpass, kAllpasses>, 2> allpasses;
+    EffectMemory* memory = nullptr; // lent: the buffers below live there
+
+    // reverb (its combs, all-passes and pre-delay are in `memory`)
     int reverbType = -1;
-    std::vector<float> preDelay; // mono, the reverb's input
     int preDelayWrite = 0;
 
-    // delay (also the chorus's lines)
-    std::array<std::vector<float>, 2> delayLine;
+    // delay (also the chorus's lines; in `memory`)
     int delayWrite = 0;
     std::array<float, 2> delayCurrent { -1.0f, -1.0f }; // samples, glide towards the target
     std::array<float, 2> delayTone { 0.0f, 0.0f };
@@ -437,8 +471,8 @@ private:
     int fadeLeft = 0, fadeLength = 1;
     float volume = 1.0f;       // the smoothed volume pattern
 
-    // pitch corrector. Its stereo recording is `delayLine` and its mono recording (for the analysis) `preDelay`, which only the delay
-    // and the reverb use otherwise; the pitch is found on a copy decimated to about 12 kHz and refined at the full rate.
+    // pitch corrector. Its stereo recording is the memory's `delayLine` and its mono recording (for the analysis) `preDelay`; the
+    // pitch is found on a copy decimated to about 12 kHz (`pcDecim`) and refined at the full rate.
     struct PitchHead
     {
         double delay = 0.0; // samples
@@ -448,9 +482,8 @@ private:
     void rebirthHead (PitchHead& head, const PitchHead& other, double ratio) noexcept;
     double headPosition (double delay) const noexcept; // read position in delayLine for a delay
 
-    static constexpr int kPitchDecimated = 1024; // the decimated history (a power of two)
-    static constexpr int kPitchHop = 64;         // analysis every 64 decimated samples (about 5 ms)
-    std::array<float, kPitchDecimated> pcDecim {}, pcScratch {}, pcDiff {};
+    static constexpr int kPitchDecimated = EffectMemory::kPitchDecimated;
+    static constexpr int kPitchHop = 64; // analysis every 64 decimated samples (about 5 ms)
     Biquad pcAa1, pcAa2; // the decimation's low-pass (fourth-order Butterworth), left channel state only
     int pcFactor = 4, pcPhase = 0, pcDecimWrite = 0, pcHopLeft = kPitchHop, pcControl = 0;
     double pcPeriod = 0.0;        // the input's period in samples, 0 = no pitch

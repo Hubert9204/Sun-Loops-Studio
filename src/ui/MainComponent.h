@@ -169,6 +169,11 @@ private:
     void applyNoteRecording();
     void openNoteRecordMenu();
     void drainMidiTakes();
+    // 0.29.0: the number of mixer tracks (within kDefaultTracks .. kMaxTracks; new ones are default tracks named "Track N").
+    // Resizes `tracks` in place (no reallocation) and brings the mixer, the channel strips and the routing up to date.
+    void setTrackCount (size_t count);
+    void addMixerTracks (int howMany);
+    void removeLastMixerTrack(); // only when nothing uses it
     void drainScoreEvents();               // 0.28.0: into scoreLog
     void dumpScoreLog (bool lastPhraseOnly); // the score log's notes into the current pattern
     void endNoteTake();
@@ -280,7 +285,8 @@ private:
 
     // Source of truth for the UI. Never resized after construction, so the strips can hold references.
     std::vector<Channel> channels;
-    std::vector<MixerTrack> tracks = Project::defaultTracks(); // the mixer: kMaxTracks tracks with their effect chains
+    // The mixer tracks (kDefaultTracks .. kMaxTracks) with their effect chains. Capacity kMaxTracks: the mixer strips hold references.
+    std::vector<MixerTrack> tracks = Project::defaultTracks();
     MixerTrack masterTrack;                                    // only its `slots` are used: the master bus's effect chain
     Console console = Console::defaults();                     // the aux buses and the VCA groups
     std::vector<std::unique_ptr<ChannelStrip>> strips;

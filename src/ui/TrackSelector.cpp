@@ -21,6 +21,16 @@ void TrackSelector::setTrack (int zeroBasedTrack)
     }
 }
 
+void TrackSelector::setNumTracks (int numberOfTracks)
+{
+    tracks = std::max (1, numberOfTracks);
+    if (track >= tracks)
+    {
+        track = tracks - 1;
+        repaint();
+    }
+}
+
 void TrackSelector::changeTo (int newTrack)
 {
     const int clamped = std::clamp (newTrack, 0, tracks - 1);
@@ -78,8 +88,20 @@ void TrackSelector::mouseWheelMove (const juce::MouseEvent&, const juce::MouseWh
 void TrackSelector::showMenu()
 {
     juce::PopupMenu menu;
-    for (int i = 0; i < tracks; ++i)
-        menu.addItem (i + 1, "Track " + juce::String (i + 1), true, i == track);
+    constexpr int kPerGroup = 50; // many tracks: in groups of 50, so the menu fits on the screen
+    if (tracks <= kPerGroup)
+        for (int i = 0; i < tracks; ++i)
+            menu.addItem (i + 1, "Track " + juce::String (i + 1), true, i == track);
+    else
+        for (int first = 0; first < tracks; first += kPerGroup)
+        {
+            juce::PopupMenu group;
+            const int last = std::min (tracks, first + kPerGroup);
+            for (int i = first; i < last; ++i)
+                group.addItem (i + 1, "Track " + juce::String (i + 1), true, i == track);
+            menu.addSubMenu ("Tracks " + juce::String (first + 1) + " - " + juce::String (last), group, true, nullptr,
+                             track >= first && track < last);
+        }
 
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
                         [safe = juce::Component::SafePointer<TrackSelector> (this)] (int result)

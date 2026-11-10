@@ -219,8 +219,10 @@ class MixerPanel : public juce::Component
 public:
     MixerPanel();
 
-    // The tracks are not owned and must not be reallocated while the panel exists.
-    void setTracks (std::vector<MixerTrack>& tracks);
+    // The tracks are not owned and must not be reallocated while the panel exists. Called again with the same vector after it
+    // grew or shrank (0.29.0), only the strips at the end are added or removed. `stripCount` below the vector's size removes
+    // the strips of the last tracks first (before those tracks are destroyed).
+    void setTracks (std::vector<MixerTrack>& tracks, size_t stripCount = static_cast<size_t> (-1));
     // The master bus's effect chain (its `slots`); not owned. Call once, after setTracks().
     void setMaster (MixerTrack& masterTrack);
     // The aux buses and VCA groups; not owned. Call once, after setTracks().
@@ -237,6 +239,8 @@ public:
     void setMasterVolume (double volume) { masterStrip.setVolume (volume); }
 
     std::function<void (int)> onTrackChanged;       // anything that changes the sound (track index, or kMasterIndex)
+    std::function<void (int)> onAddTracks;          // the "+" button: add this many tracks (0.29.0)
+    std::function<void()> onRemoveLastTrack;        // its menu: remove the last track
     std::function<void (double)> onMasterVolumeChanged;
     // Right click on a track fader / balance or on an effect parameter. For the master bus: kind MasterEffect.
     std::function<void (const AutomationTarget&)> onAutomate;
@@ -253,6 +257,8 @@ private:
     struct Inner : juce::Component {};
 
     void layoutInner();
+    void addStrip (size_t index);
+    void showAddTrackMenu();
     void selectMaster();
     void selectAux (int aux);
     void updateVcaMembers();
@@ -267,6 +273,21 @@ private:
     juce::Viewport viewport;
     Inner inner;
     std::vector<std::unique_ptr<MixerStrip>> strips;
+    // After the last track (0.29.0): a click adds a track, a right-click offers more.
+    struct AddTrackButton : juce::TextButton
+    {
+        AddTrackButton() : juce::TextButton ("+") {}
+        std::function<void()> onRightClick;
+        void mouseDown (const juce::MouseEvent& e) override
+        {
+            if (e.mods.isPopupMenu() && onRightClick)
+                onRightClick();
+            else
+                juce::TextButton::mouseDown (e);
+        }
+    };
+    AddTrackButton addTrackButton;
+    static constexpr int kAddButtonWidth = 28;
     MasterStrip masterStrip;
     FxPanel fxPanel;
 };

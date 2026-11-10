@@ -12,13 +12,14 @@ const juce::Colour kMuted { 0xffa9aeb9 };
 const juce::Colour kFree { 0xff6cc9a0 };
 } // namespace
 
-AssignTrackComponent::AssignTrackComponent (const std::vector<Channel>& channels, int channelIndex,
+AssignTrackComponent::AssignTrackComponent (const std::vector<Channel>& channels, int trackCount, int channelIndex,
                                             std::function<void (int)> assignCallback)
     : onAssign (std::move (assignCallback))
 {
+    trackCount = std::clamp (trackCount, 1, kMaxTracks);
     const bool valid = channelIndex >= 0 && channelIndex < static_cast<int> (channels.size());
     const auto name = valid ? juce::String (channels[static_cast<size_t> (channelIndex)].name) : juce::String ("instrument");
-    const int current = valid ? std::clamp (channels[static_cast<size_t> (channelIndex)].mixerTrack, 0, kMaxTracks - 1) : 0;
+    const int current = valid ? std::clamp (channels[static_cast<size_t> (channelIndex)].mixerTrack, 0, trackCount - 1) : 0;
 
     title.setText ("Mixer track for \"" + name + "\"", juce::dontSendNotification);
     title.setFont (juce::FontOptions (17.0f, juce::Font::bold));
@@ -33,31 +34,38 @@ AssignTrackComponent::AssignTrackComponent (const std::vector<Channel>& channels
     addAndMakeVisible (hint);
 
     // Who is on each track (this instrument included: it is marked as the current one).
-    std::array<juce::String, kMaxTracks> others;
+    std::vector<juce::String> others (static_cast<size_t> (trackCount));
     for (size_t i = 0; i < channels.size(); ++i)
     {
-        auto& text = others[static_cast<size_t> (std::clamp (channels[i].mixerTrack, 0, kMaxTracks - 1))];
+        auto& text = others[static_cast<size_t> (std::clamp (channels[i].mixerTrack, 0, trackCount - 1))];
         text += (text.isEmpty() ? "" : ", ") + juce::String (channels[i].name);
     }
 
-    firstFree = firstFreeTrack (channels); // a track with no instrument at all
-
-    for (int t = 0; t < kMaxTracks; ++t)
+    for (int t = 0; t < trackCount; ++t)
     {
-        auto& row = rows[static_cast<size_t> (t)];
         const auto& who = others[static_cast<size_t> (t)];
         juce::String text = "Track " + juce::String (t + 1) + "   -   ";
         text += who.isEmpty() ? juce::String ("free") : who;
         if (t == current)
             text += "   (current)";
-        row.setButtonText (text);
-        row.setRadioGroupId (1);
-        row.setColour (juce::ToggleButton::textColourId, who.isEmpty() ? kFree : kText);
-        row.setColour (juce::ToggleButton::tickColourId, kText);
-        row.onClick = [this, t] { selectedTrack = t; };
-        row.onStateChange = [this, t] { if (rows[static_cast<size_t> (t)].getToggleState()) selectedTrack = t; };
-        addAndMakeVisible (row);
+        rowText.push_back (text);
+        rowFree.push_back (who.isEmpty());
     }
+    if (trackCount < kMaxTracks)
+    {
+        rowText.push_back ("Track " + juce::String (trackCount + 1) + "   -   a new track");
+        rowFree.push_back (true);
+    }
+
+    firstFree = firstFreeTrack (channels, trackCount); // a track with no instrument at all
+    if (firstFree < 0 && trackCount < kMaxTracks)
+        firstFree = trackCount; // none: the new one
+
+    list.setModel (this);
+    list.setRowHeight (26);
+    list.setColour (juce::ListBox::backgroundColourId, kBackground.darker (0.25f));
+    list.setWantsKeyboardFocus (false);
+    addAndMakeVisible (list);
 
     freeButton.setEnabled (firstFree >= 0);
     freeButton.onClick = [this] { if (firstFree >= 0) selectTrack (firstFree); };
@@ -76,8 +84,32 @@ AssignTrackComponent::AssignTrackComponent (const std::vector<Channel>& channels
 
 void AssignTrackComponent::selectTrack (int track)
 {
-    selectedTrack = std::clamp (track, 0, kMaxTracks - 1);
-    rows[static_cast<size_t> (selectedTrack)].setToggleState (true, juce::dontSendNotification);
+    selectedTrack = std::clamp (track, 0, std::max (0, static_cast<int> (rowText.size()) - 1)); // (also called from the constructor)
+    list.selectRow (selectedTrack, false, true);
+    list.scrollToEnsureRowIsOnscreen (selectedTrack);
+}
+
+void AssignTrackComponent::paintListBoxItem (int row, juce::Graphics& g, int width, int height, bool selected)
+{
+    if (row < 0 || row >= getNumRows())
+        return;
+    if (selected)
+        g.fillAll (juce::Colour (0xff3d5a80));
+    g.setColour (rowFree[static_cast<size_t> (row)] ? kFree : kText);
+    g.setFont (juce::FontOptions (14.0f));
+    g.drawText (rowText[static_cast<size_t> (row)], 8, 0, width - 12, height, juce::Justification::centredLeft, true);
+}
+
+void AssignTrackComponent::selectedRowsChanged (int lastRowSelected)
+{
+    if (lastRowSelected >= 0)
+        selectedTrack = lastRowSelected;
+}
+
+void AssignTrackComponent::listBoxItemDoubleClicked (int row, const juce::MouseEvent&)
+{
+    selectedTrack = row;
+    assign();
 }
 
 void AssignTrackComponent::assign()
@@ -133,11 +165,8 @@ void AssignTrackComponent::resized()
     hint.setBounds (area.removeFromTop (54));
     area.removeFromTop (6);
 
-    for (auto& row : rows)
-    {
-        row.setBounds (area.removeFromTop (28));
-        area.removeFromTop (2);
-    }
+    list.setBounds (area.removeFromTop (area.getHeight() - 8 - 28 - 10 - 32));
+    list.scrollToEnsureRowIsOnscreen (selectedTrack); // (selected before the list had a size)
 
     area.removeFromTop (8);
     freeButton.setBounds (area.removeFromTop (28).removeFromLeft (190));

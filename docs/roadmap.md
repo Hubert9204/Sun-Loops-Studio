@@ -1,6 +1,6 @@
 # Status and roadmap
 
-Version 0.28.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
+Version 0.29.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
 what is missing. If something here disagrees with the program, the program is right: please fix the page.
 
 ## What has been verified, and how
@@ -63,6 +63,9 @@ what is missing. If something here disagrees with the program, the program is ri
 | Additive and physical engines (0.24.0): the default timbre is a saw (harmonic n at 1/n) on pitch; odd-only; brightness; one harmonic = a sine (2nd harmonic 80 dB down); morph to B, the morph envelope; the filter on the harmonics; no aliasing at C8 (fold-back -172 dB); the master limiter linear below -3 dBFS (3rd harmonic -164 dB) and never above 1; the string in tune from E2 to E6 with and without stiffness (within 5 cents); decay, hardness, release damping, velocity, body; marimba's 3.99 mode, the bell's hum; every model finite at its extremes; the 14 new sounds; files (and older files without the settings); no allocation | Automated headless tests (1173 checks in total) | All pass |
 | The synth window with the new engines: the engine menu, the additive layout (timbre A and B, morph, morph envelope, filter, envelopes, LFO), Nylon Guitar loaded (model, resonance, envelope), the sound menu grouped by engine | Manual, in a virtual display | Worked (not heard) |
 | Time Shaper (0.25.0): no pattern = unchanged; half speed, reverse, stutter 1/16 sample-exact against the input; tape stop (1 kHz falling below 300 Hz, faded out); gate 1/8, depth, smoothing, trance gate; its own clock when stopped; mix 0; no recording = pattern skipped safely; every time x volume pattern finite and never louder than the input; five in a project (four with a recording) without allocation | Automated headless tests (1187 checks in total) | All pass |
+| Up to 500 mixer tracks (0.29.0): 500 tracks with 499 empty sound exactly like 8; a channel on track 451 is heard with its reverb; 2 s of 500 tracks render in about 0.1 s; the memory pool (16 at first, the 4 missing counted, offered memory adopted without allocating, memory moving between slots as effects come and go, removed tracks giving theirs back); an export with 40 delays makes its own; files with 300 tracks, more than 500 (cut, with a warning), and channels past the last track; the free-track helpers with any count | Automated headless tests (1276 checks in total) | All pass |
+| The pool under AddressSanitizer and UndefinedBehaviorSanitizer: 300 random projects of 8 to 127 tracks with random effects, a second thread offering memory meanwhile, a sample-rate change half-way | A separate test program | Nothing found |
+| In the app: the + button and its menu, 500 tracks reached, scrolling to the newest, the grouped track menu of a channel (Track 105 chosen), the scrolling Assign list with its "new track" row (Track 109 made and assigned), undo back to 8 tracks; memory 395 MB with 500 tracks against 370 MB with 8 | Manual, in a virtual display | Worked |
 | Score log (0.28.0): notes from note on / off with their timing at the tempo asked for, from tick 0; quantize; held, repeated and orphan notes; channels kept apart; the last phrase (a pause with a key held is not a pause); five minutes kept, 20000 events at most; bad times and pitches refused; time never goes backwards | Automated headless tests (1256 checks in total) | All pass |
 | The score log's items in the Rec notes menu (greyed out while it is empty) | Manual, in a virtual display | Worked |
 | Audio clips' pan, reverse and fades (0.27.0): pan -100 leaves only the left side at its level, +50 halves the left (a balance); reversed clips play the audio backwards sample by sample, also when started half-way, and stop at their end; turning a clip around keeps the part it plays; sine fades (silent at the edges, -3 dB half-way, full level between); split and cut keep the fades at the outer edges; fades longer than the clip are shared; nonsense values become none; saved and loaded, written only when set; no allocation | Automated headless tests (1241 checks in total) | All pass |
@@ -74,6 +77,9 @@ what is missing. If something here disagrees with the program, the program is ri
 
 ## What has not been verified
 
+- **Many tracks on a real machine (0.29.0).** Measured here in a virtual display, where the app's audio thread busy-waits on a
+  dummy device (about one core with 8 tracks or 500 alike): the cost of 500 tracks on a real sound card was not measured.
+  Each edit records an undo step by writing the whole project out: about 3.5 ms with 300 tracks here.
 - **The score log with a real MIDI keyboard (0.28.0).** The log itself is tested, but no MIDI keyboard could be connected here: the
   way from the keyboard to the log (stamping on the audio thread, the queue, putting the notes into the pattern) was not run.
 - **The Pitch Corrector by ear (0.26.0).** Tested on synthetic tones (sines, harmonics, vibrato, glides, noise), not on a real

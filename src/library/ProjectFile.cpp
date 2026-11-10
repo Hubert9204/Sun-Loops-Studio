@@ -510,9 +510,15 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
         d.sampleSources.push_back (o->getProperty ("sample").toString().toStdString());
     }
 
-    // --- mixer tracks (missing ones keep their defaults)
+    // --- mixer tracks (missing ones keep their defaults). Since 0.29.0 a project has as many as its file lists (8 to 500).
     d.tracks = Project::defaultTracks();
     if (auto* trackList = root->getProperty ("tracks").getArray())
+    {
+        const int count = std::clamp (trackList->size(), kDefaultTracks, kMaxTracks);
+        if (trackList->size() > kMaxTracks)
+            r.warnings.push_back ("The project has more than " + std::to_string (kMaxTracks) + " mixer tracks; the ones after that were left out.");
+        while (static_cast<int> (d.tracks.size()) < count)
+            d.tracks.emplace_back().name = "Track " + std::to_string (d.tracks.size());
         for (int i = 0; i < std::min (trackList->size(), kMaxTracks); ++i)
         {
             auto* o = (*trackList)[i].getDynamicObject();
@@ -537,6 +543,9 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
             t.sendsPreFader = readBool (o->getProperty ("sendsPreFader"), false);
             t.vcaMask = static_cast<std::uint8_t> (readInt (o->getProperty ("vca"), 0, 0, (1 << kVcaGroups) - 1));
         }
+    }
+    for (auto& c : d.channels) // a channel on a track the file does not have goes to the last one
+        c.mixerTrack = std::clamp (c.mixerTrack, 0, static_cast<int> (d.tracks.size()) - 1);
 
     // --- aux buses and VCA groups (older files have none)
     d.console = Console::defaults();

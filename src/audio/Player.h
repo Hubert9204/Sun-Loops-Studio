@@ -1,13 +1,16 @@
 #pragma once
 
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cmath>
+#include <memory>
 #include <vector>
 
 #include "audio/Effects.h"
 #include "audio/Project.h"
+#include "audio/SpscQueue.h"
 
 namespace sls
 {
@@ -20,7 +23,25 @@ public:
     static constexpr int kChunk = 64; // samples processed per mixer/effects pass
     static constexpr double kMaxLiveSeconds = 20.0; // a held live note is ended after this long, whatever happens
 
+    Player();
+    ~Player();
+    Player (const Player&) = delete;
+    Player& operator= (const Player&) = delete;
+
     void prepare (double sampleRate) noexcept;
+    double getSampleRate() const noexcept { return sampleRate; } // the thread that prepares and renders
+
+    // Effect memory (0.29.0): reverbs, delays, choruses and Pitch Correctors need big buffers (EffectMemory), which come from a
+    // pool that prepare() starts with kInitialEffectMemories of. When more slots need one than the pool has, those slots let the sound
+    // through and effectMemoryShortfall() says how many are waiting; another thread then makes memory for getSampleRate() and hands it
+    // over with offerEffectMemory() (the audio thread adopts it at its next block, without allocating). An offline Player
+    // (setMakesOwnMemory) makes what it lacks itself, at once.
+    static constexpr int kInitialEffectMemories = 16;
+    static constexpr int kMaxEffectMemories = (kMaxTracks + kAuxBuses + 1) * kSlotsPerTrack;
+    int effectMemoryShortfall() const noexcept { return memoryShortfall.load (std::memory_order_relaxed); }
+    bool offerEffectMemory (std::unique_ptr<EffectMemory> memory) noexcept; // not the audio thread; false if it was not taken
+    void setMakesOwnMemory (bool shouldMake) noexcept { makesOwnMemory = shouldMake; }
+    int effectMemoryCount() const noexcept { return memoryCount.load (std::memory_order_relaxed); } // in the pool, lent or not
 
     // Offline rendering lets sample tails ring out after the transport stops.
     void setReleaseSamplesOnStop (bool shouldRelease) noexcept { releaseSamplesOnStop = shouldRelease; }
@@ -260,13 +281,24 @@ private:
     std::array<float, kMaxChannels> smoothedGain {};
     std::array<float, kMaxChannels> peaks {};
 
-    // Mixer tracks.
-    std::array<std::array<float, kChunk>, kMaxTracks> trackL {}, trackR {};
+    // Mixer tracks (up to kMaxTracks; the project says how many are in use). The big per-track parts live on the heap.
+    std::vector<std::array<float, kChunk>> trackL, trackR;
     std::array<float, kMaxTracks> trackGain {};
     std::array<float, kMaxTracks> trackPeaks {};
     std::array<float, kMaxTracks> trackMeanSquare {};
-    std::array<std::array<EffectUnit, kSlotsPerTrack>, kMaxTracks> effects;
+    std::vector<std::array<EffectUnit, kSlotsPerTrack>> effects;
+    std::vector<std::array<EffectSlot, kSlotsPerTrack>> slotsNow; // the slots with automation applied (Song mode)
     std::array<EffectUnit, kSlotsPerTrack> masterEffects; // on the master bus
+    size_t tracksInUse = 0; // the project's track count at the last block (units of tracks beyond it give their memory back)
+
+    // The effect memory pool (see effectMemoryShortfall).
+    std::vector<std::unique_ptr<EffectMemory>> memoryStore; // owns every memory; capacity kMaxEffectMemories (grows without reallocating)
+    std::vector<EffectMemory*> freeMemory;                   // not lent; capacity kMaxEffectMemories
+    SpscQueue<EffectMemory*, 64> incomingMemory;             // offered, owned by the queue until adopted
+    std::atomic<int> memoryShortfall { 0 };
+    std::atomic<int> memoryCount { 0 };
+    bool makesOwnMemory = false;
+    void lendEffectMemory (const Project& project) noexcept;
 
     // The Time Shaper's recordings (0.25.0): a few, lent to the units that need one (see EffectUnit::attachTimeBuffer).
     static constexpr int kTimeBuffers = 4;

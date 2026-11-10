@@ -36,6 +36,12 @@ public:
         return true;
     }
 
+    // How many values wait (exact for the producer or the consumer; a snapshot for anyone else).
+    std::uint32_t size() const noexcept
+    {
+        return writeIndex.load (std::memory_order_acquire) - readIndex.load (std::memory_order_acquire);
+    }
+
 private:
     std::array<T, Capacity> slots {};
     std::atomic<std::uint32_t> writeIndex { 0 };

@@ -19,7 +19,8 @@
 namespace sls
 {
 constexpr int kMaxChannels = 32;
-constexpr int kMaxTracks = 8; // mixer tracks; every channel is routed to exactly one of them
+constexpr int kMaxTracks = 500;    // mixer tracks a project can have (0.29.0; 8 before); every channel is routed to exactly one
+constexpr int kDefaultTracks = 8;  // what a new project has, and the fewest (a playlist track n plays through mixer track n)
 constexpr int kAuxBuses = 2;  // aux buses ("returns"): tracks send to them, they have their own effects and fader
 constexpr int kVcaGroups = 2; // VCA groups: one fader that scales the faders of its member tracks
 
@@ -100,7 +101,7 @@ struct AudioEvent
 struct Project
 {
     std::vector<Channel> channels;
-    std::vector<MixerTrack> tracks; // always kMaxTracks entries after make()
+    std::vector<MixerTrack> tracks; // kDefaultTracks .. kMaxTracks entries after make()
     std::array<EffectSlot, kSlotsPerTrack> masterSlots {}; // insert effects on the master bus (after the sum of all tracks)
     Console console = Console::defaults(); // aux buses and VCA groups
     std::vector<AudioEvent> audioEvents; // song mode only; sorted by startTick, validated by make()
@@ -114,7 +115,7 @@ struct Project
 
     static std::vector<MixerTrack> defaultTracks()
     {
-        std::vector<MixerTrack> t (static_cast<size_t> (kMaxTracks));
+        std::vector<MixerTrack> t (static_cast<size_t> (kDefaultTracks));
         for (size_t i = 0; i < t.size(); ++i)
             t[i].name = "Track " + std::to_string (i + 1);
         return t;
@@ -144,6 +145,14 @@ struct Project
         if (input.size() > static_cast<size_t> (kMaxChannels))
             input.resize (kMaxChannels);
 
+        if (tracks.empty())
+            tracks = defaultTracks();
+        tracks.resize (std::clamp (tracks.size(), static_cast<size_t> (kDefaultTracks), static_cast<size_t> (kMaxTracks)));
+        for (size_t i = 0; i < tracks.size(); ++i)
+            if (tracks[i].name.empty())
+                tracks[i].name = "Track " + std::to_string (i + 1);
+        const int lastTrack = static_cast<int> (tracks.size()) - 1;
+
         for (auto& c : input)
         {
             c.swing = std::clamp (finiteOr (c.swing, 0.0f), 0.0f, 1.0f);
@@ -162,7 +171,7 @@ struct Project
             c.pan = std::clamp (c.pan, -1.0f, 1.0f);
             c.rootPitch = std::clamp (c.rootPitch, 0, 127);
             c.pitch = std::clamp (finiteOr (c.pitch, 0.0f), -24.0f, 24.0f);
-            c.mixerTrack = std::clamp (c.mixerTrack, 0, kMaxTracks - 1);
+            c.mixerTrack = std::clamp (c.mixerTrack, 0, lastTrack);
             c.sampler = c.sampler.sanitised();
             c.synth = c.synth.sanitised(); // a program is sanitised when it is made (SoundFont loader, slices)
             if (c.instrument != Instrument::Sampler)
@@ -171,9 +180,6 @@ struct Project
                 c.plugin = nullptr;
         }
 
-        if (tracks.empty())
-            tracks = defaultTracks();
-        tracks.resize (static_cast<size_t> (kMaxTracks));
         for (auto& t : tracks)
         {
             t.volume = std::clamp (finiteOr (t.volume, 1.0f), 0.0f, 1.5f);
@@ -211,7 +217,7 @@ struct Project
         for (auto& e : audioEvents)
         {
             e.offsetSeconds = std::isfinite (e.offsetSeconds) ? std::max (0.0, e.offsetSeconds) : 0.0;
-            e.mixerTrack = std::clamp (e.mixerTrack, 0, kMaxTracks - 1);
+            e.mixerTrack = std::clamp (e.mixerTrack, 0, lastTrack);
             e.gain = std::clamp (finiteOr (e.gain, 1.0f), 0.0f, 2.0f);
             e.pan = std::clamp (finiteOr (e.pan, 0.0f), -1.0f, 1.0f);
             e.fadeInSeconds = std::isfinite (e.fadeInSeconds) ? std::clamp (e.fadeInSeconds, 0.0, 3600.0) : 0.0;
@@ -224,7 +230,7 @@ struct Project
         p.channels = std::move (input);
         p.masterSlots = masterSlots;
         p.tracks = std::move (tracks);
-        p.automation = makeAutomationEvents (automationClips, static_cast<int> (p.channels.size()), kMaxTracks,
+        p.automation = makeAutomationEvents (automationClips, static_cast<int> (p.channels.size()), static_cast<int> (p.tracks.size()),
                                              [&p] (const AutomationTarget& t)
                                              {
                                                  if (t.kind == AutomationKind::TrackEffect)

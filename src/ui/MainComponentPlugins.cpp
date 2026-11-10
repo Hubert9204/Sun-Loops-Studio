@@ -126,7 +126,7 @@ void MainComponent::addPluginEffectForChannel (int channelIndex, const juce::Str
         statusLabel.setText ("Drop an effect plugin on a channel: it goes into that channel's mixer track", juce::dontSendNotification);
         return;
     }
-    const int trackIndex = std::clamp (channels[static_cast<size_t> (channelIndex)].mixerTrack, 0, kMaxTracks - 1);
+    const int trackIndex = std::clamp (channels[static_cast<size_t> (channelIndex)].mixerTrack, 0, static_cast<int> (tracks.size()) - 1);
     auto& slots = tracks[static_cast<size_t> (trackIndex)].slots;
     const auto freeSlot = std::find_if (slots.begin(), slots.end(), [] (const EffectSlot& s) { return s.type == EffectType::None; });
     if (freeSlot == slots.end())

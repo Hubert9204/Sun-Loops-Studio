@@ -1034,12 +1034,63 @@ void MixerPanel::selectMaster()
     masterStrip.setSelectedSlot (fxPanel.getSelectedSlot());
 }
 
-void MixerPanel::setTracks (std::vector<MixerTrack>& tracks)
+void MixerPanel::setTracks (std::vector<MixerTrack>& tracks, size_t stripCount)
 {
-    strips.clear();
+    if (trackData != &tracks)
+        strips.clear();
     trackData = &tracks;
+    const size_t wanted = std::min (stripCount, tracks.size());
+    while (strips.size() > wanted)
+        strips.pop_back();
+    for (size_t i = strips.size(); i < wanted; ++i)
+        addStrip (i);
 
-    for (size_t i = 0; i < tracks.size(); ++i)
+    if (addTrackButton.getParentComponent() == nullptr)
+    {
+        addTrackButton.setTooltip ("Add a mixer track (right-click: add more, or remove the last one). Up to " + juce::String (kMaxTracks) + ".");
+        addTrackButton.onClick = [this]
+        {
+            if (onAddTracks)
+                onAddTracks (1);
+        };
+        addTrackButton.onRightClick = [this] { showAddTrackMenu(); };
+        inner.addAndMakeVisible (addTrackButton);
+    }
+    addTrackButton.setEnabled (tracks.size() < static_cast<size_t> (kMaxTracks));
+
+    if (selectedTrack != kMasterIndex && selectedTrack < kMaxTracks) // (an aux bus keeps its selection)
+        selectedTrack = std::clamp (selectedTrack, 0, std::max (0, static_cast<int> (strips.size()) - 1));
+    layoutInner(); // first: selecting scrolls to the strip where it now is
+    setSelectedTrack (selectedTrack);
+}
+
+void MixerPanel::showAddTrackMenu()
+{
+    juce::PopupMenu menu;
+    const int room = kMaxTracks - static_cast<int> (trackData != nullptr ? trackData->size() : 0);
+    menu.addItem (1, "Add a track", room > 0);
+    menu.addItem (10, "Add 10 tracks", room >= 10);
+    menu.addItem (100, "Add 100 tracks", room >= 100);
+    menu.addSeparator();
+    menu.addItem (-1, "Remove the last track (if nothing uses it)", trackData != nullptr && trackData->size() > static_cast<size_t> (kDefaultTracks));
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&addTrackButton),
+                        [safe = juce::Component::SafePointer<MixerPanel> (this)] (int result)
+                        {
+                            if (safe == nullptr || result == 0)
+                                return;
+                            if (result < 0)
+                            {
+                                if (safe->onRemoveLastTrack)
+                                    safe->onRemoveLastTrack();
+                            }
+                            else if (safe->onAddTracks)
+                                safe->onAddTracks (result);
+                        });
+}
+
+void MixerPanel::addStrip (size_t i)
+{
+    auto& tracks = *trackData;
     {
         auto strip = std::make_unique<MixerStrip> (tracks[i], static_cast<int> (i));
         strip->onSelect = [this] (int idx) { setSelectedTrack (idx); };
@@ -1063,10 +1114,6 @@ void MixerPanel::setTracks (std::vector<MixerTrack>& tracks)
         inner.addAndMakeVisible (*strip);
         strips.push_back (std::move (strip));
     }
-
-    selectedTrack = std::clamp (selectedTrack, 0, std::max (0, static_cast<int> (tracks.size()) - 1));
-    setSelectedTrack (selectedTrack);
-    layoutInner();
 }
 
 void MixerPanel::refreshTrack (int index)
@@ -1118,7 +1165,14 @@ void MixerPanel::setSelectedTrack (int index)
 
     fxPanel.setTrack (&(*trackData)[static_cast<size_t> (selectedTrack)], selectedTrack);
     if (selectedTrack < static_cast<int> (strips.size()))
-        strips[static_cast<size_t> (selectedTrack)]->setSelectedSlot (fxPanel.getSelectedSlot());
+    {
+        auto& strip = *strips[static_cast<size_t> (selectedTrack)];
+        strip.setSelectedSlot (fxPanel.getSelectedSlot());
+        // scrolled into view if it is not (a track just added past the visible ones, or chosen elsewhere)
+        const auto view = viewport.getViewArea();
+        if (strip.getRight() > view.getRight() || strip.getX() < view.getX())
+            viewport.setViewPosition (std::max (0, strip.getX() - (view.getWidth() - strip.getWidth()) / 2), view.getY());
+    }
 }
 
 void MixerPanel::setTrackChannels (int index, const juce::String& channelNames)
@@ -1153,7 +1207,7 @@ void MixerPanel::layoutInner()
 {
     constexpr int kGap = 10; // between the tracks, the aux buses and the VCA groups
     const int count = static_cast<int> (strips.size() + auxStrips.size() + vcaStrips.size());
-    const int needed = count * MixerStrip::kWidth + (auxStrips.empty() ? 0 : kGap) + (vcaStrips.empty() ? 0 : kGap);
+    const int needed = count * MixerStrip::kWidth + kAddButtonWidth + (auxStrips.empty() ? 0 : kGap) + (vcaStrips.empty() ? 0 : kGap);
     const int height = std::max (1, viewport.getMaximumVisibleHeight());
     inner.setSize (std::max (needed, viewport.getMaximumVisibleWidth()), height);
 
@@ -1163,6 +1217,8 @@ void MixerPanel::layoutInner()
         s->setBounds (x, 0, MixerStrip::kWidth, height);
         x += MixerStrip::kWidth;
     }
+    addTrackButton.setBounds (x + 2, 6, kAddButtonWidth - 4, 28);
+    x += kAddButtonWidth;
     if (! auxStrips.empty())
         x += kGap;
     for (auto& s : auxStrips)

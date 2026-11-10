@@ -158,7 +158,7 @@ Una riga per canale: un display **Track N** e il nome, **M** (mute), **S** (solo
   velocità del sample, quindi anche la sua durata). Trascina la manopola su o giù; doppio clic per 0.
 - **Swing** da 0 a 100 %: i sedicesimi in levare (il 2°, 4°, 6°... di ogni quarto) vengono ritardati, fino a mezzo
   sedicesimo al 100 %. Le note che verrebbero spinte oltre la fine del pattern restano dove sono.
-- **Track N** è la traccia del mixer attraverso cui suona il canale. Clic per un menu delle 8 tracce, oppure
+- **Track N** è la traccia del mixer attraverso cui suona il canale. Clic per un menu delle tracce del mixer (a gruppi di 50 quando sono tante), oppure
   trascinalo su e giù, o usa la rotella sopra di esso. All'inizio il canale 1 va alla Track 1, il canale 2 alla
   Track 2 e così via.
 - I **canali sampler** mostrano un pulsante step per ogni sedicesimo del pattern (32 per le due battute predefinite). Clic su uno step per accenderlo o
@@ -167,7 +167,7 @@ Una riga per canale: un display **Track N** e il nome, **M** (mute), **S** (solo
 - I **canali drum** mostrano un'anteprima delle note; il doppio clic apre la drum machine (vedi sotto).
 - Clic su una riga per selezionare il canale (Piano Roll e Mixer seguono la selezione).
 - **+ Add channel** sotto l'ultima riga aggiunge un canale synth, sampler o drum machine, fino a 32 canali in tutto
-  (il mixer ha sempre 8 tracce: i canali possono condividerle).
+  (i canali possono condividere le tracce del mixer, che possono essere fino a 500).
 
 ### Menu del tasto destro su un canale
 
@@ -183,7 +183,7 @@ Una riga per canale: un display **Track N** e il nome, **M** (mute), **S** (solo
 | Clone channel | Aggiunge una copia subito sotto: stesso strumento, suono e impostazioni, e le stesse note in ogni pattern. |
 | Move up / Move down | Sposta il canale di una riga; le sue note in ogni pattern e le sue clip di automazione lo seguono. |
 | Delete channel... | Dopo una conferma elimina il canale, le sue note in ogni pattern e le clip di automazione del suo volume o pan. L'ultimo canale non si può eliminare. `Ctrl+Z` lo riporta indietro. |
-| Assign free mixer track | Apre una finestra con le 8 tracce del mixer: quelle libere (senza strumenti) in verde, le altre con gli strumenti che ci sono sopra, e quella attuale segnata. La prima traccia libera è già selezionata; **Select first free track** la riseleziona, oppure scegli una traccia qualsiasi (condividerla è permesso), poi **Assign** (o Invio; Esc annulla). Il display **Track N** del canale e il mixer si aggiornano, e il mixer seleziona quella traccia. |
+| Assign free mixer track | Apre una finestra con le tracce del mixer (un elenco che scorre; l'ultima riga offre una traccia nuova): quelle libere (senza strumenti) in verde, le altre con gli strumenti che ci sono sopra, e quella attuale segnata. La prima traccia libera è già selezionata; **Select first free track** la riseleziona, oppure scegli una traccia qualsiasi (condividerla è permesso), poi **Assign** (o Invio; Esc annulla). Il display **Track N** del canale e il mixer si aggiornano, e il mixer seleziona quella traccia. |
 | Save as preset... | Chiede un nome e scrive un file `.slspreset` (strumento, sample, volume, pan, pitch, swing; non le note, le impostazioni del sampler o un SoundFont) in `~/Music/Sun Loops Studio/Presets`; compare subito nella cartella Presets del browser. |
 | Synth settings... | (Canali synth) apre la finestra del synth: suoni pronti, il motore e tutte le impostazioni del synth sottrattivo (vedi *Synth*). |
 | Sampler settings... | (Canali sampler) apre la finestra del sampler: inviluppo, loop, filtro, nota di base (vedi *Sampler e SoundFont*). |
@@ -714,7 +714,15 @@ ogni 64 campioni (1,3 ms a 48 kHz): rapido per qualsiasi uso musicale, ma non è
 ## Mixer
 
 Premi **F9** o il pulsante **Mixer F9**. Il Mixer si apre grande sopra gli altri pannelli; F9 di nuovo lo chiude. Ha
-8 **tracce** verticali, la strip **master** a destra e il **pannello effetti** della traccia selezionata.
+8 **tracce** verticali all'inizio, la strip **master** a destra e il **pannello effetti** della traccia selezionata.
+
+**Più tracce (0.29.0).** Il pulsante **+** dopo l'ultima traccia ne aggiunge una; con il tasto destro se ne aggiungono 10 o 100 alla
+volta, oppure si toglie l'ultima (solo se nessun canale ci suona, non ha effetti e nessuna automazione la controlla). Un progetto può
+avere fino a **500** tracce; scorri il mixer in orizzontale per raggiungerle (aggiungendo, il mixer scorre a quella nuova). Aggiungere
+e togliere si annulla con Annulla, e il file del progetto ricorda il numero. Le tracce senza suono e senza effetti non costano quasi
+nulla. Riverberi, delay, chorus e Pitch Corrector hanno bisogno di circa 0,8 MB di memoria ciascuno, che viene preparata man mano che
+si aggiungono: nel primissimo momento dopo averne aggiunti tanti insieme, gli ultimi possono far passare il suono senza effetto finché
+la loro memoria non è pronta (qualche decimo di secondo).
 
 Percorso del suono: ogni canale va alla traccia scelta con il suo display **Track N** (più canali possono condividerne
 una; oppure usa *Assign free mixer track* nel menu del tasto destro del canale), poi attraversa i quattro slot effetti
@@ -892,9 +900,10 @@ occupato più tardi, un brano più pesante o un mixer pieno di effetti possono r
 
 ## Limiti
 
-- Fino a 32 canali, 8 tracce del mixer con 4 slot effetti ciascuna, 2 bus aux (4 slot ciascuno), 2 gruppi VCA, 64 pattern, 8 tracce di playlist, una linea del
+- Fino a 32 canali, fino a 500 tracce del mixer (8 all'inizio) con 4 slot effetti ciascuna, 2 bus aux (4 slot ciascuno), 2 gruppi VCA, 64 pattern, 8 tracce di playlist, una linea del
   tempo di almeno 32 pattern e 64 battute, 4 corsie di automazione, 64 clip di automazione di al massimo 256 punti, 32 voci simultanee.
-- Gli effetti usano circa 18 MB di memoria a 48 kHz (di più a frequenze di campionamento maggiori).
+- Gli effetti usano circa 15 MB di memoria a 48 kHz all'inizio, più circa 0,8 MB per ogni riverbero, delay, chorus e Pitch Corrector oltre
+  il sedicesimo (di più a frequenze di campionamento maggiori). La memoria preparata resta finché il dispositivo audio non riparte.
 - I pattern durano 1, 2, 4 o 8 battute (uguale per tutti), 4/4, griglia di sedicesimi; un solo tempo per tutto il brano.
 - I sample sono mono o stereo, al massimo 30 secondi. Il sampler ha un inviluppo e un filtro per canale (niente inviluppo del filtro, LFO o
   modulazione); al massimo quattro zone suonano per nota. Clip audio: fino a 5 minuti per file, 64 clip.

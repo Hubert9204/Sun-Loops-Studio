@@ -55,11 +55,10 @@ Coefs peakCoefs (double hz, double gainDb, double q, double sampleRate) noexcept
 }
 } // namespace
 
-void EffectUnit::prepare (double newSampleRate)
+void EffectMemory::prepare (double sampleRate)
 {
-    sampleRate = newSampleRate > 0.0 ? newSampleRate : 48000.0;
-    const double scale = sampleRate / 44100.0;
-
+    rate = sampleRate > 0.0 ? sampleRate : 48000.0;
+    const double scale = rate / 44100.0;
     for (size_t ch = 0; ch < 2; ++ch)
     {
         const int spread = ch == 0 ? 0 : kStereoSpread;
@@ -67,10 +66,47 @@ void EffectUnit::prepare (double newSampleRate)
             combs[ch][i].buf.assign (static_cast<size_t> (std::max (8.0, (kCombTunings[i] + spread) * scale)), 0.0f);
         for (size_t i = 0; i < kAllpasses; ++i)
             allpasses[ch][i].buf.assign (static_cast<size_t> (std::max (8.0, (kAllpassTunings[i] + spread) * scale)), 0.0f);
-
-        delayLine[ch].assign (static_cast<size_t> (sampleRate * kMaxDelaySeconds) + 8, 0.0f);
+        delayLine[ch].assign (static_cast<size_t> (rate * kMaxDelaySeconds) + 8, 0.0f);
     }
-    preDelay.assign (static_cast<size_t> (sampleRate * 0.26) + 4, 0.0f);
+    preDelay.assign (static_cast<size_t> (rate * 0.26) + 4, 0.0f);
+    clear();
+}
+
+void EffectMemory::clear() noexcept
+{
+    for (auto& channel : combs)
+        for (auto& c : channel)
+        {
+            std::fill (c.buf.begin(), c.buf.end(), 0.0f);
+            c.idx = 0;
+            c.store = 0.0f;
+            c.len = static_cast<int> (std::max<size_t> (1, c.buf.size()));
+        }
+    for (auto& channel : allpasses)
+        for (auto& a : channel)
+        {
+            std::fill (a.buf.begin(), a.buf.end(), 0.0f);
+            a.idx = 0;
+            a.len = static_cast<int> (std::max<size_t> (1, a.buf.size()));
+        }
+    std::fill (preDelay.begin(), preDelay.end(), 0.0f);
+    for (auto& d : delayLine)
+        std::fill (d.begin(), d.end(), 0.0f);
+    pcDecim.fill (0.0f);
+    pcScratch.fill (0.0f);
+    pcDiff.fill (0.0f);
+}
+
+void EffectUnit::attachMemory (EffectMemory* m) noexcept
+{
+    memory = m;
+    reset(); // a fresh start with these buffers (and the reverb's line lengths set again for them)
+}
+
+void EffectUnit::prepare (double newSampleRate)
+{
+    sampleRate = newSampleRate > 0.0 ? newSampleRate : 48000.0;
+    memory = nullptr; // memory made for the old rate is not used again
 
     // Maximizer: 1.5 ms of look-ahead.
     lookahead = std::max (1, static_cast<int> (std::lround (0.0015 * sampleRate)));
@@ -121,15 +157,16 @@ void EffectUnit::prepare (double newSampleRate)
 
     active = EffectType::None;
     reverbType = -1;
-    setReverbType (0);
     reset();
 }
 
 void EffectUnit::setReverbType (int type) noexcept
 {
-    if (type == reverbType)
+    if (type == reverbType || memory == nullptr)
         return;
     reverbType = type;
+    auto& combs = memory->combs;
+    auto& allpasses = memory->allpasses;
     // Hall uses the whole lines (the original Freeverb tuning); Room and Plate shorter ones.
     const double factor = type == 1 ? 0.55 : type == 2 ? 0.8 : 1.0;
     for (auto& channel : combs)
@@ -149,23 +186,10 @@ void EffectUnit::setReverbType (int type) noexcept
 
 void EffectUnit::reset() noexcept
 {
-    for (auto& channel : combs)
-        for (auto& c : channel)
-        {
-            std::fill (c.buf.begin(), c.buf.end(), 0.0f);
-            c.idx = 0;
-            c.store = 0.0f;
-        }
-    for (auto& channel : allpasses)
-        for (auto& a : channel)
-        {
-            std::fill (a.buf.begin(), a.buf.end(), 0.0f);
-            a.idx = 0;
-        }
-    std::fill (preDelay.begin(), preDelay.end(), 0.0f);
+    if (memory != nullptr)
+        memory->clear();
+    reverbType = -1; // the line lengths are set again on the next block
     preDelayWrite = 0;
-    for (auto& d : delayLine)
-        std::fill (d.begin(), d.end(), 0.0f);
     for (auto& d : lookLine)
         std::fill (d.begin(), d.end(), 0.0f);
     lookWrite = 0;
@@ -202,7 +226,6 @@ void EffectUnit::reset() noexcept
     fadeLeft = 0;
     volume = 1.0f;
 
-    pcDecim.fill (0.0f);
     pcAa1.clearState();
     pcAa2.clearState();
     pcPhase = pcDecimWrite = pcControl = 0;
@@ -241,6 +264,15 @@ void EffectUnit::process (const EffectSlot& requested, float* left, float* right
         active = EffectType::Plugin;
         if (! requested.bypass && requested.plugin != nullptr)
             requested.plugin->process (left, right, numSamples, nullptr, 0);
+        return;
+    }
+    if (requested.type == EffectType::None) // an empty slot (most of them): no copy of the slot, nothing to do
+    {
+        if (active != EffectType::None)
+        {
+            active = EffectType::None;
+            reset();
+        }
         return;
     }
     const EffectSlot slot = requested.sanitised();
@@ -351,6 +383,11 @@ void EffectUnit::runParametricEq (const EffectSlot& s, float* l, float* r, int n
 
 void EffectUnit::runReverb (const EffectSlot& s, float* l, float* r, int n) noexcept
 {
+    if (memory == nullptr)
+        return; // no buffers lent (yet): the sound passes unchanged
+    auto& combs = memory->combs;
+    auto& allpasses = memory->allpasses;
+    auto& preDelay = memory->preDelay;
     const int type = effectChoice (EffectType::Reverb, 4, s.params[4]);
     if (type != reverbType)
     {
@@ -429,6 +466,9 @@ void EffectUnit::runReverb (const EffectSlot& s, float* l, float* r, int n) noex
 
 void EffectUnit::runDelay (const EffectSlot& s, float* l, float* r, int n) noexcept
 {
+    if (memory == nullptr)
+        return; // no buffers lent (yet): the sound passes unchanged
+    auto& delayLine = memory->delayLine;
     const int size = static_cast<int> (delayLine[0].size());
     const int mode = effectChoice (EffectType::Delay, 4, s.params[4]); // 0 stereo, 1 ping-pong, 2 tape
     const float base = static_cast<float> (s.params[0] * 0.001 * sampleRate);
@@ -585,6 +625,9 @@ void EffectUnit::runOverdrive (const EffectSlot& s, float* l, float* r, int n) n
 
 void EffectUnit::runChorus (const EffectSlot& s, float* l, float* r, int n) noexcept
 {
+    if (memory == nullptr)
+        return; // no buffers lent (yet): the sound passes unchanged
+    auto& delayLine = memory->delayLine;
     const int size = static_cast<int> (delayLine[0].size());
     const double step = static_cast<double> (s.params[0]) / sampleRate;
     const float depth = static_cast<float> (s.params[1] * 0.001 * sampleRate);
@@ -1163,6 +1206,9 @@ inline float hermite (float xm1, float x0, float x1, float x2, float t) noexcept
 
 double EffectUnit::headPosition (double delay) const noexcept
 {
+    if (memory == nullptr)
+        return 0.0; // no buffers lent (yet): the sound passes unchanged
+    const auto& delayLine = memory->delayLine;
     const double size = static_cast<double> (delayLine[0].size());
     double pos = static_cast<double> (delayWrite) - delay;
     while (pos < 0.0)
@@ -1172,6 +1218,12 @@ double EffectUnit::headPosition (double delay) const noexcept
 
 void EffectUnit::analysePitch (int range, int key, int scale, float amount) noexcept
 {
+    if (memory == nullptr)
+        return; // no buffers lent (yet): the sound passes unchanged
+    auto& preDelay = memory->preDelay;
+    auto& pcDecim = memory->pcDecim;
+    auto& pcScratch = memory->pcScratch;
+    auto& pcDiff = memory->pcDiff;
     const double decRate = sampleRate / pcFactor;
     const float minHz = kPitchRanges[range][0], maxHz = kPitchRanges[range][1];
     const int tauMax = std::min (kPitchDecimated / 2 - 2, static_cast<int> (std::ceil (decRate / minHz)) + 2);
@@ -1293,6 +1345,10 @@ void EffectUnit::analysePitch (int range, int key, int scale, float amount) noex
 
 void EffectUnit::rebirthHead (PitchHead& head, const PitchHead& other, double ratio) noexcept
 {
+    if (memory == nullptr)
+        return; // no buffers lent (yet): the sound passes unchanged
+    auto& preDelay = memory->preDelay;
+    auto& delayLine = memory->delayLine;
     const int target = std::max (16, static_cast<int> (0.03 * sampleRate));
     const int remaining = std::max (1, other.life - other.age);
     head.life = std::clamp (2 * remaining, target / 2, target + target / 2);
@@ -1365,6 +1421,11 @@ void EffectUnit::rebirthHead (PitchHead& head, const PitchHead& other, double ra
 
 void EffectUnit::runPitchCorrector (const EffectSlot& slot, float* left, float* right, int n) noexcept
 {
+    if (memory == nullptr)
+        return; // no buffers lent (yet): the sound passes unchanged
+    auto& preDelay = memory->preDelay;
+    auto& delayLine = memory->delayLine;
+    auto& pcDecim = memory->pcDecim;
     const auto& p = slot.params;
     const int key = effectChoice (EffectType::PitchCorrector, 0, p[0]);
     const int scale = effectChoice (EffectType::PitchCorrector, 1, p[1]);

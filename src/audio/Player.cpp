@@ -28,6 +28,35 @@ double pitchToHz (double pitch) noexcept
 const MixerTrack kDefaultTrack {};
 } // namespace
 
+Player::Player()
+    : trackL (static_cast<size_t> (kMaxTracks)), trackR (static_cast<size_t> (kMaxTracks)), effects (static_cast<size_t> (kMaxTracks)),
+      slotsNow (static_cast<size_t> (kMaxTracks))
+{
+    memoryStore.reserve (static_cast<size_t> (kMaxEffectMemories));
+    freeMemory.reserve (static_cast<size_t> (kMaxEffectMemories));
+}
+
+Player::~Player()
+{
+    EffectMemory* m = nullptr;
+    while (incomingMemory.pop (m))
+        delete m;
+}
+
+bool Player::offerEffectMemory (std::unique_ptr<EffectMemory> memory) noexcept
+{
+    if (memory == nullptr // (its rate is checked when the audio thread adopts it)
+        || memoryCount.load (std::memory_order_relaxed) + static_cast<int> (incomingMemory.size()) >= kMaxEffectMemories)
+        return false;
+    EffectMemory* raw = memory.release(); // the queue owns it until the audio thread adopts it
+    if (! incomingMemory.push (raw))
+    {
+        delete raw; // (the queue was full)
+        return false;
+    }
+    return true;
+}
+
 void Player::prepare (double newSampleRate) noexcept
 {
     sampleRate = newSampleRate > 0.0 ? newSampleRate : 48000.0;
@@ -83,6 +112,33 @@ void Player::prepare (double newSampleRate) noexcept
         for (auto& unit : chain)
             unit.prepare (sampleRate);
 
+    // Effect memory: the pool starts again for this rate (every unit gives its memory back first; memory still on its way is freed).
+    for (auto& chain : effects)
+        for (auto& unit : chain)
+            unit.attachMemory (nullptr);
+    for (auto& chain : auxEffects)
+        for (auto& unit : chain)
+            unit.attachMemory (nullptr);
+    for (auto& unit : masterEffects)
+        unit.attachMemory (nullptr);
+    {
+        EffectMemory* m = nullptr;
+        while (incomingMemory.pop (m))
+            delete m;
+    }
+    memoryStore.clear();
+    freeMemory.clear();
+    for (int i = 0; i < kInitialEffectMemories; ++i)
+    {
+        auto m = std::make_unique<EffectMemory>();
+        m->prepare (sampleRate);
+        freeMemory.push_back (m.get());
+        memoryStore.push_back (std::move (m));
+    }
+    memoryCount.store (static_cast<int> (memoryStore.size()), std::memory_order_relaxed);
+    memoryShortfall.store (0, std::memory_order_relaxed);
+    tracksInUse = 0;
+
     // The Time Shaper's recordings: made here, lent out while rendering (every unit gives its buffer back first).
     const auto timeFrames = static_cast<size_t> (kTimeBufferSeconds * sampleRate);
     for (auto& b : timeBuffers)
@@ -128,7 +184,9 @@ void Player::lendTimeBuffers (const Project& project) noexcept
                 return;
             }
     };
-    for (size_t t = 0; t < static_cast<size_t> (kMaxTracks); ++t)
+    // tracks beyond the project's (it had more at the last block) give theirs back
+    const size_t visitTracks = std::min (std::max (project.tracks.size(), tracksInUse), static_cast<size_t> (kMaxTracks));
+    for (size_t t = 0; t < visitTracks; ++t)
         for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
             visit (effects[t][s], (t < project.tracks.size() ? project.tracks[t] : kDefaultTrack).slots[s]);
     for (size_t a = 0; a < static_cast<size_t> (kAuxBuses); ++a)
@@ -136,6 +194,60 @@ void Player::lendTimeBuffers (const Project& project) noexcept
             visit (auxEffects[a][s], project.console.aux[a].slots[s]);
     for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
         visit (masterEffects[s], project.masterSlots[s]);
+}
+
+void Player::lendEffectMemory (const Project& project) noexcept
+{
+    // Memory made on another thread joins the pool (the vectors have room for all of it: no allocation here).
+    EffectMemory* incoming = nullptr;
+    while (incomingMemory.pop (incoming))
+    {
+        // (offerEffectMemory keeps the total within the capacity, so this never allocates)
+        memoryStore.emplace_back (incoming);
+        if (std::abs (incoming->preparedRate() - sampleRate) < 0.5) // made for this rate
+            freeMemory.push_back (incoming); // made for another rate (the device changed meanwhile): kept, unused, until prepare()
+    }
+    memoryCount.store (static_cast<int> (memoryStore.size()), std::memory_order_relaxed);
+
+    int shortfall = 0;
+    const auto visit = [this, &shortfall] (EffectUnit& unit, const EffectSlot& slot)
+    {
+        const bool wants = effectNeedsMemory (slot.type);
+        EffectMemory* has = unit.attachedMemory();
+        if (wants == (has != nullptr))
+            return;
+        if (! wants)
+        {
+            unit.attachMemory (nullptr);
+            freeMemory.push_back (has);
+            return;
+        }
+        if (freeMemory.empty() && makesOwnMemory && memoryStore.size() < memoryStore.capacity())
+        {
+            auto m = std::make_unique<EffectMemory>(); // offline rendering only: allowed to allocate
+            m->prepare (sampleRate);
+            freeMemory.push_back (m.get());
+            memoryStore.push_back (std::move (m));
+        }
+        if (freeMemory.empty())
+        {
+            ++shortfall;
+            return;
+        }
+        unit.attachMemory (freeMemory.back());
+        freeMemory.pop_back();
+    };
+    const size_t visitTracks = std::min (std::max (project.tracks.size(), tracksInUse), static_cast<size_t> (kMaxTracks));
+    for (size_t t = 0; t < visitTracks; ++t)
+        for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
+            visit (effects[t][s], (t < project.tracks.size() ? project.tracks[t] : kDefaultTrack).slots[s]);
+    for (size_t a = 0; a < static_cast<size_t> (kAuxBuses); ++a)
+        for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
+            visit (auxEffects[a][s], project.console.aux[a].slots[s]);
+    for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
+        visit (masterEffects[s], project.masterSlots[s]);
+    memoryShortfall.store (shortfall, std::memory_order_relaxed);
+    memoryCount.store (static_cast<int> (memoryStore.size()), std::memory_order_relaxed);
 }
 
 void Player::releaseVoices (bool includeSamplers) noexcept
@@ -1277,10 +1389,10 @@ namespace
 // they are. Channel and track gains go through `setChannel` / `setTrack` (which know the current volume and pan), effect
 // parameters are written into the slot copies.
 template <typename SetChannel, typename SetTrack>
-void applyAutomation (const Project& project, double tick, size_t numChannels, SetChannel& setChannel, SetTrack& setTrack,
+void applyAutomation (const Project& project, double tick, size_t numChannels, size_t numTracks, SetChannel& setChannel, SetTrack& setTrack,
                       const std::array<float, kMaxChannels>& channelVolume, const std::array<float, kMaxChannels>& channelPan,
                       const std::array<float, kMaxTracks>& trackVolume, const std::array<float, kMaxTracks>& trackPan,
-                      std::array<std::array<EffectSlot, kSlotsPerTrack>, kMaxTracks>& trackSlots,
+                      std::vector<std::array<EffectSlot, kSlotsPerTrack>>& trackSlots,
                       std::array<EffectSlot, kSlotsPerTrack>& masterSlots) noexcept
 {
     const auto& events = project.automation;
@@ -1307,15 +1419,15 @@ void applyAutomation (const Project& project, double tick, size_t numChannels, S
                         setChannel (idx, channelVolume[idx], v);
                     break;
                 case AutomationKind::TrackVolume:
-                    if (idx < static_cast<size_t> (kMaxTracks))
+                    if (idx < numTracks)
                         setTrack (idx, v, trackPan[idx]);
                     break;
                 case AutomationKind::TrackPan:
-                    if (idx < static_cast<size_t> (kMaxTracks))
+                    if (idx < numTracks)
                         setTrack (idx, trackVolume[idx], v);
                     break;
                 case AutomationKind::TrackEffect:
-                    if (idx < trackSlots.size())
+                    if (idx < numTracks)
                         trackSlots[idx][static_cast<size_t> (target.slot)].params[static_cast<size_t> (target.param)] = v;
                     break;
                 case AutomationKind::MasterEffect:
@@ -1336,6 +1448,7 @@ void Player::render (const Project& project, double bpm, bool playing,
     ticksPerSampleNow = ticksPerSample;
     const int loopLength = std::max (1, project.lengthTicks);
     const size_t numMixerChannels = std::min (project.channels.size(), static_cast<size_t> (kMaxChannels));
+    const size_t numTracks = std::clamp (project.tracks.size(), static_cast<size_t> (1), static_cast<size_t> (kMaxTracks));
 
     if (project.revision != projectRevision)
     {
@@ -1384,7 +1497,7 @@ void Player::render (const Project& project, double bpm, bool playing,
     {
         const auto& c = project.channels[ch];
         channelAudible[ch] = anySolo ? c.solo : ! c.mute;
-        routedTo[ch] = static_cast<size_t> (std::clamp (c.mixerTrack, 0, kMaxTracks - 1));
+        routedTo[ch] = static_cast<size_t> (std::clamp (c.mixerTrack, 0, static_cast<int> (numTracks) - 1));
         setChannel (ch, c.volume, c.pan);
 
         if (smoothedGain[ch] < 0.0f)
@@ -1397,8 +1510,16 @@ void Player::render (const Project& project, double bpm, bool playing,
         return t < project.tracks.size() ? project.tracks[t] : kDefaultTrack;
     };
 
+    // Tracks added since the last block start without smoothing (no fade from what an earlier track there left).
+    for (size_t t = tracksInUse; t < numTracks; ++t)
+    {
+        trackGain[t] = sendGate[t] = kUnsetGain;
+        sendGain[t].fill (kUnsetGain);
+        trackPeaks[t] = trackMeanSquare[t] = 0.0f;
+    }
+
     bool anyTrackSolo = false;
-    for (size_t t = 0; t < static_cast<size_t> (kMaxTracks); ++t)
+    for (size_t t = 0; t < numTracks; ++t)
         anyTrackSolo = anyTrackSolo || trackAt (t).solo;
 
     std::array<float, kMaxTracks> trackTarget {};
@@ -1408,7 +1529,7 @@ void Player::render (const Project& project, double bpm, bool playing,
 
     // VCA groups: a track's fader is scaled by the level of every group it belongs to (a muted group silences its members).
     std::array<float, kMaxTracks> trackVca {};
-    for (size_t t = 0; t < static_cast<size_t> (kMaxTracks); ++t)
+    for (size_t t = 0; t < numTracks; ++t)
     {
         float v = 1.0f;
         for (int g = 0; g < kVcaGroups; ++g)
@@ -1428,7 +1549,7 @@ void Player::render (const Project& project, double bpm, bool playing,
         balanceRight[t] = p < 0.0f ? 1.0f + p : 1.0f;
     };
 
-    for (size_t t = 0; t < static_cast<size_t> (kMaxTracks); ++t)
+    for (size_t t = 0; t < numTracks; ++t)
     {
         const auto& tr = trackAt (t);
         trackAudible[t] = anyTrackSolo ? tr.solo : ! tr.mute;
@@ -1458,30 +1579,36 @@ void Player::render (const Project& project, double bpm, bool playing,
 
     // Automation (Song mode): effect parameters are changed in copies of the slots, so the project itself is never touched.
     const bool automated = playing && ! project.automation.empty();
-    std::array<std::array<EffectSlot, kSlotsPerTrack>, kMaxTracks> trackSlotsNow {};
+    auto& trackSlotsNow = slotsNow;
     std::array<EffectSlot, kSlotsPerTrack> masterSlotsNow {};
     if (automated)
     {
-        for (size_t t = 0; t < static_cast<size_t> (kMaxTracks); ++t)
+        for (size_t t = 0; t < numTracks; ++t)
             trackSlotsNow[t] = trackAt (t).slots;
         masterSlotsNow = project.masterSlots;
     }
 
     peaks.fill (0.0f);
-    trackPeaks.fill (0.0f);
+    std::fill_n (trackPeaks.begin(), std::max (numTracks, tracksInUse), 0.0f);
     auxPeaks.fill (0.0f);
 
     lendTimeBuffers (project);
+    lendEffectMemory (project);
+    tracksInUse = numTracks;
+
+    // A track with no sound coming in and no effect in its chain is silent: it skips the per-sample work (its fader and sends jump to
+    // where they are going, its meter decays as it would have).
+    const float rmsDecayPerChunk = std::pow (1.0f - rmsCoef, static_cast<float> (kChunk));
     for (int done = 0; done < numSamples; done += kChunk)
     {
         const int n = std::min (kChunk, numSamples - done);
         const EffectTransport transport { playing ? tickPos : -1.0, ticksPerSample }; // where the song is at this chunk's start
 
         if (automated)
-            applyAutomation (project, tickPos, numMixerChannels, setChannel, setTrack, channelVolume, channelPan, trackVolume, trackPan,
+            applyAutomation (project, tickPos, numMixerChannels, numTracks, setChannel, setTrack, channelVolume, channelPan, trackVolume, trackPan,
                              trackSlotsNow, masterSlotsNow);
 
-        for (size_t t = 0; t < static_cast<size_t> (kMaxTracks); ++t)
+        for (size_t t = 0; t < numTracks; ++t)
         {
             std::fill_n (trackL[t].begin(), n, 0.0f);
             std::fill_n (trackR[t].begin(), n, 0.0f);
@@ -1794,11 +1921,33 @@ void Player::render (const Project& project, double bpm, bool playing,
         // 2. Each track: insert effects (pre-fader), then fader, balance, mute/solo, metering, master bus.
         std::array<float, kChunk> mixL {}, mixR {};
 
-        for (size_t t = 0; t < static_cast<size_t> (kMaxTracks); ++t)
+        for (size_t t = 0; t < numTracks; ++t)
         {
             float* l = trackL[t].data();
             float* r = trackR[t].data();
             const auto& tr = trackAt (t);
+
+            bool hasEffect = false;
+            for (const auto& slot : tr.slots)
+                hasEffect = hasEffect || (slot.type != EffectType::None && ! slot.bypass);
+            if (! hasEffect)
+            {
+                bool silent = true;
+                for (int i = 0; i < n && silent; ++i)
+                    silent = ! (std::abs (l[i]) > 0.0f || std::abs (r[i]) > 0.0f);
+                if (silent)
+                {
+                    for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
+                        effects[t][s].process (tr.slots[s], l, r, n, transport); // only to let a removed effect forget its state
+                    trackGain[t] = trackTarget[t];
+                    sendGate[t] = trackAudible[t] ? 1.0f : 0.0f;
+                    sendGain[t] = tr.sends;
+                    trackMeanSquare[t] = trackMeanSquare[t] * (n == kChunk ? rmsDecayPerChunk : std::pow (1.0f - rmsCoef, static_cast<float> (n)));
+                    if (trackMeanSquare[t] < 1.0e-20f)
+                        trackMeanSquare[t] = 0.0f;
+                    continue;
+                }
+            }
 
             for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
                 effects[t][s].process (automated ? trackSlotsNow[t][s] : tr.slots[s], l, r, n, transport);

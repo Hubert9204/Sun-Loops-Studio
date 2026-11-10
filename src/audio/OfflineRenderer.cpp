@@ -22,6 +22,7 @@ juce::AudioBuffer<float> renderToBuffer (const Project& project, const RenderOpt
     Player player;
     player.prepare (options.sampleRate);
     player.setReleaseSamplesOnStop (false); // let drum tails ring through the tail
+    player.setMakesOwnMemory (true);        // offline: every reverb and delay gets its memory, however many there are
 
     constexpr int blockSize = 512;
     int pos = 0;

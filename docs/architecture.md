@@ -264,8 +264,9 @@ voices -> channel (smoothed gain, equal-power pan, channel mute/solo)
        -> soft limiter -> master gain (AudioEngine)
 ```
 
-- `MixerTrack { name, volume, pan, mute, solo, slots[4] }`; `Project::make` always yields exactly 8 tracks and clamps
-  every field. A `Project` that arrives with fewer tracks (older code, tests) is padded with defaults.
+- `MixerTrack { name, volume, pan, mute, solo, slots[4] }`; `Project::make` yields between `kDefaultTracks` (8) and `kMaxTracks`
+  (500, since 0.29.0) tracks and clamps every field. A `Project` that arrives with fewer than 8 (older code, tests) is padded with defaults;
+  channels and audio events are clamped to the tracks that exist.
 - The master bus has its own chain, `Project::masterSlots` (4 `EffectSlot`s, sanitised in `Project::make` and passed through
   `compilePattern` / `compileSong`), run by `Player::masterEffects` (4 more `EffectUnit`s, allocated in `prepare`). It
   sits before the soft limiter and before the master volume, so the offline renderer and the export include it. The UI
@@ -275,9 +276,17 @@ voices -> channel (smoothed gain, equal-power pan, channel mute/solo)
 - Track mute/solo are separate from channel mute/solo. If any track is soloed, non-soloed tracks are silent.
 - `EffectSlot { type, bypass, params[5] }` is plain data inside the snapshot. `sanitised()` maps unknown types to
   empty, NaN/inf parameters to their defaults and clamps the rest, so a corrupt slot cannot reach the DSP.
-- `EffectUnit` is the DSP behind one slot. **All its memory (reverb combs and all-passes, a 1 s delay line) is
-  allocated in `Player::prepare`** for 11 x 4 = 44 units (8 tracks, the master and the two aux buses); about 0.5 MB each at 48 kHz, so ~22 MB, and proportionally
-  more at higher sample rates. `process` never allocates. If a slot's type changes the old state is dropped; a
+- `EffectUnit` is the DSP behind one slot (about 2 KB). Its big buffers (reverb combs and all-passes, pre-delay, the delay
+  lines, the Pitch Corrector's analysis: about 0.8 MB at 48 kHz) are an `EffectMemory`, **lent by the Player** (0.29.0) to the
+  slots whose effect needs one (`effectNeedsMemory`: reverb, delay, chorus, Pitch Corrector) at the start of each block
+  (`lendEffectMemory`); a slot whose effect goes gives it back. The pool starts with 16 (`Player::prepare`); when slots wait,
+  `effectMemoryShortfall()` says how many, `AudioEngine::serviceEffectMemory` (message thread timer) makes memory for the device
+  rate and hands it over through a lock-free queue (`offerEffectMemory`), and the audio thread adopts it into vectors reserved for
+  the maximum, so nothing is allocated there. An offline Player (`setMakesOwnMemory`, the export) makes what it lacks itself. The
+  pool never shrinks until the next `prepare`. Without memory such an effect lets the sound through. The Player's per-track
+  buffers and units for all 500 tracks are on the heap (about 4 MB); `render` loops only over the project's tracks, and a track
+  with silent input and no active effect skips the per-sample work (its smoothing and meter jump to where they would be).
+  `process` never allocates. If a slot's type changes the old state is dropped; a
   bypassed slot clears its state when it is switched on again, so no stale tail comes back.
 - Equalizer: low shelf 120 Hz, peaking mid (Q 0.8, frequency parameter), high shelf 6 kHz, as biquads; a band at 0 dB is
   skipped. Reverb: Freeverb layout (8 combs, 4 all-passes per side) scaled to the sample rate. Delay: up to 1 s with
@@ -468,7 +477,7 @@ ring, applies a Hann window and the library-free radix-2 FFT of `SpectrumAnalyse
 
 `Arrangement` is the song as the user edits it: **patterns** (notes per channel, ticks relative to the pattern start)
 and **clips** (pattern, track, start unit, length in units). One *unit* is one pattern length (two bars in the demo
-project). Limits: 8 tracks, a 32-unit timeline, 64 patterns.
+project). Limits: 8 playlist tracks, a 32-unit timeline, 64 patterns.
 
 It is never played directly. It is *compiled* into an ordinary `Project`:
 
@@ -512,7 +521,7 @@ dialog mid-test restores the previous size and play state.
 ## Project files
 
 `ProjectDocument` (`src/library/ProjectFile.h`) is everything that makes up a song: the channels without their notes,
-the sample source of each channel, the 8 mixer tracks with their effect chains, the `Arrangement` (patterns and
+the sample source of each channel, the mixer tracks (8 to 500) with their effect chains, the `Arrangement` (patterns and
 playlist clips; the notes live in the patterns), the current pattern, Song mode, BPM and master volume. It has no
 audio data and no JUCE GUI types, so it is tested headless.
 

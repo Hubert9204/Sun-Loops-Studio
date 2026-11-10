@@ -171,6 +171,7 @@ void MainComponent::applyDocument (ProjectDocument doc, const juce::File& file, 
         channels.push_back (std::move (c));
     jassert (channels.size() <= channels.capacity());
 
+    setTrackCount (doc.tracks.size()); // (0.29.0) as many tracks as the project has
     for (size_t t = 0; t < tracks.size() && t < doc.tracks.size(); ++t)
         tracks[t] = doc.tracks[t]; // in place: the mixer strips refer to these objects
     masterTrack.slots = doc.masterSlots;
@@ -191,7 +192,7 @@ void MainComponent::applyDocument (ProjectDocument doc, const juce::File& file, 
     refreshRackStrips();
     showPatternLength();
 
-    for (int t = 0; t < kMaxTracks; ++t)
+    for (int t = 0; t < static_cast<int> (tracks.size()); ++t)
         mixerPanel.refreshTrack (t);
     mixerPanel.refreshTrack (kMasterIndex);
     mixerPanel.refreshConsole();

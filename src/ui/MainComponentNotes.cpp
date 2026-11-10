@@ -322,13 +322,13 @@ void MainComponent::dumpScoreLog (bool lastPhraseOnly)
 // Tells every mixer strip which channels play through it.
 void MainComponent::updateTrackRouting()
 {
-    std::array<juce::String, kMaxTracks> names;
+    std::vector<juce::String> names (tracks.size());
     for (const auto& c : channels)
     {
-        auto& text = names[static_cast<size_t> (std::clamp (c.mixerTrack, 0, kMaxTracks - 1))];
+        auto& text = names[static_cast<size_t> (std::clamp (c.mixerTrack, 0, static_cast<int> (tracks.size()) - 1))];
         text += (text.isEmpty() ? "" : ", ") + juce::String (c.name);
     }
-    for (int t = 0; t < kMaxTracks; ++t)
+    for (int t = 0; t < static_cast<int> (tracks.size()); ++t)
         mixerPanel.setTrackChannels (t, names[static_cast<size_t> (t)]);
 }
 

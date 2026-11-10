@@ -14,6 +14,7 @@ public:
     explicit TrackSelector (int numberOfTracks);
 
     void setTrack (int zeroBasedTrack);
+    void setNumTracks (int numberOfTracks); // the project's mixer tracks (0.29.0: 8 to 500)
 
     std::function<void (int)> onChange; // called with the new 0-based track
 

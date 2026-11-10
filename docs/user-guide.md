@@ -153,7 +153,7 @@ One row per channel: a **Track N** display and the name, **M** (mute), **S** (so
   changes the speed of the sample, so it also changes its length). Drag the knob up or down; double-click for 0.
 - **Swing** from 0 to 100 %: the off-beat 16th notes (the 2nd, 4th, 6th... of each beat) are delayed, by up to half
   a 16th step at 100 %. Notes that would be pushed past the end of the pattern stay where they are.
-- **Track N** is the mixer track the channel plays through. Click it for a menu of the 8 tracks, or drag it up or
+- **Track N** is the mixer track the channel plays through. Click it for a menu of the mixer's tracks (grouped by 50 when there are many), or drag it up or
   down, or scroll over it. By default channel 1 goes to Track 1, channel 2 to Track 2, and so on.
 - **Sampler channels** show one step button per 16th note of the pattern (32 for the default two bars). Click a step to turn it on or off. The
   **Load** button picks a sample file.
@@ -161,7 +161,7 @@ One row per channel: a **Track N** display and the name, **M** (mute), **S** (so
 - Click a row to select that channel (the Piano Roll and the Mixer follow the selection).
 - **Drum channels** show a small preview of their notes; double-click opens the drum machine (see below).
 - **+ Add channel** under the last row adds a synth, sampler or drum-machine channel, up to 32 channels in total
-  (the mixer still has 8 tracks: channels can share them).
+  (channels can share mixer tracks, and the mixer can have up to 500).
 
 ### Right-click menu on a channel
 
@@ -177,7 +177,7 @@ One row per channel: a **Track N** display and the name, **M** (mute), **S** (so
 | Clone channel | Adds a copy right under it: same instrument, sound and settings, and the same notes in every pattern. |
 | Move up / Move down | Moves the channel one row; its notes in every pattern and its automation clips go with it. |
 | Delete channel... | After a confirmation, removes the channel, its notes in every pattern and the automation clips that move its volume or pan. The last channel cannot be deleted. `Ctrl+Z` brings it back. |
-| Assign free mixer track | Opens a window listing the 8 mixer tracks: free ones (no instrument on them) in green, the others with the instruments that are on them, and the current one marked. The first free track is selected for you; **Select first free track** picks it again, or choose any track (sharing one is allowed), then **Assign** (or Return; Escape cancels). The channel's **Track N** display and the mixer follow, and the mixer selects that track. |
+| Assign free mixer track | Opens a window listing the mixer tracks (a scrolling list; the last row offers a new track): free ones (no instrument on them) in green, the others with the instruments that are on them, and the current one marked. The first free track is selected for you; **Select first free track** picks it again, or choose any track (sharing one is allowed), then **Assign** (or Return; Escape cancels). The channel's **Track N** display and the mixer follow, and the mixer selects that track. |
 | Save as preset... | Asks for a name and writes a `.slspreset` file (instrument, sample, volume, pan, pitch, swing; not the notes, the sampler settings or a SoundFont) into `~/Music/Sun Loops Studio/Presets`; it appears in the browser's Presets folder at once. |
 | Synth settings... | (Synth channels) opens the synth window: ready-made sounds, the engine and every setting of the subtractive synth (see *Synth*). |
 | Sampler settings... | (Sampler channels) opens the sampler window: envelope, loop, filter, root key (see *Sampler and SoundFonts*). |
@@ -702,7 +702,14 @@ touching one has no lasting effect on a parameter that has a clip under the play
 ## Mixer
 
 Press **F9** or the **Mixer F9** button. The Mixer opens large over the other panels; press F9 again to close it.
-It has 8 vertical **tracks**, a **master** strip on the right and the **effects panel** of the selected track.
+It has 8 vertical **tracks** to start with, a **master** strip on the right and the **effects panel** of the selected track.
+
+**More tracks (0.29.0).** The **+** button after the last track adds one; right-click it to add 10 or 100 at once, or to remove
+the last track (only when no channel plays through it, it has no effects and no automation controls it). A project can have up to
+**500** tracks; scroll the mixer sideways to reach them (adding scrolls to the new one). Adding and removing can be undone, and
+the project file keeps the number. Tracks with no sound and no effect cost almost no processing. Reverbs, delays, choruses and
+Pitch Correctors need about 0.8 MB of memory each, which is made for them as they are added: the very first moment after adding
+many at once, the newest may let the sound through dry until their memory is ready (a few tenths of a second).
 
 Sound path: each channel goes to the mixer track chosen with its **Track N** display (several channels can share
 one; or use *Assign free mixer track* in the channel's right-click menu), then through the track's four effect slots,
@@ -878,9 +885,10 @@ a heavier song or a plugin-heavy mixer can still need a bigger size.
 
 ## Limits
 
-- Up to 32 channels, 8 mixer tracks with 4 effect slots each, 2 aux buses (4 slots each), 2 VCA groups, 64 patterns, 8 playlist tracks, a timeline of
+- Up to 32 channels, up to 500 mixer tracks (8 to start with) with 4 effect slots each, 2 aux buses (4 slots each), 2 VCA groups, 64 patterns, 8 playlist tracks, a timeline of
   at least 32 patterns and 64 bars, 4 automation lanes, 64 automation clips of up to 256 points each, 32 simultaneous voices.
-- The effects use about 18 MB of memory at 48 kHz (more at higher sample rates).
+- The effects use about 15 MB of memory at 48 kHz to start with, plus about 0.8 MB for every reverb, delay, chorus and Pitch Corrector beyond
+  the sixteenth (more at higher sample rates). Memory made for them stays until the audio device restarts.
 - Patterns are 1, 2, 4 or 8 bars long (the same for all patterns), 4/4, 16th-note grid; one tempo for the whole song.
 - Samples are mono or stereo, at most 30 seconds. The sampler has one envelope and one filter per channel (no filter envelope, LFO or modulation);
   at most four zones sound per note. Audio clips: up to 5 minutes per file, 64 clips.

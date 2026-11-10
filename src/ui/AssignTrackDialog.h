@@ -10,14 +10,16 @@
 
 namespace sls
 {
-// The window behind "Assign free mixer track" in a channel's right-click menu: the eight mixer tracks as a list
-// (free ones are marked, the others show which instruments are on them) and a button to put this instrument on the
-// track that is selected. The first free track starts selected.
-class AssignTrackComponent : public juce::Component
+// The window behind "Assign free mixer track" in a channel's right-click menu: the project's mixer tracks as a scrolling list
+// (free ones are marked, the others show which instruments are on them; with fewer than kMaxTracks a last row offers a new
+// track) and a button to put this instrument on the track that is selected. The first free track starts selected; when none is
+// free, the new track.
+class AssignTrackComponent : public juce::Component,
+                             private juce::ListBoxModel
 {
 public:
-    // `channels` is only read while the constructor runs. `onAssign` gets the chosen track (0-based).
-    AssignTrackComponent (const std::vector<Channel>& channels, int channelIndex, std::function<void (int)> onAssign);
+    // `channels` is only read while the constructor runs. `onAssign` gets the chosen track (0-based; trackCount = a new track).
+    AssignTrackComponent (const std::vector<Channel>& channels, int trackCount, int channelIndex, std::function<void (int)> onAssign);
 
     void paint (juce::Graphics&) override;
     void resized() override;
@@ -30,14 +32,22 @@ public:
     static constexpr int kWidth = 380;
     static constexpr int kHeight = 440;
 
+    int getSelectedTrack() const noexcept { return selectedTrack; }
+    int getNumRows() override { return static_cast<int> (rowText.size()); }
+
 private:
     void close();
+    void paintListBoxItem (int row, juce::Graphics&, int width, int height, bool selected) override;
+    void selectedRowsChanged (int lastRowSelected) override;
+    void listBoxItemDoubleClicked (int row, const juce::MouseEvent&) override;
 
     std::function<void (int)> onAssign;
     int selectedTrack = 0;
     juce::Label title;
     juce::Label hint;
-    std::array<juce::ToggleButton, kMaxTracks> rows;
+    std::vector<juce::String> rowText;
+    std::vector<bool> rowFree;
+    juce::ListBox list;
     juce::TextButton freeButton { "Select first free track" };
     juce::TextButton assignButton { "Assign" };
     juce::TextButton cancelButton { "Cancel" };

@@ -60,6 +60,7 @@ public:
     void setPlayheadTick (int tick) { grid.setPlayheadTick (tick); }
     void setMeterLevel (float level) { meter.setLevel (level); }
     void refreshFromChannel();
+    void setTrackCount (int mixerTracks) { trackSelector.setNumTracks (mixerTracks); } // the project's (0.29.0)
 
     int getIndex() const noexcept { return index; }
 
@@ -110,7 +111,7 @@ private:
     juce::TextButton soloButton { "S" };
     AutomatableSlider volumeSlider { juce::Slider::LinearHorizontal, juce::Slider::NoTextBox };
     AutomatableSlider panSlider { juce::Slider::LinearHorizontal, juce::Slider::NoTextBox };
-    TrackSelector trackSelector { kMaxTracks };
+    TrackSelector trackSelector { kDefaultTracks };
     Knob pitchKnob;
     Knob swingKnob;
     bool dropHighlight = false;

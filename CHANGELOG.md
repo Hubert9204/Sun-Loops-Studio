@@ -2,6 +2,21 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.29.0 - 2026-11-10
+
+### Added
+- **Up to 500 mixer tracks** (8 before): a **+** after the last track adds one (right-click: 10 or 100 at once, or remove the
+  last unused track), the mixer scrolls to the new one, undo takes it back, the project file keeps the number. Channel track
+  menus group the tracks by 50; *Assign free mixer track* is a scrolling list with a "new track" row.
+- Effect memory is lent from a pool: the big buffers of reverbs, delays, choruses and Pitch Correctors (about 0.8 MB each)
+  exist only for slots that use them, made on the message thread as needed and adopted by the audio thread without
+  allocating; exports make their own.
+
+### Changed
+- The audio thread only processes the project's tracks, and a silent track with no effect skips its per-sample work: 500
+  tracks with one sounding render 2 s of audio in about 0.1 s here. Empty effect slots no longer copy their settings each block.
+- Projects open with as many mixer tracks as they list (8 to 500); a channel routed past the last track goes to the last one.
+
 ## 0.28.0 - 2026-11-07
 
 ### Added

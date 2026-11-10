@@ -27,6 +27,14 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.29.0
+The mixer can have 500 tracks. The big effect buffers moved out of `EffectUnit` into `EffectMemory`, owned by the Player's pool
+(`memoryStore`, `unique_ptr`s in a vector reserved for the maximum) and lent by pointer; memory made on the message thread travels
+through a lock-free queue and is owned by it until adopted; queued memory is freed by `prepare` and by the destructor. Checked with
+AddressSanitizer and UndefinedBehaviorSanitizer in a program that renders 300 random projects while another thread offers memory
+and the rate changes half-way: nothing found. The audio thread allocates nothing (tested). `MixerPanel` and `ChannelStrip` hold
+references into `MainComponent::tracks`, which is reserved for 500 so it never reallocates (asserted).
+
 ## After 0.28.0
 The score log adds one push to a fixed-size lock-free queue per MIDI note on the audio thread (nothing is allocated there; a full
 queue drops the event). The log on the message thread is bounded (five minutes, 20000 events).

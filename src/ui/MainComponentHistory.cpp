@@ -81,11 +81,12 @@ void MainComponent::applyEditState (const EditState& s)
         createStrip (i);
     refreshRackStrips();
 
+    setTrackCount (s.tracks.size()); // (0.29.0) an undone track addition takes the track away again
     for (size_t t = 0; t < tracks.size() && t < s.tracks.size(); ++t)
         tracks[t] = s.tracks[t]; // in place: the mixer strips refer to these objects
     masterTrack.slots = s.masterSlots;
     console = s.console;
-    for (int t = 0; t < kMaxTracks; ++t)
+    for (int t = 0; t < static_cast<int> (tracks.size()); ++t)
         mixerPanel.refreshTrack (t);
     mixerPanel.refreshTrack (kMasterIndex);
     mixerPanel.refreshConsole();

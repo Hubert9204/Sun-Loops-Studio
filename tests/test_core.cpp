@@ -771,6 +771,9 @@ std::vector<float> runEffect (const sls::EffectSlot& slot, const std::vector<flo
 {
     sls::EffectUnit unit;
     unit.prepare (kSr);
+    sls::EffectMemory unitMemory; // the big buffers the Player would lend (0.29.0)
+    unitMemory.prepare (kSr);
+    unit.attachMemory (&unitMemory);
     std::vector<float> l = in, r = in;
     for (size_t i = 0; i < l.size(); i += 64)
     {
@@ -994,13 +997,20 @@ void testMixerTracks()
     {
         auto c = synthChannel (a4);
         c.mixerTrack = 99;
-        check (sls::Project::make ({ c }, 1920).channels[0].mixerTrack == sls::kMaxTracks - 1, "a track index out of range is clamped");
+        check (sls::Project::make ({ c }, 1920).channels[0].mixerTrack == sls::kDefaultTracks - 1, "a track index out of range is clamped");
         auto t = sls::Project::defaultTracks();
         t[0].volume = 9.0f;
         t[1].pan = std::nanf ("");
         const auto p = sls::Project::make ({}, 1920, t);
-        check (p.tracks.size() == static_cast<size_t> (sls::kMaxTracks) && p.tracks[0].volume == 1.5f && p.tracks[1].pan == 0.0f,
-               "track values are clamped and always kMaxTracks tracks exist");
+        check (p.tracks.size() == static_cast<size_t> (sls::kDefaultTracks) && p.tracks[0].volume == 1.5f && p.tracks[1].pan == 0.0f,
+               "track values are clamped; a new project has eight tracks");
+        const auto few = sls::Project::make ({}, 1920, std::vector<sls::MixerTrack> (3));
+        auto many = std::vector<sls::MixerTrack> (700);
+        c.mixerTrack = 450;
+        const auto big = sls::Project::make ({ c }, 1920, many);
+        check (few.tracks.size() == static_cast<size_t> (sls::kDefaultTracks) && big.tracks.size() == static_cast<size_t> (sls::kMaxTracks)
+                   && big.channels[0].mixerTrack == 450,
+               "at least eight tracks, at most 500 (0.29.0); a channel can play through track 451");
     }
 
     // metering
@@ -1099,6 +1109,9 @@ void testEffects()
         // stale audio must not come back after a bypass
         sls::EffectUnit unit;
         unit.prepare (kSr);
+        sls::EffectMemory unitMemory; // the big buffers the Player would lend (0.29.0)
+        unitMemory.prepare (kSr);
+        unit.attachMemory (&unitMemory);
         std::vector<float> l (64, 0.0f), r (64, 0.0f);
         l[0] = r[0] = 1.0f;
         auto slot = slotWith (sls::EffectType::Delay, { 20.0f, 0.9f, 1.0f, 1.0f });
@@ -1198,6 +1211,9 @@ std::pair<std::vector<float>, std::vector<float>> runEffectStereo (const sls::Ef
 {
     sls::EffectUnit unit;
     unit.prepare (kSr);
+    sls::EffectMemory unitMemory; // the big buffers the Player would lend (0.29.0)
+    unitMemory.prepare (kSr);
+    unit.attachMemory (&unitMemory);
     for (size_t i = 0; i < l.size(); i += 64)
         unit.process (slot, l.data() + i, r.data() + i, static_cast<int> (std::min<size_t> (64, l.size() - i)));
     return { std::move (l), std::move (r) };
@@ -1224,6 +1240,9 @@ std::vector<float> runTimeShaper (const sls::EffectSlot& slot, std::vector<float
 {
     sls::EffectUnit unit;
     unit.prepare (kSr);
+    sls::EffectMemory unitMemory; // the big buffers the Player would lend (0.29.0)
+    unitMemory.prepare (kSr);
+    unit.attachMemory (&unitMemory);
     std::vector<float> bl, br;
     if (attach)
     {
@@ -1492,6 +1511,9 @@ void testNewEffects()
         check (err < 1.0e-6, "maximizer: a quiet sound comes out unchanged, 1.5 ms late (the look-ahead)");
         sls::EffectUnit unit;
         unit.prepare (kSr);
+        sls::EffectMemory unitMemory; // the big buffers the Player would lend (0.29.0)
+        unitMemory.prepare (kSr);
+        unit.attachMemory (&unitMemory);
         check (unit.latencySamples (T::Maximizer) == lat && unit.latencySamples (T::Reverb) == 0, "the maximizer reports its latency");
     }
 
@@ -2202,6 +2224,180 @@ std::vector<float> renderBlocks (sls::Player& player, const sls::Project& projec
     return left;
 }
 
+// --- up to 500 mixer tracks and the effect memory pool (0.29.0) --------------------------------------------------------------
+void testManyTracks()
+{
+    std::cout << "Up to 500 mixer tracks, effect memory pool (0.29.0)\n";
+    using T = sls::EffectType;
+    const auto reverbSlot = slotWith (T::Reverb, { 0.0f, 80.0f, 50.0f, 20.0f, 0.0f, 30.0f });
+    const std::vector<sls::Note> a4 { { 69, 0, kBeat, 0.8f } };
+
+    // A project with 8 tracks and the same with 500 (the extra ones empty) sound the same, sample for sample.
+    {
+        auto c = synthChannel (a4);
+        auto eight = sls::Project::make ({ c }, 4 * kBeat);
+        auto many = sls::Project::make ({ c }, 4 * kBeat, std::vector<sls::MixerTrack> (500));
+        sls::Player a, b;
+        a.prepare (kSr);
+        b.prepare (kSr);
+        const auto x = renderBlocks (a, eight, true, 1.0);
+        const auto y = renderBlocks (b, many, true, 1.0);
+        check (many.tracks.size() == 500 && x == y, "500 tracks with 499 empty sound exactly like 8");
+
+        // a channel on track 451, through a reverb there
+        c.mixerTrack = 450;
+        std::vector<sls::MixerTrack> tracks (500);
+        tracks[450].slots[0] = reverbSlot;
+        auto far = sls::Project::make ({ c }, 4 * kBeat, tracks);
+        sls::Player p;
+        p.prepare (kSr);
+        const auto out = renderBlocks (p, far, true, 2.0);
+        check (far.channels[0].mixerTrack == 450 && peakOf (out.data(), 0, 24000) > 0.05f && peakOf (out.data(), 60000, 96000) > 1e-4f,
+               "a channel on track 451 is heard, with the reverb's tail");
+
+        // the time it takes: 500 tracks (one sounding) for 2 s of audio
+        sls::Player timed;
+        timed.prepare (kSr);
+        const auto start = std::chrono::steady_clock::now();
+        renderBlocks (timed, far, true, 2.0);
+        const double seconds = std::chrono::duration<double> (std::chrono::steady_clock::now() - start).count();
+        std::cout << "    (500 tracks, 2 s of audio: " << static_cast<int> (seconds * 1000) << " ms)\n";
+        check (seconds < 0.5, "and 2 s of it render in under 0.5 s (silent tracks cost almost nothing)");
+    }
+
+    // The pool: 16 memories at the start; a 20th reverb waits until memory is offered, then works; none of it allocates.
+    {
+        auto c = synthChannel ({ { 69, 0, 8 * kBeat, 0.8f } });
+        c.mixerTrack = 19;
+        std::vector<sls::MixerTrack> tracks (20);
+        for (auto& t : tracks)
+            t.slots[0] = reverbSlot;
+        auto project = sls::Project::make ({ c }, 16 * kBeat, tracks);
+        sls::Player p;
+        p.prepare (kSr);
+        check (p.effectMemoryCount() == sls::Player::kInitialEffectMemories && p.effectMemoryShortfall() == 0, "the pool starts with 16 memories");
+        std::vector<float> l (256), r (256);
+        float* ch[2] = { l.data(), r.data() };
+        gAllocs = 0;
+        gCounting = true;
+        p.render (project, 120.0, true, ch, 2, 256);
+        gCounting = false;
+        check (gAllocs.load() == 0 && p.effectMemoryShortfall() == 4, "20 reverbs: 4 wait for memory (counted, nothing allocated)");
+        // track 20 (the one that sounds) has no memory yet: the sound passes dry, so it is not silent and not reverberant
+        for (int i = 0; i < 4; ++i)
+        {
+            auto m = std::make_unique<sls::EffectMemory>();
+            m->prepare (kSr);
+            const bool taken = p.offerEffectMemory (std::move (m));
+            if (i == 0)
+                check (taken, "memory made elsewhere is taken");
+        }
+        gAllocs = 0;
+        gCounting = true;
+        for (int i = 0; i < 4; ++i)
+            p.render (project, 120.0, true, ch, 2, 256);
+        gCounting = false;
+        check (gAllocs.load() == 0 && p.effectMemoryShortfall() == 0 && p.effectMemoryCount() == 20,
+               "the audio thread adopts it without allocating; no slot waits any more");
+
+        // effects taken out give their memory back to the pool
+        for (size_t t = 0; t < 10; ++t)
+            project.tracks[t].slots[0] = {};
+        tracks.resize (30);
+        for (size_t t = 20; t < 30; ++t)
+            project.tracks.push_back (tracks[0]); // ten more tracks with a reverb
+        for (size_t t = 20; t < 30; ++t)
+            project.tracks[t].slots[0] = reverbSlot;
+        gAllocs = 0;
+        gCounting = true;
+        p.render (project, 120.0, true, ch, 2, 256);
+        gCounting = false;
+        check (gAllocs.load() == 0 && p.effectMemoryShortfall() == 0 && p.effectMemoryCount() == 20,
+               "ten reverbs removed and ten added elsewhere: the memory moves, none is missing");
+        project.tracks.resize (8);
+        p.render (project, 120.0, true, ch, 2, 256);
+        check (p.effectMemoryShortfall() == 0, "fewer tracks: the removed tracks' units give theirs back too");
+
+        // a reverb that only got its memory late still works: compare with one that had it from the start
+        bool finite = true;
+        for (int i = 0; i < 200; ++i)
+        {
+            p.render (project, 120.0, true, ch, 2, 256);
+            for (float v : l)
+                finite = finite && std::isfinite (v);
+        }
+        check (finite, "everything stays finite while memory moves around");
+    }
+
+    // An offline Player (export) makes what it lacks itself, at once.
+    {
+        auto c = synthChannel (a4);
+        c.mixerTrack = 39;
+        std::vector<sls::MixerTrack> tracks (40);
+        for (auto& t : tracks)
+            t.slots[1] = slotWith (T::Delay, { 250.0f, 0.3f, 0.7f, 0.5f }); // 250 ms, feedback 0.3, mix 0.5
+        const auto project = sls::Project::make ({ c }, 4 * kBeat, tracks);
+        const auto exported = sls::renderToBuffer (project, {});
+        auto dryTracks = tracks;
+        for (auto& t : dryTracks)
+            t.slots[1] = {};
+        const auto dry = sls::renderToBuffer (sls::Project::make ({ c }, 4 * kBeat, dryTracks), {});
+        // the echo of the note (track 40's delay) rings on after the dry note has died away
+        const int from = static_cast<int> (0.7 * kSr), to = static_cast<int> (1.0 * kSr);
+        check (peakOf (exported.getReadPointer (0), from, to) > 4.0f * peakOf (dry.getReadPointer (0), from, to) + 0.005f,
+               "an export with 40 delays: every one works (the export makes its own memory)");
+    }
+
+    // Project files with many tracks.
+    {
+        auto doc = sls::ProjectDocument::blank();
+        doc.tracks.resize (300);
+        doc.tracks[249].name = "Strings bus";
+        doc.tracks[249].volume = 0.5f;
+        doc.channels[0].mixerTrack = 249;
+        const auto start = std::chrono::steady_clock::now();
+        const auto text = doc.toJson();
+        const double ms = std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - start).count();
+        const auto back = sls::ProjectDocument::fromJson (text);
+        check (back.document.has_value() && back.document->tracks.size() == 300 && back.document->tracks[249].name == "Strings bus"
+                   && back.document->tracks[249].volume == 0.5f && back.document->channels[0].mixerTrack == 249,
+               "300 tracks are saved and opened, with a channel on track 250");
+        std::cout << "    (300 tracks written in " << ms << " ms)\n";
+
+        auto json = juce::JSON::parse (text);
+        auto* list = json.getDynamicObject()->getProperty ("tracks").getArray();
+        while (list->size() < 520)
+            list->add (list->getReference (0).clone());
+        const auto tooMany = sls::ProjectDocument::fromJson (juce::JSON::toString (json));
+        check (tooMany.document.has_value() && tooMany.document->tracks.size() == 500 && ! tooMany.warnings.empty(),
+               "a file with 520 tracks opens with 500, and says so");
+        while (list->size() > 8)
+            list->remove (list->size() - 1);
+        const auto few = sls::ProjectDocument::fromJson (juce::JSON::toString (json));
+        check (few.document.has_value() && few.document->tracks.size() == 8 && few.document->channels[0].mixerTrack == 7,
+               "a channel on a track the file does not have goes to its last track");
+    }
+
+    // The memory itself.
+    {
+        sls::EffectMemory m;
+        m.prepare (96000.0);
+        check (m.preparedRate() == 96000.0 && m.delayLine[0].size() > 96000u && ! m.preDelay.empty(), "memory is made for a rate");
+        m.delayLine[0][5] = 1.0f;
+        m.combs[1][3].buf[0] = 1.0f;
+        m.clear();
+        check (m.delayLine[0][5] == 0.0f && m.combs[1][3].buf[0] == 0.0f, "and cleared to silence");
+        sls::EffectUnit unit;
+        unit.prepare (kSr);
+        std::vector<float> l (512, 0.5f), r (512, 0.5f);
+        unit.process (reverbSlot, l.data(), r.data(), 512);
+        check (l[100] == 0.5f && r[400] == 0.5f, "a reverb without memory lets the sound through unchanged");
+        check (sls::effectNeedsMemory (T::Reverb) && sls::effectNeedsMemory (T::Delay) && sls::effectNeedsMemory (T::Chorus)
+                   && sls::effectNeedsMemory (T::PitchCorrector) && ! sls::effectNeedsMemory (T::Equalizer) && ! sls::effectNeedsMemory (T::TimeShaper),
+               "the four effects that need memory are known");
+    }
+}
+
 void testLiveNoteQueue()
 {
     std::cout << "Live note queue\n";
@@ -2659,7 +2855,7 @@ void testProjectFile()
         const auto blank = sls::ProjectDocument::blank();
         const auto back = sls::ProjectDocument::fromJson (blank.toJson());
         check (back.document.has_value() && sameDocument (blank, *back.document) && blank.channels.size() == 1
-                   && blank.tracks.size() == static_cast<size_t> (sls::kMaxTracks) && blank.arrangement.patterns.size() == 1
+                   && blank.tracks.size() == static_cast<size_t> (sls::kDefaultTracks) && blank.arrangement.patterns.size() == 1
                    && blank.arrangement.clips.empty(),
                "a blank project is valid and round-trips");
     }
@@ -2775,7 +2971,7 @@ void testProjectFile()
         {
             const auto& d = *r.document;
             check (d.channels[0].volume == 1.5f && d.channels[0].pan == -1.0f && d.channels[0].pitch == 24.0f
-                       && d.channels[0].swing == 1.0f && d.channels[0].mixerTrack == sls::kMaxTracks - 1
+                       && d.channels[0].swing == 1.0f && d.channels[0].mixerTrack == sls::kDefaultTracks - 1
                        && d.currentPattern == 1 && d.tracks[0].volume == 1.5f,
                    "channel, track and pattern values are clamped into range");
             const auto& notes = d.arrangement.patterns[0].notes[0];
@@ -2800,9 +2996,9 @@ void testProjectFile()
         while (tracks->size() > 3)
             tracks->remove (tracks->size() - 1);
         const auto r = sls::ProjectDocument::fromJson (juce::JSON::toString (juce::var (root), false));
-        check (r.document.has_value() && r.document->tracks.size() == static_cast<size_t> (sls::kMaxTracks)
+        check (r.document.has_value() && r.document->tracks.size() == static_cast<size_t> (sls::kDefaultTracks)
                    && r.document->tracks[7].name == "Track 8" && r.document->tracks[2].name == "Leads",
-               "a short list of mixer tracks is padded with defaults");
+               "a short list of mixer tracks is padded with defaults (to eight)");
     }
 
     // --- files on disk
@@ -3051,20 +3247,21 @@ void testMasterEffectsAndRouting()
         std::vector<sls::Channel> ch (4);
         for (size_t i = 0; i < ch.size(); ++i)
             ch[i].mixerTrack = static_cast<int> (i);
-        check (sls::firstFreeTrack (ch) == 4 && sls::isTrackFree (ch, 4) && ! sls::isTrackFree (ch, 2),
+        check (sls::firstFreeTrack (ch, 8) == 4 && sls::isTrackFree (ch, 8, 4) && ! sls::isTrackFree (ch, 8, 2),
                "four channels on tracks 1-4: the first free track is 5");
-        check (sls::isTrackFree (ch, 2, 2) && sls::firstFreeTrack (ch, 2) == 2,
+        check (sls::isTrackFree (ch, 8, 2, 2) && sls::firstFreeTrack (ch, 8, 2) == 2,
                "a channel's own track counts as free for that channel");
         ch[1].mixerTrack = 0;
-        check (sls::firstFreeTrack (ch) == 1 && sls::channelsPerTrack (ch)[0] == 2, "two channels can share a track; the vacated one is free");
+        check (sls::firstFreeTrack (ch, 8) == 1 && sls::channelsPerTrack (ch, 8)[0] == 2, "two channels can share a track; the vacated one is free");
         ch.resize (8);
         for (size_t i = 0; i < ch.size(); ++i)
             ch[i].mixerTrack = static_cast<int> (i);
-        check (sls::firstFreeTrack (ch) == -1 && sls::firstFreeTrack (ch, 5) == 5, "no free track when all eight are used (unless one channel is ignored)");
+        check (sls::firstFreeTrack (ch, 8) == -1 && sls::firstFreeTrack (ch, 8, 5) == 5, "no free track when all eight are used (unless one channel is ignored)");
+        check (sls::firstFreeTrack (ch, 12) == 8 && sls::channelsPerTrack (ch, 500).size() == 500, "with more tracks, the first one past them is free (0.29.0)");
         ch[0].mixerTrack = 99;
         ch[1].mixerTrack = -4;
-        const auto count = sls::channelsPerTrack (ch);
-        check (count[7] == 2 && count[0] == 1 && ! sls::isTrackFree (ch, -1) && ! sls::isTrackFree (ch, 8),
+        const auto count = sls::channelsPerTrack (ch, 8);
+        check (count[7] == 2 && count[0] == 1 && ! sls::isTrackFree (ch, 8, -1) && ! sls::isTrackFree (ch, 8, 8),
                "out-of-range track numbers are clamped; asking about a track that does not exist is not 'free'");
     }
 }
@@ -7987,6 +8184,9 @@ void testPitchCorrector()
         const auto in = steady (440.0);
         sls::EffectUnit unit;
         unit.prepare (kSr);
+        sls::EffectMemory unitMemory; // the big buffers the Player would lend (0.29.0)
+        unitMemory.prepare (kSr);
+        unit.attachMemory (&unitMemory);
         auto l = in, r = in;
         for (size_t i = 0; i < l.size(); i += 64)
             unit.process (slot (0, 0, 0, 100, 0), l.data() + i, r.data() + i, static_cast<int> (std::min<size_t> (64, l.size() - i)));
@@ -8131,6 +8331,9 @@ void testPitchCorrector()
     {
         sls::EffectUnit unit;
         unit.prepare (kSr);
+        sls::EffectMemory unitMemory; // the big buffers the Player would lend (0.29.0)
+        unitMemory.prepare (kSr);
+        unit.attachMemory (&unitMemory);
         const auto in = steady (452.0, 1, 0.5);
         std::vector<float> l (64), r (64);
         const auto s = slot (0, 1, 30, 100, 3);
@@ -8709,7 +8912,9 @@ void testPluginHosting()
     check (gain != nullptr && ! gain->isInstrument(), "a VST3 effect is created");
     if (gain != nullptr)
     {
-        const auto dry = renderBlocks (p = sls::Player(), sls::Project::make ({ synthChannel ({ { 69, 0, 2 * kBeat, 0.8f } }) }, 16 * kBeat), true, 0.6);
+        sls::Player dryPlayer;
+        dryPlayer.prepare (kSr);
+        const auto dry = renderBlocks (dryPlayer, sls::Project::make ({ synthChannel ({ { 69, 0, 2 * kBeat, 0.8f } }) }, 16 * kBeat), true, 0.6);
         auto tracks = sls::Project::defaultTracks();
         tracks[0].slots[0].type = sls::EffectType::Plugin;
         tracks[0].slots[0].plugin = gain;
@@ -8878,6 +9083,7 @@ int main()
     testChannelPitch();
     testSwing();
     testMixerTracks();
+    testManyTracks();
     testConsole();
     testMetering();
     testEffects();
