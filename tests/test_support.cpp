@@ -17,6 +17,7 @@
 #include <vector>
 
 #include <arpa/inet.h>
+#include <dlfcn.h>
 #include <netinet/in.h>
 #include <poll.h>
 #include <sys/resource.h>
@@ -476,6 +477,27 @@ void testCrashReports()
     const auto link = sls::github::newIssueLink ({ "Hubert9204", "Sun-Loops-Studio" }, "Crash: x", std::string (20000, 'a') + "\n" + body);
     supportCheck (link.rfind ("https://github.com/Hubert9204/Sun-Loops-Studio/issues/new?labels=crash&title=Crash%3A%20x&body=", 0) == 0 && link.size() <= 7500,
            "without a token: a GitHub \"new issue\" link, the body cut to fit");
+    {
+        // The AppImage: the main program appears as "AppRun" in the trace; the recorded program name ties it to the executable.
+        Dl_info where {};
+        ::dladdr (reinterpret_cast<void*> (&sls::crashtest::writeThroughNull), &where);
+        const auto offset = reinterpret_cast<std::uintptr_t> (&sls::crashtest::writeThroughNull) - reinterpret_cast<std::uintptr_t> (where.dli_fbase) + 2;
+        char text[32];
+        std::snprintf (text, sizeof (text), "+0x%llx", static_cast<unsigned long long> (offset));
+        auto appImage = *report; // the sample, read above
+        appImage.fields["program"] = "/tmp/.mount_SunLoXYZ/AppRun";
+        appImage.frames[3].module = "/tmp/.mount_SunLoXYZ/AppRun";
+        appImage.frames[3].offset = text;
+        const auto self = fs::read_symlink ("/proc/self/exe");
+        const int named = sls::crash::symbolize (appImage, self);
+        auto other = appImage;
+        other.frames[3].module = "/somewhere/else";
+        other.frames[3].symbol.clear();
+        const int namedOther = sls::crash::symbolize (other, self);
+        supportCheck (named == 1 && appImage.frames[3].symbol == "sls::crashtest::writeThroughNull(unsigned long)" && appImage.frames[3].offset == "+0x2"
+                          && namedOther == 0 && sls::crash::issueBody (appImage, who).find ("| program |") == std::string::npos,
+                      "a frame of the recorded program (AppRun in the AppImage) is named from the executable's symbol table, another file's is not");
+    }
     supportCheck (! sls::crash::parse ("hello\nsignal=11") && ! sls::crash::parse ("SLS-CRASH 1\nframes:\nend\n"), "a file that is not a crash report is refused");
 
     // The log goes into the crash file at the next start; after sending, the file is archived.

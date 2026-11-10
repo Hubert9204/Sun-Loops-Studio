@@ -11,6 +11,7 @@
 #include <fstream>
 #include <mutex>
 
+#include <cerrno> // program_invocation_name
 #include <execinfo.h>
 #include <fcntl.h>
 #include <sys/prctl.h>
@@ -253,7 +254,11 @@ bool install (const InstallOptions& options)
         return false;
     copyText (crashPath, sizeof (crashPath), crashFile (options.directory).string());
     copyText (versionText, sizeof (versionText), options.version);
-    copyText (systemText, sizeof (systemText), fieldsText (systemFields()));
+    // glibc names the main program in stack traces by argv[0] (program_invocation_name): "AppRun" in the AppImage. Recorded so
+    // that the next start knows which frames are the program's own.
+    auto fields = systemFields();
+    fields.emplace_back ("program", program_invocation_name != nullptr ? program_invocation_name : "");
+    copyText (systemText, sizeof (systemText), fieldsText (fields));
     mainThread = static_cast<pid_t> (::syscall (SYS_gettid));
     exceptionText[0] = '\0';
     handling.store (false);

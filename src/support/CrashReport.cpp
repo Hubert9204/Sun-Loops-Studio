@@ -216,12 +216,14 @@ const ElfFunction* functionAt (const std::vector<ElfFunction>& functions, std::u
 int symbolize (Report& report, const std::filesystem::path& executable)
 {
     const auto name = executable.filename().string();
+    const auto program = baseName (report.field ("program", ""));
     std::vector<ElfFunction> functions;
     bool loaded = false;
     int named = 0;
     for (auto& f : report.frames)
     {
-        if (! f.symbol.empty() || ! startsWith (f.offset, "+0x") || baseName (f.module) != name)
+        const auto module = baseName (f.module);
+        if (! f.symbol.empty() || ! startsWith (f.offset, "+0x") || (module != name && (program.empty() || module != program)))
             continue;
         if (! loaded)
         {
@@ -453,7 +455,7 @@ std::string issueBody (const Report& report, const Redaction& redaction)
     md << "| Buffer size | " << cell (report.field ("buffer_size") == "unknown" ? "unknown" : report.field ("buffer_size") + " samples") << " |\n";
     for (const auto& [key, value] : report.fields)
         if (key != "os" && key != "kernel" && key != "arch" && key != "audio_driver" && key != "audio_device" && key != "sample_rate"
-            && key != "buffer_size")
+            && key != "buffer_size" && key != "program")
             md << "| " << cell (key) << " | " << cell (value) << " |\n";
 
     md << "\n### Stack trace\n\n```text\n";
