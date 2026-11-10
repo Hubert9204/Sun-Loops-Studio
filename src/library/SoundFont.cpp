@@ -2,6 +2,7 @@
 
 #include "library/JsonRead.h"
 #include "audio/SoundLibrary.h"
+#include "library/Sfz.h"
 
 #include <algorithm>
 #include <cmath>
@@ -192,6 +193,11 @@ ProgramSpec specFromProgram (const SamplerProgram& program)
         spec.kind = ProgramSpec::Kind::Builtin;
         return spec;
     }
+    if (program.sliceStarts.empty() && juce::File (juce::String (program.source)).hasFileExtension ("sfz"))
+    {
+        spec.kind = ProgramSpec::Kind::Sfz;
+        return spec;
+    }
     spec.kind = program.sliceStarts.empty() || program.source.empty() ? ProgramSpec::Kind::None : ProgramSpec::Kind::Slices;
     spec.firstKey = program.sliceFirstKey;
     spec.starts = program.sliceStarts;
@@ -205,7 +211,7 @@ juce::var programSpecToVar (const ProgramSpec& spec)
 {
     auto* o = new juce::DynamicObject();
     o->setProperty ("kind", spec.kind == ProgramSpec::Kind::SoundFont ? "soundfont" : spec.kind == ProgramSpec::Kind::Slices ? "slices"
-                                : spec.kind == ProgramSpec::Kind::Builtin ? "builtin" : "none");
+                                : spec.kind == ProgramSpec::Kind::Builtin ? "builtin" : spec.kind == ProgramSpec::Kind::Sfz ? "sfz" : "none");
     o->setProperty ("file", juce::String (spec.file));
     if (spec.kind == ProgramSpec::Kind::SoundFont)
         o->setProperty ("preset", spec.preset);
@@ -281,11 +287,83 @@ ProgramSpec programSpecFromVar (const juce::var& v)
         spec.sliceCut = readBool (o->getProperty ("cut"), false);
         spec.sliceBpm = readNumber (o->getProperty ("bpm"), 0.0, 0.0, 999.0);
     }
+    else if (kind == "sfz")
+        spec.kind = ProgramSpec::Kind::Sfz;
     else if (kind == "builtin")
         spec.kind = isLibraryProgramSource (spec.file) ? ProgramSpec::Kind::Builtin : ProgramSpec::Kind::None;
     if (spec.file.empty())
         spec.kind = ProgramSpec::Kind::None;
     return spec;
+}
+
+std::shared_ptr<const SamplerProgram> loadSfz (const juce::File& file,
+                                               const std::function<std::shared_ptr<const SampleData> (const juce::File&, juce::String&)>& loadAudio,
+                                               juce::String& error, juce::StringArray* notes)
+{
+    if (! file.existsAsFile() || file.getSize() > 16LL * 1024 * 1024)
+    {
+        error = file.existsAsFile() ? "The SFZ file is too large: " + file.getFileName() : "Cannot find " + file.getFullPathName();
+        return nullptr;
+    }
+    const auto instrument = sfz::parse (file.loadFileAsString().toStdString());
+    auto program = std::make_shared<SamplerProgram>();
+    program->name = file.getFileNameWithoutExtension().toStdString();
+    program->source = file.getFullPathName().toStdString();
+
+    std::map<std::string, std::shared_ptr<const SampleData>> samples; // each file read once
+    int missing = 0;
+    for (const auto& r : instrument.regions)
+    {
+        const auto path = file.getParentDirectory().getChildFile (juce::String::fromUTF8 (r.sample.c_str())).getFullPathName().toStdString();
+        auto it = samples.find (path);
+        if (it == samples.end())
+        {
+            juce::String why;
+            it = samples.emplace (path, loadAudio != nullptr ? loadAudio (juce::File (juce::String::fromUTF8 (path.c_str())), why) : nullptr).first;
+            if (it->second == nullptr)
+            {
+                ++missing;
+                if (notes != nullptr)
+                    notes->addIfNotAlreadyThere ("Sample not found or not readable: " + juce::String::fromUTF8 (r.sample.c_str()));
+            }
+        }
+        if (it->second == nullptr || it->second->numFrames() < 2)
+            continue;
+        SampleZone z;
+        z.sample = it->second;
+        z.loKey = r.loKey;
+        z.hiKey = r.hiKey;
+        z.rootKey = r.rootKey;
+        z.loVel = r.loVel;
+        z.hiVel = r.hiVel;
+        z.tune = static_cast<float> (r.tuneCents / 100.0);
+        z.gain = static_cast<float> (std::pow (10.0, r.volumeDb / 20.0));
+        z.pan = static_cast<float> (r.pan / 100.0);
+        if (r.loop && r.loopEnd > r.loopStart && r.loopStart >= 0)
+        {
+            z.loop = LoopMode::Forward;
+            z.loopStart = static_cast<int> (std::min<long long> (r.loopStart, z.sample->numFrames() - 1));
+            z.loopEnd = static_cast<int> (std::min<long long> (r.loopEnd + 1, z.sample->numFrames())); // SFZ's loop_end is the last frame
+        }
+        program->zones.push_back (std::move (z));
+    }
+    if (notes != nullptr)
+    {
+        if (instrument.skippedOpcodes > 0)
+            notes->add (instrument.skippedOpcodes == 1 ? juce::String ("1 setting this sampler does not have was left out (filters, envelopes, round robin...)")
+                                                       : juce::String (instrument.skippedOpcodes) + " settings this sampler does not have were left out (filters, envelopes, round robin...)");
+        for (const auto& inc : instrument.includes)
+            notes->add ("#include not followed: " + juce::String::fromUTF8 (inc.c_str()));
+    }
+    auto sane = std::make_shared<SamplerProgram> (program->sanitised());
+    if (sane->zones.empty())
+    {
+        error = instrument.regions.empty() ? "No regions with samples in " + file.getFileName()
+                                           : "None of the " + juce::String (static_cast<int> (instrument.regions.size())) + " regions' samples could be read ("
+                                                 + juce::String (missing) + " files missing)";
+        return nullptr;
+    }
+    return sane;
 }
 
 std::shared_ptr<const SamplerProgram> loadProgram (const ProgramSpec& spec, const std::function<std::shared_ptr<const SampleData> (const juce::File&, juce::String&)>& loadAudio,
@@ -306,6 +384,8 @@ std::shared_ptr<const SamplerProgram> loadProgram (const ProgramSpec& spec, cons
     const juce::File file { juce::String (spec.file) };
     if (spec.kind == ProgramSpec::Kind::SoundFont)
         return loadSoundFont (file, spec.preset, error);
+    if (spec.kind == ProgramSpec::Kind::Sfz)
+        return loadSfz (file, loadAudio, error);
 
     const auto audio = loadAudio != nullptr ? loadAudio (file, error) : nullptr;
     if (audio == nullptr)

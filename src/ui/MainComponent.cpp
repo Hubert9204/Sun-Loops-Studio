@@ -874,6 +874,7 @@ void MainComponent::timerCallback()
     drainMidiTakes();
     drainScoreEvents();
     engine.serviceEffectMemory();
+    mixerPanel.setTimeShaperShortfall (engine.timeShapersWithoutMemory());
 
     // When the window is active but keyboard focus is outside this component (e.g. on the window
     // itself), take it so Space and F5/F6/F7/F9 work without a click first.

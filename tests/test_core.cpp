@@ -34,6 +34,7 @@
 #include "audio/PitchTrack.h"
 #include "audio/StemSplit.h"
 #include "library/HelpIndex.h"
+#include "library/Sfz.h"
 #include "audio/Loudness.h"
 #include "audio/Spectrum.h"
 #include "audio/MidiImport.h"
@@ -1384,6 +1385,12 @@ void testTimeShaper()
         }
         gCounting = false;
         check (gAllocs.load() == 0 && fine, "five Time Shapers in a project (four get a recording): finite, and no allocation while playing");
+        check (player.timeShaperShortfall() == 1, "the player says one Time Shaper has no recording (the interface tells the user)");
+        project.tracks[1].slots[0] = {};
+        float l2[256] {}, r2[256] {};
+        float* ch2[2] = { l2, r2 };
+        player.render (project, 120.0, true, ch2, 2, 256);
+        check (player.timeShaperShortfall() == 0, "with four, none is left without");
     }
 }
 
@@ -4791,6 +4798,139 @@ void testAudioImport()
     check (r3.data == nullptr && r3.error.contains ("no audio"), "a video without sound is reported");
     check (library.getNumberOfChildFiles (juce::File::findFiles) == 2, "and leaves no partial files behind");
     dir.deleteRecursively(); // test folders in /tmp are not left behind
+}
+
+void testSfz()
+{
+    std::cout << "SFZ instruments\n";
+    check (sls::sfz::keyFromText ("c4") == 60 && sls::sfz::keyFromText ("C#4") == 61 && sls::sfz::keyFromText ("db4") == 61
+               && sls::sfz::keyFromText ("a-1") == 9 && sls::sfz::keyFromText ("g9") == 127 && sls::sfz::keyFromText ("64") == 64
+               && sls::sfz::keyFromText ("b4") == 71,
+           "keys by name (c4 = 60, as in SFZ) or number");
+    check (sls::sfz::keyFromText ("h4") == -1 && sls::sfz::keyFromText ("c") == -1 && sls::sfz::keyFromText ("200") == -1
+               && sls::sfz::keyFromText ("c4.5") == -1 && sls::sfz::keyFromText ("") == -1,
+           "anything else is not a key");
+
+    const std::string text = "// a test instrument\n<control> default_path=samples\\piano/\n"
+                             "<global> volume=-6 ampeg_release=0.4\n"
+                             "<group> lovel=1 hivel=64 /* soft */\n"
+                             "<region> sample=C4 soft.wav lokey=b3 hikey=c#4 pitch_keycenter=c4\n"
+                             "<region> sample=E4 soft.wav key=64 tune=-12 transpose=1 pan=-50\n"
+                             "<group> lovel=65\n<region>sample=C4 loud.wav lokey=59 hikey=61 pitch_keycenter=60 volume=0 loop_mode=loop_continuous loop_start=100 loop_end=4000\n"
+                             "<region> sample=*sine key=90\n"
+                             "<curve> curve_index=7 v000=0\n"
+                             "#include \"more.sfz\"\n"
+                             "<region> sample=../x.wav hikey=10 lokey=20 hivel=5 lovel=100\n";
+    const auto inst = sls::sfz::parse (text);
+    check (inst.regions.size() == 4, "four regions with samples (a built-in *sine is left out)");
+    if (inst.regions.size() == 4)
+    {
+        const auto& a = inst.regions[0];
+        check (a.sample == "samples/piano/C4 soft.wav" && a.loKey == 59 && a.hiKey == 61 && a.rootKey == 60 && a.loVel == 1 && a.hiVel == 64
+                   && a.volumeDb == -6.0,
+               "a region takes the default path, a sample name with spaces, keys by name, the group's velocities and the global volume");
+        const auto& b = inst.regions[1];
+        check (b.loKey == 64 && b.hiKey == 64 && b.rootKey == 64 && b.tuneCents == 88.0 && b.pan == -50.0, "key, tune and transpose, pan");
+        const auto& c = inst.regions[2];
+        check (c.loVel == 65 && c.hiVel == 127 && c.volumeDb == 0.0 && c.loop && c.loopStart == 100 && c.loopEnd == 4000,
+               "a new group replaces the old one; a region's own volume wins; the loop");
+        const auto& d = inst.regions[3];
+        check (d.loKey == 10 && d.hiKey == 20 && d.loVel == 5 && d.hiVel == 100 && d.sample == "samples/piano/../x.wav", "ranges written backwards are put right");
+    }
+    check (inst.skippedOpcodes == 1 && inst.includes.size() == 1 && inst.includes[0] == "\"more.sfz\"",
+           "unknown opcodes are counted (not those of a <curve>), includes are reported");
+    const auto none = sls::sfz::parse ("<region> lokey=1\n<group sample=x.wav\n= = =\n<<<>>>\nsample=\n");
+    check (none.regions.empty(), "broken files give nothing (and do not crash)");
+    std::string big (100000, '<');
+    sls::sfz::parse (big);
+    check (true, "a hostile file does not crash");
+}
+
+
+void testSfzFiles()
+{
+    std::cout << "SFZ instruments from files\n";
+    const auto dir = freshTempDir ("sls-sfz");
+    const auto inst = dir.getChildFile ("Organ");
+    inst.getChildFile ("wav").createDirectory();
+    // Two samples: a 440 Hz tone (for C4..B4) and an 880 Hz tone (for C5 and up), one second each.
+    check (sls::writeSampleWav (*sineData (48000, kSr, 440.0, 0.5f), inst.getChildFile ("wav/low tone.wav")).wasOk()
+               && sls::writeSampleWav (*sineData (48000, kSr, 880.0, 0.5f), inst.getChildFile ("wav/high.wav")).wasOk(),
+           "test samples written");
+    const auto sfzFile = inst.getChildFile ("organ.sfz");
+    sfzFile.replaceWithText ("<control> default_path=wav/\n<group> ampeg_attack=0.01\n"
+                             "<region> sample=low tone.wav lokey=c4 hikey=b4 pitch_keycenter=a4\n"
+                             "<region> sample=high.wav lokey=c5 hikey=127 pitch_keycenter=a5 volume=-6 loop_mode=loop_continuous loop_start=0 loop_end=47999\n"
+                             "<region> sample=missing.wav key=20\n");
+    juce::AudioFormatManager formats;
+    formats.registerBasicFormats();
+    const auto load = [&formats] (const juce::File& f, juce::String& e) -> std::shared_ptr<const sls::SampleData>
+    {
+        std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (f));
+        if (reader == nullptr)
+        {
+            e = "cannot read " + f.getFileName();
+            return nullptr;
+        }
+        auto d = std::make_shared<sls::SampleData>();
+        d->sampleRate = reader->sampleRate;
+        juce::AudioBuffer<float> b (2, static_cast<int> (reader->lengthInSamples));
+        reader->read (&b, 0, b.getNumSamples(), 0, true, true);
+        d->left.assign (b.getReadPointer (0), b.getReadPointer (0) + b.getNumSamples());
+        d->right.assign (b.getReadPointer (1), b.getReadPointer (1) + b.getNumSamples());
+        d->source = f.getFullPathName().toStdString();
+        return d;
+    };
+    juce::String error;
+    juce::StringArray notes;
+    const auto program = sls::loadSfz (sfzFile, load, error, &notes);
+    check (program != nullptr && program->zones.size() == 2, "the two regions whose samples exist become zones");
+    if (program == nullptr || program->zones.size() != 2)
+        return;
+    const auto& low = program->zones[0];
+    const auto& high = program->zones[1];
+    check (low.loKey == 60 && low.hiKey == 71 && low.rootKey == 69 && high.loKey == 72 && high.rootKey == 81, "keys and root keys");
+    check (std::abs (high.gain - 0.501f) < 0.01f && high.loop == sls::LoopMode::Forward && high.loopEnd == 48000, "volume in dB, the loop (its last frame included)");
+    check (notes.joinIntoString ("|").contains ("missing.wav") && notes.joinIntoString ("|").contains ("ampeg_attack") == false
+               && notes.joinIntoString ("|").contains ("1 setting this"),
+           "the missing sample and the skipped setting are reported");
+
+    // The project keeps it as an .sfz and loads it again.
+    const auto spec = sls::specFromProgram (*program);
+    const auto back = sls::programSpecFromVar (sls::programSpecToVar (spec));
+    check (spec.kind == sls::ProgramSpec::Kind::Sfz && back.kind == sls::ProgramSpec::Kind::Sfz && back.file == sfzFile.getFullPathName().toStdString(),
+           "saved as an SFZ reference");
+    const auto again = sls::loadProgram (back, load, error);
+    check (again != nullptr && again->zones.size() == 2, "and loaded again from it");
+
+    // It plays: A4 plays the low tone at its own pitch, A5 the high one.
+    sls::Channel c;
+    c.instrument = sls::Instrument::Sampler;
+    c.program = program;
+    c.notes = { { 69, 0, kBeat, 0.8f } };
+    sls::Player player;
+    player.prepare (kSr);
+    auto out = renderBlocks (player, sls::Project::make ({ c }, 16 * kBeat), true, 0.4);
+    check (toneEnergy (out.data(), 2400, 14400, 440.0) > 0.05 && toneEnergy (out.data(), 2400, 14400, 880.0) < 0.01, "A4 plays the 440 Hz sample");
+    c.notes = { { 81, 0, kBeat, 0.8f } };
+    sls::Player p2;
+    p2.prepare (kSr);
+    out = renderBlocks (p2, sls::Project::make ({ c }, 16 * kBeat), true, 0.4);
+    check (toneEnergy (out.data(), 2400, 14400, 880.0) > 0.02, "A5 plays the 880 Hz sample");
+
+    // Export with samples takes the whole folder along, so the sample paths still work.
+    auto doc = sls::ProjectDocument::blank();
+    doc.channels[0].instrument = sls::Instrument::Sampler;
+    doc.programSpecs = { spec };
+    juce::StringArray exportNotes;
+    check (sls::exportProjectWithSamples (doc, dir.getChildFile ("Out"), "Song", exportNotes).isEmpty()
+               && dir.getChildFile ("Out/Samples/Organ/organ.sfz").existsAsFile() && dir.getChildFile ("Out/Samples/Organ/wav/low tone.wav").existsAsFile(),
+           "export with samples copies the SFZ's folder");
+    const auto exported = sls::readProjectFile (dir.getChildFile ("Out/Song.slp"));
+    check (exported.document && exported.document->programSpecs[0].file == dir.getChildFile ("Out/Samples/Organ/organ.sfz").getFullPathName().toStdString(),
+           "and the project finds it there");
+    check (sls::loadSfz (dir.getChildFile ("none.sfz"), load, error) == nullptr && error.contains ("Cannot find"), "a missing file is reported");
+    dir.deleteRecursively();
 }
 
 void testHelios()
@@ -9417,6 +9557,36 @@ void testPitchCorrector()
            "amount 50 %: half the correction (+23 cents, within 3)");
     check (std::abs (centsOff (strongestHz (runEffect (slot (0, 0, 0, 0, 0), sharp), 0.5, 1.5, 415.0, 480.0), 452.0)) < 2.0,
            "amount 0: no correction");
+    // Follow (0.41.0): the note a channel is playing instead of the scale (as Pitcher's MIDI mode).
+    {
+        const auto followRun = [&sharp] (const int* notes, float followChoice)
+        {
+            auto s = slotWith (T::PitchCorrector, { 0, 0, 0, 100, 0, 1.0f, 100.0f, followChoice });
+            sls::EffectUnit unit;
+            unit.prepare (kSr);
+            sls::EffectMemory memory;
+            memory.prepare (kSr);
+            unit.attachMemory (&memory);
+            auto l = sharp, r = sharp;
+            const sls::EffectTransport transport { -1.0, 0.0, notes, sls::kMaxChannels };
+            for (size_t i = 0; i < l.size(); i += 64)
+                unit.process (s, l.data() + i, r.data() + i, static_cast<int> (std::min<size_t> (64, l.size() - i)), transport);
+            return l;
+        };
+        std::array<int, sls::kMaxChannels> notes {};
+        notes.fill (-1);
+        notes[1] = 71; // channel 2 plays B4
+        check (std::abs (centsOff (strongestHz (followRun (notes.data(), 2.0f), 0.5, 1.5, 450.0, 520.0), 493.88)) < 4.0,
+               "following channel 2, A4 + 47 cents is pulled to the B4 it plays (within 4 cents)");
+        notes[1] = 59; // B3: the same note an octave lower is taken in the octave of the voice
+        check (std::abs (centsOff (strongestHz (followRun (notes.data(), 2.0f), 0.5, 1.5, 450.0, 520.0), 493.88)) < 4.0,
+               "a note in another octave is taken in the voice's octave");
+        notes[1] = -1;
+        check (std::abs (centsOff (strongestHz (followRun (notes.data(), 2.0f), 0.5, 1.5, 415.0, 480.0), 452.0)) < 2.0,
+               "nothing held on the channel: the voice is left alone");
+        check (std::abs (centsOff (strongestHz (followRun (nullptr, 0.0f), 0.5, 1.5, 415.0, 480.0), 440.0)) < 3.0,
+               "Follow = Scale works as before");
+    }
     const auto flat = steady (427.0); // A4 - 52 cents: nearest note is G#4 chromatically, A4 in C major
     check (std::abs (centsOff (strongestHz (runEffect (slot (0, 0, 0, 100, 0), flat), 0.5, 1.5, 400.0, 460.0), 415.30)) < 3.0,
            "A4 - 52 cents, chromatic: to G#4");
@@ -10420,6 +10590,8 @@ int main()
     testPitchTools();
     testStemSplit();
     testHelios();
+    testSfz();
+    testSfzFiles();
     testMidiNotes();
     testPlayerRewind();
     testClipEditing();

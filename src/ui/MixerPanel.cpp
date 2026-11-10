@@ -532,6 +532,9 @@ FxPanel::FxPanel()
     addAndMakeVisible (notePlaceholder);
     addChildComponent (pluginButton);
     addChildComponent (automatePluginButton);
+    styleSmallLabel (timeShaperNotice, 11.0f, false, juce::Justification::topLeft);
+    timeShaperNotice.setColour (juce::Label::textColourId, juce::Colour (0xffe8943a));
+    addChildComponent (timeShaperNotice);
     addChildComponent (presetButton);
     presetButton.setTooltip ("Ready-made settings of this effect");
 
@@ -626,6 +629,14 @@ void FxPanel::refresh()
     rebuildParameters();
 }
 
+void FxPanel::setTimeShaperShortfall (int count)
+{
+    if (count == timeShaperShortfall)
+        return;
+    timeShaperShortfall = count;
+    rebuildParameters();
+}
+
 void FxPanel::rebuildParameters()
 {
     const EffectSlot slot = track != nullptr ? track->slots[static_cast<size_t> (selectedSlot)] : EffectSlot {};
@@ -637,6 +648,12 @@ void FxPanel::rebuildParameters()
                                                              + (isPlugin ? juce::String (slot.plugin->displayName()) + " (plugin)" : juce::String (effectName (slot.type))),
                          juce::dontSendNotification);
     notePlaceholder.setVisible (slot.type == EffectType::None);
+    timeShaperNotice.setVisible (slot.type == EffectType::TimeShaper && timeShaperShortfall > 0);
+    timeShaperNotice.setText ("Only four Time Shapers in a project get a recording of the sound. "
+                                  + (timeShaperShortfall == 1 ? juce::String ("One has none and only shapes the volume")
+                                                              : juce::String (timeShaperShortfall) + " have none and only shape the volume")
+                                  + " (the ones added first keep theirs). Remove one to give its recording to another.",
+                              juce::dontSendNotification);
     pluginButton.setVisible (isPlugin);
     presetButton.setVisible (! effectPresets (slot.type).empty());
     presetButton.onClick = [this] { showPresetMenu(); };
@@ -858,6 +875,7 @@ void FxPanel::resized()
         effectLabel.setBounds (head);
     }
     area.removeFromTop (4);
+    timeShaperNotice.setBounds (area.removeFromBottom (60));
     notePlaceholder.setBounds (area);
     pluginButton.setBounds (area.getX(), area.getY(), std::min (200, area.getWidth()), 26);
     automatePluginButton.setBounds (area.getX(), area.getY() + 32, std::min (200, area.getWidth()), 26);

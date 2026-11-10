@@ -2,6 +2,22 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.41.0 - 2026-11-10
+
+Finishing what earlier releases left half done.
+
+### Added
+- **SFZ instruments** on sampler channels: *Load SoundFont / SFZ...* or a drag from the browser. Regions with keys (by name or
+  number), velocities, root key, tune / transpose, volume, pan and loops become zones; other opcodes are counted and reported. The
+  project keeps the `.sfz`; *Export project with samples* copies its folder.
+- **Pitch Corrector: Follow**: pull the voice to the note a channel is playing (as Pitcher's MIDI mode) instead of a scale.
+- **Time Shaper notice**: the effects panel says when a Time Shaper has no recording (more than four in a project) and only
+  shapes the volume.
+
+### Fixed
+- Stems are named *clip-drums.wav*, *clip-bass.wav*, *clip-other.wav* (they had "-edit" in their names).
+- Checked again: the AppImage started without a display exits with a message and status 1 (an earlier build crashed there).
+
 ## 0.40.0 - 2026-11-10
 
 ### Added

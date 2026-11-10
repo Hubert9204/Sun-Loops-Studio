@@ -548,6 +548,17 @@ and ranks with BM25 (k1 1.4, b 0.75) plus a title bonus, a bonus for sections ho
 question's language. The index is built the first time Helios opens. Commands are `HeliosCommand`s (name, keywords, a function)
 made by `MainComponent::heliosCommands`, matched by the share of the question's words they contain.
 
+### Finished in 0.41.0
+
+- **SFZ**: `src/library/Sfz.{h,cpp}` parses the text (comments, headers, opcodes whose values may hold spaces) into regions with
+  global / master / group / region inheritance; `loadSfz` (SoundFont.cpp) reads each sample once through the same decoder as
+  everything else and makes `SampleZone`s. `ProgramSpec::Kind::Sfz` ("sfz" in the file) stores the path; `exportProjectWithSamples`
+  copies an `.sfz`'s whole folder.
+- **Pitch Corrector Follow**: `EffectTransport` carries the highest note each channel is sounding (filled by the Player every
+  64-sample chunk from its voices); `analysePitch` aims at that note, in the voice's octave, instead of the scale.
+- **Time Shaper notice**: `Player::lendTimeBuffers` counts Time Shapers left without a recording into an atomic that the
+  interface reads on its timer (`AudioEngine::timeShapersWithoutMemory`).
+
 ### Metering (0.11.0)
 
 The audio callback feeds the final stereo output to `LoudnessMeter` (BS.1770-4: stage-1 shelf and RLB high-pass K-weighting coefficients

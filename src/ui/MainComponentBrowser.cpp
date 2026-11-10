@@ -199,6 +199,10 @@ void MainComponent::applyBrowserItem (int channelIndex, const drag::Item& item)
     {
         chooseSoundFontPreset (channelIndex, juce::File (item.payload));
     }
+    else if (item.kind == "file" && item.payload.endsWithIgnoreCase (".sfz"))
+    {
+        applySfz (channelIndex, juce::File (item.payload));
+    }
     else if (item.kind == "file")
     {
         loadSampleFile (channelIndex, juce::File (item.payload));

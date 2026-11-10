@@ -277,6 +277,7 @@ private:
     size_t nextClip = 0;
 
     std::array<Voice, kMaxVoices> voices {};
+    std::array<int, kMaxChannels> heldNotes {}; // per chunk: the highest note each channel sounds (-1 none)
     std::array<std::size_t, kMaxChannels> nextEvent {};
     std::array<float, kMaxChannels> smoothedGain {};
     std::array<float, kMaxChannels> peaks {};
@@ -306,6 +307,13 @@ private:
     std::array<std::vector<float>, 2 * kTimeBuffers> timeBuffers;
     std::array<EffectUnit*, kTimeBuffers> timeBufferOwner {};
     void lendTimeBuffers (const Project& project) noexcept;
+    std::atomic<int> timeShaperShortfallCount { 0 };
+
+public:
+    // Time Shapers in use that got no recording (more than kTimeBuffers): they only shape the volume (0.41.0). Any thread.
+    int timeShaperShortfall() const noexcept { return timeShaperShortfallCount.load (std::memory_order_relaxed); }
+
+private:
 
     // Aux buses: the sends of every track are summed here, run through the bus's effects and fader, and added to the master bus.
     std::array<std::array<EffectUnit, kSlotsPerTrack>, kAuxBuses> auxEffects;

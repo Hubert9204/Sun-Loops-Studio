@@ -922,6 +922,22 @@ juce::String exportProjectWithSamples (ProjectDocument d, const juce::File& fold
             notes.addIfNotAlreadyThere ("Not found, left as it was: " + original.getFullPathName());
             return;
         }
+        if (original.hasFileExtension ("sfz"))
+        {
+            // An SFZ names its samples relative to its folder: the whole folder goes along (0.41.0).
+            auto folderCopy = samples.getChildFile (original.getParentDirectory().getFileName());
+            for (int n = 2; folderCopy.exists(); ++n)
+                folderCopy = samples.getChildFile (original.getParentDirectory().getFileName() + "-" + juce::String (n));
+            if (! original.getParentDirectory().copyDirectoryTo (folderCopy))
+            {
+                error = "Cannot copy " + original.getParentDirectory().getFullPathName();
+                return;
+            }
+            const auto relative = ("Samples/" + folderCopy.getFileName() + "/" + original.getFileName()).toStdString();
+            copied[s] = relative;
+            s = relative;
+            return;
+        }
         auto target = samples.getChildFile (original.getFileName());
         for (int n = 2; target.exists(); ++n)
             target = samples.getChildFile (original.getFileNameWithoutExtension() + "-" + juce::String (n) + original.getFileExtension());

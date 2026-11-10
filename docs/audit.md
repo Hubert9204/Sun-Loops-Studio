@@ -27,6 +27,13 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.41.0
+The SFZ parser reads untrusted text: files over 16 MB are refused, numbers are parsed with strtod and range-checked, keys and
+velocities clamped, loops checked against the sample's length after loading; `#include` is not followed (it could name any file).
+A broken file and 100 000 `<` characters are in the tests. The Pitch Corrector's Follow adds one pass over 32 voices per 64-sample
+chunk on the audio thread (no allocation, no lock). Still not done from earlier notes: formant preservation in the Pitch Corrector
+(big shifts change the voice's character), GIG and GUS files.
+
 ## After 0.40.0
 Helios reads only text built into the program; it opens no files and no network connection. The two manuals add about 200 KB to the
 binary. Commands run on the message thread exactly as their buttons and menu items do.

@@ -99,7 +99,7 @@ void MainComponent::useStems (int index, const AudioClip& clip, Stems stems)
     std::vector<std::shared_ptr<const SampleData>> saved;
     for (const auto& [what, data] : parts)
     {
-        const auto file = uniqueEditedFile (folder, juce::String (clip.name) + "-" + what);
+        const auto file = folder.getNonexistentChildFile (juce::String (clip.name) + "-" + what, ".wav", false);
         data->name = clip.name + " " + what;
         data->source = file.getFullPathName().toStdString();
         if (const auto written = writeSampleWav (*data, file); written.failed())

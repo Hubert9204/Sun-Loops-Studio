@@ -35,7 +35,8 @@ std::shared_ptr<const SamplerProgram> loadSoundFont (const juce::File& file, int
 // Where a sampler channel's program comes from, as the project file stores it: a SoundFont preset, or slices of an audio file.
 struct ProgramSpec
 {
-    enum class Kind { None, SoundFont, Slices, Builtin }; // Builtin (0.22.0): an instrument of the sound library, file = "builtin:program:<id>"
+    enum class Kind { None, SoundFont, Slices, Builtin, Sfz }; // Builtin (0.22.0): an instrument of the sound library, file = "builtin:program:<id>";
+                                                                // Sfz (0.41.0): an .sfz file
     Kind kind = Kind::None;
     std::string file;        // the .sf2, or the audio file that was sliced
     int preset = -1;         // SoundFont: index of the preset
@@ -56,6 +57,13 @@ ProgramSpec programSpecFromVar (const juce::var& v); // lenient: a bad spec is K
 
 // A program with no zones that remembers `spec` (its file could not be read): saving the project keeps the reference.
 std::shared_ptr<const SamplerProgram> missingProgram (const ProgramSpec& spec);
+
+// An SFZ instrument (0.41.0) as a sampler program: its regions as zones, their samples read with `loadAudio` (paths relative to the
+// .sfz's folder). nullptr and a message when nothing could be loaded; `notes` gets what was left out (skipped opcodes, missing
+// samples, #include lines).
+std::shared_ptr<const SamplerProgram> loadSfz (const juce::File& file,
+                                               const std::function<std::shared_ptr<const SampleData> (const juce::File&, juce::String&)>& loadAudio,
+                                               juce::String& error, juce::StringArray* notes = nullptr);
 
 // Loads a program again from its spec. `loadAudio` reads an audio file (for slices). nullptr and a message when it cannot be read.
 std::shared_ptr<const SamplerProgram> loadProgram (const ProgramSpec& spec, const std::function<std::shared_ptr<const SampleData> (const juce::File&, juce::String&)>& loadAudio,

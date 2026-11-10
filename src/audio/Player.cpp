@@ -194,6 +194,18 @@ void Player::lendTimeBuffers (const Project& project) noexcept
             visit (auxEffects[a][s], project.console.aux[a].slots[s]);
     for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
         visit (masterEffects[s], project.masterSlots[s]);
+
+    // How many Time Shapers are left without a recording, for the interface to say so.
+    int without = 0;
+    for (size_t t = 0; t < std::min (project.tracks.size(), static_cast<size_t> (kMaxTracks)); ++t)
+        for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
+            without += project.tracks[t].slots[s].type == EffectType::TimeShaper && ! effects[t][s].hasTimeBuffer() ? 1 : 0;
+    for (size_t a = 0; a < static_cast<size_t> (kAuxBuses); ++a)
+        for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
+            without += project.console.aux[a].slots[s].type == EffectType::TimeShaper && ! auxEffects[a][s].hasTimeBuffer() ? 1 : 0;
+    for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
+        without += project.masterSlots[s].type == EffectType::TimeShaper && ! masterEffects[s].hasTimeBuffer() ? 1 : 0;
+    timeShaperShortfallCount.store (without, std::memory_order_relaxed);
 }
 
 void Player::lendEffectMemory (const Project& project) noexcept
@@ -1626,7 +1638,12 @@ void Player::render (const Project& project, double bpm, bool playing,
     for (int done = 0; done < numSamples; done += kChunk)
     {
         const int n = std::min (kChunk, numSamples - done);
-        const EffectTransport transport { playing ? tickPos : -1.0, ticksPerSample }; // where the song is at this chunk's start
+        // The highest note each channel sounds now, for a Pitch Corrector that follows one (0.41.0).
+        heldNotes.fill (-1);
+        for (const auto& v : voices)
+            if ((v.state == State::Attack || v.state == State::Sustain) && v.channel >= 0 && v.channel < kMaxChannels)
+                heldNotes[static_cast<size_t> (v.channel)] = std::max (heldNotes[static_cast<size_t> (v.channel)], v.livePitch);
+        const EffectTransport transport { playing ? tickPos : -1.0, ticksPerSample, heldNotes.data(), kMaxChannels }; // where the song is at this chunk's start
 
         if (automated)
             applyAutomation (project, tickPos, numMixerChannels, numTracks, setChannel, setTrack, channelVolume, channelPan, trackVolume, trackPan,

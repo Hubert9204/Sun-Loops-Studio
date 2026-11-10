@@ -102,7 +102,8 @@ public:
     {
         if (e.mods.isPopupMenu())
             return;
-        if ((node.kind == NodeKind::AudioFile && ! juce::String (node.payload).endsWithIgnoreCase (".sf2")) || node.kind == NodeKind::BuiltinSample)
+        if ((node.kind == NodeKind::AudioFile && ! juce::String (node.payload).endsWithIgnoreCase (".sf2")
+             && ! juce::String (node.payload).endsWithIgnoreCase (".sfz")) || node.kind == NodeKind::BuiltinSample)
         {
             // One click on a sound plays it (the same click still selects it and can start a drag).
             juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<FileBrowser> (&owner),

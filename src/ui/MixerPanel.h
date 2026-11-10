@@ -165,6 +165,8 @@ public:
     // `trackIndex` == kMasterIndex shows the master bus (its title and help text change).
     void setTrack (MixerTrack* track, int trackIndex);
     void setSelectedSlot (int slot);
+    // Time Shapers left without a recording in the whole project (0.41.0): told when one is selected.
+    void setTimeShaperShortfall (int count);
     int getSelectedSlot() const noexcept { return selectedSlot; }
     void refresh();
 
@@ -203,6 +205,8 @@ private:
     juce::Label notePlaceholder;
     juce::TextButton pluginButton { "Open plugin window" };
     juce::TextButton automatePluginButton { "Automate a parameter..." }; // 0.35.0
+    juce::Label timeShaperNotice;
+    int timeShaperShortfall = 0;
     juce::TextButton presetButton { "Presets..." }; // the built-in effect's ready-made settings (0.21.0)
     struct ParamRow
     {
@@ -238,6 +242,7 @@ public:
     void setTrackLevels (int index, float peak, float rms);
     void setMasterLevels (float peak, float rms) { masterStrip.setLevels (peak, rms); }
     void setMasterVolume (double volume) { masterStrip.setVolume (volume); }
+    void setTimeShaperShortfall (int count) { fxPanel.setTimeShaperShortfall (count); }
 
     std::function<void (int)> onTrackChanged;       // anything that changes the sound (track index, or kMasterIndex)
     std::function<void (int)> onAddTracks;          // the "+" button: add this many tracks (0.29.0)

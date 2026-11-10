@@ -471,7 +471,7 @@ void ChannelStrip::showContextMenu()
                                        && (channel.program == nullptr ? channel.sample != nullptr && channel.sample->numFrames() > 1
                                                                       : ! channel.program->sliceStarts.empty()));
     menu.addItem (19, "Synth settings...", channel.instrument == Instrument::Synth);
-    menu.addItem (16, "Load SoundFont (.sf2)...", channel.instrument != Instrument::Drums);
+    menu.addItem (16, "Load SoundFont / SFZ (.sf2, .sfz)...", channel.instrument != Instrument::Drums);
     menu.addItem (5, "Rename...");
     menu.addItem (11, "Clone channel");
     menu.addItem (12, "Move up", index > 0);

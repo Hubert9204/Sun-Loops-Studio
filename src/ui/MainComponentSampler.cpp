@@ -78,13 +78,50 @@ void MainComponent::closeSamplerSettings()
 void MainComponent::chooseSoundFontFor (int channelIndex)
 {
     library.ensureExists();
-    fileChooser = std::make_unique<juce::FileChooser> ("Load a SoundFont", library.samples, "*.sf2");
+    fileChooser = std::make_unique<juce::FileChooser> ("Load a SoundFont or an SFZ instrument", library.samples, "*.sf2;*.sfz");
     fileChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
                               [safe = juce::Component::SafePointer<MainComponent> (this), channelIndex] (const juce::FileChooser& chooser)
     {
-        if (safe != nullptr && chooser.getResult() != juce::File())
+        if (safe == nullptr || chooser.getResult() == juce::File())
+            return;
+        if (chooser.getResult().hasFileExtension ("sfz"))
+            safe->applySfz (channelIndex, chooser.getResult());
+        else
             safe->chooseSoundFontPreset (channelIndex, chooser.getResult());
     });
+}
+
+// An SFZ instrument on a sampler channel (0.41.0): its regions become the channel's zones; what it uses that this sampler does not
+// have is listed in the status line.
+void MainComponent::applySfz (int channelIndex, const juce::File& file)
+{
+    if (channelIndex < 0 || channelIndex >= static_cast<int> (channels.size()))
+        return;
+    juce::String error;
+    juce::StringArray notes;
+    statusLabel.setText ("Reading " + file.getFileName() + "...", juce::dontSendNotification);
+    auto program = loadSfz (file, [this] (const juce::File& f, juce::String& e) { return decodeSample (formats, f, e); }, error, &notes);
+    if (program == nullptr)
+    {
+        statusLabel.setText (error, juce::dontSendNotification);
+        juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "SFZ", error);
+        return;
+    }
+    auto& channel = channels[static_cast<size_t> (channelIndex)];
+    channel.instrument = Instrument::Sampler;
+    channel.name = (juce::String (program->name).substring (0, 16)).toStdString();
+    const auto zones = program->zones.size();
+    channel.sampler.envelope = true; // an SFZ instrument plays while the key is held, like a SoundFont
+    channel.program = std::move (program);
+    strips[static_cast<size_t> (channelIndex)]->refreshFromChannel();
+    updateTrackRouting();
+    selectChannel (channelIndex);
+    publishProject();
+    statusLabel.setText ("Loaded " + file.getFileName() + " (" + juce::String (static_cast<int> (zones)) + " zones)"
+                             + (notes.isEmpty() ? juce::String() : ". " + notes.joinIntoString ("; ")),
+                         juce::dontSendNotification);
+    if (samplerWindow != nullptr && samplerWindowChannel == channelIndex)
+        samplerWindow->panel().refresh();
 }
 
 // A menu of the file's presets (by bank), or the only preset at once.

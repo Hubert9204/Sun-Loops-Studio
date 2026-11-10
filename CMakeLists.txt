@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(SunLoopsStudio VERSION 0.40.0 LANGUAGES C CXX ASM)
+project(SunLoopsStudio VERSION 0.41.0 LANGUAGES C CXX ASM)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -76,6 +76,7 @@ set(SLS_CORE_SOURCES
     src/library/FlpFile.cpp
     src/library/FlpProject.cpp
     src/library/HelpIndex.cpp
+    src/library/Sfz.cpp
     src/plugins/PluginScanner.cpp
     src/plugins/PluginHost.cpp)
 

@@ -14,7 +14,7 @@ strumento sta in un pannello mobile che puoi spostare, ridimensionare, sovrappor
 Sun Loops Studio si ispira al modo di lavorare dei DAW a loop come FL Studio. È un progetto indipendente: non usa
 codice, nomi, grafica o risorse di altri prodotti e non è affiliato né approvato dai loro produttori.
 
-**Stato: alpha (0.40.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
+**Stato: alpha (0.41.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
 La riproduzione è stata confermata su un vero PC Nobara per la versione 0.3; tutto ciò che è stato aggiunto dopo
 (pannelli, pattern, playlist, browser, pitch/swing, mixer espanso ed effetti, salvataggio dei progetti, AppImage, clip audio, trascinamento
 dei file, registrazione, MIDI, metronomo e formati di esportazione) è stato provato con test automatici e in un display virtuale con un
@@ -92,7 +92,7 @@ plugin commerciali. Vedi [docs/roadmap.md](docs/roadmap.md) per sapere con preci
 - **Stretch e pitch** - tasto destro su una clip audio: allungala o accorciala senza cambiarne l'intonazione, trasponila senza cambiarne la lunghezza,
   o adatta un loop al tempo del progetto (Signalsmith Stretch).
 - **Sampler e SoundFont** - inviluppo (ADSR), loop, filtro passa-basso / passa-alto / passa-banda e nota di base per ogni canale sampler; i preset
-  **SoundFont 2 (.sf2)** suonati come zone multi-campione; le slice dell'editor di campioni diventano un canale sampler con una nota per slice.
+  **SoundFont 2 (.sf2)** e (dalla 0.41.0) gli strumenti **SFZ** suonati come zone multi-campione; le slice dell'editor di campioni diventano un canale sampler con una nota per slice.
 - **Slicer** (0.37.0) - un loop tagliato in slice come in Slicex (per suono, a griglia o in parti uguali), un tasto per slice, ognuna
   con intonazione, livello, pan e verso propri, e le note che lo suonano seguendo il tempo del progetto.
 - **Editor di intonazione** (0.38.0) - una linea cantata o suonata come note sopra la curva dell'intonazione (come Newtone): sposta

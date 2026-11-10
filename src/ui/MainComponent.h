@@ -257,6 +257,7 @@ private:
     // MainComponentSampler.cpp
     void openSamplerSettings (int channelIndex);
     void closeSamplerSettings();
+    void applySfz (int channelIndex, const juce::File& file); // 0.41.0
     // The Slicer (0.37.0, MainComponentSlicer.cpp)
     bool canSlice (int channelIndex) const;
     void openSlicer (int channelIndex);

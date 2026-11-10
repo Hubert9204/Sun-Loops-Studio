@@ -174,7 +174,9 @@ inline constexpr EffectParamInfo pitch[] = {
     { "Amount", "%", 0.0f, 100.0f, 100.0f },
     { "Shift", "st", -12.0f, 12.0f, 0.0f },
     { "Range", "", 0.0f, 2.0f, 1.0f, "Low (40-400 Hz)|Voice (70-900 Hz)|High (150-2000 Hz)" },
-    { "Mix", "%", 0.0f, 100.0f, 100.0f } };
+    { "Mix", "%", 0.0f, 100.0f, 100.0f },
+    // 0.41.0: the notes to pull to: those of the scale, or the note a channel is playing (as Pitcher's MIDI mode)
+    { "Follow", "", 0.0f, 32.0f, 0.0f, "Scale|Channel 1|Channel 2|Channel 3|Channel 4|Channel 5|Channel 6|Channel 7|Channel 8|Channel 9|Channel 10|Channel 11|Channel 12|Channel 13|Channel 14|Channel 15|Channel 16|Channel 17|Channel 18|Channel 19|Channel 20|Channel 21|Channel 22|Channel 23|Channel 24|Channel 25|Channel 26|Channel 27|Channel 28|Channel 29|Channel 30|Channel 31|Channel 32" } };
 
 // The scales' notes as bit masks (bit n: n semitones above the key), in the order of the Scale choice; equal to theory::scales().
 inline constexpr std::uint16_t kPitchScaleMasks[] = { 0x0fff, 0x0ab5, 0x05ad, 0x09ad, 0x0aad, 0x06ad, 0x05ab, 0x0ad5, 0x06b5, 0x056b, 0x0295, 0x04a9, 0x04e9 };
@@ -306,6 +308,9 @@ struct EffectTransport
 {
     double tick = -1.0;
     double ticksPerSample = 0.0;
+    // The highest note each channel is sounding now (-1: none), for the Pitch Corrector's Follow (0.41.0); may be null.
+    const int* channelNotes = nullptr;
+    int numChannelNotes = 0;
 };
 
 // The big buffers some effects need (0.29.0): the reverb's combs and all-passes, the pre-delay, the delay lines (also the chorus's
@@ -410,7 +415,7 @@ private:
     void runTransient (const EffectSlot&, float*, float*, int) noexcept;
     void runImager (const EffectSlot&, float*, float*, int) noexcept;
     void runTimeShaper (const EffectSlot&, float*, float*, int, const EffectTransport&) noexcept;
-    void runPitchCorrector (const EffectSlot&, float*, float*, int) noexcept;
+    void runPitchCorrector (const EffectSlot&, float*, float*, int, const EffectTransport&) noexcept;
     void setReverbType (int type) noexcept;
 
     double sampleRate = 48000.0;
@@ -478,7 +483,7 @@ private:
         double delay = 0.0; // samples
         int age = 0, life = 1;
     };
-    void analysePitch (int range, int key, int scale, float amount) noexcept;
+    void analysePitch (int range, int key, int scale, float amount, int heldNote = -2) noexcept; // heldNote: -2 follow the scale, -1 none held
     void rebirthHead (PitchHead& head, const PitchHead& other, double ratio) noexcept;
     double headPosition (double delay) const noexcept; // read position in delayLine for a delay
 

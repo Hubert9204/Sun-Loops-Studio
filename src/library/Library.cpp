@@ -13,7 +13,8 @@ namespace
 bool matches (const juce::String& fileName, NodeKind kind, const juce::String& extension)
 {
     if (kind == NodeKind::AudioFile)
-        return isAudioFileName (fileName) || fileName.endsWithIgnoreCase (".sf2"); // SoundFonts go on sampler channels
+        return isAudioFileName (fileName) || fileName.endsWithIgnoreCase (".sf2") // SoundFonts and SFZ instruments go on sampler channels
+            || fileName.endsWithIgnoreCase (".sfz");
     return fileName.endsWithIgnoreCase (extension);
 }
 

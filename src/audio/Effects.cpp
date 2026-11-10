@@ -309,7 +309,7 @@ void EffectUnit::process (const EffectSlot& requested, float* left, float* right
         case EffectType::Transient:    runTransient (slot, left, right, numSamples); break;
         case EffectType::Imager:       runImager (slot, left, right, numSamples); break;
         case EffectType::TimeShaper:   runTimeShaper (slot, left, right, numSamples, transport); break;
-        case EffectType::PitchCorrector: runPitchCorrector (slot, left, right, numSamples); break;
+        case EffectType::PitchCorrector: runPitchCorrector (slot, left, right, numSamples, transport); break;
         case EffectType::Plugin:
         case EffectType::None:         break;
     }
@@ -1216,7 +1216,7 @@ double EffectUnit::headPosition (double delay) const noexcept
     return pos;
 }
 
-void EffectUnit::analysePitch (int range, int key, int scale, float amount) noexcept
+void EffectUnit::analysePitch (int range, int key, int scale, float amount, int heldNote) noexcept
 {
     if (memory == nullptr)
         return; // no buffers lent (yet): the sound passes unchanged
@@ -1326,6 +1326,24 @@ void EffectUnit::analysePitch (int range, int key, int scale, float amount) noex
     }
 
     const double midi = 69.0 + 12.0 * std::log2 (sampleRate / period / 440.0);
+    if (heldNote >= -1)
+    {
+        // Following a channel: its note, in the octave nearest to what is sung; nothing held, nothing changed.
+        if (heldNote < 0)
+        {
+            pcNote = -1;
+            pcTarget = 0.0f;
+            return;
+        }
+        double target = heldNote;
+        while (target - midi > 6.0)
+            target -= 12.0;
+        while (midi - target > 6.0)
+            target += 12.0;
+        pcNote = static_cast<int> (target);
+        pcTarget = static_cast<float> (amount * (target - midi));
+        return;
+    }
     const auto mask = effect_tables::kPitchScaleMasks[scale];
     auto inScale = [&] (int note) { return (mask & (1u << static_cast<unsigned> (((note - key) % 12 + 12) % 12))) != 0; };
     int nearest = -1;
@@ -1419,7 +1437,7 @@ void EffectUnit::rebirthHead (PitchHead& head, const PitchHead& other, double ra
     head.delay = other.delay + bestLag;
 }
 
-void EffectUnit::runPitchCorrector (const EffectSlot& slot, float* left, float* right, int n) noexcept
+void EffectUnit::runPitchCorrector (const EffectSlot& slot, float* left, float* right, int n, const EffectTransport& transport) noexcept
 {
     if (memory == nullptr)
         return; // no buffers lent (yet): the sound passes unchanged
@@ -1434,6 +1452,10 @@ void EffectUnit::runPitchCorrector (const EffectSlot& slot, float* left, float* 
     const float shift = p[4];
     const int range = effectChoice (EffectType::PitchCorrector, 5, p[5]);
     const float mix = p[6] / 100.0f;
+    const int followChannel = effectChoice (EffectType::PitchCorrector, 7, p[7]) - 1; // -1: the scale
+    int heldNote = -2;
+    if (followChannel >= 0)
+        heldNote = transport.channelNotes != nullptr && followChannel < transport.numChannelNotes ? transport.channelNotes[followChannel] : -1;
     const float follow = speedMs <= 0.0f ? 1.0f : 1.0f - std::exp (-1000.0f / (speedMs * static_cast<float> (sampleRate)));
 
     const int lineSize = static_cast<int> (delayLine[0].size());
@@ -1459,7 +1481,7 @@ void EffectUnit::runPitchCorrector (const EffectSlot& slot, float* left, float* 
             if (--pcHopLeft <= 0)
             {
                 pcHopLeft = kPitchHop;
-                analysePitch (range, key, scale, amount);
+                analysePitch (range, key, scale, amount, heldNote);
             }
         }
 
