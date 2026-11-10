@@ -27,13 +27,16 @@ MainComponent::NoteState MainComponent::captureNoteState() const
     s.pattern = currentPattern;
     s.notes.reserve (channels.size());
     for (const auto& c : channels)
+    {
         s.notes.push_back (c.notes);
+        s.steps.push_back (c.steps);
+    }
     return s;
 }
 
 bool MainComponent::sameNoteState (const NoteState& a, const NoteState& b)
 {
-    if (a.pattern != b.pattern || a.notes.size() != b.notes.size())
+    if (a.pattern != b.pattern || a.notes.size() != b.notes.size() || a.steps != b.steps)
         return false;
     for (size_t c = 0; c < a.notes.size(); ++c)
     {
@@ -82,6 +85,7 @@ void MainComponent::applyNoteState (const NoteState& state)
     for (size_t c = 0; c < channels.size() && c < state.notes.size(); ++c)
     {
         channels[c].notes = state.notes[c];
+        channels[c].steps = c < state.steps.size() ? state.steps[c] : 0;
         strips[c]->refreshFromChannel();
     }
     pianoRoll.setNotes (channels[static_cast<size_t> (selected)].notes);

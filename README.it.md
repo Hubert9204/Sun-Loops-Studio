@@ -14,7 +14,7 @@ strumento sta in un pannello mobile che puoi spostare, ridimensionare, sovrappor
 Sun Loops Studio si ispira al modo di lavorare dei DAW a loop come FL Studio. È un progetto indipendente: non usa
 codice, nomi, grafica o risorse di altri prodotti e non è affiliato né approvato dai loro produttori.
 
-**Stato: alpha (0.30.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
+**Stato: alpha (0.31.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
 La riproduzione è stata confermata su un vero PC Nobara per la versione 0.3; tutto ciò che è stato aggiunto dopo
 (pannelli, pattern, playlist, browser, pitch/swing, mixer espanso ed effetti, salvataggio dei progetti, AppImage, clip audio, trascinamento
 dei file, registrazione, MIDI, metronomo e formati di esportazione) è stato provato con test automatici e in un display virtuale con un
@@ -31,8 +31,10 @@ plugin commerciali. Vedi [docs/roadmap.md](docs/roadmap.md) per sapere con preci
 - **Browser** (barra laterale a sinistra, `F8` la ripiega) - un albero con *Samples*, *Drum Kits*, *Instruments*,
   *Presets* e *Plugin*, una casella di ricerca rapida e il trascinamento (o il doppio clic) dei suoni su un canale
   del Channel Rack. I tuoi file stanno in `~/Music/Sun Loops Studio/`.
-- **Channel Rack** - fino a 32 canali, ognuno synth, sampler o drum machine. Sequencer a step da 16esimi sui canali sampler con un solo
-  campione, anteprima delle note sugli altri (synth, drum machine, strumenti multi-campione come il pianoforte). Per canale: volume, pan, manopola **Pitch** (semitoni), manopola **Swing** e
+- **Channel Rack** - fino a 32 canali, ognuno synth, sampler o drum machine. Sequencer a step da 16esimi come in FL Studio
+  (0.31.0): ogni nuovo canale parte con i quadratini (clic sinistro scrive, destro cancella); gli step dopo la prima battuta sono
+  grigi e la ripetono, e trascinando la fine della sequenza (o scrivendo nella parte grigia) la si allunga; appena il Piano Roll
+  scrive altre note la riga ne mostra l'anteprima (un clic apre il Piano Roll), e cancellandole tornano i quadratini. Per canale: volume, pan, manopola **Pitch** (semitoni), manopola **Swing** e
   un display **Track N** che manda il canale a una traccia del mixer. Tasto destro su un canale: *Piano roll*,
   *Instrument*, *Load sample...*, *Rename...*, *Clone*, *Move up / down*, *Delete*, *Assign free mixer track*, *Save as preset...*.
 - **Piano Roll** - per il canale selezionato: clic per aggiungere una nota, trascina per spostarla, trascina il bordo

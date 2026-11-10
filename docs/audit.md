@@ -27,6 +27,12 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.31.0
+The step sequencer's rules live in `src/audio/StepSequence.h` (JUCE-free, tested); the rack repaints its rows from the notes on
+every paint, nothing is cached. The repeats of a short sequence are made when the project snapshot is compiled, on the message
+thread; the audio thread sees ordinary notes. The browser's one-click preview decodes on the message thread (the first 30 seconds
+are kept, files over 200 MB are refused), like loading a sample into a channel.
+
 ## After 0.30.0
 The Loop Starter is plain code on note lists, run on the message thread; its only resource use is loading the sounds it names (the
 library instruments are decoded the first time, with a wait cursor). Every sound it can name is checked to exist by a test; if the

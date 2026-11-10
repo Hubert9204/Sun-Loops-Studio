@@ -453,6 +453,7 @@ MainComponent::MainComponent()
         // A double-clicked plugin instrument gets a channel of its own instead of replacing the selected one.
         applyBrowserItem (item.kind == "plugin" && item.payload.startsWith ("instrument|") ? -1 : selected, item);
     };
+    browser.onItemPreview = [this] (const drag::Item& item) { previewBrowserItem (item); };
     browser.onAction = [this] (const juce::String& action) { if (action == "scan-plugins") startPluginScan(); };
     browser.onRefresh = [this] { rebuildBrowser(); };
     browser.onOpenFolder = [this] { library.ensureExists(); library.root.revealToUser(); };
@@ -900,6 +901,19 @@ void MainComponent::createStrip (size_t channelIndex)
     strip->onEditSample = [this] (int idx) { openSampleEditorForChannel (idx); };
     strip->onOpenPianoRoll = [this] (int idx) { openPianoRoll (idx); };
     strip->onOpenDrumMachine = [this] (int idx) { openDrumMachine (idx); };
+    strip->onWantsLongerPattern = [this] (int)
+    {
+        // The next length offered (1, 2, 4, 8 bars): every pattern gets it, as with "Pattern length" in the pattern menu.
+        const int bars = arrangement.patternTicks / (4 * kTicksPerBeat);
+        for (const int choice : kPatternBarChoices)
+            if (choice > bars)
+            {
+                setPatternLength (choice);
+                return;
+            }
+        statusLabel.setText ("Patterns are at most " + juce::String (kPatternBarChoices[std::size (kPatternBarChoices) - 1]) + " bars long",
+                             juce::dontSendNotification);
+    };
     strip->onOpenPlugin = [this] (int idx) { openChannelPlugin (idx); };
     strip->listInstrumentPlugins = [this]
     {
@@ -1014,6 +1028,8 @@ void MainComponent::publishProject()
         samplerWindow->panel().refresh();
     if (synthWindow != nullptr)
         synthWindow->panel().refresh();
+    for (auto& strip : strips)
+        strip->repaintGrid(); // the notes may have changed from somewhere else (drum machine, recording, undo): squares follow
     auto project = std::make_unique<Project> (compileCurrent());
     if (! songMode && currentPattern >= 0 && currentPattern < static_cast<int> (arrangement.patterns.size()))
     {

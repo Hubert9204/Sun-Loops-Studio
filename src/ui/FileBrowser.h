@@ -24,6 +24,7 @@ public:
 
     std::function<void (const drag::Item&)> onItemActivated; // double-click on a draggable item
     std::function<void (const juce::String&)> onAction;      // click on an action ("scan-plugins")
+    std::function<void (const drag::Item&)> onItemPreview;   // left click on a sound (an audio file or a built-in sample): listen to it (0.31.0)
     std::function<void()> onRefresh;
     std::function<void()> onOpenFolder;
     std::function<void()> onCollapse;

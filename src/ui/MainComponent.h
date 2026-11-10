@@ -93,6 +93,7 @@ private:
     {
         int pattern = 0;
         std::vector<std::vector<Note>> notes; // [channel]
+        std::vector<int> steps;               // [channel]: the step sequencer's active lengths (0.31.0)
     };
     NoteState captureNoteState() const;
     static bool sameNoteState (const NoteState& a, const NoteState& b);
@@ -221,6 +222,9 @@ private:
     void beginPluginExport (double sampleRate);
     void endPluginExport();
     void applyBrowserItem (int channelIndex, const drag::Item& item);
+    void previewBrowserItem (const drag::Item& item); // one click on a sound in the browser (0.31.0)
+    juce::String previewKey;                          // the sound last previewed, kept decoded so clicking it again starts at once
+    std::shared_ptr<const SampleData> previewSound;
     bool applyPreset (int channelIndex, const ChannelPreset& preset);
     void savePresetFor (int channelIndex);
 

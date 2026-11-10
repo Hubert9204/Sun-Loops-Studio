@@ -9,6 +9,7 @@
 #include "audio/Automation.h"
 #include "audio/TimeStretch.h"
 #include "audio/Project.h"
+#include "audio/StepSequence.h"
 
 namespace sls
 {
@@ -28,6 +29,10 @@ struct Pattern
     // The piano roll's loop region of this pattern (0.20.0): Pattern mode repeats only this part. -1 / -1 when there is none.
     int loopStartTick = -1;
     int loopEndTick = -1;
+    // The step sequencer's active length of each channel in this pattern (0.31.0), in steps; 0 or missing = not set (see
+    // StepSequence.h). Projects saved before 0.31.0 load with every channel set to the whole pattern, so they play as before.
+    std::vector<int> steps;
+    int stepsOf (size_t channel) const noexcept { return channel < steps.size() ? steps[channel] : 0; }
     bool hasLoop (int patternTicks) const noexcept { return loopStartTick >= 0 && loopEndTick > loopStartTick && loopEndTick <= patternTicks; }
 };
 
@@ -279,7 +284,10 @@ struct Arrangement
     void ensureChannelCount (size_t numChannels)
     {
         for (auto& p : patterns)
+        {
             p.notes.resize (numChannels);
+            p.steps.resize (numChannels, 0);
+        }
     }
 
     // "Pattern 3": the lowest number that no pattern uses yet, so names stay tidy after patterns were deleted.
@@ -335,7 +343,10 @@ inline Project compilePattern (const std::vector<Channel>& channelSettings, cons
         {
             const auto& notes = arrangement.patterns[static_cast<size_t> (patternIndex)].notes;
             if (c < notes.size())
-                channels[c].notes = notes[c];
+            {
+                const auto& pattern = arrangement.patterns[static_cast<size_t> (patternIndex)];
+                channels[c].notes = steps::playedNotes (channelSettings[c], notes[c], pattern.stepsOf (c), arrangement.patternTicks);
+            }
         }
     }
     return Project::make (std::move (channels), arrangement.patternTicks, std::move (tracks), masterSlots, {}, {}, std::move (console));
@@ -358,10 +369,16 @@ inline void remapArrangementChannels (Arrangement& arrangement, const std::vecto
     {
         pattern.notes.resize (std::max (pattern.notes.size(), oldCount));
         std::vector<std::vector<Note>> notes;
+        std::vector<int> steps;
         notes.reserve (newToOld.size());
         for (const int old : newToOld)
-            notes.push_back (old >= 0 && static_cast<size_t> (old) < oldCount ? pattern.notes[static_cast<size_t> (old)] : std::vector<Note> {});
+        {
+            const bool kept = old >= 0 && static_cast<size_t> (old) < oldCount;
+            notes.push_back (kept ? pattern.notes[static_cast<size_t> (old)] : std::vector<Note> {});
+            steps.push_back (kept ? pattern.stepsOf (static_cast<size_t> (old)) : 0);
+        }
         pattern.notes = std::move (notes);
+        pattern.steps = std::move (steps);
     }
 
     auto& clips = arrangement.automationClips;
@@ -397,7 +414,10 @@ inline Project compileSong (const std::vector<Channel>& channelSettings, const A
         if (clip.pattern < 0 || clip.pattern >= static_cast<int> (arrangement.patterns.size()))
             continue;
 
-        const auto& notes = arrangement.patterns[static_cast<size_t> (clip.pattern)].notes;
+        const auto& source = arrangement.patterns[static_cast<size_t> (clip.pattern)];
+        std::vector<std::vector<Note>> notes (std::min (channels.size(), source.notes.size()));
+        for (size_t c = 0; c < notes.size(); ++c)
+            notes[c] = steps::playedNotes (channelSettings[c], source.notes[c], source.stepsOf (c), arrangement.patternTicks);
         for (int repeat = 0; repeat < clip.lengthUnits; ++repeat)
         {
             const int offset = (clip.startUnit + repeat) * arrangement.patternTicks;

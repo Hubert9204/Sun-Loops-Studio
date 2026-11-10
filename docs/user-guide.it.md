@@ -140,6 +140,9 @@ nel file manager; **Refresh** cerca file nuovi (il browser non controlla il disc
 - **Trascinamento**: trascina un suono su un canale del Channel Rack (la riga si evidenzia con un contorno verde) per
   caricarlo lì; rilascialo nello spazio vuoto sotto le righe per creare un nuovo canale. Un preset imposta strumento,
   sample, volume, pan, pitch e swing del canale; una voce di *Instruments* cambia lo strumento del canale.
+- **Un clic** su un suono (un file audio o un suono incorporato) lo fa ascoltare una volta, che il brano suoni o no
+  (0.31.0); un altro clic lo riascolta dall'inizio, un clic su un altro suono fa ascoltare quello. Dei file lunghi si
+  ascoltano i primi 30 secondi.
 - **Doppio clic** su una voce: la applica al canale selezionato.
 - **Ripiegare**: il pulsante con la freccia nel titolo del browser, **F8** o il pulsante **Browser** della barra. Resta
   una linguetta sottile sul bordo sinistro per riaprirlo. Lo stato viene ricordato.
@@ -161,10 +164,30 @@ Una riga per canale: un display **Track N** e il nome, **M** (mute), **S** (solo
 - **Track N** è la traccia del mixer attraverso cui suona il canale. Clic per un menu delle tracce del mixer (a gruppi di 50 quando sono tante), oppure
   trascinalo su e giù, o usa la rotella sopra di esso. All'inizio il canale 1 va alla Track 1, il canale 2 alla
   Track 2 e così via.
-- I **canali sampler** mostrano un pulsante step per ogni sedicesimo del pattern (32 per le due battute predefinite). Clic su uno step per accenderlo o
-  spegnerlo. Il pulsante **Load** sceglie un file audio.
-- I **canali synth** mostrano un'anteprima delle note. Le note si modificano nel Piano Roll.
-- I **canali drum** mostrano un'anteprima delle note; il doppio clic apre la drum machine (vedi sotto).
+- **L'area degli step** (0.31.0, come in FL Studio) mostra i **quadratini** dello step sequencer oppure
+  un'**anteprima del Piano Roll**, a seconda delle note stesse:
+  - Ogni nuovo canale parte con i quadratini, uno per sedicesimo del pattern. **Clic sinistro** (o trascinamento)
+    scrive gli step, **clic destro** (o trascinamento) li cancella. Uno step suona la nota base del canale (la nota MIDI
+    60, salvo un'altra impostazione *Root* del sampler), o la cassa (pad 1) su un canale drum. Durante la riproduzione si illumina lo
+    step in corso.
+  - I primi **16 step** (una battuta di 4 quarti) sono **attivi**; quelli dopo, fino alla fine del pattern, sono
+    **grigi**: ripetono gli step attivi, così un ritmo di una battuta riempie un pattern più lungo.
+  - Scrivere (o cancellare) uno step nella parte grigia allunga la sequenza di una battuta: quella battuta diventa
+    attiva, riempita con ciò che suonava, più la tua modifica. Il resto del suono non cambia.
+  - **Trascina la maniglia** alla fine degli step attivi (il cursore diventa una freccia destra-sinistra) per
+    allungare o accorciare la sequenza a battute intere, o a singoli step tenendo premuto **Alt** (una sequenza di 12
+    step si ripete ogni 12 contro le altre: poliritmia). Accorciando, gli step dopo la nuova fine vengono cancellati
+    (Ctrl+Z li riporta). Trascinando oltre la fine del pattern, il pattern si allunga (tutti i pattern: 1, 2, 4, 8 battute).
+  - Appena il canale ha una nota che non è un semplice step - un'altra altezza, una nota più lunga, una nota fuori
+    dalla griglia dei sedicesimi, scritta nel Piano Roll, nella drum machine, registrata o generata - la riga mostra
+    invece l'**anteprima del Piano Roll** e le sue note suonano come sono scritte (senza ripetizioni). Il **clic
+    sinistro** sull'anteprima apre il Piano Roll (la drum machine per un canale drum) o lo porta in primo piano; il
+    clic destro apre il menu del canale.
+  - Se cancelli tutte le note nel Piano Roll, la riga torna ai quadratini.
+  - I quadratini vengono disegnati ogni volta dalle note, quindi mostrano sempre ciò che suona.
+  - I progetti di prima della 0.31.0 si aprono con la sequenza di ogni canale lunga quanto il pattern, quindi suonano
+    esattamente come prima.
+- Il pulsante **Load** di un canale sampler sceglie un file audio.
 - Clic su una riga per selezionare il canale (Piano Roll e Mixer seguono la selezione).
 - **+ Add channel** sotto l'ultima riga aggiunge un canale synth, sampler o drum machine, fino a 32 canali in tutto
   (i canali possono condividere le tracce del mixer, che possono essere fino a 500).

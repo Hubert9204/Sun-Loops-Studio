@@ -26,7 +26,10 @@ void MainComponent::commitCurrentPattern()
     arrangement.ensureChannelCount (channels.size());
     auto& pattern = arrangement.patterns[static_cast<size_t> (currentPattern)];
     for (size_t c = 0; c < channels.size(); ++c)
+    {
         pattern.notes[c] = channels[c].notes;
+        pattern.steps[c] = channels[c].steps;
+    }
 }
 
 void MainComponent::selectPattern (int index)
@@ -36,10 +39,11 @@ void MainComponent::selectPattern (int index)
     commitCurrentPattern();
     currentPattern = index;
 
-    const auto& notes = arrangement.patterns[static_cast<size_t> (index)].notes;
+    const auto& pattern = arrangement.patterns[static_cast<size_t> (index)];
     for (size_t c = 0; c < channels.size(); ++c)
     {
-        channels[c].notes = notes[c];
+        channels[c].notes = pattern.notes[c];
+        channels[c].steps = pattern.stepsOf (c);
         strips[c]->refreshFromChannel();
     }
 
@@ -62,7 +66,10 @@ void MainComponent::addPattern (bool cloneCurrent)
     Pattern pattern;
     pattern.name = arrangement.newPatternName();
     if (cloneCurrent)
+    {
         pattern.notes = arrangement.patterns[static_cast<size_t> (currentPattern)].notes;
+        pattern.steps = arrangement.patterns[static_cast<size_t> (currentPattern)].steps;
+    }
     arrangement.patterns.push_back (std::move (pattern));
     arrangement.ensureChannelCount (channels.size());
 
@@ -173,10 +180,11 @@ void MainComponent::renamePattern (int index)
 void MainComponent::loadPatternIntoChannels (int index)
 {
     arrangement.ensureChannelCount (channels.size());
-    const auto& notes = arrangement.patterns[static_cast<size_t> (index)].notes;
+    const auto& pattern = arrangement.patterns[static_cast<size_t> (index)];
     for (size_t c = 0; c < channels.size(); ++c)
     {
-        channels[c].notes = notes[c];
+        channels[c].notes = pattern.notes[c];
+        channels[c].steps = pattern.stepsOf (c);
         strips[c]->refreshFromChannel();
     }
     pianoRoll.setNotes (channels[static_cast<size_t> (selected)].notes);

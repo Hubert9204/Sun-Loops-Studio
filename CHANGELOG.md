@@ -2,6 +2,30 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.31.0 - 2026-11-10
+
+### Added
+- **Step sequencer as in FL Studio** in the Channel Rack: every new channel starts with squares, on every instrument (synths,
+  drum machines and plugins included; a drum channel's steps play the kick). Left click or drag writes steps, right click or drag
+  erases them; the step the song is on lights up.
+- The first 16 steps are active; the steps after them, to the end of the pattern, are greyed out and play the active ones again.
+  Writing or erasing a greyed step makes the sequence a bar longer (that bar filled with what it played); a handle at the end
+  of the active steps drags it longer or shorter by bars (single steps with Alt: polymeter); dragged past the end of the pattern,
+  the pattern gets longer. Kept per channel and per pattern, undoable, saved in the project.
+- **Squares or preview, by the notes**: a channel with any note that is not a plain step (written in the Piano Roll, the drum
+  machine, recorded or generated) shows the Piano Roll preview and plays as written; clearing its notes brings the squares back.
+  A left click on the preview opens or brings forward the Piano Roll (the drum machine for drum channels).
+- **One-click preview in the browser**: a click on an audio file or a built-in sample plays it once.
+
+### Fixed
+- Squares that did not show what played: a sampler channel's notes on other pitches (from the Piano Roll) played but were not
+  shown, and the rack did not repaint after edits made elsewhere (the drum machine, recording). Squares are now drawn from the
+  notes on every paint and every edit repaints the rack.
+
+### Changed
+- Right click on the squares erases (it opened the channel menu; the menu is still on the name and the rest of the row).
+- Projects from before 0.31.0 open with every channel's sequence as long as the pattern: they play exactly as before.
+
 ## 0.30.0 - 2026-11-10
 
 ### Added

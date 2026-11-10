@@ -326,6 +326,12 @@ juce::String ProjectDocument::toJson() const
             perChannel.add (notes);
         }
         o->setProperty ("notes", perChannel);
+        // The step sequencer's active lengths (0.31.0). Always written: a file without them is older, and its channels then
+        // take the whole pattern (as they played before).
+        juce::Array<juce::var> stepList;
+        for (size_t c = 0; c < channels.size(); ++c)
+            stepList.add (p.stepsOf (c));
+        o->setProperty ("steps", stepList);
         if (p.hasLoop (arrangement.patternTicks))
             o->setProperty ("loop", juce::Array<juce::var> { p.loopStartTick, p.loopEndTick }); // the piano roll's loop region (0.20.0)
         patternList.add (juce::var (o));
@@ -647,6 +653,13 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
                                       [] (const Note& a, const Note& b)
                                       { return a.startTick != b.startTick ? a.startTick < b.startTick : a.pitch < b.pitch; });
                 }
+
+        pattern.steps.assign (numChannels, steps::patternSteps (d.arrangement.patternTicks));
+        if (auto* stepList = o->getProperty ("steps").getArray())
+            for (int c = 0; c < static_cast<int> (numChannels); ++c)
+                pattern.steps[static_cast<size_t> (c)] = c < stepList->size()
+                                                             ? readInt ((*stepList)[c], 0, 0, steps::patternSteps (d.arrangement.patternTicks))
+                                                             : 0;
 
         d.arrangement.patterns.push_back (std::move (pattern));
     }

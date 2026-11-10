@@ -315,4 +315,41 @@ void MainComponent::exportAs (ExportFormat format)
     });
 }
 
+// One click on a sound in the browser plays it once through the preview player (the sample editor's), at its own speed, whether
+// the song is playing or not. Clicking it again starts it again; another sound replaces it. Long files play their first 30
+// seconds (as when loaded into a channel); very large files are not decoded just to listen.
+void MainComponent::previewBrowserItem (const drag::Item& item)
+{
+    if (sampleEditorWindow != nullptr)
+        return; // the editor's own preview is using the player
+    const auto key = item.kind + "|" + item.payload;
+    if (key != previewKey || previewSound == nullptr)
+    {
+        std::shared_ptr<const SampleData> sound;
+        if (item.kind == "builtin")
+            sound = makeBuiltinSample (item.payload.toStdString());
+        else if (item.kind == "file")
+        {
+            const juce::File file (item.payload);
+            if (file.getSize() > juce::int64 { 200 } * 1024 * 1024)
+            {
+                statusLabel.setText (file.getFileName() + " is too large to preview: drag it onto a channel or the playlist", juce::dontSendNotification);
+                return;
+            }
+            juce::String error;
+            sound = decodeSample (formats, file, error);
+            if (sound == nullptr)
+            {
+                statusLabel.setText (error, juce::dontSendNotification);
+                return;
+            }
+        }
+        if (sound == nullptr)
+            return;
+        previewKey = key;
+        previewSound = std::move (sound);
+    }
+    engine.auditioner().play (previewSound, 0.0, 0.0, false);
+}
+
 } // namespace sls

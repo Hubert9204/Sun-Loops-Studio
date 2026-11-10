@@ -136,6 +136,8 @@ location in your file manager; **Refresh** looks for new files (the browser does
 - **Drag and drop**: drag a sound onto a channel of the Channel Rack (the row is outlined in green) to load it
   there; drop it on the empty space below the rows to create a new channel for it. A preset sets the channel's
   instrument, sample, volume, pan, pitch and swing; an instrument item switches the channel's instrument.
+- **One click** on a sound (an audio file or a built-in sample) plays it once, whether the song is playing or not (0.31.0);
+  click it again to hear it from the start, click another to hear that one. Long files play their first 30 seconds.
 - **Double-click** an item to apply it to the selected channel.
 - **Fold away**: the arrow button in the browser's title, **F8** or the **Browser** toolbar button. A thin tab stays
   on the left edge to bring it back. The state is remembered.
@@ -155,11 +157,28 @@ One row per channel: a **Track N** display and the name, **M** (mute), **S** (so
   a 16th step at 100 %. Notes that would be pushed past the end of the pattern stay where they are.
 - **Track N** is the mixer track the channel plays through. Click it for a menu of the mixer's tracks (grouped by 50 when there are many), or drag it up or
   down, or scroll over it. By default channel 1 goes to Track 1, channel 2 to Track 2, and so on.
-- **Sampler channels** show one step button per 16th note of the pattern (32 for the default two bars). Click a step to turn it on or off. The
-  **Load** button picks a sample file.
-- **Synth channels** show a small preview of their notes. Edit the notes in the Piano Roll.
+- **The step area** (0.31.0, as in FL Studio) shows either **squares** - the step sequencer - or a **preview of the
+  Piano Roll**, chosen by the notes themselves:
+  - Every new channel starts with squares, one per 16th note of the pattern. **Left click** (or drag) writes steps,
+    **right click** (or drag) erases them. A step plays the channel's root note (MIDI note 60 unless the sampler's *Root* is set otherwise),
+    or the kick (pad 1) on a drum channel. The step the song is on lights up while it plays.
+  - The first **16 steps** (one bar of 4 quarter notes) are **active**; the steps after them, up to the end of the
+    pattern, are **greyed out**: they play the active steps again, so a one-bar beat fills a longer pattern.
+  - Writing (or erasing) a step in the greyed part makes the sequence a bar longer: that bar becomes active, filled
+    with what it was playing, plus your change. Nothing else changes in the sound.
+  - **Drag the handle** at the end of the active steps (the cursor becomes a left-right arrow) to make the sequence
+    longer or shorter by whole bars, or by single steps with **Alt** held (a 12-step sequence repeats every 12
+    steps against the others: polymeter). Made shorter, the steps after the new end are deleted (Ctrl+Z brings them
+    back). Dragged past the end of the pattern, the pattern gets longer (every pattern: 1, 2, 4, 8 bars).
+  - As soon as the channel has a note that is not a plain step - another pitch, a longer note, a note off the 16th
+    grid, written in the Piano Roll, the drum machine, recorded or generated - the row shows the **preview of the
+    Piano Roll** instead, and its notes play as written (no repeats). **Left click** on the preview opens the Piano
+    Roll (the drum machine for a drum channel), or brings it forward; right click opens the channel's menu.
+  - Delete every note in the Piano Roll and the row goes back to squares.
+  - Squares are drawn from the notes every time, so they always show what plays.
+  - Projects from before 0.31.0 open with every channel's sequence as long as the pattern, so they play exactly as before.
+- The **Load** button of a sampler channel picks a sample file.
 - Click a row to select that channel (the Piano Roll and the Mixer follow the selection).
-- **Drum channels** show a small preview of their notes; double-click opens the drum machine (see below).
 - **+ Add channel** under the last row adds a synth, sampler or drum-machine channel, up to 32 channels in total
   (channels can share mixer tracks, and the mixer can have up to 500).
 

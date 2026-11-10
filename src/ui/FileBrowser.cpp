@@ -45,7 +45,7 @@ juce::Colour dotColour (NodeKind k)
 class FileBrowser::Item : public juce::TreeViewItem
 {
 public:
-    Item (const BrowserNode& n, FileBrowser& o, juce::String parentPath)
+    Item (const BrowserNode& n, FileBrowser& o, const juce::String& parentPath)
         : node (n), owner (o), path (parentPath + "/" + juce::String (n.name))
     {
     }
@@ -100,7 +100,17 @@ public:
     // this item is still handling the mouse event: they are posted to the message loop instead.
     void itemClicked (const juce::MouseEvent& e) override
     {
-        if (e.mods.isPopupMenu() || node.kind != NodeKind::Action)
+        if (e.mods.isPopupMenu())
+            return;
+        if ((node.kind == NodeKind::AudioFile && ! juce::String (node.payload).endsWithIgnoreCase (".sf2")) || node.kind == NodeKind::BuiltinSample)
+        {
+            // One click on a sound plays it (the same click still selects it and can start a drag).
+            juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<FileBrowser> (&owner),
+                                              item = drag::Item { kindName (node.kind), juce::String (node.payload) }]
+                                             { if (safe != nullptr && safe->onItemPreview) safe->onItemPreview (item); });
+            return;
+        }
+        if (node.kind != NodeKind::Action)
             return;
 
         juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<FileBrowser> (&owner), action = juce::String (node.payload)]

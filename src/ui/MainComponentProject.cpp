@@ -183,9 +183,12 @@ void MainComponent::applyDocument (ProjectDocument doc, const juce::File& file, 
     loadAudioClipFiles (problems);
     currentPattern = std::clamp (doc.currentPattern, 0, static_cast<int> (arrangement.patterns.size()) - 1);
 
-    const auto& notes = arrangement.patterns[static_cast<size_t> (currentPattern)].notes;
+    const auto& pattern = arrangement.patterns[static_cast<size_t> (currentPattern)];
     for (size_t c = 0; c < channels.size(); ++c)
-        channels[c].notes = notes[c];
+    {
+        channels[c].notes = pattern.notes[c];
+        channels[c].steps = pattern.stepsOf (c);
+    }
 
     for (size_t i = 0; i < channels.size(); ++i)
         createStrip (i);

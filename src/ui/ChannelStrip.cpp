@@ -28,29 +28,53 @@ void StepGrid::setPlayheadTick (int tick)
 
 int StepGrid::stepAt (int x) const noexcept
 {
-    const float w = static_cast<float> (getWidth()) / static_cast<float> (stepCount());
-    return std::clamp (static_cast<int> (static_cast<float> (x) / w), 0, stepCount() - 1);
+    return std::clamp (static_cast<int> (static_cast<float> (x) / stepWidth()), 0, stepCount() - 1);
+}
+
+bool StepGrid::overEdge (int x) const noexcept
+{
+    if (! showsSteps())
+        return false;
+    const float edge = static_cast<float> (activeSteps()) * stepWidth();
+    return std::abs (static_cast<float> (x) - edge) <= std::max (3.0f, std::min (6.0f, stepWidth() * 0.35f));
 }
 
 void StepGrid::paint (juce::Graphics& g)
 {
     const auto bounds = getLocalBounds().toFloat();
-    const int steps = stepCount();
-    const float w = bounds.getWidth() / static_cast<float> (steps);
+    const int stepTotal = stepCount();
+    const float w = bounds.getWidth() / static_cast<float> (stepTotal);
+    const int playingStep = playheadTick >= 0 ? playheadTick / kStepTicks : -1;
 
     if (showsSteps())
     {
-        for (int s = 0; s < steps; ++s)
+        // Each square is drawn from the notes on every paint (nothing is cached), so what is shown is always what plays. The steps
+        // after the active part are greyed out: they play the active ones again.
+        const int pitch = steps::stepPitch (channel);
+        const int active = activeSteps();
+        for (int s = 0; s < stepTotal; ++s)
         {
-            bool on = false;
-            for (const auto& n : channel.notes)
-                if (n.startTick == s * kStepTicks && n.pitch == channel.rootPitch)
-                    on = true;
-
-            const auto r = juce::Rectangle<float> (bounds.getX() + s * w, bounds.getY(), w, bounds.getHeight()).reduced (1.5f);
-            g.setColour (on ? kStepOn : ((s / 4) % 2 == 0 ? kStepOff : kStepOffAlt));
+            const bool inActive = s < active;
+            const bool on = inActive ? steps::stepOn (channel.notes, s, pitch) : steps::repeatedStepOn (channel.notes, s, active, pitch);
+            const auto r = juce::Rectangle<float> (bounds.getX() + static_cast<float> (s) * w, bounds.getY(), w, bounds.getHeight()).reduced (std::min (1.5f, w * 0.12f));
+            auto colour = on ? kStepOn : ((s / 4) % 2 == 0 ? kStepOff : kStepOffAlt);
+            if (! inActive)
+                colour = on ? kStepOn.withMultipliedSaturation (0.35f).withMultipliedBrightness (0.55f) : colour.withMultipliedBrightness (0.6f);
+            if (s == playingStep)
+                colour = colour.brighter (on ? 0.5f : 0.35f);
+            g.setColour (colour);
             g.fillRoundedRectangle (r, 2.0f);
+            if (! inActive)
+            {
+                g.setColour (juce::Colours::black.withAlpha (0.25f));
+                g.drawRoundedRectangle (r, 2.0f, 1.0f);
+            }
         }
+
+        // The handle at the end of the active part: drag it to make the sequence longer or shorter.
+        const float edge = bounds.getX() + static_cast<float> (active) * w;
+        g.setColour (hoverEdge || drag == Drag::Edge ? kPlayhead : juce::Colour (0xffb8bec9).withAlpha (0.8f));
+        g.fillRect (juce::Rectangle<float> (std::min (edge, bounds.getRight() - 3.0f) - 1.0f, bounds.getY(), 3.0f, bounds.getHeight()));
     }
     else
     {
@@ -87,51 +111,107 @@ void StepGrid::paint (juce::Graphics& g)
     }
 }
 
-void StepGrid::mouseDoubleClick (const juce::MouseEvent& e)
+void StepGrid::paintStep (int step, bool on)
 {
-    // Channels that show their notes have a read-only preview: double-clicking it opens the piano roll.
-    // Step channels toggle steps on every click, so a double click must not be interpreted here.
-    if (! showsSteps() && ! e.mods.isPopupMenu() && onDoubleClicked)
-        onDoubleClicked();
+    if (step == lastStep)
+        return;
+    lastStep = step;
+    if (steps::setStep (channel.notes, channel.steps, step, on, loopLengthTicks, steps::stepPitch (channel)))
+    {
+        repaint();
+        if (onStepsEdited)
+            onStepsEdited();
+    }
 }
 
 void StepGrid::mouseDown (const juce::MouseEvent& e)
 {
-    if (e.mods.isPopupMenu())
-    {
-        if (onContextMenu)
-            onContextMenu();
-        return;
-    }
+    drag = Drag::None;
+    lastStep = -1;
+    askedForLongerPattern = false;
 
     if (! showsSteps())
     {
-        if (onClickedPreview)
-            onClickedPreview();
+        // The preview of the piano roll: right click is the channel's menu, left click opens (or brings forward) the editor.
+        if (e.mods.isPopupMenu())
+        {
+            if (onContextMenu)
+                onContextMenu();
+        }
+        else if (onOpenEditor)
+            onOpenEditor();
         return;
     }
 
-    const int tick = stepAt (e.x) * kStepTicks;
-    auto it = std::find_if (channel.notes.begin(), channel.notes.end(), [&] (const Note& n)
-                            { return n.startTick == tick && n.pitch == channel.rootPitch; });
-
-    if (it != channel.notes.end())
+    if (! e.mods.isPopupMenu() && overEdge (e.x))
     {
-        channel.notes.erase (it);
+        drag = Drag::Edge;
+        repaint();
+        return;
     }
-    else
+    // Squares: the left button writes steps, the right button erases them (both also while dragging across).
+    drag = e.mods.isPopupMenu() ? Drag::Erase : Drag::Paint;
+    paintStep (stepAt (e.x), drag == Drag::Paint);
+}
+
+void StepGrid::mouseDrag (const juce::MouseEvent& e)
+{
+    if (drag == Drag::Paint || drag == Drag::Erase)
     {
-        Note n;
-        n.pitch = channel.rootPitch;
-        n.startTick = tick;
-        n.lengthTicks = kStepTicks;
-        n.velocity = 0.9f;
-        channel.notes.push_back (n);
+        if (e.x >= 0 && e.x < getWidth())
+            paintStep (stepAt (e.x), drag == Drag::Paint);
+        return;
+    }
+    if (drag != Drag::Edge)
+        return;
+
+    // Past the end of the pattern: the pattern gets a bar longer (once per drag), and the channel takes it in.
+    if (e.x > getWidth() + 8 && ! askedForLongerPattern && activeSteps() >= stepCount())
+    {
+        askedForLongerPattern = true;
+        if (onWantsLongerPattern)
+            onWantsLongerPattern();
     }
 
+    // Whole bars of 16 steps (4 quarter notes); with Alt held, single steps.
+    const float position = static_cast<float> (e.x) / stepWidth();
+    int wanted = e.mods.isAltDown() ? juce::roundToInt (position)
+                                    : juce::roundToInt (position / static_cast<float> (steps::kBarSteps)) * steps::kBarSteps;
+    wanted = std::clamp (wanted, std::min (e.mods.isAltDown() ? 1 : steps::kBarSteps, stepCount()), stepCount());
+    if (steps::resize (channel.notes, channel.steps, wanted, loopLengthTicks, steps::stepPitch (channel)))
+    {
+        repaint();
+        if (onStepsEdited)
+            onStepsEdited();
+    }
+}
+
+void StepGrid::mouseUp (const juce::MouseEvent&)
+{
+    drag = Drag::None;
+    lastStep = -1;
     repaint();
-    if (onStepsEdited)
-        onStepsEdited();
+}
+
+void StepGrid::mouseMove (const juce::MouseEvent& e)
+{
+    const bool over = overEdge (e.x);
+    if (over != hoverEdge)
+    {
+        hoverEdge = over;
+        repaint();
+    }
+    setMouseCursor (over ? juce::MouseCursor::LeftRightResizeCursor
+                         : (showsSteps() ? juce::MouseCursor::NormalCursor : juce::MouseCursor::PointingHandCursor));
+}
+
+void StepGrid::mouseExit (const juce::MouseEvent&)
+{
+    if (hoverEdge)
+    {
+        hoverEdge = false;
+        repaint();
+    }
 }
 
 // ------------------------------------------------------------------------- ChannelStrip
@@ -218,16 +298,14 @@ ChannelStrip::ChannelStrip (Channel& channelToControl, int channelIndex)
     loadButton.onClick = [this] { if (onLoadSample) onLoadSample (index); };
 
     grid.onStepsEdited = [this] { if (onChanged) onChanged (index); };
-    grid.onClickedPreview = [this] { if (onSelect) onSelect (index); };
-    grid.onDoubleClicked = [this]
+    grid.onOpenEditor = [this]
     {
-        if (channel.instrument == Instrument::Plugin && onOpenPlugin)
-            onOpenPlugin (index);
-        else if (channel.instrument == Instrument::Drums && onOpenDrumMachine)
+        if (channel.instrument == Instrument::Drums && onOpenDrumMachine)
             onOpenDrumMachine (index);
         else if (onOpenPianoRoll)
             onOpenPianoRoll (index);
     };
+    grid.onWantsLongerPattern = [this] { if (onWantsLongerPattern) onWantsLongerPattern (index); };
     grid.onContextMenu = [this] { showContextMenu(); };
 
     for (auto* c : std::initializer_list<juce::Component*> { &nameLabel, &trackSelector, &muteButton, &soloButton,

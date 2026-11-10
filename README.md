@@ -16,7 +16,7 @@ Sun Loops Studio is inspired by the workflow of loop-based DAWs such as FL Studi
 that uses no code, names, graphics or assets from other products, and it is not affiliated with or endorsed by
 their makers.
 
-**Status: alpha (0.30.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
+**Status: alpha (0.31.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
 display. Playback was confirmed on a real Nobara machine for version 0.3; everything added since (panels, patterns,
 playlist, browser, pitch/swing, the expanded mixer and its effects, saving projects, the AppImage, audio clips, drag and
 drop, recording, MIDI, the metronome and the export formats) was tested headless and in a virtual display with a silent
@@ -32,8 +32,10 @@ See [docs/roadmap.md](docs/roadmap.md) for exactly what is and is not verified a
 - **Browser** (left sidebar, `F8` folds it away) - a tree with *Samples*, *Drum Kits*, *Instruments*, *Presets* and
   *Plugin*, a quick-search box, and drag-and-drop (or double-click) of sounds onto a channel of the Channel Rack.
   Your own files live in `~/Music/Sun Loops Studio/`.
-- **Channel Rack** - up to 32 channels, each a synth, a sampler or a drum machine. 16th-note step sequencer on sampler channels with one sample,
-  note preview on the others (synths, drum machines, multi-sample instruments such as the piano). Per channel: volume, pan, a **Pitch** knob (semitones) and a **Swing** knob, and a
+- **Channel Rack** - up to 32 channels, each a synth, a sampler or a drum machine. 16th-note step sequencer as in FL Studio
+  (0.31.0): every new channel starts with squares (left click writes, right click erases); the steps after the first bar are greyed
+  out and repeat it, and dragging the end of the sequence (or writing in the greyed part) makes it longer; as soon as the Piano Roll
+  writes other notes the row shows their preview (a click opens the Piano Roll), and clearing them brings the squares back. Per channel: volume, pan, a **Pitch** knob (semitones) and a **Swing** knob, and a
   **Track N** display that sends the channel to a mixer track. Right-click a channel for *Piano roll*, *Instrument*,
   *Load sample...*, *Rename...*, *Clone*, *Move up / down*, *Delete*, *Assign free mixer track*, *Save as preset...*.
 - **Piano Roll** - for the selected channel: click to add a note, drag to move, drag the right edge to resize,

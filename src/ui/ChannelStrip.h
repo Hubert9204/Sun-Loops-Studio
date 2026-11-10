@@ -8,6 +8,7 @@
 
 #include "audio/Automation.h"
 #include "audio/Project.h"
+#include "audio/StepSequence.h"
 #include "ui/AutomatableSlider.h"
 #include "ui/AudioMeter.h"
 #include "ui/DragItems.h"
@@ -26,27 +27,46 @@ public:
     void setLoopLengthTicks (int ticks) { loopLengthTicks = ticks; repaint(); }
     void setPlayheadTick (int tick);
 
-    std::function<void()> onStepsEdited;   // a step was toggled
-    std::function<void()> onClickedPreview; // the preview of a synth channel was clicked
-    std::function<void()> onDoubleClicked;  // the preview of a synth channel was double-clicked
-    std::function<void()> onContextMenu;    // right click
+    // The row shows squares (a step sequence: no notes, or only steps) or a preview of the piano roll (0.31.0, see StepSequence.h).
+    bool showsSteps() const noexcept { return steps::isStepSequence (channel.notes, steps::stepPitch (channel)); }
+    int activeSteps() const noexcept { return steps::activeSteps (channel.notes, channel.steps, loopLengthTicks); }
+
+    std::function<void()> onStepsEdited;      // a step was written or erased, or the active part was resized
+    std::function<void()> onOpenEditor;       // the preview was clicked: open the piano roll (the drum machine for drums)
+    std::function<void()> onContextMenu;      // right click on the preview
+    std::function<void()> onWantsLongerPattern; // the end of the active part was dragged past the end of the pattern
 
     void paint (juce::Graphics&) override;
     void mouseDown (const juce::MouseEvent&) override;
-    void mouseDoubleClick (const juce::MouseEvent&) override;
+    void mouseDrag (const juce::MouseEvent&) override;
+    void mouseUp (const juce::MouseEvent&) override;
+    void mouseMove (const juce::MouseEvent&) override;
+    void mouseExit (const juce::MouseEvent&) override;
 
 private:
-    static constexpr int kStepTicks = kSixteenthTicks;
+    static constexpr int kStepTicks = steps::kStepTicks;
 
-    int stepCount() const noexcept { return std::max (1, loopLengthTicks / kStepTicks); }
-    // A sampler with one sample is edited as steps of its root note; every other channel (synths, drum machines, samplers playing a
-    // multi-sample instrument such as the grand piano, a SoundFont or slices) shows its notes, like a small piano roll.
-    bool showsSteps() const noexcept { return channel.instrument == Instrument::Sampler && channel.program == nullptr; }
+    int stepCount() const noexcept { return steps::patternSteps (loopLengthTicks); }
+    float stepWidth() const noexcept { return static_cast<float> (getWidth()) / static_cast<float> (stepCount()); }
     int stepAt (int x) const noexcept;
+    bool overEdge (int x) const noexcept; // on the handle at the end of the active part
+    void paintStep (int step, bool on);   // left button writes, right button erases
+
+    enum class Drag
+    {
+        None,
+        Paint,
+        Erase,
+        Edge
+    };
 
     Channel& channel;
     int loopLengthTicks = 8 * kTicksPerBeat;
     int playheadTick = -1;
+    Drag drag = Drag::None;
+    int lastStep = -1;
+    bool askedForLongerPattern = false;
+    bool hoverEdge = false;
 };
 
 // One row of the channel rack, doubling as the channel's mixer strip.
@@ -58,6 +78,7 @@ public:
     void setSelected (bool shouldBeSelected);
     void setLoopLengthTicks (int ticks) { grid.setLoopLengthTicks (ticks); }
     void setPlayheadTick (int tick) { grid.setPlayheadTick (tick); }
+    void repaintGrid() { grid.repaint(); }
     void setMeterLevel (float level) { meter.setLevel (level); }
     void refreshFromChannel();
     void setTrackCount (int mixerTracks) { trackSelector.setNumTracks (mixerTracks); } // the project's (0.29.0)
@@ -69,6 +90,7 @@ public:
     std::function<void (int)> onLoadSample;    // "Load" pressed (sampler channels)
     std::function<void (int)> onEditSample;    // "Edit sample..." chosen (sampler channels with a sample)
     std::function<void (int)> onOpenPianoRoll; // context menu "Piano roll", or double click on the name / note preview
+    std::function<void (int)> onWantsLongerPattern; // the step grid's end was dragged past the end of the pattern (0.31.0)
     std::function<void (int)> onOpenDrumMachine; // drum channels: "Drum machine..." in the menu, or a double click (instead of the piano roll)
     std::function<void (int, Instrument)> onInstrumentChosen; // context menu "Instrument"
     std::function<void (int)> onOpenPlugin;      // plugin channels: "Plugin window..." in the menu, or a double click (0.17.0)

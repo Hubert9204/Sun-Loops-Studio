@@ -45,6 +45,8 @@ struct Channel
     float pitch = 0.0f;                       // channel tuning in semitones (-24..+24), applied to every note
     float swing = 0.0f;                       // 0..1: delays notes that fall on the second half of every 8th
     int mixerTrack = 0;                       // which mixer track this channel plays through (0-based)
+    int steps = 0;                            // step sequencer (0.31.0): the active length the user set in the current pattern, in
+                                              // steps (0 = not set); kept per pattern in Pattern::steps, like `notes`
 };
 
 // One vertical strip of the mixer: its own fader, balance, mute/solo and a chain of insert effects.

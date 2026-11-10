@@ -926,6 +926,7 @@ void testSwing()
         sls::Arrangement a;
         a.patterns.resize (1);
         a.patterns[0].notes = { { { 60, 120, 60, 0.8f } } };
+        a.patterns[0].steps = { sls::steps::patternSteps (a.patternTicks) }; // the whole pattern (one step: it would repeat each bar)
         a.clips = { { 0, 0, 1, 1 } };
         auto c = synthChannel ({});
         c.swing = 1.0f;
@@ -3599,6 +3600,133 @@ void testAudioClips()
 // --- per-clip pan, reverse and fades (0.27.0) -------------------------------------------------------------------------------
 // --- the score log (0.28.0) ------------------------------------------------------------------------------------------------
 // --- the Loop Starter (0.30.0) ----------------------------------------------------------------------------------------------
+void testStepSequencer()
+{
+    std::cout << "Step sequencer (0.31.0)\n";
+    namespace st = sls::steps;
+    const int bar = 16 * st::kStepTicks;
+    const int pattern2 = 2 * bar; // a 2-bar pattern: 32 steps
+
+    sls::Channel sampler;
+    sampler.instrument = sls::Instrument::Sampler;
+    sampler.rootPitch = 60;
+    sls::Channel drums;
+    drums.instrument = sls::Instrument::Drums;
+    check (st::stepPitch (sampler) == 60 && st::stepPitch (drums) == 36, "a step plays the root note, or the kick on a drum channel");
+
+    const auto step = [] (int s, int pitch) { return sls::Note { pitch, s * st::kStepTicks, st::kStepTicks, 0.9f }; };
+    std::vector<sls::Note> kicks { step (0, 60), step (4, 60), step (8, 60), step (12, 60) };
+    check (st::isStepSequence ({}, 60), "no notes at all: squares");
+    check (st::isStepSequence (kicks, 60), "only steps: squares");
+    auto chord = kicks;
+    chord.push_back ({ 64, 0, st::kStepTicks, 0.8f });
+    check (! st::isStepSequence (chord, 60), "a note on another pitch (from the piano roll): the preview");
+    auto longNote = kicks;
+    longNote[1].lengthTicks = 2 * st::kStepTicks;
+    check (! st::isStepSequence (longNote, 60), "a note longer than a step: the preview");
+    auto offGrid = kicks;
+    offGrid[2].startTick += 30;
+    check (! st::isStepSequence (offGrid, 60), "a note off the step grid: the preview");
+
+    check (st::activeSteps ({}, 0, pattern2) == 16, "a new channel has 16 active steps");
+    check (st::activeSteps (kicks, 0, pattern2) == 16, "one bar of steps: 16 active steps");
+    check (st::activeSteps ({ step (20, 60) }, 0, pattern2) == 32, "a step in the second bar makes it two bars");
+    check (st::activeSteps (kicks, 12, pattern2) == 13, "a length set by hand, but never shorter than the notes");
+    check (st::activeSteps ({}, 0, bar) == 16 && st::activeSteps ({}, 40, bar) == 16, "never longer than the pattern");
+    check (st::activeSteps ({ step (3, 60) }, 8, pattern2) == 8, "a length set by hand (8 steps)");
+
+    // What plays: the active part again in the greyed steps.
+    const auto played = st::playedNotes (sampler, kicks, 0, pattern2);
+    check (played.size() == 8 && played[4].startTick == bar && played[7].startTick == bar + 12 * st::kStepTicks,
+           "a one-bar step sequence fills a two-bar pattern");
+    const auto polymeter = st::playedNotes (sampler, { step (0, 60) }, 12, pattern2);
+    check (polymeter.size() == 3 && polymeter[1].startTick == 12 * st::kStepTicks && polymeter[2].startTick == 24 * st::kStepTicks,
+           "a 12-step sequence repeats every 12 steps (and is cut at the end of the pattern)");
+    check (st::playedNotes (sampler, chord, 0, pattern2).size() == chord.size(), "a channel written in the piano roll plays its notes as they are");
+    check (st::playedNotes (sampler, kicks, 32, pattern2).size() == 4, "a channel set to the whole pattern does not repeat");
+    check (st::playedNotes (drums, kicks, 0, pattern2).size() == 4, "on a drum channel only kicks are steps (these notes are not): played as written");
+
+    // Editing: left writes, right erases; a greyed step first makes the active part reach it, keeping the sound.
+    {
+        auto notes = kicks;
+        int set = 0;
+        check (st::setStep (notes, set, 2, true, pattern2, 60) && st::stepOn (notes, 2, 60) && set == 0, "left click writes a step");
+        check (! st::setStep (notes, set, 2, true, pattern2, 60), "writing a step that is on changes nothing");
+        check (st::setStep (notes, set, 2, false, pattern2, 60) && ! st::stepOn (notes, 2, 60), "right click erases it");
+        check (! st::setStep (notes, set, 3, false, pattern2, 60), "erasing an empty step changes nothing");
+        const auto before = st::playedNotes (sampler, notes, set, pattern2);
+        check (st::setStep (notes, set, 22, true, pattern2, 60) && set == 32 && st::stepOn (notes, 22, 60),
+               "a step written in the greyed part makes the sequence a bar longer");
+        check (st::stepOn (notes, 16, 60) && st::stepOn (notes, 20, 60) && st::stepOn (notes, 28, 60) && notes.size() == 9,
+               "the bar taken in is filled with what it was playing, plus the new step");
+        const auto after = st::playedNotes (sampler, notes, set, pattern2);
+        check (after.size() == before.size() + 1, "so the sound only changes by the step written");
+
+        auto erase = kicks;
+        int eraseSet = 0;
+        check (st::setStep (erase, eraseSet, 20, false, pattern2, 60) && eraseSet == 32 && ! st::stepOn (erase, 20, 60) && erase.size() == 7,
+               "erasing a greyed step that played makes the sequence longer and erases only that one");
+    }
+    {
+        // Dragging the end of the active part.
+        auto notes = kicks;
+        int set = 0;
+        check (st::resize (notes, set, 32, pattern2, 60) && set == 32 && notes.size() == 8, "dragged longer: the new steps keep what they played");
+        check (st::resize (notes, set, 16, pattern2, 60) && set == 16 && notes.size() == 4, "dragged shorter: the steps after the end are deleted");
+        check (st::resize (notes, set, 8, pattern2, 60) && set == 8 && notes.size() == 2 && st::activeSteps (notes, set, pattern2) == 8,
+               "shorter than a bar (with Alt)");
+        check (st::playedNotes (sampler, notes, set, pattern2).size() == 8, "an 8-step sequence plays four times in two bars");
+        check (! st::resize (notes, set, 8, pattern2, 60), "the same length changes nothing");
+        check (st::resize (notes, set, 99, pattern2, 60) && set == 32, "never longer than the pattern");
+        int fresh = 0;
+        std::vector<sls::Note> none;
+        check (st::resize (none, fresh, 32, pattern2, 60) && fresh == 32 && none.empty(), "an empty channel can be made longer too");
+    }
+
+    // The patterns that play: pattern mode and song mode both repeat the active part.
+    {
+        sls::Arrangement arrangement;
+        arrangement.patternTicks = pattern2;
+        arrangement.patterns.resize (1);
+        std::vector<sls::Channel> channels { sampler, sampler };
+        arrangement.ensureChannelCount (channels.size());
+        arrangement.patterns[0].notes[0] = kicks;
+        arrangement.patterns[0].notes[1] = chord;
+        const auto p = sls::compilePattern (channels, arrangement, 0);
+        check (p.channels[0].notes.size() == 8 && p.channels[1].notes.size() == chord.size(), "pattern mode plays the repeats");
+        arrangement.patterns[0].steps[0] = 32;
+        check (sls::compilePattern (channels, arrangement, 0).channels[0].notes.size() == 4, "a channel set to two bars leaves the second bar silent");
+        arrangement.patterns[0].steps[0] = 0;
+        arrangement.clips = { { 0, 0, 0, 2 } };
+        const auto song = sls::compileSong (channels, arrangement);
+        check (song.channels[0].notes.size() == 16, "song mode plays the repeats in every pattern clip");
+
+        // Channels deleted or moved: the lengths follow.
+        arrangement.patterns[0].steps = { 12, 24 };
+        sls::remapArrangementChannels (arrangement, { 1, 0 }, 2);
+        check (arrangement.patterns[0].stepsOf (0) == 24 && arrangement.patterns[0].stepsOf (1) == 12, "the lengths follow channels that move");
+    }
+
+    // Project files: the lengths are saved; a file from before 0.31.0 keeps every channel to the whole pattern (it plays as before).
+    {
+        auto doc = richDocument();
+        doc.arrangement.ensureChannelCount (doc.channels.size());
+        doc.arrangement.patterns[0].steps[0] = 12;
+        const auto back = sls::ProjectDocument::fromJson (doc.toJson());
+        check (back.document.has_value() && back.document->arrangement.patterns[0].stepsOf (0) == 12
+                   && back.document->arrangement.patterns[0].stepsOf (1) == 0,
+               "the active lengths survive a round trip");
+        auto v = juce::JSON::parse (doc.toJson());
+        for (auto& p : *v.getDynamicObject()->getProperty ("patterns").getArray())
+            p.getDynamicObject()->removeProperty ("steps");
+        const auto old = sls::ProjectDocument::fromJson (juce::JSON::toString (v));
+        const int whole = st::patternSteps (doc.arrangement.patternTicks);
+        check (old.document.has_value() && old.warnings.empty() && old.document->arrangement.patterns[0].stepsOf (0) == whole
+                   && old.document->arrangement.patterns[0].stepsOf (1) == whole,
+               "an older file sets every channel to the whole pattern, so nothing starts repeating");
+    }
+}
+
 void testLoopStarter()
 {
     std::cout << "Loop Starter (0.30.0)\n";
@@ -9349,6 +9477,7 @@ int main()
     testClipPanReverseFades();
     testScoreLog();
     testLoopStarter();
+    testStepSequencer();
     testAudioImport();
     testInputRecorder();
     testMidiNotes();
