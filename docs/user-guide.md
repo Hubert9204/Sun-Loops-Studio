@@ -483,6 +483,27 @@ starts a new history.
 
 With the mouse over the Playlist the same keys use the Playlist's own, finer history of clip edits (its **Undo** / **Redo** buttons do the same).
 
+## FL Studio projects (.flp)
+
+Projects are saved in the program's own format, **.slp**, as before. Since 0.34.0 the **File** menu can also read and write FL
+Studio's **.flp** files, with code written for this program (no FL Studio code or library is used):
+
+- **Open an FL Studio project (.flp)...** opens one as a **new, untitled project**: the .flp is never changed, and **Save** writes a
+  .slp. Carried over: the tempo, the channels (names, sample files and their root key), every pattern's notes (pitch, position,
+  length, velocity), the first arrangement's playlist (pattern clips and audio clips on their tracks) and the tracks' names and
+  colours. FL Studio's own synths and plugins have no equivalent here: a default synth plays their notes. A sample whose stored
+  path does not exist (a Windows path, FL Studio's own folders) is looked for by its name next to the .flp and in the folders beside
+  it. Patterns get one length here (1, 2, 4 or 8 bars: the shortest that holds the longest), FL Studio's 500 playlist tracks go onto
+  the 8 here in their order, and clips are placed on whole pattern lengths.
+- **Export as FL Studio project (.flp)...** writes the current project in FL Studio 20.8's layout at 960 PPQ (exact: twice this
+  program's 480). Sampler channels keep their sample file; synths, drum machines, plugins and built-in sounds become empty Sampler
+  channels that keep their notes; step sequences that repeat are written out in full; a pattern clip repeated over several pattern
+  lengths becomes one clip per repeat; audio clips play their file from its start.
+- Neither direction carries effects, the mixer, automation or plugin settings; a message after each lists what was left out.
+- **Checked**: the files written here were read back by this program and by an independent reader (PyFLP), and a real FL Studio
+  20.8 project from PyFLP's tests was opened. **Not checked**: opening the exported files in FL Studio itself, which is not
+  available here.
+
 ## Importing a MIDI file
 
 *File > Import a MIDI file into patterns...* (or drop a `.mid` / `.midi` file on the Playlist) turns a Standard MIDI File into **new synth

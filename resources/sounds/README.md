@@ -13,10 +13,10 @@ Everything here is built into the program (nothing is read from disk at run time
 | `library/bass` | Electric Bass (4 velocity layers) and Electric Bass Staccato, 14 notes | Growlybass by Karoryfer Lecolds (a Squier Jazz Bass) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `library/kits/studio` | Acoustic Studio kit: 16 pieces, 4 velocity layers | DrumGizmo MuldjordKit by Lars Muldjord | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | `library/kits/rock` | Acoustic Rock kit: 16 pieces, 4 velocity layers | DrumGizmo DRSKit by the DrumGizmo team | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
-| `library/programs`, `library/kits/*.json` | How the sounds are mapped to keys, velocities and pads | written for Sun Loops Studio | GPL-3.0 like the program |
+| `library/programs`, `library/kits/*.json` | How the sounds are mapped to keys, velocities and pads | written for Sun Loops Studio | AGPL-3.0 like the program (GPL-3.0 before 0.34.0) |
 
-The recordings keep their own licenses (above); they are not covered by the program's GPL. Under CC BY the sounds can be used in
+The recordings keep their own licenses (above); they are not covered by the program's AGPL. Under CC BY the sounds can be used in
 music of any kind, also commercially, as long as the authors are credited when the sounds themselves are passed on. The electronic
-kits and the hand percussion are not recordings: they are made by the program's code (`src/audio/DrumSynth.cpp`, GPL-3.0).
+kits and the hand percussion are not recordings: they are made by the program's code (`src/audio/DrumSynth.cpp`, AGPL-3.0).
 
 The Cyber-Hub sound theme that earlier versions carried was removed in 0.22.0.

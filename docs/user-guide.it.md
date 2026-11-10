@@ -503,6 +503,29 @@ passi. Aprire o creare un progetto fa partire una nuova cronologia.
 Con il mouse sulla Playlist gli stessi tasti usano la cronologia propria della Playlist, più fine, per le modifiche alle clip (i suoi pulsanti
 **Undo** / **Redo** fanno lo stesso).
 
+## Progetti FL Studio (.flp)
+
+I progetti si salvano nel formato del programma, **.slp**, come prima. Dalla 0.34.0 il menu **File** sa anche leggere e scrivere i
+file **.flp** di FL Studio, con codice scritto per questo programma (non si usa codice né librerie di FL Studio):
+
+- **Open an FL Studio project (.flp)...** ne apre uno come **nuovo progetto senza nome**: il .flp non viene mai modificato e **Save**
+  scrive un .slp. Vengono portati: il tempo, i canali (nomi, file dei campioni e la loro nota base), le note di ogni pattern
+  (altezza, posizione, durata, velocity), la playlist del primo arrangement (clip di pattern e clip audio sulle loro tracce) e
+  nomi e colori delle tracce. I synth e i plugin di FL Studio qui non esistono: le loro note le suona un synth predefinito. Un
+  campione il cui percorso salvato non esiste (un percorso Windows, le cartelle di FL Studio) viene cercato per nome accanto al
+  .flp e nelle cartelle vicine. Qui i pattern hanno una sola lunghezza (1, 2, 4 o 8 battute: la più corta che contiene il più
+  lungo), le 500 tracce della playlist di FL Studio finiscono sulle 8 di qui nel loro ordine e le clip si posano su lunghezze di
+  pattern intere.
+- **Export as FL Studio project (.flp)...** scrive il progetto corrente nella struttura di FL Studio 20.8 a 960 PPQ (esatto: il
+  doppio dei 480 di questo programma). I canali sampler mantengono il loro file; synth, drum machine, plugin e suoni incorporati
+  diventano canali Sampler vuoti che mantengono le note; le sequenze di step che si ripetono vengono scritte per intero; una clip
+  di pattern ripetuta su più lunghezze diventa una clip per ripetizione; le clip audio suonano il loro file dall'inizio.
+- In nessuna delle due direzioni passano effetti, mixer, automazioni e impostazioni dei plugin; dopo ognuna un messaggio elenca
+  cosa è stato lasciato fuori.
+- **Verificato**: i file scritti qui sono stati riletti da questo programma e da un lettore indipendente (PyFLP), ed è stato
+  aperto un vero progetto di FL Studio 20.8 dai test di PyFLP. **Non verificato**: l'apertura dei file esportati in FL Studio
+  stesso, che qui non è disponibile.
+
 ## Importare un file MIDI
 
 *File > Import a MIDI file into patterns...* (oppure trascina un file `.mid` / `.midi` sulla Playlist) trasforma un file MIDI standard in **nuovi

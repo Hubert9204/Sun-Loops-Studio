@@ -16,7 +16,7 @@ Sun Loops Studio is inspired by the workflow of loop-based DAWs such as FL Studi
 that uses no code, names, graphics or assets from other products, and it is not affiliated with or endorsed by
 their makers.
 
-**Status: alpha (0.33.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
+**Status: alpha (0.34.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
 display. Playback was confirmed on a real Nobara machine for version 0.3; everything added since (panels, patterns,
 playlist, browser, pitch/swing, the expanded mixer and its effects, saving projects, the AppImage, audio clips, drag and
 drop, recording, MIDI, the metronome and the export formats) was tested headless and in a virtual display with a silent
@@ -44,6 +44,8 @@ See [docs/roadmap.md](docs/roadmap.md) for exactly what is and is not verified a
   the grid (with snap to scale), **chords placed with one click**, a **velocity lane**, editing tools (quantize, humanize, legato,
   staccato, strum, arpeggiate, chop, flip, velocity ramps) and **generators** of chord progressions and basslines (also following the
   chords of another channel).
+- **FL Studio projects** (0.34.0) - *File* opens a .flp as a new project (tempo, channels and their samples, pattern notes, the
+  playlist, track names and colours) and exports one; the native format stays .slp. Written for this program, no FL Studio code.
 - **Typing keyboard** (0.32.0) - the computer keyboard plays the selected channel: A S D F... from C5 (note names as in FL
   Studio, MIDI 60 = C5), Z / X for the octave, C / V for the velocity; recorded by Rec notes like a MIDI keyboard.
 - **Loop Starter** (0.30.0) - a starting loop in one of ten genres (house, techno, hip-hop, trap, drum & bass, pop, lo-fi,
@@ -152,9 +154,14 @@ importing audio and video, audio clips, the recorder, MIDI note handling and the
 
 ## License
 
-Sun Loops Studio is free software under the **GNU General Public License, version 3** ([LICENSE](LICENSE)); versions up to
-0.16.0 were published under MIT. GPLv3 is the license under which JUCE may be used for free, so the program and its AppImage can
-be shared as long as the source comes with them.
+Since 0.34.0 Sun Loops Studio is free software under the **GNU Affero General Public License, version 3** (AGPLv3,
+[LICENSE](LICENSE)); versions 0.17.0 to 0.33.0 were published under the GNU GPL version 3 and versions up to 0.16.0 under MIT.
+JUCE 8, which the program is built on, is itself offered for free under the AGPLv3, so the two now match. The program and its
+AppImage can be shared as long as the source comes with them; if you change the program and let people use it over a network
+(for example a remote control), you must offer them the source of your version too (section 13 of the license).
+
+The FL Studio project support (`src/library/FlpFile.*`, `FlpProject.*`) is code written for this program under the same
+license; it uses no FL Studio code or library, only the file layout as documented by the free-software community.
 
 `third_party/signalsmith` holds Signalsmith Stretch and Signalsmith Linear, both MIT-licensed (their licences and the exact revisions are in that folder).
 `third_party/tinysoundfont` holds TinySoundFont's `tsf.h` (MIT), used only to read SoundFont files.

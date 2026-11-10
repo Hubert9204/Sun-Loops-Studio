@@ -2,6 +2,20 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.34.0 - 2026-11-10
+
+### Changed
+- **License: GNU Affero General Public License, version 3** (AGPLv3; GPLv3 from 0.17.0 to 0.33.0). JUCE 8 is offered under the
+  same license. If you change the program and let people use it over a network, offer them your source too.
+
+### Added
+- **FL Studio projects**: *File > Open an FL Studio project (.flp)...* opens one as a new, untitled project (Save writes a .slp:
+  the native format stays .slp); *File > Export as FL Studio project (.flp)...* writes one in FL Studio 20.8's layout. Tempo,
+  channels with their sample files, pattern notes, the playlist's pattern and audio clips, and track names and colours carry over;
+  synths, plugins, effects, the mixer and automation do not, and a message lists what was left out. Reader and writer are this
+  program's own code (`src/library/FlpFile.*`, `FlpProject.*`), written from the community's documentation of the format; damaged
+  files are refused (3000 randomly damaged files tested), never read past their end.
+
 ## 0.33.0 - 2026-11-10
 
 ### Added

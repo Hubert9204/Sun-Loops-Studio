@@ -14,7 +14,7 @@ strumento sta in un pannello mobile che puoi spostare, ridimensionare, sovrappor
 Sun Loops Studio si ispira al modo di lavorare dei DAW a loop come FL Studio. È un progetto indipendente: non usa
 codice, nomi, grafica o risorse di altri prodotti e non è affiliato né approvato dai loro produttori.
 
-**Stato: alpha (0.33.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
+**Stato: alpha (0.34.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
 La riproduzione è stata confermata su un vero PC Nobara per la versione 0.3; tutto ciò che è stato aggiunto dopo
 (pannelli, pattern, playlist, browser, pitch/swing, mixer espanso ed effetti, salvataggio dei progetti, AppImage, clip audio, trascinamento
 dei file, registrazione, MIDI, metronomo e formati di esportazione) è stato provato con test automatici e in un display virtuale con un
@@ -43,6 +43,8 @@ plugin commerciali. Vedi [docs/roadmap.md](docs/roadmap.md) per sapere con preci
   frecce, snap da battute a 1/32 e terzine, una **scala** mostrata sulla griglia (con snap alla scala), **accordi posati con un clic**,
   una **corsia della velocity**, strumenti di modifica (quantize, humanize, legato, staccato, strum, arpeggio, chop, flip, rampe di
   velocity) e **generatori** di progressioni di accordi e linee di basso (anche seguendo gli accordi di un altro canale).
+- **Progetti FL Studio** (0.34.0) - *File* apre un .flp come nuovo progetto (tempo, canali e campioni, note dei pattern, playlist,
+  nomi e colori delle tracce) e ne esporta uno; il formato nativo resta .slp. Codice scritto per questo programma, niente di FL Studio.
 - **Tastiera del computer** (0.32.0) - la tastiera del computer suona il canale selezionato: A S D F... da C5 (nomi delle
   note come in FL Studio, MIDI 60 = C5), Z / X per l'ottava, C / V per la velocity; Rec notes la registra come una tastiera MIDI.
 - **Loop Starter** (0.30.0) - un loop di partenza in uno di dieci generi (house, techno, hip-hop, trap, drum & bass, pop, lo-fi,
@@ -152,9 +154,15 @@ la gestione delle note MIDI e il metronomo.
 
 ## Licenza
 
-Sun Loops Studio è software libero con licenza **GNU General Public License, versione 3** ([LICENSE](LICENSE)); le versioni fino
-alla 0.16.0 erano pubblicate con licenza MIT. La GPLv3 è la licenza con cui JUCE si può usare gratuitamente, quindi il programma e la
-sua AppImage si possono condividere purché siano accompagnati dal codice sorgente.
+Dalla 0.34.0 Sun Loops Studio è software libero con licenza **GNU Affero General Public License, versione 3** (AGPLv3,
+[LICENSE](LICENSE)); le versioni dalla 0.17.0 alla 0.33.0 erano pubblicate con la GNU GPL versione 3 e quelle fino alla 0.16.0 con
+licenza MIT. Anche JUCE 8, su cui il programma è costruito, è offerto gratuitamente con la AGPLv3, quindi le due licenze ora
+coincidono. Se modifichi il programma e lo fai usare ad altri attraverso una rete (per esempio un controllo remoto), devi offrire
+anche a loro il sorgente della tua versione (sezione 13 della licenza).
+
+Il supporto dei progetti FL Studio (`src/library/FlpFile.*`, `FlpProject.*`) è codice scritto per questo programma con la stessa
+licenza; non usa codice né librerie di FL Studio, solo la struttura del file come documentata dalla comunità del software libero. Il programma e
+la sua AppImage si possono condividere purché siano accompagnati dal codice sorgente.
 
 `third_party/signalsmith` contiene Signalsmith Stretch e Signalsmith Linear, entrambe con licenza MIT (le licenze e le revisioni esatte sono in quella cartella).
 `third_party/tinysoundfont` contiene `tsf.h` di TinySoundFont (MIT), usato solo per leggere i file SoundFont.

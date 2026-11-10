@@ -27,6 +27,13 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.34.0
+The .flp reader takes untrusted input: every size is checked against what is left of the file before it is used, lengths and
+positions are clamped, 7-bit size groups stop after 35 bits, and a file whose data chunk claims more than the file holds is
+refused. 3000 randomly damaged files are read in the tests; the reader also ran clean under AddressSanitizer and
+UndefinedBehaviorSanitizer on the real FL Studio 20.8 project from PyFLP's tests and on files written here. Opening a .flp never
+writes anything; the export writes through a temporary file.
+
 ## After 0.33.0
 Clips may overlap on a playlist track: `Arrangement::canPlace` / `canPlaceAudio` only check the timeline, the hit tests pick the
 last clip (drawn on top). The player already gave every audio clip its own voice (16 at once) and summed pattern notes, so

@@ -190,6 +190,8 @@ private:
     // withPluginStates: the plugins' own settings are asked for (saving, autosave); without, a plugin is named by its instance only
     // (the undo history compares documents after every edit and must stay cheap).
     ProjectDocument makeDocument (bool withPluginStates = true);
+    void openFlpProject();   // File > Open an FL Studio project (0.34.0)
+    void exportFlpProject(); // File > Export as FL Studio project
     void applyDocument (ProjectDocument document, const juce::File& file, juce::StringArray& problems);
     bool saveProjectTo (const juce::File& file);
     void showFileMenu();

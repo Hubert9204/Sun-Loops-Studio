@@ -1,6 +1,6 @@
 # Status and roadmap
 
-Version 0.33.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
+Version 0.34.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
 what is missing. If something here disagrees with the program, the program is right: please fix the page.
 
 ## What has been verified, and how
@@ -63,6 +63,10 @@ what is missing. If something here disagrees with the program, the program is ri
 | Additive and physical engines (0.24.0): the default timbre is a saw (harmonic n at 1/n) on pitch; odd-only; brightness; one harmonic = a sine (2nd harmonic 80 dB down); morph to B, the morph envelope; the filter on the harmonics; no aliasing at C8 (fold-back -172 dB); the master limiter linear below -3 dBFS (3rd harmonic -164 dB) and never above 1; the string in tune from E2 to E6 with and without stiffness (within 5 cents); decay, hardness, release damping, velocity, body; marimba's 3.99 mode, the bell's hum; every model finite at its extremes; the 14 new sounds; files (and older files without the settings); no allocation | Automated headless tests (1173 checks in total) | All pass |
 | The synth window with the new engines: the engine menu, the additive layout (timbre A and B, morph, morph envelope, filter, envelopes, LFO), Nylon Guitar loaded (model, resonance, envelope), the sound menu grouped by engine | Manual, in a virtual display | Worked (not heard) |
 | Time Shaper (0.25.0): no pattern = unchanged; half speed, reverse, stutter 1/16 sample-exact against the input; tape stop (1 kHz falling below 300 Hz, faded out); gate 1/8, depth, smoothing, trance gate; its own clock when stopped; mix 0; no recording = pattern skipped safely; every time x volume pattern finite and never louder than the input; five in a project (four with a recording) without allocation | Automated headless tests (1187 checks in total) | All pass |
+| FL Studio projects (0.34.0): names to UTF-16 and back; a project exported (tempo, two channels with a sample and its root key, a channel for an audio clip's file, two patterns with exact notes, a step sequence written out over both bars, a repeated clip as two items, an audio clip as an item of its channel, track names and colours) and read back by the program's reader, then opened as a project (notes exact, steps set to the whole pattern, clips, audio clip, tracks, tempo, Song mode) and saved as .slp; a hand-written file in FL Studio 9's style (8-bit names, the tempo in two parts, 96 PPQ, a generator, an automation channel); empty, foreign, cut-short, wrong-timebase and non-song files refused; 3000 randomly damaged files read or refused without a crash | Automated headless tests (1380 checks in total) | All pass |
+| The .flp reader and writer under AddressSanitizer and UndefinedBehaviorSanitizer: the FL Studio 20.8 project from PyFLP's tests (19 channels, 5 patterns, 22 playlist items, 2 arrangements, 500 tracks read correctly) and 40000 randomly damaged copies of it and of a written file (every file that opened was written again and read back) | A separate test program | Nothing found |
+| Files written here read by PyFLP 2.2.1 (an independent reader, on the development machine only): version, 960 PPQ, tempo, 4/4, channels with their sample paths (the audio clip's channel seen as a sampler), notes with their channel, key, position, length and velocity, the arrangement with pattern and audio items on their tracks, track names and colours | Manual, with PyFLP | Read correctly |
+| In the app (0.34.0): the two items of the File menu; the demo exported (its message), the PyFLP test project opened (default synths for BooBass, Fruit Kick, MIDI Out, Plucked! and the VST, empty samplers, left-out automation and layer channels, the second arrangement left out, the missing kick sample reported; one-bar patterns, the clips in place on tracks named Audio track, MIDI, Cut pattern, Automation; tempo 69.42) | Manual, in a virtual display | Worked (not heard) |
 | Playlist layering and track names (0.33.0): pattern clips over each other on a track all play (notes of both), the top one picked; two audio clips over each other both heard at their level (220 Hz and 880 Hz in the mix); names and colours saved and read back, only the tracks that have them written, a bad colour or track ignored, older files with the defaults; the earlier overlap tests turned round (pasting, stretching and edited audio no longer shortened by a neighbour) | Automated headless tests (1351 checks in total) | All pass |
 | In the app (0.33.0): the track menu (Rename..., Colour with twelve colours, Default name and colour), Track 2 coloured blue (the mark and the tinted row), Track 3 renamed Vocals by double-click, the second Drums clip dragged over Pattern 1 on the same track (drawn on top with its outline) | Manual, in a virtual display | Worked (not heard) |
 | Typing keyboard (0.32.0): A is C5 (MIDI 60), the home row the white keys and the row above the black keys, capitals and the Italian ò / à alike, other keys nothing, octaves up and down within range, Z / X / C / V, velocity steps; note names as in FL Studio (60 = C5, 0 = C0, 127 = G10) | Automated headless tests (1342 checks in total) | All pass |
@@ -85,6 +89,8 @@ what is missing. If something here disagrees with the program, the program is ri
 
 ## What has not been verified
 
+- **Exported .flp files in FL Studio (0.34.0).** FL Studio is not available here: the files follow FL Studio 20.8's layout and are
+  read correctly by an independent reader, but whether FL Studio opens them without complaint has not been seen.
 - **The typing keyboard's timing (0.32.0).** In the virtual display the audio device has no real clock (the song runs several
   times too fast), so notes recorded from the keyboard came out too long there; the key presses and releases themselves were
   seen to arrive at once. How it feels on a real machine was not tried.
@@ -239,10 +245,12 @@ The larger feature blocks are in [feature-plan.md](feature-plan.md) (A, B and C 
 5. **Mixer**: sends, effect-chain presets, a spectrum display.
 6. **Plugins** (done in 0.17.0): next, automation of their parameters and plugin presets.
 7. **Sampler and audio-clip improvements** (loop, envelope, fades), pitch-to-MIDI, then automation.
-8. **Packaging** (Flatpak or RPM). The license was settled in 0.17.0 (GPLv3, see below).
+8. **Packaging** (Flatpak or RPM). The license is the AGPLv3 since 0.34.0 (see below).
 
 ## License
 
-Since 0.17.0 Sun Loops Studio is licensed under the GNU GPL version 3 (the maintainer's choice on 2026-11-06), which is the
-license under which JUCE may be used for free; versions up to 0.16.0 were published under MIT. Signalsmith Stretch and
-TinySoundFont keep their MIT licenses (compatible with the GPL).
+Since 0.34.0 Sun Loops Studio is licensed under the GNU Affero GPL version 3 (the maintainer's choice on 2026-11-10), the license
+under which JUCE 8 is offered for free. Versions 0.17.0 to 0.33.0 were published under the GNU GPL version 3 (chosen on
+2026-11-06) and versions up to 0.16.0 under MIT. Signalsmith Stretch and TinySoundFont keep their MIT licenses (compatible with
+the AGPL). The FL Studio project reader and writer are this program's own code; PyFLP (GPLv3) was used only on the development
+machine to check the files, and is not part of the program.

@@ -56,6 +56,7 @@
 #include "library/ChannelPreset.h"
 #include "library/Library.h"
 #include "library/ProjectFile.h"
+#include "library/FlpProject.h"
 #include "plugins/PluginScanner.h"
 #include "ui/PanelLayout.h"
 
@@ -3701,6 +3702,176 @@ void testPlaylistLayering()
         for (const auto& t : old.document->arrangement.playlistTracks)
             plain = plain && t == sls::PlaylistTrack {};
         check (plain, "an older file opens with the default names and colours");
+    }
+}
+
+void testFlpFiles()
+{
+    std::cout << "FL Studio projects (0.34.0)\n";
+    namespace fl = sls::flp;
+
+    check (fl::fromUtf16 (fl::utf16 ("B\xc3\xa4sse \xf0\x9f\x8e\xb5").data(), fl::utf16 ("B\xc3\xa4sse \xf0\x9f\x8e\xb5").size()) == "B\xc3\xa4sse \xf0\x9f\x8e\xb5",
+           "names go to UTF-16 and back (accents and a character outside the basic plane)");
+
+    // A project to export.
+    auto doc = sls::ProjectDocument::blank();
+    doc.bpm = 128.5;
+    doc.channels[0].name = "Lead";
+    sls::Channel kick;
+    kick.name = "Kick";
+    kick.instrument = sls::Instrument::Sampler;
+    kick.rootPitch = 48;
+    doc.channels.push_back (kick);
+    doc.sampleSources = { "", "/home/me/Samples/kick.wav" };
+    doc.kitSpecs.push_back (sls::KitSpec::empty());
+    auto& a = doc.arrangement;
+    a.patternTicks = 2 * 1920;
+    a.patterns.resize (2);
+    a.patterns[1].name = "Verse \xc3\xa8";
+    a.ensureChannelCount (2);
+    a.patterns[0].notes[0] = { { 64, 0, 480, 0.5f }, { 67, 1000, 333, 1.0f } };
+    a.patterns[0].notes[1] = { { 48, 0, 120, 0.9f }, { 48, 480, 120, 0.9f } }; // one bar of steps: repeats in the second
+    a.patterns[1].notes[0] = { { 72, 3800, 40, 0.8f } };
+    a.clips = { { 0, 0, 0, 2 }, { 1, 3, 4, 1 } };
+    sls::AudioClip audio;
+    audio.data = sls::makeMissingSample ("/home/me/Audio/vocal take.wav");
+    audio.name = "vocal take";
+    audio.track = 2;
+    audio.startTick = 960;
+    audio.lengthTicks = 5000;
+    a.audioClips.push_back (audio);
+    a.playlistTracks[0] = { "Beat", 0xffe0524au };
+    a.playlistTracks[3].name = "Verses";
+
+    const auto exported = sls::projectToFlp (doc);
+    const auto parsed = fl::parse (exported.bytes);
+    check (parsed.song.has_value() && parsed.error.empty(), "an exported project reads back");
+    if (! parsed.song.has_value())
+        return;
+    const auto& song = *parsed.song;
+    check (song.ppq == 960 && std::abs (song.bpm - 128.5) < 1.0e-9 && song.version == "20.8.4.2576", "with its tempo, at 960 PPQ, as FL Studio 20.8");
+    check (song.channels.size() == 3 && song.channels[0].name == "Lead" && song.channels[1].name == "Kick" && song.channels[1].samplePath == "/home/me/Samples/kick.wav"
+               && song.channels[1].rootNote == 48 && song.channels[2].type == 4 && song.channels[2].samplePath == "/home/me/Audio/vocal take.wav",
+           "the channels, a sample file with its root key, and a channel for the audio clip's file");
+    check (song.patterns.size() == 2 && song.patterns[1].name == "Verse \xc3\xa8", "the patterns with their names");
+    int lead = 0, kicks = 0;
+    bool exact = false;
+    for (const auto& n : song.patterns[0].notes)
+    {
+        lead += n.channel == 0 ? 1 : 0;
+        kicks += n.channel == 1 ? 1 : 0;
+        exact = exact || (n.channel == 0 && n.key == 67 && n.position == 2000 && n.length == 666 && n.velocity == 128);
+    }
+    check (lead == 2 && exact, "notes keep their exact position, length and velocity (ticks doubled)");
+    check (kicks == 4, "a one-bar step sequence is written out over both bars");
+    int patternItems = 0, audioItems = 0;
+    for (const auto& item : song.items)
+    {
+        patternItems += item.pattern > 0 ? 1 : 0;
+        audioItems += item.pattern == 0 && item.channel == 2 && item.position == 1920 && item.length == 10000 && item.track == 2 ? 1 : 0;
+    }
+    check (patternItems == 3 && audioItems == 1, "a clip repeated twice is two items; the audio clip is an item of its channel");
+    check (song.tracks.size() == 2 && song.tracks[0].name == "Beat" && song.tracks[0].hasColour && song.tracks[0].rgb == 0xe0524a
+               && song.tracks[1].index == 3 && song.tracks[1].name == "Verses" && ! song.tracks[1].hasColour,
+           "the playlist tracks' names and colours");
+    check (exported.warnings.size() >= 2, "what does not carry over is listed");
+
+    // ...and back into a project here.
+    const auto back = sls::projectFromFlp (song);
+    check (back.document.has_value(), "the .flp opens as a project");
+    if (back.document.has_value())
+    {
+        const auto& d = *back.document;
+        check (d.channels.size() == 2 && d.channels[0].name == "Lead" && d.channels[0].instrument == sls::Instrument::Sampler
+                   && d.channels[1].instrument == sls::Instrument::Sampler && d.sampleSources[1] == "/home/me/Samples/kick.wav" && d.channels[1].rootPitch == 48,
+               "the channels come back (the synth as an empty Sampler, as FL Studio would have it); the audio file is not a rack channel");
+        check (d.arrangement.patternTicks == 2 * 1920 && d.arrangement.patterns.size() == 2, "two-bar patterns, both of them");
+        const auto& n = d.arrangement.patterns[0].notes[0];
+        check (n.size() == 2 && n[1].pitch == 67 && n[1].startTick == 1000 && n[1].lengthTicks == 333 && std::abs (n[1].velocity - 1.0f) < 1.0e-6f
+                   && std::abs (n[0].velocity - 0.5f) < 1.0e-6f,
+               "the notes come back exactly");
+        check (d.arrangement.patterns[0].notes[1].size() == 4 && d.arrangement.patterns[0].stepsOf (1) == 32,
+               "the steps come back written out, set to the whole pattern (they play as before)");
+        int clipsOnTrack0 = 0;
+        for (const auto& c : d.arrangement.clips)
+            clipsOnTrack0 += c.track == 0 && c.pattern == 0 ? 1 : 0;
+        check (d.arrangement.clips.size() == 3 && clipsOnTrack0 == 2, "the pattern clips come back (one per repeat)");
+        check (d.arrangement.audioClips.size() == 1 && d.arrangement.audioClips[0].data->source == "/home/me/Audio/vocal take.wav"
+                   && d.arrangement.audioClips[0].startTick == 960 && d.arrangement.audioClips[0].lengthTicks == 5000,
+               "the audio clip comes back with its file, place and length");
+        check (d.arrangement.playlistTracks[0].name == "Beat" && d.arrangement.playlistTracks[0].colour == 0xffe0524au,
+               "track names and colours come back (FL Studio's track 1 is the first track used here)");
+        check (std::abs (d.bpm - 128.5) < 1.0e-9 && d.songMode, "the tempo, and Song mode since the playlist has clips");
+        const auto json = d.toJson();
+        check (sls::ProjectDocument::fromJson (json).document.has_value(), "and it can be saved as a .slp project");
+    }
+
+    // An older file, written by hand: 8-bit names, the tempo in two parts, 96 PPQ, a generator and an automation channel.
+    {
+        std::vector<std::uint8_t> ev;
+        const auto u = [&ev] (int id, std::uint32_t v, int n) { ev.push_back (static_cast<std::uint8_t> (id)); for (int i = 0; i < n; ++i) ev.push_back (static_cast<std::uint8_t> (v >> (8 * i))); };
+        const auto t = [&ev] (int id, const std::string& s) { ev.push_back (static_cast<std::uint8_t> (id)); ev.push_back (static_cast<std::uint8_t> (s.size() + 1)); ev.insert (ev.end(), s.begin(), s.end()); ev.push_back (0); };
+        t (199, "9.0.3");
+        u (66, 125, 2);
+        u (93, 500, 2);
+        u (64, 0, 2); u (21, 2, 1); t (201, "3x Osc"); t (192, "Bass\xe9");
+        u (64, 1, 2); u (21, 5, 1); t (192, "Auto");
+        u (65, 1, 2); t (193, "Intro");
+        std::vector<std::uint8_t> note (24, 0);
+        note[0] = 96; note[6] = 0; note[8] = 48; note[12] = 36; note[21] = 100;
+        ev.push_back (224); ev.push_back (24); ev.insert (ev.end(), note.begin(), note.end());
+        std::vector<std::uint8_t> file { 'F', 'L', 'h', 'd', 6, 0, 0, 0, 0, 0, 2, 0, 96, 0, 'F', 'L', 'd', 't' };
+        for (int i = 0; i < 4; ++i) file.push_back (static_cast<std::uint8_t> (ev.size() >> (8 * i)));
+        file.insert (file.end(), ev.begin(), ev.end());
+        const auto old = fl::parse (file);
+        check (old.song.has_value() && std::abs (old.song->bpm - 125.5) < 1.0e-9 && old.song->channels.size() == 2 && old.song->channels[0].name == "Bass\xc3\xa9"
+                   && old.song->patterns.size() == 1 && old.song->patterns[0].notes.size() == 1 && old.song->patterns[0].notes[0].position == 96,
+               "a file from FL Studio 9: 8-bit names, the tempo in two parts");
+        if (old.song.has_value())
+        {
+            const auto d = sls::projectFromFlp (*old.song);
+            check (d.document.has_value() && d.document->channels.size() == 1 && d.document->channels[0].instrument == sls::Instrument::Synth
+                       && d.document->arrangement.patterns[0].notes[0].size() == 1 && d.document->arrangement.patterns[0].notes[0][0].startTick == 480
+                       && d.document->arrangement.patterns[0].notes[0][0].lengthTicks == 240 && d.document->arrangement.patternTicks == 1920,
+                   "its generator plays on a default synth, the automation channel is left out, 96 PPQ becomes 480");
+            check (d.warnings.size() >= 2, "and that is reported");
+        }
+    }
+
+    // Damaged files are refused, never read past their end.
+    {
+        check (! fl::parse (std::vector<std::uint8_t> {}).song.has_value(), "an empty file is refused");
+        check (! fl::parse (std::vector<std::uint8_t> (40, 0)).song.has_value(), "a file that is not a .flp is refused");
+        auto cut = exported.bytes;
+        cut.resize (cut.size() - 10);
+        check (! fl::parse (cut).song.has_value() && ! fl::parse (cut).error.empty(), "a file cut short is refused with a reason");
+        auto wrongPpq = exported.bytes;
+        wrongPpq[12] = 7;
+        check (! fl::parse (wrongPpq).song.has_value(), "an impossible timebase is refused");
+        auto score = exported.bytes;
+        score[8] = 1;
+        check (! fl::parse (score).song.has_value(), "a file that is not a song (a score, a preset) is refused");
+        // Random damage: thousands of mutated files never crash and never read out of bounds.
+        std::uint32_t seed = 12345;
+        const auto next = [&seed] { seed = seed * 1664525u + 1013904223u; return seed >> 8; };
+        int opened = 0;
+        for (int round = 0; round < 3000; ++round)
+        {
+            auto bytes = exported.bytes;
+            const int changes = 1 + static_cast<int> (next() % 8);
+            for (int k = 0; k < changes; ++k)
+                bytes[22 + next() % (bytes.size() - 22)] = static_cast<std::uint8_t> (next());
+            if (next() % 4 == 0)
+                bytes.resize (22 + next() % (bytes.size() - 22));
+            const auto r = fl::parse (bytes);
+            if (r.song.has_value())
+            {
+                ++opened;
+                (void) sls::projectFromFlp (*r.song);
+            }
+        }
+        std::cout << "  (" << opened << " of 3000 damaged files still opened)\n";
+        check (opened > 0, "3000 randomly damaged files: read or refused, never a crash");
     }
 }
 
@@ -9619,6 +9790,7 @@ int main()
     testStepSequencer();
     testTypingKeyboard();
     testPlaylistLayering();
+    testFlpFiles();
     testAudioImport();
     testInputRecorder();
     testMidiNotes();

@@ -1,6 +1,8 @@
 // Part of MainComponent: project files, recent projects, the File menu.
 #include "ui/MainComponent.h"
 
+#include "library/FlpProject.h"
+
 #include "ui/AssignTrackDialog.h"
 #include "ui/AudioSettings.h"
 #include "ui/MetronomePanel.h"
@@ -413,6 +415,9 @@ void MainComponent::showFileMenu()
     menu.addItem (item (6, "Import audio or video into the playlist...", ""));
     menu.addItem (item (8, "Import a MIDI file into patterns...", ""));
     menu.addSeparator();
+    menu.addItem (item (12, "Open an FL Studio project (.flp)...", ""));
+    menu.addItem (item (13, "Export as FL Studio project (.flp)...", ""));
+    menu.addSeparator();
 
     // Export: the same render the engine plays, written as the chosen file type. MP3 and AAC are encoded by ffmpeg.
     const bool haveFfmpeg = findFfmpeg().existsAsFile();
@@ -450,6 +455,8 @@ void MainComponent::showFileMenu()
                                 case 8: safe->chooseMidiToImport(); break;
                                 case 9: safe->undoEdit(); break;
                                 case 11: safe->exportProjectFolder(); break;
+                                case 12: safe->openFlpProject(); break;
+                                case 13: safe->exportFlpProject(); break;
                                 case 10: safe->redoEdit(); break;
                                 case 7:
                                     if (safe->settings != nullptr)
@@ -473,4 +480,74 @@ void MainComponent::showFileMenu()
                             }
                         });
 }
+// FL Studio projects (0.34.0). A .flp opens as a new, untitled project: saving it writes a .slp (the program's own format) and
+// never touches the .flp. Exporting writes a .flp next to nothing else; what cannot be carried over is listed afterwards.
+void MainComponent::openFlpProject()
+{
+    confirmDiscardChanges ([safe = juce::Component::SafePointer<MainComponent> (this)]
+    {
+        if (safe == nullptr)
+            return;
+        safe->library.ensureExists();
+        safe->fileChooser = std::make_unique<juce::FileChooser> ("Open an FL Studio project", safe->library.projects, "*.flp");
+        safe->fileChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+                                        [safe] (const juce::FileChooser& chooser)
+        {
+            if (safe == nullptr || chooser.getResult() == juce::File())
+                return;
+            const auto file = chooser.getResult();
+            auto imported = importFlpFile (file);
+            if (! imported.document.has_value())
+            {
+                juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Could not open " + file.getFileName(),
+                                                        juce::String (imported.error));
+                return;
+            }
+            juce::StringArray problems;
+            for (const auto& w : imported.warnings)
+                problems.add (juce::String (w));
+            safe->applyDocument (std::move (*imported.document), juce::File(), problems);
+            safe->statusLabel.setText ("Opened " + file.getFileName() + " as a new project (Save writes a " + juce::String (kProjectExtension) + " file)",
+                                       juce::dontSendNotification);
+            const auto shown = juce::StringArray (problems.strings.begin(), juce::jmin (problems.size(), 8));
+            juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::InfoIcon, "Opened " + file.getFileName(),
+                                                    shown.joinIntoString ("\n")
+                                                        + (problems.size() > 8 ? "\n... and " + juce::String (problems.size() - 8) + " more" : juce::String()));
+        });
+    });
+}
+
+void MainComponent::exportFlpProject()
+{
+    library.ensureExists();
+    const auto start = currentProjectFile != juce::File() ? currentProjectFile.withFileExtension (".flp")
+                                                         : library.projects.getChildFile ("Untitled.flp");
+    fileChooser = std::make_unique<juce::FileChooser> ("Export as FL Studio project", start, "*.flp");
+    fileChooser->launchAsync (juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles
+                                  | juce::FileBrowserComponent::warnAboutOverwriting,
+                              [safe = juce::Component::SafePointer<MainComponent> (this)] (const juce::FileChooser& chooser)
+    {
+        if (safe == nullptr || chooser.getResult() == juce::File())
+            return;
+        const auto file = chooser.getResult().withFileExtension (".flp");
+        const auto exported = projectToFlp (safe->makeDocument (false));
+        juce::TemporaryFile temp (file);
+        const bool ok = temp.getFile().replaceWithData (exported.bytes.data(), exported.bytes.size()) && temp.overwriteTargetFileWithTemporary();
+        if (! ok)
+        {
+            juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Export as FL Studio project",
+                                                    "Could not write " + file.getFullPathName());
+            return;
+        }
+        safe->statusLabel.setText ("Exported " + file.getFileName(), juce::dontSendNotification);
+        juce::StringArray notes;
+        for (const auto& w : exported.warnings)
+            notes.add (juce::String (w));
+        juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::InfoIcon, "Exported " + file.getFileName(),
+                                                notes.joinIntoString ("\n")
+                                                    + "\n\nThe file follows FL Studio 20.8's layout; it was checked with an independent reader, "
+                                                      "not with FL Studio itself.");
+    });
+}
+
 } // namespace sls

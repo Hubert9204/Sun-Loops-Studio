@@ -297,6 +297,11 @@ voices -> channel (smoothed gain, equal-power pan, channel mute/solo)
   is active in the audio callback and the feedback loops flush tiny values.
 - The piano roll's loop region (0.20.0) lives in `Pattern::loopStartTick / loopEndTick`; in Pattern mode `publishProject` copies the current
   pattern's region into the snapshot's `loopStartTick / loopEndTick`, which the `Player` already handles for the playlist's region.
+- FL Studio projects (0.34.0): `src/library/FlpFile.{h,cpp}` (JUCE-free) reads and writes the event list of a .flp into a small
+  `flp::Song` (channels, patterns with 24-byte notes, the first arrangement's 32/60-byte playlist items, tracks);
+  `src/library/FlpProject.{h,cpp}` turns a `Song` into a `ProjectDocument` (then opened like a saved project, untitled) and a
+  `ProjectDocument` into a `Song` (step repeats written out with `steps::playedNotes`, one item per pattern repeat, audio clips as
+  channels of type 4 with their file). The program's own format stays .slp.
 - Playlist tracks (0.33.0): `Arrangement::playlistTracks` holds a name and an ARGB colour per track (written to the project only
   when set, under `playlistTracks`), part of the playlist's undo snapshots. Overlap is allowed: the placement checks only test the
   timeline, and `clipAt` / `audioClipAt` search from the end so the top clip wins.
