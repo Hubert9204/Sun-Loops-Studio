@@ -27,6 +27,13 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.47.0
+The new automation kinds index the two aux buses and VCA groups by `slot`, checked against the counts before use (a
+`static_assert` keeps the counts equal to Project's). The Player's send levels per track live in a preallocated member array; a VCA
+change recomputes the members' gains in the same chunk. The count-in is counted by the audio thread (no locks): the message thread
+only stores a request or a cancel flag. Loop-take fields of a clip are read from the file clamped to 0 - 10^6 seconds, and a take is
+chosen only inside the file's length.
+
 ## After 0.46.0
 Tempo markers come from the file as data: `tidyTempoMarkers` drops markers at or before tick 0 or with a non-finite tempo,
 clamps tempos to 20-400 BPM and keeps at most 256, so the Player's per-chunk lookup is bounded; it allocates nothing (the

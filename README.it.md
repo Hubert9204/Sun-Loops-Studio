@@ -14,7 +14,7 @@ strumento sta in un pannello mobile che puoi spostare, ridimensionare, sovrappor
 Sun Loops Studio si ispira al modo di lavorare dei DAW a loop come FL Studio. È un progetto indipendente: non usa
 codice, nomi, grafica o risorse di altri prodotti e non è affiliato né approvato dai loro produttori.
 
-**Stato: alpha (0.46.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
+**Stato: alpha (0.47.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
 La riproduzione è stata confermata su un vero PC Nobara per la versione 0.3; tutto ciò che è stato aggiunto dopo
 (pannelli, pattern, playlist, browser, pitch/swing, mixer espanso ed effetti, salvataggio dei progetti, AppImage, clip audio, trascinamento
 dei file, registrazione, MIDI, metronomo e formati di esportazione) è stato provato con test automatici e in un display virtuale con un
@@ -59,7 +59,7 @@ plugin commerciali. Vedi [docs/roadmap.md](docs/roadmap.md) per sapere con preci
   con la lettura del tempo sotto il mouse permettono di lavorare con precisione su una registrazione. AAC e l'audio dei video richiedono `ffmpeg` installato.
 - **Registrazione** - il pulsante **Record** registra un microfono o uno strumento nella traccia di playlist che scegli,
   a tempo con il brano; **dalla 0.36.0** più tracce insieme, ognuna dal proprio ingresso (mono o una coppia stereo), e dal
-  marcatore di inizio (punch-in). Le **tastiere MIDI** suonano il canale selezionato e **Rec notes** scrive nel piano roll (quantizzato) ciò che suonano, per
+  marcatore di inizio (punch-in); **dalla 0.47.0** con count-in, una take per ogni passaggio di una regione di loop, o punch-out. Le **tastiere MIDI** suonano il canale selezionato e **Rec notes** scrive nel piano roll (quantizzato) ciò che suonano, per
   fare pattern; una registrazione può anche diventare un nuovo canale sampler. Si imposta in **Audio...**.
 - **Suoni incorporati** (0.22.0) - un **pianoforte a coda** campionato (Salamander, 4 livelli di velocity), un **basso elettrico**
   campionato (Growlybass, 4 livelli di velocity, più una versione staccato), due **kit di batteria acustica** campionati (dalle
@@ -91,6 +91,7 @@ plugin commerciali. Vedi [docs/roadmap.md](docs/roadmap.md) per sapere con preci
   corsie sotto le tracce della playlist e hanno un editor dei punti (linee lineari / a gradino / morbide). Solo in modalità Song.
   **Dalla 0.35.0** anche i parametri dei plugin VST3 / LV2 / LADSPA, scelti da un elenco filtrabile con quello mosso per ultimo nella
   finestra del plugin già selezionato.
+  **Dalla 0.47.0** anche send, bus aux e gruppi VCA, e i controlli si muovono con la loro automazione mentre il brano suona.
 - **Stretch e pitch** - tasto destro su una clip audio: allungala o accorciala senza cambiarne l'intonazione, trasponila senza cambiarne la lunghezza,
   o adatta un loop al tempo del progetto (Signalsmith Stretch).
 - **Sampler e SoundFont** - inviluppo (ADSR), loop, filtro passa-basso / passa-alto / passa-banda e nota di base per ogni canale sampler; i preset

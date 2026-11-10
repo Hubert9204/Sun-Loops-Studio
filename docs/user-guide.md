@@ -848,13 +848,21 @@ The arrow next to Record also has:
   roll).
 - **The takes start**: *At the start of the song* (the song is rewound), or *Where the song is (punch in)*: from the playlist's
   start marker, or from where the song is playing if it already is. The takes are placed where they started.
+- **Count-in** (0.47.0): *None*, *1 bar* or *2 bars* of metronome (in the time signature, at the starting tempo) before the song
+  and the takes start; the metronome need not be on. The status line says *Count-in...*; Record or Stop cancels it.
+- **With a loop region in Song mode** (0.47.0):
+  - *Keep recording: every pass is a take* (the default): the song goes round the region and the recording goes on. At the end
+    the clip covers the region and plays the **last whole pass**; right-click it > **Take** chooses another (*Take 1*, *Take 2*...).
+    A pass counts when the whole region was recorded in it (the first one only if the take started at or before the region).
+  - *Stop at the end of the region (punch out)*: the take stops when the song jumps back, and its clip ends exactly at the end of
+    the region.
 - *Hear the input while recording* (use headphones: with speakers and a microphone it feeds back; this monitoring adds the
   device's latency, and it plays inputs 1 and 2 only).
 
 All the takes start in the same audio block, so they line up with each other, and they are shifted by the round-trip latency
-that the audio device reports so that they line up with what was playing. A take stops by itself at the end of the playlist,
-after 5 minutes, or when the song jumps back (a loop region: what comes after would no longer line up). There is no count-in
-yet (switch the **Metronome** on to play in time). An input the device does not have is reported and nothing is recorded.
+that the audio device reports so that they line up with what was playing. A take stops by itself at the end of the playlist
+(with loop takes: after 5 minutes), or at the end of the loop region with *punch out*. An input the device does not have is
+reported and nothing is recorded.
 
 ### MIDI keyboards and other devices
 
@@ -929,10 +937,16 @@ Automation makes a control move by itself while the song plays. It works on:
 - a track's **fader** and **balance** (Mixer);
 - every **parameter of an effect** in a track slot or in a master slot (the sliders of the effects panel);
 - every **parameter of a plugin** (VST3, LV2, LADSPA): of a plugin instrument in the Channel Rack and of a plugin effect in a track or
-  master slot (since 0.35.0, see *Plugin parameters* below).
+  master slot (since 0.35.0, see *Plugin parameters* below);
+- since 0.47.0: a track's **sends** to Aux A and Aux B (the small A / B sliders), an aux bus's **fader** and **balance**, and a
+  **VCA group's** fader.
 
-**Not automatable yet:** the pitch and swing knobs, the master volume, mute and solo, the sends, the aux buses and VCA groups
-(including the parameters of effects on an aux bus), and anything else.
+While the song plays in Song mode, the controls that have automation **move with it** (0.47.0): the faders, balance and send
+sliders of the Mixer and the volume and pan of the Channel Rack. When the song stops they show their own values again (the
+automation never changes them). Touching a control while it moves sets its own value, as usual.
+
+**Not automatable yet:** the pitch and swing knobs, the master volume, mute and solo, the parameters of effects on an aux bus,
+the tempo (use tempo changes, 0.46.0) and anything else.
 
 **Create a clip.** Right-click the control and choose *Create automation clip*. A clip one pattern long appears on one of the four
 **automation lanes** (*Auto 1-4*, under the tracks of the Playlist) and its editor opens. The clip is a flat line at the
@@ -1195,6 +1209,6 @@ a heavier song or a plugin-heavy mixer can still need a bigger size.
   velocity; the LFO is restarted with every note. The FM engine has four operators, sine waves only, no filter, and its matrix is evaluated
   with a delay of one sample (as in most matrix FM synths).
 - Plugins: VST3, LV2 and LADSPA (no VST2, no Audio Units); stereo in and out (extra outputs and side-chain inputs are not used); their parameters
-  cannot be automated; edits made in a plugin's window are saved with the project but are not in the undo history.
-- Not available yet: time-stretching of samples in the Sampler (only audio clips on the playlist can be stretched), automation of anything except volumes, pans, effect and plugin parameters, turning guitar or voice pitch into notes,
-  punch-in and count-in for recording, fades and per-clip effects. See [roadmap.md](roadmap.md).
+  can be automated (0.35.0); edits made in a plugin's window are saved with the project but are not in the undo history.
+- Not available yet: time-stretching of samples in the Sampler (only audio clips on the playlist can be stretched), automation of the pitch, swing,
+  master volume, mute and solo, per-clip effects. See [roadmap.md](roadmap.md).

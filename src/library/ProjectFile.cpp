@@ -26,6 +26,10 @@ const char* automationKindName (AutomationKind k)
         case AutomationKind::ChannelPlugin: return "channelPlugin";
         case AutomationKind::TrackPlugin:   return "trackPlugin";
         case AutomationKind::MasterPlugin:  return "masterPlugin";
+        case AutomationKind::TrackSend:     return "trackSend";
+        case AutomationKind::AuxVolume:     return "auxVolume";
+        case AutomationKind::AuxPan:        return "auxPan";
+        case AutomationKind::VcaLevel:      return "vcaLevel";
     }
     return "trackVolume";
 }
@@ -396,6 +400,11 @@ juce::String ProjectDocument::toJson() const
             o->setProperty ("fadeIn", a.fadeInSeconds);
         if (a.fadeOutSeconds > 0.0)
             o->setProperty ("fadeOut", a.fadeOutSeconds);
+        if (a.takeSeconds > 0.0)
+        {
+            o->setProperty ("takeFirstSeconds", a.takeFirstSeconds);
+            o->setProperty ("takeSeconds", a.takeSeconds);
+        }
         if (! a.stretch.isNeutral())
         {
             // Only the settings: the audio is stretched again when the project is opened.
@@ -786,6 +795,8 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
                 clip.reverse = readBool (o->getProperty ("reverse"), false);
                 clip.fadeInSeconds = readNumber (o->getProperty ("fadeIn"), 0.0, 0.0, 3600.0);
                 clip.fadeOutSeconds = readNumber (o->getProperty ("fadeOut"), 0.0, 0.0, 3600.0);
+                clip.takeFirstSeconds = readNumber (o->getProperty ("takeFirstSeconds"), 0.0, 0.0, 1.0e6); // 0.47.0
+                clip.takeSeconds = readNumber (o->getProperty ("takeSeconds"), 0.0, 0.0, 1.0e6);
                 if (auto* st = o->getProperty ("stretch").getDynamicObject())
                 {
                     clip.stretch.lengthRatio = readNumber (st->getProperty ("lengthRatio"), 1.0, kMinStretchRatio, kMaxStretchRatio);

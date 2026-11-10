@@ -179,6 +179,15 @@ void MainComponent::openRecordMenu()
     menu.addItem (50, "At the start of the song", ! recording, ! recordFromPlayhead);
     menu.addItem (51, "Where the song is (punch in)", ! recording, recordFromPlayhead);
     menu.addSeparator();
+    menu.addSectionHeader ("Count-in (the metronome first)");
+    menu.addItem (60, "None", ! recording, countInBars == 0);
+    menu.addItem (61, "1 bar", ! recording, countInBars == 1);
+    menu.addItem (62, "2 bars", ! recording, countInBars == 2);
+    menu.addSeparator();
+    menu.addSectionHeader ("With a loop region in Song mode");
+    menu.addItem (65, "Keep recording: every pass is a take", ! recording, recordLoopTakes);
+    menu.addItem (66, "Stop at the end of the region (punch out)", ! recording, ! recordLoopTakes);
+    menu.addSeparator();
     menu.addItem (32, "Hear the input while recording (use headphones)", true, monitorInput);
     menu.addItem (33, "Audio and MIDI devices...");
 
@@ -216,6 +225,24 @@ void MainComponent::openRecordMenu()
                                 if (safe->settings != nullptr)
                                 {
                                     safe->settings->setValue ("record.fromPlayhead", safe->recordFromPlayhead);
+                                    safe->settings->saveIfNeeded();
+                                }
+                            }
+                            else if (result >= 60 && result <= 62)
+                            {
+                                safe->countInBars = result - 60;
+                                if (safe->settings != nullptr)
+                                {
+                                    safe->settings->setValue ("record.countInBars", safe->countInBars);
+                                    safe->settings->saveIfNeeded();
+                                }
+                            }
+                            else if (result == 65 || result == 66)
+                            {
+                                safe->recordLoopTakes = result == 65;
+                                if (safe->settings != nullptr)
+                                {
+                                    safe->settings->setValue ("record.loopTakes", safe->recordLoopTakes);
                                     safe->settings->saveIfNeeded();
                                 }
                             }
@@ -284,7 +311,14 @@ void MainComponent::startRecording()
         setSongMode (true); // the playlist is what plays while recording, and the takes are part of it
     engine.setInputMonitoring (monitorInput);
 
-    if (const auto error = engine.startRecording (streams, ! recordFromPlayhead); error.isNotEmpty())
+    // The loop region the song will go round while recording (Song mode only).
+    const bool loops = recordTarget == RecordTarget::PlaylistTrack && arrangement.hasLoop() && from < arrangement.loopEndTick;
+    recordLoopStart = loops ? arrangement.loopStartTick : -1;
+    recordLoopEnd = loops ? arrangement.loopEndTick : -1;
+    punchedOut = false;
+
+    const int countInBeats = countInBars * arrangement.meter.beats;
+    if (const auto error = engine.startRecording (streams, ! recordFromPlayhead, countInBeats); error.isNotEmpty())
     {
         fail (error);
         return;
@@ -300,6 +334,13 @@ void MainComponent::startRecording()
 
 void MainComponent::showRecordProgress()
 {
+    if (engine.isCountingIn())
+    {
+        statusLabel.setText ("Count-in: the take starts after " + juce::String (countInBars) + (countInBars == 1 ? " bar" : " bars")
+                                 + " of metronome...",
+                             juce::dontSendNotification);
+        return;
+    }
     const double seconds = engine.getRecordedSeconds();
     const int whole = static_cast<int> (seconds);
     float loudest = 0.0f;
@@ -325,11 +366,19 @@ void MainComponent::showRecordProgress()
     const double bpm = std::max (1.0, bpmSlider.getValue());
     const double start = engine.getRecordStartTick();
     const double startTick = std::max (0.0, start);
-    const double limit = std::min (kMaxImportSeconds, (arrangement.timelineTicks() - startTick) * 60.0 / (bpm * kTicksPerBeat));
+    const auto& tempos = arrangement.tempoMarkers;
+    const bool loopTakes = recordLoopTakes && recordLoopEnd > recordLoopStart;
+    const double startSeconds = tickToSeconds (tempos, bpm, startTick);
+    const double limit = loopTakes ? kMaxImportSeconds
+                                   : std::min (kMaxImportSeconds, tickToSeconds (tempos, bpm, arrangement.timelineTicks()) - startSeconds);
     if (seconds >= limit)
-        finishRecording ("The takes reached the end of the playlist.");
-    else if (start >= 0.0 && engine.getPlayheadTick() + kTicksPerBeat < startTick + seconds * bpm / 60.0 * kTicksPerBeat)
-        finishRecording ("The song jumped back (a loop region?), so the takes stop there.");
+        finishRecording (loopTakes ? "The takes reached the longest recording kept in memory." : "The takes reached the end of the playlist.");
+    else if (! loopTakes && start >= 0.0 && engine.getPlayheadTick() + kTicksPerBeat < secondsToTick (tempos, bpm, startSeconds + seconds))
+    {
+        punchedOut = recordLoopEnd > recordLoopStart;
+        finishRecording (punchedOut ? "Punch out: the take stopped at the end of the loop region."
+                                    : "The song jumped back, so the takes stop there.");
+    }
 }
 
 void MainComponent::finishRecording (const juce::String& why)
@@ -349,6 +398,7 @@ void MainComponent::finishRecording (const juce::String& why)
     bool dropped = false;
     bool changedPlaylist = false;
     int firstNewChannel = -1;
+    juce::String takesNote;
 
     for (size_t i = 0; i < takes.size() && i < recordingTracks.size(); ++i)
     {
@@ -400,6 +450,25 @@ void MainComponent::finishRecording (const juce::String& why)
         clip.startTick = startTick;
         const int natural = clip.naturalLengthTicks (bpmSlider.getValue());
         clip.lengthTicks = arrangement.maxAudioLengthAt (track, startTick, natural);
+        if (recordLoopEnd > recordLoopStart && startTick < recordLoopEnd)
+        {
+            // 0.47.0: the song went round the loop region. With takes: the clip covers the region and plays the last whole pass;
+            // its menu chooses another. Otherwise (punch out, or no whole pass) it ends where the region ends.
+            const auto passes = loopTakesOf (arrangement.tempoMarkers, bpmSlider.getValue(), startTick, recordLoopStart, recordLoopEnd,
+                                             static_cast<double> (data->numFrames()) / data->sampleRate);
+            if (recordLoopTakes && passes.complete >= 1 && (passes.complete >= 2 || startTick <= recordLoopStart))
+            {
+                clip.startTick = recordLoopStart;
+                clip.takeFirstSeconds = passes.firstSeconds;
+                clip.takeSeconds = passes.passSeconds;
+                clip.offsetSeconds = passes.firstSeconds + (passes.complete - 1) * passes.passSeconds;
+                clip.lengthTicks = arrangement.maxAudioLengthAt (track, recordLoopStart, recordLoopEnd - recordLoopStart);
+                if (passes.complete > 1)
+                    takesNote = juce::String (passes.complete) + " takes of the loop region (the last one plays): right-click a clip, Take, to choose another";
+            }
+            else
+                clip.lengthTicks = std::min (clip.lengthTicks, recordLoopEnd - startTick);
+        }
         juce::String note;
         if (clip.lengthTicks >= 1 && arrangement.audioClips.size() < static_cast<size_t> (kMaxAudioClips))
         {
@@ -427,6 +496,8 @@ void MainComponent::finishRecording (const juce::String& why)
     }
     if (why.isNotEmpty())
         status += ". " + why;
+    if (takesNote.isNotEmpty())
+        status += ". " + takesNote;
     if (dropped)
         status += " Warning: some audio was lost because the disk was too slow.";
     if (! problems.isEmpty())

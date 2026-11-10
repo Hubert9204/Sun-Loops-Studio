@@ -2,6 +2,26 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.47.0 - 2026-11-10
+
+### Added
+- **More automation targets**: a track's sends to Aux A / B (right-click the small A / B sliders), an aux bus's fader and balance,
+  and a VCA group's fader.
+- **Controls follow automation**: while the song plays in Song mode, automated faders, balance and send sliders in the Mixer and
+  volume / pan in the Channel Rack move with their automation; they show their own values again when it stops.
+- **Count-in**: *Record* arrow > Count-in: none, 1 or 2 bars of metronome before the song and the takes start (sample-accurate,
+  in the time signature).
+- **Loop recording with takes**: with a loop region, the recording goes on round the region; the clip plays the last whole pass
+  and its menu (*Take*) chooses another. Or, from the same menu, **punch out**: the take stops at the end of the region and its
+  clip ends exactly there.
+
+### Changed
+- A SoundFont is read on its own thread: the window keeps responding while a large .sf2 loads ("Loading ..." in the status line).
+
+### Fixed
+- The check that stops a take when the song jumps back now follows tempo changes.
+- Documentation: stale limits (plugin parameters, fades, punch-in) corrected; the roadmap's order of work rewritten.
+
 ## 0.46.0 - 2026-11-10
 
 ### Added

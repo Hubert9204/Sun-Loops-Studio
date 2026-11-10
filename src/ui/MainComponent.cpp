@@ -578,6 +578,8 @@ MainComponent::MainComponent()
             recordSetup.tracks[static_cast<size_t> (oldTrack)].stereo = settings->getBoolValue ("record.stereo", false);
         }
         recordFromPlayhead = settings->getBoolValue ("record.fromPlayhead", false);
+        countInBars = std::clamp (settings->getIntValue ("record.countInBars", 0), 0, 2);
+        recordLoopTakes = settings->getBoolValue ("record.loopTakes", true);
         monitorInput = settings->getBoolValue ("record.monitor", false);
         metronomeOn = settings->getBoolValue ("metronome.on", false);
         typingOn = settings->getBoolValue ("typing.on", true);
@@ -863,6 +865,7 @@ void MainComponent::timerCallback()
                 markDirty();
     }
 
+    followAutomation();
     const float masterPeak = engine.consumePeak();
     meter.setLevel (masterPeak);
 
@@ -1176,6 +1179,7 @@ void MainComponent::publishProject()
     for (auto& strip : strips)
         strip->repaintGrid(); // the notes may have changed from somewhere else (drum machine, recording, undo): squares follow
     auto project = std::make_unique<Project> (compileCurrent());
+    followEvents = songMode ? project->automation : std::vector<AutomationEvent> {};
     if (! songMode && currentPattern >= 0 && currentPattern < static_cast<int> (arrangement.patterns.size()))
     {
         // The piano roll's loop region of this pattern (0.20.0); a pattern made shorter loses a region that no longer fits.
@@ -1328,7 +1332,8 @@ void MainComponent::removeLastMixerTrack()
             reason = "it has effects";
     for (const auto& a : arrangement.automationClips)
         if (reason.isEmpty() && (a.target.kind == AutomationKind::TrackVolume || a.target.kind == AutomationKind::TrackPan
-                                 || a.target.kind == AutomationKind::TrackEffect || a.target.kind == AutomationKind::TrackPlugin)
+                                 || a.target.kind == AutomationKind::TrackEffect || a.target.kind == AutomationKind::TrackPlugin
+                                 || a.target.kind == AutomationKind::TrackSend)
             && a.target.index == last)
             reason = "an automation clip controls it";
     if (reason.isNotEmpty())

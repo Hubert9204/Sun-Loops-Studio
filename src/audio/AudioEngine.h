@@ -100,7 +100,10 @@ public:
         InputRecorder::Channels channels = InputRecorder::Channels::Mono;
     };
     static constexpr int kMaxRecordStreams = 8;
-    juce::String startRecording (const std::vector<RecordStream>& streams, bool fromSongStart);
+    // `countInBeats` (0.47.0): the metronome counts that many beats first (with the transport stopped), then the song and the
+    // takes start together, on the beat after the last click. stopRecording() during the count-in cancels it.
+    juce::String startRecording (const std::vector<RecordStream>& streams, bool fromSongStart, int countInBeats = 0);
+    bool isCountingIn() const noexcept { return countingIn.load (std::memory_order_relaxed); }
     std::vector<InputRecorder::Take> stopRecording(); // in the order of the streams; the transport keeps running
     bool isRecording() const noexcept { return captureGate.load (std::memory_order_relaxed); }
     double getRecordedSeconds() const noexcept { return recorders[0].getSecondsRecorded(); }
@@ -248,6 +251,11 @@ private:
     std::atomic<bool> captureFromStart { true };  // rewind the song when the take starts
     std::atomic<double> recordStartTick { -1.0 };
     bool captureStarted = false; // audio thread only: the take has started (and the song was rewound for it if asked)
+    // Count-in (0.47.0): beats asked for by startRecording, a cancel from stopRecording, and the audio thread's own countdown.
+    std::atomic<int> countInRequest { 0 };
+    std::atomic<bool> countInCancel { false };
+    std::atomic<bool> countingIn { false };
+    long long countInLeft = 0; // audio thread only: samples of count-in still to play
     Auditioner audition;                            // preview of one sample; hand-over rules in Auditioner.h
     OneShot startup;                                // set before the device starts; played by the audio thread only
     std::atomic<bool> startupTrigger { false };

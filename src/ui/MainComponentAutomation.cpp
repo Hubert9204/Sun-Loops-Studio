@@ -47,7 +47,11 @@ std::shared_ptr<HostedPlugin> MainComponent::pluginFor (const AutomationTarget& 
         case AutomationKind::TrackVolume:
         case AutomationKind::TrackPan:
         case AutomationKind::TrackEffect:
-        case AutomationKind::MasterEffect: break;
+        case AutomationKind::MasterEffect:
+        case AutomationKind::TrackSend:
+        case AutomationKind::AuxVolume:
+        case AutomationKind::AuxPan:
+        case AutomationKind::VcaLevel: break;
     }
     return nullptr;
 }
@@ -77,6 +81,13 @@ float MainComponent::currentValueOf (const AutomationTarget& t) const
         case AutomationKind::ChannelPlugin:
         case AutomationKind::TrackPlugin:
         case AutomationKind::MasterPlugin: break; // handled above
+        case AutomationKind::TrackSend:
+            if (at (tracks, t.index) && t.slot >= 0 && t.slot < kAuxBuses)
+                return tracks[static_cast<size_t> (t.index)].sends[static_cast<size_t> (t.slot)];
+            break;
+        case AutomationKind::AuxVolume: if (t.slot >= 0 && t.slot < kAuxBuses) return console.aux[static_cast<size_t> (t.slot)].volume; break;
+        case AutomationKind::AuxPan:    if (t.slot >= 0 && t.slot < kAuxBuses) return console.aux[static_cast<size_t> (t.slot)].pan; break;
+        case AutomationKind::VcaLevel:  if (t.slot >= 0 && t.slot < kVcaGroups) return console.vcaLevel[static_cast<size_t> (t.slot)]; break;
     }
     return automationRange (t, effectTypeFor (t)).def;
 }
@@ -88,12 +99,21 @@ juce::String MainComponent::automationLabelFor (const AutomationTarget& t) const
         return i >= 0 && i < static_cast<int> (channels.size()) ? juce::String (channels[static_cast<size_t> (i)].name)
                                                                 : "Channel " + juce::String (i + 1);
     };
+    const auto auxName = [this] (int a)
+    {
+        return a >= 0 && a < kAuxBuses && ! console.aux[static_cast<size_t> (a)].name.empty() ? juce::String (console.aux[static_cast<size_t> (a)].name)
+                                                                                                : "Aux " + juce::String::charToString (static_cast<juce::juce_wchar> ('A' + std::max (0, a)));
+    };
     switch (t.kind)
     {
         case AutomationKind::ChannelVolume: return channelName (t.index) + " volume";
         case AutomationKind::ChannelPan:    return channelName (t.index) + " pan";
         case AutomationKind::TrackVolume:   return "Track " + juce::String (t.index + 1) + " volume";
         case AutomationKind::TrackPan:      return "Track " + juce::String (t.index + 1) + " balance";
+        case AutomationKind::TrackSend:     return "Track " + juce::String (t.index + 1) + " send to " + auxName (t.slot);
+        case AutomationKind::AuxVolume:     return auxName (t.slot) + " volume";
+        case AutomationKind::AuxPan:        return auxName (t.slot) + " balance";
+        case AutomationKind::VcaLevel:      return "VCA " + juce::String (t.slot + 1) + " level";
         case AutomationKind::TrackEffect:
         {
             const auto type = effectTypeFor (t);
@@ -129,9 +149,13 @@ juce::String MainComponent::automationValueText (const AutomationTarget& t, floa
     switch (t.kind)
     {
         case AutomationKind::ChannelVolume:
-        case AutomationKind::TrackVolume:   return MixerStrip::volumeToText (v);
+        case AutomationKind::TrackVolume:
+        case AutomationKind::TrackSend:
+        case AutomationKind::AuxVolume:
+        case AutomationKind::VcaLevel:      return MixerStrip::volumeToText (v);
         case AutomationKind::ChannelPan:
-        case AutomationKind::TrackPan:      return MixerStrip::panToText (v);
+        case AutomationKind::TrackPan:
+        case AutomationKind::AuxPan:        return MixerStrip::panToText (v);
         case AutomationKind::TrackEffect:
         case AutomationKind::MasterEffect:
         {
@@ -264,4 +288,43 @@ void MainComponent::openAutomationEditor (int clipIndex)
     automationWindow->toFront (true);
     automationWindow->editor().refresh();
 }
+// While the song plays, the faders, knobs and send sliders that have automation move with it; when it stops they show the
+// project's own values again (the automation never changes them).
+void MainComponent::followAutomation()
+{
+    if (! (songMode && engine.isPlaying() && ! followEvents.empty()))
+    {
+        if (followingAutomation)
+        {
+            followingAutomation = false;
+            mixerPanel.refreshControls();
+            for (auto& strip : strips)
+                strip->refreshFromChannel();
+        }
+        return;
+    }
+    followingAutomation = true;
+    const double tick = engine.getPlayheadTick();
+    for (size_t first = 0; first < followEvents.size();)
+    {
+        const auto target = followEvents[first].target;
+        size_t last = first + 1;
+        while (last < followEvents.size() && followEvents[last].target.key() == target.key())
+            ++last;
+        float v = 0.0f;
+        if (automationValueFor (followEvents, first, last, tick, v))
+        {
+            if (target.kind == AutomationKind::ChannelVolume || target.kind == AutomationKind::ChannelPan)
+            {
+                for (auto& strip : strips)
+                    if (strip->getIndex() == target.index)
+                        strip->showAutomated (target.kind, v);
+            }
+            else
+                mixerPanel.showAutomated (target, v);
+        }
+        first = last;
+    }
+}
+
 } // namespace sls

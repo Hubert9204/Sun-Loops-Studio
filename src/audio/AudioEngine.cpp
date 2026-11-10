@@ -186,7 +186,7 @@ juce::String AudioEngine::enableInputChannels (const std::vector<int>& channels)
     return {};
 }
 
-juce::String AudioEngine::startRecording (const std::vector<RecordStream>& streams, bool fromSongStart)
+juce::String AudioEngine::startRecording (const std::vector<RecordStream>& streams, bool fromSongStart, int countInBeats)
 {
     auto* device = deviceManager.getCurrentAudioDevice();
     if (device == nullptr)
@@ -226,6 +226,15 @@ juce::String AudioEngine::startRecording (const std::vector<RecordStream>& strea
     // second, so it can never record a block of a song that has not started.
     captureFromStart.store (fromSongStart, std::memory_order_seq_cst);
     recordStartTick.store (-1.0, std::memory_order_seq_cst);
+    if (countInBeats > 0)
+    {
+        // The audio thread counts in and then opens the gate itself (see audioDeviceIOCallbackWithContext).
+        countInCancel.store (false, std::memory_order_seq_cst);
+        countingIn.store (true, std::memory_order_seq_cst);
+        playing.store (false, std::memory_order_seq_cst);
+        countInRequest.store (std::min (countInBeats, 64), std::memory_order_seq_cst);
+        return {};
+    }
     playing.store (true, std::memory_order_seq_cst);
     captureGate.store (true, std::memory_order_seq_cst);
     return {};
@@ -234,6 +243,11 @@ juce::String AudioEngine::startRecording (const std::vector<RecordStream>& strea
 std::vector<InputRecorder::Take> AudioEngine::stopRecording()
 {
     // Close the gate first: no recorder gets a block after this one, so the takes end (almost) together.
+    if (countingIn.load (std::memory_order_seq_cst))
+    {
+        countInRequest.store (0, std::memory_order_seq_cst);
+        countInCancel.store (true, std::memory_order_seq_cst);
+    }
     captureGate.store (false, std::memory_order_seq_cst);
     std::vector<InputRecorder::Take> takes;
     for (auto& r : recorders)
@@ -310,6 +324,33 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* in, int 
 
     const Project* project = exchange.acquire();
 
+    // Count-in (0.47.0): the clicks are placed so that the last beat ends exactly at the end of a block; the song and the takes
+    // start with the next block, so the first beat of the take falls where the next click would have been.
+    bool startTakeAfterThisBlock = false;
+    if (countInCancel.exchange (false, std::memory_order_acq_rel))
+    {
+        countInLeft = 0;
+        countingIn.store (false, std::memory_order_relaxed);
+    }
+    if (const int beats = countInRequest.exchange (0, std::memory_order_acq_rel); beats > 0 && numSamples > 0)
+    {
+        const int beatTicks = kTicksPerBeat * 4 / (project->beatUnit == 8 ? 8 : 4);
+        const double perBeat = 60.0 * sampleRateHz / std::max (1.0, bpm.load (std::memory_order_relaxed)) * beatTicks / kTicksPerBeat;
+        const double total = beats * perBeat;
+        const auto blocks = static_cast<long long> (std::ceil (total / numSamples));
+        countInLeft = blocks * numSamples;
+        player.delayFreeClick (static_cast<double> (countInLeft) - total);
+    }
+    if (countInLeft > 0)
+    {
+        countInLeft -= numSamples;
+        if (countInLeft <= 0)
+        {
+            countInLeft = 0;
+            startTakeAfterThisBlock = true;
+        }
+    }
+
     // Recording: the recorder is checked before the transport (see startRecording). The song restarts from the
     // beginning in the very block where the recording starts, so take and song line up.
     const bool recording = captureGate.load (std::memory_order_seq_cst);
@@ -363,8 +404,17 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* in, int 
 
     if (const int seekTo = seekRequest.exchange (-1, std::memory_order_acq_rel); seekTo >= 0)
         player.seek (*project, seekTo, currentBpm);
-    player.setMetronome (metronomeOn.load (std::memory_order_relaxed), metronomeVolume.load (std::memory_order_relaxed));
+    const bool countInNow = countingIn.load (std::memory_order_relaxed);
+    player.setMetronome (metronomeOn.load (std::memory_order_relaxed) || countInNow,
+                         countInNow ? std::max (0.5f, metronomeVolume.load (std::memory_order_relaxed)) : metronomeVolume.load (std::memory_order_relaxed));
     player.render (*project, currentBpm, isPlaying, out, numOut, numSamples);
+    if (startTakeAfterThisBlock)
+    {
+        // Same order as startRecording: the transport, then the gate (the next block starts the take and the song together).
+        playing.store (true, std::memory_order_seq_cst);
+        captureGate.store (true, std::memory_order_seq_cst);
+        countingIn.store (false, std::memory_order_seq_cst);
+    }
     audioClockSeconds += numSamples / sampleRateHz;
     playheadTick.store (static_cast<int> (player.getPositionTicks()), std::memory_order_relaxed);
 

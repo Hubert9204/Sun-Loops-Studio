@@ -253,6 +253,14 @@ ChannelStrip::ChannelStrip (Channel& channelToControl, int channelIndex)
     refreshFromChannel();
 }
 
+void ChannelStrip::showAutomated (AutomationKind kind, float value)
+{
+    if (kind == AutomationKind::ChannelVolume)
+        volumeSlider.setValue (value, juce::dontSendNotification);
+    else if (kind == AutomationKind::ChannelPan)
+        panSlider.setValue (value, juce::dontSendNotification);
+}
+
 void ChannelStrip::refreshFromChannel()
 {
     nameLabel.setText (juce::String (channel.name), juce::dontSendNotification);

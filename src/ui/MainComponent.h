@@ -150,6 +150,10 @@ private:
     // Crash reports, updates and the session log (0.43.0, MainComponentSupport.cpp).
     bool offerCrashReport (std::function<void()> then);
     void showEffectChainMenu (juce::Component& button, MixerTrack& track, int trackIndex); // 0.45.0
+    // Controls that follow automation while the song plays (0.47.0, MainComponentAutomation.cpp).
+    void followAutomation();
+    std::vector<AutomationEvent> followEvents; // the automation of the song as last published
+    bool followingAutomation = false;
     // Time signature and tempo changes (0.46.0, MainComponentTempo.cpp).
     void showMeter();
     void showTempoMenu();
@@ -287,7 +291,10 @@ private:
     void closeSynthSettings();
     void chooseSoundFontFor (int channelIndex);
     void chooseSoundFontPreset (int channelIndex, const juce::File& file);
-    void applySoundFont (int channelIndex, const juce::File& file, int presetIndex);
+    void applySoundFont (int channelIndex, const juce::File& file, int presetIndex); // reads it on another thread (0.47.0)
+    void useSoundFont (int channelIndex, const juce::File& file, std::shared_ptr<const SamplerProgram> program, const juce::String& error,
+                       const SamplerSettings& suggested);
+    bool soundFontLoading = false;
     juce::String slicesToSampler (const std::shared_ptr<const SampleData>& edited, const std::vector<double>& markers, const juce::String& name);
 
     // Patterns and the playlist. The channels' `notes` always hold the notes of the current pattern;
@@ -420,6 +427,11 @@ private:
     bool recording = false;
     RecordSetup recordSetup;                                         // armed playlist tracks and their inputs (0.36.0)
     bool recordFromPlayhead = false;                                 // takes start where the song is (punch in), not at its start
+    // 0.47.0: bars of metronome before the take; with a loop region, keep every pass as a take (else stop at its end: punch out).
+    int countInBars = 0;
+    bool recordLoopTakes = true;
+    int recordLoopStart = -1, recordLoopEnd = -1; // the loop region while recording, or -1
+    bool punchedOut = false;                      // the take stopped at the end of the loop region
     std::vector<int> recordingTracks;                                // the take being recorded: a track per engine stream
     bool monitorInput = false;
     juce::String midiNote;                                           // last status text set for MIDI activity

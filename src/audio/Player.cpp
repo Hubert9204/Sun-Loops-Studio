@@ -1412,8 +1412,9 @@ namespace
 // Sets every automated parameter to its value at song position `tick`. Parameters without a clip that has started are left as
 // they are. Channel and track gains go through `setChannel` / `setTrack` (which know the current volume and pan), effect
 // parameters are written into the slot copies.
-template <typename SetChannel, typename SetTrack>
+template <typename SetChannel, typename SetTrack, typename SetMix>
 void applyAutomation (const Project& project, double tick, size_t numChannels, size_t numTracks, SetChannel& setChannel, SetTrack& setTrack,
+                      SetMix& setMix,
                       const std::array<float, kMaxChannels>& channelVolume, const std::array<float, kMaxChannels>& channelPan,
                       const std::array<float, kMaxTracks>& trackVolume, const std::array<float, kMaxTracks>& trackPan,
                       std::vector<std::array<EffectSlot, kSlotsPerTrack>>& trackSlots,
@@ -1471,6 +1472,16 @@ void applyAutomation (const Project& project, double tick, size_t numChannels, s
                 case AutomationKind::MasterPlugin:
                     if (auto& plugin = masterSlots[static_cast<size_t> (target.slot)].plugin; plugin != nullptr)
                         plugin->setParameter (target.param, v);
+                    break;
+                // Sends, aux buses and VCA groups (0.47.0).
+                case AutomationKind::TrackSend:
+                    if (idx < numTracks)
+                        setMix (target.kind, idx, static_cast<size_t> (target.slot), v);
+                    break;
+                case AutomationKind::AuxVolume:
+                case AutomationKind::AuxPan:
+                case AutomationKind::VcaLevel:
+                    setMix (target.kind, idx, static_cast<size_t> (target.slot), v);
                     break;
             }
         }
@@ -1606,17 +1617,51 @@ void Player::render (const Project& project, double bpm, bool playing,
     }
 
     // Aux buses: fader, balance, mute.
-    std::array<float, kAuxBuses> auxTarget {}, auxBalanceLeft {}, auxBalanceRight {};
-    for (size_t a = 0; a < static_cast<size_t> (kAuxBuses); ++a)
+    std::array<float, kAuxBuses> auxTarget {}, auxBalanceLeft {}, auxBalanceRight {}, auxVolume {}, auxPan {};
+    const auto setAux = [&] (size_t a, float volume, float pan)
     {
-        const auto& bus = project.console.aux[a];
-        auxTarget[a] = bus.mute ? 0.0f : std::clamp (bus.volume, 0.0f, 1.5f);
-        const float p = std::clamp (bus.pan, -1.0f, 1.0f);
+        auxVolume[a] = volume;
+        auxPan[a] = pan;
+        auxTarget[a] = project.console.aux[a].mute ? 0.0f : std::clamp (volume, 0.0f, 1.5f);
+        const float p = std::clamp (pan, -1.0f, 1.0f);
         auxBalanceLeft[a] = p > 0.0f ? 1.0f - p : 1.0f;
         auxBalanceRight[a] = p < 0.0f ? 1.0f + p : 1.0f;
+    };
+    for (size_t a = 0; a < static_cast<size_t> (kAuxBuses); ++a)
+    {
+        setAux (a, project.console.aux[a].volume, project.console.aux[a].pan);
         if (auxGain[a] < 0.0f)
             auxGain[a] = auxTarget[a];
     }
+
+    // What the tracks send to the aux buses (the project's own levels, or what automation says, 0.47.0), and the VCA levels.
+    auto& sendLevel = sendLevelNow;
+    for (size_t t = 0; t < numTracks; ++t)
+        sendLevel[t] = trackAt (t).sends;
+    std::array<float, kVcaGroups> vcaLevel = project.console.vcaLevel;
+    const auto setMix = [&] (AutomationKind kind, size_t index, size_t slot, float v)
+    {
+        if (kind == AutomationKind::TrackSend && slot < static_cast<size_t> (kAuxBuses))
+            sendLevel[index][slot] = std::clamp (v, 0.0f, 1.5f);
+        else if (kind == AutomationKind::AuxVolume && slot < static_cast<size_t> (kAuxBuses))
+            setAux (slot, v, auxPan[slot]);
+        else if (kind == AutomationKind::AuxPan && slot < static_cast<size_t> (kAuxBuses))
+            setAux (slot, auxVolume[slot], v);
+        else if (kind == AutomationKind::VcaLevel && slot < static_cast<size_t> (kVcaGroups) && std::abs (vcaLevel[slot] - v) > 1.0e-6f)
+        {
+            vcaLevel[slot] = v;
+            for (size_t t = 0; t < numTracks; ++t)
+                if ((trackAt (t).vcaMask >> slot) & 1u)
+                {
+                    float level = 1.0f;
+                    for (int g = 0; g < kVcaGroups; ++g)
+                        if ((trackAt (t).vcaMask >> g) & 1u)
+                            level *= project.console.vcaMute[static_cast<size_t> (g)] ? 0.0f : std::clamp (vcaLevel[static_cast<size_t> (g)], 0.0f, 1.5f);
+                    trackVca[t] = level;
+                    setTrack (t, trackVolume[t], trackPan[t]);
+                }
+        }
+    };
 
     // Automation (Song mode): effect parameters are changed in copies of the slots, so the project itself is never touched.
     const bool automated = playing && ! project.automation.empty();
@@ -1657,7 +1702,7 @@ void Player::render (const Project& project, double bpm, bool playing,
         const EffectTransport transport { playing ? tickPos : -1.0, ticksPerSample, heldNotes.data(), kMaxChannels }; // where the song is at this chunk's start
 
         if (automated)
-            applyAutomation (project, tickPos, numMixerChannels, numTracks, setChannel, setTrack, channelVolume, channelPan, trackVolume, trackPan,
+            applyAutomation (project, tickPos, numMixerChannels, numTracks, setChannel, setTrack, setMix, channelVolume, channelPan, trackVolume, trackPan,
                              trackSlotsNow, masterSlotsNow);
 
         for (size_t t = 0; t < numTracks; ++t)
@@ -1677,6 +1722,12 @@ void Player::render (const Project& project, double bpm, bool playing,
         const int meterBeatTicks = kTicksPerBeat * 4 / (project.beatUnit == 8 ? 8 : 4);
         const int meterBeats = std::clamp (project.beatsPerBar, 1, 16);
         const double samplesPerBeat = 60.0 * sampleRate / std::max (bpm, 1.0) * meterBeatTicks / kTicksPerBeat;
+        if (pendingClickDelay >= 0.0)
+        {
+            freeBeatSamples = pendingClickDelay > 0.0 ? samplesPerBeat - pendingClickDelay : 1.0e18;
+            freeBeatCount = 0;
+            pendingClickDelay = -1.0;
+        }
 
         for (int i = 0; i < n; ++i)
         {
@@ -2034,7 +2085,7 @@ void Player::render (const Project& project, double bpm, bool playing,
                         effects[t][s].process (tr.slots[s], l, r, n, trackTransport); // only to let a removed effect forget its state
                     trackGain[t] = trackTarget[t];
                     sendGate[t] = trackAudible[t] ? 1.0f : 0.0f;
-                    sendGain[t] = tr.sends;
+                    sendGain[t] = sendLevel[t];
                     trackMeanSquare[t] = trackMeanSquare[t] * (n == kChunk ? rmsDecayPerChunk : std::pow (1.0f - rmsCoef, static_cast<float> (n)));
                     if (trackMeanSquare[t] < 1.0e-20f)
                         trackMeanSquare[t] = 0.0f;
@@ -2056,7 +2107,7 @@ void Player::render (const Project& project, double bpm, bool playing,
                 sendGate[t] += (gateTarget - sendGate[t]) * kGainSmoothing;
                 for (size_t a = 0; a < static_cast<size_t> (kAuxBuses); ++a)
                 {
-                    sendGain[t][a] += (tr.sends[a] - sendGain[t][a]) * kGainSmoothing;
+                    sendGain[t][a] += (sendLevel[t][a] - sendGain[t][a]) * kGainSmoothing;
                     const float level = sendGain[t][a] * sendGate[t];
                     auxL[a][static_cast<size_t> (i)] += (tr.sendsPreFader ? l[i] : outL) * level;
                     auxR[a][static_cast<size_t> (i)] += (tr.sendsPreFader ? r[i] : outR) * level;

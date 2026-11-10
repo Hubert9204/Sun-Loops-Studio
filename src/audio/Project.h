@@ -25,6 +25,7 @@ constexpr int kMaxTracks = 500;    // mixer tracks a project can have (0.29.0; 8
 constexpr int kDefaultTracks = 8;  // what a new project has, and the fewest (a playlist track n plays through mixer track n)
 constexpr int kAuxBuses = 2;  // aux buses ("returns"): tracks send to them, they have their own effects and fader
 constexpr int kVcaGroups = 2; // VCA groups: one fader that scales the faders of its member tracks
+static_assert (kAuxBuses == kAutomationAuxBuses && kVcaGroups == kAutomationVcaGroups);
 
 enum class Instrument { Synth, Sampler, Drums, Plugin };
 

@@ -3960,6 +3960,125 @@ void testTypingKeyboard()
 
 
 
+void testRecording047()
+{
+    std::cout << "Recording: count-in click, loop takes (0.47.0)\n";
+    // The count-in's clicks: the free-running click starts over after a delay, accented first.
+    {
+        sls::Player player;
+        player.prepare (48000.0);
+        player.setMetronome (true, 0.8f);
+        player.delayFreeClick (1000.0);
+        const auto project = sls::Project::make ({}, 4 * kBeat);
+        std::vector<float> l (256), r (256), all;
+        float* ch[2] = { l.data(), r.data() };
+        while (all.size() < 52000)
+        {
+            std::fill (l.begin(), l.end(), 0.0f);
+            std::fill (r.begin(), r.end(), 0.0f);
+            player.render (project, 120.0, false, ch, 2, 256);
+            all.insert (all.end(), l.begin(), l.end());
+        }
+        const auto peak = [&all] (size_t from, size_t to)
+        {
+            float p = 0.0f;
+            for (size_t i = from; i < to; ++i)
+                p = std::max (p, std::abs (all[i]));
+            return p;
+        };
+        check (peak (0, 999) == 0.0f && peak (1000, 1600) > 0.05f && peak (3600, 24999) == 0.0f && peak (25000, 25600) > 0.05f
+                   && peak (1000, 1600) > peak (25000, 25600) * 1.2f,
+               "the count-in's first click comes after the delay, accented, the next a beat later");
+    }
+
+    // Where the passes of a loop recording are: loop region bars 2-3 (ticks 1920-3840) at 120 BPM = 2 s per pass.
+    {
+        const auto fromStart = sls::loopTakesOf ({}, 120.0, 0, 4 * kBeat, 8 * kBeat, 9.5);
+        check (std::abs (fromStart.firstSeconds - 2.0) < 1e-9 && std::abs (fromStart.passSeconds - 2.0) < 1e-9 && fromStart.complete == 3,
+               "a take from the start of the song: the first pass starts when the song reaches the region; 3 whole passes in 9.5 s");
+        const auto inside = sls::loopTakesOf ({}, 120.0, 6 * kBeat, 4 * kBeat, 8 * kBeat, 5.0);
+        check (std::abs (inside.firstSeconds - 1.0) < 1e-9 && inside.complete == 2, "a take that starts inside the region: whole passes from its first wrap");
+        const auto atStart = sls::loopTakesOf ({}, 120.0, 4 * kBeat, 4 * kBeat, 8 * kBeat, 3.99);
+        check (atStart.firstSeconds == 0.0 && atStart.complete == 1, "a take at the region's start: the first pass counts (3.99 s rounds to 2 whole passes only past 4 s)");
+        const auto slower = sls::loopTakesOf ({ { 4 * kBeat, 60.0 } }, 120.0, 0, 4 * kBeat, 8 * kBeat, 10.0);
+        check (std::abs (slower.passSeconds - 4.0) < 1e-9 && slower.complete == 2, "the passes follow tempo changes");
+        check (sls::loopTakesOf ({}, 120.0, 8 * kBeat, 4 * kBeat, 8 * kBeat, 9.0).complete == 0, "a take after the region has no passes");
+    }
+
+    // Choosing a take on the clip.
+    {
+        sls::AudioClip clip;
+        clip.data = sineData (static_cast<int> (9.5 * 48000), 48000.0, 220.0, 0.3f);
+        clip.takeFirstSeconds = 2.0;
+        clip.takeSeconds = 2.0;
+        clip.offsetSeconds = 6.0;
+        check (sls::takeCount (clip) == 3 && sls::currentTake (clip) == 2, "the clip has 3 takes and plays the last");
+        check (sls::chooseTake (clip, 0) && std::abs (clip.offsetSeconds - 2.0) < 1e-9 && sls::currentTake (clip) == 0, "take 1 is chosen");
+        clip.offsetSeconds = 2.5; // the clip was cut half a second into the pass
+        check (sls::chooseTake (clip, 1) && std::abs (clip.offsetSeconds - 4.5) < 1e-9, "a clip cut at its start keeps the cut in the other take");
+        check (! sls::chooseTake (clip, 3), "no take beyond the file");
+        clip.reverse = true;
+        check (sls::takeCount (clip) == 0, "a reversed clip offers no takes");
+        clip.reverse = false;
+
+        auto doc = sls::ProjectDocument::blank();
+        clip.data = sineData (100, 48000.0, 220.0, 0.3f, "/home/x/rec.wav");
+        clip.lengthTicks = 960;
+        doc.arrangement.audioClips = { clip };
+        const auto back = sls::ProjectDocument::fromJson (doc.toJson());
+        check (back.document.has_value() && back.document->arrangement.audioClips.size() == 1
+                   && back.document->arrangement.audioClips[0].takeSeconds == 2.0 && back.document->arrangement.audioClips[0].takeFirstSeconds == 2.0,
+               "the takes of a clip are saved and loaded");
+    }
+}
+
+void testMixAutomation047()
+{
+    std::cout << "Automation of sends, aux buses and VCA groups (0.47.0)\n";
+    using K = sls::AutomationKind;
+    const auto render = [] (std::vector<sls::AutomationClip> clips, float send, unsigned vcaMask)
+    {
+        auto tracks = sls::Project::defaultTracks();
+        tracks[0].sends[0] = send;
+        tracks[0].vcaMask = vcaMask;
+        auto ch = synthChannel ({ { 57, 0, 8 * kBeat, 0.6f } }, 0.6f);
+        ch.mixerTrack = 0;
+        return sls::renderToBuffer (sls::Project::make ({ ch }, 8 * kBeat, tracks, {}, {}, clips, sls::Console::defaults()), {});
+    };
+    const auto rms = [] (const juce::AudioBuffer<float>& b) { return b.getRMSLevel (0, 24000, 96000); }; // 0.5 s to 2.5 s
+    const float plain = rms (render ({}, 0.0f, 0));
+    const float sent = rms (render ({ sls::makeFlatAutomationClip ({ K::TrackSend, 0, 0, 0 }, 0, 0, 8 * kBeat, 1.0f) }, 0.0f, 0));
+    check (plain > 0.01f && sent > plain * 1.5f, "a send automated up adds the aux bus to the mix (it is off on the track itself)");
+    const float projectSend = rms (render ({}, 1.0f, 0));
+    const float auxDown = rms (render ({ sls::makeFlatAutomationClip ({ K::AuxVolume, 0, 0, 0 }, 0, 0, 8 * kBeat, 0.0f) }, 1.0f, 0));
+    check (projectSend > plain * 1.5f && std::abs (auxDown - plain) < plain * 0.05f, "the aux bus's volume automated down takes it out again");
+    const float sendOther = rms (render ({ sls::makeFlatAutomationClip ({ K::TrackSend, 0, 1, 0 }, 0, 0, 8 * kBeat, 0.0f) }, 1.0f, 0));
+    check (std::abs (sendOther - projectSend) < projectSend * 0.02f, "automating the send to Aux B leaves the send to Aux A alone");
+    const float vcaDown = rms (render ({ sls::makeFlatAutomationClip ({ K::VcaLevel, 0, 0, 0 }, 0, 0, 8 * kBeat, 0.0f) }, 0.0f, 1u));
+    const float vcaOther = rms (render ({ sls::makeFlatAutomationClip ({ K::VcaLevel, 0, 1, 0 }, 0, 0, 8 * kBeat, 0.0f) }, 0.0f, 1u));
+    check (vcaDown < plain * 0.01f && std::abs (vcaOther - plain) < plain * 0.02f, "a VCA level automated to 0 silences its member tracks, another group's does not");
+    const float panned = sls::renderToBuffer (sls::Project::make ({ [] { auto c = synthChannel ({ { 57, 0, 8 * kBeat, 0.6f } }, 0.6f); c.mixerTrack = 0; return c; }() },
+                                                                  8 * kBeat, [] { auto t = sls::Project::defaultTracks(); t[0].sends[0] = 1.0f; t[0].volume = 0.0f; return t; }(), {}, {},
+                                                                  { sls::makeFlatAutomationClip ({ K::AuxPan, 0, 0, 0 }, 0, 0, 8 * kBeat, 1.0f) }, sls::Console::defaults()),
+                                              {}).getRMSLevel (0, 24000, 96000);
+    check (panned < 1.0e-4f, "the aux bus's balance automated fully right leaves its left side silent");
+
+    check (sls::automationTargetExists ({ K::TrackSend, 3, 1, 0 }, 1, 8) && ! sls::automationTargetExists ({ K::TrackSend, 3, 2, 0 }, 1, 8)
+               && ! sls::automationTargetExists ({ K::AuxVolume, 0, 2, 0 }, 1, 8) && sls::automationTargetExists ({ K::VcaLevel, 0, 1, 0 }, 1, 8)
+               && sls::automationRange ({ K::TrackSend, 0, 0, 0 }).max == 1.5f && sls::automationRange ({ K::AuxPan, 0, 0, 0 }).min == -1.0f,
+           "the new targets: two aux buses and two VCA groups, in their controls' ranges");
+    auto doc = sls::ProjectDocument::blank();
+    doc.arrangement.automationClips = { sls::makeFlatAutomationClip ({ K::TrackSend, 2, 1, 0 }, 0, 0, 960, 0.7f),
+                                        sls::makeFlatAutomationClip ({ K::AuxPan, 0, 1, 0 }, 1, 0, 960, -0.5f),
+                                        sls::makeFlatAutomationClip ({ K::VcaLevel, 0, 1, 0 }, 2, 0, 960, 1.2f) };
+    const auto back = sls::ProjectDocument::fromJson (doc.toJson());
+    check (back.document.has_value() && back.document->arrangement.automationClips.size() == 3
+               && back.document->arrangement.automationClips[0].target == sls::AutomationTarget { K::TrackSend, 2, 1, 0 }
+               && back.document->arrangement.automationClips[1].target.kind == K::AuxPan
+               && back.document->arrangement.automationClips[2].target == sls::AutomationTarget { K::VcaLevel, 0, 1, 0 },
+           "automation of sends, aux buses and VCA groups is saved and loaded");
+}
+
 void testTempoAndMeter046()
 {
     std::cout << "Tempo changes and time signatures (0.46.0)\n";
@@ -11047,6 +11166,8 @@ int main()
     testPlaylistTracks();
     testMixerAndExport045();
     testTempoAndMeter046();
+    testMixAutomation047();
+    testRecording047();
     testSemVerAndUpdates();
     testCrashReports();
     testSessionLog();

@@ -26,10 +26,14 @@ inline double finiteOrZero (double v) noexcept { return std::isfinite (v) ? v : 
 
 // The three plugin kinds (0.35.0) move a parameter of a third-party plugin: the instrument of a channel, or an effect in a mixer
 // slot. Their values are the plugin's normalised 0..1 (what the plugin shows for them is the plugin's business).
+// 0.47.0: a track's send to an aux bus (`slot` = the bus), an aux bus's volume and balance (`slot` = the bus) and a VCA group's
+// level (`slot` = the group).
 enum class AutomationKind : std::uint8_t { ChannelVolume, ChannelPan, TrackVolume, TrackPan, TrackEffect, MasterEffect,
-                                           ChannelPlugin, TrackPlugin, MasterPlugin };
-constexpr int kAutomationKindCount = 9;
+                                           ChannelPlugin, TrackPlugin, MasterPlugin, TrackSend, AuxVolume, AuxPan, VcaLevel };
+constexpr int kAutomationKindCount = 13;
 constexpr int kMaxPluginParams = 65536; // a parameter number beyond this is not a plugin's
+constexpr int kAutomationAuxBuses = 2;  // = kAuxBuses and kVcaGroups (Project.h, which includes this file)
+constexpr int kAutomationVcaGroups = 2;
 
 inline bool isPluginAutomation (AutomationKind k) noexcept
 {
@@ -81,6 +85,10 @@ inline AutomationRange automationRange (const AutomationTarget& t, EffectType ef
         case AutomationKind::ChannelPlugin:
         case AutomationKind::TrackPlugin:
         case AutomationKind::MasterPlugin:  return { 0.0f, 1.0f, 0.5f };
+        case AutomationKind::TrackSend:     return { 0.0f, 1.5f, 0.0f };
+        case AutomationKind::AuxVolume:
+        case AutomationKind::VcaLevel:      return { 0.0f, 1.5f, 1.0f };
+        case AutomationKind::AuxPan:        return { -1.0f, 1.0f, 0.0f };
     }
     return {};
 }
@@ -101,6 +109,10 @@ inline bool automationTargetExists (const AutomationTarget& t, int numChannels, 
         case AutomationKind::TrackPlugin:   return t.index >= 0 && t.index < numTracks && t.slot >= 0 && t.slot < kSlotsPerTrack
                                                    && t.param >= 0 && t.param < kMaxPluginParams;
         case AutomationKind::MasterPlugin:  return t.slot >= 0 && t.slot < kSlotsPerTrack && t.param >= 0 && t.param < kMaxPluginParams;
+        case AutomationKind::TrackSend:     return t.index >= 0 && t.index < numTracks && t.slot >= 0 && t.slot < kAutomationAuxBuses;
+        case AutomationKind::AuxVolume:
+        case AutomationKind::AuxPan:        return t.slot >= 0 && t.slot < kAutomationAuxBuses;
+        case AutomationKind::VcaLevel:      return t.slot >= 0 && t.slot < kAutomationVcaGroups;
     }
     return false;
 }

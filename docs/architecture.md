@@ -478,7 +478,7 @@ switches or undo show up. The window is closed when a project is opened (it poin
 
 ### Aux buses, sends and VCA groups (0.11.0)
 
-`Project::console` holds `aux[2]` (each a `MixerTrack`: name, fader, balance, mute, four effect slots) and `vcaLevel[2]` /
+`Project::console` holds `aux[2]` (each a `MixerTrack`: name, fader, balance, mute, ten effect slots since 0.45.0) and `vcaLevel[2]` /
 `vcaMute[2]`. Each `MixerTrack` has `sends[2]`, `sendsPreFader` and `vcaMask` (bit n: member of VCA n); `Project::make` clamps all of them.
 In `Player`, per 64-sample chunk, after a track's effects: the VCA factor is the product of the `vcaLevel`s of its groups (0 if one is
 muted); the fader gain is multiplied by it; a **post-fader** send takes the signal after fader, balance and VCA, a **pre-fader** send takes the
@@ -547,6 +547,20 @@ sections at `##` / `###`, folds accents and case, drops stop words, maps a few s
 and ranks with BM25 (k1 1.4, b 0.75) plus a title bonus, a bonus for sections holding every word and a small one for the
 question's language. The index is built the first time Helios opens. Commands are `HeliosCommand`s (name, keywords, a function)
 made by `MainComponent::heliosCommands`, matched by the share of the question's words they contain.
+
+### Automation targets, following controls, count-in and loop takes (0.47.0)
+
+- `AutomationKind` gained `TrackSend` (index = track, slot = bus), `AuxVolume`, `AuxPan` (slot = bus) and `VcaLevel` (slot =
+  group). `applyAutomation` hands them to the Player's `setMix`, which writes `sendLevelNow` (used instead of the tracks' own
+  sends), re-runs `setAux`, or recomputes the VCA members' gains.
+- `MainComponent::followAutomation()` (on the UI timer) evaluates the published song's `AutomationEvent`s at the playhead and
+  calls `MixerPanel::showAutomated` / `ChannelStrip::showAutomated` (controls set without notification); when the song stops,
+  `refreshControls()` / `refreshFromChannel()` put the project's values back.
+- Count-in: `AudioEngine::startRecording (…, countInBeats)` stores a request; the audio thread computes the count-in in whole
+  blocks, delays the free-running click (`Player::delayFreeClick`) so the last beat ends at a block boundary, then sets the
+  transport and the capture gate together.
+- Loop takes: `loopTakesOf` (Arrangement.h) finds the whole passes in a recording; an `AudioClip` keeps `takeFirstSeconds` /
+  `takeSeconds`, and `chooseTake` moves `offsetSeconds` to another pass.
 
 ### Tempo changes and time signatures (0.46.0)
 

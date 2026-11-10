@@ -1,6 +1,8 @@
 // Part of MainComponent: the sampler settings window, SoundFonts and slices turned into a sampler channel (0.16.0).
 #include "ui/MainComponent.h"
 
+#include <thread>
+
 #include "audio/SampleEdit.h"
 #include "audio/ClipEdit.h"
 #include "library/SoundFont.h"
@@ -167,9 +169,34 @@ void MainComponent::applySoundFont (int channelIndex, const juce::File& file, in
 {
     if (channelIndex < 0 || channelIndex >= static_cast<int> (channels.size()))
         return;
-    juce::String error;
-    SamplerSettings suggested;
-    auto program = loadSoundFont (file, presetIndex, error, &suggested);
+    if (soundFontLoading)
+    {
+        statusLabel.setText ("A SoundFont is still loading; try again when it is ready.", juce::dontSendNotification);
+        return;
+    }
+    // A large SoundFont takes a while to read (0.47.0): it is read on its own thread, so the window keeps responding.
+    soundFontLoading = true;
+    statusLabel.setText ("Loading " + file.getFileName() + "...", juce::dontSendNotification);
+    std::thread ([safe = juce::Component::SafePointer<MainComponent> (this), channelIndex, file, presetIndex]
+    {
+        auto error = std::make_shared<juce::String>();
+        auto suggested = std::make_shared<SamplerSettings>();
+        auto program = loadSoundFont (file, presetIndex, *error, suggested.get());
+        juce::MessageManager::callAsync ([safe, channelIndex, file, program, error, suggested]
+        {
+            if (safe == nullptr)
+                return;
+            safe->soundFontLoading = false;
+            safe->useSoundFont (channelIndex, file, program, *error, *suggested);
+        });
+    }).detach();
+}
+
+void MainComponent::useSoundFont (int channelIndex, const juce::File& file, std::shared_ptr<const SamplerProgram> program, const juce::String& error,
+                                  const SamplerSettings& suggested)
+{
+    if (channelIndex < 0 || channelIndex >= static_cast<int> (channels.size()))
+        return;
     if (program == nullptr)
     {
         statusLabel.setText (error, juce::dontSendNotification);

@@ -881,14 +881,22 @@ La freccia accanto a Record offre anche:
 - **The takes start**: *At the start of the song* (il brano riparte dall'inizio), o *Where the song is (punch in)*: dal
   marcatore di inizio della playlist, o da dove il brano sta suonando se è già in riproduzione. Le riprese vengono messe dove
   sono partite.
+- **Count-in** (0.47.0): *None*, *1 bar* o *2 bars* di metronomo (nel metro del brano, al tempo iniziale) prima che partano brano e
+  riprese; il metronomo non deve essere acceso. La riga di stato dice *Count-in...*; Record o Stop lo annullano.
+- **With a loop region in Song mode** (0.47.0):
+  - *Keep recording: every pass is a take* (predefinito): il brano gira nella regione e la registrazione continua. Alla fine la
+    clip copre la regione e suona l'**ultimo passaggio completo**; tasto destro sulla clip > **Take** ne sceglie un altro
+    (*Take 1*, *Take 2*...). Un passaggio conta se in esso è stata registrata tutta la regione (il primo solo se la ripresa è
+    partita prima della regione o al suo inizio).
+  - *Stop at the end of the region (punch out)*: la ripresa si ferma quando il brano torna indietro e la sua clip finisce
+    esattamente alla fine della regione.
 - *Hear the input while recording* (usa le cuffie: con casse e microfono si crea un fischio; questo ascolto aggiunge la latenza
   del dispositivo e riproduce solo gli ingressi 1 e 2).
 
 Tutte le riprese partono nello stesso blocco audio, quindi sono allineate tra loro, e sono spostate della latenza di andata e
-ritorno dichiarata dal dispositivo, per allinearle a ciò che suonava. Una ripresa si ferma da sola alla fine della playlist, dopo
-5 minuti, o quando il brano torna indietro (una regione di loop: il resto non sarebbe più allineato). Non c'è ancora il
-conteggio iniziale (accendi il **Metronome** per suonare a tempo). Un ingresso che il dispositivo non ha viene segnalato e non si
-registra nulla.
+ritorno dichiarata dal dispositivo, per allinearle a ciò che suonava. Una ripresa si ferma da sola alla fine della playlist (con
+le take in loop: dopo 5 minuti), o alla fine della regione di loop con il *punch out*. Un ingresso che il dispositivo non ha
+viene segnalato e non si registra nulla.
 
 ### Tastiere MIDI e altri dispositivi
 
@@ -962,10 +970,16 @@ L'automazione fa muovere un controllo da solo mentre il brano suona. Funziona su
 - **fader** e **bilanciamento** di una traccia (Mixer);
 - ogni **parametro di un effetto** in uno slot di traccia o del master (gli slider del pannello effetti);
 - ogni **parametro di un plugin** (VST3, LV2, LADSPA): di uno strumento plugin nel Channel Rack e di un effetto plugin in uno slot di
-  traccia o del master (dalla 0.35.0, vedi *Parametri dei plugin* più sotto).
+  traccia o del master (dalla 0.35.0, vedi *Parametri dei plugin* più sotto);
+- dalla 0.47.0: i **send** di una traccia verso Aux A e Aux B (i piccoli slider A / B), **fader** e **bilanciamento** di un bus aux e
+  il fader di un **gruppo VCA**.
 
-**Non ancora automatizzabili:** le manopole Pitch e Swing, il volume master, mute e solo, i send, i bus aux e i gruppi VCA (compresi i
-parametri degli effetti di un bus aux) e tutto il resto.
+Mentre il brano suona in modalità Song, i controlli che hanno un'automazione **si muovono con essa** (0.47.0): fader,
+bilanciamento e send del Mixer, volume e pan del Channel Rack. Quando il brano si ferma tornano a mostrare i propri valori
+(l'automazione non li cambia mai). Toccare un controllo mentre si muove ne imposta il valore, come sempre.
+
+**Non ancora automatizzabili:** le manopole Pitch e Swing, il volume master, mute e solo, i parametri degli effetti di un bus aux,
+il tempo (usa i cambi di tempo, 0.46.0) e tutto il resto.
 
 **Creare una clip.** Tasto destro sul controllo e *Create automation clip*. Una clip lunga un pattern compare su una delle quattro
 **corsie di automazione** (*Auto 1-4*, sotto le tracce della Playlist) e si apre il suo editor. La clip è una linea piatta al
@@ -1228,6 +1242,6 @@ occupato più tardi, un brano più pesante o un mixer pieno di effetti possono r
   inviluppi; l'LFO riparte a ogni nota. Il motore FM ha quattro operatori, solo sinusoidi, nessun filtro, e la sua matrice è calcolata con un
   ritardo di un campione (come nella maggior parte dei synth FM a matrice).
 - Plugin: VST3, LV2 e LADSPA (niente VST2, niente Audio Unit); stereo in ingresso e in uscita (uscite extra e ingressi sidechain non sono usati);
-  i loro parametri non si possono automatizzare; le modifiche fatte nella finestra di un plugin si salvano col progetto ma non entrano nell'annulla.
-- Non ancora disponibili: time-stretch dei campioni nel Sampler (si possono modificare solo le clip audio della playlist), automazione di qualsiasi cosa tranne volumi, pan, parametri degli effetti e dei plugin, trasformare l'altezza di
-  chitarra o voce in note, punch-in e conteggio iniziale per la registrazione, dissolvenze ed effetti per clip. Vedi [roadmap.md](roadmap.md) (in inglese).
+  i loro parametri si possono automatizzare (0.35.0); le modifiche fatte nella finestra di un plugin si salvano col progetto ma non entrano nell'annulla.
+- Non ancora disponibili: time-stretch dei campioni nel Sampler (si possono modificare solo le clip audio della playlist), automazione di pitch, swing,
+  volume master, mute e solo, effetti per clip. Vedi [roadmap.md](roadmap.md) (in inglese).

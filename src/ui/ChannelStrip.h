@@ -76,6 +76,7 @@ public:
     void repaintGrid() { grid.repaint(); }
     void setMeterLevel (float level) { meter.setLevel (level); }
     void refreshFromChannel();
+    void showAutomated (AutomationKind kind, float value); // volume or pan as automation has it while the song plays (0.47.0)
     void setTrackCount (int mixerTracks) { trackSelector.setNumTracks (mixerTracks); } // the project's (0.29.0)
 
     int getIndex() const noexcept { return index; }

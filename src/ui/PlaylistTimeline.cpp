@@ -1803,6 +1803,15 @@ void PlaylistTimeline::showClipMenu (const juce::MouseEvent& e)
         menu.addItem (8, "Edit sample...");
         menu.addItem (10, "Edit pitch...", onEditPitch != nullptr);
         menu.addItem (11, "Split into stems...", onSplitStems != nullptr);
+        // Loop recording (0.47.0): the passes of the loop region that the clip's file holds.
+        if (const int takes = takeCount (clip); takes > 1)
+        {
+            juce::PopupMenu takeMenu;
+            const int now = currentTake (clip);
+            for (int k = 0; k < takes && k < 99; ++k)
+                takeMenu.addItem (100 + k, "Take " + juce::String (k + 1), true, k == now);
+            menu.addSubMenu ("Take (" + juce::String (now + 1) + " of " + juce::String (takes) + ")", takeMenu);
+        }
     }
     else
         menu.addItem (5, "Open this pattern");
@@ -1831,7 +1840,14 @@ void PlaylistTimeline::showClipMenu (const juce::MouseEvent& e)
                                         safe->onPatternPicked (safe->arrangement.clips[static_cast<size_t> (safe->selection.index)].pattern);
                                     break;
                                 case 6: safe->deleteSelected(); break;
-                                default: break;
+                                default:
+                                    if (result >= 100 && result < 200 && audio >= 0 && audio < static_cast<int> (safe->arrangement.audioClips.size())
+                                        && chooseTake (safe->arrangement.audioClips[static_cast<size_t> (audio)], result - 100))
+                                    {
+                                        safe->notifyChanged();
+                                        safe->repaint();
+                                    }
+                                    break;
                             }
                         });
 }

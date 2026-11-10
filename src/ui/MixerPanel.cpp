@@ -148,7 +148,8 @@ MixerStrip::MixerStrip (MixerTrack& trackToControl, int trackIndex, bool isAuxBu
         slider.setRange (0.0, 1.5, 0.01);
         slider.setDoubleClickReturnValue (true, 0.0);
         slider.setTooltip ("Send to Aux " + juce::String::charToString (static_cast<juce::juce_wchar> ('A' + static_cast<int> (a)))
-                           + " (all the way left: off; double-click: off)");
+                           + " (all the way left: off; double-click: off; right click: automate)");
+        slider.onAutomate = [this, a] { if (onAutomate && ! isAux) onAutomate ({ AutomationKind::TrackSend, index, static_cast<int> (a), 0 }); };
         slider.onValueChange = [this, a]
         {
             track.sends[a] = static_cast<float> (sendSliders[a].getValue());
@@ -187,8 +188,12 @@ MixerStrip::MixerStrip (MixerTrack& trackToControl, int trackIndex, bool isAuxBu
 
     panSlider.setRange (-1.0, 1.0, 0.01);
     panSlider.setDoubleClickReturnValue (true, 0.0);
-    panSlider.setTooltip (isAux ? "Stereo balance (double-click: centre)" : "Stereo balance (double-click: centre; right click: automate)");
-    panSlider.onAutomate = [this] { if (onAutomate && ! isAux) onAutomate ({ AutomationKind::TrackPan, index, 0, 0 }); };
+    panSlider.setTooltip ("Stereo balance (double-click: centre; right click: automate)");
+    panSlider.onAutomate = [this]
+    {
+        if (onAutomate)
+            onAutomate (isAux ? AutomationTarget { AutomationKind::AuxPan, 0, index - kAuxIndexBase, 0 } : AutomationTarget { AutomationKind::TrackPan, index, 0, 0 });
+    };
     panSlider.onValueChange = [this]
     {
         track.pan = static_cast<float> (panSlider.getValue());
@@ -216,8 +221,12 @@ MixerStrip::MixerStrip (MixerTrack& trackToControl, int trackIndex, bool isAuxBu
 
     fader.setRange (0.0, 1.5, 0.01);
     fader.setDoubleClickReturnValue (true, 1.0);
-    fader.setTooltip (isAux ? "Bus volume (double-click: 0 dB)" : "Track volume (double-click: 0 dB; right click: automate)");
-    fader.onAutomate = [this] { if (onAutomate && ! isAux) onAutomate ({ AutomationKind::TrackVolume, index, 0, 0 }); };
+    fader.setTooltip (isAux ? "Bus volume (double-click: 0 dB; right click: automate)" : "Track volume (double-click: 0 dB; right click: automate)");
+    fader.onAutomate = [this]
+    {
+        if (onAutomate)
+            onAutomate (isAux ? AutomationTarget { AutomationKind::AuxVolume, 0, index - kAuxIndexBase, 0 } : AutomationTarget { AutomationKind::TrackVolume, index, 0, 0 });
+    };
     fader.onValueChange = [this]
     {
         track.volume = static_cast<float> (fader.getValue());
@@ -247,6 +256,35 @@ MixerStrip::MixerStrip (MixerTrack& trackToControl, int trackIndex, bool isAuxBu
     }
 
     refreshFromTrack();
+}
+
+void MixerStrip::showAutomated (AutomationKind kind, int slot, float value)
+{
+    switch (kind)
+    {
+        case AutomationKind::TrackVolume:
+        case AutomationKind::AuxVolume:
+            fader.setValue (value, juce::dontSendNotification);
+            dbLabel.setText (volumeToText (value), juce::dontSendNotification);
+            break;
+        case AutomationKind::TrackPan:
+        case AutomationKind::AuxPan:
+            panSlider.setValue (value, juce::dontSendNotification);
+            panLabel.setText (panToText (value), juce::dontSendNotification);
+            break;
+        case AutomationKind::TrackSend:
+            if (slot >= 0 && slot < static_cast<int> (sendSliders.size()))
+                sendSliders[static_cast<size_t> (slot)].setValue (value, juce::dontSendNotification);
+            break;
+        case AutomationKind::ChannelVolume:
+        case AutomationKind::ChannelPan:
+        case AutomationKind::TrackEffect:
+        case AutomationKind::MasterEffect:
+        case AutomationKind::ChannelPlugin:
+        case AutomationKind::TrackPlugin:
+        case AutomationKind::MasterPlugin:
+        case AutomationKind::VcaLevel: break;
+    }
 }
 
 void MixerStrip::refreshFromTrack()
@@ -358,6 +396,12 @@ void MixerStrip::mouseDown (const juce::MouseEvent&)
 
 // ------------------------------------------------------------------------- VcaStrip
 
+void VcaStrip::showAutomated (float value)
+{
+    fader.setValue (value, juce::dontSendNotification);
+    dbLabel.setText (MixerStrip::volumeToText (value), juce::dontSendNotification);
+}
+
 VcaStrip::VcaStrip (Console& consoleToControl, int groupIndex) : console (consoleToControl), group (groupIndex)
 {
     styleSmallLabel (nameLabel, 12.0f, true, juce::Justification::centred);
@@ -368,7 +412,8 @@ VcaStrip::VcaStrip (Console& consoleToControl, int groupIndex) : console (consol
 
     fader.setRange (0.0, 1.5, 0.01);
     fader.setDoubleClickReturnValue (true, 1.0);
-    fader.setTooltip ("VCA level: scales the faders of its member tracks (double-click: 0 dB)");
+    fader.setTooltip ("VCA level: scales the faders of its member tracks (double-click: 0 dB; right click: automate)");
+    fader.onAutomate = [this] { if (onAutomate) onAutomate ({ AutomationKind::VcaLevel, 0, group, 0 }); };
     fader.onValueChange = [this]
     {
         console.vcaLevel[static_cast<size_t> (group)] = static_cast<float> (fader.getValue());
@@ -1028,6 +1073,7 @@ void MixerPanel::setConsole (Console& consoleToControl)
         auto strip = std::make_unique<MixerStrip> (consoleToControl.aux[static_cast<size_t> (a)], kAuxIndexBase + a, true);
         strip->onSelect = [this] (int idx) { selectAux (idx - kAuxIndexBase); };
         strip->onChanged = [this] (int idx) { if (onTrackChanged) onTrackChanged (idx); };
+        strip->onAutomate = [this] (const AutomationTarget& t) { if (onAutomate) onAutomate (t); };
         strip->onSlotClicked = [this] (int idx, int slot)
         {
             selectAux (idx - kAuxIndexBase);
@@ -1051,6 +1097,7 @@ void MixerPanel::setConsole (Console& consoleToControl)
     {
         auto strip = std::make_unique<VcaStrip> (consoleToControl, g);
         strip->onChanged = [this] { if (onTrackChanged) onTrackChanged (kMasterIndex); };
+        strip->onAutomate = [this] (const AutomationTarget& t) { if (onAutomate) onAutomate (t); };
         inner.addAndMakeVisible (*strip);
         vcaStrips.push_back (std::move (strip));
     }
@@ -1313,5 +1360,48 @@ void MixerPanel::layoutInner()
         s->setBounds (x, 0, MixerStrip::kWidth, height);
         x += MixerStrip::kWidth;
     }
+}
+} // namespace sls
+
+namespace sls
+{
+void MixerPanel::showAutomated (const AutomationTarget& target, float value)
+{
+    const auto in = [] (const auto& v, int i) { return i >= 0 && i < static_cast<int> (v.size()); };
+    switch (target.kind)
+    {
+        case AutomationKind::TrackVolume:
+        case AutomationKind::TrackPan:
+        case AutomationKind::TrackSend:
+            if (in (strips, target.index))
+                strips[static_cast<size_t> (target.index)]->showAutomated (target.kind, target.slot, value);
+            break;
+        case AutomationKind::AuxVolume:
+        case AutomationKind::AuxPan:
+            if (in (auxStrips, target.slot))
+                auxStrips[static_cast<size_t> (target.slot)]->showAutomated (target.kind, 0, value);
+            break;
+        case AutomationKind::VcaLevel:
+            if (in (vcaStrips, target.slot))
+                vcaStrips[static_cast<size_t> (target.slot)]->showAutomated (value);
+            break;
+        case AutomationKind::ChannelVolume:
+        case AutomationKind::ChannelPan:
+        case AutomationKind::TrackEffect:
+        case AutomationKind::MasterEffect:
+        case AutomationKind::ChannelPlugin:
+        case AutomationKind::TrackPlugin:
+        case AutomationKind::MasterPlugin: break;
+    }
+}
+
+void MixerPanel::refreshControls()
+{
+    for (auto& s : strips)
+        s->refreshFromTrack();
+    for (auto& s : auxStrips)
+        s->refreshFromTrack();
+    for (auto& s : vcaStrips)
+        s->refresh();
 }
 } // namespace sls

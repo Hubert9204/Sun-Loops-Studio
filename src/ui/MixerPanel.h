@@ -41,6 +41,8 @@ public:
     MixerStrip (MixerTrack& trackToControl, int trackIndex, bool isAuxBus = false);
 
     void refreshFromTrack();
+    // The value automation gives a control while the song plays (0.47.0): the control moves, the track's own value stays.
+    void showAutomated (AutomationKind kind, int slot, float value);
     void setSelected (bool shouldBeSelected);
     void setSelectedSlot (int slot) { selectedSlot = slot; refreshSlots(); }
     void setRoutedChannels (const juce::String& text);
@@ -76,7 +78,7 @@ private:
     juce::Label routedLabel;
     juce::String routed;
     std::array<SlotButton, kSlotsPerTrack> slotButtons;
-    std::array<juce::Slider, kAuxBuses> sendSliders;
+    std::array<AutomatableSlider, kAuxBuses> sendSliders;
     std::array<juce::Label, kAuxBuses> sendLabels;
     juce::TextButton preButton { "Pre" };
     std::array<juce::TextButton, kVcaGroups> vcaButtons;
@@ -104,8 +106,10 @@ public:
 
     void refresh();
     void setMemberCount (int count);
+    void showAutomated (float value); // 0.47.0
 
     std::function<void()> onChanged;
+    std::function<void (const AutomationTarget&)> onAutomate; // right click on the fader (0.47.0)
 
     void paint (juce::Graphics&) override;
     void resized() override;
@@ -116,7 +120,7 @@ private:
     juce::Label nameLabel;
     juce::Label membersLabel;
     juce::TextButton muteButton { "M" };
-    juce::Slider fader { juce::Slider::LinearVertical, juce::Slider::NoTextBox };
+    AutomatableSlider fader { juce::Slider::LinearVertical, juce::Slider::NoTextBox };
     juce::Label dbLabel;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VcaStrip)
@@ -250,6 +254,10 @@ public:
     void setTrackChannels (int index, const juce::String& channelNames);
     void setTrackLevels (int index, float peak, float rms);
     void setMasterLevels (float peak, float rms) { masterStrip.setLevels (peak, rms); }
+    // Controls that follow automation (0.47.0): show a value on the control a target belongs to; refreshControls() puts the
+    // project's own values back.
+    void showAutomated (const AutomationTarget& target, float value);
+    void refreshControls();
     void setMasterVolume (double volume) { masterStrip.setVolume (volume); }
     void setTimeShaperShortfall (int count) { fxPanel.setTimeShaperShortfall (count); }
 

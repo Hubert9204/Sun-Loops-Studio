@@ -72,6 +72,8 @@ public:
         metronomeOn = on;
         metronomeVolume = std::clamp (volume, 0.0f, 1.0f);
     }
+    // The free-running click (transport stopped) starts over: its first click (an accented one) after `samples` (0.47.0, count-in).
+    void delayFreeClick (double samples) noexcept { pendingClickDelay = std::max (0.0, samples); }
 
     // Notes played by hand (piano roll keyboard). They go through the channel's own volume, pan, pitch, mixer track
     // and effects, work with the transport stopped or running, and are not affected by the loop boundary.
@@ -341,11 +343,13 @@ private:
     std::uint64_t liveLimitSamples = 20ull * 48000;
 
     // Metronome state.
+    std::array<std::array<float, kAuxBuses>, kMaxTracks> sendLevelNow {}; // the sends as automation has them this block (0.47.0)
     bool metronomeOn = false;
     float metronomeVolume = 0.5f;
     int lastClickBeat = -1;        // while playing: the beat that last clicked
     double freeBeatSamples = 0.0;  // while stopped: samples since the last click (starts "due")
     int freeBeatCount = 0;
+    double pendingClickDelay = -1.0; // delayFreeClick(): applied at the next chunk
     int clickPos = -1;             // samples into the current click, -1 when none
     bool clickAccent = false;
     void startClick (bool accent) noexcept { clickPos = 0; clickAccent = accent; }

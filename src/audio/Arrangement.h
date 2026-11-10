@@ -84,6 +84,10 @@ struct AudioClip
     bool reverse = false;       // plays the audio backwards; offsetSeconds then counts from the end of the audio (see setAudioReverse)
     double fadeInSeconds = 0.0; // fades over the clip's first and last seconds (sine curves); 0 = none
     double fadeOutSeconds = 0.0;
+    // 0.47.0: a loop recording keeps every pass of the loop region in its file; take k (from 0) starts at
+    // takeFirstSeconds + k * takeSeconds. takeSeconds 0: not a loop recording.
+    double takeFirstSeconds = 0.0;
+    double takeSeconds = 0.0;
 
     int endTick() const noexcept { return startTick + lengthTicks; }
 
@@ -97,6 +101,58 @@ struct AudioClip
         return std::max (1, static_cast<int> (std::ceil (seconds * bpm / 60.0 * kTicksPerBeat)));
     }
 };
+
+// Loop recording (0.47.0). Takes can be chosen only on a clip that plays its file as it is (not reversed, not stretched).
+inline int takeCount (const AudioClip& c) noexcept
+{
+    if (c.takeSeconds <= 0.0 || c.data == nullptr || c.data->sampleRate <= 0.0 || c.reverse || c.original != nullptr)
+        return 0;
+    const double file = c.data->numFrames() / c.data->sampleRate;
+    return std::max (0, static_cast<int> (std::floor ((file - c.takeFirstSeconds) / c.takeSeconds + 0.01)));
+}
+
+inline int currentTake (const AudioClip& c) noexcept
+{
+    const int n = takeCount (c);
+    if (n == 0)
+        return -1;
+    return std::clamp (static_cast<int> (std::floor ((c.offsetSeconds - c.takeFirstSeconds) / c.takeSeconds + 1.0e-6)), 0, n - 1);
+}
+
+// Plays take `take` instead: the same place inside the pass (a clip cut at its start keeps its cut).
+inline bool chooseTake (AudioClip& c, int take) noexcept
+{
+    const int now = currentTake (c);
+    if (now < 0 || take < 0 || take >= takeCount (c))
+        return false;
+    const double inside = std::clamp (c.offsetSeconds - c.takeFirstSeconds - now * c.takeSeconds, 0.0, c.takeSeconds);
+    c.offsetSeconds = std::max (0.0, c.takeFirstSeconds + take * c.takeSeconds + inside);
+    return true;
+}
+
+// Where the passes of a loop recording lie in its file. The take started at `startTick` and lasted `fileSeconds`, while the
+// song looped over [loopStart, loopEnd). A pass is complete when the file holds the whole loop region for it; the first pass
+// counts only if the take started at or before the region's start.
+struct LoopTakes
+{
+    double firstSeconds = 0.0; // where the first complete pass starts in the file
+    double passSeconds = 0.0;  // the loop region's length
+    int complete = 0;
+};
+
+inline LoopTakes loopTakesOf (const std::vector<TempoMarker>& markers, double bpm, int startTick, int loopStart, int loopEnd, double fileSeconds) noexcept
+{
+    LoopTakes out;
+    if (loopEnd <= loopStart || startTick >= loopEnd || startTick < 0)
+        return out;
+    const double s0 = tickToSeconds (markers, bpm, startTick), sL = tickToSeconds (markers, bpm, loopStart), sE = tickToSeconds (markers, bpm, loopEnd);
+    out.passSeconds = sE - sL;
+    if (out.passSeconds <= 0.0)
+        return {};
+    out.firstSeconds = startTick <= loopStart ? sL - s0 : sE - s0;
+    out.complete = std::max (0, static_cast<int> (std::floor ((fileSeconds - out.firstSeconds) / out.passSeconds + 0.002)));
+    return out;
+}
 
 // A playlist track's own name and colour (0.33.0). An empty name shows "Track N" - or, on a track dedicated to a pattern
 // (0.44.0), the pattern's name; colour 0 is the default look. `pattern` is the pattern the track is dedicated to (a click on
