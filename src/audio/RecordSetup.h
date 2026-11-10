@@ -28,12 +28,12 @@ struct TrackInput
 
 struct RecordSetup
 {
-    std::array<TrackInput, kPlaylistTracks> tracks {};
+    std::array<TrackInput, kMaxPlaylistTracks> tracks {};
 
     std::vector<int> armedTracks() const
     {
         std::vector<int> result;
-        for (int t = 0; t < kPlaylistTracks; ++t)
+        for (int t = 0; t < kMaxPlaylistTracks; ++t)
             if (tracks[static_cast<std::size_t> (t)].armed)
                 result.push_back (t);
         return result;
@@ -42,14 +42,27 @@ struct RecordSetup
     // Arms only `track` (a click on a track's name, as before 0.36.0).
     void armOnly (int track)
     {
-        for (int t = 0; t < kPlaylistTracks; ++t)
+        for (int t = 0; t < kMaxPlaylistTracks; ++t)
             tracks[static_cast<std::size_t> (t)].armed = t == track;
+    }
+
+    // Track `t` was removed from the playlist (0.44.0): the settings of the tracks after it move up with them. When no
+    // track is armed afterwards, the first one is.
+    void removeTrack (int t)
+    {
+        if (t < 0 || t >= kMaxPlaylistTracks)
+            return;
+        for (int i = t; i + 1 < kMaxPlaylistTracks; ++i)
+            tracks[static_cast<std::size_t> (i)] = tracks[static_cast<std::size_t> (i + 1)];
+        tracks[static_cast<std::size_t> (kMaxPlaylistTracks - 1)] = {};
+        if (armedTracks().empty())
+            tracks[0].armed = true;
     }
 
     // Toggles one track. The last armed track cannot be disarmed: Record always has somewhere to write.
     void toggle (int track)
     {
-        if (track < 0 || track >= kPlaylistTracks)
+        if (track < 0 || track >= kMaxPlaylistTracks)
             return;
         auto& input = tracks[static_cast<std::size_t> (track)];
         if (input.armed && armedTracks().size() <= 1)
@@ -77,7 +90,7 @@ struct RecordSetup
     std::string toString() const
     {
         std::ostringstream out;
-        for (int t = 0; t < kPlaylistTracks; ++t)
+        for (int t = 0; t < kMaxPlaylistTracks; ++t)
         {
             const auto& input = tracks[static_cast<std::size_t> (t)];
             if (input != TrackInput {})
@@ -116,7 +129,7 @@ struct RecordSetup
             if (! ok || count != 4 || p <= item.size())
                 continue;
             const int track = values[0];
-            if (track >= kPlaylistTracks || values[1] > 1 || values[3] > 1 || values[2] >= kMaxRecordInputs)
+            if (track >= kMaxPlaylistTracks || values[1] > 1 || values[3] > 1 || values[2] >= kMaxRecordInputs)
                 continue;
             auto& input = setup.tracks[static_cast<std::size_t> (track)];
             input.armed = values[1] == 1;
@@ -124,7 +137,7 @@ struct RecordSetup
             input.stereo = values[3] == 1 && values[2] + 1 < kMaxRecordInputs;
         }
         if (setup.armedTracks().empty())
-            setup.tracks[static_cast<std::size_t> (std::clamp (fallbackTrack, 0, kPlaylistTracks - 1))].armed = true;
+            setup.tracks[static_cast<std::size_t> (std::clamp (fallbackTrack, 0, kMaxPlaylistTracks - 1))].armed = true;
         return setup;
     }
 };

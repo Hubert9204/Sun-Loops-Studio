@@ -14,7 +14,7 @@ strumento sta in un pannello mobile che puoi spostare, ridimensionare, sovrappor
 Sun Loops Studio si ispira al modo di lavorare dei DAW a loop come FL Studio. È un progetto indipendente: non usa
 codice, nomi, grafica o risorse di altri prodotti e non è affiliato né approvato dai loro produttori.
 
-**Stato: alpha (0.43.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
+**Stato: alpha (0.44.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
 La riproduzione è stata confermata su un vero PC Nobara per la versione 0.3; tutto ciò che è stato aggiunto dopo
 (pannelli, pattern, playlist, browser, pitch/swing, mixer espanso ed effetti, salvataggio dei progetti, AppImage, clip audio, trascinamento
 dei file, registrazione, MIDI, metronomo e formati di esportazione) è stato provato con test automatici e in un display virtuale con un
@@ -39,7 +39,7 @@ plugin commerciali. Vedi [docs/roadmap.md](docs/roadmap.md) per sapere con preci
   *Instrument*, *Load sample...*, *Rename...*, *Clone*, *Move up / down*, *Delete*, *Assign free mixer track*, *Save as preset...*.
 - **Piano Roll** - per il canale selezionato: clic per aggiungere una nota, trascina per spostarla, trascina il bordo
   destro per ridimensionarla, tasto destro per eliminarla, scorrimento e zoom. Si apre da un canale (menu o doppio
-  clic), come in FL Studio. **Dalla 0.23.0**: selezioni (Ctrl+trascinamento, Ctrl+A), copia / incolla / duplica, spostamento con le
+  clic), come in FL Studio. **Dalla 0.23.0**: selezioni (dalla 0.44.0 un trascinamento sulle celle vuote disegna un rettangolo di selezione; Ctrl+A), copia / incolla / duplica (anche tra i piano roll di canali diversi), spostamento con le
   frecce, snap da battute a 1/32 e terzine, una **scala** mostrata sulla griglia (con snap alla scala), **accordi posati con un clic**,
   una **corsia della velocity**, strumenti di modifica (quantize, humanize, legato, staccato, strum, arpeggio, chop, flip, rampe di
   velocity) e **generatori** di progressioni di accordi e linee di basso (anche seguendo gli accordi di un altro canale).
@@ -50,7 +50,7 @@ plugin commerciali. Vedi [docs/roadmap.md](docs/roadmap.md) per sapere con preci
 - **Loop Starter** (0.30.0) - un loop di partenza in uno di dieci generi (house, techno, hip-hop, trap, drum & bass, pop, lo-fi,
   reggaeton, rock, synthwave): batteria, basso, accordi e una melodia che stanno insieme, nella tonalità scelta, al tempo del genere, con
   i suoni incorporati, come nuovo pattern. Fatto con regole e caso (niente IA, niente in rete); ogni variante è diversa.
-- **Pattern e Playlist** - più pattern (nuovi, copiati, rinominati o eliminati con i pulsanti sopra la playlist) disposti come clip su 8 tracce (ognuna con nome e colore propri, e le clip possono stare una sopra l'altra: 0.33.0). Il pulsante *Pattern / Song*
+- **Pattern e Playlist** - più pattern (nuovi, copiati, rinominati o eliminati con i pulsanti sopra la playlist) disposti come clip su tracce (0.44.0: 4 tracce libere più una per ogni pattern, aggiunta da sola a ogni nuovo pattern, e **-** / **+** per togliere o aggiungere tracce a mano, fino a 128; ognuna con nome e colore propri, e le clip possono stare una sopra l'altra: 0.33.0). Il pulsante *Pattern / Song*
   sceglie se ripetere il pattern selezionato o suonare tutta la playlist; i pattern durano da 4 a 64 quarti, e le clip di pattern si spostano per quadrati della griglia (o liberamente con Alt), quindi possono partire sfasate tra loro (0.42.0). **Clic sul righello per spostare il
   cursore, anche in riproduzione; trascinamento col destro per disegnare una zona di loop** (tasto destro sulla zona per spostarla, ridimensionarla o eliminarla).
 - **Audio nella Playlist** - trascina file audio (`.wav .aiff .flac .ogg .oga .mp3 .aac`) o video (ne viene presa la

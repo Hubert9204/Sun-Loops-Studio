@@ -27,6 +27,12 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.44.0
+The playlist's track count is now data from the file: it is clamped to 1-128 and every clip's track is checked against the
+actual count when placed or read (`canPlace`, `canPlaceAudio`); a pattern claimed by two tracks keeps the first. `RecordSetup`
+keeps a fixed array of 128 (no allocation). Removing a track deletes its clips, after a question, and is one undo step. The
+.slsproj extension is gone from the open dialog, the extension check and the desktop file type.
+
 ## After 0.43.0
 New attack surface: the program now talks to the network (only api.github.com, over HTTPS with certificate checks, redirects
 limited to HTTPS, answers capped at 1-2 MB, 5 s / 20 s timeouts) and parses JSON from it with nlohmann/json without exceptions

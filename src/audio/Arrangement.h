@@ -19,7 +19,12 @@ namespace sls
 // patterns on a timeline. It is compiled into a flat Project, so the audio engine and the offline
 // renderer know nothing about patterns: they just play notes in a loop.
 
-constexpr int kPlaylistTracks = 8;
+// Playlist tracks (0.44.0): a project starts with kDefaultGenericTracks free tracks (recordings, audio, anything) plus one track
+// dedicated to each pattern; every new pattern adds its own; the - and + buttons remove and add tracks by hand, up to
+// kMaxPlaylistTracks. Before 0.44.0 there were always 8.
+constexpr int kMaxPlaylistTracks = 128;
+constexpr int kDefaultGenericTracks = 4;
+constexpr int kLegacyPlaylistTracks = 8;
 constexpr int kPlaylistUnits = 32;     // the timeline holds at least this many pattern lengths (see Arrangement::timelineTicks)
 constexpr int kPatternBarChoices[] = { 1, 2, 4, 8 }; // the pattern lengths offered in the pattern menu, in bars of 4/4
 // The pattern length (0.42.0) is counted in quarter notes: 4 (one bar of 4/4, the default) at least, changed one quarter at a time
@@ -92,11 +97,14 @@ struct AudioClip
     }
 };
 
-// A playlist track's own name and colour (0.33.0). An empty name shows "Track N"; colour 0 is the default look.
+// A playlist track's own name and colour (0.33.0). An empty name shows "Track N" - or, on a track dedicated to a pattern
+// (0.44.0), the pattern's name; colour 0 is the default look. `pattern` is the pattern the track is dedicated to (a click on
+// an empty place of the track puts that pattern there), -1 for a free track.
 struct PlaylistTrack
 {
     std::string name;
     std::uint32_t colour = 0; // 0xAARRGGBB
+    int pattern = -1;
     bool operator== (const PlaylistTrack&) const = default;
 };
 
@@ -111,7 +119,73 @@ struct Arrangement
     // back to its start when it reaches its end.
     int loopStartTick = -1;
     int loopEndTick = -1;
-    std::array<PlaylistTrack, kPlaylistTracks> playlistTracks {}; // the playlist tracks' names and colours (0.33.0)
+    // The playlist tracks, in order (0.44.0: as many as the project has; names and colours since 0.33.0).
+    std::vector<PlaylistTrack> playlistTracks = std::vector<PlaylistTrack> (kDefaultGenericTracks);
+
+    int trackCount() const noexcept { return static_cast<int> (playlistTracks.size()); }
+
+    // The track dedicated to `pattern`, or -1.
+    int dedicatedTrack (int pattern) const noexcept
+    {
+        for (int t = 0; t < trackCount(); ++t)
+            if (playlistTracks[static_cast<size_t> (t)].pattern == pattern)
+                return t;
+        return -1;
+    }
+
+    // A new project's tracks: the free ones, then one per pattern.
+    void resetTracks()
+    {
+        playlistTracks.assign (kDefaultGenericTracks, PlaylistTrack {});
+        for (int p = 0; p < static_cast<int> (patterns.size()); ++p)
+            addPatternTrack (p);
+    }
+
+    // Adds a track at the end (a free one unless `track.pattern` says otherwise). Returns its index, or -1 when there are
+    // kMaxPlaylistTracks already.
+    int addTrack (PlaylistTrack track = {})
+    {
+        if (trackCount() >= kMaxPlaylistTracks)
+            return -1;
+        playlistTracks.push_back (std::move (track));
+        return trackCount() - 1;
+    }
+
+    // The track for a new pattern: the one it already has, or a new one at the end (-1 when full).
+    int addPatternTrack (int pattern)
+    {
+        if (const int t = dedicatedTrack (pattern); t >= 0)
+            return t;
+        PlaylistTrack track;
+        track.pattern = pattern;
+        return addTrack (track);
+    }
+
+    // Removes track `t` with every clip on it; the tracks after it move up one place (their clips follow). The last track is
+    // kept. Returns false (and changes nothing) for a bad index or the only track.
+    bool removeTrack (int t)
+    {
+        if (t < 0 || t >= trackCount() || trackCount() <= 1)
+            return false;
+        playlistTracks.erase (playlistTracks.begin() + t);
+        const auto onTrack = [t] (const auto& c) { return c.track == t; };
+        clips.erase (std::remove_if (clips.begin(), clips.end(), onTrack), clips.end());
+        audioClips.erase (std::remove_if (audioClips.begin(), audioClips.end(), onTrack), audioClips.end());
+        for (auto& c : clips)
+            if (c.track > t)
+                --c.track;
+        for (auto& c : audioClips)
+            if (c.track > t)
+                --c.track;
+        return true;
+    }
+
+    // How many clips (pattern and audio) are on track `t`.
+    int clipsOnTrack (int t) const noexcept
+    {
+        return static_cast<int> (std::count_if (clips.begin(), clips.end(), [t] (const Clip& c) { return c.track == t; })
+                                 + std::count_if (audioClips.begin(), audioClips.end(), [t] (const AudioClip& c) { return c.track == t; }));
+    }
 
     bool hasLoop() const noexcept { return loopStartTick >= 0 && loopEndTick > loopStartTick && loopEndTick <= timelineTicks(); }
     // Sets the loop region; false (and no region) when it does not fit in the timeline or is shorter than one 16th.
@@ -136,7 +210,7 @@ struct Arrangement
     // audio clips alike (layering, as in FL Studio): they all play. `ignoreIndex` is kept for the callers (the clip being moved).
     bool canPlaceAudio (const AudioClip& c, [[maybe_unused]] int ignoreIndex = -1) const
     {
-        if (c.data == nullptr || c.track < 0 || c.track >= kPlaylistTracks)
+        if (c.data == nullptr || c.track < 0 || c.track >= trackCount())
             return false;
         return c.startTick >= 0 && c.lengthTicks >= 1 && c.endTick() <= timelineTicks() && std::isfinite (c.offsetSeconds) && c.offsetSeconds >= 0.0;
     }
@@ -246,7 +320,7 @@ struct Arrangement
     {
         if (c.pattern < 0 || c.pattern >= static_cast<int> (patterns.size()))
             return false;
-        if (c.track < 0 || c.track >= kPlaylistTracks)
+        if (c.track < 0 || c.track >= trackCount())
             return false;
         return c.startTick >= 0 && c.lengthTicks >= 1 && c.offsetTicks >= 0 && c.endTick() <= timelineTicks();
     }
@@ -319,11 +393,28 @@ struct Arrangement
         if (index < 0 || index >= static_cast<int> (patterns.size()) || patterns.size() <= 1)
             return false;
 
+        const auto oldName = patterns[static_cast<size_t> (index)].name;
         patterns.erase (patterns.begin() + index);
         clips.erase (std::remove_if (clips.begin(), clips.end(), [index] (const Clip& c) { return c.pattern == index; }), clips.end());
         for (auto& c : clips)
             if (c.pattern > index)
                 --c.pattern;
+        // Its own track goes too when nothing else is on it (0.44.0); otherwise it stays as a free track.
+        if (const int t = dedicatedTrack (index); t >= 0)
+        {
+            if (clipsOnTrack (t) == 0 && trackCount() > 1)
+                removeTrack (t);
+            else
+            {
+                auto& track = playlistTracks[static_cast<size_t> (t)];
+                track.pattern = -1;
+                if (track.name.empty())
+                    track.name = oldName.substr (0, 32);
+            }
+        }
+        for (auto& track : playlistTracks)
+            if (track.pattern > index)
+                --track.pattern;
         return true;
     }
 

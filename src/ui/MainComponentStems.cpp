@@ -111,8 +111,12 @@ void MainComponent::useStems (int index, const AudioClip& clip, Stems stems)
     }
 
     // The clips: Drums replaces the original on its track, Bass and Other below it (above it at the bottom of the playlist).
-    const int targets[3] = { clip.track, clip.track + 1 < kPlaylistTracks ? clip.track + 1 : clip.track - 2,
-                            clip.track + 2 < kPlaylistTracks ? clip.track + 2 : clip.track - 1 };
+    // Tracks are added at the end of the playlist when there are not two below it (0.44.0).
+    while (clip.track + 2 >= arrangement.trackCount() && arrangement.addTrack() >= 0) {}
+    playlistView.tracksChanged();
+    const int count = arrangement.trackCount();
+    const int targets[3] = { clip.track, clip.track + 1 < count ? clip.track + 1 : clip.track - 2,
+                            clip.track + 2 < count ? clip.track + 2 : clip.track - 1 };
     std::vector<AudioClip> made;
     for (size_t i = 0; i < 3; ++i)
     {
@@ -120,7 +124,7 @@ void MainComponent::useStems (int index, const AudioClip& clip, Stems stems)
         c.data = saved[i];
         c.name = saved[i]->name;
         c.offsetSeconds = 0.0;
-        c.track = std::clamp (targets[i], 0, kPlaylistTracks - 1);
+        c.track = std::clamp (targets[i], 0, count - 1);
         made.push_back (std::move (c));
     }
     const auto error = playlistView.replaceAudioClip (index, clip.data, made);

@@ -21,7 +21,7 @@ The status line shows the audio device (sample rate, buffer size, reported laten
 
 ## Projects
 
-Everything in the song is saved in one `.slp` file (versions before 0.8 wrote `.slsproj`; those files still open): channels (instrument, sample, volume, pan, pitch, swing,
+Everything in the song is saved in one `.slp` file: channels (instrument, sample, volume, pan, pitch, swing,
 mixer track), all patterns and their notes, the playlist, the mixer (faders, balance, mute/solo, effect chains and
 their settings), the audio clips of the playlist (as paths of their files), BPM, master volume and whether Song mode is on. The window title shows the project name, with a
 `*` after it while there are changes that are not saved.
@@ -29,10 +29,10 @@ their settings), the audio clips of the playlist (as paths of their files), BPM,
 | Command | Key | What it does |
 | --- | --- | --- |
 | **New** | `Ctrl+N` | Starts an empty project (one synth channel, one empty pattern). |
-| **Open...** | `Ctrl+O` | Chooses a `.slp` (or older `.slsproj`) file. |
+| **Open...** | `Ctrl+O` | Chooses a `.slp` file. |
 | **Open recent** | | The last eight projects that still exist. |
 | **Save** | `Ctrl+S` | Writes the project. |
-| **Save as...** | `Ctrl+Shift+S` | Asks for a name (the `.slp` ending is added if you leave it out) and writes the project there. An old `.slsproj` is offered as `.slp`. |
+| **Save as...** | `Ctrl+Shift+S` | Asks for a name (the `.slp` ending is added if you leave it out) and writes the project there. |
 | **Export project with samples...** | | Asks for the name of a new folder and writes the project into it together with a copy of every sound it uses (see below). |
 | **Undo / Redo** | `Ctrl+Z` / `Ctrl+Y` | Undoes or redoes the last edit, of any kind (see *Undo and redo*). |
 | **Import audio or video into the playlist...** | | Chooses audio or video files and puts them on the playlist (see *Audio clips*). |
@@ -474,13 +474,13 @@ It is closed at start and opens from a channel, as above.
 | Action | How |
 | --- | --- |
 | Play a note | Left button on a key of the keyboard (held = sounds). |
-| Add a note | Click an empty cell; keep the button down and drag to the right to set its length. It sounds while you hold. |
+| Add a note | Click an empty cell (press and release without moving: since 0.44.0 a drag on empty cells selects instead). The key sounds while you hold. Drag the new note's right edge to change its length. |
 | Move a note | Drag it (Alt while dragging: no snap). Dragging a **selected** note moves every selected note. |
 | Change its length | Drag its right edge, or its **left edge** to move its start keeping its end (0.32.0); over either edge the cursor becomes a left-right arrow. On a selected note every selected note changes by the same amount. |
 | Reuse a length | Click a note: its length becomes the length of the next notes you draw (0.32.0, as in FL Studio). |
 | Delete a note | Right-click it (a selected note: the whole selection). |
-| Select notes | **Ctrl + drag** on an empty part draws a rectangle (with Shift it adds to the selection); **Ctrl + click** a note adds or removes it; **Ctrl + A** selects all, **Escape** none. Selected notes are bright with a white border. |
-| Copy, cut, paste, duplicate | **Ctrl + C / X / V** (paste puts the first note under the mouse), **Ctrl + D** (a copy right after the selection). **Delete** removes the selection. |
+| Select notes | **Drag on an empty part** (0.44.0, as on the desktop) draws a selection rectangle; on release every note it touches or holds is selected (with Shift it adds to the selection; **Ctrl + drag** does the same); **Ctrl + click** a note adds or removes it; **Ctrl + A** selects all, **Escape** none. Selected notes are bright with a white border. |
+| Copy, cut, paste, duplicate | **Ctrl + C / X / V** with the mouse over the piano roll (paste puts the first note under the mouse; the copied notes can be pasted in the same piano roll or in another channel's or pattern's - select the channel or pattern, then Ctrl + V), **Ctrl + D** (a copy right after the selection). **Delete** removes the selection. |
 | Move with the keys | **Up / Down**: a semitone (Shift: an octave, Ctrl: a step of the scale); **Left / Right**: a snap step (Shift: a beat). |
 | Legato / slide | Shift + click a note: normal -> **legato** (blue, "L") -> **slide** (amber, "S") -> normal. |
 | Scroll pitch | Mouse wheel. |
@@ -586,8 +586,8 @@ Studio's **.flp** files, with code written for this program (no FL Studio code o
   length, velocity), the first arrangement's playlist (pattern clips and audio clips on their tracks) and the tracks' names and
   colours. FL Studio's own synths and plugins have no equivalent here: a default synth plays their notes. A sample whose stored
   path does not exist (a Windows path, FL Studio's own folders) is looked for by its name next to the .flp and in the folders beside
-  it. Patterns get one length here (1, 2, 4 or 8 bars: the shortest that holds the longest), FL Studio's 500 playlist tracks go onto
-  the 8 here in their order, and clips keep their position and length.
+  it. Patterns get one length here (1, 2, 4 or 8 bars: the shortest that holds the longest), the FL Studio playlist tracks that hold something
+  go onto as many tracks here (at least 4, at most 128) in their order, and clips keep their position and length.
 - **Export as FL Studio project (.flp)...** writes the current project in FL Studio 20.8's layout at 960 PPQ (exact: twice this
   program's 480). Sampler channels keep their sample file; synths, drum machines, plugins and built-in sounds become empty Sampler
   channels that keep their notes; a pattern clip repeated over several pattern lengths becomes one clip per repeat; audio clips play
@@ -602,7 +602,7 @@ Studio's **.flp** files, with code written for this program (no FL Studio code o
 
 *File > Import a MIDI file into patterns...* (or drop a `.mid` / `.midi` file on the Playlist) turns a Standard MIDI File into **new synth
 channels** (one per track and MIDI channel that has notes, named after the track) and **new patterns** of the project's pattern length, placed one after the
-other on playlist track 1 after the existing clips. Long notes that cross the end of a pattern are cut there and sound again at the start of
+other after the existing clips, each on its own playlist track (0.44.0; before, all on track 1). Long notes that cross the end of a pattern are cut there and sound again at the start of
 the next pattern. The first tempo of the file sets the BPM. The status line reports what was done and what was left out.
 
 Left out: General MIDI **drum** tracks (MIDI channel 10), tempo changes after the first, controllers, pitch bend, program changes; tracks that
@@ -611,7 +611,24 @@ imported channels are plain synths: give them a sampler or another sound afterwa
 
 ## Playlist
 
-The Playlist arranges patterns in time. It has 8 tracks and a timeline of at least 32 pattern lengths and at least 64 bars. The ruler shows bar
+The Playlist arranges patterns in time. Its **tracks** (0.44.0):
+
+- A new project starts with **4 free tracks** (*Track 1-4*, for recordings, audio files or anything) and, below them, **one track
+  for each pattern**, named and coloured after it. Every pattern made afterwards (*New*, *Clone*, the Loop Starter, a MIDI import)
+  adds its own track at the end and the playlist scrolls to it: with 4 patterns there are 4 pattern tracks + the 4 free ones = 8.
+- A click on an empty place of a pattern's track puts **that pattern** there; on a free track it puts the pattern chosen in the
+  pattern box. Clips can still be moved to any track.
+- The **-** and **+** buttons in the top-left corner, above the track names, remove the **last** track and add a free track at
+  the end. To remove a particular track, right-click its name > *Delete this track* (the menu also has *Add a track at the
+  end*). A track that holds clips is removed only after a question, and its clips go with it; **Ctrl+Z** brings everything back.
+  At least one track stays; at most 128.
+- Deleting a pattern removes its track too when nothing else is on it; a track that still holds clips (a recording, say) stays,
+  as a free track with the pattern's old name.
+- Up to 8 tracks share the height of the panel; with more, they scroll: the scroll bar on the right, the **mouse wheel over the
+  track names**, or **Alt + wheel** anywhere.
+- Projects saved before 0.44.0 open with their 8 tracks as they were.
+
+The timeline is at least 32 pattern lengths and at least 64 bars long. The ruler shows bar
 numbers. The orange vertical line marks the end of the song: in Song mode playback loops there (or at the loop region, below).
 
 ### The ruler: song position and loop region
@@ -899,7 +916,7 @@ Automation makes a control move by itself while the song plays. It works on:
 (including the parameters of effects on an aux bus), and anything else.
 
 **Create a clip.** Right-click the control and choose *Create automation clip*. A clip one pattern long appears on one of the four
-**automation lanes** (*Auto 1-4*, under the eight tracks of the Playlist) and its editor opens. The clip is a flat line at the
+**automation lanes** (*Auto 1-4*, under the tracks of the Playlist) and its editor opens. The clip is a flat line at the
 control's current value. It starts at the pattern under the playhead if the song is playing in Song mode, otherwise at the start of the song. If all four
 lanes are already occupied there (or 64 clips exist), nothing is created and the status line says so; move or delete a clip and try again.
 
@@ -1131,7 +1148,7 @@ a heavier song or a plugin-heavy mixer can still need a bigger size.
 
 ## Limits
 
-- Up to 32 channels, up to 500 mixer tracks (8 to start with) with 4 effect slots each, 2 aux buses (4 slots each), 2 VCA groups, 64 patterns, 8 playlist tracks, a timeline of
+- Up to 32 channels, up to 500 mixer tracks (8 to start with) with 4 effect slots each, 2 aux buses (4 slots each), 2 VCA groups, 64 patterns, 1 to 128 playlist tracks, a timeline of
   at least 32 patterns and 64 bars, 4 automation lanes, 64 automation clips of up to 256 points each, 32 simultaneous voices.
 - The effects use about 15 MB of memory at 48 kHz to start with, plus about 0.8 MB for every reverb, delay, chorus and Pitch Corrector beyond
   the sixteenth (more at higher sample rates). Memory made for them stays until the audio device restarts.

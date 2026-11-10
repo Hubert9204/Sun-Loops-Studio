@@ -15,10 +15,9 @@
 namespace sls
 {
 // Everything that makes up a song, in a form that can be written to and read from a file.
-// Stored as JSON in a ".slp" file (files from before 0.8, ".slsproj", are still opened). Samples are not embedded: a channel refers to its sample by
+// Stored as JSON in a ".slp" file. Samples are not embedded: a channel refers to its sample by
 // "builtin:<id>" or by absolute file path, and the caller loads it (a missing file is reported, not fatal).
 constexpr const char* kProjectExtension = ".slp";
-constexpr const char* kLegacyProjectExtension = ".slsproj"; // what versions before 0.8 wrote; still read and kept as is
 constexpr int kProjectFormatVersion = 1;
 constexpr const char* kProjectFormatName = "sun-loops-studio-project";
 
@@ -103,14 +102,11 @@ juce::String exportProjectWithSamples (ProjectDocument d, const juce::File& fold
 // next to the target, which then replaces it. Returns an error message, empty on success.
 juce::String writeProjectFile (const juce::File& file, const ProjectDocument& document);
 
-// True for a name ending in .slp or in the older .slsproj.
+// True for a name ending in .slp (0.44.0: the .slsproj of versions before 0.8 is no longer recognised).
 bool hasProjectExtension (const juce::File& file);
 
-// "My Song" -> "My Song.slp"; names that already end in .slp (or the older .slsproj) are left alone.
+// "My Song" -> "My Song.slp"; names that already end in .slp are left alone.
 juce::File withProjectExtension (const juce::File& file);
-
-// The file a project opened from `file` is offered under by "Save as": an old ".slsproj" becomes ".slp".
-juce::File projectFileForSaveAs (const juce::File& file);
 
 // "Untitled 2026-11-05 21-54-07.slp" in `folder`, never an existing file.
 juce::File automaticProjectFile (const juce::File& folder, juce::Time now);

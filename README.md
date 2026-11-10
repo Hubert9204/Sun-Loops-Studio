@@ -16,7 +16,7 @@ Sun Loops Studio is inspired by the workflow of loop-based DAWs such as FL Studi
 that uses no code, names, graphics or assets from other products, and it is not affiliated with or endorsed by
 their makers.
 
-**Status: alpha (0.43.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
+**Status: alpha (0.44.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
 display. Playback was confirmed on a real Nobara machine for version 0.3; everything added since (panels, patterns,
 playlist, browser, pitch/swing, the expanded mixer and its effects, saving projects, the AppImage, audio clips, drag and
 drop, recording, MIDI, the metronome and the export formats) was tested headless and in a virtual display with a silent
@@ -40,7 +40,7 @@ See [docs/roadmap.md](docs/roadmap.md) for exactly what is and is not verified a
   *Load sample...*, *Rename...*, *Clone*, *Move up / down*, *Delete*, *Assign free mixer track*, *Save as preset...*.
 - **Piano Roll** - for the selected channel: click to add a note, drag to move, drag the right edge to resize,
   right-click to delete, scroll and zoom. Opens from a channel (menu or double-click), as in FL Studio. **Since 0.23.0**: selections
-  (Ctrl+drag, Ctrl+A), copy / paste / duplicate, moving with the arrow keys, snap from bars to 1/32 and triplets, a **scale** shown on
+  (a drag on empty cells draws a selection rectangle since 0.44.0; Ctrl+A), copy / paste / duplicate (also between channels' piano rolls), moving with the arrow keys, snap from bars to 1/32 and triplets, a **scale** shown on
   the grid (with snap to scale), **chords placed with one click**, a **velocity lane**, editing tools (quantize, humanize, legato,
   staccato, strum, arpeggiate, chop, flip, velocity ramps) and **generators** of chord progressions and basslines (also following the
   chords of another channel).
@@ -52,7 +52,8 @@ See [docs/roadmap.md](docs/roadmap.md) for exactly what is and is not verified a
   reggaeton, rock, synthwave): drums, bass, chords and a melody that fit together, in the key you choose, at the genre's tempo, with the
   built-in sounds, as a new pattern. Made by rules and chance (no AI, nothing online); each variation is different.
 - **Patterns and Playlist** - several patterns (new, cloned, renamed or deleted from buttons above the playlist), arranged
-  as clips on 8 tracks (each with its own name and colour, and clips may lie over each other: 0.33.0); patterns are 4 to 64 quarters long, and pattern clips move by grid squares (or freely with Alt), so they can start out of step with each other (0.42.0). A *Pattern / Song* switch chooses between looping the selected pattern and playing the whole
+  as clips on tracks (0.44.0: 4 free tracks plus one per pattern, added automatically with each new pattern, and **-** / **+** to
+  remove or add tracks by hand, up to 128; each with its own name and colour, and clips may lie over each other: 0.33.0); patterns are 4 to 64 quarters long, and pattern clips move by grid squares (or freely with Alt), so they can start out of step with each other (0.42.0). A *Pattern / Song* switch chooses between looping the selected pattern and playing the whole
   playlist. **Click the ruler to move the playhead, even while playing; right-drag on it to draw a loop region** (right-click it to move, resize or delete it).
 - **Audio in the Playlist** - drag audio files (`.wav .aiff .flac .ogg .oga .mp3 .aac`) or video files (their sound
   track) from the file manager onto the Playlist: they become clips with a waveform. **Select, Split, Cut, Erase and Zoom

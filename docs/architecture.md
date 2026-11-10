@@ -48,7 +48,7 @@ src/library/                    No JUCE GUI; JUCE core only (files, JSON)
   SoundFont.*                   SoundFont 2 presets to SamplerPrograms (parsed with third_party/tinysoundfont), ProgramSpec (what the project file stores), sampler settings as JSON
   JsonRead.h                    readNumber / readInt / readBool / readName / number: the range-clamping JSON helpers shared by the project, preset and kit files
   Library.*                     ~/Music/Sun Loops Studio folders, directory scan, building the browser tree
-  ProjectFile.*                 The .slp project file (older .slsproj still read): ProjectDocument <-> JSON, safe read and write
+  ProjectFile.*                 The .slp project file: ProjectDocument <-> JSON, safe read and write
 
 src/plugins/PluginScanner.*     A plain VST3 file finder (older; kept for its tests). The browser uses PluginHost's scan since 0.17.0
 src/plugins/PluginHost.*        Plugin hosting (0.17.0): JucePlugin (a VST3 / LV2 / LADSPA instance behind HostedPlugin: block processing, MIDI, state,
@@ -548,6 +548,23 @@ and ranks with BM25 (k1 1.4, b 0.75) plus a title bonus, a bonus for sections ho
 question's language. The index is built the first time Helios opens. Commands are `HeliosCommand`s (name, keywords, a function)
 made by `MainComponent::heliosCommands`, matched by the share of the question's words they contain.
 
+### Playlist tracks and piano roll selection (0.44.0)
+
+- `Arrangement::playlistTracks` is a vector (`kMaxPlaylistTracks` = 128): each `PlaylistTrack` has a name, a colour and the
+  pattern it is dedicated to (-1: free). `resetTracks()` makes `kDefaultGenericTracks` (4) free tracks plus one per pattern;
+  `addPatternTrack()` is called wherever a pattern is made (MainComponentPatterns, LoopStarter, MIDI import); `removeTrack()`
+  deletes the track's clips and moves the clips below up; `removePattern()` removes the pattern's track when it is empty,
+  otherwise makes it free with the pattern's name. Saved as `trackCount` plus the tracks that differ from the default (with
+  `pattern`); files without `trackCount` have 8.
+- `PlaylistTimeline` computes the track height from the visible count (up to 8 share the panel), scrolls the tracks vertically
+  (`scrollY`, a vertical `ScrollBar`, the wheel over the names or Alt+wheel) and clips the track drawing to the tracks' area; the
+  automation lanes stay under it. The - / + buttons and the track menu go through `addTrack` / `removeTrack` (one undo step: the
+  playlist's snapshots hold the tracks); `onTrackRemoved` lets MainComponent move the record arms (`RecordSetup::removeTrack`).
+  A click on an empty place of a dedicated track places that track's pattern.
+- `PianoRoll`: a press on empty grid is `Drag::PendingEmpty`; moving 4 pixels turns it into the selection rectangle (`Drag::Select`),
+  releasing without moving creates the note(s). The clipboard (`PianoRoll::clipboard()`) is static, shared by the piano roll
+  whatever channel or pattern it shows.
+
 ### Crash reports, session log and updates (0.43.0)
 
 `src/support/` is plain C++ (no JUCE) and tested headless:
@@ -602,7 +619,7 @@ ring, applies a Hann window and the library-free radix-2 FFT of `SpectrumAnalyse
 
 `Arrangement` is the song as the user edits it: **patterns** (notes per channel, ticks relative to the pattern start)
 and **clips** (pattern, track, start tick, length in ticks, offset into the pattern; in pattern units before 0.42.0). The
-pattern length is shared by all patterns (one bar of 4/4 by default). Limits: 8 playlist tracks, a timeline of at least 32 pattern
+pattern length is shared by all patterns (one bar of 4/4 by default). Limits: 1 to 128 playlist tracks (0.44.0; 8 before), a timeline of at least 32 pattern
 lengths and 64 bars, 64 patterns.
 
 It is never played directly. It is *compiled* into an ordinary `Project`:
@@ -665,8 +682,7 @@ frames (silent) that still carries the `source` string, so saving again does not
 
 `writeProjectFile()` writes to a `juce::TemporaryFile` next to the target and then replaces the target, so a failed
 write leaves the old file intact; it returns an error string. `withProjectExtension()` adds `.slp` to a name that
-lacks it (names ending in `.slp` or the older `.slsproj` are left alone; `projectFileForSaveAs()` turns an old `.slsproj` into
-`.slp`), and `automaticProjectFile()` makes `Untitled <date> <time>.slp` in `Library`'s `projects` folder
+lacks it (names ending in `.slp` are left alone; 0.44.0 dropped the `.slsproj` of versions before 0.8), and `automaticProjectFile()` makes `Untitled <date> <time>.slp` in `Library`'s `projects` folder
 (`~/Music/Sun Loops Studio/Projects`), never an existing name.
 
 In the interface, `MainComponent` turns its state into a document (`makeDocument`) and back (`applyDocument`, which

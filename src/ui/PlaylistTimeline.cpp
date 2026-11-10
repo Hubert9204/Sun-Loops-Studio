@@ -45,12 +45,27 @@ PlaylistTimeline::PlaylistTimeline (Arrangement& arrangementToEdit) : arrangemen
     scrollBar.addListener (this);
     scrollBar.setAutoHide (false);
     addAndMakeVisible (scrollBar);
+    trackScrollBar.addListener (this);
+    trackScrollBar.setAutoHide (false);
+    addChildComponent (trackScrollBar);
+    // The tracks' - and + (0.44.0), in the corner above the track names.
+    removeTrackButton.setTooltip ("Remove the last playlist track (right-click a track's name to delete that one)");
+    addTrackButton.setTooltip ("Add a playlist track at the end");
+    removeTrackButton.onClick = [this] { removeTrack (arrangement.trackCount() - 1); };
+    addTrackButton.onClick = [this] { addTrack(); };
+    for (auto* b : { &removeTrackButton, &addTrackButton })
+    {
+        b->setMouseClickGrabsKeyboardFocus (false);
+        b->setWantsKeyboardFocus (false);
+        addAndMakeVisible (b);
+    }
     unitWidth = 120.0;
 }
 
 PlaylistTimeline::~PlaylistTimeline()
 {
     scrollBar.removeListener (this);
+    trackScrollBar.removeListener (this);
 }
 
 juce::Colour PlaylistTimeline::colourForPattern (int patternIndex)
@@ -81,14 +96,113 @@ double PlaylistTimeline::getPixelsPerTick() const noexcept
     return arrangement.patternTicks > 0 ? unitWidth / arrangement.patternTicks : 1.0;
 }
 
+namespace
+{
+int availableTrackHeight (int componentHeight) noexcept
+{
+    return componentHeight - 38 - 14 - kAutomationLanes * 22 - 4; // ruler, scroll bar, automation lanes, gap
+}
+} // namespace
+
+// Up to kMaxVisibleTracks tracks share the height; more keep that size and scroll (0.44.0).
 int PlaylistTimeline::trackHeight() const noexcept
 {
-    return std::clamp ((getHeight() - kRulerHeight - kScrollBarHeight - kAutomationLanes * kLaneHeight - kLanesGap) / kPlaylistTracks, 18, 56);
+    return std::clamp (availableTrackHeight (getHeight()) / std::clamp (trackCount(), 1, kMaxVisibleTracks), 18, 56);
+}
+
+int PlaylistTimeline::tracksViewHeight() const noexcept
+{
+    const int th = trackHeight();
+    return std::max (th, std::min (trackCount() * th, availableTrackHeight (getHeight())));
 }
 
 int PlaylistTimeline::lanesTop() const noexcept
 {
-    return kRulerHeight + kPlaylistTracks * trackHeight() + kLanesGap;
+    return kRulerHeight + tracksViewHeight() + kLanesGap;
+}
+
+void PlaylistTimeline::clampScrollY()
+{
+    scrollY = std::clamp (scrollY, 0, std::max (0, trackCount() * trackHeight() - tracksViewHeight()));
+}
+
+void PlaylistTimeline::updateTrackScrollBar()
+{
+    const int content = trackCount() * trackHeight();
+    const int view = tracksViewHeight();
+    trackScrollBar.setVisible (content > view);
+    trackScrollBar.setBounds (getWidth() - kTrackScrollWidth, kRulerHeight, kTrackScrollWidth, view);
+    trackScrollBar.setRangeLimits (0.0, std::max (content, view));
+    trackScrollBar.setCurrentRange (scrollY, view, juce::dontSendNotification);
+}
+
+void PlaylistTimeline::scrollToTrack (int track)
+{
+    const int th = trackHeight();
+    const int top = track * th;
+    if (top < scrollY)
+        scrollY = top;
+    else if (top + th > scrollY + tracksViewHeight())
+        scrollY = top + th - tracksViewHeight();
+    clampScrollY();
+    updateTrackScrollBar();
+    repaint();
+}
+
+void PlaylistTimeline::tracksChanged()
+{
+    armedTrack = std::clamp (armedTrack, 0, trackCount() - 1);
+    removeTrackButton.setEnabled (arrangement.trackCount() > 1);
+    addTrackButton.setEnabled (arrangement.trackCount() < kMaxPlaylistTracks);
+    clampScrollY();
+    updateTrackScrollBar();
+    repaint();
+}
+
+void PlaylistTimeline::addTrack()
+{
+    if (arrangement.trackCount() >= kMaxPlaylistTracks)
+        return;
+    beginEdit();
+    arrangement.addTrack();
+    commitPendingUndo();
+    tracksChanged();
+    scrollToTrack (arrangement.trackCount() - 1);
+    notifyChanged();
+}
+
+void PlaylistTimeline::removeTrack (int track)
+{
+    if (track < 0 || track >= arrangement.trackCount() || arrangement.trackCount() <= 1)
+        return;
+    const auto doRemove = [safe = juce::Component::SafePointer<PlaylistTimeline> (this), track]
+    {
+        if (safe == nullptr || track >= safe->arrangement.trackCount())
+            return;
+        safe->beginEdit();
+        if (! safe->arrangement.removeTrack (track))
+        {
+            safe->pendingUndoValid = false;
+            return;
+        }
+        safe->commitPendingUndo();
+        safe->select (Kind::None, -1);
+        safe->tracksChanged();
+        if (safe->onTrackRemoved)
+            safe->onTrackRemoved (track);
+        safe->notifyChanged();
+    };
+    const int clipsThere = arrangement.clipsOnTrack (track);
+    if (clipsThere == 0)
+    {
+        doRemove();
+        return;
+    }
+    juce::AlertWindow::showOkCancelBox (juce::MessageBoxIconType::QuestionIcon, "Delete " + trackName (track) + "?",
+                                        "The track holds " + juce::String (clipsThere) + (clipsThere == 1 ? " clip, which is" : " clips, which are")
+                                            + " deleted with it (Undo brings them back).",
+                                        "Delete the track", "Cancel", this,
+                                        juce::ModalCallbackFunction::create ([doRemove] (int result) { if (result != 0) doRemove(); }));
 }
 
 juce::Rectangle<int> PlaylistTimeline::automationClipRect (const AutomationClip& c) const noexcept
@@ -111,14 +225,14 @@ int PlaylistTimeline::xToUnit (int x) const noexcept
 
 int PlaylistTimeline::yToTrack (int y) const noexcept
 {
-    return std::clamp ((y - kRulerHeight) / trackHeight(), 0, kPlaylistTracks - 1);
+    return std::clamp ((y - kRulerHeight + scrollY) / trackHeight(), 0, trackCount() - 1);
 }
 
 juce::Rectangle<int> PlaylistTimeline::clipRect (const Clip& c) const noexcept
 {
     const int x0 = tickToX (c.startTick);
     const int x1 = tickToX (c.endTick());
-    return { x0, kRulerHeight + c.track * trackHeight(), std::max (2, x1 - x0), trackHeight() };
+    return { x0, trackTop (c.track), std::max (2, x1 - x0), trackHeight() };
 }
 
 int PlaylistTimeline::tickToX (int tick) const noexcept
@@ -150,7 +264,7 @@ juce::Rectangle<int> PlaylistTimeline::audioClipRect (const AudioClip& c) const 
 {
     const int x0 = tickToX (c.startTick);
     const int x1 = tickToX (c.endTick());
-    return { x0, kRulerHeight + c.track * trackHeight(), std::max (1, x1 - x0), trackHeight() };
+    return { x0, trackTop (c.track), std::max (1, x1 - x0), trackHeight() };
 }
 
 double PlaylistTimeline::totalWidth() const noexcept
@@ -171,8 +285,15 @@ void PlaylistTimeline::updateScrollBar()
     scrollBar.setCurrentRange (scrollX, visible, juce::dontSendNotification);
 }
 
-void PlaylistTimeline::scrollBarMoved (juce::ScrollBar*, double newRangeStart)
+void PlaylistTimeline::scrollBarMoved (juce::ScrollBar* bar, double newRangeStart)
 {
+    if (bar == &trackScrollBar)
+    {
+        scrollY = static_cast<int> (std::lround (newRangeStart));
+        clampScrollY();
+        repaint();
+        return;
+    }
     scrollX = newRangeStart;
     clampScroll();
     repaint();
@@ -245,7 +366,7 @@ void PlaylistTimeline::setSnapTicks (int ticks)
     repaint();
 }
 
-void PlaylistTimeline::setRecordArms (const std::array<bool, kPlaylistTracks>& arms)
+void PlaylistTimeline::setRecordArms (const std::array<bool, kMaxPlaylistTracks>& arms)
 {
     if (arms != recordArms)
     {
@@ -256,7 +377,7 @@ void PlaylistTimeline::setRecordArms (const std::array<bool, kPlaylistTracks>& a
 
 void PlaylistTimeline::setSelectedTrack (int track)
 {
-    track = std::clamp (track, 0, kPlaylistTracks - 1);
+    track = std::clamp (track, 0, trackCount() - 1);
     if (track != armedTrack)
     {
         armedTrack = track;
@@ -463,6 +584,10 @@ void PlaylistTimeline::resized()
     scrollBar.setBounds (kNameWidth, getHeight() - kScrollBarHeight, std::max (1, getWidth() - kNameWidth), kScrollBarHeight);
     clampScroll();
     updateScrollBar();
+    removeTrackButton.setBounds (6, 8, 38, kRulerHeight - 16);
+    addTrackButton.setBounds (50, 8, 38, kRulerHeight - 16);
+    clampScrollY();
+    updateTrackScrollBar();
 }
 
 void PlaylistTimeline::paintGrid (juce::Graphics& g)
@@ -699,10 +824,10 @@ void PlaylistTimeline::paintLoopRegion (juce::Graphics& g)
     g.fillRect (b - 2, 0, 2, kRulerHeight);
     // a faint band down the tracks, so the region can be seen against the clips
     g.setColour (kLoop.withAlpha (0.07f));
-    g.fillRect (a, kRulerHeight, b - a, kPlaylistTracks * trackHeight());
+    g.fillRect (a, kRulerHeight, b - a, tracksViewHeight());
     g.setColour (kLoop.withAlpha (0.45f));
-    g.drawVerticalLine (a, static_cast<float> (kRulerHeight), static_cast<float> (kRulerHeight + kPlaylistTracks * trackHeight()));
-    g.drawVerticalLine (b - 1, static_cast<float> (kRulerHeight), static_cast<float> (kRulerHeight + kPlaylistTracks * trackHeight()));
+    g.drawVerticalLine (a, static_cast<float> (kRulerHeight), static_cast<float> (kRulerHeight + tracksViewHeight()));
+    g.drawVerticalLine (b - 1, static_cast<float> (kRulerHeight), static_cast<float> (kRulerHeight + tracksViewHeight()));
     if (b - a > 44)
     {
         g.setColour (juce::Colours::black.withAlpha (0.85f));
@@ -722,13 +847,19 @@ void PlaylistTimeline::paint (juce::Graphics& g)
         juce::Graphics::ScopedSaveState state (g);
         g.reduceClipRegion (kNameWidth, 0, getWidth() - kNameWidth, getHeight());
 
-        for (int t = 0; t < kPlaylistTracks; ++t)
         {
-            auto row = t % 2 == 0 ? kTrackA : kTrackB;
-            if (const auto colour = arrangement.playlistTracks[static_cast<size_t> (t)].colour; colour != 0)
-                row = row.interpolatedWith (juce::Colour (colour).withAlpha (1.0f), 0.14f); // a coloured track (0.33.0)
-            g.setColour (row);
-            g.fillRect (kNameWidth, kRulerHeight + t * th, getWidth() - kNameWidth, th);
+            juce::Graphics::ScopedSaveState rows (g);
+            g.reduceClipRegion (kNameWidth, kRulerHeight, getWidth() - kNameWidth, tracksViewHeight());
+            for (int t = 0; t < arrangement.trackCount(); ++t)
+            {
+                if (trackTop (t) + th < kRulerHeight || trackTop (t) > kRulerHeight + tracksViewHeight())
+                    continue;
+                auto row = t % 2 == 0 ? kTrackA : kTrackB;
+                if (const auto colour = arrangement.playlistTracks[static_cast<size_t> (t)].colour; colour != 0)
+                    row = row.interpolatedWith (juce::Colour (colour).withAlpha (1.0f), 0.14f); // a coloured track (0.33.0)
+                g.setColour (row);
+                g.fillRect (kNameWidth, trackTop (t), getWidth() - kNameWidth, th);
+            }
         }
 
         for (int lane = 0; lane < kAutomationLanes; ++lane)
@@ -746,9 +877,12 @@ void PlaylistTimeline::paint (juce::Graphics& g)
         if (songTicks > 0)
         {
             g.setColour (kPlayhead.withAlpha (0.35f));
-            g.drawVerticalLine (tickToX (songTicks), static_cast<float> (kRulerHeight), static_cast<float> (kRulerHeight + kPlaylistTracks * th));
+            g.drawVerticalLine (tickToX (songTicks), static_cast<float> (kRulerHeight), static_cast<float> (kRulerHeight + tracksViewHeight()));
         }
 
+        // The tracks' clips, kept inside the tracks' area when the tracks scroll (0.44.0).
+        g.saveState();
+        g.reduceClipRegion (kNameWidth, kRulerHeight, getWidth() - kNameWidth, tracksViewHeight());
         for (int i = 0; i < static_cast<int> (arrangement.clips.size()); ++i)
         {
             const auto& clip = arrangement.clips[static_cast<size_t> (i)];
@@ -787,13 +921,10 @@ void PlaylistTimeline::paint (juce::Graphics& g)
         for (int i = 0; i < static_cast<int> (arrangement.audioClips.size()); ++i)
             paintAudioClip (g, arrangement.audioClips[static_cast<size_t> (i)], selection.kind == Kind::Audio && selection.index == i);
 
-        for (int i = 0; i < static_cast<int> (arrangement.automationClips.size()); ++i)
-            paintAutomationClip (g, arrangement.automationClips[static_cast<size_t> (i)], selection.kind == Kind::Automation && selection.index == i);
-
         // Drop preview (files or sounds dragged over the timeline).
         if (dropTrack >= 0)
         {
-            const auto r = juce::Rectangle<int> (tickToX (dropTick), kRulerHeight + dropTrack * th, std::max (6, tickToX (dropTick + 4 * kTicksPerBeat) - tickToX (dropTick)), th);
+            const auto r = juce::Rectangle<int> (tickToX (dropTick), trackTop (dropTrack), std::max (6, tickToX (dropTick + 4 * kTicksPerBeat) - tickToX (dropTick)), th);
             g.setColour (kAudio.withAlpha (0.35f));
             g.fillRect (r);
             g.setColour (kAudio);
@@ -808,13 +939,13 @@ void PlaylistTimeline::paint (juce::Graphics& g)
             {
                 const int tick = snapTick (hoverTick, false);
                 g.setColour (kSelect);
-                g.drawVerticalLine (tickToX (tick), static_cast<float> (kRulerHeight + hoverTrack * th), static_cast<float> (kRulerHeight + (hoverTrack + 1) * th));
+                g.drawVerticalLine (tickToX (tick), static_cast<float> (trackTop (hoverTrack)), static_cast<float> (trackTop (hoverTrack) + th));
             }
         }
         if (drag == Drag::CutRange)
         {
             const int from = std::min (dragStartTick, dragEndTick), to = std::max (dragStartTick, dragEndTick);
-            const auto r = juce::Rectangle<int> (tickToX (from), kRulerHeight + dragTrack * th, std::max (2, tickToX (to) - tickToX (from)), th);
+            const auto r = juce::Rectangle<int> (tickToX (from), trackTop (dragTrack), std::max (2, tickToX (to) - tickToX (from)), th);
             g.setColour (kCut.withAlpha (0.35f));
             g.fillRect (r);
             g.setColour (kCut);
@@ -822,12 +953,17 @@ void PlaylistTimeline::paint (juce::Graphics& g)
         }
         if (drag == Drag::ZoomRange)
         {
-            const auto r = juce::Rectangle<int> (std::min (dragStartX, dragEndX), kRulerHeight, std::abs (dragEndX - dragStartX), kPlaylistTracks * th);
+            const auto r = juce::Rectangle<int> (std::min (dragStartX, dragEndX), kRulerHeight, std::abs (dragEndX - dragStartX), tracksViewHeight());
             g.setColour (kSelect.withAlpha (0.12f));
             g.fillRect (r);
             g.setColour (kSelect.withAlpha (0.8f));
             g.drawRect (r, 1);
         }
+
+        g.restoreState(); // back to the whole timeline: the automation lanes and the playhead
+
+        for (int i = 0; i < static_cast<int> (arrangement.automationClips.size()); ++i)
+            paintAutomationClip (g, arrangement.automationClips[static_cast<size_t> (i)], selection.kind == Kind::Automation && selection.index == i);
 
         if (playheadTick >= 0 && arrangement.patternTicks > 0)
         {
@@ -841,11 +977,15 @@ void PlaylistTimeline::paint (juce::Graphics& g)
     g.fillRect (0, 0, kNameWidth, getHeight());
     g.setColour (kText);
     g.setFont (juce::FontOptions (12.0f));
-    for (int t = 0; t < kPlaylistTracks; ++t)
+    g.saveState();
+    g.reduceClipRegion (0, kRulerHeight, kNameWidth, tracksViewHeight());
+    for (int t = 0; t < arrangement.trackCount(); ++t)
     {
+        if (trackTop (t) + th < kRulerHeight || trackTop (t) > kRulerHeight + tracksViewHeight())
+            continue;
         {
             // the tracks Record writes to: a red dot; the others a faint ring, to show where to click
-            const juce::Rectangle<float> dot (static_cast<float> (kNameWidth - 14), static_cast<float> (kRulerHeight + t * th) + 0.5f * static_cast<float> (th) - 4.0f, 8.0f, 8.0f);
+            const juce::Rectangle<float> dot (static_cast<float> (kNameWidth - 14), static_cast<float> (trackTop (t)) + 0.5f * static_cast<float> (th) - 4.0f, 8.0f, 8.0f);
             if (recordArms[static_cast<size_t> (t)])
             {
                 g.setColour (juce::Colour (0xffd9433b));
@@ -860,11 +1000,20 @@ void PlaylistTimeline::paint (juce::Graphics& g)
         if (const auto colour = arrangement.playlistTracks[static_cast<size_t> (t)].colour; colour != 0)
         {
             g.setColour (juce::Colour (colour).withAlpha (1.0f)); // the track's colour (0.33.0)
-            g.fillRect (0, kRulerHeight + t * th + 1, 4, th - 2);
+            g.fillRect (0, trackTop (t) + 1, 4, th - 2);
+        }
+        const auto& own = arrangement.playlistTracks[static_cast<size_t> (t)];
+        if (own.pattern >= 0 && own.colour == 0)
+        {
+            g.setColour (colourForPattern (own.pattern).withAlpha (0.8f)); // a track dedicated to a pattern: its colour (0.44.0)
+            g.fillRect (0, trackTop (t) + 1, 4, th - 2);
         }
         g.setColour (t == armedTrack ? juce::Colours::white : kText);
-        g.drawText (trackName (t), 8, kRulerHeight + t * th, kNameWidth - 22, th, juce::Justification::centredLeft, true);
+        g.drawText (trackName (t), 8, trackTop (t), kNameWidth - 22, th, juce::Justification::centredLeft, true);
+        g.setColour (kText.withAlpha (0.08f));
+        g.drawHorizontalLine (trackTop (t) + th - 1, 0.0f, static_cast<float> (kNameWidth));
     }
+    g.restoreState();
 
     g.setColour (kAutomationColour.brighter (0.3f));
     g.setFont (juce::FontOptions (11.0f));
@@ -927,10 +1076,14 @@ void PlaylistTimeline::paintAutomationClip (juce::Graphics& g, const AutomationC
 
 juce::String PlaylistTimeline::trackName (int track) const
 {
-    if (track < 0 || track >= kPlaylistTracks)
+    if (track < 0 || track >= arrangement.trackCount())
         return {};
-    const auto& name = arrangement.playlistTracks[static_cast<size_t> (track)].name;
-    return name.empty() ? "Track " + juce::String (track + 1) : juce::String (name);
+    const auto& t = arrangement.playlistTracks[static_cast<size_t> (track)];
+    if (! t.name.empty())
+        return juce::String (t.name);
+    if (t.pattern >= 0 && t.pattern < static_cast<int> (arrangement.patterns.size()))
+        return juce::String (arrangement.patterns[static_cast<size_t> (t.pattern)].name); // a pattern's own track (0.44.0)
+    return "Track " + juce::String (track + 1);
 }
 
 const std::vector<std::pair<const char*, std::uint32_t>>& PlaylistTimeline::trackColours()
@@ -945,7 +1098,7 @@ const std::vector<std::pair<const char*, std::uint32_t>>& PlaylistTimeline::trac
 
 void PlaylistTimeline::showTrackMenu (int track)
 {
-    if (track < 0 || track >= kPlaylistTracks)
+    if (track < 0 || track >= arrangement.trackCount())
         return;
     juce::PopupMenu colours;
     const auto current = arrangement.playlistTracks[static_cast<size_t> (track)].colour;
@@ -963,10 +1116,16 @@ void PlaylistTimeline::showTrackMenu (int track)
     menu.addSectionHeader (trackName (track));
     menu.addItem (1, "Rename...");
     menu.addSubMenu ("Colour", colours);
-    menu.addItem (2, "Default name and colour", arrangement.playlistTracks[static_cast<size_t> (track)] != PlaylistTrack {});
+    {
+        const auto& t = arrangement.playlistTracks[static_cast<size_t> (track)];
+        menu.addItem (2, "Default name and colour", ! t.name.empty() || t.colour != 0);
+    }
     menu.addSeparator();
     menu.addItem (3, "Record on this track", onTrackArmToggled != nullptr, recordArms[static_cast<size_t> (track)]);
     menu.addItem (4, "Recording input...", onTrackInputMenu != nullptr);
+    menu.addSeparator();
+    menu.addItem (5, "Add a track at the end", arrangement.trackCount() < kMaxPlaylistTracks);
+    menu.addItem (6, "Delete this track", arrangement.trackCount() > 1);
     menu.showMenuAsync (juce::PopupMenu::Options().withMousePosition(),
                         [safe = juce::Component::SafePointer<PlaylistTimeline> (this), track] (int choice)
                         {
@@ -978,10 +1137,16 @@ void PlaylistTimeline::showTrackMenu (int track)
                                 safe->onTrackArmToggled (track);
                             else if (choice == 4 && safe->onTrackInputMenu)
                                 safe->onTrackInputMenu (track);
+                            else if (choice == 5)
+                                safe->addTrack();
+                            else if (choice == 6)
+                                safe->removeTrack (track);
                             else if (choice == 2)
                             {
                                 safe->beginEdit();
-                                safe->arrangement.playlistTracks[static_cast<size_t> (track)] = {};
+                                auto& t = safe->arrangement.playlistTracks[static_cast<size_t> (track)];
+                                t.name.clear(); // a pattern's track stays that pattern's
+                                t.colour = 0;
                                 safe->commitPendingUndo();
                                 safe->notifyChanged();
                             }
@@ -994,7 +1159,7 @@ void PlaylistTimeline::showTrackMenu (int track)
 
 void PlaylistTimeline::setTrackColour (int track, std::uint32_t colour)
 {
-    if (track < 0 || track >= kPlaylistTracks || arrangement.playlistTracks[static_cast<size_t> (track)].colour == colour)
+    if (track < 0 || track >= arrangement.trackCount() || arrangement.playlistTracks[static_cast<size_t> (track)].colour == colour)
         return;
     beginEdit();
     arrangement.playlistTracks[static_cast<size_t> (track)].colour = colour;
@@ -1004,9 +1169,13 @@ void PlaylistTimeline::setTrackColour (int track, std::uint32_t colour)
 
 void PlaylistTimeline::renameTrack (int track)
 {
-    if (track < 0 || track >= kPlaylistTracks)
+    if (track < 0 || track >= arrangement.trackCount())
         return;
-    auto* window = new juce::AlertWindow ("Rename track", "A name for the playlist track (empty: \"Track " + juce::String (track + 1) + "\").",
+    const auto& own = arrangement.playlistTracks[static_cast<size_t> (track)];
+    const auto defaultName = own.pattern >= 0 && own.pattern < static_cast<int> (arrangement.patterns.size())
+                                 ? "\"" + juce::String (arrangement.patterns[static_cast<size_t> (own.pattern)].name) + "\", its pattern's name"
+                                 : "\"Track " + juce::String (track + 1) + "\"";
+    auto* window = new juce::AlertWindow ("Rename track", "A name for the playlist track (empty: " + defaultName + ").",
                                           juce::MessageBoxIconType::NoIcon);
     window->addTextEditor ("name", juce::String (arrangement.playlistTracks[static_cast<size_t> (track)].name));
     window->addButton ("OK", 1, juce::KeyPress (juce::KeyPress::returnKey));
@@ -1040,7 +1209,8 @@ void PlaylistTimeline::restore (const Snapshot& s)
     arrangement.clips = s.clips;
     arrangement.audioClips = s.audioClips;
     arrangement.automationClips = s.automationClips;
-    arrangement.playlistTracks = s.tracks;
+    arrangement.playlistTracks = s.tracks.empty() ? std::vector<PlaylistTrack> (1) : s.tracks;
+    tracksChanged();
 }
 
 void PlaylistTimeline::beginEdit()
@@ -1160,7 +1330,7 @@ void PlaylistTimeline::updateReadout (int x, int y)
         return;
 
     juce::String position;
-    if (x >= kNameWidth && y >= kRulerHeight && y < kRulerHeight + kPlaylistTracks * trackHeight())
+    if (x >= kNameWidth && inTracks (y))
     {
         const int tick = xToTick (x);
         position = "Position " + jstr (formatBarsBeatsTicks (tick)) + "  =  " + jstr (formatSeconds (ticksToSeconds (tick, bpm)))
@@ -1357,7 +1527,7 @@ void PlaylistTimeline::pasteAt (int track, int tick)
         AudioClip c = clipboard.audio;
         if (arrangement.audioClips.size() >= static_cast<size_t> (kMaxAudioClips))
             return;
-        c.track = std::clamp (track, 0, kPlaylistTracks - 1);
+        c.track = std::clamp (track, 0, trackCount() - 1);
         c.startTick = std::clamp (snapTick (tick, false), 0, std::max (0, arrangement.timelineTicks() - c.lengthTicks));
         if (! arrangement.canPlaceAudio (c))
         {
@@ -1375,7 +1545,7 @@ void PlaylistTimeline::pasteAt (int track, int tick)
     else if (clipboard.kind == Kind::Pattern)
     {
         Clip c = clipboard.pattern;
-        c.track = std::clamp (track, 0, kPlaylistTracks - 1);
+        c.track = std::clamp (track, 0, trackCount() - 1);
         c.startTick = std::clamp (tick, 0, std::max (0, arrangement.timelineTicks() - c.lengthTicks));
         if (! arrangement.canPlace (c))
             return;
@@ -1732,7 +1902,7 @@ void PlaylistTimeline::mouseMove (const juce::MouseEvent& e)
         return;
     }
 
-    if (e.x >= kNameWidth && e.y >= kRulerHeight && e.y < kRulerHeight + kPlaylistTracks * trackHeight())
+    if (e.x >= kNameWidth && inTracks (e.y))
         setHover (yToTrack (e.y), xToTick (e.x));
     else
         setHover (-1, 0);
@@ -1826,15 +1996,15 @@ void PlaylistTimeline::mouseDown (const juce::MouseEvent& e)
         return;
     }
 
-    if (e.x < kNameWidth && e.y >= kRulerHeight && e.y < kRulerHeight + kPlaylistTracks * trackHeight() && e.mods.isPopupMenu())
+    if (e.x < kNameWidth && inTracks (e.y) && e.mods.isPopupMenu())
     {
         showTrackMenu (yToTrack (e.y)); // rename, colour (0.33.0)
         return;
     }
-    if (e.x < kNameWidth && e.y >= kRulerHeight)
+    if (e.x < kNameWidth && inTracks (e.y))
     {
         const int track = yToTrack (e.y);
-        if (track >= 0 && track < kPlaylistTracks && (e.x >= kNameWidth - 20 || e.mods.isCommandDown()))
+        if (track >= 0 && track < arrangement.trackCount() && (e.x >= kNameWidth - 20 || e.mods.isCommandDown()))
         {
             if (onTrackArmToggled)
                 onTrackArmToggled (track); // the record dot (0.36.0)
@@ -1900,7 +2070,7 @@ void PlaylistTimeline::mouseDown (const juce::MouseEvent& e)
         }
         return;
     }
-    if (e.x < kNameWidth || e.y < kRulerHeight || e.y >= kRulerHeight + kPlaylistTracks * trackHeight())
+    if (e.x < kNameWidth || e.y < kRulerHeight || ! inTracks (e.y))
     {
         // The ruler zooms too: a drag selects the stretch to zoom to.
         if (e.x >= kNameWidth && e.y < kRulerHeight && tool == PlaylistTool::Zoom && ! e.mods.isPopupMenu())
@@ -1996,7 +2166,10 @@ void PlaylistTimeline::mouseDown (const juce::MouseEvent& e)
     {
         // A new clip: one pattern long, on the grid square clicked (anywhere with Alt) - not on whole pattern lengths (0.42.0).
         const int at = std::clamp (noSnap ? tick : floorToGrid (tick), 0, std::max (0, arrangement.timelineTicks() - arrangement.patternTicks));
-        const Clip c { selectedPattern, track, at, arrangement.patternTicks, 0 };
+        // On a track dedicated to a pattern that pattern goes there (0.44.0); on a free track, the one selected in the pattern box.
+        const int ownPattern = track >= 0 && track < arrangement.trackCount() ? arrangement.playlistTracks[static_cast<size_t> (track)].pattern : -1;
+        const Clip c { ownPattern >= 0 && ownPattern < static_cast<int> (arrangement.patterns.size()) ? ownPattern : selectedPattern, track, at,
+                       arrangement.patternTicks, 0 };
         if (arrangement.canPlace (c))
         {
             beginEdit();
@@ -2236,7 +2409,7 @@ void PlaylistTimeline::mouseUp (const juce::MouseEvent& e)
 
 void PlaylistTimeline::mouseDoubleClick (const juce::MouseEvent& e)
 {
-    if (e.x < kNameWidth && e.y >= kRulerHeight && e.y < kRulerHeight + kPlaylistTracks * trackHeight() && ! e.mods.isPopupMenu())
+    if (e.x < kNameWidth && inTracks (e.y) && ! e.mods.isPopupMenu())
     {
         renameTrack (yToTrack (e.y)); // a double click on a track's name renames it (0.33.0)
         return;
@@ -2267,6 +2440,15 @@ void PlaylistTimeline::mouseDoubleClick (const juce::MouseEvent& e)
 
 void PlaylistTimeline::mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel)
 {
+    // Over the track names, or with Alt anywhere, the wheel scrolls the tracks up and down (0.44.0).
+    if ((e.x < kNameWidth && inTracks (e.y)) || e.mods.isAltDown())
+    {
+        scrollY -= static_cast<int> (std::lround (wheel.deltaY * 3.0f * static_cast<float> (trackHeight())));
+        clampScrollY();
+        updateTrackScrollBar();
+        repaint();
+        return;
+    }
     // The wheel zooms in (up) and out (down) around the mouse, anywhere on the playlist (0.20.0). Shift+wheel, or a sideways
     // wheel / touchpad swipe, scrolls along the song.
     const bool sideways = std::abs (wheel.deltaX) > std::abs (wheel.deltaY);

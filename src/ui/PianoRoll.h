@@ -11,12 +11,15 @@
 namespace sls
 {
 // Note editor.
-//   Left click on empty grid   : create a note (drag right to set its length); with a chord chosen in the toolbar, the whole chord
+//   Left click on empty grid   : create a note (on release; drag its right edge afterwards to change its length); with a chord chosen in
+//                                the toolbar, the whole chord
+//   Left drag on empty grid    : (0.44.0) a selection rectangle: on release every note it touches or holds is selected (Shift: added to
+//                                the selection); a drag shorter than 4 pixels is a click
 //   Left drag on a note        : move it (drag its left or right edge to resize: the cursor becomes a left-right arrow there); on a
 //                                selected note, every selected note moves / resizes. A click on a note also makes its length the
 //                                length of the next notes drawn (0.32.0, as in FL Studio)
 //   Ctrl + click on a note     : add it to the selection or take it out
-//   Ctrl + drag on empty grid  : select the notes in a rectangle (with Shift: add them to the selection)
+//   Ctrl + drag on empty grid  : the same rectangle (as before 0.44.0)
 //   Right click on a note      : delete it (on a selected note: every selected note)
 //   Shift + click on a note    : changes how it joins the note before it: normal -> legato (blue: the sound goes on, the pitch
 //                                jumps) -> slide (amber: the pitch glides, drawn as a line from the old pitch) -> normal. The note before must still be sounding
@@ -99,7 +102,11 @@ public:
     void visibilityChanged() override;
 
 private:
-    enum class Drag { None, Move, Resize, ResizeStart, Seek, LoopCreate, LoopMove, LoopResize, Select, Velocity };
+    // PendingEmpty (0.44.0): the button went down on empty grid; a drag turns it into Select, a release creates the note there.
+    enum class Drag { None, Move, Resize, ResizeStart, Seek, LoopCreate, LoopMove, LoopResize, Select, Velocity, PendingEmpty };
+    void createNotesAt (juce::Point<float> pos, bool noSnap);
+    juce::Point<float> pendingPosition;
+    bool pendingNoSnap = false;
     enum class LoopMode { None, Move, Resize }; // following the mouse after the region's menu
 
     juce::Rectangle<int> rulerArea() const;

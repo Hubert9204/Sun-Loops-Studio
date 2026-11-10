@@ -261,7 +261,7 @@ bool MainComponent::saveProject()
 void MainComponent::saveProjectAs (std::function<void (bool)> whenDone)
 {
     library.ensureExists();
-    const auto suggested = currentProjectFile != juce::File() ? projectFileForSaveAs (currentProjectFile)
+    const auto suggested = currentProjectFile != juce::File() ? currentProjectFile
                                                               : library.projects.getChildFile ("My Project" + juce::String (kProjectExtension));
 
     fileChooser = std::make_unique<juce::FileChooser> ("Save project as", suggested, juce::String ("*") + kProjectExtension);
@@ -301,7 +301,7 @@ void MainComponent::openProject()
         safe->library.ensureExists();
         const auto start = safe->currentProjectFile != juce::File() ? safe->currentProjectFile.getParentDirectory() : safe->library.projects;
         safe->fileChooser = std::make_unique<juce::FileChooser> ("Open a project", start,
-                                                                         juce::String ("*") + kProjectExtension + ";*" + kLegacyProjectExtension);
+                                                                         juce::String ("*") + kProjectExtension);
         safe->fileChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
                                         [safe] (const juce::FileChooser& chooser)
         {

@@ -204,6 +204,7 @@ ProjectDocument ProjectDocument::blank()
     d.arrangement.patterns.resize (1);
     d.arrangement.patterns[0].name = "Pattern 1";
     d.arrangement.ensureChannelCount (d.channels.size());
+    d.arrangement.resetTracks(); // 4 free tracks and Pattern 1's own (0.44.0)
     return d;
 }
 
@@ -354,7 +355,8 @@ juce::String ProjectDocument::toJson() const
     }
     root->setProperty ("clips", clipList);
 
-    // Playlist tracks with their own name or colour (0.33.0); the others are not written.
+    // How many playlist tracks there are (0.44.0; 8 before), and those with their own name, colour (0.33.0) or pattern (0.44.0).
+    root->setProperty ("trackCount", arrangement.trackCount());
     juce::Array<juce::var> playlistTrackList;
     for (size_t t = 0; t < arrangement.playlistTracks.size(); ++t)
     {
@@ -367,6 +369,8 @@ juce::String ProjectDocument::toJson() const
             o->setProperty ("name", juce::String (pt.name));
         if (pt.colour != 0)
             o->setProperty ("colour", juce::String::toHexString (static_cast<juce::int64> (pt.colour)).paddedLeft ('0', 8));
+        if (pt.pattern >= 0)
+            o->setProperty ("pattern", pt.pattern);
         playlistTrackList.add (juce::var (o));
     }
     if (! playlistTrackList.isEmpty())
@@ -696,15 +700,22 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
 
     d.currentPattern = readInt (root->getProperty ("currentPattern"), 0, 0, static_cast<int> (d.arrangement.patterns.size()) - 1);
 
-    // --- playlist tracks' names and colours (0.33.0)
+    // --- playlist tracks: how many (0.44.0; files before had 8), names and colours (0.33.0), the pattern each is dedicated to
+    d.arrangement.playlistTracks.assign (static_cast<size_t> (root->hasProperty ("trackCount")
+                                                                  ? readInt (root->getProperty ("trackCount"), kLegacyPlaylistTracks, 1, kMaxPlaylistTracks)
+                                                                  : kLegacyPlaylistTracks),
+                                         PlaylistTrack {});
     if (auto* trackList = root->getProperty ("playlistTracks").getArray())
         for (const auto& tv : *trackList)
             if (auto* o = tv.getDynamicObject())
             {
-                const int t = readInt (o->getProperty ("track"), -1, -1, kPlaylistTracks - 1);
+                const int t = readInt (o->getProperty ("track"), -1, -1, d.arrangement.trackCount() - 1);
                 if (t < 0)
                     continue;
                 auto& pt = d.arrangement.playlistTracks[static_cast<size_t> (t)];
+                const int pattern = readInt (o->getProperty ("pattern"), -1, -1, static_cast<int> (d.arrangement.patterns.size()) - 1);
+                if (pattern >= 0 && d.arrangement.dedicatedTrack (pattern) < 0) // one track per pattern
+                    pt.pattern = pattern;
                 pt.name = juce::String (readName (o->getProperty ("name"), "")).substring (0, 32).toStdString();
                 const auto hex = o->getProperty ("colour").toString().trim();
                 if (hex.length() == 8 && hex.containsOnly ("0123456789abcdefABCDEF"))
@@ -990,8 +1001,7 @@ juce::String writeProjectFile (const juce::File& file, const ProjectDocument& do
 
 bool hasProjectExtension (const juce::File& file)
 {
-    return file.getFileName().endsWithIgnoreCase (kProjectExtension)
-        || file.getFileName().endsWithIgnoreCase (kLegacyProjectExtension);
+    return file.getFileName().endsWithIgnoreCase (kProjectExtension);
 }
 
 juce::File withProjectExtension (const juce::File& file)
@@ -1000,14 +1010,6 @@ juce::File withProjectExtension (const juce::File& file)
     return hasProjectExtension (file)
                ? file
                : file.getParentDirectory().getChildFile (file.getFileName() + kProjectExtension);
-}
-
-juce::File projectFileForSaveAs (const juce::File& file)
-{
-    if (file.getFileName().endsWithIgnoreCase (kLegacyProjectExtension))
-        return file.getParentDirectory().getChildFile (file.getFileName().dropLastCharacters (juce::String (kLegacyProjectExtension).length())
-                                                       + kProjectExtension);
-    return file;
 }
 
 juce::File automaticProjectFile (const juce::File& folder, juce::Time now)

@@ -207,6 +207,8 @@ void MainComponent::applyLoop (const loopstarter::Loop& loop, std::uint32_t vari
     for (size_t p = 0; p < loop.parts.size(); ++p)
         pattern.notes[static_cast<size_t> (target[p])] = loop.parts[p].notes;
     arrangement.patterns.push_back (std::move (pattern));
+    const int ownTrack = arrangement.addPatternTrack (static_cast<int> (arrangement.patterns.size()) - 1); // its own playlist track (0.44.0)
+    playlistView.showTrack (ownTrack);
     arrangement.ensureChannelCount (channels.size());
 
     if (setTempo)

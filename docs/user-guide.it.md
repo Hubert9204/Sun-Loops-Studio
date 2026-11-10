@@ -21,7 +21,7 @@ La riga di stato mostra il dispositivo audio (frequenza, buffer, latenza dichiar
 
 ## Progetti
 
-Tutto il brano è salvato in un unico file `.slp` (le versioni prima della 0.8 scrivevano `.slsproj`; quei file si aprono ancora): canali (strumento, sample, volume, pan, pitch, swing, traccia
+Tutto il brano è salvato in un unico file `.slp`: canali (strumento, sample, volume, pan, pitch, swing, traccia
 del mixer), tutti i pattern con le loro note, la playlist, il mixer (fader, bilanciamento, mute/solo, catene di
 effetti e loro impostazioni), le clip audio della playlist (come percorsi dei loro file), BPM, volume master e se la modalità Song è attiva. Il titolo della finestra mostra il
 nome del progetto, seguito da `*` quando ci sono modifiche non salvate.
@@ -29,10 +29,10 @@ nome del progetto, seguito da `*` quando ci sono modifiche non salvate.
 | Comando | Tasto | Cosa fa |
 | --- | --- | --- |
 | **New** | `Ctrl+N` | Parte con un progetto vuoto (un canale synth, un pattern vuoto). |
-| **Open...** | `Ctrl+O` | Sceglie un file `.slp` (o `.slsproj` vecchio). |
+| **Open...** | `Ctrl+O` | Sceglie un file `.slp`. |
 | **Open recent** | | Gli ultimi otto progetti che esistono ancora. |
 | **Save** | `Ctrl+S` | Scrive il progetto. |
-| **Save as...** | `Ctrl+Maiusc+S` | Chiede un nome (se manca, aggiunge `.slp`) e scrive il progetto lì. Un vecchio `.slsproj` viene proposto come `.slp`. |
+| **Save as...** | `Ctrl+Maiusc+S` | Chiede un nome (se manca, aggiunge `.slp`) e scrive il progetto lì. |
 | **Export project with samples...** | | Chiede il nome di una nuova cartella e ci scrive il progetto insieme a una copia di ogni suono che usa (vedi sotto). |
 | **Undo / Redo** | `Ctrl+Z` / `Ctrl+Y` | Annulla o ripristina l'ultima modifica, di qualunque tipo (vedi *Annulla e ripristina*). |
 | **Import audio or video into the playlist...** | | Sceglie file audio o video e li mette nella playlist (vedi *Clip audio*). |
@@ -493,13 +493,13 @@ chiuso all'avvio e si apre da un canale, come sopra.
 | Azione | Come |
 | --- | --- |
 | Suonare una nota | Pulsante sinistro su un tasto della tastiera (tenuto premuto = suona). |
-| Aggiungere una nota | Clic su una cella vuota; tieni premuto e trascina a destra per scegliere la lunghezza. Suona finché tieni premuto. |
+| Aggiungere una nota | Clic su una cella vuota (premi e rilascia senza muovere: dalla 0.44.0 un trascinamento sulle celle vuote seleziona). Il tasto suona finché tieni premuto. Trascina il bordo destro della nota nuova per cambiarne la lunghezza. |
 | Spostare una nota | Trascinala (Alt mentre trascini: senza snap). Trascinando una nota **selezionata** si spostano tutte le note selezionate. |
 | Cambiare la lunghezza | Trascina il bordo destro, oppure il **bordo sinistro** per spostarne l'inizio tenendo ferma la fine (0.32.0); sopra i due bordi il cursore diventa una freccia destra-sinistra. Su una nota selezionata tutte le selezionate cambiano della stessa quantità. |
 | Riusare una lunghezza | Clic su una nota: la sua lunghezza diventa quella delle prossime note che disegni (0.32.0, come in FL Studio). |
 | Eliminare una nota | Tasto destro sulla nota (su una nota selezionata: tutta la selezione). |
-| Selezionare note | **Ctrl + trascinamento** su una parte vuota disegna un rettangolo (con Maiusc aggiunge alla selezione); **Ctrl + clic** su una nota la aggiunge o la toglie; **Ctrl + A** seleziona tutto, **Esc** niente. Le note selezionate sono chiare con il bordo bianco. |
-| Copiare, tagliare, incollare, duplicare | **Ctrl + C / X / V** (incolla mettendo la prima nota sotto il mouse), **Ctrl + D** (una copia subito dopo la selezione). **Canc** elimina la selezione. |
+| Selezionare note | **Trascina su una parte vuota** (0.44.0, come sul desktop): compare un rettangolo di selezione e al rilascio vengono selezionate tutte le note che tocca o contiene (con Maiusc aggiunge alla selezione; **Ctrl + trascinamento** fa lo stesso); **Ctrl + clic** su una nota la aggiunge o la toglie; **Ctrl + A** seleziona tutto, **Esc** niente. Le note selezionate sono chiare con il bordo bianco. |
+| Copiare, tagliare, incollare, duplicare | **Ctrl + C / X / V** con il mouse sul piano roll (incolla mettendo la prima nota sotto il mouse; le note copiate si incollano nello stesso piano roll o in quello di un altro canale o pattern - scegli il canale o il pattern, poi Ctrl + V), **Ctrl + D** (una copia subito dopo la selezione). **Canc** elimina la selezione. |
 | Spostare con i tasti | **Su / Giù**: un semitono (Maiusc: un'ottava, Ctrl: un grado della scala); **Sinistra / Destra**: un passo dello snap (Maiusc: un movimento). |
 | Legato / slide | Maiusc + clic su una nota: normale -> **legato** (blu, "L") -> **slide** (arancione, "S") -> normale. |
 | Scorrere in altezza | Rotella del mouse. |
@@ -610,7 +610,7 @@ file **.flp** di FL Studio, con codice scritto per questo programma (non si usa 
   nomi e colori delle tracce. I synth e i plugin di FL Studio qui non esistono: le loro note le suona un synth predefinito. Un
   campione il cui percorso salvato non esiste (un percorso Windows, le cartelle di FL Studio) viene cercato per nome accanto al
   .flp e nelle cartelle vicine. Qui i pattern hanno una sola lunghezza (1, 2, 4 o 8 battute: la più corta che contiene il più
-  lungo), le 500 tracce della playlist di FL Studio finiscono sulle 8 di qui nel loro ordine e le clip mantengono posizione e
+  lungo), le tracce della playlist di FL Studio che contengono qualcosa finiscono su altrettante tracce qui (almeno 4, al massimo 128) nel loro ordine e le clip mantengono posizione e
   lunghezza.
 - **Export as FL Studio project (.flp)...** scrive il progetto corrente nella struttura di FL Studio 20.8 a 960 PPQ (esatto: il
   doppio dei 480 di questo programma). I canali sampler mantengono il loro file; synth, drum machine, plugin e suoni incorporati
@@ -627,7 +627,7 @@ file **.flp** di FL Studio, con codice scritto per questo programma (non si usa 
 
 *File > Import a MIDI file into patterns...* (oppure trascina un file `.mid` / `.midi` sulla Playlist) trasforma un file MIDI standard in **nuovi
 canali synth** (uno per ogni traccia e canale MIDI con note, col nome della traccia) e **nuovi pattern** lunghi quanto la lunghezza dei pattern del progetto, messi uno dopo l'altro
-sulla traccia 1 della playlist dopo le clip esistenti. Le note lunghe che superano la fine di un pattern vengono tagliate lì e suonano di nuovo
+dopo le clip esistenti, ognuno sulla propria traccia della playlist (0.44.0; prima tutti sulla traccia 1). Le note lunghe che superano la fine di un pattern vengono tagliate lì e suonano di nuovo
 all'inizio del pattern successivo. Il primo tempo del file imposta il BPM. La riga di stato dice cosa è stato fatto e cosa è stato lasciato fuori.
 
 Lasciati fuori: le tracce di **batteria** General MIDI (canale MIDI 10), i cambi di tempo dopo il primo, controller, pitch bend, cambi di programma; le
@@ -636,7 +636,25 @@ sono semplici synth: dopo puoi dare loro un sampler o un altro suono.
 
 ## Playlist
 
-La Playlist dispone i pattern nel tempo. Ha 8 tracce e una linea del tempo lunga almeno 32 pattern e almeno 64 battute. Il righello mostra i
+La Playlist dispone i pattern nel tempo. Le sue **tracce** (0.44.0):
+
+- Un progetto nuovo parte con **4 tracce libere** (*Track 1-4*, per registrazioni, file audio o qualsiasi uso) e, sotto, **una
+  traccia per ogni pattern**, col suo nome e colore. Ogni pattern creato dopo (*New*, *Clone*, il Loop Starter, un'importazione
+  MIDI) aggiunge la propria traccia in fondo e la playlist scorre fino a lei: con 4 pattern ci sono 4 tracce dei pattern + le 4
+  libere = 8.
+- Un clic in un punto vuoto della traccia di un pattern mette lì **quel pattern**; su una traccia libera mette il pattern scelto
+  nel menu dei pattern. Le clip si possono comunque spostare su qualsiasi traccia.
+- I pulsanti **-** e **+** nell'angolo in alto a sinistra, sopra i nomi delle tracce, tolgono l'**ultima** traccia e aggiungono
+  una traccia libera in fondo. Per togliere una traccia precisa: tasto destro sul nome > *Delete this track* (nello stesso menu
+  c'è *Add a track at the end*). Una traccia che contiene clip viene tolta solo dopo una domanda, e le clip se ne vanno con lei;
+  **Ctrl+Z** riporta tutto. Resta almeno una traccia; al massimo 128.
+- Eliminando un pattern se ne va anche la sua traccia, se non contiene altro; una traccia che contiene ancora clip (una
+  registrazione, per esempio) resta, come traccia libera con il vecchio nome del pattern.
+- Fino a 8 tracce si dividono l'altezza del pannello; se sono di più scorrono: la barra a destra, la **rotella sopra i nomi delle
+  tracce**, o **Alt + rotella** ovunque.
+- I progetti salvati prima della 0.44.0 si aprono con le loro 8 tracce com'erano.
+
+La linea del tempo è lunga almeno 32 pattern e almeno 64 battute. Il righello mostra i
 numeri di battuta. La linea verticale arancione segna la fine del brano: in modalità Song la riproduzione ricomincia da lì (o dalla zona di
 loop, sotto).
 
@@ -931,7 +949,7 @@ L'automazione fa muovere un controllo da solo mentre il brano suona. Funziona su
 parametri degli effetti di un bus aux) e tutto il resto.
 
 **Creare una clip.** Tasto destro sul controllo e *Create automation clip*. Una clip lunga un pattern compare su una delle quattro
-**corsie di automazione** (*Auto 1-4*, sotto le otto tracce della Playlist) e si apre il suo editor. La clip è una linea piatta al
+**corsie di automazione** (*Auto 1-4*, sotto le tracce della Playlist) e si apre il suo editor. La clip è una linea piatta al
 valore attuale del controllo. Parte dal pattern sotto il cursore se il brano suona in modalità Song, altrimenti dall'inizio del brano. Se tutte e quattro le corsie sono
 già occupate in quel punto (o esistono 64 clip), non viene creato nulla e la barra di stato lo dice; sposta o elimina una clip e riprova.
 
@@ -1164,7 +1182,7 @@ occupato più tardi, un brano più pesante o un mixer pieno di effetti possono r
 
 ## Limiti
 
-- Fino a 32 canali, fino a 500 tracce del mixer (8 all'inizio) con 4 slot effetti ciascuna, 2 bus aux (4 slot ciascuno), 2 gruppi VCA, 64 pattern, 8 tracce di playlist, una linea del
+- Fino a 32 canali, fino a 500 tracce del mixer (8 all'inizio) con 4 slot effetti ciascuna, 2 bus aux (4 slot ciascuno), 2 gruppi VCA, 64 pattern, da 1 a 128 tracce di playlist, una linea del
   tempo di almeno 32 pattern e 64 battute, 4 corsie di automazione, 64 clip di automazione di al massimo 256 punti, 32 voci simultanee.
 - Gli effetti usano circa 15 MB di memoria a 48 kHz all'inizio, più circa 0,8 MB per ogni riverbero, delay, chorus e Pitch Corrector oltre
   il sedicesimo (di più a frequenze di campionamento maggiori). La memoria preparata resta finché il dispositivo audio non riparte.

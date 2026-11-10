@@ -589,9 +589,12 @@ void testSessionLog()
     const bool rotated = fs::exists (dir / "session.log") && fs::exists (dir / "session.1.log") && fs::exists (dir / "session.2.log") && ! fs::exists (dir / "session.3.log");
     supportCheck (rotated && fs::file_size (dir / "session.log") <= 4096 && fs::file_size (dir / "session.1.log") <= 4096,
            "full files rotate: session.log, session.1.log, session.2.log, each under the limit (5 MB in the program)");
-    const auto last = sls::logging::lastLines (dir / "session.log", 2);
-    supportCheck (last.size() == 2 && last[1].find ("[warning]") != std::string::npos && last[1].find ("last line") != std::string::npos && last[0].find ("line 399") != std::string::npos,
-           "the last lines, with time stamp and level");
+    // The last line may be alone in a just-rotated file: look at the last line, and for the one before it in either file.
+    const auto last = sls::logging::lastLines (dir / "session.log", 1);
+    const auto before = readAll (dir / "session.log") + readAll (dir / "session.1.log");
+    supportCheck (last.size() == 1 && last[0].find ("[warning]") != std::string::npos && last[0].find ("last line") != std::string::npos
+                      && last[0].rfind ("[20", 0) == 0 && before.find ("line 399 of") != std::string::npos,
+                  "the last lines, with time stamp and level");
     supportCheck (readAll (dir / "session.1.log").find ("rotation test") != std::string::npos, "the older lines are in session.1.log");
     supportCheck (! sls::logging::start ({ "/proc/no-such-folder" }), "a folder that cannot be written: false, the program goes on (logging to stderr)");
     sls::logging::stop();

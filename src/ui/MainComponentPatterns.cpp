@@ -71,6 +71,8 @@ void MainComponent::addPattern (bool cloneCurrent)
         pattern.steps = arrangement.patterns[static_cast<size_t> (currentPattern)].steps;
     }
     arrangement.patterns.push_back (std::move (pattern));
+    const int ownTrack = arrangement.addPatternTrack (static_cast<int> (arrangement.patterns.size()) - 1); // its own playlist track (0.44.0)
+    playlistView.showTrack (ownTrack);
     arrangement.ensureChannelCount (channels.size());
 
     refreshPatternBox();
@@ -229,8 +231,16 @@ void MainComponent::deletePattern (int index)
                                                     return;
 
                                                 safe->commitCurrentPattern();
+                                                const int ownTrack = safe->arrangement.dedicatedTrack (index);
+                                                const int tracksBefore = safe->arrangement.trackCount();
                                                 if (! safe->arrangement.removePattern (index))
                                                     return;
+                                                if (safe->arrangement.trackCount() < tracksBefore && ownTrack >= 0)
+                                                {
+                                                    safe->recordSetup.removeTrack (ownTrack); // its own track went with it (0.44.0)
+                                                    safe->applyRecordSetup();
+                                                }
+                                                safe->playlistView.tracksChanged();
 
                                                 // Which pattern is open afterwards: the same one if it is still there, else its neighbour.
                                                 int now = safe->currentPattern;

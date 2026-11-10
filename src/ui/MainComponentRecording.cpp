@@ -14,6 +14,7 @@ namespace
 {
 constexpr int kInputItemBase = 1000;  // menu ids: kInputItemBase + track * kInputItemsPerTrack + 2 * input (+1 for a stereo pair)
 constexpr int kInputItemsPerTrack = 2 * kMaxRecordInputs;
+constexpr int kArmItemBase = kInputItemBase + kMaxPlaylistTracks * kInputItemsPerTrack; // "record on track t" items (0.44.0: after the inputs)
 } // namespace
 
 void MainComponent::updateRecordButton()
@@ -24,7 +25,7 @@ void MainComponent::updateRecordButton()
 
 juce::String MainComponent::recordInputLabel (int track) const
 {
-    const auto& input = recordSetup.tracks[static_cast<size_t> (std::clamp (track, 0, kPlaylistTracks - 1))];
+    const auto& input = recordSetup.tracks[static_cast<size_t> (std::clamp (track, 0, kMaxPlaylistTracks - 1))];
     return input.stereo ? "inputs " + juce::String (input.firstInput + 1) + "+" + juce::String (input.firstInput + 2)
                         : "input " + juce::String (input.firstInput + 1);
 }
@@ -39,8 +40,8 @@ juce::String MainComponent::armedTracksText() const
 
 void MainComponent::applyRecordSetup (bool announce)
 {
-    std::array<bool, kPlaylistTracks> arms {};
-    for (int t = 0; t < kPlaylistTracks; ++t)
+    std::array<bool, kMaxPlaylistTracks> arms {};
+    for (int t = 0; t < kMaxPlaylistTracks; ++t)
         arms[static_cast<size_t> (t)] = recordSetup.tracks[static_cast<size_t> (t)].armed;
     playlistView.setRecordArms (arms);
     if (settings != nullptr)
@@ -57,13 +58,13 @@ void MainComponent::selectPlaylistTrack (int track)
     // With one track armed, clicking another track's name moves the arm there (as before 0.36.0); with several, it only selects.
     if (recording || recordSetup.armedTracks().size() != 1)
         return;
-    recordSetup.armOnly (std::clamp (track, 0, kPlaylistTracks - 1));
+    recordSetup.armOnly (std::clamp (track, 0, kMaxPlaylistTracks - 1));
     applyRecordSetup();
 }
 
 void MainComponent::toggleRecordArm (int track)
 {
-    if (recording || track < 0 || track >= kPlaylistTracks)
+    if (recording || track < 0 || track >= arrangement.trackCount())
         return;
     recordSetup.toggle (track);
     applyRecordSetup();
@@ -119,7 +120,7 @@ void MainComponent::addRecordInputItems (juce::PopupMenu& menu, int track)
 
 bool MainComponent::handleRecordInputItem (int result)
 {
-    if (result < kInputItemBase || result >= kInputItemBase + kPlaylistTracks * kInputItemsPerTrack || recording)
+    if (result < kInputItemBase || result >= kInputItemBase + kMaxPlaylistTracks * kInputItemsPerTrack || recording)
         return false;
     const int track = (result - kInputItemBase) / kInputItemsPerTrack;
     const int item = (result - kInputItemBase) % kInputItemsPerTrack;
@@ -132,7 +133,7 @@ bool MainComponent::handleRecordInputItem (int result)
 
 void MainComponent::showTrackInputMenu (int track)
 {
-    if (track < 0 || track >= kPlaylistTracks)
+    if (track < 0 || track >= arrangement.trackCount())
         return;
     juce::PopupMenu menu;
     menu.addSectionHeader ("Recording on " + playlistView.trackName (track));
@@ -164,9 +165,9 @@ void MainComponent::openRecordMenu()
     menu.addSeparator();
     menu.addSectionHeader ("Armed tracks (all are recorded together)");
     juce::PopupMenu inputs;
-    for (int t = 0; t < kPlaylistTracks; ++t)
+    for (int t = 0; t < arrangement.trackCount(); ++t)
     {
-        menu.addItem (10 + t, playlistView.trackName (t) + "   - " + recordInputLabel (t), ! recording,
+        menu.addItem (kArmItemBase + t, playlistView.trackName (t) + "   - " + recordInputLabel (t), ! recording,
                       recordSetup.tracks[static_cast<size_t> (t)].armed);
         juce::PopupMenu one;
         addRecordInputItems (one, t);
@@ -186,8 +187,8 @@ void MainComponent::openRecordMenu()
                         {
                             if (safe == nullptr || result == 0)
                                 return;
-                            if (result >= 10 && result < 10 + kPlaylistTracks)
-                                safe->toggleRecordArm (result - 10);
+                            if (result >= kArmItemBase && result < kArmItemBase + kMaxPlaylistTracks)
+                                safe->toggleRecordArm (result - kArmItemBase);
                             else if (safe->handleRecordInputItem (result))
                                 return;
                             else if (result == 32)

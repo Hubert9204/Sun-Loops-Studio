@@ -28,11 +28,15 @@ public:
 
     void setPlayheadTick (int tick) { timeline.setPlayheadTick (tick); }
     void setSelectedTrack (int track) { timeline.setSelectedTrack (track); }
-    void setRecordArms (const std::array<bool, kPlaylistTracks>& arms) { timeline.setRecordArms (arms); }
+    void setRecordArms (const std::array<bool, kMaxPlaylistTracks>& arms) { timeline.setRecordArms (arms); }
     juce::String trackName (int track) const { return timeline.trackName (track); }
     void setBpm (double bpm) { timeline.setBpm (bpm); }
     bool handleKey (const juce::KeyPress& key) { return timeline.handleKey (key); }
-    void clearHistory() { timeline.clearHistory(); updateUndoButtons(); }
+    void clearHistory() { timeline.clearHistory(); timeline.tracksChanged(); updateUndoButtons(); } // the arrangement was replaced
+    // The arrangement's tracks were added or removed from outside (a new pattern, an import): scroll bar and drawing (0.44.0).
+    void tracksChanged() { timeline.tracksChanged(); }
+    void addTrack() { timeline.addTrack(); }
+    void showTrack (int track) { timeline.showTrack (track); }
 
     // Automation clips (see PlaylistTimeline).
     int addAutomationClip (AutomationClip clip, int startTick) { return timeline.addAutomationClip (std::move (clip), startTick); }
@@ -56,6 +60,7 @@ public:
     std::function<void (int)> onTrackSelected;
     std::function<void (int)> onTrackArmToggled; // the record dot of a track, or its menu's "Record on this track"
     std::function<void (int)> onTrackInputMenu;  // the track menu's "Recording input..."
+    std::function<void (int)> onTrackRemoved;    // the - button removed this track (0.44.0): what refers to tracks by number follows
     std::function<void (int)> onEditSample; // an audio clip's "Edit sample..." was chosen: its index
     std::function<void (int)> onEditPitch;  // ... "Edit pitch..."
     std::function<void (int)> onSplitStems; // ... "Split into stems..."

@@ -3,7 +3,6 @@
   <mime-type type="application/x-sun-loops-studio-project">
     <comment>Sun Loops Studio project</comment>
     <glob pattern="*.slp"/>
-    <glob pattern="*.slsproj"/>
     <icon name="sun-loops-studio"/>
   </mime-type>
 </mime-info>

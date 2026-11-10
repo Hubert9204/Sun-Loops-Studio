@@ -214,7 +214,8 @@ FlpImportResult projectFromFlp (const flp::Song& song, const juce::File& folder)
     if (extraPatterns > 0)
         warnings.push_back (std::to_string (extraPatterns) + " pattern(s) beyond the first " + std::to_string (kMaxPatterns) + " were left out.");
 
-    // --- the playlist: FL Studio's tracks (up to 500) onto the 8 here, in their order
+    // --- the playlist: FL Studio's tracks (up to 500) that hold something, in their order, onto as many free tracks here (0.44.0:
+    // at least kDefaultGenericTracks, at most kMaxPlaylistTracks); the layout of the .flp is kept, so no pattern gets its own track.
     std::set<int> usedTracks;
     for (const auto& item : song.items)
         usedTracks.insert (item.track);
@@ -222,11 +223,13 @@ FlpImportResult projectFromFlp (const flp::Song& song, const juce::File& folder)
     int mergedTracks = 0;
     for (const int t : usedTracks)
     {
-        const int ours = std::min (static_cast<int> (trackOf.size()), kPlaylistTracks - 1);
-        if (static_cast<int> (trackOf.size()) >= kPlaylistTracks)
+        const int ours = std::min (static_cast<int> (trackOf.size()), kMaxPlaylistTracks - 1);
+        if (static_cast<int> (trackOf.size()) >= kMaxPlaylistTracks)
             ++mergedTracks;
         trackOf[t] = ours;
     }
+    arrangement.playlistTracks.assign (static_cast<size_t> (std::clamp (static_cast<int> (trackOf.size()), kDefaultGenericTracks, kMaxPlaylistTracks)),
+                                       PlaylistTrack {});
     for (const auto& t : song.tracks)
         if (const auto it = trackOf.find (t.index); it != trackOf.end() && static_cast<int> (std::count_if (trackOf.begin(), trackOf.end(), [&] (const auto& kv) { return kv.second == it->second; })) == 1)
         {
@@ -282,8 +285,8 @@ FlpImportResult projectFromFlp (const flp::Song& song, const juce::File& folder)
         }
     }
     if (mergedTracks > 0)
-        warnings.push_back (std::to_string (mergedTracks) + " playlist track(s) beyond the first " + std::to_string (kPlaylistTracks)
-                            + " used were put on track " + std::to_string (kPlaylistTracks) + ".");
+        warnings.push_back (std::to_string (mergedTracks) + " playlist track(s) beyond the first " + std::to_string (kMaxPlaylistTracks)
+                            + " used were put on track " + std::to_string (kMaxPlaylistTracks) + ".");
     if (droppedItems > 0)
         warnings.push_back (std::to_string (droppedItems) + " pattern clip(s) did not fit in the playlist and were left out.");
     if (droppedAudio > 0)
@@ -435,7 +438,7 @@ FlpExportResult projectToFlp (const ProjectDocument& doc)
             ++changedAudio;
     }
 
-    for (int t = 0; t < kPlaylistTracks; ++t)
+    for (int t = 0; t < arrangement.trackCount(); ++t)
     {
         const auto& pt = arrangement.playlistTracks[static_cast<size_t> (t)];
         if (pt == PlaylistTrack {})
@@ -443,6 +446,8 @@ FlpExportResult projectToFlp (const ProjectDocument& doc)
         flp::Track out;
         out.index = t;
         out.name = pt.name;
+        if (out.name.empty() && pt.pattern >= 0 && pt.pattern < static_cast<int> (arrangement.patterns.size()))
+            out.name = arrangement.patterns[static_cast<size_t> (pt.pattern)].name; // a pattern's own track carries its name
         out.hasColour = pt.colour != 0;
         out.rgb = pt.colour & 0xffffffu;
         song.tracks.push_back (out);

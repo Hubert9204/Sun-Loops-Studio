@@ -2,6 +2,26 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.44.0 - 2026-11-10
+
+### Changed
+- **Playlist tracks**: a project starts with **4 free tracks** (recordings, audio, anything) plus **one track per pattern**, named
+  and coloured after it; every new pattern (New, Clone, Loop Starter, MIDI import) adds its own track and the playlist scrolls to
+  it - 4 patterns = 4 pattern tracks + 4 free = 8. A click on an empty place of a pattern's track puts that pattern there.
+- **- and + buttons** above the track names remove the last track and add a free one (right-click a name: *Delete this track*,
+  *Add a track at the end*); a track with clips is removed after a question, with its clips; undoable. 1 to 128 tracks; more than 8
+  scroll (scroll bar, wheel over the names, Alt+wheel). Deleting a pattern removes its empty track.
+- **Piano Roll**: dragging on empty cells draws a **selection rectangle**; every note it touches or holds is selected on release
+  (Shift adds). A click without dragging still adds a note. **Ctrl+C / Ctrl+X / Ctrl+V** copy, cut and paste the selection, in
+  the same piano roll or in another channel's or pattern's.
+- MIDI import puts each new pattern on its own track; FL Studio import keeps as many tracks as the .flp uses (at least 4).
+
+### Removed
+- The **.slsproj** extension (projects of versions before 0.8, none exist): no longer opened, offered or registered.
+
+### Compatibility
+- Projects saved before 0.44.0 open with their 8 tracks, names and colours as they were.
+
 ## 0.43.0 - 2026-11-10
 
 Crash reports, a session log and an update check.

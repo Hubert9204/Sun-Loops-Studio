@@ -702,7 +702,7 @@ void testArrangement()
     // canPlace
     check (a.canPlace (uc (a, 0, 0, 0, 1)), "a clip on an empty playlist can be placed");
     check (! a.canPlace (uc (a, 5, 0, 0, 1)), "a clip of an unknown pattern is refused");
-    check (! a.canPlace (uc (a, 0, sls::kPlaylistTracks, 0, 1)), "a clip below the last track is refused");
+    check (! a.canPlace (uc (a, 0, a.trackCount(), 0, 1)), "a clip below the last track is refused");
     check (! a.canPlace (uc (a, 0, 0, -1, 1)), "a clip before the start is refused");
     check (! a.canPlace (uc (a, 0, 0, 0, 0)), "a zero-length clip is refused");
     check (! a.canPlace (uc (a, 0, 0, (a.timelineTicks() / a.patternTicks) - 1, 2)), "a clip past the end of the timeline is refused");
@@ -3072,13 +3072,10 @@ void testProjectFile()
                    && sls::withProjectExtension (base.getChildFile ("A.SLP")).getFileName() == "A.SLP"
                    && sls::withProjectExtension (base.getChildFile ("My.Song")).getFileName() == "My.Song.slp",
                "the .slp extension is added when missing and never doubled");
-        check (sls::withProjectExtension (base.getChildFile ("old.slsproj")).getFileName() == "old.slsproj"
-                   && sls::hasProjectExtension (base.getChildFile ("old.slsproj")) && sls::hasProjectExtension (base.getChildFile ("x.SLP"))
-                   && ! sls::hasProjectExtension (base.getChildFile ("x.wav")) && ! sls::hasProjectExtension (base.getChildFile ("slp")),
-               "files with the older .slsproj extension are still recognised and left alone");
-        check (sls::projectFileForSaveAs (base.getChildFile ("old.slsproj")).getFileName() == "old.slp"
-                   && sls::projectFileForSaveAs (base.getChildFile ("new.slp")).getFileName() == "new.slp",
-               "Save as offers an old .slsproj project under the new .slp name");
+        check (sls::hasProjectExtension (base.getChildFile ("x.SLP")) && ! sls::hasProjectExtension (base.getChildFile ("x.wav"))
+                   && ! sls::hasProjectExtension (base.getChildFile ("slp")) && ! sls::hasProjectExtension (base.getChildFile ("old.slsproj"))
+                   && sls::withProjectExtension (base.getChildFile ("old.slsproj")).getFileName() == "old.slsproj.slp",
+               "only .slp is a project (0.44.0: the .slsproj of versions before 0.8 is no longer recognised)");
 
         const auto dir = freshTempDir ("sls-project-names");
         const auto when = juce::Time (2026, 10, 5, 21, 54, 7); // month is 0-based: 5 November
@@ -3432,7 +3429,7 @@ void testAudioClips()
     check (a.canPlaceAudio (audio (0, 960, 960)), "an audio clip can start where the previous one ends");
     check (a.canPlaceAudio (audio (0, 1060, 960)), "audio clips may start on any tick (they are no longer tied to the beat grid)");
     check (! a.canPlaceAudio (audio (0, a.timelineTicks() - 480, 960)), "an audio clip cannot run past the end of the timeline");
-    check (! a.canPlaceAudio (audio (sls::kPlaylistTracks, 0, 480)), "or sit on a track that does not exist");
+    check (! a.canPlaceAudio (audio (a.trackCount(), 0, 480)), "or sit on a track that does not exist");
     check (a.canPlaceAudio (audio (0, 0, 480), 0), "a clip being moved does not collide with itself");
     check (a.canPlace (uc (a, 0, 0, 0, 1)), "a pattern clip may cover an audio clip");
     check (a.canPlace (uc (a, 0, 0, 1, 1)), "but can sit after it");
@@ -3701,6 +3698,7 @@ void testPlaylistLayering()
     // Names and colours.
     {
         auto doc = richDocument();
+        doc.arrangement.playlistTracks.resize (8);
         doc.arrangement.playlistTracks[1] = { "Drums", 0xffe0524au };
         doc.arrangement.playlistTracks[5].colour = 0xff4a90e2u;
         const auto back = sls::ProjectDocument::fromJson (doc.toJson());
@@ -3790,9 +3788,10 @@ void testFlpFiles()
         audioItems += item.pattern == 0 && item.channel == 2 && item.position == 1920 && item.length == 10000 && item.track == 2 ? 1 : 0;
     }
     check (patternItems == 3 && audioItems == 1, "a clip repeated twice is two items; the audio clip is an item of its channel");
-    check (song.tracks.size() == 2 && song.tracks[0].name == "Beat" && song.tracks[0].hasColour && song.tracks[0].rgb == 0xe0524a
-               && song.tracks[1].index == 3 && song.tracks[1].name == "Verses" && ! song.tracks[1].hasColour,
-           "the playlist tracks' names and colours");
+    check (song.tracks.size() == 3 && song.tracks[0].name == "Beat" && song.tracks[0].hasColour && song.tracks[0].rgb == 0xe0524a
+               && song.tracks[1].index == 3 && song.tracks[1].name == "Verses" && ! song.tracks[1].hasColour
+               && song.tracks[2].index == 4 && song.tracks[2].name == a.patterns[0].name,
+           "the playlist tracks' names and colours (0.44.0: a pattern's own track carries the pattern's name)");
     check (exported.warnings.size() >= 2, "what does not carry over is listed");
 
     // ...and back into a project here.
@@ -3955,6 +3954,106 @@ void testTypingKeyboard()
            "velocity steps");
 }
 
+
+
+void testPlaylistTracks()
+{
+    std::cout << "Playlist tracks: 4 free tracks, one per pattern, - and + (0.44.0)\n";
+    auto doc = sls::ProjectDocument::blank();
+    auto& a = doc.arrangement;
+    check (a.trackCount() == 5 && a.playlistTracks[4].pattern == 0 && a.dedicatedTrack (0) == 4
+               && std::all_of (a.playlistTracks.begin(), a.playlistTracks.begin() + 4, [] (const sls::PlaylistTrack& t) { return t.pattern == -1; }),
+           "a new project: 4 free tracks and Pattern 1's own track");
+    for (int p = 1; p < 4; ++p)
+    {
+        a.patterns.emplace_back();
+        a.addPatternTrack (p);
+    }
+    check (a.trackCount() == 8 && a.dedicatedTrack (3) == 7, "with 4 patterns: 4 tracks for the patterns + the 4 free ones = 8");
+    check (a.addPatternTrack (3) == 7 && a.trackCount() == 8, "a pattern never gets a second track");
+    check (a.addTrack() == 8 && a.trackCount() == 9 && a.playlistTracks[8].pattern == -1, "+ adds a free track at the end");
+
+    // Removing a track takes its clips with it; the tracks (and clips) after it move up.
+    a.clips = { { 0, 4, 0, 1920, 0 }, { 1, 5, 0, 1920, 0 }, { 3, 7, 1920, 1920, 0 } };
+    sls::AudioClip audio;
+    audio.data = sls::makeMissingSample ("/x.wav");
+    audio.track = 6;
+    audio.lengthTicks = 960;
+    a.audioClips = { audio };
+    check (a.clipsOnTrack (5) == 1 && a.clipsOnTrack (6) == 1 && a.clipsOnTrack (0) == 0, "clips are counted per track");
+    check (a.removeTrack (5) && a.trackCount() == 8 && a.clips.size() == 2 && a.clips[1].track == 6 && a.audioClips[0].track == 5
+               && a.playlistTracks[5].pattern == 2 && a.dedicatedTrack (1) == -1,
+           "- on a track: its clip goes, the clips and tracks below move up one place");
+    check (! a.removeTrack (-1) && ! a.removeTrack (99), "a track that does not exist cannot be removed");
+    sls::Arrangement one;
+    one.playlistTracks.resize (1);
+    check (! one.removeTrack (0) && one.trackCount() == 1, "the last track stays");
+    sls::Arrangement full;
+    while (full.addTrack() >= 0) {}
+    check (full.trackCount() == sls::kMaxPlaylistTracks, "at most kMaxPlaylistTracks tracks");
+
+    // Deleting a pattern: its own track goes when empty, else it becomes a free track named after it; later patterns' tracks follow.
+    {
+        auto d = sls::ProjectDocument::blank();
+        auto& b = d.arrangement;
+        b.patterns.resize (3);
+        b.patterns[1].name = "Verse";
+        b.addPatternTrack (1);
+        b.addPatternTrack (2);
+        b.clips = { { 2, b.dedicatedTrack (2), 0, 1920, 0 } };
+        check (b.removePattern (1) && b.trackCount() == 6 && b.dedicatedTrack (1) == 5 && b.clips[0].pattern == 1 && b.clips[0].track == 5,
+               "deleting a pattern whose track is empty removes the track; the next pattern's track and clip move up");
+        b.clips.push_back ({ 0, 4, 0, 1920, 0 });
+        sls::AudioClip take;
+        take.data = sls::makeMissingSample ("/take.wav");
+        take.track = 4;
+        take.lengthTicks = 960;
+        b.audioClips = { take };
+        b.patterns[0].name = "Intro";
+        check (b.removePattern (0) && b.trackCount() == 6 && b.playlistTracks[4].pattern == -1 && b.playlistTracks[4].name == "Intro"
+                   && b.audioClips.size() == 1 && b.dedicatedTrack (0) == 5,
+               "a pattern's track that still holds a recording stays, as a free track with the pattern's name");
+    }
+
+    // Saved and read back; older files had 8 tracks.
+    {
+        auto d = sls::ProjectDocument::blank();
+        d.arrangement.patterns.resize (2);
+        d.arrangement.patterns[1].name = "B";
+        d.arrangement.addPatternTrack (1);
+        d.arrangement.addTrack();
+        d.arrangement.playlistTracks[2].name = "Vocals";
+        const auto back = sls::ProjectDocument::fromJson (d.toJson());
+        check (back.document && back.document->arrangement.playlistTracks == d.arrangement.playlistTracks && back.document->arrangement.trackCount() == 7,
+               "7 tracks, two of them dedicated to patterns and one named, are saved and read back");
+        auto v = juce::JSON::parse (d.toJson());
+        v.getDynamicObject()->removeProperty ("trackCount");
+        const auto old = sls::ProjectDocument::fromJson (juce::JSON::toString (v));
+        check (old.document && old.document->arrangement.trackCount() == sls::kLegacyPlaylistTracks,
+               "a file from before 0.44.0 opens with its 8 tracks");
+        auto* list = v.getDynamicObject()->getProperty ("playlistTracks").getArray();
+        for (auto& t : *list)
+            t.getDynamicObject()->setProperty ("pattern", 1); // two tracks claiming one pattern
+        v.getDynamicObject()->setProperty ("trackCount", 100000);
+        const auto odd = sls::ProjectDocument::fromJson (juce::JSON::toString (v));
+        int claims = 0;
+        if (odd.document)
+            for (const auto& t : odd.document->arrangement.playlistTracks)
+                claims += t.pattern == 1 ? 1 : 0;
+        check (odd.document && odd.document->arrangement.trackCount() == sls::kMaxPlaylistTracks && claims == 1,
+               "an impossible track count is limited and a pattern keeps a single track");
+    }
+
+    // Recording settings follow a removed track.
+    sls::RecordSetup setup;
+    setup.armOnly (3);
+    setup.tracks[5] = { true, 4, true };
+    setup.removeTrack (2);
+    check (setup.armedTracks() == std::vector<int> ({ 2, 4 }) && setup.tracks[4].firstInput == 4, "the arms and inputs of the tracks below move up with them");
+    setup.armOnly (0);
+    setup.removeTrack (0);
+    check (setup.armedTracks() == std::vector<int> { 0 }, "removing the only armed track arms the first one");
+}
 
 void testFreePlaylist()
 {
@@ -5370,7 +5469,7 @@ void testRecordSetup()
     setup.toggle (5);
     check (setup.armedTracks() == std::vector<int> { 5 }, "the last armed track stays armed (Record always has somewhere to write)");
     setup.toggle (-1);
-    setup.toggle (sls::kPlaylistTracks);
+    setup.toggle (sls::kMaxPlaylistTracks);
     check (setup.armedTracks() == std::vector<int> { 5 }, "tracks out of range are ignored");
 
     setup.armOnly (0);
@@ -5388,10 +5487,10 @@ void testRecordSetup()
 
     const auto empty = RecordSetup::fromString ("", 4);
     check (empty.armedTracks() == std::vector<int> { 4 }, "with nothing saved, the track recorded before 0.36.0 is armed");
-    const auto clamped = RecordSetup::fromString ("", 99);
-    check (clamped.armedTracks() == std::vector<int> { sls::kPlaylistTracks - 1 }, "and an impossible one is brought in range");
+    const auto clamped = RecordSetup::fromString ("", 999);
+    check (clamped.armedTracks() == std::vector<int> { sls::kMaxPlaylistTracks - 1 }, "and an impossible one is brought in range");
 
-    const auto bad = RecordSetup::fromString ("x;1:1:0;2:1:0:0:0;9:1:0:0;3:2:0:0;4:1:64:0;5:1:0:7;-1:1:0:0;6:1:99999:0;::::;;7:1:3:1;1:1:63:1", 0);
+    const auto bad = RecordSetup::fromString ("x;1:1:0;2:1:0:0:0;200:1:0:0;3:2:0:0;4:1:64:0;5:1:0:7;-1:1:0:0;6:1:99999:0;::::;;7:1:3:1;1:1:63:1", 0);
     check (bad.armedTracks() == std::vector<int> ({ 1, 7 }), "malformed or out-of-range entries are skipped, good ones kept");
     check (bad.tracks[7] == TrackInput { true, 3, true }, "a good entry is read whole");
     check (bad.tracks[1].firstInput == 63 && ! bad.tracks[1].stereo, "a stereo pair past the last input becomes mono");
@@ -10660,6 +10759,7 @@ int main()
     testSfz();
     testSfzFiles();
     testFreePlaylist();
+    testPlaylistTracks();
     testSemVerAndUpdates();
     testCrashReports();
     testSessionLog();

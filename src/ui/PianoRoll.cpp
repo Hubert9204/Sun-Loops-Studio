@@ -782,7 +782,22 @@ void PianoRoll::mouseDown (const juce::MouseEvent& e)
         return;
     }
 
+    // Empty grid (0.44.0): a drag draws a selection rectangle, a click (released without moving) creates a note there.
     const int tick = e.mods.isAltDown() ? static_cast<int> (xToTick (pos.x)) : snapDown (xToTick (pos.x));
+    if (tick < 0 || tick >= loopLengthTicks)
+        return;
+    dragMode = Drag::PendingEmpty;
+    pendingPosition = pos;
+    pendingNoSnap = e.mods.isAltDown();
+    selectAdds = e.mods.isShiftDown();
+    selectionBefore = selected;
+    selectBox = { pos, pos };
+    sound (fitPitch (yToPitch (pos.y))); // the key under the mouse sounds while the button is down
+}
+
+void PianoRoll::createNotesAt (juce::Point<float> pos, bool noSnap)
+{
+    const int tick = noSnap ? static_cast<int> (xToTick (pos.x)) : snapDown (xToTick (pos.x));
     if (tick < 0 || tick >= loopLengthTicks)
         return;
 
@@ -802,15 +817,20 @@ void PianoRoll::mouseDown (const juce::MouseEvent& e)
         selected.push_back (true);
     }
     dragOriginal = notes;
-    dragMode = Drag::Resize;
     dragChanged = true; // creation is a change even without dragging
-    sound (root);
     say (describe (notes[static_cast<size_t> (dragIndex)]) + (pitches.size() > 1 ? "  (" + juce::String (theory::chords()[static_cast<size_t> (chordStamp)].name) + ")" : juce::String()));
     repaint();
 }
 
 void PianoRoll::mouseDrag (const juce::MouseEvent& e)
 {
+    if (dragMode == Drag::PendingEmpty)
+    {
+        if (e.getDistanceFromDragStart() < 4)
+            return;
+        sound (-1);
+        dragMode = Drag::Select; // from here on the rectangle (selectionBefore, selectAdds and selectBox were set on the press)
+    }
     if (dragMode == Drag::Seek)
     {
         if (onSeek)
@@ -980,8 +1000,23 @@ void PianoRoll::mouseUp (const juce::MouseEvent& e)
     if (dragMode == Drag::Select)
     {
         dragMode = Drag::None;
+        selectBox = {};
         repaint();
         say (juce::String (selectedCount()) + " note(s) selected");
+        return;
+    }
+    if (dragMode == Drag::PendingEmpty)
+    {
+        sound (-1);
+        dragMode = Drag::None;
+        createNotesAt (pendingPosition, pendingNoSnap); // a click on empty grid: a note there
+        dragIndex = -1;
+        dragOriginal.clear();
+        if (dragChanged)
+        {
+            dragChanged = false;
+            notifyChanged();
+        }
         return;
     }
 

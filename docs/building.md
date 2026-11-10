@@ -53,7 +53,7 @@ cmake --install build --prefix ~/.local
 
 Installs, under the prefix: the `sun-loops-studio` command (`bin/`), the application-menu entry
 (`share/applications/sun-loops-studio.desktop`), the icons (`share/icons/hicolor/{16x16,256x256}/apps/`) and the
-file type of `.slp` (and the older `.slsproj`) projects (`share/mime/packages/sun-loops-studio.xml`).
+file type of `.slp` projects (`share/mime/packages/sun-loops-studio.xml`).
 Make sure `~/.local/bin` is in your `PATH`. KDE normally picks the menu entry up within moments; if not, log out and
 in again or run `kbuildsycoca6`.
 

@@ -102,12 +102,14 @@ void MainComponent::importMidiFile (const juce::File& file)
         for (size_t k = 0; k < newChannels.size() && k < plan.patternNotes[static_cast<size_t> (p)].size(); ++k)
             pattern.notes[static_cast<size_t> (newChannels[k])] = plan.patternNotes[static_cast<size_t> (p)][k];
         arrangement.patterns.push_back (std::move (pattern));
-        arrangement.clips.push_back ({ firstPattern + p, 0, startTick + p * arrangement.patternTicks, arrangement.patternTicks, 0 });
+        // Each new pattern gets its own playlist track (0.44.0), and its clip goes there.
+        const int own = arrangement.addPatternTrack (firstPattern + p);
+        arrangement.clips.push_back ({ firstPattern + p, own >= 0 ? own : 0, startTick + p * arrangement.patternTicks, arrangement.patternTicks, 0 });
     }
 
     juce::String message = "Imported " + file.getFileName() + ": " + juce::String (static_cast<int> (newChannels.size()))
                          + (newChannels.size() == 1 ? " channel, " : " channels, ") + juce::String (plan.patternCount())
-                         + (plan.patternCount() == 1 ? " pattern" : " patterns") + " on playlist track 1";
+                         + (plan.patternCount() == 1 ? " pattern on its own playlist track" : " patterns on their own playlist tracks");
     if (parsed.bpm > 0.0)
     {
         bpmSlider.setValue (std::clamp (std::round (parsed.bpm), 40.0, 240.0)); // the slider drives the engine
@@ -182,10 +184,14 @@ void MainComponent::importMediaFiles (const juce::StringArray& allPaths, int tra
     library.ensureExists();
     const auto videoFolder = library.samples.getChildFile ("From videos");
 
+    // One file per track from the one dropped on; tracks are added at the end when the files need more (0.44.0).
+    const int firstTrack = std::clamp (track, 0, arrangement.trackCount() - 1);
+    while (firstTrack + paths.size() > arrangement.trackCount() && arrangement.addTrack() >= 0) {}
+    playlistView.tracksChanged();
     for (int i = 0; i < paths.size(); ++i)
     {
         const juce::File file (paths[i]);
-        const int target = (std::clamp (track, 0, kPlaylistTracks - 1) + i) % kPlaylistTracks;
+        const int target = std::min (firstTrack + i, arrangement.trackCount() - 1);
         importPool.addJob ([safe = juce::Component::SafePointer<MainComponent> (this), batch, file, videoFolder, target, tick]
                            {
                                auto result = std::make_shared<ImportResult> (importMediaFile (file, videoFolder));
@@ -209,7 +215,7 @@ bool MainComponent::addAudioClip (const std::shared_ptr<const SampleData>& data,
     AudioClip clip;
     clip.data = data;
     clip.name = data->name;
-    clip.track = std::clamp (track, 0, kPlaylistTracks - 1);
+    clip.track = std::clamp (track, 0, arrangement.trackCount() - 1);
 
     const int natural = clip.naturalLengthTicks (bpmSlider.getValue());
     int start = arrangement.findFreeAudioStart (clip.track, tick, natural);

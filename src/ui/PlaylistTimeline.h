@@ -24,8 +24,9 @@ enum class PlaylistTool { Select, Split, Cut, Erase, Zoom };
 //   Zoom   : click zooms in, right click or Shift+click zooms out, drag a stretch to zoom to it.
 // Always: Ctrl+wheel zooms around the mouse, the wheel scrolls in time, Alt while dragging switches the grid off.
 // Delete removes the selected clip; Ctrl+C / Ctrl+X / Ctrl+V / Ctrl+D copy, cut, paste and duplicate it; Ctrl+Z / Ctrl+Y undo and redo.
-// Pattern clips always sit on whole pattern boundaries; audio clips (recordings, imported files) sit on the grid chosen
-// with Snap, down to a single tick, and are drawn with their waveform. Click on a track's name to choose the track
+// Pattern clips and audio clips (recordings, imported files) sit on the grid chosen with Snap, down to a single tick (0.42.0);
+// audio is drawn with its waveform. Tracks (0.44.0): free ones and one per pattern (a click there places that pattern), - / +
+// in the top-left corner, scrolling when there are more than 8. Click on a track's name to choose the track
 // that Record writes to. Audio and video files dragged in from the file manager, and sounds dragged from the browser,
 // become audio clips (the caller does the importing: see onFilesDropped / onItemDropped).
 // The arrangement is owned by the caller; this view edits it in place and reports through onChanged.
@@ -114,9 +115,18 @@ public:
     std::function<void (int)> onTrackSelected;
     // The tracks Record writes to (0.36.0): a red dot after the name. A click on the dot (or Ctrl+click on the name) toggles it;
     // the track menu has *Record on this track* and *Recording input...*.
-    void setRecordArms (const std::array<bool, kPlaylistTracks>& arms);
+    void setRecordArms (const std::array<bool, kMaxPlaylistTracks>& arms);
     std::function<void (int)> onTrackArmToggled;
     std::function<void (int)> onTrackInputMenu;
+
+    // Tracks (0.44.0): the - and + buttons in the top-left corner, and the track menu's "Delete this track". Adding is one
+    // undo step; removing a track with clips on it asks first, then removes the clips with it (one undo step too).
+    void addTrack();
+    void removeTrack (int track); // asks when the track holds clips
+    // The arrangement's tracks changed from outside (a new pattern, an import, a project opened).
+    void tracksChanged();
+    void showTrack (int track) { tracksChanged(); scrollToTrack (track); } // scrolls the tracks so that `track` can be seen
+    std::function<void (int)> onTrackRemoved; // the tracks after it moved up one place: what refers to tracks by number follows
 
     // Tempo, to draw audio at its real length (an audio clip lasts a fixed time, not a fixed number of beats) and to
     // show times.
@@ -165,7 +175,7 @@ private:
         std::vector<Clip> clips;
         std::vector<AudioClip> audioClips;
         std::vector<AutomationClip> automationClips;
-        std::array<PlaylistTrack, kPlaylistTracks> tracks {}; // names and colours (0.33.0)
+        std::vector<PlaylistTrack> tracks; // names, colours and the pattern each is dedicated to (0.33.0, 0.44.0)
     };
 
     struct Peaks
@@ -190,14 +200,24 @@ private:
     void endLoopMode (bool keep);
     void paintGrid (juce::Graphics& g);
 
-    static constexpr int kNameWidth = 64;
+    static constexpr int kNameWidth = 96; // 0.44.0: wider, for the patterns' names on their own tracks
     static constexpr int kRulerHeight = 38;
     static constexpr int kScrollBarHeight = 14;
     static constexpr int kEdgeGrab = 7;
     static constexpr int kLaneHeight = 22;
     static constexpr int kLanesGap = 4;
 
+    static constexpr int kTrackScrollWidth = 10;
+    static constexpr int kMaxVisibleTracks = 8; // more than this scroll (0.44.0)
+
+    int trackCount() const noexcept { return std::max (1, arrangement.trackCount()); }
     int trackHeight() const noexcept;
+    int tracksViewHeight() const noexcept;          // the visible height of the tracks (they scroll when there are more)
+    int trackTop (int track) const noexcept { return kRulerHeight + track * trackHeight() - scrollY; }
+    bool inTracks (int y) const noexcept { return y >= kRulerHeight && y < kRulerHeight + tracksViewHeight(); }
+    void clampScrollY();
+    void updateTrackScrollBar();
+    void scrollToTrack (int track);
     int lanesTop() const noexcept;                  // y of the first automation lane
     int lanesBottom() const noexcept { return lanesTop() + kAutomationLanes * kLaneHeight; }
     bool inLanes (int y) const noexcept { return y >= lanesTop() && y < lanesBottom(); }
@@ -256,6 +276,9 @@ private:
     double unitWidth = 90.0;
     double scrollX = 0.0;
     juce::ScrollBar scrollBar { false };
+    int scrollY = 0; // the tracks, in pixels (0.44.0)
+    juce::ScrollBar trackScrollBar { true };
+    juce::TextButton removeTrackButton { "-" }, addTrackButton { "+" };
 
     PlaylistTool tool = PlaylistTool::Select;
     int snapTicks = kTicksPerBeat;
@@ -281,7 +304,7 @@ private:
     } clipboard;
 
     int armedTrack = 0;                          // the selected track (named so before 0.36.0, when it was also the one recorded)
-    std::array<bool, kPlaylistTracks> recordArms {}; // the tracks Record writes to
+    std::array<bool, kMaxPlaylistTracks> recordArms {}; // the tracks Record writes to
     double bpm = 120.0;
     std::vector<Peaks> waveformCache;
     int dropTrack = -1; // while something is dragged over the timeline: where it would land
