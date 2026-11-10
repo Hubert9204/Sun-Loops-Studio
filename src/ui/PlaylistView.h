@@ -27,7 +27,9 @@ public:
     int getSelectedPattern() const noexcept { return timeline.getSelectedPattern(); }
 
     void setPlayheadTick (int tick) { timeline.setPlayheadTick (tick); }
-    void setArmedTrack (int track) { timeline.setArmedTrack (track); }
+    void setSelectedTrack (int track) { timeline.setSelectedTrack (track); }
+    void setRecordArms (const std::array<bool, kPlaylistTracks>& arms) { timeline.setRecordArms (arms); }
+    juce::String trackName (int track) const { return timeline.trackName (track); }
     void setBpm (double bpm) { timeline.setBpm (bpm); }
     bool handleKey (const juce::KeyPress& key) { return timeline.handleKey (key); }
     void clearHistory() { timeline.clearHistory(); updateUndoButtons(); }
@@ -52,6 +54,8 @@ public:
     std::function<void (const juce::StringArray&, int, int)> onFilesDropped;
     std::function<void (const drag::Item&, int, int)> onItemDropped;
     std::function<void (int)> onTrackSelected;
+    std::function<void (int)> onTrackArmToggled; // the record dot of a track, or its menu's "Record on this track"
+    std::function<void (int)> onTrackInputMenu;  // the track menu's "Recording input..."
     std::function<void (int)> onEditSample; // an audio clip's "Edit sample..." was chosen: its index
     std::function<void (int)> onSeek;       // the ruler was clicked: the song position (ticks)
     std::function<void()> onLoopChanged;    // the loop region was made, changed or deleted

@@ -700,22 +700,39 @@ trovati entro 0,2 ms) e **non giudicati ad orecchio su registrazioni reali**: lo
 
 ### Registrazione
 
-**Record** (barra) registra l'**ingresso audio**: un microfono, una chitarra in un'interfaccia audio, un ingresso di linea.
+**Record** (barra) registra l'**ingresso audio**: un microfono, una chitarra in un'interfaccia audio, un ingresso di linea - su una
+traccia o, dalla 0.36.0, su **più tracce insieme**, ognuna dal proprio ingresso.
 
-1. In **Audio...** scegli il dispositivo di ingresso e attiva i suoi canali; parla o suona e guarda la barra **Input
-   level**. (Se salti questo passo, premendo Record il programma attiva da solo i primi canali di ingresso del dispositivo.)
-2. Nella Playlist clicca sul **nome di una traccia vuota**: ottiene un punto rosso. La freccia accanto a Record offre la
-   stessa scelta, più il tipo di ingresso: **Mono** (il primo ingresso, scritto come file a un canale: usalo per un
-   microfono o una chitarra) o **Stereo** (ingressi 1 e 2), e *Hear the input while recording* (usa le cuffie: con casse e
-   microfono si crea un fischio; questo ascolto aggiunge la latenza del dispositivo).
-3. Premi **Record**. Il brano parte dall'inizio, in modalità Song, e la riga di stato mostra il tempo e il livello
-   d'ingresso (avvisa se satura). Premi di nuovo **Record** o **Stop** per finire; la registrazione compare come clip audio
-   all'inizio della traccia ed è conservata anche come WAV a 24 bit in `~/Music/Sun Loops Studio/Samples/Recordings/`.
+1. In **Audio...** scegli il dispositivo di ingresso; parla o suona e guarda la barra **Input level**. (Premendo Record si
+   accendono gli ingressi che servono alle tracce armate, se sono spenti.)
+2. **Arma** le tracce da registrare: ogni traccia della playlist ha un **pallino di registrazione** dopo il nome. Clicca il
+   pallino (o Ctrl+clic sul nome) per armare o disarmare la traccia: le tracce armate hanno il pallino rosso. Una traccia resta
+   sempre armata. Con una sola traccia armata, un clic sul nome di un'altra sposta lì l'armamento; con più tracce armate, la
+   seleziona soltanto.
+3. Scegli **l'ingresso di ogni traccia**: tasto destro sul nome della traccia > *Recording input...* (o la freccia accanto a
+   Record > *Input of each track*): un ingresso (file a un canale: un microfono, una chitarra) o due ingressi vicini (file
+   stereo). I nomi vengono dal dispositivo audio quando un ingresso è aperto; prima, si offrono gli ingressi 1-8 per numero. Una
+   traccia nuova registra l'ingresso 1.
+4. Premi **Record**. Il brano suona in modalità Song e la riga di stato mostra il tempo, il livello d'ingresso più alto e le
+   tracce che saturano. Premi di nuovo **Record** o **Stop** per finire; ogni ripresa compare come clip audio sulla sua traccia
+   ed è conservata anche come WAV a 24 bit in `~/Music/Sun Loops Studio/Samples/Recordings/` (con *T1*, *T2*... nel nome quando
+   si sono registrate più tracce).
 
-La registrazione è spostata della latenza di andata e ritorno dichiarata dal dispositivo audio, per allinearla a ciò che
-suonava. La traccia deve essere libera all'inizio della playlist (altrimenti Record lo dice); una registrazione si ferma da
-sola alla fine della playlist o dopo 5 minuti. Le registrazioni partono sempre dall'inizio del brano: non c'è ancora
-punch-in né conteggio iniziale (accendi il **Metronome** per suonare a tempo).
+La freccia accanto a Record offre anche:
+
+- **The recording becomes**: clip sulle tracce armate, o *New sampler channels* (uno per traccia armata, da suonare dal piano
+  roll).
+- **The takes start**: *At the start of the song* (il brano riparte dall'inizio), o *Where the song is (punch in)*: dal
+  marcatore di inizio della playlist, o da dove il brano sta suonando se è già in riproduzione. Le riprese vengono messe dove
+  sono partite.
+- *Hear the input while recording* (usa le cuffie: con casse e microfono si crea un fischio; questo ascolto aggiunge la latenza
+  del dispositivo e riproduce solo gli ingressi 1 e 2).
+
+Tutte le riprese partono nello stesso blocco audio, quindi sono allineate tra loro, e sono spostate della latenza di andata e
+ritorno dichiarata dal dispositivo, per allinearle a ciò che suonava. Una ripresa si ferma da sola alla fine della playlist, dopo
+5 minuti, o quando il brano torna indietro (una regione di loop: il resto non sarebbe più allineato). Non c'è ancora il
+conteggio iniziale (accendi il **Metronome** per suonare a tempo). Un ingresso che il dispositivo non ha viene segnalato e non si
+registra nulla.
 
 ### Tastiere MIDI e altri dispositivi
 

@@ -8,6 +8,7 @@
 #include <juce_audio_devices/juce_audio_devices.h>
 
 #include "audio/InputRecorder.h"
+#include "audio/RecordSetup.h"
 #include "audio/Loudness.h"
 #include "audio/LiveNotes.h"
 #include "audio/MidiNotes.h"
@@ -81,12 +82,33 @@ public:
     int getNumActiveInputChannels() const;
     // Switches on the device's first input channels (up to two) if none is on. Returns an error message, empty on success.
     juce::String enableDefaultInput();
-    // Records the audio input to `file` from the start of the song: rewinds the song, starts it and writes what comes
-    // in, delayed by the round-trip latency so that it lines up with what was playing. Returns an error message,
-    // empty on success.
-    juce::String startRecording (const juce::File& file, InputRecorder::Channels channels);
-    InputRecorder::Take stopRecording(); // the transport keeps running; the caller stops it
-    double getRecordedSeconds() const noexcept { return recorder.getSecondsRecorded(); }
+    // The names of every input channel of the device (also those that are switched off), in order.
+    juce::StringArray getInputChannelNames() const;
+    // Switches on these input channels of the device (counted from 0), keeping those already on. Error message, or empty.
+    juce::String enableInputChannels (const std::vector<int>& channels);
+
+    // Multitrack recording (0.36.0): one file per stream, each from its own input channel(s), all started in the same audio
+    // block. With `fromSongStart` the song is rewound first (as before 0.36.0); otherwise it plays on from where it is and
+    // getRecordStartTick() tells where the takes begin. Every take is delayed by the round-trip latency so that it lines up
+    // with what was playing. The input channels must be on (enableInputChannels). Returns an error message, empty on success;
+    // after an error nothing is recorded and no file is left.
+    struct RecordStream
+    {
+        juce::File file;
+        int deviceInput = 0; // the device's input channel (from 0); Stereo takes it and the next
+        InputRecorder::Channels channels = InputRecorder::Channels::Mono;
+    };
+    static constexpr int kMaxRecordStreams = 8;
+    juce::String startRecording (const std::vector<RecordStream>& streams, bool fromSongStart);
+    std::vector<InputRecorder::Take> stopRecording(); // in the order of the streams; the transport keeps running
+    bool isRecording() const noexcept { return captureGate.load (std::memory_order_relaxed); }
+    double getRecordedSeconds() const noexcept { return recorders[0].getSecondsRecorded(); }
+    float consumeStreamPeak (int stream) noexcept
+    {
+        return stream >= 0 && stream < kMaxRecordStreams ? recorders[static_cast<size_t> (stream)].consumePeak() : 0.0f;
+    }
+    // The song position (ticks) of the takes' first frame, or -1 before the audio thread has started them.
+    double getRecordStartTick() const noexcept { return recordStartTick.load (std::memory_order_acquire); }
     // Hear the input through the speakers (adds its latency; keep off with speakers and a microphone: feedback).
     void setInputMonitoring (bool on) noexcept { monitorInput.store (on, std::memory_order_relaxed); }
     // Loudest input sample since the last call (0 without input).
@@ -220,8 +242,11 @@ private:
     MidiReceiver midiReceiver { *this };
     juce::MidiDeviceListConnection midiDeviceWatch;
     juce::StringArray knownMidiInputs;
-    InputRecorder recorder;
-    bool captureStarted = false; // audio thread only: the recorder is armed and the song was rewound for it
+    std::array<InputRecorder, kMaxRecordStreams> recorders;
+    std::atomic<bool> captureGate { false };      // set once every recorder of a take is armed: they all start in one block
+    std::atomic<bool> captureFromStart { true };  // rewind the song when the take starts
+    std::atomic<double> recordStartTick { -1.0 };
+    bool captureStarted = false; // audio thread only: the take has started (and the song was rewound for it if asked)
     Auditioner audition;                            // preview of one sample; hand-over rules in Auditioner.h
     OneShot startup;                                // set before the device starts; played by the audio thread only
     std::atomic<bool> startupTrigger { false };

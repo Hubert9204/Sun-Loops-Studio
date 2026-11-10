@@ -101,6 +101,8 @@ PlaylistView::PlaylistView (Arrangement& arrangementToEdit) : timeline (arrangem
     timeline.onFilesDropped = [this] (const juce::StringArray& f, int track, int tick) { if (onFilesDropped) onFilesDropped (f, track, tick); };
     timeline.onItemDropped = [this] (const drag::Item& item, int track, int tick) { if (onItemDropped) onItemDropped (item, track, tick); };
     timeline.onTrackSelected = [this] (int track) { if (onTrackSelected) onTrackSelected (track); };
+    timeline.onTrackArmToggled = [this] (int track) { if (onTrackArmToggled) onTrackArmToggled (track); };
+    timeline.onTrackInputMenu = [this] (int track) { if (onTrackInputMenu) onTrackInputMenu (track); };
     timeline.onEditSample = [this] (int index) { if (onEditSample) onEditSample (index); };
     timeline.onSeek = [this] (int tick) { if (onSeek) onSeek (tick); };
     timeline.onLoopChanged = [this] { if (onLoopChanged) onLoopChanged(); };

@@ -16,7 +16,7 @@ Sun Loops Studio is inspired by the workflow of loop-based DAWs such as FL Studi
 that uses no code, names, graphics or assets from other products, and it is not affiliated with or endorsed by
 their makers.
 
-**Status: alpha (0.35.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
+**Status: alpha (0.36.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
 display. Playback was confirmed on a real Nobara machine for version 0.3; everything added since (panels, patterns,
 playlist, browser, pitch/swing, the expanded mixer and its effects, saving projects, the AppImage, audio clips, drag and
 drop, recording, MIDI, the metronome and the export formats) was tested headless and in a virtual display with a silent
@@ -59,7 +59,8 @@ See [docs/roadmap.md](docs/roadmap.md) for exactly what is and is not verified a
   tools**, trimming from both edges, a grid down to one tick, undo/redo and a ruler in minutes:seconds.milliseconds
   with a readout of the time under the mouse let you work on a take precisely. AAC and video sound need `ffmpeg` installed.
 - **Recording** - the **Record** button records a microphone or an instrument into the playlist track you choose, in
-  time with the song. **MIDI keyboards** play the selected channel, and **Rec notes** writes what they play into the piano roll
+  time with the song; **since 0.36.0** several tracks at once, each from its own input (mono or a stereo pair), and from the
+  start marker (punch-in). **MIDI keyboards** play the selected channel, and **Rec notes** writes what they play into the piano roll
   (quantized) so you can make patterns; a take can also become a new sampler channel. Set up in **Audio...**.
 - **Built-in sounds** (0.22.0) - a sampled **Grand Piano** (Salamander, 4 velocity layers), a sampled **Electric Bass** (Growlybass,
   4 velocity layers, plus a staccato version), two sampled **acoustic drum kits** (from the DrumGizmo recordings: Acoustic Studio and

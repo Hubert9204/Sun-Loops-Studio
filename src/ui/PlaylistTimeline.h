@@ -105,9 +105,14 @@ public:
     int getSelectedAutomation() const noexcept { return selection.kind == Kind::Automation ? selection.index : -1; }
     void selectAutomation (int index);
 
-    // The track that Record writes to: shown with a red mark, chosen by clicking its name.
-    void setArmedTrack (int track);
+    // The selected track (its name in white; pasting goes there), chosen by clicking its name.
+    void setSelectedTrack (int track);
     std::function<void (int)> onTrackSelected;
+    // The tracks Record writes to (0.36.0): a red dot after the name. A click on the dot (or Ctrl+click on the name) toggles it;
+    // the track menu has *Record on this track* and *Recording input...*.
+    void setRecordArms (const std::array<bool, kPlaylistTracks>& arms);
+    std::function<void (int)> onTrackArmToggled;
+    std::function<void (int)> onTrackInputMenu;
 
     // Tempo, to draw audio at its real length (an audio clip lasts a fixed time, not a fixed number of beats) and to
     // show times.
@@ -271,7 +276,8 @@ private:
         AudioClip audio;
     } clipboard;
 
-    int armedTrack = 0;
+    int armedTrack = 0;                          // the selected track (named so before 0.36.0, when it was also the one recorded)
+    std::array<bool, kPlaylistTracks> recordArms {}; // the tracks Record writes to
     double bpm = 120.0;
     std::vector<Peaks> waveformCache;
     int dropTrack = -1; // while something is dragged over the timeline: where it would land

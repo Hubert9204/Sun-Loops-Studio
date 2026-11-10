@@ -29,6 +29,7 @@
 #include "audio/TimeFormat.h"
 #include "audio/Effects.h"
 #include "audio/InputRecorder.h"
+#include "audio/RecordSetup.h"
 #include "audio/Loudness.h"
 #include "audio/Spectrum.h"
 #include "audio/MidiImport.h"
@@ -4786,6 +4787,135 @@ void testAudioImport()
     check (r3.data == nullptr && r3.error.contains ("no audio"), "a video without sound is reported");
     check (library.getNumberOfChildFiles (juce::File::findFiles) == 2, "and leaves no partial files behind");
     dir.deleteRecursively(); // test folders in /tmp are not left behind
+}
+
+void testRecordSetup()
+{
+    std::cout << "Multitrack recording: armed tracks and their inputs\n";
+    using sls::RecordSetup;
+    using sls::TrackInput;
+
+    RecordSetup setup;
+    check (setup.armedTracks().empty() && setup.toString().empty(), "a new setup arms nothing and writes nothing");
+    setup.armOnly (2);
+    check (setup.armedTracks() == std::vector<int> { 2 }, "arming one track arms only it");
+    setup.toggle (5);
+    setup.toggle (0);
+    check (setup.armedTracks() == std::vector<int> ({ 0, 2, 5 }), "more tracks can be armed together");
+    setup.toggle (2);
+    check (setup.armedTracks() == std::vector<int> ({ 0, 5 }), "and disarmed one by one");
+    setup.toggle (0);
+    setup.toggle (5);
+    check (setup.armedTracks() == std::vector<int> { 5 }, "the last armed track stays armed (Record always has somewhere to write)");
+    setup.toggle (-1);
+    setup.toggle (sls::kPlaylistTracks);
+    check (setup.armedTracks() == std::vector<int> { 5 }, "tracks out of range are ignored");
+
+    setup.armOnly (0);
+    setup.tracks[0] = { true, 2, false };
+    setup.tracks[1] = { true, 0, true };
+    setup.tracks[3] = { true, 1, true };   // shares input 2 with track 1's pair
+    setup.tracks[6] = { false, 7, true };  // an input of its own, not armed
+    check (setup.neededInputs() == std::vector<int> ({ 0, 1, 2 }), "the inputs needed are those of the armed tracks, sorted, each once");
+
+    const auto text = setup.toString();
+    const auto back = RecordSetup::fromString (text, 0);
+    check (back.tracks == setup.tracks, "the setup is saved and read back exactly");
+    check (text.find ("6:0:7:1;") != std::string::npos && text.rfind ("2:", 0) != 0 && text.find (";2:") == std::string::npos,
+           "only tracks that differ from the default are written");
+
+    const auto empty = RecordSetup::fromString ("", 4);
+    check (empty.armedTracks() == std::vector<int> { 4 }, "with nothing saved, the track recorded before 0.36.0 is armed");
+    const auto clamped = RecordSetup::fromString ("", 99);
+    check (clamped.armedTracks() == std::vector<int> { sls::kPlaylistTracks - 1 }, "and an impossible one is brought in range");
+
+    const auto bad = RecordSetup::fromString ("x;1:1:0;2:1:0:0:0;9:1:0:0;3:2:0:0;4:1:64:0;5:1:0:7;-1:1:0:0;6:1:99999:0;::::;;7:1:3:1;1:1:63:1", 0);
+    check (bad.armedTracks() == std::vector<int> ({ 1, 7 }), "malformed or out-of-range entries are skipped, good ones kept");
+    check (bad.tracks[7] == TrackInput { true, 3, true }, "a good entry is read whole");
+    check (bad.tracks[1].firstInput == 63 && ! bad.tracks[1].stereo, "a stereo pair past the last input becomes mono");
+
+    std::vector<bool> on { true, false, true, true, false, true };
+    check (sls::callbackInputIndex (on, 0) == 0 && sls::callbackInputIndex (on, 2) == 1 && sls::callbackInputIndex (on, 3) == 2
+               && sls::callbackInputIndex (on, 5) == 3,
+           "a device input is found at its place among the switched-on inputs");
+    check (sls::callbackInputIndex (on, 1) == -1 && sls::callbackInputIndex (on, 6) == -1 && sls::callbackInputIndex (on, -1) == -1,
+           "an input that is off or does not exist has none");
+}
+
+void testMultitrackRecorders()
+{
+    std::cout << "Multitrack recording: several takes from several inputs\n";
+    const auto dir = freshTempDir ("sls-multirec");
+    constexpr int kBlock = 256;
+    constexpr int kInputs = 4;
+
+    // input c carries a sine of its own frequency and level
+    const auto value = [] (int c, long long i) { return (0.2f + 0.1f * static_cast<float> (c)) * std::sin ((0.03f + 0.02f * static_cast<float> (c)) * static_cast<float> (i)); };
+
+    std::array<sls::InputRecorder, 3> recs;
+    const auto fileA = dir.getChildFile ("a.wav"), fileB = dir.getChildFile ("b.wav"), fileC = dir.getChildFile ("c.wav");
+    bool started = recs[0].start (fileA, 48000.0, sls::InputRecorder::Channels::Mono, 100, 2).isEmpty();      // input 3 alone
+    started = started && recs[1].start (fileB, 48000.0, sls::InputRecorder::Channels::Stereo, 100, 0).isEmpty(); // inputs 1 and 2
+    started = started && recs[2].start (fileC, 48000.0, sls::InputRecorder::Channels::Stereo, 100, 3).isEmpty(); // input 4 and a missing 5th
+    check (started, "three recorders start, each on its own inputs");
+
+    std::vector<std::vector<float>> in (kInputs, std::vector<float> (kBlock));
+    std::vector<const float*> pointers (kInputs);
+    long long position = 0;
+    for (int blk = 0; blk < 40; ++blk)
+    {
+        for (int c = 0; c < kInputs; ++c)
+        {
+            for (int i = 0; i < kBlock; ++i)
+                in[static_cast<size_t> (c)][static_cast<size_t> (i)] = value (c, position + i);
+            pointers[static_cast<size_t> (c)] = in[static_cast<size_t> (c)].data();
+        }
+        for (auto& r : recs)
+            r.process (pointers.data(), kInputs, kBlock);
+        position += kBlock;
+    }
+    const auto ta = recs[0].stop(), tb = recs[1].stop(), tc = recs[2].stop();
+    check (ta.frames == 40 * kBlock - 100 && tb.frames == ta.frames && tc.frames == ta.frames, "the takes have the same length");
+
+    juce::AudioFormatManager manager;
+    manager.registerBasicFormats();
+    const auto matches = [&] (const juce::File& f, int channels, int firstInput, bool secondIsCopy)
+    {
+        std::unique_ptr<juce::AudioFormatReader> reader (manager.createReaderFor (f));
+        if (reader == nullptr || static_cast<int> (reader->numChannels) != channels)
+            return false;
+        juce::AudioBuffer<float> buf (channels, static_cast<int> (reader->lengthInSamples));
+        reader->read (&buf, 0, buf.getNumSamples(), 0, true, true);
+        for (int ch = 0; ch < channels; ++ch)
+        {
+            const int input = (ch == 1 && secondIsCopy) ? firstInput : firstInput + ch;
+            for (int i = 0; i < buf.getNumSamples(); ++i)
+                if (std::abs (buf.getSample (ch, i) - value (input, i + 100)) > 2e-6f)
+                    return false;
+        }
+        return buf.getNumSamples() > 0;
+    };
+    check (matches (fileA, 1, 2, false), "a mono take holds its own input, lined up");
+    check (matches (fileB, 2, 0, false), "a stereo take holds its two inputs");
+    check (matches (fileC, 2, 3, true), "a stereo pair whose second input is missing gets the first on both sides");
+
+    sls::InputRecorder beyond;
+    const auto fileD = dir.getChildFile ("d.wav");
+    beyond.start (fileD, 48000.0, sls::InputRecorder::Channels::Mono, 0, 9);
+    for (int blk = 0; blk < 4; ++blk)
+        beyond.process (pointers.data(), kInputs, kBlock);
+    const auto td = beyond.stop();
+    std::unique_ptr<juce::AudioFormatReader> reader (manager.createReaderFor (fileD));
+    bool silent = reader != nullptr && reader->lengthInSamples == 4 * kBlock;
+    if (silent)
+    {
+        juce::AudioBuffer<float> buf (1, 4 * kBlock);
+        reader->read (&buf, 0, 4 * kBlock, 0, true, true);
+        silent = buf.getMagnitude (0, 4 * kBlock) == 0.0f;
+    }
+    check (td.frames == 4 * kBlock && silent, "an input the device does not have records silence of the right length");
+    reader.reset();
+    dir.deleteRecursively();
 }
 
 void testInputRecorder()
@@ -9915,6 +10045,8 @@ int main()
     testPluginAutomationFile();
     testAudioImport();
     testInputRecorder();
+    testRecordSetup();
+    testMultitrackRecorders();
     testMidiNotes();
     testPlayerRewind();
     testClipEditing();

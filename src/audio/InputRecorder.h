@@ -24,7 +24,9 @@ public:
     // Opens `file` and arms the recorder: from now on process() records. The first `skipFrames` frames are thrown
     // away (the delay between sound and input, so the take lines up with what was playing). Returns an error message
     // (empty on success); on an error no file is left behind.
-    juce::String start (const juce::File& file, double sampleRate, Channels channels, int skipFrames);
+    // `firstInput` (0.36.0) is the index of the input in process()'s array that the take starts from: one for Mono, it and the
+    // next for Stereo. An input that is not there is recorded as silence (a stereo pair without its second input: the first twice).
+    juce::String start (const juce::File& file, double sampleRate, Channels channels, int skipFrames, int firstInput = 0);
 
     struct Take
     {
@@ -63,5 +65,6 @@ private:
     std::atomic<float> peak { 0.0f };
     std::atomic<double> rateHz { 0.0 };
     int numFileChannels = 1;
+    int inputIndex = 0;
 };
 } // namespace sls

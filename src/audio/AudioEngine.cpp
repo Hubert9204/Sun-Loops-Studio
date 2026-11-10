@@ -13,7 +13,9 @@ AudioEngine::~AudioEngine()
     midiDeviceWatch.reset();
     deviceManager.removeMidiInputDeviceCallback ({}, &midiReceiver);
     deviceManager.removeAudioCallback (this);
-    recorder.stop();
+    captureGate.store (false);
+    for (auto& r : recorders)
+        r.stop();
     deviceManager.closeAudioDevice();
 }
 
@@ -141,30 +143,103 @@ juce::String AudioEngine::enableDefaultInput()
     return {};
 }
 
-juce::String AudioEngine::startRecording (const juce::File& file, InputRecorder::Channels channels)
+juce::StringArray AudioEngine::getInputChannelNames() const
+{
+    auto* device = deviceManager.getCurrentAudioDevice();
+    return device != nullptr ? device->getInputChannelNames() : juce::StringArray();
+}
+
+juce::String AudioEngine::enableInputChannels (const std::vector<int>& channels)
 {
     auto* device = deviceManager.getCurrentAudioDevice();
     if (device == nullptr)
         return "No audio device is running.";
-    if (recorder.isActive())
+
+    const auto active = device->getActiveInputChannels();
+    bool allOn = true;
+    for (const int c : channels)
+        allOn = allOn && c >= 0 && active[c];
+    if (allOn && ! channels.empty())
+        return {};
+
+    auto setup = deviceManager.getAudioDeviceSetup();
+    if (setup.inputDeviceName.isEmpty())
+        setup.inputDeviceName = setup.outputDeviceName;
+    setup.useDefaultInputChannels = false;
+    setup.inputChannels = active;
+    for (const int c : channels)
+        if (c >= 0)
+            setup.inputChannels.setBit (c);
+    if (channels.empty())
+        setup.inputChannels.setBit (0);
+
+    const auto error = deviceManager.setAudioDeviceSetup (setup, true);
+    auto* now = deviceManager.getCurrentAudioDevice();
+    if (error.isNotEmpty() || now == nullptr || now->getActiveInputChannels().countNumberOfSetBits() == 0)
+        return "No audio input could be opened (" + (error.isNotEmpty() ? error : juce::String ("the device has none")) + "). "
+               "Connect a microphone or an audio interface and choose it in the Audio dialog.";
+    const auto on = now->getActiveInputChannels();
+    for (const int c : channels)
+        if (c < 0 || ! on[c])
+            return "The device has no input " + juce::String (c + 1) + " (it has " + juce::String (now->getInputChannelNames().size())
+                   + "). Choose another input for the track, or another device in the Audio dialog.";
+    return {};
+}
+
+juce::String AudioEngine::startRecording (const std::vector<RecordStream>& streams, bool fromSongStart)
+{
+    auto* device = deviceManager.getCurrentAudioDevice();
+    if (device == nullptr)
+        return "No audio device is running.";
+    if (captureGate.load())
         return "Already recording.";
+    if (streams.empty() || streams.size() > static_cast<size_t> (kMaxRecordStreams))
+        return "Nothing to record.";
+
+    // The audio callback gets the switched-on inputs packed together: find each stream's place among them.
+    const auto active = device->getActiveInputChannels();
+    std::vector<bool> switchedOn (static_cast<size_t> (std::max (0, active.getHighestBit() + 1)));
+    for (size_t c = 0; c < switchedOn.size(); ++c)
+        switchedOn[c] = active[static_cast<int> (c)];
 
     // The sound a performer plays along with is heard `output latency` late and arrives `input latency` after
     // that: the first frames of the take belong to before the song started, so they are left out.
     const int skip = std::max (0, device->getInputLatencyInSamples()) + std::max (0, device->getOutputLatencyInSamples());
+    const double rate = device->getCurrentSampleRate();
 
-    // The song must already be running when the recorder arms: the audio callback checks the recorder first and
-    // the transport second, so it can never record a block of a song that has not started.
+    for (size_t i = 0; i < streams.size(); ++i)
+    {
+        const auto& stream = streams[i];
+        const int index = callbackInputIndex (switchedOn, stream.deviceInput);
+        juce::String error = index < 0 ? "Input " + juce::String (stream.deviceInput + 1) + " is not switched on." : juce::String();
+        if (error.isEmpty())
+            error = recorders[i].start (stream.file, rate, stream.channels, skip, index);
+        if (error.isNotEmpty())
+        {
+            for (size_t j = 0; j < i; ++j)
+                recorders[j].stop().file.deleteFile();
+            return error;
+        }
+    }
+
+    // The song must already be running when the take starts: the audio callback checks the gate first and the transport
+    // second, so it can never record a block of a song that has not started.
+    captureFromStart.store (fromSongStart, std::memory_order_seq_cst);
+    recordStartTick.store (-1.0, std::memory_order_seq_cst);
     playing.store (true, std::memory_order_seq_cst);
-    const auto error = recorder.start (file, device->getCurrentSampleRate(), channels, skip);
-    if (error.isNotEmpty())
-        playing.store (false, std::memory_order_seq_cst);
-    return error;
+    captureGate.store (true, std::memory_order_seq_cst);
+    return {};
 }
 
-InputRecorder::Take AudioEngine::stopRecording()
+std::vector<InputRecorder::Take> AudioEngine::stopRecording()
 {
-    return recorder.stop();
+    // Close the gate first: no recorder gets a block after this one, so the takes end (almost) together.
+    captureGate.store (false, std::memory_order_seq_cst);
+    std::vector<InputRecorder::Take> takes;
+    for (auto& r : recorders)
+        if (auto take = r.stop(); take.file != juce::File())
+            takes.push_back (std::move (take));
+    return takes;
 }
 
 juce::String AudioEngine::describeDevice() const
@@ -237,9 +312,17 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* in, int 
 
     // Recording: the recorder is checked before the transport (see startRecording). The song restarts from the
     // beginning in the very block where the recording starts, so take and song line up.
-    const bool recording = recorder.isActive();
+    const bool recording = captureGate.load (std::memory_order_seq_cst);
     if (recording && ! captureStarted)
-        player.rewind();
+    {
+        // A seek asked for just before (Song mode switched on for the take) is applied first, so the take's start is known.
+        const int pendingSeek = seekRequest.exchange (-1, std::memory_order_acq_rel);
+        if (captureFromStart.load (std::memory_order_relaxed))
+            player.rewind();
+        else if (pendingSeek >= 0)
+            player.seek (*project, pendingSeek, bpm.load (std::memory_order_relaxed));
+        recordStartTick.store (player.getPositionTicks(), std::memory_order_release);
+    }
     captureStarted = recording;
     const bool isPlaying = playing.load (std::memory_order_seq_cst);
 
@@ -253,7 +336,8 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* in, int 
         raiseTo (inputPeak, inLevel);
     }
     if (recording)
-        recorder.process (in, numIn, numSamples);
+        for (auto& r : recorders)
+            r.process (in, numIn, numSamples); // wait-free; nothing for a recorder that is not part of this take
 
     const bool takeNotes = isPlaying && noteRecording.load (std::memory_order_relaxed);
     const double blockStartTick = player.getPositionTicks();

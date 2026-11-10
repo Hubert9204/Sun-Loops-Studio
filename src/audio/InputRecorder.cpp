@@ -14,7 +14,7 @@ InputRecorder::~InputRecorder()
     thread.stopThread (2000);
 }
 
-juce::String InputRecorder::start (const juce::File& file, double sampleRate, Channels channels, int skipFrames)
+juce::String InputRecorder::start (const juce::File& file, double sampleRate, Channels channels, int skipFrames, int firstInput)
 {
     if (active.load())
         return "Already recording";
@@ -38,7 +38,7 @@ juce::String InputRecorder::start (const juce::File& file, double sampleRate, Ch
         file.deleteFile();
         return "Cannot create a WAV file at " + file.getFullPathName();
     }
-    stream.release(); // the writer owns it now
+    static_cast<void> (stream.release()); // the writer owns it now
 
     if (! thread.isThreadRunning())
         thread.startThread();
@@ -48,6 +48,7 @@ juce::String InputRecorder::start (const juce::File& file, double sampleRate, Ch
 
     target = file;
     numFileChannels = numChannels;
+    inputIndex = std::max (0, firstInput);
     framesWritten.store (0);
     skipRemaining.store (std::max (0, skipFrames));
     dropped.store (0);
@@ -83,10 +84,11 @@ void InputRecorder::process (const float* const* input, int numInputChannels, in
     if (active.load (std::memory_order_seq_cst) && writer != nullptr && numSamples > 0)
     {
         const float* channels[2] = { nullptr, nullptr };
-        if (numInputChannels > 0 && input != nullptr && input[0] != nullptr)
+        const int first = inputIndex;
+        if (numInputChannels > first && input != nullptr && input[first] != nullptr)
         {
-            channels[0] = input[0];
-            channels[1] = (numFileChannels == 2 && numInputChannels > 1 && input[1] != nullptr) ? input[1] : input[0];
+            channels[0] = input[first];
+            channels[1] = (numFileChannels == 2 && numInputChannels > first + 1 && input[first + 1] != nullptr) ? input[first + 1] : input[first];
         }
 
         if (channels[0] != nullptr)

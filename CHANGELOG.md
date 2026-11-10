@@ -2,6 +2,28 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.36.0 - 2026-11-10
+
+### Added
+- **Multitrack recording**: several playlist tracks can be armed at once and are recorded together, each from its own input
+  into its own WAV file; all the takes start in the same audio block, so they line up with each other and with the song.
+  Every track has a **record dot** after its name (click it, or Ctrl+click the name, to arm or disarm the track); its
+  input - one input (mono) or a pair (stereo) - is chosen with right-click on the name > *Recording input...* or in Record's
+  menu > *Input of each track*. The inputs needed are switched on when Record is pressed.
+- **Punch-in**: Record's menu > *The takes start* > *Where the song is*: the takes start at the playlist's start marker (or
+  where the song is playing) and are placed there, instead of rewinding the song.
+- With *New sampler channels* as the target, every armed track gives a channel of its own.
+
+### Changed
+- A take stops by itself when the song jumps back (a loop region, or the end of the song looping), where it used to keep going
+  out of line with the song.
+- Record's menu: the Mono / Stereo items became each track's own input; a first start keeps the track and the Mono / Stereo
+  choice of earlier versions.
+
+### Fixed
+- A take started while the song was in Pattern mode, with the playlist's start marker moved, played the song from the marker
+  while the take was placed at the start.
+
 ## 0.35.0 - 2026-11-10
 
 ### Added

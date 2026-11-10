@@ -314,7 +314,9 @@ MainComponent::MainComponent()
     recordButton.onRightClick = [this] { openRecordMenu(); };
     recordMenuButton.setTooltip ("Recording options: track, input, monitoring");
     recordMenuButton.onClick = [this] { openRecordMenu(); };
-    playlistView.onTrackSelected = [this] (int track) { setRecordTrack (track); };
+    playlistView.onTrackSelected = [this] (int track) { selectPlaylistTrack (track); };
+    playlistView.onTrackArmToggled = [this] (int track) { toggleRecordArm (track); };
+    playlistView.onTrackInputMenu = [this] (int track) { showTrackInputMenu (track); };
 
     // Rec notes: what a MIDI keyboard plays while the song runs is written into the selected channel's pattern.
     noteRecordButton.setClickingTogglesState (false);
@@ -520,8 +522,16 @@ MainComponent::MainComponent()
         savedAudio = settings->getXmlValue (kAudioStateKey);
     if (settings != nullptr)
     {
-        recordTrack = std::clamp (settings->getIntValue ("record.track", 0), 0, kPlaylistTracks - 1);
-        recordChannels = settings->getBoolValue ("record.stereo", false) ? InputRecorder::Channels::Stereo : InputRecorder::Channels::Mono;
+        // Before 0.36.0 one track was recorded, from input 1 or inputs 1+2: that is where a first start of 0.36.0 begins.
+        const int oldTrack = std::clamp (settings->getIntValue ("record.track", 0), 0, kPlaylistTracks - 1);
+        if (settings->containsKey ("record.arms"))
+            recordSetup = RecordSetup::fromString (settings->getValue ("record.arms").toStdString(), oldTrack);
+        else
+        {
+            recordSetup.armOnly (oldTrack);
+            recordSetup.tracks[static_cast<size_t> (oldTrack)].stereo = settings->getBoolValue ("record.stereo", false);
+        }
+        recordFromPlayhead = settings->getBoolValue ("record.fromPlayhead", false);
         monitorInput = settings->getBoolValue ("record.monitor", false);
         metronomeOn = settings->getBoolValue ("metronome.on", false);
         typingOn = settings->getBoolValue ("typing.on", true);
@@ -532,7 +542,9 @@ MainComponent::MainComponent()
     }
     applyMetronome();
     applyNoteRecording();
-    playlistView.setArmedTrack (recordTrack);
+    if (recordSetup.armedTracks().empty())
+        recordSetup.armOnly (0);
+    applyRecordSetup (false);
     engine.setInputMonitoring (monitorInput);
     engine.setMidiTargetChannel (selected);
     engine.setStartupSound (makeStartupSample());

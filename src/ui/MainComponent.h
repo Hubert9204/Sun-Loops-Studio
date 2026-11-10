@@ -11,6 +11,7 @@
 #include "audio/Arrangement.h"
 #include "audio/AudioEngine.h"
 #include "audio/NoteRecorder.h"
+#include "audio/RecordSetup.h"
 #include "audio/Project.h"
 #include "audio/TypingKeyboard.h"
 #include "ui/AudioMeter.h"
@@ -168,7 +169,14 @@ private:
     void startRecording();
     void finishRecording (const juce::String& why);
     void openRecordMenu();
-    void setRecordTrack (int track);
+    void selectPlaylistTrack (int track); // a click on a track's name: moves the arm there when only one track is armed
+    void toggleRecordArm (int track);
+    void applyRecordSetup (bool announce = true); // shows the arms on the playlist and saves them
+    void showTrackInputMenu (int track);
+    void addRecordInputItems (juce::PopupMenu& menu, int track);
+    bool handleRecordInputItem (int result);
+    juce::String recordInputLabel (int track) const;
+    juce::String armedTracksText() const;
     void updateRecordButton();
     void showRecordProgress();
 
@@ -363,8 +371,9 @@ private:
     juce::Component::SafePointer<juce::DialogWindow> audioDialog;
     juce::Component::SafePointer<juce::DialogWindow> assignDialog;
     bool recording = false;
-    int recordTrack = 0;                                             // playlist track the take goes to
-    InputRecorder::Channels recordChannels = InputRecorder::Channels::Mono;
+    RecordSetup recordSetup;                                         // armed playlist tracks and their inputs (0.36.0)
+    bool recordFromPlayhead = false;                                 // takes start where the song is (punch in), not at its start
+    std::vector<int> recordingTracks;                                // the take being recorded: a track per engine stream
     bool monitorInput = false;
     juce::String midiNote;                                           // last status text set for MIDI activity
     enum class RecordTarget { PlaylistTrack, SamplerChannel };

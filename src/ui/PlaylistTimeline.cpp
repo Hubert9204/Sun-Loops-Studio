@@ -239,7 +239,16 @@ void PlaylistTimeline::setSnapTicks (int ticks)
     repaint();
 }
 
-void PlaylistTimeline::setArmedTrack (int track)
+void PlaylistTimeline::setRecordArms (const std::array<bool, kPlaylistTracks>& arms)
+{
+    if (arms != recordArms)
+    {
+        recordArms = arms;
+        repaint();
+    }
+}
+
+void PlaylistTimeline::setSelectedTrack (int track)
 {
     track = std::clamp (track, 0, kPlaylistTracks - 1);
     if (track != armedTrack)
@@ -826,15 +835,20 @@ void PlaylistTimeline::paint (juce::Graphics& g)
     g.setFont (juce::FontOptions (12.0f));
     for (int t = 0; t < kPlaylistTracks; ++t)
     {
-        if (t == armedTrack)
         {
-            // the track Record writes to
-            g.setColour (juce::Colour (0xffd9433b));
-            g.fillEllipse (static_cast<float> (kNameWidth - 14), static_cast<float> (kRulerHeight + t * th) + 0.5f * static_cast<float> (th) - 4.0f, 8.0f, 8.0f);
-            g.setColour (juce::Colours::white);
+            // the tracks Record writes to: a red dot; the others a faint ring, to show where to click
+            const juce::Rectangle<float> dot (static_cast<float> (kNameWidth - 14), static_cast<float> (kRulerHeight + t * th) + 0.5f * static_cast<float> (th) - 4.0f, 8.0f, 8.0f);
+            if (recordArms[static_cast<size_t> (t)])
+            {
+                g.setColour (juce::Colour (0xffd9433b));
+                g.fillEllipse (dot);
+            }
+            else
+            {
+                g.setColour (kText.withAlpha (0.25f));
+                g.drawEllipse (dot, 1.0f);
+            }
         }
-        else
-            g.setColour (kText);
         if (const auto colour = arrangement.playlistTracks[static_cast<size_t> (t)].colour; colour != 0)
         {
             g.setColour (juce::Colour (colour).withAlpha (1.0f)); // the track's colour (0.33.0)
@@ -942,6 +956,9 @@ void PlaylistTimeline::showTrackMenu (int track)
     menu.addItem (1, "Rename...");
     menu.addSubMenu ("Colour", colours);
     menu.addItem (2, "Default name and colour", arrangement.playlistTracks[static_cast<size_t> (track)] != PlaylistTrack {});
+    menu.addSeparator();
+    menu.addItem (3, "Record on this track", onTrackArmToggled != nullptr, recordArms[static_cast<size_t> (track)]);
+    menu.addItem (4, "Recording input...", onTrackInputMenu != nullptr);
     menu.showMenuAsync (juce::PopupMenu::Options().withMousePosition(),
                         [safe = juce::Component::SafePointer<PlaylistTimeline> (this), track] (int choice)
                         {
@@ -949,6 +966,10 @@ void PlaylistTimeline::showTrackMenu (int track)
                                 return;
                             if (choice == 1)
                                 safe->renameTrack (track);
+                            else if (choice == 3 && safe->onTrackArmToggled)
+                                safe->onTrackArmToggled (track);
+                            else if (choice == 4 && safe->onTrackInputMenu)
+                                safe->onTrackInputMenu (track);
                             else if (choice == 2)
                             {
                                 safe->beginEdit();
@@ -1786,7 +1807,13 @@ void PlaylistTimeline::mouseDown (const juce::MouseEvent& e)
     if (e.x < kNameWidth && e.y >= kRulerHeight)
     {
         const int track = yToTrack (e.y);
-        setArmedTrack (track);
+        if (track >= 0 && track < kPlaylistTracks && (e.x >= kNameWidth - 20 || e.mods.isCommandDown()))
+        {
+            if (onTrackArmToggled)
+                onTrackArmToggled (track); // the record dot (0.36.0)
+            return;
+        }
+        setSelectedTrack (track);
         if (onTrackSelected)
             onTrackSelected (track);
         return;

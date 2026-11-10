@@ -245,6 +245,15 @@ user chooses one or records). Input monitoring adds the input to the output befo
 `MainComponent` finishes a take (also when the transport is stopped or a limit is reached), reads the WAV back, and places
 it at tick 0 of the armed track, cut to the free space.
 
+**Multitrack (0.36.0).** `RecordSetup.h` (plain C++, tested) keeps the armed playlist tracks and each one's input (a device
+channel and mono / stereo), saved in the settings as `record.arms`. The engine has eight `InputRecorder`s; `startRecording`
+takes a list of streams, maps each device channel to its place among the switched-on inputs (`callbackInputIndex`: the callback
+gets them packed together), arms the recorders one by one, and only then opens `captureGate`. The callback checks the gate,
+not the recorders, so every take starts in the same block; in that block it rewinds the song (from the start) or applies a
+pending seek (punch-in) and publishes `recordStartTick`. `stopRecording` closes the gate first, then stops each recorder. The
+UI places every take at `recordStartTick` on its track, and stops the takes when the playhead falls behind where they started
+plus their length (the song jumped back).
+
 MIDI: the engine registers one `MidiInputCallback` for all enabled inputs. `MidiNoteMapper` turns note on/off (velocity 0
 included), all-notes-off and all-sound-off into `LiveNoteEvent`s for the selected channel and remembers which channel
 got each note on, so the note off cannot be misrouted when the selection changes. The producers (message thread and MIDI

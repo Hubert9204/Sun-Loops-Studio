@@ -674,22 +674,36 @@ within 0.2 ms) and **not judged by ear on real recordings**: spectral gating alw
 
 ### Recording
 
-**Record** (toolbar) records the **audio input**: a microphone, a guitar into an audio interface, a line input.
+**Record** (toolbar) records the **audio input**: a microphone, a guitar into an audio interface, a line input - on one track or,
+since 0.36.0, on **several tracks at once**, each from its own input.
 
-1. In **Audio...** choose the input device and switch on its input channels; speak or play and watch the **Input level**
-   bar. (If you skip this, pressing Record switches on the device's first input channels for you.)
-2. In the Playlist click the **name of an empty track**: it gets a red dot. The arrow next to Record offers the same
-   choice, plus the input type: **Mono** (the first input, written as a one-channel file: use this for a microphone or
-   a guitar) or **Stereo** (inputs 1 and 2), and *Hear the input while recording* (use headphones: with speakers and a
-   microphone it feeds back; this monitoring adds the device's latency).
-3. Press **Record**. The song plays from the start, in Song mode, and the status line shows the time and the input
-   level (it warns about clipping). Press **Record** again or **Stop** to finish; the take appears as an audio clip at
-   the start of the track and is also kept as a 24-bit WAV in `~/Music/Sun Loops Studio/Samples/Recordings/`.
+1. In **Audio...** choose the input device; speak or play and watch the **Input level** bar. (Pressing Record switches on the
+   inputs the armed tracks need, if they are off.)
+2. **Arm** the tracks to record: every playlist track has a **record dot** after its name. Click the dot (or Ctrl+click the
+   name) to arm or disarm the track: armed tracks have a red dot. One track always stays armed. With a single track armed, a
+   click on another track's name moves the arm there; with several armed, it only selects the track.
+3. Choose **each track's input**: right-click the track's name > *Recording input...* (or the arrow next to Record > *Input of
+   each track*): one input (a one-channel file: a microphone, a guitar) or two neighbouring inputs (a stereo file). The names
+   come from the audio device once an input is open; before that, inputs 1-8 are offered by number. A new track records
+   input 1.
+4. Press **Record**. The song plays in Song mode and the status line shows the time, the loudest input level and the tracks
+   that clip. Press **Record** again or **Stop** to finish; each take appears as an audio clip on its track and is also kept
+   as a 24-bit WAV in `~/Music/Sun Loops Studio/Samples/Recordings/` (with *T1*, *T2*... in the name when several tracks
+   were recorded).
 
-The recording is shifted by the round-trip latency that the audio device reports so that it lines up with what was
-playing. The track must be free at the start of the playlist (otherwise Record says so); a take stops by itself at the
-end of the playlist or after 5 minutes. Takes always start at the beginning of the song: there is no punch-in or
-count-in yet (switch the **Metronome** on to play in time).
+The arrow next to Record also has:
+
+- **The recording becomes**: clips on the armed tracks, or *New sampler channels* (one per armed track, to play from the piano
+  roll).
+- **The takes start**: *At the start of the song* (the song is rewound), or *Where the song is (punch in)*: from the playlist's
+  start marker, or from where the song is playing if it already is. The takes are placed where they started.
+- *Hear the input while recording* (use headphones: with speakers and a microphone it feeds back; this monitoring adds the
+  device's latency, and it plays inputs 1 and 2 only).
+
+All the takes start in the same audio block, so they line up with each other, and they are shifted by the round-trip latency
+that the audio device reports so that they line up with what was playing. A take stops by itself at the end of the playlist,
+after 5 minutes, or when the song jumps back (a loop region: what comes after would no longer line up). There is no count-in
+yet (switch the **Metronome** on to play in time). An input the device does not have is reported and nothing is recorded.
 
 ### MIDI keyboards and other devices
 

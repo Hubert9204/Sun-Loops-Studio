@@ -14,7 +14,7 @@ strumento sta in un pannello mobile che puoi spostare, ridimensionare, sovrappor
 Sun Loops Studio si ispira al modo di lavorare dei DAW a loop come FL Studio. È un progetto indipendente: non usa
 codice, nomi, grafica o risorse di altri prodotti e non è affiliato né approvato dai loro produttori.
 
-**Stato: alpha (0.35.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
+**Stato: alpha (0.36.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
 La riproduzione è stata confermata su un vero PC Nobara per la versione 0.3; tutto ciò che è stato aggiunto dopo
 (pannelli, pattern, playlist, browser, pitch/swing, mixer espanso ed effetti, salvataggio dei progetti, AppImage, clip audio, trascinamento
 dei file, registrazione, MIDI, metronomo e formati di esportazione) è stato provato con test automatici e in un display virtuale con un
@@ -58,7 +58,8 @@ plugin commerciali. Vedi [docs/roadmap.md](docs/roadmap.md) per sapere con preci
   il ritaglio dai due bordi, una griglia fino al singolo tick, annulla/ripristina e un righello in minuti:secondi.millisecondi
   con la lettura del tempo sotto il mouse permettono di lavorare con precisione su una registrazione. AAC e l'audio dei video richiedono `ffmpeg` installato.
 - **Registrazione** - il pulsante **Record** registra un microfono o uno strumento nella traccia di playlist che scegli,
-  a tempo con il brano. Le **tastiere MIDI** suonano il canale selezionato e **Rec notes** scrive nel piano roll (quantizzato) ciò che suonano, per
+  a tempo con il brano; **dalla 0.36.0** più tracce insieme, ognuna dal proprio ingresso (mono o una coppia stereo), e dal
+  marcatore di inizio (punch-in). Le **tastiere MIDI** suonano il canale selezionato e **Rec notes** scrive nel piano roll (quantizzato) ciò che suonano, per
   fare pattern; una registrazione può anche diventare un nuovo canale sampler. Si imposta in **Audio...**.
 - **Suoni incorporati** (0.22.0) - un **pianoforte a coda** campionato (Salamander, 4 livelli di velocity), un **basso elettrico**
   campionato (Growlybass, 4 livelli di velocity, più una versione staccato), due **kit di batteria acustica** campionati (dalle

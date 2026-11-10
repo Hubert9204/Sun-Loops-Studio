@@ -27,6 +27,12 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.36.0
+The audio callback now calls eight recorders' `process()` while recording (each a few atomic operations when it is not part of
+the take). Up to eight `ThreadedWriter`s share nothing: each recorder has its own writer thread, started on its first take. The
+input channel each take reads is resolved on the message thread when Record is pressed; if the device is changed while
+recording, the takes keep reading the same positions of the callback's input array (missing ones become silence).
+
 ## After 0.35.0
 Plugin parameters are set from the audio thread through `juce::AudioProcessorParameter::setValue`, as JUCE's own hosts do; what a
 plugin does inside that call is the plugin's business (most only store an atomic). The call is skipped when the value has not
