@@ -294,6 +294,7 @@ MainComponent::MainComponent()
         return plugin;
     };
     mixerPanel.openPluginWindow = [this] (const std::shared_ptr<HostedPlugin>& p) { openPluginWindow (p); };
+    mixerPanel.onChainMenu = [this] (juce::Component& b, MixerTrack& t, int i) { showEffectChainMenu (b, t, i); };
     mixerPanel.onMasterVolumeChanged = [this] (double v) { volumeSlider.setValue (v); }; // the slider drives the engine
     updateTrackRouting();
 

@@ -61,6 +61,7 @@ public:
     static juce::String panToText (float pan);
 
     static constexpr int kWidth = 72;
+    juce::String routedChannels() const { return routed; } // the channels playing through this track ("" when none)
 
 private:
     void refreshSlots();
@@ -73,6 +74,7 @@ private:
 
     juce::Label nameLabel;
     juce::Label routedLabel;
+    juce::String routed;
     std::array<SlotButton, kSlotsPerTrack> slotButtons;
     std::array<juce::Slider, kAuxBuses> sendSliders;
     std::array<juce::Label, kAuxBuses> sendLabels;
@@ -183,6 +185,11 @@ public:
     std::function<std::vector<PluginChoice>()> listEffectPlugins;
     std::function<std::shared_ptr<HostedPlugin> (const juce::String& identifier)> createEffectPlugin;
     std::function<void (const std::shared_ptr<HostedPlugin>&)> openPluginWindow;
+    // The name of mixer track `index` (0-based), for the compressor's sidechain choice (0.45.0).
+    std::function<juce::String (int)> trackNameOf;
+    std::function<int()> trackCount; // how many mixer tracks there are, for that choice
+    // Effect-chain presets (0.45.0): the Chain button's menu (save the slots, load a chain, clear them); MainComponent does the files.
+    std::function<void (juce::Component& button, MixerTrack& track, int trackIndex)> onChainMenu;
 
     void showSlotMenu (int slot);
 
@@ -208,10 +215,12 @@ private:
     juce::Label timeShaperNotice;
     int timeShaperShortfall = 0;
     juce::TextButton presetButton { "Presets..." }; // the built-in effect's ready-made settings (0.21.0)
+    juce::TextButton chainButton { "Chain..." };    // the whole chain of slots saved and loaded (0.45.0)
     struct ParamRow
     {
         juce::Label name;
         AutomatableSlider slider { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
+        juce::ComboBox choice; // a mixer track (0.45.0: the compressor's sidechain), shown instead of the slider
     };
     std::array<ParamRow, kMaxEffectParams> params;
 
@@ -253,6 +262,8 @@ public:
     std::function<std::vector<FxPanel::PluginChoice>()> listEffectPlugins;
     std::function<std::shared_ptr<HostedPlugin> (const juce::String& identifier)> createEffectPlugin;
     std::function<void (const std::shared_ptr<HostedPlugin>&)> openPluginWindow;
+    std::function<void (juce::Component& button, MixerTrack& track, int trackIndex)> onChainMenu; // 0.45.0, see FxPanel
+    void refreshEffects() { fxPanel.refresh(); }
 
     void paint (juce::Graphics&) override;
     void resized() override;

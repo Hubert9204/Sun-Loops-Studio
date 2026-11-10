@@ -149,6 +149,8 @@ private:
     void endSession();
     // Crash reports, updates and the session log (0.43.0, MainComponentSupport.cpp).
     bool offerCrashReport (std::function<void()> then);
+    void showEffectChainMenu (juce::Component& button, MixerTrack& track, int trackIndex); // 0.45.0
+    void exportWithOptions (ExportFormat format, RenderOptions options, const ExportSettings& exportSettings, bool stems); // 0.45.0
     void checkForUpdates (bool manual);
     void showUpdateResult (const updates::Result& result, bool manual);
     bool checksForUpdatesAutomatically() const;

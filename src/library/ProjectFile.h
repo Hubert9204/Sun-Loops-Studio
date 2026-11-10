@@ -110,4 +110,10 @@ juce::File withProjectExtension (const juce::File& file);
 
 // "Untitled 2026-11-05 21-54-07.slp" in `folder`, never an existing file.
 juce::File automaticProjectFile (const juce::File& folder, juce::Time now);
+// Effect-chain presets (0.45.0): the built-in effects of a track's slots, in order, as a small JSON file (.slchain). Plugin slots
+// are left out (counted in `pluginsLeftOut`): a preset must not depend on what is installed.
+constexpr const char* kEffectChainExtension = ".slchain";
+juce::String effectChainToJson (const std::array<EffectSlot, kSlotsPerTrack>& slots, int* pluginsLeftOut = nullptr);
+std::optional<std::array<EffectSlot, kSlotsPerTrack>> effectChainFromJson (const juce::String& json);
+
 } // namespace sls

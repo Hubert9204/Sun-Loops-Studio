@@ -29,7 +29,10 @@ const MixerTrack kDefaultTrack {};
 } // namespace
 
 Player::Player()
-    : trackL (static_cast<size_t> (kMaxTracks)), trackR (static_cast<size_t> (kMaxTracks)), effects (static_cast<size_t> (kMaxTracks)),
+    : trackL (static_cast<size_t> (kMaxTracks)), trackR (static_cast<size_t> (kMaxTracks)),
+      keyL (static_cast<size_t> (kMaxTracks)), keyR (static_cast<size_t> (kMaxTracks)),
+      keyPtrL (static_cast<size_t> (kMaxTracks), nullptr), keyPtrR (static_cast<size_t> (kMaxTracks), nullptr),
+      keyWanted (static_cast<size_t> (kMaxTracks), 0), effects (static_cast<size_t> (kMaxTracks)),
       slotsNow (static_cast<size_t> (kMaxTracks))
 {
     memoryStore.reserve (static_cast<size_t> (kMaxEffectMemories));
@@ -1962,6 +1965,44 @@ void Player::render (const Project& project, double bpm, bool playing,
         // 2. Each track: insert effects (pre-fader), then fader, balance, mute/solo, metering, master bus.
         std::array<float, kChunk> mixL {}, mixR {};
 
+        // 2a. Sidechain sources (0.45.0): the tracks a compressor listens to keep a copy of their sound as it is now, before
+        // any track's effects run, so the order of the tracks does not matter.
+        std::fill_n (keyWanted.begin(), numTracks, static_cast<char> (0));
+        bool anyKey = false;
+        const auto wantKeys = [&] (const std::array<EffectSlot, kSlotsPerTrack>& slots)
+        {
+            for (const auto& slot : slots)
+                if (slot.type == EffectType::Compressor && ! slot.bypass)
+                    if (const auto k = static_cast<long> (std::lround (slot.params[5])) - 1; k >= 0 && k < static_cast<long> (numTracks))
+                    {
+                        keyWanted[static_cast<size_t> (k)] = 1;
+                        anyKey = true;
+                    }
+        };
+        for (size_t t = 0; t < numTracks; ++t)
+            wantKeys (trackAt (t).slots);
+        for (const auto& bus : project.console.aux)
+            wantKeys (bus.slots);
+        wantKeys (project.masterSlots);
+        for (size_t t = 0; t < numTracks; ++t)
+        {
+            keyPtrL[t] = nullptr;
+            keyPtrR[t] = nullptr;
+            if (keyWanted[t] == 0)
+                continue;
+            std::copy_n (trackL[t].begin(), n, keyL[t].begin());
+            std::copy_n (trackR[t].begin(), n, keyR[t].begin());
+            keyPtrL[t] = keyL[t].data();
+            keyPtrR[t] = keyR[t].data();
+        }
+        auto trackTransport = transport;
+        if (anyKey)
+        {
+            trackTransport.keyLeft = keyPtrL.data();
+            trackTransport.keyRight = keyPtrR.data();
+            trackTransport.numKeys = static_cast<int> (numTracks);
+        }
+
         for (size_t t = 0; t < numTracks; ++t)
         {
             float* l = trackL[t].data();
@@ -1979,7 +2020,7 @@ void Player::render (const Project& project, double bpm, bool playing,
                 if (silent)
                 {
                     for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
-                        effects[t][s].process (tr.slots[s], l, r, n, transport); // only to let a removed effect forget its state
+                        effects[t][s].process (tr.slots[s], l, r, n, trackTransport); // only to let a removed effect forget its state
                     trackGain[t] = trackTarget[t];
                     sendGate[t] = trackAudible[t] ? 1.0f : 0.0f;
                     sendGain[t] = tr.sends;
@@ -1991,7 +2032,7 @@ void Player::render (const Project& project, double bpm, bool playing,
             }
 
             for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
-                effects[t][s].process (automated ? trackSlotsNow[t][s] : tr.slots[s], l, r, n, transport);
+                effects[t][s].process (automated ? trackSlotsNow[t][s] : tr.slots[s], l, r, n, trackTransport);
 
             const float gateTarget = trackAudible[t] ? 1.0f : 0.0f;
             for (int i = 0; i < n; ++i)
@@ -2027,7 +2068,7 @@ void Player::render (const Project& project, double bpm, bool playing,
             float* l = auxL[a].data();
             float* r = auxR[a].data();
             for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
-                auxEffects[a][s].process (bus.slots[s], l, r, n, transport);
+                auxEffects[a][s].process (bus.slots[s], l, r, n, trackTransport);
 
             for (int i = 0; i < n; ++i)
             {
@@ -2045,7 +2086,7 @@ void Player::render (const Project& project, double bpm, bool playing,
 
         // 3. Master bus: insert effects on the sum of all tracks, then a soft limiter, added to the output.
         for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
-            masterEffects[s].process (automated ? masterSlotsNow[s] : project.masterSlots[s], mixL.data(), mixR.data(), n, transport);
+            masterEffects[s].process (automated ? masterSlotsNow[s] : project.masterSlots[s], mixL.data(), mixR.data(), n, trackTransport);
 
         // The soft limiter (0.24.0): exactly linear up to 0.7 (-3 dBFS), then a tanh knee that never passes 1 and has the same slope
         // where it starts. Until 0.23.0 it was a plain tanh, which bent (and so distorted, by about -40 dB at -10 dBFS) every level.

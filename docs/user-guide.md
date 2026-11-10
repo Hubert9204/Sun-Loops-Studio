@@ -975,14 +975,14 @@ Pitch Correctors need about 0.8 MB of memory each, which is made for them as the
 many at once, the newest may let the sound through dry until their memory is ready (a few tenths of a second).
 
 Sound path: each channel goes to the mixer track chosen with its **Track N** display (several channels can share
-one; or use *Assign free mixer track* in the channel's right-click menu), then through the track's four effect slots,
-then the track fader and balance, then the sum of all tracks goes through the master's four effect slots and the
+one; or use *Assign free mixer track* in the channel's right-click menu), then through the track's ten effect slots (four before 0.45.0),
+then the track fader and balance, then the sum of all tracks goes through the master's ten effect slots and the
 master fader.
 
 Each track, from top to bottom:
 
 - its name (Track 1...) and the channels routed to it;
-- **four effect slots**, one above the other (see below);
+- **ten effect slots** (0.45.0; four before), one above the other (see below);
 - **balance** (stereo) - double-click to centre. It is a balance control: at the centre the sound is untouched;
 - **M** (mute) and **S** (solo) - these belong to the track and are independent of the channel buttons in the rack.
   If any track is soloed, only soloed tracks are heard;
@@ -995,6 +995,11 @@ Click a track to select it; the effects panel then shows its slots.
 
 ### Effects
 
+**Effect chains (0.45.0).** The **Chain...** button of the effects panel saves the selected track's slots as a preset
+(*Save this chain as a preset...*, a `.slchain` file in `~/Music/Sun Loops Studio/Presets/Effect chains`), loads one onto any track,
+aux bus or the master (it replaces every slot), or clears every slot. Presets keep the built-in effects with their settings and
+bypass; plugin slots are left out (the status line says so).
+
 Click a slot for the menu: the effects, grouped (**EQ and filter**, **Dynamics**, **Drive**, **Modulation**, **Space and time**,
 **Stereo**), then **Plugin effects**, **Bypass** and **Remove effect**. The effects run in order, top to bottom, before the track
 fader. The effects panel has a power button per slot (bypass), a slider per parameter of the selected slot (a choice such as
@@ -1006,7 +1011,7 @@ ready-made settings.
 | Equalizer | Low shelf (120 Hz), Mid (a bell with its own frequency, 200-5000 Hz), High shelf (6 kHz); each -15 to +15 dB | |
 | Parametric EQ | Low shelf (frequency, gain), a bell (frequency, gain, Q), high shelf (frequency, gain), each -18 to +18 dB; output | Vocal presence, Kick punch, Warm master |
 | Filter | Type (low-pass, high-pass, band-pass, notch), Cutoff, Resonance, Slope (12 or 24 dB), Drive, LFO rate and depth (sweeps the cutoff up to 3 octaves), Mix | Low-pass 24 dB, High-pass, Wobble, Telephone |
-| Compressor | Threshold (-60 to 0 dB), Ratio (1-20:1), Attack, Release, Makeup gain | Gentle, Drum bus, Vocal |
+| Compressor | Threshold (-60 to 0 dB), Ratio (1-20:1), Attack, Release, Makeup gain, **Sidechain** (0.45.0: *Off*, or a mixer track whose sound - before its own effects and fader, so even a muted track works - drives the gain reduction: the classic pumping bass under the kick) | Gentle, Drum bus, Vocal (a preset keeps the sidechain) |
 | Maximizer | A mastering limiter in three stages: Input gain, optional Soft clip, Glue (a gentle soft-knee compressor), then a look-ahead limiter that keeps every peak at or below the **Ceiling**; Release. It delays the sound by 1.5 ms (its look-ahead). | Transparent, Loud, Streaming (-1 dB) |
 | Transient | Splits each sound into its attack and its sustain: Attack and Sustain gain (-24 to +24 dB), Speed (how long an attack lasts), Listen (both, transients only, sustain only), Mix, Output | Punchy drums, Tighten, More room, Transients only |
 | Overdrive | Drive, Boost (x10), Color (darker / brighter before the drive), Tone (after it), Character (adds even harmonics), Mix, Output. Runs at 4x the sample rate with anti-aliasing. | Warm, Crunch, Fuzz, Parallel grit |
@@ -1026,7 +1031,7 @@ scan, see *Plugins*) and **Open plugin window** for a plugin slot; a plugin's pa
 
 ### Master effects
 
-The **master strip** (right of the tracks) has the same four effect slots as a track. Click a slot to pick an effect
+The **master strip** (right of the tracks) has the same ten effect slots as a track. Click a slot to pick an effect
 (all the effects above, a Maximizer at the end for mastering); click the strip or a slot to show it in the effects panel, which is titled
 *Effects - Master*. The master chain processes the **sum of all tracks**, in order, **before the master fader** and
 the final soft limiter, so a compressor or equalizer there shapes the whole mix, and the exported WAV includes it. Use
@@ -1045,7 +1050,7 @@ Under its effect slots every track has:
   fader). Off (the default), they are **post-fader**. A muted track, or a track silenced by another track's solo, sends nothing either way;
 - **V1** and **V2**: put the track in VCA group 1 and/or 2.
 
-**Aux buses** (the two strips after the tracks, with a green bar) sum what the tracks send them, run it through their own four effect slots
+**Aux buses** (the two strips after the tracks, with a green bar) sum what the tracks send them, run it through their own ten effect slots
 (click a slot as on a track), then their fader and balance, and add the result to the mix **before the master effects**. Typical use: one reverb
 on Aux A, a delay on Aux B (set the effect's Mix to 100 %), and each track sends as much as it needs. An aux bus has mute and balance but no
 solo, and its name is fixed (Aux A, Aux B). Its effect parameters cannot be automated yet.
@@ -1098,8 +1103,20 @@ The metronome is never part of an export. It is remembered between runs.
 ## Export
 
 **File > Export audio** writes the current mode: the pattern (one bar unless you changed it) or the song (up to the end of the last clip, audio
-clips included), plus one second of tail so releases and drum tails are not cut. It is rendered at 48 kHz stereo, at the
-BPM set in the toolbar, by the same engine that plays, so it sounds like what you hear. Choose the format in the submenu:
+clips included), plus one second of tail so releases and drum tails are not cut. It is rendered stereo, at the
+BPM set in the toolbar, by the same engine that plays, so it sounds like what you hear. Choose the format in the submenu; then
+**Export options** (0.45.0, remembered) ask for:
+
+- **Sample rate**: 44100, 48000 (the default), 88200 or 96000 Hz.
+- **Bit depth** (WAV, AIFF, FLAC): 16-bit (with TPDF dither), 24-bit, or 32-bit floating point (WAV). **Quality** (MP3, AAC,
+  Ogg Vorbis): 96 to 320 kbit/s.
+- **Title** and **Artist**, written into WAV (INFO list), Ogg Vorbis (comments), MP3 and AAC (tags, through ffmpeg); FLAC and AIFF
+  get none.
+- **One file per mixer track (stems)**: instead of the mix, one file for each mixer track that plays something, named
+  *<name> - <track>*, each rendered with only that track soloed (its sends and the master effects included, as in the mix);
+  silent tracks are skipped. Together they add up to the mix (as long as the master effects are not compressors or limiters).
+
+The table gives the defaults:
 
 | Format | Kind | Notes |
 | --- | --- | --- |
@@ -1148,7 +1165,7 @@ a heavier song or a plugin-heavy mixer can still need a bigger size.
 
 ## Limits
 
-- Up to 32 channels, up to 500 mixer tracks (8 to start with) with 4 effect slots each, 2 aux buses (4 slots each), 2 VCA groups, 64 patterns, 1 to 128 playlist tracks, a timeline of
+- Up to 32 channels, up to 500 mixer tracks (8 to start with) with 10 effect slots each, 2 aux buses (10 slots each), 2 VCA groups, 64 patterns, 1 to 128 playlist tracks, a timeline of
   at least 32 patterns and 64 bars, 4 automation lanes, 64 automation clips of up to 256 points each, 32 simultaneous voices.
 - The effects use about 15 MB of memory at 48 kHz to start with, plus about 0.8 MB for every reverb, delay, chorus and Pitch Corrector beyond
   the sixteenth (more at higher sample rates). Memory made for them stays until the audio device restarts.

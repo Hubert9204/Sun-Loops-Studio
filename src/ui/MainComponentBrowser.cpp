@@ -273,7 +273,81 @@ void MainComponent::savePresetFor (int channelIndex)
                    });
 }
 
+// Export options (0.45.0): sample rate, bit depth (lossless) or bit rate (lossy), title and artist, and stems. Asked before the file
+// chooser and remembered in the settings.
 void MainComponent::exportAs (ExportFormat format)
+{
+    const auto& info = exportFormatInfo (format);
+    auto* window = new juce::AlertWindow ("Export options", juce::String ("Export the ") + (songMode ? "song" : "pattern") + " as "
+                                              + juce::String (info.label).upToFirstOccurrenceOf ("  (", false, false),
+                                          juce::MessageBoxIconType::NoIcon);
+    const juce::StringArray rates { "44100 Hz", "48000 Hz", "88200 Hz", "96000 Hz" };
+    const auto savedRate = settings != nullptr ? settings->getIntValue ("export.rate", 48000) : 48000;
+    window->addComboBox ("rate", rates, "Sample rate");
+    if (auto* box = window->getComboBoxComponent ("rate"))
+        box->setSelectedItemIndex (std::max (0, rates.indexOf (juce::String (savedRate) + " Hz")));
+    if (info.lossy)
+    {
+        const juce::StringArray rateChoices { "96 kbit/s", "128 kbit/s", "192 kbit/s", "256 kbit/s", "320 kbit/s" };
+        window->addComboBox ("kbps", rateChoices, "Quality");
+        if (auto* box = window->getComboBoxComponent ("kbps"))
+            box->setSelectedItemIndex (std::max (0, rateChoices.indexOf (juce::String (settings != nullptr ? settings->getIntValue ("export.kbps", 192) : 192) + " kbit/s")));
+    }
+    else
+    {
+        juce::StringArray depths { "16-bit (dithered)", "24-bit" };
+        if (format == ExportFormat::Wav)
+            depths.add ("32-bit float");
+        window->addComboBox ("bits", depths, "Bit depth");
+        const int bits = settings != nullptr ? settings->getIntValue ("export.bits", 24) : 24;
+        if (auto* box = window->getComboBoxComponent ("bits"))
+            box->setSelectedItemIndex (bits == 16 ? 0 : (bits == 32 && format == ExportFormat::Wav ? 2 : 1));
+    }
+    window->addTextEditor ("title", settings != nullptr ? settings->getValue ("export.title") : juce::String(), "Title (written into WAV, Ogg, MP3, AAC)");
+    window->addTextEditor ("artist", settings != nullptr ? settings->getValue ("export.artist") : juce::String(), "Artist");
+    auto stems = std::make_unique<juce::ToggleButton> ("One file per mixer track (stems)");
+    stems->setSize (320, 24);
+    stems->setName ({}); // the window would show the name as a label above it too
+    stems->setToggleState (settings != nullptr && settings->getBoolValue ("export.stems", false), juce::dontSendNotification);
+    auto* stemsToggle = stems.get();
+    window->addCustomComponent (stems.release());
+    window->addButton ("Choose file...", 1, juce::KeyPress (juce::KeyPress::returnKey));
+    window->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+    window->enterModalState (true, juce::ModalCallbackFunction::create (
+        [safe = juce::Component::SafePointer<MainComponent> (this), window, stemsToggle, format, lossy = info.lossy] (int result)
+        {
+            std::unique_ptr<juce::Component> toggleOwner (stemsToggle); // custom components are not deleted by the window
+            if (safe == nullptr || result != 1)
+                return;
+            RenderOptions options;
+            ExportSettings exportSettings;
+            options.sampleRate = window->getComboBoxComponent ("rate")->getText().getDoubleValue();
+            if (lossy)
+                exportSettings.kbps = window->getComboBoxComponent ("kbps")->getText().getIntValue();
+            else
+            {
+                const int index = window->getComboBoxComponent ("bits")->getSelectedItemIndex();
+                options.bitDepth = index == 0 ? 16 : (index == 2 ? 32 : 24);
+            }
+            exportSettings.title = window->getTextEditorContents ("title").trim().toStdString();
+            exportSettings.artist = window->getTextEditorContents ("artist").trim().toStdString();
+            const bool wantStems = stemsToggle->getToggleState();
+            if (auto* s = safe->settings.get())
+            {
+                s->setValue ("export.rate", static_cast<int> (options.sampleRate));
+                s->setValue ("export.bits", options.bitDepth);
+                s->setValue ("export.kbps", exportSettings.kbps);
+                s->setValue ("export.title", juce::String (exportSettings.title));
+                s->setValue ("export.artist", juce::String (exportSettings.artist));
+                s->setValue ("export.stems", wantStems);
+                s->saveIfNeeded();
+            }
+            safe->exportWithOptions (format, options, exportSettings, wantStems);
+        }),
+        true);
+}
+
+void MainComponent::exportWithOptions (ExportFormat format, RenderOptions chosen, const ExportSettings& exportSettings, bool stems)
 {
     const auto& info = exportFormatInfo (format);
     const juce::String extension (info.extension);
@@ -288,7 +362,7 @@ void MainComponent::exportAs (ExportFormat format)
     fileChooser->launchAsync (juce::FileBrowserComponent::saveMode
                                   | juce::FileBrowserComponent::canSelectFiles
                                   | juce::FileBrowserComponent::warnAboutOverwriting,
-                              [safe = juce::Component::SafePointer<MainComponent> (this), format, extension] (const juce::FileChooser& chooser)
+                              [safe = juce::Component::SafePointer<MainComponent> (this), format, extension, chosen, exportSettings, stems] (const juce::FileChooser& chooser)
     {
         if (safe == nullptr)
             return;
@@ -303,15 +377,18 @@ void MainComponent::exportAs (ExportFormat format)
         safe->statusLabel.setText ("Exporting " + file.getFileName() + " ...", juce::dontSendNotification);
         safe->statusLabel.repaint();
 
-        RenderOptions options;
+        auto options = chosen;
         options.bpm = safe->bpmSlider.getValue();
 
         safe->beginPluginExport (options.sampleRate); // plugins render the export; the live engine is silent meanwhile
-        const auto result = exportAudio (safe->compileCurrent(), options, file, format);
+        std::vector<juce::File> written;
+        const auto result = stems ? exportStems (safe->compileCurrent(), options, file, format, written, {}, exportSettings)
+                                  : exportAudio (safe->compileCurrent(), options, file, format, {}, exportSettings);
         safe->endPluginExport();
 
-        safe->statusLabel.setText (result.wasOk() ? "Exported " + file.getFileName()
-                                                  : "Export failed: " + result.getErrorMessage(),
+        safe->statusLabel.setText (result.failed() ? "Export failed: " + result.getErrorMessage()
+                                                   : stems ? "Exported " + juce::String (static_cast<int> (written.size())) + " stems next to " + file.getFileName()
+                                                           : "Exported " + file.getFileName(),
                                    juce::dontSendNotification);
         if (result.failed())
             juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Export failed",

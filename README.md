@@ -16,7 +16,7 @@ Sun Loops Studio is inspired by the workflow of loop-based DAWs such as FL Studi
 that uses no code, names, graphics or assets from other products, and it is not affiliated with or endorsed by
 their makers.
 
-**Status: alpha (0.44.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
+**Status: alpha (0.45.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
 display. Playback was confirmed on a real Nobara machine for version 0.3; everything added since (panels, patterns,
 playlist, browser, pitch/swing, the expanded mixer and its effects, saving projects, the AppImage, audio clips, drag and
 drop, recording, MIDI, the metronome and the export formats) was tested headless and in a virtual display with a silent
@@ -76,9 +76,9 @@ See [docs/roadmap.md](docs/roadmap.md) for exactly what is and is not verified a
   project to another computer.
 - **Metronome** - a click with adjustable tempo (and tap tempo) and volume, on its own button.
 - **Mixer** (`F9`) - 8 vertical tracks to start with and up to **500** (0.29.0: the **+** after the last track adds more), each with a fader and dB read-out, stereo balance, mute, solo, a Peak/RMS
-  meter and 4 insert-effect slots (14 built-in effects with presets: Equalizer, Parametric EQ, Filter, Compressor, Maximizer, Transient, Overdrive, Chorus, Phaser, Reverb with Hall/Room/Plate, Delay with Stereo/Ping-pong/Tape, Time Shaper (like Gross Beat), Pitch Corrector (like Pitcher), Stereo Imager; each with bypass), two **sends** (pre or post fader)
+  meter and 10 insert-effect slots (0.45.0; with effect-chain presets) (14 built-in effects with presets: Equalizer, Parametric EQ, Filter, Compressor, Maximizer, Transient, Overdrive, Chorus, Phaser, Reverb with Hall/Room/Plate, Delay with Stereo/Ping-pong/Tape, Time Shaper (like Gross Beat), Pitch Corrector (like Pitcher), Stereo Imager; each with bypass), two **sends** (pre or post fader)
   and two **VCA** switches. Two **aux buses** with their own effects and two **VCA groups** sit beside the tracks. The master strip on the
-  right has the same 4 effect slots, applied to the whole mix. Several channels can share a track.
+  right has the same 10 effect slots, applied to the whole mix. The Compressor has a **sidechain** input from any track (0.45.0). Several channels can share a track.
 - **Synth** - every synth channel can switch from the classic sine to a **subtractive synth**: two band-limited oscillators and noise, a 12 or
   24 dB filter with its own envelope, an amplitude envelope and an LFO, or to an **FM synth** with four operators and a modulation matrix
   (feedback, eight classic algorithms), to an **additive synth** (0.24.0: up to 64 harmonics, two timbres with formants and a morph
@@ -117,7 +117,8 @@ See [docs/roadmap.md](docs/roadmap.md) for exactly what is and is not verified a
   that shows the name and `*` for unsaved changes, and a prompt before closing with unsaved work. Samples are
   referenced by path, not copied into the file.
 - **Export** - *File > Export audio*: the pattern or the song as WAV, AIFF, FLAC (lossless) or MP3, Ogg Vorbis
-  (`.ogg` / `.oga`), AAC (lossy), rendered by the same engine that plays it. MP3 and AAC need `ffmpeg`.
+  (`.ogg` / `.oga`), AAC (lossy), rendered by the same engine that plays it; since 0.45.0 with a choice of sample rate (44.1 - 96 kHz),
+  bit depth (16 dithered, 24, 32 float) or bit rate, title and artist tags, and **stems** (one file per mixer track). MP3 and AAC need `ffmpeg`.
 - **Audio** - device selection, an adjustable **buffer size** (default 1024 samples) and an **Auto** button that tests
   your computer and picks a size that does not crackle, plus a read-out of load and dropped blocks. The choice is
   remembered.

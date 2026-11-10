@@ -75,7 +75,7 @@ void SlotButton::paint (juce::Graphics& g)
         text += fullName ? "  (bypassed)" : "";
 
     g.setColour (empty ? juce::Colour (0xff7d8491) : (active ? juce::Colours::white : juce::Colour (0xff9aa0ab)));
-    g.setFont (juce::FontOptions (fullName ? 12.0f : 11.0f));
+    g.setFont (juce::FontOptions (fullName ? 12.0f : 10.0f));
     g.drawText (text, getLocalBounds().reduced (6, 0), fullName ? juce::Justification::centredLeft : juce::Justification::centred, true);
 }
 
@@ -274,6 +274,7 @@ void MixerStrip::refreshSlots()
 
 void MixerStrip::setRoutedChannels (const juce::String& text)
 {
+    routed = text;
     routedLabel.setText (text.isEmpty() ? juce::String ("no channel") : text, juce::dontSendNotification);
     routedLabel.setTooltip (text);
 }
@@ -308,10 +309,10 @@ void MixerStrip::resized()
     routedLabel.setBounds (area.removeFromTop (14));
     area.removeFromTop (4);
 
-    for (auto& b : slotButtons)
+    for (auto& b : slotButtons) // 10 slots (0.45.0): compact
     {
-        b.setBounds (area.removeFromTop (18));
-        area.removeFromTop (2);
+        b.setBounds (area.removeFromTop (14));
+        area.removeFromTop (1);
     }
     area.removeFromTop (4);
 
@@ -499,8 +500,8 @@ void MasterStrip::resized()
 
     for (auto& b : slotButtons)
     {
-        b.setBounds (area.removeFromTop (18));
-        area.removeFromTop (2);
+        b.setBounds (area.removeFromTop (14));
+        area.removeFromTop (1);
     }
     area.removeFromTop (4);
 
@@ -528,6 +529,13 @@ FxPanel::FxPanel()
                              juce::dontSendNotification);
 
     addAndMakeVisible (titleLabel);
+    chainButton.setTooltip ("Save this track's effect chain as a preset, load one, or clear every slot (0.45.0)");
+    chainButton.onClick = [this]
+    {
+        if (track != nullptr && onChainMenu)
+            onChainMenu (chainButton, *track, trackIndex);
+    };
+    addAndMakeVisible (chainButton);
     addAndMakeVisible (effectLabel);
     addAndMakeVisible (notePlaceholder);
     addChildComponent (pluginButton);
@@ -579,6 +587,7 @@ FxPanel::FxPanel()
         row.slider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 64, 20);
         addChildComponent (row.name);
         addChildComponent (row.slider);
+        addChildComponent (row.choice);
     }
 
     refresh();
@@ -671,14 +680,40 @@ void FxPanel::rebuildParameters()
     {
         auto& row = params[static_cast<size_t> (i)];
         row.slider.onValueChange = nullptr; // not while reconfiguring
+        row.choice.onChange = nullptr;
         const bool used = i < count;
-        row.name.setVisible (used);
-        row.slider.setVisible (used);
-        if (! used)
-            continue;
-
         const auto info = effectParamInfo (slot.type, i);
         const juce::String unit (info.unit);
+        row.name.setVisible (used);
+        row.slider.setVisible (used && unit != "track");
+        row.choice.setVisible (used && unit == "track");
+        if (! used)
+            continue;
+        if (unit == "track")
+        {
+            // A mixer track (0.45.0: the compressor's sidechain): "Off" or one of the project's tracks, by name.
+            row.name.setText (info.name, juce::dontSendNotification);
+            row.choice.clear (juce::dontSendNotification);
+            row.choice.addItem ("Off (its own sound)", 1);
+            const int tracks = trackCount ? trackCount() : 8;
+            for (int t = 0; t < tracks; ++t)
+                row.choice.addItem (trackNameOf ? trackNameOf (t) : "Track " + juce::String (t + 1), t + 2);
+            const int current = juce::roundToInt (slot.params[static_cast<size_t> (i)]);
+            if (current > tracks)
+                row.choice.addItem ("Track " + juce::String (current) + " (not in the mixer)", current + 1);
+            row.choice.setSelectedId (current + 1, juce::dontSendNotification);
+            row.choice.setTooltip ("The compressor turns this track down when the chosen track plays (its sound before its own effects and fader)");
+            row.choice.onChange = [this, i]
+            {
+                if (track == nullptr)
+                    return;
+                track->slots[static_cast<size_t> (selectedSlot)].params[static_cast<size_t> (i)]
+                    = static_cast<float> (std::max (0, params[static_cast<size_t> (i)].choice.getSelectedId() - 1));
+                if (onChanged)
+                    onChanged (trackIndex);
+            };
+            continue;
+        }
         const double range = static_cast<double> (info.max) - static_cast<double> (info.min);
         const int decimals = range >= 100.0 ? 0 : (range >= 10.0 ? 1 : 2);
 
@@ -759,6 +794,8 @@ void FxPanel::showPresetMenu()
                             const auto& list = effectPresets (current.type);
                             if (result >= 1 && result <= static_cast<int> (list.size()))
                                 s.params = list[static_cast<size_t> (result - 1)].params;
+                            if (current.type == EffectType::Compressor)
+                                s.params[5] = current.params[5]; // a preset does not change where the sidechain comes from
                             safe->applySlot (slot, s.sanitised());
                         });
 }
@@ -860,16 +897,18 @@ void FxPanel::resized()
 
     for (size_t s = 0; s < slotButtons.size(); ++s)
     {
-        auto row = area.removeFromTop (26);
+        auto row = area.removeFromTop (20);
         powerButtons[s].setBounds (row.removeFromLeft (36));
         row.removeFromLeft (4);
         slotButtons[s].setBounds (row);
-        area.removeFromTop (4);
+        area.removeFromTop (2);
     }
 
     area.removeFromTop (6);
     {
         auto head = area.removeFromTop (22);
+        chainButton.setBounds (head.removeFromRight (64));
+        head.removeFromRight (4);
         if (presetButton.isVisible())
             presetButton.setBounds (head.removeFromRight (82));
         effectLabel.setBounds (head);
@@ -882,11 +921,12 @@ void FxPanel::resized()
 
     for (auto& row : params)
     {
-        if (! row.slider.isVisible())
+        if (! row.slider.isVisible() && ! row.choice.isVisible())
             continue;
         auto r = area.removeFromTop (23);
         row.name.setBounds (r.removeFromLeft (64));
         row.slider.setBounds (r);
+        row.choice.setBounds (r.reduced (0, 1));
         area.removeFromTop (2);
     }
 }
@@ -903,8 +943,21 @@ MixerPanel::MixerPanel()
 
     masterStrip.onVolumeChanged = [this] (double v) { if (onMasterVolumeChanged) onMasterVolumeChanged (v); };
     fxPanel.onChanged = [this] (int track) { if (onTrackChanged) onTrackChanged (track); };
+    fxPanel.trackCount = [this] { return trackData != nullptr ? static_cast<int> (trackData->size()) : 8; };
+    fxPanel.trackNameOf = [this] (int t)
+    {
+        const auto number = "Track " + juce::String (t + 1);
+        if (trackData == nullptr || t < 0 || t >= static_cast<int> (trackData->size()))
+            return number + " (not in the mixer)";
+        const auto& name = (*trackData)[static_cast<size_t> (t)].name;
+        auto text = name.empty() || juce::String (name) == number ? number : number + ": " + juce::String (name);
+        if (t < static_cast<int> (strips.size()) && strips[static_cast<size_t> (t)]->routedChannels().isNotEmpty())
+            text += " (" + strips[static_cast<size_t> (t)]->routedChannels() + ")";
+        return text;
+    };
     fxPanel.onAutomate = [this] (const AutomationTarget& t) { if (onAutomate) onAutomate (t); };
     fxPanel.listEffectPlugins = [this] { return listEffectPlugins ? listEffectPlugins() : std::vector<FxPanel::PluginChoice> {}; };
+    fxPanel.onChainMenu = [this] (juce::Component& b, MixerTrack& t, int i) { if (onChainMenu) onChainMenu (b, t, i); };
     fxPanel.createEffectPlugin = [this] (const juce::String& id) { return createEffectPlugin ? createEffectPlugin (id) : std::shared_ptr<HostedPlugin>(); };
     fxPanel.openPluginWindow = [this] (const std::shared_ptr<HostedPlugin>& p) { if (openPluginWindow) openPluginWindow (p); };
     fxPanel.onSlotsChanged = [this] (int track) { refreshTrack (track); };

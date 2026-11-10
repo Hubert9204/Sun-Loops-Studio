@@ -548,6 +548,18 @@ and ranks with BM25 (k1 1.4, b 0.75) plus a title bonus, a bonus for sections ho
 question's language. The index is built the first time Helios opens. Commands are `HeliosCommand`s (name, keywords, a function)
 made by `MainComponent::heliosCommands`, matched by the share of the question's words they contain.
 
+### Sidechain, effect chains and export options (0.45.0)
+
+- `kSlotsPerTrack` is 10. The Compressor's sixth parameter is a mixer track (1-based, 0 = off). Before the tracks' effects run,
+  the Player copies the sound of every track that some compressor listens to (`keyL` / `keyR`, preallocated for 500 tracks)
+  and passes pointers to them in `EffectTransport`; the copy is the track's sum before its effects and fader, so the order of the
+  tracks does not matter and a muted track can key. Tracks, aux buses and master all see the keys.
+- `effectChainToJson` / `effectChainFromJson` (ProjectFile) write the slots with the project's own slot format;
+  `MainComponentChains.cpp` shows the Chain menu and handles the files.
+- `exportAudio` takes `ExportSettings` (bit rate, title, artist) besides `RenderOptions` (sample rate, bit depth); a rendered buffer
+  is written by `exportBuffer`, so `exportStems` renders each track once (soloed copy of the project) and skips silent ones.
+  `ditherTo16Bits` adds TPDF dither before 16-bit files.
+
 ### Playlist tracks and piano roll selection (0.44.0)
 
 - `Arrangement::playlistTracks` is a vector (`kMaxPlaylistTracks` = 128): each `PlaylistTrack` has a name, a colour and the

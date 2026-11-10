@@ -27,6 +27,13 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.45.0
+The sidechain adds one scan of the compressor slots per 64-sample chunk (500 tracks x 10 slots at most, comparisons only) and a
+copy of 64 samples per source track; no allocation (the key buffers are made in the constructor). Ten slots per track raise the
+Player's effect units from 2 000 to 5 000 (about 9 MB) - the big effect buffers are still lent from the pool only to the slots
+that need them. An effect-chain file is parsed with the project's own slot reader (ranges clamped); plugin slots are never read
+from it. Export tags are passed to ffmpeg as separate arguments (no shell).
+
 ## After 0.44.0
 The playlist's track count is now data from the file: it is clamped to 1-128 and every clip's track is checked against the
 actual count when placed or read (`canPlace`, `canPlaceAudio`); a pattern claimed by two tracks keeps the first. `RecordSetup`

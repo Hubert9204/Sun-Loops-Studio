@@ -2,6 +2,18 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.45.0 - 2026-11-10
+
+### Added
+- **Sidechain** on the Compressor: a new *Sidechain* parameter picks a mixer track (by name, with its channels) whose sound - before
+  its own effects and fader, so a muted track works too - drives the gain reduction. Works on tracks, aux buses and the master.
+- **10 effect slots** per mixer track, aux bus and master (4 before), drawn compactly in the strips.
+- **Effect-chain presets**: *Chain...* in the effects panel saves a track's slots as a `.slchain` file, loads one onto any track,
+  aux bus or the master, or clears every slot. Built-in effects only (plugin slots are left out).
+- **Export options**: sample rate (44.1 / 48 / 88.2 / 96 kHz), bit depth (16-bit with TPDF dither, 24, 32-bit float WAV) or bit
+  rate (96 - 320 kbit/s), title and artist tags (WAV, Ogg, MP3, AAC), and **stems**: one file per mixer track that plays,
+  rendered with that track soloed. Remembered between exports.
+
 ## 0.44.0 - 2026-11-10
 
 ### Changed

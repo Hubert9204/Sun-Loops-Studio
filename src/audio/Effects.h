@@ -26,7 +26,7 @@ enum class EffectType : std::uint8_t
 
 constexpr int kEffectTypeCount = 16;
 constexpr int kMaxEffectParams = 8;
-constexpr int kSlotsPerTrack = 4;
+constexpr int kSlotsPerTrack = 10; // insert effects per mixer track, aux bus and master (0.45.0: 10, as in FL Studio; 4 before)
 
 // The built-in effects in the order of the slot menu, grouped (the group starts where `group` is set).
 struct EffectMenuEntry
@@ -101,7 +101,10 @@ inline constexpr EffectParamInfo comp[] = { { "Threshold", "dB", -60.0f, 0.0f, -
                                             { "Ratio", ":1", 1.0f, 20.0f, 4.0f },
                                             { "Attack", "ms", 0.1f, 100.0f, 10.0f },
                                             { "Release", "ms", 10.0f, 1000.0f, 120.0f },
-                                            { "Makeup", "dB", 0.0f, 24.0f, 0.0f } };
+                                            { "Makeup", "dB", 0.0f, 24.0f, 0.0f },
+                                            // 0.45.0: the level that drives the gain reduction comes from another mixer track (its sound before its
+                                            // own effects and fader, e.g. the kick for a pumping bass); 0 = the track's own sound
+                                            { "Sidechain", "track", 0.0f, 500.0f, 0.0f } };
 inline constexpr EffectParamInfo drive[] = { { "Drive", "", 0.0f, 1.0f, 0.4f },
                                              { "Boost", "", 0.0f, 1.0f, 0.0f, "Off|x10" },
                                              { "Color", "", 0.0f, 1.0f, 0.5f },
@@ -311,6 +314,11 @@ struct EffectTransport
     // The highest note each channel is sounding now (-1: none), for the Pitch Corrector's Follow (0.41.0); may be null.
     const int* channelNotes = nullptr;
     int numChannelNotes = 0;
+    // The mixer tracks' sound before their effects and fader (0.45.0), for a compressor's sidechain: keyLeft[t] / keyRight[t]
+    // for track t (0-based), null when that track is not a sidechain source in this block. May be null altogether.
+    const float* const* keyLeft = nullptr;
+    const float* const* keyRight = nullptr;
+    int numKeys = 0;
 };
 
 // The big buffers some effects need (0.29.0): the reverb's combs and all-passes, the pre-delay, the delay lines (also the chorus's
@@ -405,7 +413,7 @@ private:
     void runEqualizer (const EffectSlot&, float*, float*, int) noexcept;
     void runReverb (const EffectSlot&, float*, float*, int) noexcept;
     void runDelay (const EffectSlot&, float*, float*, int) noexcept;
-    void runCompressor (const EffectSlot&, float*, float*, int) noexcept;
+    void runCompressor (const EffectSlot&, float*, float*, int, const EffectTransport&) noexcept;
     void runOverdrive (const EffectSlot&, float*, float*, int) noexcept;
     void runChorus (const EffectSlot&, float*, float*, int) noexcept;
     void runPhaser (const EffectSlot&, float*, float*, int) noexcept;

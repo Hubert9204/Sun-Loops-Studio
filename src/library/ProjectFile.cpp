@@ -1020,4 +1020,46 @@ juce::File automaticProjectFile (const juce::File& folder, juce::Time now)
         file = folder.getChildFile ("Untitled " + stamp + " (" + juce::String (n) + ")" + kProjectExtension);
     return file;
 }
+juce::String effectChainToJson (const std::array<EffectSlot, kSlotsPerTrack>& slots, int* pluginsLeftOut)
+{
+    int left = 0;
+    auto* root = new juce::DynamicObject();
+    root->setProperty ("format", "sun-loops-studio-effect-chain");
+    root->setProperty ("version", 1);
+    juce::Array<juce::var> list;
+    for (const auto& slot : slots)
+    {
+        if (slot.type == EffectType::Plugin)
+        {
+            ++left;
+            list.add (slotToVar (EffectSlot {}, nullptr));
+        }
+        else
+            list.add (slotToVar (slot, nullptr));
+    }
+    root->setProperty ("slots", list);
+    if (pluginsLeftOut != nullptr)
+        *pluginsLeftOut = left;
+    return juce::JSON::toString (juce::var (root));
+}
+
+std::optional<std::array<EffectSlot, kSlotsPerTrack>> effectChainFromJson (const juce::String& json)
+{
+    const auto v = juce::JSON::parse (json);
+    auto* root = v.getDynamicObject();
+    if (root == nullptr || root->getProperty ("format").toString() != "sun-loops-studio-effect-chain")
+        return std::nullopt;
+    auto* list = root->getProperty ("slots").getArray();
+    if (list == nullptr)
+        return std::nullopt;
+    std::array<EffectSlot, kSlotsPerTrack> slots {};
+    std::vector<PluginSpec> ignored;
+    for (int s = 0; s < std::min (list->size(), kSlotsPerTrack); ++s)
+    {
+        auto slot = readSlot ((*list)[s], ignored, PluginSpec::Place::Track, 0, s);
+        slots[static_cast<size_t> (s)] = slot.type == EffectType::Plugin ? EffectSlot {} : slot;
+    }
+    return slots;
+}
+
 } // namespace sls

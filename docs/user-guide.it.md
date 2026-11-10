@@ -1007,14 +1007,14 @@ si aggiungono: nel primissimo momento dopo averne aggiunti tanti insieme, gli ul
 la loro memoria non è pronta (qualche decimo di secondo).
 
 Percorso del suono: ogni canale va alla traccia scelta con il suo display **Track N** (più canali possono condividerne
-una; oppure usa *Assign free mixer track* nel menu del tasto destro del canale), poi attraversa i quattro slot effetti
-della traccia, poi fader e bilanciamento della traccia; la somma di tutte le tracce passa poi dai quattro slot effetti
+una; oppure usa *Assign free mixer track* nel menu del tasto destro del canale), poi attraversa i dieci slot effetti (quattro prima della 0.45.0)
+della traccia, poi fader e bilanciamento della traccia; la somma di tutte le tracce passa poi dai dieci slot effetti
 del master e dal fader master.
 
 Ogni traccia, dall'alto in basso:
 
 - il nome (Track 1...) e i canali che le sono assegnati;
-- **quattro slot effetti**, uno sopra l'altro (vedi sotto);
+- **dieci slot effetti** (0.45.0; quattro prima), uno sopra l'altro (vedi sotto);
 - **bilanciamento** (stereo) - doppio clic per centrarlo. È un bilanciamento: al centro il suono non cambia;
 - **M** (mute) e **S** (solo) - appartengono alla traccia e sono indipendenti dai pulsanti del canale nel rack. Se
   una traccia è in solo, si sentono solo quelle in solo;
@@ -1027,6 +1027,11 @@ Clic su una traccia per selezionarla: il pannello effetti mostra allora i suoi s
 
 ### Effetti
 
+**Catene di effetti (0.45.0).** Il pulsante **Chain...** del pannello effetti salva gli slot della traccia selezionata come preset
+(*Save this chain as a preset...*, un file `.slchain` in `~/Music/Sun Loops Studio/Presets/Effect chains`), ne carica uno su
+qualsiasi traccia, bus aux o master (sostituisce tutti gli slot) o svuota tutti gli slot. I preset conservano gli effetti interni con
+impostazioni e bypass; gli slot con plugin vengono lasciati fuori (la riga di stato lo dice).
+
 Clic su uno slot per il menu: gli effetti, a gruppi (**EQ and filter**, **Dynamics**, **Drive**, **Modulation**, **Space and time**,
 **Stereo**), poi **Plugin effects**, **Bypass** e **Remove effect**. Gli effetti agiscono in ordine, dall'alto in basso, prima del
 fader della traccia. Il pannello effetti ha un pulsante di accensione per slot (bypass), un cursore per ogni parametro dello slot
@@ -1038,7 +1043,7 @@ quasi tutti gli effetti, **Presets...** con impostazioni pronte.
 | Equalizer | Shelf basso (120 Hz), Mid (una campana con frequenza propria, 200-5000 Hz), shelf alto (6 kHz); ciascuno da -15 a +15 dB | |
 | Parametric EQ | Shelf basso (frequenza, guadagno), una campana (frequenza, guadagno, Q), shelf alto (frequenza, guadagno), ciascuno da -18 a +18 dB; uscita | Vocal presence, Kick punch, Warm master |
 | Filter | Tipo (passa-basso, passa-alto, passa-banda, notch), Cutoff, Risonanza, Pendenza (12 o 24 dB), Drive, velocità e profondità dell'LFO (sposta il cutoff fino a 3 ottave), Mix | Low-pass 24 dB, High-pass, Wobble, Telephone |
-| Compressor | Threshold (da -60 a 0 dB), Ratio (1-20:1), Attack, Release, Makeup | Gentle, Drum bus, Vocal |
+| Compressor | Threshold (da -60 a 0 dB), Ratio (1-20:1), Attack, Release, Makeup, **Sidechain** (0.45.0: *Off*, oppure una traccia del mixer il cui suono - prima dei suoi effetti e del fader, quindi funziona anche una traccia muta - comanda la riduzione: il classico basso che "pompa" sotto la cassa) | Gentle, Drum bus, Vocal (un preset non cambia il sidechain) |
 | Maximizer | Un limiter da mastering in tre stadi: guadagno d'ingresso, Soft clip facoltativo, Glue (un compressore morbido a ginocchio dolce), poi un limiter con look-ahead che tiene ogni picco sotto il **Ceiling**; Release. Ritarda il suono di 1,5 ms (il suo look-ahead). | Transparent, Loud, Streaming (-1 dB) |
 | Transient | Divide ogni suono in attacco e sustain: guadagno di Attack e Sustain (da -24 a +24 dB), Speed (quanto dura un attacco), Listen (entrambi, solo transienti, solo sustain), Mix, Output | Punchy drums, Tighten, More room, Transients only |
 | Overdrive | Drive, Boost (x10), Color (più scuro / più brillante prima della saturazione), Tone (dopo), Character (aggiunge armoniche pari), Mix, Output. Lavora a 4 volte la frequenza di campionamento con anti-aliasing. | Warm, Crunch, Fuzz, Parallel grit |
@@ -1058,7 +1063,7 @@ scansione, vedi *Plugin*) e **Open plugin window** per uno slot con un plugin; i
 
 ### Effetti sul master
 
-La **strip master** (a destra delle tracce) ha gli stessi quattro slot effetti di una traccia. Clicca uno slot per
+La **strip master** (a destra delle tracce) ha gli stessi dieci slot effetti di una traccia. Clicca uno slot per
 scegliere un effetto (tutti quelli sopra, un Maximizer in fondo per il mastering); cliccando la strip o uno slot lo vedi nel pannello
 effetti, intitolato *Effects - Master*. La catena master elabora la **somma di tutte le tracce**, in ordine, **prima
 del fader master** e del limitatore morbido finale, quindi un compressore o un equalizzatore lì modella tutto il mix,
@@ -1078,7 +1083,7 @@ Sotto i suoi slot effetti ogni traccia ha:
   (predefinito), sono **post-fader**. Una traccia in mute, o zittita dal solo di un'altra, non manda niente in nessun caso;
 - **V1** e **V2**: mettono la traccia nel gruppo VCA 1 e/o 2.
 
-I **bus aux** (le due strip dopo le tracce, con la barra verde) sommano ciò che le tracce mandano, lo fanno passare dai loro quattro slot effetti
+I **bus aux** (le due strip dopo le tracce, con la barra verde) sommano ciò che le tracce mandano, lo fanno passare dai loro dieci slot effetti
 (clic su uno slot come su una traccia), poi da fader e bilanciamento, e aggiungono il risultato al mix **prima degli effetti master**. Uso tipico: un riverbero
 su Aux A, un delay su Aux B (imposta il Mix dell'effetto al 100 %), e ogni traccia manda quanto serve. Un bus aux ha mute e bilanciamento ma niente
 solo, e il nome è fisso (Aux A, Aux B). I parametri dei suoi effetti non si possono ancora automatizzare.
@@ -1128,9 +1133,20 @@ parte di un'esportazione. Viene ricordato tra una sessione e l'altra.
 ## Esportazione
 
 **File > Export audio** scrive la modalità corrente: il pattern (una battuta, se non l'hai cambiata) o il brano (fino alla fine dell'ultima clip,
-clip audio comprese), più un secondo di coda per non tagliare i rilasci e le code della batteria. Viene generato a 48 kHz
+clip audio comprese), più un secondo di coda per non tagliare i rilasci e le code della batteria. Viene generato in
 stereo, al BPM impostato nella barra, dallo stesso motore che suona, quindi suona come ciò che ascolti. Scegli il formato
-nel sottomenu:
+nel sottomenu; poi le **Export options** (0.45.0, ricordate) chiedono:
+
+- **Sample rate**: 44100, 48000 (predefinito), 88200 o 96000 Hz.
+- **Bit depth** (WAV, AIFF, FLAC): 16 bit (con dither TPDF), 24 bit o 32 bit in virgola mobile (WAV). **Quality** (MP3, AAC, Ogg
+  Vorbis): da 96 a 320 kbit/s.
+- **Title** e **Artist**, scritti in WAV (lista INFO), Ogg Vorbis (commenti), MP3 e AAC (tag, tramite ffmpeg); FLAC e AIFF non
+  ne hanno.
+- **One file per mixer track (stems)**: invece del mix, un file per ogni traccia del mixer che suona qualcosa, chiamato
+  *<nome> - <traccia>*, ognuno generato con solo quella traccia in solo (mandate ed effetti master compresi, come nel mix); le
+  tracce mute vengono saltate. Sommati danno il mix (finché gli effetti master non sono compressori o limiter).
+
+La tabella indica i valori predefiniti:
 
 | Formato | Tipo | Note |
 | --- | --- | --- |
@@ -1182,7 +1198,7 @@ occupato più tardi, un brano più pesante o un mixer pieno di effetti possono r
 
 ## Limiti
 
-- Fino a 32 canali, fino a 500 tracce del mixer (8 all'inizio) con 4 slot effetti ciascuna, 2 bus aux (4 slot ciascuno), 2 gruppi VCA, 64 pattern, da 1 a 128 tracce di playlist, una linea del
+- Fino a 32 canali, fino a 500 tracce del mixer (8 all'inizio) con 10 slot effetti ciascuna, 2 bus aux (10 slot ciascuno), 2 gruppi VCA, 64 pattern, da 1 a 128 tracce di playlist, una linea del
   tempo di almeno 32 pattern e 64 battute, 4 corsie di automazione, 64 clip di automazione di al massimo 256 punti, 32 voci simultanee.
 - Gli effetti usano circa 15 MB di memoria a 48 kHz all'inizio, più circa 0,8 MB per ogni riverbero, delay, chorus e Pitch Corrector oltre
   il sedicesimo (di più a frequenze di campionamento maggiori). La memoria preparata resta finché il dispositivo audio non riparte.

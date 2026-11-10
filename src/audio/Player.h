@@ -284,6 +284,10 @@ private:
 
     // Mixer tracks (up to kMaxTracks; the project says how many are in use). The big per-track parts live on the heap.
     std::vector<std::array<float, kChunk>> trackL, trackR;
+    // Sidechain (0.45.0): copies of the source tracks' sound before their effects, and pointers to them (null: not a source).
+    std::vector<std::array<float, kChunk>> keyL, keyR;
+    std::vector<const float*> keyPtrL, keyPtrR;
+    std::vector<char> keyWanted;
     std::array<float, kMaxTracks> trackGain {};
     std::array<float, kMaxTracks> trackPeaks {};
     std::array<float, kMaxTracks> trackMeanSquare {};

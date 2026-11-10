@@ -299,7 +299,7 @@ void EffectUnit::process (const EffectSlot& requested, float* left, float* right
         case EffectType::Equalizer:    runEqualizer (slot, left, right, numSamples); break;
         case EffectType::Reverb:       runReverb (slot, left, right, numSamples); break;
         case EffectType::Delay:        runDelay (slot, left, right, numSamples); break;
-        case EffectType::Compressor:   runCompressor (slot, left, right, numSamples); break;
+        case EffectType::Compressor:   runCompressor (slot, left, right, numSamples, transport); break;
         case EffectType::Overdrive:    runOverdrive (slot, left, right, numSamples); break;
         case EffectType::Chorus:       runChorus (slot, left, right, numSamples); break;
         case EffectType::Phaser:       runPhaser (slot, left, right, numSamples); break;
@@ -539,8 +539,19 @@ void EffectUnit::runDelay (const EffectSlot& s, float* l, float* r, int n) noexc
 
 // ------------------------------------------------------------------------- compressor
 
-void EffectUnit::runCompressor (const EffectSlot& s, float* l, float* r, int n) noexcept
+void EffectUnit::runCompressor (const EffectSlot& s, float* l, float* r, int n, const EffectTransport& transport) noexcept
 {
+    // Sidechain (0.45.0): the level is measured on another track's sound when one is chosen and it is there in this block.
+    const int key = static_cast<int> (std::lround (s.params[5])) - 1;
+    const float* keyL = nullptr;
+    const float* keyR = nullptr;
+    if (key >= 0 && key < transport.numKeys && transport.keyLeft != nullptr && transport.keyRight != nullptr)
+    {
+        keyL = transport.keyLeft[key];
+        keyR = transport.keyRight[key];
+    }
+    const float* detectL = keyL != nullptr && keyR != nullptr ? keyL : l;
+    const float* detectR = keyL != nullptr && keyR != nullptr ? keyR : r;
     const float threshold = s.params[0];
     const float slope = 1.0f - 1.0f / s.params[1];
     const float attack = static_cast<float> (1.0 - std::exp (-1.0 / (s.params[2] * 0.001 * sampleRate)));
@@ -550,7 +561,7 @@ void EffectUnit::runCompressor (const EffectSlot& s, float* l, float* r, int n) 
 
     for (int i = 0; i < n; ++i)
     {
-        const float level = std::max (std::fabs (l[i]), std::fabs (r[i]));
+        const float level = std::max (std::fabs (detectL[i]), std::fabs (detectR[i]));
         env += (level - env) * (level > env ? attack : release);
         env = flush (env);
 

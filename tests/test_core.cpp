@@ -1067,7 +1067,7 @@ void testEffects()
         check (c.params[1] == 4.0f && c.params[0] == -60.0f && c.params[4] == 24.0f, "slot parameters: NaN -> default, out of range -> clamped");
         s.type = static_cast<sls::EffectType> (77);
         check (s.sanitised().type == sls::EffectType::None, "an unknown effect type becomes empty");
-        check (sls::effectParamCount (sls::EffectType::None) == 0 && sls::effectParamCount (sls::EffectType::Compressor) == 5,
+        check (sls::effectParamCount (sls::EffectType::None) == 0 && sls::effectParamCount (sls::EffectType::Compressor) == 6,
                "parameter counts");
     }
 
@@ -1370,7 +1370,7 @@ void testTimeShaper()
     {
         auto c = synthChannel ({ { 60, 0, 2 * kBeat, 0.8f }, { 64, 2 * kBeat, 2 * kBeat, 0.8f } });
         std::vector<sls::MixerTrack> tracks (static_cast<size_t> (sls::kMaxTracks));
-        for (size_t s = 0; s < static_cast<size_t> (sls::kSlotsPerTrack); ++s)
+        for (size_t s = 0; s < 4; ++s) // four of the track's ten slots
             tracks[0].slots[s] = slotWith (T::TimeShaper, { static_cast<float> (s + 1), 2.0f, 0.0f, 100.0f, 3.0f, 100.0f });
         tracks[1].slots[0] = slotWith (T::TimeShaper, { 1.0f, 0.0f, 2.0f, 100.0f, 3.0f, 100.0f }); // a fifth: none left for it
         auto project = sls::Project::make ({ c }, 16 * kBeat);
@@ -3955,6 +3955,171 @@ void testTypingKeyboard()
 }
 
 
+
+
+void testMixerAndExport045()
+{
+    std::cout << "Mixer and export: sidechain, 10 slots, effect chains, export options and stems (0.45.0)\n";
+    check (sls::kSlotsPerTrack == 10, "10 effect slots per track, aux bus and master");
+
+    // Sidechain: a steady tone on track 2 with a compressor listening to track 1, where a loud note plays in the second half.
+    // Track 1 is muted: its sound still drives the compressor (the key is taken before the fader and mute).
+    const auto buildProject = [] (int sidechain)
+    {
+        auto pad = synthChannel ({ { 57, 0, 8 * kBeat, 0.5f } }, 0.6f);
+        pad.mixerTrack = 1;
+        auto kick = synthChannel ({ { 45, 4 * kBeat, 4 * kBeat, 1.0f } }, 1.5f);
+        kick.mixerTrack = 0;
+        auto tracks = sls::Project::defaultTracks();
+        tracks[0].mute = true;
+        auto comp = sls::EffectSlot::make (sls::EffectType::Compressor);
+        comp.params = { -40.0f, 20.0f, 1.0f, 50.0f, 0.0f, static_cast<float> (sidechain) };
+        tracks[1].slots[9] = comp; // the last of the 10 slots works too
+        return sls::Project::make ({ kick, pad }, 8 * kBeat, tracks);
+    };
+    const auto rms = [] (const juce::AudioBuffer<float>& b, double from, double to)
+    {
+        const int a = static_cast<int> (from * 48000.0), z = static_cast<int> (to * 48000.0);
+        return b.getRMSLevel (0, a, z - a);
+    };
+    const auto keyed = sls::renderToBuffer (buildProject (1), {});
+    const auto own = sls::renderToBuffer (buildProject (0), {});
+    // 120 BPM: the kick plays from 2 s to 4 s.
+    const float keyedQuiet = rms (keyed, 0.5, 1.8), keyedDucked = rms (keyed, 2.3, 3.8);
+    const float ownQuiet = rms (own, 0.5, 1.8), ownLater = rms (own, 2.3, 3.8);
+    check (keyedDucked < keyedQuiet * 0.5f, "with the sidechain on track 1 the pad is turned down while track 1's (muted) note plays");
+    check (std::abs (ownLater - ownQuiet) < ownQuiet * 0.1f, "without it the pad stays level (the muted track is not heard)");
+    check (sls::effectParamInfo (sls::EffectType::Compressor, 5).def == 0.0f && sls::EffectSlot::make (sls::EffectType::Compressor).params[5] == 0.0f,
+           "the sidechain is off by default (older projects keep their sound)");
+    // A source beyond the project's tracks is ignored, not read.
+    const auto far = sls::renderToBuffer (buildProject (400), {});
+    check (std::abs (rms (far, 2.3, 3.8) - ownLater) < ownLater * 0.05f, "a sidechain from a track that does not exist does nothing");
+
+    // Effect chains.
+    std::array<sls::EffectSlot, sls::kSlotsPerTrack> chain {};
+    chain[0] = sls::EffectSlot::make (sls::EffectType::ParametricEq);
+    chain[3] = sls::EffectSlot::make (sls::EffectType::Compressor);
+    chain[3].params[0] = -30.0f;
+    chain[3].params[5] = 2.0f;
+    chain[3].bypass = true;
+    chain[9] = sls::EffectSlot::make (sls::EffectType::Reverb);
+    chain[5].type = sls::EffectType::Plugin;
+    int leftOut = 0;
+    const auto json = sls::effectChainToJson (chain, &leftOut);
+    const auto back = sls::effectChainFromJson (json);
+    check (leftOut == 1 && back.has_value() && (*back)[0].type == sls::EffectType::ParametricEq && (*back)[3].params[0] == -30.0f
+               && (*back)[3].params[5] == 2.0f && (*back)[3].bypass && (*back)[9].type == sls::EffectType::Reverb
+               && (*back)[5].type == sls::EffectType::None,
+           "an effect chain is saved and read back (built-in effects, bypass, sidechain; a plugin slot is left out)");
+    check (! sls::effectChainFromJson ("{\"format\":\"other\"}") && ! sls::effectChainFromJson ("not json"), "other files are not effect chains");
+
+    // Older projects: 4 slots per track come back in the first 4 of 10.
+    {
+        auto doc = sls::ProjectDocument::blank();
+        doc.tracks[0].slots[3] = sls::EffectSlot::make (sls::EffectType::Delay);
+        doc.tracks[0].slots[8] = sls::EffectSlot::make (sls::EffectType::Chorus);
+        const auto again = sls::ProjectDocument::fromJson (doc.toJson());
+        check (again.document && again.document->tracks[0].slots[3].type == sls::EffectType::Delay
+                   && again.document->tracks[0].slots[8].type == sls::EffectType::Chorus,
+               "slots 4 and 9 of a track are saved and read back");
+    }
+
+    // Export options.
+    const auto dir = freshTempDir ("sls-export-045");
+    const auto project = buildProject (0);
+    const auto read = [] (const juce::File& f, int& bits, double& rate, juce::StringPairArray& tags)
+    {
+        juce::AudioFormatManager m;
+        m.registerBasicFormats();
+        std::unique_ptr<juce::AudioFormatReader> r (m.createReaderFor (f));
+        if (r == nullptr)
+            return false;
+        bits = static_cast<int> (r->bitsPerSample);
+        rate = r->sampleRate;
+        tags = r->metadataValues;
+        return true;
+    };
+    sls::RenderOptions o16;
+    o16.sampleRate = 44100.0;
+    o16.bitDepth = 16;
+    sls::ExportSettings tagsIn;
+    tagsIn.title = "Sole";
+    tagsIn.artist = "Hubert";
+    int bits = 0;
+    double rate = 0.0;
+    juce::StringPairArray tags;
+    const auto wav16 = dir.getChildFile ("a.wav");
+    check (sls::exportAudio (project, o16, wav16, sls::ExportFormat::Wav, {}, tagsIn).wasOk() && read (wav16, bits, rate, tags) && bits == 16
+               && std::abs (rate - 44100.0) < 0.5,
+           "a 16-bit WAV at 44.1 kHz");
+    check (tags[juce::WavAudioFormat::riffInfoTitle] == "Sole" && tags[juce::WavAudioFormat::riffInfoArtist] == "Hubert", "with the title and artist in its INFO list");
+    sls::RenderOptions o32;
+    o32.sampleRate = 96000.0;
+    o32.bitDepth = 32;
+    const auto wav32 = dir.getChildFile ("b.wav");
+    check (sls::exportAudio (project, o32, wav32, sls::ExportFormat::Wav).wasOk() && read (wav32, bits, rate, tags) && bits == 32
+               && std::abs (rate - 96000.0) < 0.5,
+           "a 32-bit floating-point WAV at 96 kHz");
+    sls::RenderOptions o24;
+    const auto flac16 = dir.getChildFile ("c.flac");
+    check (sls::exportAudio (project, o16, flac16, sls::ExportFormat::Flac).wasOk() && read (flac16, bits, rate, tags) && bits == 16,
+           "a 16-bit FLAC");
+
+    // Dither: a quiet steady value comes out on the 16-bit grid, on average where it was (no truncation bias).
+    juce::AudioBuffer<float> quiet (1, 48000);
+    quiet.clear();
+    for (int i = 0; i < quiet.getNumSamples(); ++i)
+        quiet.setSample (0, i, 0.3f / 32768.0f);
+    sls::ditherTo16Bits (quiet, 7);
+    double mean = 0.0;
+    bool onGrid = true;
+    for (int i = 0; i < quiet.getNumSamples(); ++i)
+    {
+        const double v = quiet.getSample (0, i) * 32768.0;
+        mean += v;
+        onGrid = onGrid && std::abs (v - std::round (v)) < 1.0e-3;
+    }
+    mean /= quiet.getNumSamples();
+    check (onGrid && std::abs (mean - 0.3) < 0.03, "16-bit dither: every sample on the grid, the average kept (0.3 of a step)");
+
+    // Stems.
+    {
+        auto tracks = sls::Project::defaultTracks();
+        tracks[2].name = "Keys";
+        auto a = synthChannel ({ { 60, 0, kBeat, 0.8f } });
+        a.mixerTrack = 0;
+        auto b = synthChannel ({ { 64, kBeat, kBeat, 0.8f } });
+        b.mixerTrack = 2;
+        auto c = synthChannel ({});
+        c.mixerTrack = 5; // routed, but plays nothing
+        const auto song = sls::Project::make ({ a, b, c }, 4 * kBeat, tracks);
+        check (sls::tracksInUse (song) == std::vector<int> ({ 0, 2, 5 }), "the tracks in use are those of the channels (and audio clips)");
+        std::vector<juce::File> written;
+        sls::RenderOptions opts;
+        const auto result = sls::exportStems (song, opts, dir.getChildFile ("Mix.wav"), sls::ExportFormat::Wav, written);
+        check (result.wasOk() && written.size() == 2 && written[0].getFileName() == "Mix - Track 1.wav" && written[1].getFileName() == "Mix - Keys.wav",
+               "stems: one file per track that plays, named after it; the silent track is skipped");
+        juce::AudioFormatManager m;
+        m.registerBasicFormats();
+        float sumPeak = 0.0f;
+        std::vector<juce::AudioBuffer<float>> stems;
+        for (const auto& f : written)
+        {
+            std::unique_ptr<juce::AudioFormatReader> r (m.createReaderFor (f));
+            juce::AudioBuffer<float> buf (2, static_cast<int> (r->lengthInSamples));
+            r->read (&buf, 0, buf.getNumSamples(), 0, true, true);
+            stems.push_back (buf);
+        }
+        const auto full = sls::renderToBuffer (song, opts);
+        float worst = 0.0f;
+        if (stems.size() == 2)
+            for (int i = 0; i < full.getNumSamples(); ++i)
+                worst = std::max (worst, std::abs (full.getSample (0, i) - stems[0].getSample (0, i) - stems[1].getSample (0, i)));
+        sumPeak = full.getMagnitude (0, 0, full.getNumSamples());
+        check (stems.size() == 2 && worst < sumPeak * 0.001f, "the stems add up to the mix (within 24-bit rounding)");
+    }
+    dir.deleteRecursively();
+}
 
 void testPlaylistTracks()
 {
@@ -10760,6 +10925,7 @@ int main()
     testSfzFiles();
     testFreePlaylist();
     testPlaylistTracks();
+    testMixerAndExport045();
     testSemVerAndUpdates();
     testCrashReports();
     testSessionLog();
