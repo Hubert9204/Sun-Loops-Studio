@@ -31,6 +31,7 @@
 #include "audio/InputRecorder.h"
 #include "audio/RecordSetup.h"
 #include "audio/Slicer.h"
+#include "audio/PitchTrack.h"
 #include "audio/Loudness.h"
 #include "audio/Spectrum.h"
 #include "audio/MidiImport.h"
@@ -4788,6 +4789,110 @@ void testAudioImport()
     check (r3.data == nullptr && r3.error.contains ("no audio"), "a video without sound is reported");
     check (library.getNumberOfChildFiles (juce::File::findFiles) == 2, "and leaves no partial files behind");
     dir.deleteRecursively(); // test folders in /tmp are not left behind
+}
+
+// A "sung" line: tones with harmonics at the given MIDI pitches (with cents), each `seconds` long, with short silences between.
+std::shared_ptr<sls::SampleData> sungLine (const std::vector<double>& midi, double seconds, double vibratoCents = 0.0)
+{
+    auto s = std::make_shared<sls::SampleData>();
+    s->sampleRate = kSr;
+    s->name = "line";
+    double phase = 0.0;
+    for (const double m : midi)
+    {
+        const int n = static_cast<int> (seconds * kSr), gap = static_cast<int> (0.08 * kSr);
+        for (int i = 0; i < n; ++i)
+        {
+            const double t = i / kSr;
+            const double hz = 440.0 * std::pow (2.0, (m - 69.0 + vibratoCents / 100.0 * std::sin (2.0 * 3.14159265358979 * 5.5 * t)) / 12.0);
+            phase += 2.0 * 3.14159265358979 * hz / kSr;
+            const double env = std::min ({ 1.0, i / (0.01 * kSr), (n - i) / (0.01 * kSr) });
+            const auto v = static_cast<float> (env * (0.4 * std::sin (phase) + 0.15 * std::sin (2.0 * phase) + 0.08 * std::sin (3.0 * phase)));
+            s->left.push_back (v);
+            s->right.push_back (v);
+        }
+        for (int i = 0; i < gap; ++i)
+        {
+            s->left.push_back (0.0f);
+            s->right.push_back (0.0f);
+        }
+    }
+    return s;
+}
+
+void testPitchTools()
+{
+    std::cout << "Pitch editor: pitch tracking, notes, correction, rendering\n";
+    // A4 + 30 cents, C4, E5 - 20 cents, G2, with vibrato of 25 cents.
+    const auto line = sungLine ({ 69.3, 60.0, 75.8, 43.0 }, 0.5, 25.0);
+    const auto frames = sls::pitchtrack::track (*line);
+    check (frames.size() > 300 && std::abs (frames[1].seconds - frames[0].seconds - 0.005) < 0.0005, "a frame every 5 ms");
+    int voiced = 0;
+    for (const auto& f : frames)
+        voiced += f.hz > 0.0 ? 1 : 0;
+    check (voiced > static_cast<int> (frames.size()) * 6 / 10, "most of the line has a pitch");
+
+    const auto notes = sls::pitchtrack::notesFrom (frames);
+    check (notes.size() == 4, "four notes are found");
+    if (notes.size() == 4)
+    {
+        check (std::abs (notes[0].midi - 69.3) < 0.08 && std::abs (notes[1].midi - 60.0) < 0.08 && std::abs (notes[2].midi - 75.8) < 0.08
+                   && std::abs (notes[3].midi - 43.0) < 0.08,
+               "each note's centre within 8 cents, vibrato or not, from G2 to E5");
+        check (std::abs (notes[0].start - 0.0) < 0.04 && std::abs (notes[0].end - 0.5) < 0.04 && std::abs (notes[1].start - 0.58) < 0.04,
+               "and where it starts and ends within 40 ms");
+        check (notes[0].nearestKey() == 69 && std::abs (notes[0].centsOff() - 30.0) < 8.0 && notes[2].nearestKey() == 76
+                   && std::abs (notes[2].centsOff() + 20.0) < 8.0,
+               "the nearest key and how many cents off");
+
+        // Correction: all the way, half, and to a scale.
+        auto n = notes[0];
+        check (std::abs (sls::pitchtrack::correction (n, 1.0) + (notes[0].midi - 69.0)) < 1e-9, "full correction brings a note to its key");
+        check (std::abs (sls::pitchtrack::correction (n, 0.5) + 0.5 * (notes[0].midi - 69.0)) < 1e-9, "half correction half way");
+        bool cMajor[12] = { true, false, true, false, true, true, false, true, false, true, false, true };
+        n.midi = 61.2; // C#4 + 20 cents: not in C major, the nearest key in it is C (61.2 - 60 = 1.2) or D (0.8): D
+        check (std::abs (sls::pitchtrack::correction (n, 1.0, cMajor, 0) - 0.8) < 1e-9, "with a scale, to the nearest key in it");
+
+        // Rendering: the first note brought to A4, the third moved up a tone; the others left alone.
+        auto edited = notes;
+        edited[0].shift = sls::pitchtrack::correction (edited[0], 1.0);
+        edited[2].shift = 2.0;
+        const auto out = sls::pitchtrack::render (line, edited);
+        check (out != nullptr && out != line && out->numFrames() == line->numFrames(), "the edited audio keeps its length");
+        const auto again = sls::pitchtrack::notesFrom (sls::pitchtrack::track (*out));
+        check (again.size() == 4 && std::abs (again[0].midi - 69.0) < 0.1 && std::abs (again[2].midi - 77.8) < 0.1
+                   && std::abs (again[1].midi - 60.0) < 0.05 && std::abs (again[3].midi - 43.0) < 0.05,
+               "measured again: A4 in tune, the third a tone higher, the others unchanged");
+        bool untouched = true;
+        const auto mid = static_cast<size_t> (0.8 * kSr); // inside the second note, which did not move
+        for (size_t i = mid; i < mid + 1000; ++i)
+            untouched = untouched && out->left[i] == line->left[i];
+        check (untouched, "a note that does not move is left sample for sample");
+        check (sls::pitchtrack::render (line, notes) == line, "no shift: the audio itself comes back");
+    }
+
+    // Silence and noise have no pitch; a hostile input does not crash.
+    sls::SampleData quiet;
+    quiet.sampleRate = kSr;
+    quiet.left.assign (48000, 0.0f);
+    quiet.right.assign (48000, 0.0f);
+    const auto qf = sls::pitchtrack::track (quiet);
+    check (! qf.empty() && std::all_of (qf.begin(), qf.end(), [] (const sls::pitchtrack::Frame& f) { return f.hz == 0.0; })
+               && sls::pitchtrack::notesFrom (qf).empty(),
+           "silence has no pitch and no notes");
+    sls::SampleData noise = quiet;
+    std::uint32_t seed = 1;
+    for (size_t i = 0; i < noise.left.size(); ++i)
+    {
+        seed = seed * 1664525u + 1013904223u;
+        noise.left[i] = noise.right[i] = static_cast<float> (seed >> 8) / 16777216.0f - 0.5f;
+    }
+    const auto nn = sls::pitchtrack::notesFrom (sls::pitchtrack::track (noise));
+    check (nn.size() <= 1, "white noise gives no steady notes");
+    sls::SampleData tiny;
+    tiny.sampleRate = kSr;
+    tiny.left = tiny.right = { 0.1f, 0.2f };
+    check (sls::pitchtrack::track (tiny).empty() && sls::pitchtrack::notesFrom ({}).empty(), "too little audio gives nothing");
 }
 
 void testSlicer()
@@ -10179,6 +10284,7 @@ int main()
     testRecordSetup();
     testMultitrackRecorders();
     testSlicer();
+    testPitchTools();
     testMidiNotes();
     testPlayerRewind();
     testClipEditing();

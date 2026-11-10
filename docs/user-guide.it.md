@@ -727,6 +727,27 @@ volta. Il sample di un canale sampler non si può tagliare in clip (non ci sono 
 La riduzione del rumore e il rilevamento dei colpi sono stati misurati su segnali di prova (rumore abbassato di circa 18 dB con un tono mantenuto entro 1,5 dB; cinque colpi di prova
 trovati entro 0,2 ms) e **non giudicati ad orecchio su registrazioni reali**: lo spectral gating scambia sempre rumore con una certa perdita del dettaglio più debole del suono.
 
+### Editor di intonazione (0.38.0)
+
+Tasto destro su una clip audio > **Edit pitch...** mostra una registrazione di **una sola voce o strumento alla volta** (un cantante,
+un basso, una linea solista) come **note sopra la curva della sua intonazione**, come Newtone di FL Studio: ogni nota all'altezza a cui
+è stata cantata, con il tasto più vicino e di quanti cent se ne discosta (nomi come nel piano roll: C5 = MIDI 60).
+
+| Azione | Come |
+| --- | --- |
+| Spostare una nota | Trascinala su o giù: di semitoni; tieni **Alt** per muoverla liberamente. La linea sottile mostra dove era cantata |
+| Intonare una nota | Doppio clic: va al tasto più vicino |
+| Intonarne diverse | Selezionale (clic, **Shift+clic** per aggiungere) - o nessuna per tutte - e premi **Correct**: **Amount** 100 % le porta sui loro tasti, 50 % a metà strada; con una tonica e una scala vanno al tasto più vicino **della scala** |
+| Annullare le modifiche | **Reset** (le note selezionate, o tutte) |
+| Ascoltare | **Play** suona l'audio modificato |
+| Tenerlo | **Save as new file and use**: un nuovo WAV in `Samples/Edited`, che la clip poi suona (il file originale non viene mai toccato; Ctrl+Z nella playlist riporta l'audio di prima) |
+| Dall'intonazione al MIDI | **Notes to pattern**: le note diventano le note del **canale selezionato** nel pattern corrente (le sue note lì vengono sostituite; Ctrl+Z annulla), ognuna sul tasto più vicino, dall'inizio del pattern, le più forti con velocity più alta |
+
+Come funziona: l'intonazione si misura ogni 5 ms (YIN), le note sono i tratti in cui resta stabile, e ogni nota spostata viene
+trasposta da sola (stessa lunghezza, dissolvenze di 10 ms ai bordi); l'audio tra le note non cambia. Cosa non sa fare: accordi o più
+voci insieme, registrazioni molto rumorose, appiattire il vibrato o le derive dentro una nota (una nota si sposta tutta insieme),
+cambiare la durata di una nota. Una clip allungata, trasposta o invertita va prima riportata all'originale (come per l'editor di campioni).
+
 ### Registrazione
 
 **Record** (barra) registra l'**ingresso audio**: un microfono, una chitarra in un'interfaccia audio, un ingresso di linea - su una

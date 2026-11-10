@@ -409,6 +409,7 @@ MainComponent::MainComponent()
     };
     playlistView.onPatternPicked = [this] (int pattern) { selectPattern (pattern); };
     playlistView.onEditSample = [this] (int index) { openSampleEditorForClip (index); };
+    playlistView.onEditPitch = [this] (int index) { openPitchEditorForClip (index); };
     playlistView.onSeek = [this] (int tick) { seekSong (tick); };
     playlistView.onLoopChanged = [this]
     {
@@ -589,6 +590,8 @@ MainComponent::~MainComponent()
     endSession();
     automationWindow.reset();
     sampleEditorWindow.reset();
+    pitchEditorWindow.reset(); // before the engine it plays through
+    slicerWindow.reset();
     drumWindow.reset();
     samplerWindow.reset();
     synthWindow.reset();

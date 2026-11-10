@@ -701,6 +701,27 @@ neighbour is in the way, and the tempo is the current one). Only one editor can 
 Noise reduction and hit detection were measured on test signals (noise lowered by about 18 dB with a tone kept within 1.5 dB; five test hits found to
 within 0.2 ms) and **not judged by ear on real recordings**: spectral gating always trades noise for some loss of the quiet detail of the sound.
 
+### Pitch editor (0.38.0)
+
+Right-click an audio clip > **Edit pitch...** shows a recording of **one voice or instrument at a time** (a singer, a bass, a lead
+line) as **notes over its pitch curve**, as FL Studio's Newtone: each note at the pitch it was sung, labelled with the nearest key
+and how many cents off it is (names as in the piano roll: C5 = MIDI 60).
+
+| Action | How |
+| --- | --- |
+| Move a note | Drag it up or down: by semitones; hold **Alt** to move it freely. The thin line shows where it was sung |
+| Tune a note | Double-click it: it goes to the key it is nearest to |
+| Tune several | Select them (click, **Shift+click** to add) - or none for all - and press **Correct**: **Amount** 100 % brings them to their keys, 50 % half way; with a root and a scale they go to the nearest key **in the scale** |
+| Undo the changes | **Reset** (the selected notes, or all) |
+| Listen | **Play** plays the edited audio |
+| Keep it | **Save as new file and use**: a new WAV in `Samples/Edited`, which the clip then plays (the original file is never touched; Ctrl+Z in the playlist brings the old audio back) |
+| Pitch to MIDI | **Notes to pattern**: the notes become the **selected channel's** notes in the current pattern (its notes there are replaced; Ctrl+Z undoes), each on its nearest key, from the start of the pattern, the louder ones with a higher velocity |
+
+How it works: the pitch is measured every 5 ms (YIN), notes are the stretches where it holds steady, and each moved note is
+pitch-shifted on its own (same length, 10 ms crossfades at its edges); the audio between notes is not changed. What it cannot do:
+chords or several voices at once, very noisy recordings, flattening vibrato or drifts inside a note (a note moves as a whole),
+or changing a note's length. A stretched, pitched or reversed clip must be put back first (as for the sample editor).
+
 ### Recording
 
 **Record** (toolbar) records the **audio input**: a microphone, a guitar into an audio interface, a line input - on one track or,

@@ -66,6 +66,7 @@ src/ui/
   AutomatableSlider.h           A slider whose right-click menu offers "Create automation clip"
   AutomationEditor.*            The point editor window for one automation clip
   SlicerWindow.*                The Slicer (0.37.0): the loop with its markers, per-slice settings; MainComponentSlicer.cpp wires it
+  PitchEditor.*                 The pitch editor (0.38.0) over src/audio/PitchTrack.*; MainComponentPitch.cpp wires it to audio clips
   PluginParameterPicker.*       The list a plugin parameter to automate is chosen from (0.35.0): filter, current values, last-touched preselected
   MetersView.*                  The Meters window: loudness read-outs, true peak, spectrum, goniometer, correlation
   SamplerPanel.*                The sampler settings window (MainComponentSampler.cpp opens and wires it, loads SoundFonts, makes slice channels)
@@ -517,6 +518,15 @@ In `Player::noteOn`, a program with `sliceCut` puts every sampler voice of the c
 `src/audio/Slicer.h` holds the plain helpers (tempo guess, grid, markers, the score); `SlicerPanel` edits a `SlicerState` and calls
 back after every change, and `MainComponent` rebuilds the program and publishes the project. The window is closed by undo / redo,
 channel moves and project changes, as the sampler window is.
+
+### Pitch editor (0.38.0)
+
+`src/audio/PitchTrack.{h,cpp}` (namespace `pitchtrack`, plain C++, tested): `track` runs YIN on a mono copy decimated to 12-24 kHz,
+a frame every 5 ms, 50-1500 Hz, silence below -60 dBFS; `notesFrom` groups frames whose pitch stays within 0.7 semitones of the
+median of the last ten, bridging 30 ms gaps, at least 60 ms long; `correction` gives the shift to the nearest key (or key of a
+scale) by an amount; `render` pitch-shifts each moved note's span (plus 10 ms each side) with `stretchSample` and crossfades it in,
+leaving everything else bit for bit. `PitchEditor` holds the frames and notes, renders on demand for Play and Apply, and hands the
+notes to `MainComponent::pitchNotesToPattern` for pitch to MIDI.
 
 ### Metering (0.11.0)
 

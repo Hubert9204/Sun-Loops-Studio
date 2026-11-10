@@ -70,6 +70,7 @@ void MainComponent::applyEditState (const EditState& s)
     pianoRoll.setNotes ({}); // also ends a note played by hand
     closeAutomationEditor();
     sampleEditorWindow.reset();
+    pitchEditorWindow.reset();
 
     rackView.setStrips ({});
     strips.clear();

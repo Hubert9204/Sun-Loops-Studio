@@ -2,6 +2,16 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.38.0 - 2026-11-10
+
+### Added
+- **Pitch editor** (as FL Studio's Newtone): right-click an audio clip > *Edit pitch...*. A monophonic recording is shown as notes
+  over its pitch curve (YIN every 5 ms; notes where the pitch holds), each with its nearest key and cents. Drag notes by semitones
+  (Alt: freely), double-click to tune one, or *Correct* the selected notes (or all) by an amount, to the nearest key or the nearest
+  key of a scale. *Save as new file and use* writes a new WAV that the clip plays; each moved note is pitch-shifted on its own with
+  its length kept.
+- **Pitch to MIDI**: *Notes to pattern* turns the line into notes of the selected channel in the current pattern.
+
 ## 0.37.0 - 2026-11-10
 
 ### Added

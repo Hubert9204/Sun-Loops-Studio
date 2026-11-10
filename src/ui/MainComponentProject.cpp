@@ -110,6 +110,7 @@ void MainComponent::applyDocument (ProjectDocument doc, const juce::File& file, 
     closeDrumMachine();      // it points at a channel of the old project
     closeSamplerSettings();
     closeSlicer();
+    pitchEditorWindow.reset();
     closeSynthSettings();
 
     // Plugins (instruments and effects): a plugin that is not installed here becomes a silent placeholder that keeps its settings.

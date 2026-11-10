@@ -92,6 +92,7 @@ public:
     std::function<void (int)> onAutomationPicked;
     // "Edit sample..." in an audio clip's menu: the clip's index (the owner opens the sample editor).
     std::function<void (int)> onEditSample;
+    std::function<void (int)> onEditPitch; // an audio clip's "Edit pitch..." (0.38.0): its index
     // The sample editor saved an edited copy of clip `index`'s audio (`expected` is what the clip played when the editor
     // opened): the clip plays `edited` from its start, as long as it lasts or as far as fits, and is cut at `sliceSeconds`
     // (positions in `edited`). One undo step. Returns an error text, or an empty string.

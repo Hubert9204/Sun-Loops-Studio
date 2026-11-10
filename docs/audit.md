@@ -27,6 +27,10 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.38.0
+The pitch editor analyses and renders on the message thread (a second or two for a few minutes of audio; the window waits). It
+allocates freely and never touches the audio thread except through the auditioner, which plays a finished buffer.
+
 ## After 0.37.0
 The Slicer rebuilds the whole slice program (copies of every slice) on the message thread after each edit; the audio thread
 only ever sees finished snapshots. A bug found by the tests and fixed before release: `slicer::addStart` computed the new

@@ -1587,6 +1587,7 @@ void PlaylistTimeline::showClipMenu (const juce::MouseEvent& e)
         menu.addItem (9, "Reverse", true, clip.reverse);
         menu.addItem (7, "Stretch and pitch...");
         menu.addItem (8, "Edit sample...");
+        menu.addItem (10, "Edit pitch...", onEditPitch != nullptr);
     }
     else
         menu.addItem (5, "Open this pattern");
@@ -1607,6 +1608,7 @@ void PlaylistTimeline::showClipMenu (const juce::MouseEvent& e)
                                 case 7: safe->editAudioStretch (audio); break;
                                 case 9: safe->toggleAudioReverse (audio); break;
                                 case 8: if (safe->onEditSample) safe->onEditSample (audio); break;
+                                case 10: if (safe->onEditPitch) safe->onEditPitch (audio); break;
                                 case 5:
                                     if (safe->selection.kind == Kind::Pattern && safe->selection.index >= 0
                                         && safe->selection.index < static_cast<int> (safe->arrangement.clips.size()) && safe->onPatternPicked)

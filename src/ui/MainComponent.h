@@ -19,6 +19,7 @@
 #include "ui/DrumMachine.h"
 #include "ui/SamplerPanel.h"
 #include "ui/SlicerWindow.h"
+#include "ui/PitchEditor.h"
 #include "ui/SynthPanel.h"
 #include "ui/SampleEditor.h"
 #include "ui/MetersView.h"
@@ -331,11 +332,14 @@ private:
     std::unique_ptr<AutomationEditorWindow> automationWindow;
     std::unique_ptr<SampleEditorWindow> sampleEditorWindow;
     void openSampleEditorForClip (int audioClipIndex);
+    void openPitchEditorForClip (int audioClipIndex);                 // 0.38.0, MainComponentPitch.cpp
+    juce::String pitchNotesToPattern (const std::vector<pitchtrack::Note>& notes);
     void openSampleEditorForChannel (int channelIndex);
     std::unique_ptr<DrumMachineWindow> drumWindow;
     std::unique_ptr<SamplerWindow> samplerWindow;
     int samplerWindowChannel = -1;
     std::unique_ptr<SlicerWindow> slicerWindow;
+    std::unique_ptr<PitchEditorWindow> pitchEditorWindow;
     int slicerWindowChannel = -1;
     std::unique_ptr<SynthWindow> synthWindow;
     int synthWindowChannel = -1;
