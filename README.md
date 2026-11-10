@@ -16,7 +16,7 @@ Sun Loops Studio is inspired by the workflow of loop-based DAWs such as FL Studi
 that uses no code, names, graphics or assets from other products, and it is not affiliated with or endorsed by
 their makers.
 
-**Status: alpha (0.36.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
+**Status: alpha (0.37.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
 display. Playback was confirmed on a real Nobara machine for version 0.3; everything added since (panels, patterns,
 playlist, browser, pitch/swing, the expanded mixer and its effects, saving projects, the AppImage, audio clips, drag and
 drop, recording, MIDI, the metronome and the export formats) was tested headless and in a virtual display with a silent
@@ -93,6 +93,8 @@ See [docs/roadmap.md](docs/roadmap.md) for exactly what is and is not verified a
   or match a loop to the project tempo (Signalsmith Stretch).
 - **Sampler and SoundFonts** - envelope (ADSR), loop, low / high / band-pass filter and root key per sampler channel; **SoundFont 2 (.sf2)** presets
   played as multi-sample zones; the sample editor's slices become a sampler channel with one note per slice.
+- **Slicer** (0.37.0) - a loop cut into slices as in Slicex (by sound, by grid or in equal parts), one key per slice, each with its
+  own pitch, level, pan and direction, and the notes that play it following the project's tempo.
 - **Drum machine** - a channel with 16 pads (notes 36 to 51): up to four sound layers per pad chosen by velocity, level, pan, tuning, swing and
   choke groups per pad, a step sequencer with a row per pad, drag-and-drop from the browser, and kits saved as folders (`kit.json` + sounds).
 - **Sample editor** - right-click an audio clip or a sampler channel > *Edit sample...*: waveform with zoom and selection, preview with a live spectrum,

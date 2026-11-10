@@ -177,6 +177,8 @@ juce::String MainComponent::slicesToSampler (const std::shared_ptr<const SampleD
         starts.push_back (static_cast<int> (std::lround (s * out->sampleRate)));
     auto program = std::make_shared<SamplerProgram> (makeSliceProgram (out, starts, 60, (name + " slices").toStdString()).sanitised());
     program->source = out->source;
+    program->sliceCut = true;                    // as in the Slicer (0.37.0)
+    program->sliceBpm = bpmSlider.getValue();    // the notes below are timed at this tempo
     if (program->zones.empty())
         return "No slices could be made.";
 

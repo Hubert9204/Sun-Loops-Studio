@@ -590,6 +590,15 @@ void Player::noteOn (const Channel& channel, int channelIndex, const Note& n, in
     {
         if (hasProgram)
         {
+            // A Slicer program that cuts (0.37.0): the slice still sounding on this channel fades out in 5 ms, as in Slicex.
+            if (channel.program->sliceCut)
+                for (auto& other : voices)
+                    if (other.sampler && other.pad < 0 && other.channel == channelIndex
+                        && (other.state == State::Attack || other.state == State::Sustain))
+                    {
+                        other.state = State::Release;
+                        other.relStep = static_cast<float> (1.0 / (0.005 * sampleRate));
+                    }
             // Every zone that answers to the key and the velocity plays (at most four: a stereo pair, layers).
             const int velocity = std::clamp (static_cast<int> (std::lround (n.velocity * 127.0f)), 1, 127);
             int started = 0;

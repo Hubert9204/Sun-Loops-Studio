@@ -467,6 +467,9 @@ void ChannelStrip::showContextMenu()
     menu.addItem (4, "Load sample...", channel.instrument == Instrument::Sampler);
     menu.addItem (8, "Edit sample...", channel.instrument == Instrument::Sampler && channel.sample != nullptr && channel.sample->numFrames() > 1);
     menu.addItem (15, "Sampler settings...", channel.instrument == Instrument::Sampler);
+    menu.addItem (21, "Slicer...", channel.instrument == Instrument::Sampler
+                                       && (channel.program == nullptr ? channel.sample != nullptr && channel.sample->numFrames() > 1
+                                                                      : ! channel.program->sliceStarts.empty()));
     menu.addItem (19, "Synth settings...", channel.instrument == Instrument::Synth);
     menu.addItem (16, "Load SoundFont (.sf2)...", channel.instrument != Instrument::Drums);
     menu.addItem (5, "Rename...");
@@ -509,6 +512,7 @@ void ChannelStrip::showContextMenu()
                                 case 13: if (safe->onMove) safe->onMove (i, 1); break;
                                 case 14: if (safe->onDelete) safe->onDelete (i); break;
                                 case 15: if (safe->onSamplerSettings) safe->onSamplerSettings (i); break;
+                                case 21: if (safe->onOpenSlicer) safe->onOpenSlicer (i); break;
                                 case 16: if (safe->onLoadSoundFont) safe->onLoadSoundFont (i); break;
                                 case 18: if (safe->onOpenPlugin) safe->onOpenPlugin (i); break;
                                 case 19: if (safe->onSynthSettings) safe->onSynthSettings (i); break;

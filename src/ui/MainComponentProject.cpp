@@ -109,6 +109,7 @@ void MainComponent::applyDocument (ProjectDocument doc, const juce::File& file, 
     pianoRoll.setNotes ({}); // also ends a note that is being played by hand
     closeDrumMachine();      // it points at a channel of the old project
     closeSamplerSettings();
+    closeSlicer();
     closeSynthSettings();
 
     // Plugins (instruments and effects): a plugin that is not installed here becomes a silent placeholder that keeps its settings.

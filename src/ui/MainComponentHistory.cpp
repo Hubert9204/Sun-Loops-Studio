@@ -115,6 +115,7 @@ void MainComponent::applyEditState (const EditState& s)
 
     if (samplerWindow != nullptr && (samplerWindowChannel < 0 || samplerWindowChannel >= static_cast<int> (channels.size())))
         closeSamplerSettings(); // (otherwise publishProject() below refreshes it)
+    closeSlicer(); // an undo or redo may change the slices it shows: it is opened again from the channel menu
     if (synthWindow != nullptr && (synthWindowChannel < 0 || synthWindowChannel >= static_cast<int> (channels.size())))
         closeSynthSettings();
     if (drumWindow != nullptr)

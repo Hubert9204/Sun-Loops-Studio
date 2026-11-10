@@ -41,6 +41,9 @@ struct ProgramSpec
     int preset = -1;         // SoundFont: index of the preset
     std::vector<int> starts; // Slices: first frame of every slice
     int firstKey = 60;       // Slices: the key of the first slice
+    std::vector<SliceSettings> sliceSettings; // Slices (0.37.0): each slice's pitch, level, pan, direction
+    bool sliceCut = false;   // Slices: a slice cuts the one still sounding
+    double sliceBpm = 0.0;   // Slices: the loop's own tempo (0 = not known)
 
     bool empty() const noexcept { return kind == Kind::None || file.empty(); }
 };

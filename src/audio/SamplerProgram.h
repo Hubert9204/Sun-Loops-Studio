@@ -84,6 +84,26 @@ struct SampleZone
 
 // A multi-sample instrument: for every note the zones that answer to its key and velocity play together (a SoundFont often has a left
 // and a right zone for one stereo sample). `source` and `preset` say where it was loaded from, so a project can load it again.
+// One slice of a Slicer program (0.37.0): its own pitch, level, pan and direction.
+struct SliceSettings
+{
+    float tune = 0.0f;   // semitones, -24..+24
+    float gain = 1.0f;   // 0..2
+    float pan = 0.0f;    // -1..+1
+    bool reverse = false;
+
+    bool operator== (const SliceSettings&) const = default;
+
+    SliceSettings sanitised() const noexcept
+    {
+        SliceSettings s = *this;
+        s.tune = std::clamp (finiteOr (s.tune, 0.0f), -24.0f, 24.0f);
+        s.gain = std::clamp (finiteOr (s.gain, 1.0f), 0.0f, 2.0f);
+        s.pan = std::clamp (finiteOr (s.pan, 0.0f), -1.0f, 1.0f);
+        return s;
+    }
+};
+
 struct SamplerProgram
 {
     std::string name;
@@ -91,6 +111,9 @@ struct SamplerProgram
     int preset = -1;    // index of the preset in that file
     std::vector<int> sliceStarts; // a program made from slices of `source`: where they begin (frames) and the key of the first
     int sliceFirstKey = 60;
+    std::vector<SliceSettings> sliceSettings; // per slice, in the order of sliceStarts (shorter: the rest are default) (0.37.0)
+    bool sliceCut = false;  // a slice cuts the one still sounding on the channel (the Slicer's default, as in Slicex)
+    double sliceBpm = 0.0;  // the loop's own tempo, for writing its notes; 0 = not known
     std::vector<SampleZone> zones; // empty: a placeholder for a program whose file is missing (it keeps the reference; the channel is silent)
 
     bool owns (const SampleData* s) const noexcept
@@ -131,7 +154,10 @@ struct SamplerProgram
 // A program from slices of one sample (the sample editor's markers): slice n plays on key `firstKey` + n at its own pitch, one key each.
 // `starts` are the frames where slices begin (sorted, the first should be 0); each slice ends where the next begins. Slices shorter than
 // two frames are left out; at most 128 - firstKey slices.
-inline SamplerProgram makeSliceProgram (const std::shared_ptr<const SampleData>& whole, std::vector<int> starts, int firstKey = 60, std::string name = "Slices")
+// `settings` (0.37.0) are for the slices in order (after `starts` is sorted, with 0 added and repeats removed). Slice i plays on
+// key firstKey + i; slices past key 127 are left out.
+inline SamplerProgram makeSliceProgram (const std::shared_ptr<const SampleData>& whole, std::vector<int> starts, int firstKey = 60, std::string name = "Slices",
+                                        const std::vector<SliceSettings>& settings = {})
 {
     SamplerProgram p;
     p.name = std::move (name);
@@ -146,7 +172,13 @@ inline SamplerProgram makeSliceProgram (const std::shared_ptr<const SampleData>&
     starts.erase (std::unique (starts.begin(), starts.end()), starts.end());
     p.sliceStarts = starts;
     p.sliceFirstKey = firstKey;
-    for (size_t i = 0; i < starts.size() && firstKey + static_cast<int> (p.zones.size()) <= 127; ++i)
+    for (const auto& s : settings)
+        p.sliceSettings.push_back (s.sanitised());
+    if (p.sliceSettings.size() > starts.size())
+        p.sliceSettings.resize (starts.size());
+    while (! p.sliceSettings.empty() && p.sliceSettings.back() == SliceSettings {})
+        p.sliceSettings.pop_back(); // only what differs is kept (and saved)
+    for (size_t i = 0; i < starts.size() && firstKey + static_cast<int> (i) <= 127; ++i)
     {
         const int a = starts[i];
         const int b = i + 1 < starts.size() ? starts[i + 1] : frames;
@@ -156,11 +188,20 @@ inline SamplerProgram makeSliceProgram (const std::shared_ptr<const SampleData>&
         part->left.assign (whole->left.begin() + a, whole->left.begin() + b);
         part->right.assign (whole->right.begin() + a, whole->right.begin() + b);
         part->sampleRate = whole->sampleRate;
-        part->name = whole->name + " " + std::to_string (p.zones.size() + 1);
+        const SliceSettings s = i < p.sliceSettings.size() ? p.sliceSettings[i] : SliceSettings {};
+        if (s.reverse)
+        {
+            std::reverse (part->left.begin(), part->left.end());
+            std::reverse (part->right.begin(), part->right.end());
+        }
+        part->name = whole->name + " " + std::to_string (i + 1);
         part->source = whole->source;
         SampleZone z;
         z.sample = std::move (part);
-        z.rootKey = z.loKey = z.hiKey = firstKey + static_cast<int> (p.zones.size());
+        z.rootKey = z.loKey = z.hiKey = firstKey + static_cast<int> (i);
+        z.tune = s.tune;
+        z.gain = s.gain;
+        z.pan = s.pan;
         p.zones.push_back (std::move (z));
     }
     return p;

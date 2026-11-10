@@ -18,6 +18,7 @@
 #include "ui/AutomationEditor.h"
 #include "ui/DrumMachine.h"
 #include "ui/SamplerPanel.h"
+#include "ui/SlicerWindow.h"
 #include "ui/SynthPanel.h"
 #include "ui/SampleEditor.h"
 #include "ui/MetersView.h"
@@ -253,6 +254,13 @@ private:
     // MainComponentSampler.cpp
     void openSamplerSettings (int channelIndex);
     void closeSamplerSettings();
+    // The Slicer (0.37.0, MainComponentSlicer.cpp)
+    bool canSlice (int channelIndex) const;
+    void openSlicer (int channelIndex);
+    void closeSlicer();
+    void writeSlicerScore (int channelIndex);
+    void chooseLoopForSlicer();
+    bool sliceLoopFile (const juce::File& file);
     void openSynthSettings (int channelIndex);  // MainComponentSynth.cpp (0.18.0)
     void closeSynthSettings();
     void chooseSoundFontFor (int channelIndex);
@@ -327,6 +335,8 @@ private:
     std::unique_ptr<DrumMachineWindow> drumWindow;
     std::unique_ptr<SamplerWindow> samplerWindow;
     int samplerWindowChannel = -1;
+    std::unique_ptr<SlicerWindow> slicerWindow;
+    int slicerWindowChannel = -1;
     std::unique_ptr<SynthWindow> synthWindow;
     int synthWindowChannel = -1;
     int drumWindowChannel = -1;

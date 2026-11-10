@@ -2,6 +2,20 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.37.0 - 2026-11-10
+
+### Added
+- **Slicer** (as FL Studio's Slicex): *+ Add channel* > *Slicer (slice a loop)...*, or right-click a sampler channel > *Slicer...*.
+  The loop is cut where its sounds start (or by a grid at the loop's tempo, or in equal parts), slice n plays on key C5 + n, and
+  *Write the loop into the pattern* puts one note per slice where it was, so the loop follows the project's tempo. In the window:
+  click a slice to hear it, drag / double-click / right-click markers, and give each slice its own **pitch, level, pan and
+  direction**. *A slice cuts the one before* (on by default) stops a slice when the next starts, with a 5 ms fade.
+- The loop's own tempo is guessed (whole bars nearest the project's tempo) and can be typed.
+
+### Changed
+- *Slices to sampler channel* in the sample editor makes the same kind of channel (cutting on, its tempo noted), which the
+  Slicer then opens. A slice that is too short to play no longer moves the following slices to other keys.
+
 ## 0.36.0 - 2026-11-10
 
 ### Added

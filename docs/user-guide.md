@@ -295,6 +295,35 @@ chorus / reverb sends and exclusive classes. Files up to 512 MB.
 (one key each, at their own pitch), and the current pattern gets **one note per slice at the time it had in the audio**, so the pattern plays the
 loop as it was and you can move, repeat or delete the notes to make a new groove.
 
+### Slicer (0.37.0)
+
+The **Slicer** cuts a loop into slices, as FL Studio's Slicex: slice 1 plays on **C5**, slice 2 on C#5 and so on, and the pattern plays
+them with one note per slice. Because the notes are in beats, the loop **follows the project's tempo**: slow the song down and the slices
+are struck further apart, each at its own speed and pitch.
+
+- **A new loop**: *+ Add channel* > *Slicer (slice a loop)...*, choose an audio file. It is cut where its sounds start, the current
+  pattern gets one note per slice, and the Slicer window opens.
+- **A channel's sample**: right-click a sampler channel > *Slicer...* (also for slices made with *Slices to sampler channel*).
+
+In the window:
+
+| Action | How |
+| --- | --- |
+| Hear a slice | Click it (it plays on its key through the channel, while the button is held) |
+| Move a marker | Drag it (the first slice always starts at the beginning) |
+| Add a marker | Double-click |
+| Delete a marker | Right-click it |
+| Slice again | *Slice by sound* (with **Sensitivity**: higher finds more), *Slice by grid* (1/4 to 1/32 at the **Loop tempo**), *Equal parts...* |
+| One slice at a time | *A slice cuts the one before* (on by default, as in Slicex): a new slice stops the one still sounding (5 ms fade); off, they overlap |
+| Change a slice | Select it, then **Pitch** (-24 to +24 semitones), **Level**, **Pan**, **Reverse**; *Reset slice* puts them back |
+| Notes for the loop | *Write the loop into the pattern*: the current pattern's notes of this channel are replaced by one note per slice |
+
+The **Loop tempo** is the tempo the loop was played at: it is guessed when the window opens (the tempo nearest to the project's at
+which the loop is 1, 2, 4, 8 or 16 bars) and can be typed. It sets where *Write the loop into the pattern* puts the notes and the
+grid of *Slice by grid*. Every change is heard at once and is undone with Ctrl+Z (which closes the window). Everything is saved
+with the project (the loop is the audio file's own: keep it, or use *Export project with samples*). At most 128 slices; slices
+past key G10 are not played.
+
 ## Drum machine
 
 A **drum channel** is one channel with 16 pads. Add one with **+ Add channel** > *Drum machine (16 pads)*, by dragging *Instruments > Drum machine* from the browser onto the rack,

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(SunLoopsStudio VERSION 0.36.0 LANGUAGES C CXX ASM)
+project(SunLoopsStudio VERSION 0.37.0 LANGUAGES C CXX ASM)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -142,6 +142,8 @@ target_sources(SunLoopsStudio PRIVATE
     src/ui/SamplerPanel.cpp
     src/ui/AutomationEditor.cpp
     src/ui/PluginParameterPicker.cpp
+    src/ui/SlicerWindow.cpp
+    src/ui/MainComponentSlicer.cpp
     src/ui/MetersView.cpp
     src/ui/SampleEditor.cpp
     ${SLS_CORE_SOURCES})

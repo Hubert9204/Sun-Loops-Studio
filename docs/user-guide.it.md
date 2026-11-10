@@ -310,6 +310,35 @@ premi **Slices to sampler channel**: l'audio modificato viene salvato come nuovo
 C#5 e così via (un tasto ciascuna, alla loro altezza), e il pattern corrente riceve **una nota per slice nel momento in cui era nell'audio**, quindi il
 pattern suona il loop com'era e puoi spostare, ripetere o eliminare le note per fare un groove nuovo.
 
+### Slicer (0.37.0)
+
+Lo **Slicer** taglia un loop in fette (slice), come Slicex di FL Studio: la slice 1 suona su **C5**, la 2 su C#5 e così via, e il pattern le
+suona con una nota per slice. Poiché le note sono in battiti, il loop **segue il tempo del progetto**: rallenta il brano e le slice vengono
+suonate più distanti, ognuna alla propria velocità e intonazione.
+
+- **Un loop nuovo**: *+ Add channel* > *Slicer (slice a loop)...*, scegli un file audio. Viene tagliato dove iniziano i suoi suoni, il
+  pattern corrente riceve una nota per slice e si apre la finestra dello Slicer.
+- **Il sample di un canale**: tasto destro su un canale sampler > *Slicer...* (anche per le slice fatte con *Slices to sampler channel*).
+
+Nella finestra:
+
+| Azione | Come |
+| --- | --- |
+| Ascoltare una slice | Cliccala (suona sul suo tasto attraverso il canale, finché tieni premuto) |
+| Spostare un marcatore | Trascinalo (la prima slice inizia sempre dall'inizio) |
+| Aggiungere un marcatore | Doppio clic |
+| Eliminare un marcatore | Tasto destro su di esso |
+| Ritagliare | *Slice by sound* (con **Sensitivity**: più alta trova più colpi), *Slice by grid* (da 1/4 a 1/32 al **Loop tempo**), *Equal parts...* |
+| Una slice alla volta | *A slice cuts the one before* (attivo di default, come in Slicex): una nuova slice ferma quella che suona ancora (sfumatura di 5 ms); se spento, si sovrappongono |
+| Cambiare una slice | Selezionala, poi **Pitch** (da -24 a +24 semitoni), **Level**, **Pan**, **Reverse**; *Reset slice* li riporta come prima |
+| Le note del loop | *Write the loop into the pattern*: le note di questo canale nel pattern corrente vengono sostituite da una nota per slice |
+
+Il **Loop tempo** è il tempo a cui il loop è stato suonato: viene stimato all'apertura della finestra (il tempo più vicino a quello del
+progetto per cui il loop dura 1, 2, 4, 8 o 16 battute) e si può scrivere. Decide dove *Write the loop into the pattern* mette le note e
+la griglia di *Slice by grid*. Ogni modifica si sente subito e si annulla con Ctrl+Z (che chiude la finestra). Tutto si salva con il
+progetto (il loop resta il suo file audio: conservalo, o usa *Export project with samples*). Al massimo 128 slice; quelle oltre il
+tasto G10 non suonano.
+
 ## Drum machine
 
 Un **canale drum** è un canale con 16 pad. Si aggiunge con **+ Add channel** > *Drum machine (16 pads)*, trascinando *Instruments > Drum machine* dal browser sul rack, oppure con il tasto destro

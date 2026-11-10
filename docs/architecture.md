@@ -65,6 +65,7 @@ src/ui/
                                 export with samples
   AutomatableSlider.h           A slider whose right-click menu offers "Create automation clip"
   AutomationEditor.*            The point editor window for one automation clip
+  SlicerWindow.*                The Slicer (0.37.0): the loop with its markers, per-slice settings; MainComponentSlicer.cpp wires it
   PluginParameterPicker.*       The list a plugin parameter to automate is chosen from (0.35.0): filter, current values, last-touched preselected
   MetersView.*                  The Meters window: loudness read-outs, true peak, spectrum, goniometer, correlation
   SamplerPanel.*                The sampler settings window (MainComponentSampler.cpp opens and wires it, loads SoundFonts, makes slice channels)
@@ -505,6 +506,17 @@ set in an atomic per parameter and does nothing when it is unchanged, so a held 
 parameter listener records the last parameter moved by the user (ignoring the changes it makes itself). `makeAutomationEvents` takes a
 second callback giving the plugin's parameter count, so clips for a missing plugin or parameter are dropped when the snapshot is made.
 The UI picks the parameter with `PluginParameterPicker` (`MainComponent::createAutomationFor` opens it when `param` is -1).
+
+### Slicer (0.37.0)
+
+A Slicer channel is a sampler channel with a slice program: `SamplerProgram::sliceStarts` (frames, the first 0), and new in 0.37.0
+`sliceSettings` (per slice: tune, gain, pan, reverse; only what differs from the default is kept), `sliceCut` and `sliceBpm`.
+`makeSliceProgram` builds one zone per slice on key `firstKey + i` (a reversed slice gets its frames reversed, tune / gain / pan go
+to the zone). The `ProgramSpec` saves the settings as `"slices"`, `"cut"` and `"bpm"` (absent in older files: the old behaviour).
+In `Player::noteOn`, a program with `sliceCut` puts every sampler voice of the channel into release with a 5 ms step first.
+`src/audio/Slicer.h` holds the plain helpers (tempo guess, grid, markers, the score); `SlicerPanel` edits a `SlicerState` and calls
+back after every change, and `MainComponent` rebuilds the program and publishes the project. The window is closed by undo / redo,
+channel moves and project changes, as the sampler window is.
 
 ### Metering (0.11.0)
 

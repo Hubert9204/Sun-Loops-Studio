@@ -30,6 +30,7 @@
 #include "audio/Effects.h"
 #include "audio/InputRecorder.h"
 #include "audio/RecordSetup.h"
+#include "audio/Slicer.h"
 #include "audio/Loudness.h"
 #include "audio/Spectrum.h"
 #include "audio/MidiImport.h"
@@ -4787,6 +4788,136 @@ void testAudioImport()
     check (r3.data == nullptr && r3.error.contains ("no audio"), "a video without sound is reported");
     check (library.getNumberOfChildFiles (juce::File::findFiles) == 2, "and leaves no partial files behind");
     dir.deleteRecursively(); // test folders in /tmp are not left behind
+}
+
+void testSlicer()
+{
+    std::cout << "Slicer: slices, their settings, the score and cutting\n";
+    // A two-second "loop" at 48 kHz: four parts, each a constant level (0.1, 0.2, 0.3, 0.4 rising inside), to tell them apart.
+    auto loop = std::make_shared<sls::SampleData>();
+    loop->sampleRate = 48000.0;
+    loop->source = "/tmp/loop.wav";
+    loop->name = "loop";
+    for (int i = 0; i < 96000; ++i)
+    {
+        const float v = 0.1f * static_cast<float> (i / 24000 + 1) + 0.00001f * static_cast<float> (i % 24000);
+        loop->left.push_back (v);
+        loop->right.push_back (-v);
+    }
+
+    std::vector<sls::SliceSettings> settings (4);
+    settings[1].reverse = true;
+    settings[2].tune = 7.0f;
+    settings[2].gain = 0.5f;
+    settings[3].pan = -1.0f;
+    settings[3].gain = 9.0f; // out of range: kept to 2
+    const auto p = sls::makeSliceProgram (loop, { 0, 24000, 48000, 72000 }, 60, "loop", settings).sanitised();
+    check (p.zones.size() == 4 && p.zones[0].loKey == 60 && p.zones[3].loKey == 63, "four slices on C5 and up");
+    check (p.zones[1].sample->left.front() > p.zones[1].sample->left.back()
+               && std::abs (p.zones[1].sample->left.front() - (0.2f + 0.00001f * 23999.0f)) < 1e-6f,
+           "a reversed slice plays its part backwards");
+    check (p.zones[0].sample->left.front() < p.zones[0].sample->left.back(), "the others play forwards");
+    check (p.zones[2].tune == 7.0f && p.zones[2].gain == 0.5f && p.zones[3].pan == -1.0f && p.zones[3].gain == 2.0f,
+           "a slice's pitch, level and pan reach its zone, within range");
+    check (p.sliceSettings.size() == 4 && p.sliceSettings[0] == sls::SliceSettings {}, "the settings are kept with the program");
+    const auto plain = sls::makeSliceProgram (loop, { 0, 48000 }, 60, "loop", std::vector<sls::SliceSettings> (5));
+    check (plain.sliceSettings.empty(), "default settings are not kept (nothing to save)");
+    const auto high = sls::makeSliceProgram (loop, { 0, 10, 20, 30, 40 }, 125, "loop");
+    check (high.zones.size() == 3 && high.zones.back().loKey == 127, "slices past the last key are left out");
+
+    // The file: settings, cut and tempo saved and read back.
+    auto withCut = p;
+    withCut.sliceCut = true;
+    withCut.sliceBpm = 93.5;
+    const auto spec = sls::specFromProgram (withCut);
+    const auto back = sls::programSpecFromVar (sls::programSpecToVar (spec));
+    check (back.kind == sls::ProgramSpec::Kind::Slices && back.sliceSettings == p.sliceSettings && back.sliceCut && back.sliceBpm == 93.5
+               && back.starts == p.sliceStarts,
+           "a Slicer program's slices, settings, cutting and tempo are saved and read back");
+    auto* o = sls::programSpecToVar (sls::specFromProgram (plain)).getDynamicObject();
+    check (o != nullptr && ! o->hasProperty ("slices") && ! o->hasProperty ("cut") && ! o->hasProperty ("bpm"),
+           "a plain slice program is written as before 0.37.0");
+    juce::var hostile = sls::programSpecToVar (spec);
+    if (auto* h = hostile.getDynamicObject())
+    {
+        juce::Array<juce::var> bad;
+        auto* item = new juce::DynamicObject();
+        item->setProperty ("tune", 1000.0);
+        item->setProperty ("gain", "loud");
+        item->setProperty ("reverse", 3);
+        bad.add (juce::var (item));
+        bad.add (juce::var ("nothing"));
+        h->setProperty ("slices", bad);
+        h->setProperty ("bpm", -5.0);
+        h->setProperty ("cut", "yes");
+    }
+    const auto lenient = sls::programSpecFromVar (hostile);
+    check (lenient.sliceSettings.size() == 2 && lenient.sliceSettings[0].tune == 24.0f && lenient.sliceSettings[0].gain == 1.0f
+               && ! lenient.sliceSettings[0].reverse && lenient.sliceSettings[1] == sls::SliceSettings {} && lenient.sliceBpm == 0.0
+               && ! lenient.sliceCut,
+           "bad values in a file are brought in range or ignored");
+    juce::String error;
+    const auto loaded = sls::loadProgram (back, [&loop] (const juce::File&, juce::String&) { return std::shared_ptr<const sls::SampleData> (loop); }, error);
+    check (loaded != nullptr && loaded->sliceCut && loaded->sliceBpm == 93.5 && loaded->zones.size() == 4 && loaded->zones[2].tune == 7.0f
+               && loaded->zones[1].sample->left.front() > loaded->zones[1].sample->left.back(),
+           "and a project opened again plays them the same way");
+
+    // Helpers.
+    check (std::abs (sls::slicer::guessLoopBpm (96000, 48000.0, 120.0) - 120.0) < 1e-9, "a two-second loop is one bar at 120 BPM");
+    check (std::abs (sls::slicer::guessLoopBpm (96000, 48000.0, 200.0) - 120.0) < 1e-9, "the nearest whole number of bars wins (two bars would be 240)");
+    check (std::abs (sls::slicer::guessLoopBpm (3 * 48000, 48000.0, 90.0) - 80.0) < 1e-9, "three seconds: two bars at 80 BPM");
+    check (sls::slicer::guessLoopBpm (1000, 48000.0, 120.0) == 0.0 && sls::slicer::guessLoopBpm (1, 48000.0, 120.0) == 0.0,
+           "a sound too short for any bar has no tempo");
+    const auto grid = sls::slicer::gridStarts (96000, 48000.0, 120.0, sls::kTicksPerBeat / 4);
+    check (grid.size() == 16 && grid[1] == 6000 && grid[15] == 90000, "a one-bar loop by 16ths: 16 slices, 6000 frames apart");
+    check (sls::slicer::gridStarts (96000, 48000.0, 0.0, 120).size() == 1, "no tempo, no grid");
+
+    std::vector<int> starts { 0, 1000, 2000 };
+    check (sls::slicer::addStart (starts, 1500, 3000) == 2 && starts == std::vector<int> ({ 0, 1000, 1500, 2000 }), "a start is added in order");
+    check (sls::slicer::addStart (starts, 1501, 3000) == -1 && sls::slicer::addStart (starts, 2999, 3000) == -1 && sls::slicer::addStart (starts, 0, 3000) == -1,
+           "not too close to another, nor at the ends");
+    sls::slicer::moveStart (starts, 2, 5000, 3000);
+    check (starts[2] == 1998, "a moved start stays before the next one");
+    sls::slicer::moveStart (starts, 2, 0, 3000);
+    check (starts[2] == 1002, "and after the one before");
+    sls::slicer::moveStart (starts, 0, 700, 3000);
+    check (starts[0] == 0, "the first start stays at 0");
+    check (sls::slicer::sliceAt (starts, 0) == 0 && sls::slicer::sliceAt (starts, 1001) == 1 && sls::slicer::sliceAt (starts, 2999) == 3,
+           "a frame is found in its slice");
+
+    // The score: one note per slice, timed at the loop's tempo.
+    const auto notes = sls::slicer::score (p, 48000.0, 120.0, 4 * sls::kTicksPerBeat * 4);
+    check (notes.size() == 4 && notes[0].pitch == 60 && notes[0].startTick == 0 && notes[1].startTick == sls::kTicksPerBeat && notes[3].pitch == 63
+               && notes[3].startTick == 3 * sls::kTicksPerBeat && notes[2].lengthTicks == sls::kTicksPerBeat,
+           "the score plays the loop as it was: a slice per beat at 120 BPM");
+    const auto cutShort = sls::slicer::score (p, 48000.0, 120.0, 2 * sls::kTicksPerBeat + 100);
+    check (cutShort.size() == 3 && cutShort[2].lengthTicks == 100, "notes past the pattern are left out, the last one shortened");
+    const auto slower = sls::slicer::score (p, 48000.0, 60.0, 64 * sls::kTicksPerBeat);
+    check (slower[1].startTick == sls::kTicksPerBeat / 2, "at half the tempo, a slice lasts half a beat");
+
+    // Playing: with cutting on, a slice ends the one before (5 ms fade); off, both sound.
+    const auto render = [&loop] (bool cut, bool both)
+    {
+        sls::Channel ch;
+        ch.instrument = sls::Instrument::Sampler;
+        auto prog = std::make_shared<sls::SamplerProgram> (sls::makeSliceProgram (loop, { 0, 48000 }, 60, "loop").sanitised());
+        prog->sliceCut = cut;
+        ch.program = prog;
+        ch.sample = loop;
+        ch.notes = { { 61, kBeat / 2, 4 * kBeat, 1.0f } };
+        if (both)
+            ch.notes.insert (ch.notes.begin(), { 60, 0, 4 * kBeat, 1.0f });
+        const auto project = sls::Project::make ({ ch }, 8 * kBeat);
+        sls::Player player;
+        player.prepare (kSr);
+        return renderBlocks (player, project, true, 0.5);
+    };
+    // At 120 BPM the second slice starts at 0.25 s; 50 ms later only it is heard when cutting.
+    const auto alone = render (true, false), cutting = render (true, true), layered = render (false, true);
+    const size_t at = static_cast<size_t> (0.30 * kSr);
+    check (alone[at] > 0.01f && std::abs (cutting[at] - alone[at]) < 1e-4f, "with cutting on, a slice stops the one before it");
+    check (layered[at] > 1.5f * alone[at], "with cutting off, both slices sound together");
+    check (std::abs (cutting[static_cast<size_t> (0.2 * kSr)] - layered[static_cast<size_t> (0.2 * kSr)]) < 1e-6f, "before the second slice, both are the same");
 }
 
 void testRecordSetup()
@@ -10047,6 +10178,7 @@ int main()
     testInputRecorder();
     testRecordSetup();
     testMultitrackRecorders();
+    testSlicer();
     testMidiNotes();
     testPlayerRewind();
     testClipEditing();

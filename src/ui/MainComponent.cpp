@@ -227,11 +227,17 @@ MainComponent::MainComponent()
         menu.addItem (1, "Synth channel");
         menu.addItem (2, "Sampler channel (load a sample)");
         menu.addItem (3, "Drum machine (16 pads)");
+        menu.addItem (4, "Slicer (slice a loop)...");
         menu.showMenuAsync (juce::PopupMenu::Options(),
                             [safe = juce::Component::SafePointer<MainComponent> (this)] (int result)
                             {
                                 if (safe == nullptr || result == 0)
                                     return;
+                                if (result == 4)
+                                {
+                                    safe->chooseLoopForSlicer();
+                                    return;
+                                }
                                 const int index = safe->addChannel (result == 1 ? Instrument::Synth : result == 2 ? Instrument::Sampler : Instrument::Drums);
                                 if (index >= 0 && result == 3)
                                     safe->openDrumMachine (index);
@@ -1023,6 +1029,7 @@ void MainComponent::createStrip (size_t channelIndex)
     };
     strip->onRename = [this] (int idx) { renameChannel (idx); };
     strip->onSamplerSettings = [this] (int idx) { openSamplerSettings (idx); };
+    strip->onOpenSlicer = [this] (int idx) { openSlicer (idx); };
     strip->onSynthSettings = [this] (int idx) { openSynthSettings (idx); };
     strip->onLoadSoundFont = [this] (int idx) { chooseSoundFontFor (idx); };
     strip->onDelete = [this] (int idx) { deleteChannel (idx); };

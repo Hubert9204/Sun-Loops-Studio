@@ -27,6 +27,11 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.37.0
+The Slicer rebuilds the whole slice program (copies of every slice) on the message thread after each edit; the audio thread
+only ever sees finished snapshots. A bug found by the tests and fixed before release: `slicer::addStart` computed the new
+index from an iterator taken before `vector::insert` could reallocate (unspecified evaluation order).
+
 ## After 0.36.0
 The audio callback now calls eight recorders' `process()` while recording (each a few atomic operations when it is not part of
 the take). Up to eight `ThreadedWriter`s share nothing: each recorder has its own writer thread, started on its first take. The

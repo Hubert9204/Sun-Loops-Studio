@@ -170,6 +170,9 @@ std::shared_ptr<const SamplerProgram> missingProgram (const ProgramSpec& spec)
     {
         p->sliceStarts = spec.starts.empty() ? std::vector<int> { 0 } : spec.starts;
         p->sliceFirstKey = spec.firstKey;
+        p->sliceSettings = spec.sliceSettings;
+        p->sliceCut = spec.sliceCut;
+        p->sliceBpm = spec.sliceBpm;
     }
     return p;
 }
@@ -192,6 +195,9 @@ ProgramSpec specFromProgram (const SamplerProgram& program)
     spec.kind = program.sliceStarts.empty() || program.source.empty() ? ProgramSpec::Kind::None : ProgramSpec::Kind::Slices;
     spec.firstKey = program.sliceFirstKey;
     spec.starts = program.sliceStarts;
+    spec.sliceSettings = program.sliceSettings;
+    spec.sliceCut = program.sliceCut;
+    spec.sliceBpm = program.sliceBpm;
     return spec;
 }
 
@@ -210,6 +216,28 @@ juce::var programSpecToVar (const ProgramSpec& spec)
             starts.add (f);
         o->setProperty ("starts", starts);
         o->setProperty ("firstKey", spec.firstKey);
+        if (! spec.sliceSettings.empty())
+        {
+            juce::Array<juce::var> list;
+            for (const auto& s : spec.sliceSettings)
+            {
+                auto* so = new juce::DynamicObject();
+                if (std::abs (s.tune) > 0.0f)
+                    so->setProperty ("tune", s.tune);
+                if (std::abs (s.gain - 1.0f) > 0.0f)
+                    so->setProperty ("gain", s.gain);
+                if (std::abs (s.pan) > 0.0f)
+                    so->setProperty ("pan", s.pan);
+                if (s.reverse)
+                    so->setProperty ("reverse", true);
+                list.add (juce::var (so));
+            }
+            o->setProperty ("slices", list);
+        }
+        if (spec.sliceCut)
+            o->setProperty ("cut", true);
+        if (spec.sliceBpm > 0.0)
+            o->setProperty ("bpm", spec.sliceBpm);
     }
     return juce::var (o);
 }
@@ -236,6 +264,22 @@ ProgramSpec programSpecFromVar (const juce::var& v)
         if (auto* starts = o->getProperty ("starts").getArray())
             for (int i = 0; i < std::min (starts->size(), 128); ++i)
                 spec.starts.push_back (readInt ((*starts)[i], 0, 0, 1 << 30));
+        if (auto* slices = o->getProperty ("slices").getArray())
+            for (int i = 0; i < std::min (slices->size(), 128); ++i)
+            {
+                const auto& item = (*slices)[i];
+                SliceSettings s;
+                if (auto* so = item.getDynamicObject())
+                {
+                    s.tune = static_cast<float> (readNumber (so->getProperty ("tune"), 0.0, -24.0, 24.0));
+                    s.gain = static_cast<float> (readNumber (so->getProperty ("gain"), 1.0, 0.0, 2.0));
+                    s.pan = static_cast<float> (readNumber (so->getProperty ("pan"), 0.0, -1.0, 1.0));
+                    s.reverse = readBool (so->getProperty ("reverse"), false);
+                }
+                spec.sliceSettings.push_back (s);
+            }
+        spec.sliceCut = readBool (o->getProperty ("cut"), false);
+        spec.sliceBpm = readNumber (o->getProperty ("bpm"), 0.0, 0.0, 999.0);
     }
     else if (kind == "builtin")
         spec.kind = isLibraryProgramSource (spec.file) ? ProgramSpec::Kind::Builtin : ProgramSpec::Kind::None;
@@ -270,10 +314,13 @@ std::shared_ptr<const SamplerProgram> loadProgram (const ProgramSpec& spec, cons
             error = "Cannot read " + file.getFullPathName();
         return nullptr;
     }
-    auto program = std::make_shared<SamplerProgram> (makeSliceProgram (audio, spec.starts, spec.firstKey, file.getFileNameWithoutExtension().toStdString()).sanitised());
+    auto program = std::make_shared<SamplerProgram> (
+        makeSliceProgram (audio, spec.starts, spec.firstKey, file.getFileNameWithoutExtension().toStdString(), spec.sliceSettings).sanitised());
     program->source = spec.file;
     program->sliceStarts = spec.starts.empty() ? std::vector<int> { 0 } : spec.starts;
     program->sliceFirstKey = spec.firstKey;
+    program->sliceCut = spec.sliceCut;
+    program->sliceBpm = spec.sliceBpm;
     if (program->zones.empty())
     {
         error = "No slices could be made from " + file.getFileName();
