@@ -18,6 +18,7 @@
 
 #include <arpa/inet.h>
 #include <dlfcn.h>
+#include <link.h>
 #include <netinet/in.h>
 #include <poll.h>
 #include <sys/resource.h>
@@ -457,6 +458,12 @@ void testCrashReports()
                && report->frames[2].symbol == "sls::Player::render(juce::AudioBuffer<float>&, int)" && report->frames[2].offset == "+0x1a"
                && report->frames[3].offset == "+0x12345" && report->frames[4].address == "0x7f0b1c000000",
            "frames: demangled names, offsets, frames without a name or a module; the crash is the frame after the handler and libc");
+    {
+        const auto nonPie = sls::crash::parse ("SLS-CRASH 1\nsignal=6\nframes:\n./prog() [0x6b8e7c]\n/lib64/libc.so.6(gsignal+0x1e) [0x7f39e]\nend\n");
+        supportCheck (nonPie && nonPie->frames.size() == 2 && nonPie->frames[0].module == "./prog" && nonPie->frames[0].symbol.empty()
+                          && nonPie->frames[0].offset.empty() && nonPie->frames[0].address == "0x6b8e7c" && nonPie->frames[1].symbol == "gsignal",
+                      "a non-PIE program's frame (\"prog() [0x6b8e7c]\", as on Fedora) is read with its absolute address");
+    }
     supportCheck (sls::crash::withoutParameters ("sls::(anonymous namespace)::f(int) const") == "sls::(anonymous namespace)::f"
                && sls::crash::withoutParameters ("std::function<void (int)>::operator()(int) const") == "std::function<void (int)>::operator()"
                && sls::crash::withoutParameters ("plain") == "plain",
@@ -490,9 +497,11 @@ void testCrashReports()
            "without a token: a GitHub \"new issue\" link, the body cut to fit");
     {
         // The AppImage: the main program appears as "AppRun" in the trace; the recorded program name ties it to the executable.
+        // The offset glibc would print: from the load address (l_addr; 0 for a non-PIE executable).
         Dl_info where {};
-        ::dladdr (reinterpret_cast<void*> (&sls::crashtest::writeThroughNull), &where);
-        const auto offset = reinterpret_cast<std::uintptr_t> (&sls::crashtest::writeThroughNull) - reinterpret_cast<std::uintptr_t> (where.dli_fbase) + 2;
+        link_map* map = nullptr;
+        ::dladdr1 (reinterpret_cast<void*> (&sls::crashtest::writeThroughNull), &where, reinterpret_cast<void**> (&map), RTLD_DL_LINKMAP);
+        const auto offset = reinterpret_cast<std::uintptr_t> (&sls::crashtest::writeThroughNull) - (map != nullptr ? map->l_addr : 0) + 2;
         char text[32];
         std::snprintf (text, sizeof (text), "+0x%llx", static_cast<unsigned long long> (offset));
         auto appImage = *report; // the sample, read above

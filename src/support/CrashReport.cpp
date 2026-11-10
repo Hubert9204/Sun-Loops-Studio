@@ -155,9 +155,11 @@ struct ElfFunction
 };
 
 // The function symbols of a 64-bit little-endian ELF file (x86_64, aarch64): .symtab when the file has one, else .dynsym.
-std::vector<ElfFunction> readElfFunctions (const std::filesystem::path& file)
+// `fixedAddress` is set for a non-PIE executable (ET_EXEC), whose trace shows absolute addresses and no offsets.
+std::vector<ElfFunction> readElfFunctions (const std::filesystem::path& file, bool& fixedAddress)
 {
     std::vector<ElfFunction> functions;
+    fixedAddress = false;
     std::ifstream in (file, std::ios::binary);
     if (! in)
         return functions;
@@ -166,6 +168,7 @@ std::vector<ElfFunction> readElfFunctions (const std::filesystem::path& file)
         || header.e_ident[EI_CLASS] != ELFCLASS64 || header.e_ident[EI_DATA] != ELFDATA2LSB || header.e_shentsize != sizeof (Elf64_Shdr)
         || header.e_shnum == 0 || header.e_shnum > 4096)
         return functions;
+    fixedAddress = header.e_type == ET_EXEC;
     std::vector<Elf64_Shdr> sections (header.e_shnum);
     in.seekg (static_cast<std::streamoff> (header.e_shoff));
     if (! in.read (reinterpret_cast<char*> (sections.data()), static_cast<std::streamsize> (sections.size() * sizeof (Elf64_Shdr))))
@@ -218,19 +221,25 @@ int symbolize (Report& report, const std::filesystem::path& executable)
     const auto name = executable.filename().string();
     const auto program = baseName (report.field ("program", ""));
     std::vector<ElfFunction> functions;
-    bool loaded = false;
+    bool loaded = false, fixedAddress = false;
     int named = 0;
     for (auto& f : report.frames)
     {
         const auto module = baseName (f.module);
-        if (! f.symbol.empty() || ! startsWith (f.offset, "+0x") || (module != name && (program.empty() || module != program)))
+        if (! f.symbol.empty() || (module != name && (program.empty() || module != program)))
+            continue;
+        if (! startsWith (f.offset, "+0x") && ! (f.offset.empty() && startsWith (f.address, "0x")))
             continue;
         if (! loaded)
         {
-            functions = readElfFunctions (executable);
+            functions = readElfFunctions (executable, fixedAddress);
             loaded = true;
         }
-        const auto address = std::strtoull (f.offset.c_str() + 3, nullptr, 16);
+        // PIE (the usual build): "+0x..." from the load address = the ELF address. Non-PIE (Fedora's default): no offset, and the
+        // absolute address is the ELF address.
+        if (f.offset.empty() && ! fixedAddress)
+            continue;
+        const auto address = std::strtoull ((f.offset.empty() ? f.address : f.offset).c_str() + (f.offset.empty() ? 2 : 3), nullptr, 16);
         // A return address may sit just past its call at the very end of a function: look up the byte before it.
         if (const auto* fn = functionAt (functions, address > 0 ? address - 1 : address))
         {

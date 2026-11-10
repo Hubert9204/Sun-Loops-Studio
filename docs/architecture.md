@@ -558,7 +558,7 @@ made by `MainComponent::heliosCommands`, matched by the share of the question's 
   in two buffers swapped atomically by `setContext`); in the handler only `open`, `write`, `backtrace`, `backtrace_symbols_fd`,
   `prctl`, `time` and `raise`. `backtrace` is warmed up at install (it allocates the first time).
 - `CrashReport` parses the file (fields, frames, the log lines added at the next start), names frames from the executable's ELF
-  `.symtab` when the version matches (`symbolize`, a small ELF64 reader), finds the crash frame after the handler and the signal /
+  `.symtab` when the version matches (`symbolize`, a small ELF64 reader; PIE frames by their offset from the load address, non-PIE ones - Fedora's default - by their absolute address), finds the crash frame after the handler and the signal /
   unwinding frames, and writes the issue title and Markdown body (redacted home and user name).
 - `Http` wraps libcurl (timeouts, cancellation through the progress callback, a size limit, CA bundle found per distribution,
   proxies from the environment). `GitHub` makes the issue request and the browser link; `UpdateChecker` runs the release request
