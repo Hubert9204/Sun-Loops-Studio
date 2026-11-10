@@ -22,6 +22,8 @@ All notable changes to Sun Loops Studio. Newest first.
 - Sun Loops Studio finds the bundled SunBurst without a scan and offers it in *Browser > Instruments* and in the Channel Rack's **+**.
 - Plugin instruments are told the song's tempo, position and play state (a play head), so their synced LFOs, delays and
   arpeggiators follow the song.
+- A project finds a plugin that moved (reinstalled elsewhere, or SunBurst inside an AppImage, which is mounted in a new place
+  each time) by its format, name and id; bundled SunBurst entries from a place that is gone are dropped from the plugin list.
 
 ## 0.47.0 - 2026-11-10
 

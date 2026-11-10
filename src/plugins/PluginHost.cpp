@@ -236,6 +236,10 @@ int PluginHost::addBundledPlugins()
 {
     int added = 0;
     const auto paths = bundledPaths();
+    // An AppImage is mounted somewhere else each time it runs: forget bundled plugins listed from a place that is gone.
+    for (const auto& t : knownPlugins.getTypes())
+        if (t.pluginFormatName == "VST3" && t.name == "SunBurst" && ! juce::File (t.fileOrIdentifier).exists())
+            knownPlugins.removeType (t);
     for (auto* format : formatManager.getFormats())
         if (format->getName() == "VST3")
             for (int i = 0; i < paths.getNumPaths(); ++i)

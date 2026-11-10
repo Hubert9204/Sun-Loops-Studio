@@ -10770,7 +10770,19 @@ void testSunBurstInHost()
         std::cout << "  (SunBurst was not built: skipped)\n";
         return;
     }
+    {
+        juce::PluginDescription stale; // listed from an AppImage mounted somewhere else last time
+        stale.name = "SunBurst";
+        stale.pluginFormatName = "VST3";
+        stale.fileOrIdentifier = "/tmp/.mount_gone/usr/lib/vst3/SunBurst.vst3";
+        stale.isInstrument = true;
+        host.known().addType (stale);
+    }
     check (host.addBundledPlugins() >= 1 && host.addBundledPlugins() == 0, "the bundled SunBurst is added to the known plugins once, without a scan");
+    int sunbursts = 0;
+    for (const auto& t : host.known().getTypes())
+        sunbursts += t.name == "SunBurst" ? 1 : 0;
+    check (sunbursts == 1, "a SunBurst listed from a place that is gone is forgotten");
     const auto* found = findPlugin (host, "SunBurst", "VST3");
     check (found != nullptr && found->isInstrument, "it is listed as a VST3 instrument");
     if (found == nullptr)

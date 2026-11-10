@@ -284,6 +284,15 @@ void MainComponent::loadDocumentPlugins (ProjectDocument& doc, juce::StringArray
         juce::PluginDescription known;
         if (findPluginDescription (description.createIdentifierString(), known))
             description = known;
+        else
+            // Not at the same place any more (a reinstalled plugin, or SunBurst inside an AppImage, mounted anew each time):
+            // the same plugin by its format, name and id.
+            for (const auto& d : pluginHost->known().getTypes())
+                if (d.pluginFormatName == description.pluginFormatName && d.name == description.name && d.uniqueId == description.uniqueId)
+                {
+                    description = d;
+                    break;
+                }
         juce::String error;
         auto plugin = pluginHost->create (description, engine.getSampleRate(), Player::kChunk, error);
         if (plugin == nullptr)
