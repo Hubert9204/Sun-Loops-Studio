@@ -1,6 +1,6 @@
 # Status and roadmap
 
-Version 0.29.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
+Version 0.30.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
 what is missing. If something here disagrees with the program, the program is right: please fix the page.
 
 ## What has been verified, and how
@@ -63,6 +63,8 @@ what is missing. If something here disagrees with the program, the program is ri
 | Additive and physical engines (0.24.0): the default timbre is a saw (harmonic n at 1/n) on pitch; odd-only; brightness; one harmonic = a sine (2nd harmonic 80 dB down); morph to B, the morph envelope; the filter on the harmonics; no aliasing at C8 (fold-back -172 dB); the master limiter linear below -3 dBFS (3rd harmonic -164 dB) and never above 1; the string in tune from E2 to E6 with and without stiffness (within 5 cents); decay, hardness, release damping, velocity, body; marimba's 3.99 mode, the bell's hum; every model finite at its extremes; the 14 new sounds; files (and older files without the settings); no allocation | Automated headless tests (1173 checks in total) | All pass |
 | The synth window with the new engines: the engine menu, the additive layout (timbre A and B, morph, morph envelope, filter, envelopes, LFO), Nylon Guitar loaded (model, resonance, envelope), the sound menu grouped by engine | Manual, in a virtual display | Worked (not heard) |
 | Time Shaper (0.25.0): no pattern = unchanged; half speed, reverse, stutter 1/16 sample-exact against the input; tape stop (1 kHz falling below 300 Hz, faded out); gate 1/8, depth, smoothing, trance gate; its own clock when stopped; mix 0; no recording = pattern skipped safely; every time x volume pattern finite and never louder than the input; five in a project (four with a recording) without allocation | Automated headless tests (1187 checks in total) | All pass |
+| Loop Starter (0.30.0): every genre, both modes, 1 to 8 bars, six variations: four parts at the genre's tempo, every note inside the pattern and valid, bass, chords and melody in the key, the bass below the chords, the melody in range and on a chord note at every bar's start; the genre backbones (four on the floor, backbeat, trap half time, dembow); the same request gives the same loop, other variations other loops; only the parts asked for; the 28 sounds it names all exist; every genre with its own sounds: each part heard on its own, the whole loop clear and not clipping | Automated headless tests (1294 checks in total) | All pass |
+| In the app: the + menu item, the window, a House loop made (pattern "House 1", 124 BPM, four channels on tracks 5-8, Pattern mode), a second variation reusing the channels, played for a few seconds | Manual, in a virtual display | Worked (not heard) |
 | Up to 500 mixer tracks (0.29.0): 500 tracks with 499 empty sound exactly like 8; a channel on track 451 is heard with its reverb; 2 s of 500 tracks render in about 0.1 s; the memory pool (16 at first, the 4 missing counted, offered memory adopted without allocating, memory moving between slots as effects come and go, removed tracks giving theirs back); an export with 40 delays makes its own; files with 300 tracks, more than 500 (cut, with a warning), and channels past the last track; the free-track helpers with any count | Automated headless tests (1276 checks in total) | All pass |
 | The pool under AddressSanitizer and UndefinedBehaviorSanitizer: 300 random projects of 8 to 127 tracks with random effects, a second thread offering memory meanwhile, a sample-rate change half-way | A separate test program | Nothing found |
 | In the app: the + button and its menu, 500 tracks reached, scrolling to the newest, the grouped track menu of a channel (Track 105 chosen), the scrolling Assign list with its "new track" row (Track 109 made and assigned), undo back to 8 tracks; memory 395 MB with 500 tracks against 370 MB with 8 | Manual, in a virtual display | Worked |
@@ -77,6 +79,8 @@ what is missing. If something here disagrees with the program, the program is ri
 
 ## What has not been verified
 
+- **How the Loop Starter's loops sound (0.30.0).** They are checked for key, rhythm and level, not heard: whether the grooves feel
+  right and the melodies are pleasant is for a listener to say.
 - **Many tracks on a real machine (0.29.0).** Measured here in a virtual display, where the app's audio thread busy-waits on a
   dummy device (about one core with 8 tracks or 500 alike): the cost of 500 tracks on a real sound card was not measured.
   Each edit records an undo step by writing the whole project out: about 3.5 ms with 300 tracks here.

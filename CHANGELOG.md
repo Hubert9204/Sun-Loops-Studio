@@ -2,6 +2,14 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.30.0 - 2026-11-10
+
+### Added
+- **Loop Starter** (in the pattern **+** menu): a starting loop in one of ten genres - drums, bass, chords and a melody in a
+  chosen key and mode, at the genre's tempo, with the built-in sounds (kits, library instruments, synth patches), as a new
+  pattern on channels named after the genre (reused by later loops of the same genre). Rules and seeded chance, no AI: the
+  same genre, key and variation give the same loop.
+
 ## 0.29.0 - 2026-11-10
 
 ### Added

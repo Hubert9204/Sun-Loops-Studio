@@ -3,6 +3,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <set>
 #include <cmath>
 #include <cstring>
 #include <cstdlib>
@@ -42,6 +43,7 @@
 #include "audio/TimeStretch.h"
 #include "audio/NoteRecorder.h"
 #include "audio/ScoreLog.h"
+#include "audio/LoopStarter.h"
 #include "audio/SpscQueue.h"
 #include "audio/LiveNotes.h"
 #include "audio/OfflineRenderer.h"
@@ -3596,6 +3598,248 @@ void testAudioClips()
 
 // --- per-clip pan, reverse and fades (0.27.0) -------------------------------------------------------------------------------
 // --- the score log (0.28.0) ------------------------------------------------------------------------------------------------
+// --- the Loop Starter (0.30.0) ----------------------------------------------------------------------------------------------
+void testLoopStarter()
+{
+    std::cout << "Loop Starter (0.30.0)\n";
+    namespace ls = sls::loopstarter;
+    using sls::kTicksPerBeat;
+    constexpr int bar = 4 * kTicksPerBeat;
+
+    bool allValid = true, allInScale = true, allHaveParts = true, chordTonesOnBars = true, bassBelow = true, melodyRange = true;
+    bool soundsKnown = true;
+    for (int g = 0; g < ls::kGenreCount; ++g)
+        for (const bool minor : { true, false })
+            for (const int bars : { 1, 2, 4, 8 })
+                for (std::uint32_t v = 1; v <= 6; ++v)
+                {
+                    ls::Request q;
+                    q.genre = static_cast<ls::Genre> (g);
+                    q.key = (g * 5 + static_cast<int> (v)) % 12;
+                    q.minor = minor;
+                    q.variation = v;
+                    q.patternTicks = bars * bar;
+                    const auto loop = ls::make (q);
+                    allHaveParts = allHaveParts && loop.parts.size() == 4 && loop.bpm == ls::genreInfo (q.genre).bpm;
+                    int lowestChord = 128, highestBass = -1;
+                    for (const auto& part : loop.parts)
+                    {
+                        allValid = allValid && ! part.notes.empty();
+                        soundsKnown = soundsKnown && (part.sound.id.rfind ("kit:", 0) == 0 || part.sound.id.rfind ("program:", 0) == 0 || part.sound.id.rfind ("patch:", 0) == 0);
+                        int previousStart = -1;
+                        for (const auto& n : part.notes)
+                        {
+                            allValid = allValid && n.startTick >= 0 && n.startTick + n.lengthTicks <= q.patternTicks && n.lengthTicks > 0
+                                       && n.pitch >= 0 && n.pitch <= 127 && n.velocity > 0.0f && n.velocity <= 1.0f && n.startTick >= previousStart;
+                            previousStart = n.startTick;
+                            if (part.role != ls::Role::Drums)
+                                allInScale = allInScale && loop.scale.contains (n.pitch);
+                            if (part.role == ls::Role::Chords)
+                                lowestChord = std::min (lowestChord, n.pitch);
+                            if (part.role == ls::Role::Bass)
+                                highestBass = std::max (highestBass, n.pitch);
+                            if (part.role == ls::Role::Melody)
+                                melodyRange = melodyRange && n.pitch >= 60 && n.pitch <= 90;
+                        }
+                    }
+                    bassBelow = bassBelow && highestBass < lowestChord;
+                    // the melody's note on each bar's downbeat is a note of the chord playing there
+                    const auto& chordsPart = loop.parts[2].notes;
+                    for (const auto& n : loop.parts[3].notes)
+                        if (n.startTick % bar == 0)
+                        {
+                            bool found = false;
+                            for (const auto& c : chordsPart)
+                                if (c.startTick <= n.startTick && n.startTick < c.startTick + c.lengthTicks + kTicksPerBeat && (c.pitch - n.pitch) % 12 == 0)
+                                    found = true;
+                            chordTonesOnBars = chordTonesOnBars && found;
+                        }
+                }
+    check (allHaveParts, "every genre, both modes, 1 to 8 bars: four parts at the genre's tempo");
+    check (allValid, "every note inside the pattern, in order, with a sensible pitch, length and velocity");
+    check (allInScale, "bass, chords and melody stay in the key");
+    check (bassBelow, "the bass is always below the chords");
+    check (melodyRange, "the melody stays between C4 and F#6");
+    check (chordTonesOnBars, "the melody starts every bar on a note of the chord");
+    check (soundsKnown, "every part names a kit, a library program or a synth patch");
+    {
+        // and every one of them exists: each genre's choices over many variations, fallbacks included
+        std::set<std::string> ids;
+        for (int g = 0; g < ls::kGenreCount; ++g)
+            for (std::uint32_t v = 1; v <= 40; ++v)
+                for (const bool minor : { true, false })
+                {
+                    ls::Request q;
+                    q.genre = static_cast<ls::Genre> (g);
+                    q.variation = v;
+                    q.minor = minor;
+                    for (const auto& part : ls::make (q).parts)
+                        ids.insert (part.sound.id), ids.insert (part.sound.fallback);
+                }
+        bool allExist = true;
+        std::string missing;
+        for (const auto& id : ids)
+        {
+            bool found = false;
+            if (id.rfind ("patch:", 0) == 0)
+                for (const auto& f : sls::synthFactoryPatches())
+                    found = found || "patch:" + f.name == id;
+            else if (id.rfind ("program:", 0) == 0)
+            {
+                sls::SamplerSettings settings;
+                std::string error;
+                found = sls::makeLibraryProgram (id.substr (8), &settings, error) != nullptr;
+            }
+            else if (id.rfind ("kit:", 0) == 0)
+                for (const auto& k : sls::builtinKits())
+                    found = found || "kit:" + k.id == id;
+            if (! found)
+                missing += " " + id;
+            allExist = allExist && found;
+        }
+        if (! allExist)
+            std::cout << "    missing:" << missing << "\n";
+        std::cout << "    (" << ids.size() << " different sounds)\n";
+        check (allExist && ids.size() > 20, "every sound the Loop Starter names exists");
+    }
+
+    // genre traits
+    const auto notesOf = [] (const ls::Loop& l, ls::Role role) -> const std::vector<sls::Note>& {
+        for (const auto& p : l.parts)
+            if (p.role == role)
+                return p.notes;
+        static const std::vector<sls::Note> none;
+        return none;
+    };
+    const auto hasHit = [] (const std::vector<sls::Note>& notes, int key, int tick)
+    { return std::any_of (notes.begin(), notes.end(), [&] (const sls::Note& n) { return n.pitch == key && n.startTick == tick; }); };
+    bool fourOnTheFloor = true, backbeat = true, halfTime = true, dembow = true;
+    for (std::uint32_t v = 1; v <= 8; ++v)
+    {
+        ls::Request q;
+        q.variation = v;
+        q.patternTicks = 2 * bar;
+        for (const auto g : { ls::Genre::House, ls::Genre::Techno, ls::Genre::Reggaeton })
+        {
+            q.genre = g;
+            const auto d = notesOf (ls::make (q), ls::Role::Drums);
+            for (int beat = 0; beat < 8; ++beat)
+                fourOnTheFloor = fourOnTheFloor && hasHit (d, ls::drum::kick, beat * kTicksPerBeat);
+        }
+        for (const auto g : { ls::Genre::HipHop, ls::Genre::DrumAndBass, ls::Genre::Pop, ls::Genre::Rock, ls::Genre::Synthwave })
+        {
+            q.genre = g;
+            const auto d = notesOf (ls::make (q), ls::Role::Drums);
+            for (int b = 0; b < 2; ++b)
+                backbeat = backbeat && hasHit (d, ls::drum::snare, b * bar + kTicksPerBeat) && hasHit (d, ls::drum::snare, b * bar + 3 * kTicksPerBeat);
+        }
+        q.genre = ls::Genre::Trap;
+        const auto trap = notesOf (ls::make (q), ls::Role::Drums);
+        for (int b = 0; b < 2; ++b)
+            halfTime = halfTime && hasHit (trap, ls::drum::clap, b * bar + 2 * kTicksPerBeat) && ! hasHit (trap, ls::drum::clap, b * bar + kTicksPerBeat);
+        q.genre = ls::Genre::Reggaeton;
+        const auto reg = notesOf (ls::make (q), ls::Role::Drums);
+        for (const int s : { 3, 6, 11, 14 })
+            dembow = dembow && hasHit (reg, ls::drum::snare, s * kTicksPerBeat / 4);
+    }
+    check (fourOnTheFloor, "house, techno and reggaeton: a kick on every beat");
+    check (backbeat, "hip-hop, drum & bass, pop, rock and synthwave: the snare on beats 2 and 4");
+    check (halfTime, "trap: the clap on beat 3 (half time), not on 2");
+    check (dembow, "reggaeton: the dembow snare (16ths 4, 7, 12 and 15 of the bar)");
+
+    // the same request, the same loop; another variation, another loop
+    {
+        ls::Request q;
+        q.genre = ls::Genre::LoFi;
+        const auto a = ls::make (q), b = ls::make (q);
+        bool same = a.parts.size() == b.parts.size() && a.progression == b.progression;
+        for (size_t i = 0; same && i < a.parts.size(); ++i)
+            same = sameNotes (a.parts[i].notes, b.parts[i].notes) && a.parts[i].sound.id == b.parts[i].sound.id;
+        check (same, "the same genre, key and variation always give the same loop");
+        int different = 0;
+        for (std::uint32_t v = 2; v <= 9; ++v)
+        {
+            q.variation = v;
+            const auto c = ls::make (q);
+            different += ! sameNotes (c.parts[0].notes, a.parts[0].notes) || ! sameNotes (c.parts[3].notes, a.parts[3].notes) ? 1 : 0;
+        }
+        check (different == 8, "eight other variations: eight other loops (drums or melody)");
+        q.key = 2;
+        q.minor = false;
+        const auto d = ls::make (q);
+        check (d.scale.root == 2 && d.scale.type == 1, "the key and mode asked for (D major)");
+        q.drums = false;
+        q.melody = false;
+        const auto e = ls::make (q);
+        check (e.parts.size() == 2 && e.parts[0].role == ls::Role::Bass && e.parts[1].role == ls::Role::Chords, "only the parts asked for");
+    }
+    {
+        // every genre plays with its own sounds (kits, library instruments, synth patches): every part is heard on its own, and
+        // the whole loop is neither quiet nor clipping
+        const auto channelFor = [] (const ls::Part& part)
+        {
+            sls::Channel c;
+            c.name = part.name;
+            c.volume = part.volume;
+            c.swing = part.swing;
+            c.notes = part.notes;
+            const auto& id = part.sound.id;
+            if (id.rfind ("kit:", 0) == 0)
+            {
+                c.instrument = sls::Instrument::Drums;
+                juce::StringArray problems;
+                c.kit = std::make_shared<const sls::DrumKit> (sls::loadKit (sls::builtinKitSpec (id.substr (4)), problems));
+            }
+            else if (id.rfind ("program:", 0) == 0)
+            {
+                c.instrument = sls::Instrument::Sampler;
+                std::string error;
+                c.program = sls::makeLibraryProgram (id.substr (8), &c.sampler, error);
+            }
+            else
+            {
+                c.instrument = sls::Instrument::Synth;
+                for (const auto& f : sls::synthFactoryPatches())
+                    if ("patch:" + f.name == id)
+                        c.synth = f.patch;
+            }
+            return c;
+        };
+        bool everyPartHeard = true, loopsFine = true;
+        std::string report;
+        for (int g = 0; g < ls::kGenreCount; ++g)
+        {
+            ls::Request q;
+            q.genre = static_cast<ls::Genre> (g);
+            q.variation = 3;
+            q.patternTicks = 2 * bar;
+            const auto loop = ls::make (q);
+            sls::RenderOptions o;
+            o.bpm = loop.bpm;
+            o.tailSeconds = 0.3;
+            std::vector<sls::Channel> all;
+            for (const auto& part : loop.parts)
+            {
+                auto c = channelFor (part);
+                const auto solo = sls::renderToBuffer (sls::Project::make ({ c }, 2 * bar), o);
+                const float partPeak = peakOf (solo.getReadPointer (0), 0, solo.getNumSamples());
+                if (partPeak < 0.02f)
+                    report += " " + std::string (ls::genreInfo (q.genre).name) + "/" + part.name;
+                everyPartHeard = everyPartHeard && partPeak >= 0.02f;
+                c.mixerTrack = static_cast<int> (all.size());
+                all.push_back (std::move (c));
+            }
+            const auto out = sls::renderToBuffer (sls::Project::make (std::move (all), 2 * bar), o);
+            const float peak = peakOf (out.getReadPointer (0), 0, out.getNumSamples());
+            loopsFine = loopsFine && peak > 0.15f && peak <= 1.0f;
+        }
+        if (! report.empty())
+            std::cout << "    quiet:" << report << "\n";
+        check (everyPartHeard, "every genre: each part, with its own sound, is heard on its own");
+        check (loopsFine, "and each whole loop is clearly heard without clipping");
+    }
+}
+
 void testScoreLog()
 {
     std::cout << "Score log (0.28.0)\n";
@@ -9104,6 +9348,7 @@ int main()
     testAudioClips();
     testClipPanReverseFades();
     testScoreLog();
+    testLoopStarter();
     testAudioImport();
     testInputRecorder();
     testMidiNotes();

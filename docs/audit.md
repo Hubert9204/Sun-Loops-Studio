@@ -27,6 +27,11 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.30.0
+The Loop Starter is plain code on note lists, run on the message thread; its only resource use is loading the sounds it names (the
+library instruments are decoded the first time, with a wait cursor). Every sound it can name is checked to exist by a test; if the
+sound library were missing, a synth patch stands in and the status line says so. clang-tidy is clean on the new files.
+
 ## After 0.29.0
 The mixer can have 500 tracks. The big effect buffers moved out of `EffectUnit` into `EffectMemory`, owned by the Player's pool
 (`memoryStore`, `unique_ptr`s in a vector reserved for the maximum) and lent by pointer; memory made on the message thread travels

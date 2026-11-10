@@ -16,7 +16,7 @@ Sun Loops Studio is inspired by the workflow of loop-based DAWs such as FL Studi
 that uses no code, names, graphics or assets from other products, and it is not affiliated with or endorsed by
 their makers.
 
-**Status: alpha (0.29.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
+**Status: alpha (0.30.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
 display. Playback was confirmed on a real Nobara machine for version 0.3; everything added since (panels, patterns,
 playlist, browser, pitch/swing, the expanded mixer and its effects, saving projects, the AppImage, audio clips, drag and
 drop, recording, MIDI, the metronome and the export formats) was tested headless and in a virtual display with a silent
@@ -42,6 +42,9 @@ See [docs/roadmap.md](docs/roadmap.md) for exactly what is and is not verified a
   the grid (with snap to scale), **chords placed with one click**, a **velocity lane**, editing tools (quantize, humanize, legato,
   staccato, strum, arpeggiate, chop, flip, velocity ramps) and **generators** of chord progressions and basslines (also following the
   chords of another channel).
+- **Loop Starter** (0.30.0) - a starting loop in one of ten genres (house, techno, hip-hop, trap, drum & bass, pop, lo-fi,
+  reggaeton, rock, synthwave): drums, bass, chords and a melody that fit together, in the key you choose, at the genre's tempo, with the
+  built-in sounds, as a new pattern. Made by rules and chance (no AI, nothing online); each variation is different.
 - **Patterns and Playlist** - several patterns (new, cloned, renamed or deleted from buttons above the playlist), arranged
   as clips on 8 tracks; patterns are 1, 2, 4 or 8 bars long. A *Pattern / Song* switch chooses between looping the selected pattern and playing the whole
   playlist. **Click the ruler to move the playhead, even while playing; right-drag on it to draw a loop region** (right-click it to move, resize or delete it).

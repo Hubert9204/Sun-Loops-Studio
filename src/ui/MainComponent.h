@@ -38,6 +38,11 @@
 
 namespace sls
 {
+namespace loopstarter
+{
+struct Loop;
+}
+
 // A pattern is two bars long: the length of the loop in Pattern mode and of one playlist cell.
 constexpr int kLoopBars = 2;
 constexpr int kLoopTicks = kLoopBars * 4 * kTicksPerBeat;
@@ -245,6 +250,11 @@ private:
     void selectPattern (int index);
     void addPattern (bool cloneCurrent);
     void showNewPatternMenu (juce::Component& target);
+    // 0.30.0: the Loop Starter window, and the loop it made turned into channels (reused by name) and a new pattern
+    void openLoopStarter();
+    void applyLoop (const loopstarter::Loop& loop, std::uint32_t variation, bool setTempo);
+    int loopStarterGenre = 0, loopStarterKey = 9, loopStarterParts = 0; // the last choices (A, all parts)
+    std::uint32_t loopStarterVariation = 0;
     void setPatternLength (int bars);
     void showPatternLength(); // the editors follow arrangement.patternTicks
     void renamePattern (int index);

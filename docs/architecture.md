@@ -297,6 +297,10 @@ voices -> channel (smoothed gain, equal-power pan, channel mute/solo)
   is active in the audio callback and the feedback loops flush tiny values.
 - The piano roll's loop region (0.20.0) lives in `Pattern::loopStartTick / loopEndTick`; in Pattern mode `publishProject` copies the current
   pattern's region into the snapshot's `loopStartTick / loopEndTick`, which the `Player` already handles for the playlist's region.
+- Loop Starter (0.30.0): `src/audio/LoopStarter.{h,cpp}` (JUCE-free) builds a `Loop` from a genre, key, mode and variation: drum
+  grooves per genre on the General MIDI keys of the built-in kits, and bass, chords and melody from `theory::progressionChords`,
+  `basslineNotes`, `progressionNotes` and its own motif generator, with a portable xorshift generator so a variation is the same
+  everywhere. `MainComponentLoopStarter.cpp` turns the parts into channels (sounds named `kit:`, `program:` or `patch:`) and a pattern.
 - Score log (0.28.0): the audio thread stamps every MIDI keyboard note with its own clock (`audioClockSeconds`, minus the output
   latency) and queues it (`scoreEvents`, lock-free); the message thread's timer moves them into `ScoreLog` (`src/audio/ScoreLog.h`,
   JUCE-free), which keeps five minutes and turns them into pattern notes at a tempo when asked.

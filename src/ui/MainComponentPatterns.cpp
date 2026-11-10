@@ -76,6 +76,7 @@ void MainComponent::showNewPatternMenu (juce::Component& target)
     juce::PopupMenu menu;
     menu.addItem (1, "New empty pattern");
     menu.addItem (2, "Clone current pattern");
+    menu.addItem (3, "Loop Starter...");
     juce::PopupMenu lengths;
     const int bars = arrangement.patternTicks / (4 * kTicksPerBeat);
     for (const int choice : kPatternBarChoices)
@@ -89,6 +90,8 @@ void MainComponent::showNewPatternMenu (juce::Component& target)
                                 return;
                             if (result > 100)
                                 safe->setPatternLength (result - 100);
+                            else if (result == 3)
+                                safe->openLoopStarter();
                             else
                                 safe->addPattern (result == 2);
                         });

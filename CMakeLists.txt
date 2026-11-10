@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(SunLoopsStudio VERSION 0.29.0 LANGUAGES C CXX ASM)
+project(SunLoopsStudio VERSION 0.30.0 LANGUAGES C CXX ASM)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -58,6 +58,7 @@ set(SLS_CORE_SOURCES
     src/audio/SoundLibrary.cpp
     src/audio/DrumSynth.cpp
     src/audio/MusicTheory.cpp
+    src/audio/LoopStarter.cpp
     src/audio/OfflineRenderer.cpp
     src/audio/AudioExport.cpp
     src/audio/AudioImport.cpp
@@ -120,6 +121,7 @@ target_sources(SunLoopsStudio PRIVATE
     src/ui/MainComponent.cpp
     src/ui/MainComponentNotes.cpp
     src/ui/MainComponentPatterns.cpp
+    src/ui/MainComponentLoopStarter.cpp
     src/ui/MainComponentImport.cpp
     src/ui/MainComponentRecording.cpp
     src/ui/MainComponentBrowser.cpp

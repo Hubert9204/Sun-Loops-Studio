@@ -413,6 +413,21 @@ is refused if the playlist would no longer fit in the timeline. New patterns get
 with "Pattern 1" (the full groove: drums, grand piano, electric bass and a plucked synth, 100 BPM) and "Drums" (the drums and the
 bass), played with the built-in sounds.
 
+**Loop Starter (0.30.0).** *Loop Starter...* in the **+** menu makes a starting loop for a track. Choose the **genre** (house, techno,
+hip-hop, trap, drum & bass, pop, lo-fi, reggaeton, rock or synthwave, each with its tempo), the **key**, the **mode** (minor, major or
+the genre's usual one), the **parts** (drums, bass, chords and melody, or fewer), whether to use the genre's **tempo**, and a
+**variation** (a number). *Make it* adds a new pattern named after the genre and the variation, with the parts on channels named
+"House Drums", "House Bass" and so on, each on its own mixer track with a sound that suits it: a built-in drum kit, the grand piano
+or electric bass of the sound library, or a factory synth patch. The program switches to Pattern mode, so **Play** plays the loop.
+
+Every genre keeps its backbone (four-on-the-floor kick for house, techno and reggaeton; the snare on 2 and 4 for hip-hop, drum &
+bass, pop, rock and synthwave; trap's half-time clap with hi-hat rolls; reggaeton's dembow) and varies the rest: kick patterns,
+ghost notes, hats, fills, the chord progression, the bassline's style and the melody (a motif answered every fourth bar, on chord
+notes at every bar's start, in the key). The same genre, key and variation always give the same loop, so a loop you liked can be made
+again; the window remembers your choices and offers the next variation. Making another loop in the same genre uses its channels
+again (with the new loop's sounds) instead of adding more. Everything is made by rules and chance, without a trained model and
+without the internet. Undo removes the loop.
+
 The **pattern box** at the top of the Playlist has three buttons: **New** (empty or cloned, like the **+**), **Rename**
 (a name of up to 40 characters) and **Delete**. Delete removes the selected pattern, its notes and **every playlist clip
 that plays it**; the last remaining pattern cannot be deleted. Choosing a pattern in that box also opens it in the Rack and

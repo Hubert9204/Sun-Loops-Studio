@@ -281,7 +281,7 @@ MainComponent::MainComponent()
     patternBox.setTooltip ("Current pattern");
     patternBox.onChange = [this] { selectPattern (patternBox.getSelectedId() - 1); };
 
-    patternAddButton.setTooltip ("New pattern");
+    patternAddButton.setTooltip ("New pattern, Loop Starter, pattern length");
     patternAddButton.onClick = [this] { showNewPatternMenu (patternAddButton); };
 
     clearButton.onClick = [this]

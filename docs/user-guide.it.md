@@ -424,6 +424,22 @@ il brano si allunga. Le note oltre la fine di un pattern più corto restano cons
 cambio viene rifiutato se la playlist non entrerebbe più nella linea del tempo. I nuovi pattern prendono da soli il nome successivo (Pattern 3, Pattern 4, ...). Il progetto dimostrativo parte con "Pattern 1" (il groove completo: batteria,
 pianoforte a coda, basso elettrico e un synth pizzicato, 100 BPM) e "Drums" (batteria e basso), suonati con i suoni incorporati.
 
+**Loop Starter (0.30.0).** *Loop Starter...* nel menu del **+** crea un loop di partenza per un brano. Scegli il **genere** (house,
+techno, hip-hop, trap, drum & bass, pop, lo-fi, reggaeton, rock o synthwave, ognuno con il suo tempo), la **tonalità**, il **modo**
+(minore, maggiore o quello tipico del genere), le **parti** (batteria, basso, accordi e melodia, o meno), se usare il **tempo** del
+genere e una **variante** (un numero). *Make it* aggiunge un pattern nuovo che porta il nome del genere e della variante, con le parti
+su canali chiamati "House Drums", "House Bass" e così via, ognuno sulla sua traccia del mixer e con un suono adatto: un kit di batteria
+incorporato, il pianoforte a coda o il basso elettrico della libreria, o una patch di fabbrica del synth. Il programma passa in
+modalità Pattern, così **Play** suona il loop.
+
+Ogni genere mantiene la sua ossatura (cassa in quattro per house, techno e reggaeton; rullante sul 2 e sul 4 per hip-hop, drum &
+bass, pop, rock e synthwave; il clap in half-time della trap con i rulli di hi-hat; il dembow del reggaeton) e varia il resto: figure
+di cassa, ghost note, hi-hat, fill, la progressione di accordi, lo stile del basso e la melodia (un motivo a cui risponde ogni quarta
+battuta, su note dell'accordo all'inizio di ogni battuta, nella tonalità). Lo stesso genere, tonalità e variante danno sempre lo stesso
+loop, così uno che ti è piaciuto si può rifare; la finestra ricorda le scelte e propone la variante successiva. Un altro loop dello
+stesso genere riusa i suoi canali (con i suoni del nuovo loop) invece di aggiungerne altri. Tutto è fatto con regole e caso, senza un
+modello addestrato e senza internet. Annulla toglie il loop.
+
 Il **menu dei pattern** in cima alla Playlist ha tre pulsanti: **New** (vuoto o copia, come il **+**), **Rename** (un nome di
 al massimo 40 caratteri) e **Delete**. Delete elimina il pattern selezionato, le sue note e **tutte le clip della playlist che lo
 suonano**; l'ultimo pattern rimasto non si può eliminare. Scegliere un pattern in quel menu lo apre anche nel Rack e nel Piano Roll.
