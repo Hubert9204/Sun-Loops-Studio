@@ -237,7 +237,7 @@ FlpImportResult projectFromFlp (const flp::Song& song, const juce::File& folder)
         }
 
     const double unitInFlTicks = static_cast<double> (arrangement.patternTicks) * ppq / kTicksPerBeat;
-    int offGrid = 0, droppedItems = 0, droppedAudio = 0;
+    int droppedItems = 0, droppedAudio = 0;
     for (const auto& item : song.items)
     {
         const int track = trackOf[item.track];
@@ -252,11 +252,10 @@ FlpImportResult projectFromFlp (const flp::Song& song, const juce::File& folder)
             Clip clip;
             clip.pattern = it->second;
             clip.track = track;
-            const double startUnits = item.position / unitInFlTicks;
-            clip.startUnit = static_cast<int> (std::lround (startUnits));
-            clip.lengthUnits = std::max (1, static_cast<int> (std::lround (item.length / unitInFlTicks)));
-            if (std::abs (startUnits - clip.startUnit) * unitInFlTicks > ppq / 4.0)
-                ++offGrid;
+            // Since 0.42.0 clips go anywhere: FL Studio's position and length are kept (to the nearest tick).
+            const double ticksPerFl = static_cast<double> (kTicksPerBeat) / ppq;
+            clip.startTick = static_cast<int> (std::lround (item.position * ticksPerFl));
+            clip.lengthTicks = std::max (1, static_cast<int> (std::lround ((item.length > 0 ? item.length : unitInFlTicks) * ticksPerFl)));
             if (arrangement.canPlace (clip))
                 arrangement.clips.push_back (clip);
             else
@@ -285,9 +284,6 @@ FlpImportResult projectFromFlp (const flp::Song& song, const juce::File& folder)
     if (mergedTracks > 0)
         warnings.push_back (std::to_string (mergedTracks) + " playlist track(s) beyond the first " + std::to_string (kPlaylistTracks)
                             + " used were put on track " + std::to_string (kPlaylistTracks) + ".");
-    if (offGrid > 0)
-        warnings.push_back (std::to_string (offGrid) + " pattern clip(s) did not start on a pattern length (" + std::to_string (bars)
-                            + " bars here) and were moved to the nearest one.");
     if (droppedItems > 0)
         warnings.push_back (std::to_string (droppedItems) + " pattern clip(s) did not fit in the playlist and were left out.");
     if (droppedAudio > 0)
@@ -366,7 +362,7 @@ FlpExportResult projectToFlp (const ProjectDocument& doc)
         out.name = pattern.name;
         out.length = arrangement.patternTicks * scale;
         for (size_t c = 0; c < doc.channels.size() && c < pattern.notes.size(); ++c)
-            for (const auto& n : steps::playedNotes (doc.channels[c], pattern.notes[c], pattern.stepsOf (c), arrangement.patternTicks))
+            for (const auto& n : steps::playedNotes (pattern.notes[c], arrangement.patternTicks))
             {
                 flp::Note note;
                 note.position = n.startTick * scale;
@@ -380,17 +376,31 @@ FlpExportResult projectToFlp (const ProjectDocument& doc)
         song.patterns.push_back (std::move (out));
     }
 
-    // A pattern clip is one item per repeat (FL Studio's own clips do not repeat a pattern by themselves).
+    // A pattern clip is one item per repeat (FL Studio's own clips do not repeat a pattern by themselves), the last one cut at the
+    // clip's end. A clip that starts inside its pattern (split) cannot say so in this writer: its first item starts the pattern from
+    // its beginning.
+    int offsetClips = 0;
     for (const auto& clip : arrangement.clips)
-        for (int u = 0; u < clip.lengthUnits; ++u)
+    {
+        const int length = std::max (1, arrangement.patternTicks);
+        const int offset = ((clip.offsetTicks % length) + length) % length;
+        offsetClips += offset != 0 ? 1 : 0;
+        for (int pass = -offset; pass < clip.lengthTicks; pass += length)
         {
+            const int from = std::max (pass, 0);
+            const int to = std::min (pass + length, clip.lengthTicks);
+            if (to <= from)
+                continue;
             flp::Item item;
-            item.position = (clip.startUnit + u) * arrangement.patternTicks * scale;
-            item.length = arrangement.patternTicks * scale;
+            item.position = (clip.startTick + from) * scale;
+            item.length = (to - from) * scale;
             item.track = clip.track;
             item.pattern = clip.pattern + 1;
             song.items.push_back (item);
         }
+    }
+    if (offsetClips > 0)
+        result.warnings.push_back (std::to_string (offsetClips) + " pattern clip(s) that start inside their pattern start it from its beginning in FL Studio.");
 
     // Audio clips: one audio clip channel per file, after the rack's channels.
     std::map<std::string, int> audioChannel;

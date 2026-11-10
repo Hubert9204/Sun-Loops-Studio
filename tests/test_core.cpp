@@ -109,6 +109,12 @@ void check (bool ok, const char* name)
 constexpr double kSr = 48000.0;
 constexpr int kBeat = sls::kTicksPerBeat;
 
+// A pattern clip given in whole pattern lengths, as the playlist placed them before 0.42.0 (start and length in "units").
+sls::Clip uc (const sls::Arrangement& a, int pattern, int track, int startUnit, int lengthUnits)
+{
+    return { pattern, track, startUnit * a.patternTicks, lengthUnits * a.patternTicks, 0 };
+}
+
 // Magnitude of the component of x[begin,end) at `hz` (single-bin DFT).
 double toneEnergy (const float* x, int begin, int end, double hz)
 {
@@ -694,22 +700,22 @@ void testArrangement()
     check (channels[0].notes.empty(), "compiling does not modify the channel settings");
 
     // canPlace
-    check (a.canPlace ({ 0, 0, 0, 1 }), "a clip on an empty playlist can be placed");
-    check (! a.canPlace ({ 5, 0, 0, 1 }), "a clip of an unknown pattern is refused");
-    check (! a.canPlace ({ 0, sls::kPlaylistTracks, 0, 1 }), "a clip below the last track is refused");
-    check (! a.canPlace ({ 0, 0, -1, 1 }), "a clip before the start is refused");
-    check (! a.canPlace ({ 0, 0, 0, 0 }), "a zero-length clip is refused");
-    check (! a.canPlace ({ 0, 0, a.timelineUnits() - 1, 2 }), "a clip past the end of the timeline is refused");
-    check (a.canPlace ({ 0, 0, a.timelineUnits() - 2, 2 }), "a clip ending exactly at the end is accepted");
+    check (a.canPlace (uc (a, 0, 0, 0, 1)), "a clip on an empty playlist can be placed");
+    check (! a.canPlace (uc (a, 5, 0, 0, 1)), "a clip of an unknown pattern is refused");
+    check (! a.canPlace (uc (a, 0, sls::kPlaylistTracks, 0, 1)), "a clip below the last track is refused");
+    check (! a.canPlace (uc (a, 0, 0, -1, 1)), "a clip before the start is refused");
+    check (! a.canPlace (uc (a, 0, 0, 0, 0)), "a zero-length clip is refused");
+    check (! a.canPlace (uc (a, 0, 0, (a.timelineTicks() / a.patternTicks) - 1, 2)), "a clip past the end of the timeline is refused");
+    check (a.canPlace (uc (a, 0, 0, (a.timelineTicks() / a.patternTicks) - 2, 2)), "a clip ending exactly at the end is accepted");
 
     // song with two clips on one track, a gap between them
-    a.clips = { { 0, 0, 0, 1 }, { 0, 0, 2, 1 } };
-    check (a.songLengthUnits() == 3, "song length is the end of the last clip");
-    check (a.canPlace ({ 1, 0, 1, 2 }), "a clip may overlap another on its track (0.33.0: layering)");
-    check (a.canPlace ({ 1, 0, 1, 1 }), "filling the gap exactly is accepted");
-    check (a.canPlace ({ 1, 1, 0, 3 }), "the same time on another track is accepted");
+    a.clips = { uc (a, 0, 0, 0, 1), uc (a, 0, 0, 2, 1) };
+    check (a.songLengthTicks() == 3 * a.patternTicks, "song length is the end of the last clip");
+    check (a.canPlace (uc (a, 1, 0, 1, 2)), "a clip may overlap another on its track (0.33.0: layering)");
+    check (a.canPlace (uc (a, 1, 0, 1, 1)), "filling the gap exactly is accepted");
+    check (a.canPlace (uc (a, 1, 1, 0, 3)), "the same time on another track is accepted");
     check (a.canPlace (a.clips[0], 0), "a clip does not collide with itself when moved");
-    check (a.clipAt (0, 2) == 1 && a.clipAt (0, 1) == -1 && a.clipAt (1, 0) == -1, "clipAt finds the clip under a cell");
+    check (a.clipAt (0, 2 * a.patternTicks) == 1 && a.clipAt (0, a.patternTicks) == -1 && a.clipAt (1, 0) == -1, "clipAt finds the clip under a tick");
 
     const auto song = sls::compileSong (channels, a);
     check (song.lengthTicks == 3 * 4 * kBeat, "song mode loops the whole arrangement");
@@ -726,21 +732,21 @@ void testArrangement()
     check (toneEnergy (l, 2 * unit + 4800, 2 * unit + 21600, 440.0) > 0.05, "the second clip is audible");
 
     // repeats
-    a.clips = { { 0, 0, 1, 3 } };
+    a.clips = { uc (a, 0, 0, 1, 3) };
     const auto rep = sls::compileSong (channels, a);
     check (rep.lengthTicks == 4 * 4 * kBeat && rep.channels[0].notes.size() == 3
                && rep.channels[0].notes[0].startTick == 4 * kBeat && rep.channels[0].notes[2].startTick == 3 * 4 * kBeat,
            "a long clip repeats its pattern once per unit");
 
     // notes are cut at their pattern's end so they cannot leak into the next unit
-    a.clips = { { 2, 0, 0, 2 } };
+    a.clips = { uc (a, 2, 0, 0, 2) };
     const auto cut = sls::compileSong (channels, a);
     check (cut.channels[0].notes.size() == 2 && cut.channels[0].notes[0].lengthTicks == kBeat
                && cut.channels[0].notes[1].startTick == 4 * kBeat + 3 * kBeat,
            "notes are clipped at the end of their pattern");
 
     // overlapping clips on different tracks play together
-    a.clips = { { 0, 0, 0, 1 }, { 2, 1, 0, 1 } };
+    a.clips = { uc (a, 0, 0, 0, 1), uc (a, 2, 1, 0, 1) };
     check (sls::compileSong (channels, a).channels[0].notes.size() == 2, "clips on different tracks are mixed");
 
     // empty playlist
@@ -749,7 +755,7 @@ void testArrangement()
     check (empty.lengthTicks == 4 * kBeat && empty.channels[0].notes.empty(), "an empty playlist is one silent pattern length");
 
     // robustness
-    a.clips = { { 9, 0, 0, 1 }, { 0, 0, 0, 1 } };
+    a.clips = { uc (a, 9, 0, 0, 1), uc (a, 0, 0, 0, 1) };
     check (sls::compileSong (channels, a).channels[0].notes.size() == 1, "clips of unknown patterns are skipped");
     a.dropInvalidClips();
     check (a.clips.size() == 1, "dropInvalidClips removes them");
@@ -935,7 +941,7 @@ void testSwing()
         a.patterns.resize (1);
         a.patterns[0].notes = { { { 60, 120, 60, 0.8f } } };
         a.patterns[0].steps = { sls::steps::patternSteps (a.patternTicks) }; // the whole pattern (one step: it would repeat each bar)
-        a.clips = { { 0, 0, 1, 1 } };
+        a.clips = { uc (a, 0, 0, 1, 1) };
         auto c = synthChannel ({});
         c.swing = 1.0f;
         const auto song = sls::compileSong ({ c }, a);
@@ -2686,7 +2692,7 @@ bool sameDocument (const sls::ProjectDocument& a, const sls::ProjectDocument& b)
     for (size_t i = 0; i < a.arrangement.clips.size(); ++i)
     {
         const auto &x = a.arrangement.clips[i], &y = b.arrangement.clips[i];
-        if (x.pattern != y.pattern || x.track != y.track || x.startUnit != y.startUnit || x.lengthUnits != y.lengthUnits)
+        if (x.pattern != y.pattern || x.track != y.track || x.startTick != y.startTick || x.lengthTicks != y.lengthTicks || x.offsetTicks != y.offsetTicks)
             return false;
     }
     for (size_t i = 0; i < a.arrangement.automationClips.size(); ++i)
@@ -2755,13 +2761,14 @@ sls::ProjectDocument richDocument()
     d.masterSlots[3] = sls::EffectSlot::make (sls::EffectType::Compressor);
     d.masterSlots[3].bypass = true;
 
+    d.arrangement.patternTicks = 8 * kBeat; // two bars (the default before 0.42.0), so the note at beat 5 fits
     d.arrangement.patterns.resize (2);
     d.arrangement.patterns[0].name = "Intro";
     d.arrangement.patterns[1].name = "Verse";
     d.arrangement.ensureChannelCount (2);
     d.arrangement.patterns[0].notes[0] = { { 60, 0, 240, 0.8f }, { 64, 480, 480, 0.5f }, { 67, 960, 120, 1.0f, sls::NoteLink::Slide } };
     d.arrangement.patterns[1].notes[1] = { { 60, 0, 120, 0.9f, sls::NoteLink::Legato }, { 60, 1920, 120, 0.7f } };
-    d.arrangement.clips = { { 0, 0, 0, 2 }, { 1, 1, 1, 3 } };
+    d.arrangement.clips = { uc (d.arrangement, 0, 0, 0, 2), uc (d.arrangement, 1, 1, 1, 3) };
 
     auto fade = sls::makeFlatAutomationClip ({ sls::AutomationKind::TrackVolume, 2, 0, 0 }, 1, 960, 3840, 0.0f);
     fade.points.back().value = 0.8123456f;
@@ -2980,8 +2987,8 @@ void testProjectFile()
         doc.arrangement.patterns[0].notes[0].push_back ({ 200, 0, 100, 0.5f });      // pitch out of range
         doc.arrangement.patterns[0].notes[0].push_back ({ 60, 99999, 100, 0.5f });   // starts after the pattern
         doc.arrangement.patterns[0].notes[0].push_back ({ 60, 3800, 9999, 5.0f });   // too long, too loud: kept, trimmed
-        doc.arrangement.clips.push_back ({ 0, 0, 1, 1 });                            // overlaps the first clip
-        doc.arrangement.clips.push_back ({ 9, 0, 20, 1 });                           // no such pattern
+        doc.arrangement.clips.push_back (uc (doc.arrangement, 0, 0, 1, 1));                            // overlaps the first clip
+        doc.arrangement.clips.push_back (uc (doc.arrangement, 9, 0, 20, 1));                           // no such pattern
         const auto r = sls::ProjectDocument::fromJson (doc.toJson());
         check (r.document.has_value(), "a file with out-of-range values still opens");
         if (r.document.has_value())
@@ -3427,9 +3434,9 @@ void testAudioClips()
     check (! a.canPlaceAudio (audio (0, a.timelineTicks() - 480, 960)), "an audio clip cannot run past the end of the timeline");
     check (! a.canPlaceAudio (audio (sls::kPlaylistTracks, 0, 480)), "or sit on a track that does not exist");
     check (a.canPlaceAudio (audio (0, 0, 480), 0), "a clip being moved does not collide with itself");
-    check (a.canPlace ({ 0, 0, 0, 1 }), "a pattern clip may cover an audio clip");
-    check (a.canPlace ({ 0, 0, 1, 1 }), "but can sit after it");
-    a.clips.push_back ({ 0, 2, 1, 1 });
+    check (a.canPlace (uc (a, 0, 0, 0, 1)), "a pattern clip may cover an audio clip");
+    check (a.canPlace (uc (a, 0, 0, 1, 1)), "but can sit after it");
+    a.clips.push_back (uc (a, 0, 2, 1, 1));
     check (a.canPlaceAudio (audio (2, a.patternTicks + 480, 480)), "and an audio clip a pattern clip");
     check (a.audioClipAt (0, 0) == 0 && a.audioClipAt (0, 959) == 0 && a.audioClipAt (0, 960) == -1, "audioClipAt finds the clip under a tick");
     check (a.findFreeAudioStart (0, 0, 960) == 0 && a.findFreeAudioStart (1, 100, 480) == 100 && a.findFreeAudioStart (0, 100, 480) == 100,
@@ -3439,7 +3446,7 @@ void testAudioClips()
     sls::Arrangement b;
     b.patterns.resize (1);
     b.audioClips.push_back (audio (3, 960, 3000));
-    check (b.songLengthUnits() == 2, "the song is as long as its last audio clip (rounded up to whole patterns)");
+    check (b.songLengthTicks() == 3 * 4 * kBeat, "the song ends at its last audio clip, rounded up to a whole bar (3960 ticks: 3 bars)");
 
     // compiling
     const auto empty = std::vector<sls::Channel> { synthChannel ({}) };
@@ -3627,7 +3634,7 @@ void testPlaylistLayering()
     a.patterns[1].notes[0] = { { 72, 120, 240, 0.8f } };
     a.patterns[0].steps = { st_whole (a.patternTicks) };
     a.patterns[1].steps = { st_whole (a.patternTicks) };
-    a.clips = { { 0, 0, 0, 2 }, { 1, 0, 1, 1 } }; // the second lies over the first's second repeat, on the same track
+    a.clips = { uc (a, 0, 0, 0, 2), uc (a, 1, 0, 1, 1) }; // the second lies over the first's second repeat, on the same track
     const std::vector<sls::Channel> channels { synthChannel ({}) };
     const auto song = sls::compileSong (channels, a);
     int at60 = 0, at72 = 0;
@@ -3637,7 +3644,7 @@ void testPlaylistLayering()
         at72 += n.pitch == 72 && n.startTick == a.patternTicks + 120 ? 1 : 0;
     }
     check (at60 == 2 && at72 == 1, "pattern clips laid over each other on a track all play");
-    check (a.clipAt (0, 1) == 1 && a.clipAt (0, 0) == 0, "the clip on top (the later one) is the one picked under the mouse");
+    check (a.clipAt (0, a.patternTicks) == 1 && a.clipAt (0, 0) == 0, "the clip on top (the later one) is the one picked under the mouse");
 
     // Two audio clips over each other on one track are both heard.
     const auto tone = [] (double hz)
@@ -3744,7 +3751,7 @@ void testFlpFiles()
     a.patterns[0].notes[0] = { { 64, 0, 480, 0.5f }, { 67, 1000, 333, 1.0f } };
     a.patterns[0].notes[1] = { { 48, 0, 120, 0.9f }, { 48, 480, 120, 0.9f } }; // one bar of steps: repeats in the second
     a.patterns[1].notes[0] = { { 72, 3800, 40, 0.8f } };
-    a.clips = { { 0, 0, 0, 2 }, { 1, 3, 4, 1 } };
+    a.clips = { uc (a, 0, 0, 0, 2), uc (a, 1, 3, 4, 1) };
     sls::AudioClip audio;
     audio.data = sls::makeMissingSample ("/home/me/Audio/vocal take.wav");
     audio.name = "vocal take";
@@ -3775,7 +3782,7 @@ void testFlpFiles()
         exact = exact || (n.channel == 0 && n.key == 67 && n.position == 2000 && n.length == 666 && n.velocity == 128);
     }
     check (lead == 2 && exact, "notes keep their exact position, length and velocity (ticks doubled)");
-    check (kicks == 4, "a one-bar step sequence is written out over both bars");
+    check (kicks == 2, "steps are written as they are (since 0.42.0 nothing repeats by itself)");
     int patternItems = 0, audioItems = 0;
     for (const auto& item : song.items)
     {
@@ -3802,8 +3809,7 @@ void testFlpFiles()
         check (n.size() == 2 && n[1].pitch == 67 && n[1].startTick == 1000 && n[1].lengthTicks == 333 && std::abs (n[1].velocity - 1.0f) < 1.0e-6f
                    && std::abs (n[0].velocity - 0.5f) < 1.0e-6f,
                "the notes come back exactly");
-        check (d.arrangement.patterns[0].notes[1].size() == 4 && d.arrangement.patterns[0].stepsOf (1) == 32,
-               "the steps come back written out, set to the whole pattern (they play as before)");
+        check (d.arrangement.patterns[0].notes[1].size() == 2, "the steps come back as written");
         int clipsOnTrack0 = 0;
         for (const auto& c : d.arrangement.clips)
             clipsOnTrack0 += c.track == 0 && c.pattern == 0 ? 1 : 0;
@@ -3949,6 +3955,80 @@ void testTypingKeyboard()
            "velocity steps");
 }
 
+
+void testFreePlaylist()
+{
+    std::cout << "Playlist: pattern clips anywhere on the grid, the pattern length in quarters (0.42.0)\n";
+    const int bar = 4 * kBeat;
+    sls::Arrangement a;
+    check (a.patternTicks == bar, "a new project's patterns are one bar of 4/4 (4 quarters, 16 steps)");
+    a.patterns.resize (1);
+    a.ensureChannelCount (1);
+    a.patterns[0].notes[0] = { { 60, 0, 120, 0.8f }, { 62, kBeat, 120, 0.8f }, { 64, 2 * kBeat, 120, 0.8f }, { 65, 3 * kBeat, 120, 0.8f } };
+    const std::vector<sls::Channel> channels { synthChannel ({}) };
+
+    // A clip one 16th after a bar line: every note moves with it (no snapping to whole patterns).
+    a.clips = { { 0, 0, bar + 120, bar, 0 } };
+    auto song = sls::compileSong (channels, a);
+    check (song.channels[0].notes.size() == 4 && song.channels[0].notes[0].startTick == bar + 120 && song.channels[0].notes[3].startTick == bar + 120 + 3 * kBeat,
+           "a clip placed a 16th after the bar plays its notes a 16th late");
+    a.clips = { { 0, 0, 37, bar, 0 } };
+    song = sls::compileSong (channels, a);
+    check (song.channels[0].notes[0].startTick == 37, "off the grid too (Alt): any tick");
+    // Two clips on different tracks, one of them a beat behind the other: they play out of step, as placed.
+    a.clips = { { 0, 0, 0, bar, 0 }, { 0, 1, kBeat, bar, 0 } };
+    song = sls::compileSong (channels, a);
+    check (song.channels[0].notes.size() == 8, "clips may be offset against each other freely");
+    // Length not a whole number of patterns: the notes after the end are left out, a note running over is shortened.
+    a.clips = { { 0, 0, 0, bar + kBeat + 60, 0 } };
+    song = sls::compileSong (channels, a);
+    check (song.channels[0].notes.size() == 6 && song.channels[0].notes.back().startTick == bar + kBeat && song.channels[0].notes.back().lengthTicks == 60,
+           "a clip 1 bar + 1 beat + a 32nd long: the second pass is cut where the clip ends");
+    // A clip that starts inside the pattern (after a split) goes on from there.
+    a.clips = { { 0, 0, 0, 2 * kBeat, 2 * kBeat } };
+    song = sls::compileSong (channels, a);
+    check (song.channels[0].notes.size() == 2 && song.channels[0].notes[0].pitch == 64 && song.channels[0].notes[0].startTick == 0
+               && song.channels[0].notes[1].pitch == 65,
+           "a clip with an offset of 2 beats starts with the pattern's third beat");
+    a.clips = { { 0, 0, 0, bar, 3 * kBeat } };
+    song = sls::compileSong (channels, a);
+    check (song.channels[0].notes.size() == 4 && song.channels[0].notes[0].pitch == 65 && song.channels[0].notes[1].pitch == 60
+               && song.channels[0].notes[1].startTick == kBeat,
+           "and wraps round to the pattern's start");
+    check (song.lengthTicks == bar, "the song ends at the last clip, rounded up to a bar");
+
+    // The pattern length in quarters, kept for clips.
+    a.clips = { { 0, 0, 120, 2 * bar, 0 }, { 0, 1, 0, 3 * kBeat, 0 } };
+    a.setPatternLengthKeepingClips (5 * kBeat);
+    check (a.patternTicks == 5 * kBeat && a.clips[0].startTick == 120 && a.clips[0].lengthTicks == 10 * kBeat && a.clips[1].lengthTicks == 3 * kBeat,
+           "one quarter longer: clips stay put, a two-pattern clip keeps its two repeats, a shorter one its length");
+    a.setPatternLengthKeepingClips (2 * kBeat);
+    check (a.patternTicks == 4 * kBeat, "never shorter than one bar of 4/4");
+
+    // Saved and read back in ticks; older files in whole patterns.
+    auto doc = sls::ProjectDocument::blank();
+    doc.arrangement.patternTicks = 5 * kBeat;
+    doc.arrangement.clips = { { 0, 2, 777, 3000, 240 } };
+    auto back = sls::ProjectDocument::fromJson (doc.toJson());
+    check (back.document && back.document->arrangement.patternTicks == 5 * kBeat && back.document->arrangement.clips.size() == 1
+               && back.document->arrangement.clips[0].startTick == 777 && back.document->arrangement.clips[0].lengthTicks == 3000
+               && back.document->arrangement.clips[0].offsetTicks == 240 && back.document->arrangement.clips[0].track == 2,
+           "a pattern length of 5 quarters and a clip at tick 777 with an offset are saved and read back");
+    doc.arrangement.patternTicks = 8 * kBeat;
+    auto v = juce::JSON::parse (doc.toJson());
+    v.getDynamicObject()->removeProperty ("patternBeats");
+    auto* clip = v.getDynamicObject()->getProperty ("clips").getArray()->getReference (0).getDynamicObject();
+    clip->removeProperty ("startTick");
+    clip->removeProperty ("lengthTicks");
+    clip->removeProperty ("offsetTicks");
+    clip->setProperty ("start", 3);
+    clip->setProperty ("length", 2);
+    back = sls::ProjectDocument::fromJson (juce::JSON::toString (v));
+    check (back.document && back.document->arrangement.patternTicks == 8 * kBeat && back.document->arrangement.clips[0].startTick == 3 * 8 * kBeat
+               && back.document->arrangement.clips[0].lengthTicks == 2 * 8 * kBeat,
+           "a file from before 0.42.0 (whole patterns of two bars) opens with its clips in the same places");
+}
+
 void testStepSequencer()
 {
     std::cout << "Step sequencer (0.31.0)\n";
@@ -3977,62 +4057,27 @@ void testStepSequencer()
     offGrid[2].startTick += 30;
     check (! st::isStepSequence (offGrid, 60), "a note off the step grid: the preview");
 
-    check (st::activeSteps ({}, 0, pattern2) == 16, "a new channel has 16 active steps");
-    check (st::activeSteps (kicks, 0, pattern2) == 16, "one bar of steps: 16 active steps");
-    check (st::activeSteps ({ step (20, 60) }, 0, pattern2) == 32, "a step in the second bar makes it two bars");
-    check (st::activeSteps (kicks, 12, pattern2) == 13, "a length set by hand, but never shorter than the notes");
-    check (st::activeSteps ({}, 0, bar) == 16 && st::activeSteps ({}, 40, bar) == 16, "never longer than the pattern");
-    check (st::activeSteps ({ step (3, 60) }, 8, pattern2) == 8, "a length set by hand (8 steps)");
+    // 0.42.0: the grid is the whole pattern; nothing is greyed out, nothing grows or repeats by itself.
+    check (st::activeSteps ({}, 0, bar) == 16, "a bar of 4/4 shows 16 steps");
+    check (st::activeSteps (kicks, 0, bar + 4 * st::kStepTicks) == 20, "a quarter more: 20 steps");
+    check (st::activeSteps ({ step (3, 60) }, 8, pattern2) == 32, "every step of the pattern is a real step (a length set before 0.42.0 is ignored)");
+    check (st::playedNotes (kicks, pattern2).size() == 4, "a one-bar step sequence in a two-bar pattern is not repeated");
+    check (st::playedNotes (chord, pattern2).size() == chord.size(), "notes play as written");
 
-    // What plays: the active part again in the greyed steps.
-    const auto played = st::playedNotes (sampler, kicks, 0, pattern2);
-    check (played.size() == 8 && played[4].startTick == bar && played[7].startTick == bar + 12 * st::kStepTicks,
-           "a one-bar step sequence fills a two-bar pattern");
-    const auto polymeter = st::playedNotes (sampler, { step (0, 60) }, 12, pattern2);
-    check (polymeter.size() == 3 && polymeter[1].startTick == 12 * st::kStepTicks && polymeter[2].startTick == 24 * st::kStepTicks,
-           "a 12-step sequence repeats every 12 steps (and is cut at the end of the pattern)");
-    check (st::playedNotes (sampler, chord, 0, pattern2).size() == chord.size(), "a channel written in the piano roll plays its notes as they are");
-    check (st::playedNotes (sampler, kicks, 32, pattern2).size() == 4, "a channel set to the whole pattern does not repeat");
-    check (st::playedNotes (drums, kicks, 0, pattern2).size() == 4, "on a drum channel only kicks are steps (these notes are not): played as written");
-
-    // Editing: left writes, right erases; a greyed step first makes the active part reach it, keeping the sound.
+    // Editing: left writes, right erases, anywhere in the pattern.
     {
         auto notes = kicks;
         int set = 0;
-        check (st::setStep (notes, set, 2, true, pattern2, 60) && st::stepOn (notes, 2, 60) && set == 0, "left click writes a step");
+        check (st::setStep (notes, set, 2, true, pattern2, 60) && st::stepOn (notes, 2, 60), "left click writes a step");
         check (! st::setStep (notes, set, 2, true, pattern2, 60), "writing a step that is on changes nothing");
         check (st::setStep (notes, set, 2, false, pattern2, 60) && ! st::stepOn (notes, 2, 60), "right click erases it");
         check (! st::setStep (notes, set, 3, false, pattern2, 60), "erasing an empty step changes nothing");
-        const auto before = st::playedNotes (sampler, notes, set, pattern2);
-        check (st::setStep (notes, set, 22, true, pattern2, 60) && set == 32 && st::stepOn (notes, 22, 60),
-               "a step written in the greyed part makes the sequence a bar longer");
-        check (st::stepOn (notes, 16, 60) && st::stepOn (notes, 20, 60) && st::stepOn (notes, 28, 60) && notes.size() == 9,
-               "the bar taken in is filled with what it was playing, plus the new step");
-        const auto after = st::playedNotes (sampler, notes, set, pattern2);
-        check (after.size() == before.size() + 1, "so the sound only changes by the step written");
-
-        auto erase = kicks;
-        int eraseSet = 0;
-        check (st::setStep (erase, eraseSet, 20, false, pattern2, 60) && eraseSet == 32 && ! st::stepOn (erase, 20, 60) && erase.size() == 7,
-               "erasing a greyed step that played makes the sequence longer and erases only that one");
-    }
-    {
-        // Dragging the end of the active part.
-        auto notes = kicks;
-        int set = 0;
-        check (st::resize (notes, set, 32, pattern2, 60) && set == 32 && notes.size() == 8, "dragged longer: the new steps keep what they played");
-        check (st::resize (notes, set, 16, pattern2, 60) && set == 16 && notes.size() == 4, "dragged shorter: the steps after the end are deleted");
-        check (st::resize (notes, set, 8, pattern2, 60) && set == 8 && notes.size() == 2 && st::activeSteps (notes, set, pattern2) == 8,
-               "shorter than a bar (with Alt)");
-        check (st::playedNotes (sampler, notes, set, pattern2).size() == 8, "an 8-step sequence plays four times in two bars");
-        check (! st::resize (notes, set, 8, pattern2, 60), "the same length changes nothing");
-        check (st::resize (notes, set, 99, pattern2, 60) && set == 32, "never longer than the pattern");
-        int fresh = 0;
-        std::vector<sls::Note> none;
-        check (st::resize (none, fresh, 32, pattern2, 60) && fresh == 32 && none.empty(), "an empty channel can be made longer too");
+        check (st::setStep (notes, set, 22, true, pattern2, 60) && st::stepOn (notes, 22, 60) && notes.size() == 5,
+               "a step in the second bar is written alone (nothing else is filled in)");
+        check (! st::setStep (notes, set, 32, true, pattern2, 60) && ! st::setStep (notes, set, -1, true, pattern2, 60), "steps outside the pattern are refused");
     }
 
-    // The patterns that play: pattern mode and song mode both repeat the active part.
+    // Pattern and song mode play the notes as written.
     {
         sls::Arrangement arrangement;
         arrangement.patternTicks = pattern2;
@@ -4042,37 +4087,45 @@ void testStepSequencer()
         arrangement.patterns[0].notes[0] = kicks;
         arrangement.patterns[0].notes[1] = chord;
         const auto p = sls::compilePattern (channels, arrangement, 0);
-        check (p.channels[0].notes.size() == 8 && p.channels[1].notes.size() == chord.size(), "pattern mode plays the repeats");
-        arrangement.patterns[0].steps[0] = 32;
-        check (sls::compilePattern (channels, arrangement, 0).channels[0].notes.size() == 4, "a channel set to two bars leaves the second bar silent");
-        arrangement.patterns[0].steps[0] = 0;
-        arrangement.clips = { { 0, 0, 0, 2 } };
-        const auto song = sls::compileSong (channels, arrangement);
-        check (song.channels[0].notes.size() == 16, "song mode plays the repeats in every pattern clip");
-
-        // Channels deleted or moved: the lengths follow.
-        arrangement.patterns[0].steps = { 12, 24 };
-        sls::remapArrangementChannels (arrangement, { 1, 0 }, 2);
-        check (arrangement.patterns[0].stepsOf (0) == 24 && arrangement.patterns[0].stepsOf (1) == 12, "the lengths follow channels that move");
+        check (p.channels[0].notes.size() == 4 && p.channels[1].notes.size() == chord.size(), "pattern mode plays the steps once");
+        arrangement.clips = { uc (arrangement, 0, 0, 0, 2) };
+        check (sls::compileSong (channels, arrangement).channels[0].notes.size() == 8, "song mode: once per repeat of the clip");
     }
 
-    // Project files: the lengths are saved; a file from before 0.31.0 keeps every channel to the whole pattern (it plays as before).
+    // Project files from 0.31.0 - 0.41.0 keep their sound: the repeats of the greyed steps are written out as notes.
     {
+        std::vector<sls::Note> legacy = kicks;
+        st::bakeLegacyRepeats (legacy, 0, pattern2, 60);
+        check (legacy.size() == 8 && legacy[4].startTick == bar, "a one-bar sequence that repeated in a two-bar pattern gets its second bar");
+        std::vector<sls::Note> twelve { step (0, 60) };
+        st::bakeLegacyRepeats (twelve, 12, pattern2, 60);
+        check (twelve.size() == 3 && twelve[1].startTick == 12 * st::kStepTicks && twelve[2].startTick == 24 * st::kStepTicks, "a 12-step sequence: every 12 steps");
+        auto whole = kicks;
+        st::bakeLegacyRepeats (whole, 32, pattern2, 60);
+        check (whole.size() == 4, "a channel set to the whole pattern did not repeat: unchanged");
+        auto melody = chord;
+        st::bakeLegacyRepeats (melody, 0, pattern2, 60);
+        check (melody.size() == chord.size(), "a channel written in the piano roll did not repeat: unchanged");
+
         auto doc = richDocument();
+        doc.arrangement.patternTicks = pattern2;
         doc.arrangement.ensureChannelCount (doc.channels.size());
-        doc.arrangement.patterns[0].steps[0] = 12;
-        const auto back = sls::ProjectDocument::fromJson (doc.toJson());
-        check (back.document.has_value() && back.document->arrangement.patterns[0].stepsOf (0) == 12
-                   && back.document->arrangement.patterns[0].stepsOf (1) == 0,
-               "the active lengths survive a round trip");
+        doc.channels[0].instrument = sls::Instrument::Sampler;
+        doc.channels[0].rootPitch = 60;
+        doc.arrangement.patterns[0].notes[0] = kicks;
         auto v = juce::JSON::parse (doc.toJson());
-        for (auto& p : *v.getDynamicObject()->getProperty ("patterns").getArray())
-            p.getDynamicObject()->removeProperty ("steps");
+        check (! v.getDynamicObject()->getProperty ("patterns").getArray()->getReference (0).getDynamicObject()->hasProperty ("steps"),
+               "0.42.0 no longer writes the active lengths");
+        for (auto& pv : *v.getDynamicObject()->getProperty ("patterns").getArray())
+        {
+            juce::Array<juce::var> lengths;
+            for (size_t c = 0; c < doc.channels.size(); ++c)
+                lengths.add (0);
+            pv.getDynamicObject()->setProperty ("steps", lengths); // as 0.31.0 - 0.41.0 wrote them
+        }
         const auto old = sls::ProjectDocument::fromJson (juce::JSON::toString (v));
-        const int whole = st::patternSteps (doc.arrangement.patternTicks);
-        check (old.document.has_value() && old.warnings.empty() && old.document->arrangement.patterns[0].stepsOf (0) == whole
-                   && old.document->arrangement.patterns[0].stepsOf (1) == whole,
-               "an older file sets every channel to the whole pattern, so nothing starts repeating");
+        check (old.document.has_value() && old.document->arrangement.patterns[0].notes[0].size() == 8,
+               "an older file opens with the repeats written out, so it sounds as before");
     }
 }
 
@@ -5982,7 +6035,7 @@ void testClipEditing()
         a.patterns[1].name = "Pattern 2";
         a.patterns[2].name = "Pattern 3";
         a.patterns[3].name = "Drums";
-        a.clips = { { 0, 0, 0, 1 }, { 1, 0, 1, 2 }, { 2, 1, 0, 1 }, { 3, 2, 0, 1 }, { 1, 3, 4, 1 } };
+        a.clips = { uc (a, 0, 0, 0, 1), uc (a, 1, 0, 1, 2), uc (a, 2, 1, 0, 1), uc (a, 3, 2, 0, 1), uc (a, 1, 3, 4, 1) };
         check (a.newPatternName() == "Pattern 4", "the next pattern name is the lowest number not in use");
         check (! a.removePattern (-1) && ! a.removePattern (4) && a.patterns.size() == 4, "deleting a pattern that does not exist changes nothing");
         check (a.removePattern (1), "a pattern can be deleted");
@@ -6005,16 +6058,23 @@ void testClipEditing()
     {
         sls::Arrangement a;
         a.patterns.resize (1);
-        a.clips = { { 0, 0, 2, 6 } }; // units 2..8
-        check (sls::splitPatternClip (a, 0, 2) == -1 && sls::splitPatternClip (a, 0, 8) == -1 && a.clips.size() == 1, "pattern clips split only strictly inside");
-        check (sls::splitPatternClip (a, 0, 5) == 1 && a.clips[0].lengthUnits == 3 && a.clips[1].startUnit == 5 && a.clips[1].lengthUnits == 3,
-               "a pattern clip splits at a unit boundary");
-        a.clips = { { 0, 0, 2, 6 } };
-        check (sls::cutPatternRange (a, 0, 4, 6) == 2 && a.clips[0].lengthUnits == 2 && a.clips[1].startUnit == 6 && a.clips[1].lengthUnits == 2,
-               "cutting units out of the middle leaves two clips");
-        a.clips = { { 0, 0, 2, 6 } };
-        check (sls::cutPatternRange (a, 0, 0, 4) == 1 && a.clips[0].startUnit == 4 && a.clips[0].lengthUnits == 4, "cutting from the start");
-        check (sls::cutPatternRange (a, 0, 0, 99) == 0 && a.clips.empty(), "cutting everything removes the clip");
+        const int pt = a.patternTicks; // one bar of 4/4 since 0.42.0
+        a.clips = { { 0, 0, 2 * pt, 6 * pt, 0 } };
+        check (sls::splitPatternClip (a, 0, 2 * pt) == -1 && sls::splitPatternClip (a, 0, 8 * pt) == -1 && a.clips.size() == 1, "pattern clips split only strictly inside");
+        check (sls::splitPatternClip (a, 0, 5 * pt) == 1 && a.clips[0].lengthTicks == 3 * pt && a.clips[1].startTick == 5 * pt && a.clips[1].lengthTicks == 3 * pt
+                   && a.clips[1].offsetTicks == 0,
+               "a pattern clip splits at a pattern boundary (the right part starts the pattern again)");
+        a.clips = { { 0, 0, 2 * pt, 6 * pt, 0 } };
+        check (sls::splitPatternClip (a, 0, 3 * pt + 480) == 1 && a.clips[1].startTick == 3 * pt + 480 && a.clips[1].offsetTicks == 480,
+               "split inside a pattern (0.42.0): the right part goes on from that beat of the pattern");
+        a.clips = { { 0, 0, 2 * pt, 6 * pt, 0 } };
+        check (sls::cutPatternRange (a, 0, 4 * pt, 6 * pt) == 2 && a.clips[0].lengthTicks == 2 * pt && a.clips[1].startTick == 6 * pt && a.clips[1].lengthTicks == 2 * pt,
+               "cutting out of the middle leaves two clips");
+        a.clips = { { 0, 0, 2 * pt, 6 * pt, 0 } };
+        check (sls::cutPatternRange (a, 0, 0, 4 * pt + 960) == 1 && a.clips[0].startTick == 4 * pt + 960 && a.clips[0].lengthTicks == 4 * pt - 960
+                   && a.clips[0].offsetTicks == 960,
+               "cutting from the start keeps the rest where it was in the pattern");
+        check (sls::cutPatternRange (a, 0, 0, 1 << 28) == 0 && a.clips.empty(), "cutting everything removes the clip");
     }
 }
 
@@ -8492,19 +8552,19 @@ void testPatternLength()
     const int bar = 4 * kBeat;
     sls::Arrangement a;
     a.patternTicks = bar;
-    check (a.timelineUnits() == 64 && a.timelineTicks() == 64 * bar, "1-bar patterns: 64 of them fit (64 bars)");
+    check ((a.timelineTicks() / a.patternTicks) == 64 && a.timelineTicks() == 64 * bar, "1-bar patterns: 64 of them fit (64 bars)");
     a.patternTicks = 2 * bar;
-    check (a.timelineUnits() == 32 && a.timelineTicks() == 64 * bar, "2-bar patterns: 32 (64 bars, as before)");
+    check ((a.timelineTicks() / a.patternTicks) == 32 && a.timelineTicks() == 64 * bar, "2-bar patterns: 32 (64 bars, as before)");
     a.patternTicks = 4 * bar;
-    check (a.timelineUnits() == 32 && a.timelineTicks() == 128 * bar, "4-bar patterns: 32 (128 bars)");
+    check ((a.timelineTicks() / a.patternTicks) == 32 && a.timelineTicks() == 128 * bar, "4-bar patterns: 32 (128 bars)");
     a.patternTicks = 8 * bar;
     a.patterns.resize (1);
-    check (a.timelineUnits() == 32 && a.canPlace ({ 0, 0, 31, 1 }) && ! a.canPlace ({ 0, 0, 32, 1 }), "8-bar patterns: 32, and the last unit is the end");
+    check ((a.timelineTicks() / a.patternTicks) == 32 && a.canPlace (uc (a, 0, 0, 31, 1)) && ! a.canPlace (uc (a, 0, 0, 32, 1)), "8-bar patterns: 32, and the last unit is the end");
 
     // A 4-bar pattern played twice in Song mode: its note in bar 3 comes at bars 3 and 7.
     a.patternTicks = 4 * bar;
     a.patterns[0].notes = { { { 60, 2 * bar, kBeat, 0.8f } } };
-    a.clips = { { 0, 0, 0, 2 } };
+    a.clips = { uc (a, 0, 0, 0, 2) };
     const auto song = sls::compileSong ({ synthChannel ({}) }, a);
     check (song.lengthTicks == 8 * bar && song.channels[0].notes.size() == 2 && song.channels[0].notes[1].startTick == 6 * bar,
            "4-bar patterns compile to a song with the notes in the right bars");
@@ -8518,6 +8578,7 @@ void testPatternLength()
     const auto withBars = [&] (const juce::var& value)
     {
         auto v = juce::JSON::parse (doc.toJson());
+        v.getDynamicObject()->removeProperty ("patternBeats"); // as files from before 0.42.0
         if (value.isVoid())
             v.getDynamicObject()->removeProperty ("patternBars");
         else
@@ -10373,7 +10434,7 @@ void testPluginHosting()
         a.ensureChannelCount (1);
         a.patterns[0].notes[0] = { { 69, 0, 8 * kBeat, 0.8f } };
         a.patterns[0].steps = { 64 };
-        a.clips = { { 0, 0, 0, 1 } };
+        a.clips = { uc (a, 0, 0, 0, 1) };
         const std::vector<sls::Channel> chans { synthChannel ({}) };
         auto tracks = sls::Project::defaultTracks();
         const auto dry = [&]
@@ -10592,6 +10653,7 @@ int main()
     testHelios();
     testSfz();
     testSfzFiles();
+    testFreePlaylist();
     testMidiNotes();
     testPlayerRewind();
     testClipEditing();

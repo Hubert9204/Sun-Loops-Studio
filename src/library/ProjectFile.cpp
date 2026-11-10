@@ -329,18 +329,16 @@ juce::String ProjectDocument::toJson() const
             perChannel.add (notes);
         }
         o->setProperty ("notes", perChannel);
-        // The step sequencer's active lengths (0.31.0). Always written: a file without them is older, and its channels then
-        // take the whole pattern (as they played before).
-        juce::Array<juce::var> stepList;
-        for (size_t c = 0; c < channels.size(); ++c)
-            stepList.add (p.stepsOf (c));
-        o->setProperty ("steps", stepList);
+        // (0.31.0 to 0.41.0 wrote "steps", the step channels' active lengths that repeated; since 0.42.0 nothing repeats by
+        // itself, and a file with "steps" is opened with the repeats written out as notes.)
         if (p.hasLoop (arrangement.patternTicks))
             o->setProperty ("loop", juce::Array<juce::var> { p.loopStartTick, p.loopEndTick }); // the piano roll's loop region (0.20.0)
         patternList.add (juce::var (o));
     }
     root->setProperty ("patterns", patternList);
-    root->setProperty ("patternBars", arrangement.patternTicks / (4 * kTicksPerBeat));
+    root->setProperty ("patternBeats", arrangement.patternTicks / kTicksPerBeat); // 0.42.0: in quarter notes
+    if (arrangement.patternTicks % (4 * kTicksPerBeat) == 0)
+        root->setProperty ("patternBars", arrangement.patternTicks / (4 * kTicksPerBeat)); // what older versions read
 
     juce::Array<juce::var> clipList;
     for (const auto& c : arrangement.clips)
@@ -348,8 +346,10 @@ juce::String ProjectDocument::toJson() const
         auto* o = new juce::DynamicObject();
         o->setProperty ("pattern", c.pattern);
         o->setProperty ("track", c.track);
-        o->setProperty ("start", c.startUnit);
-        o->setProperty ("length", c.lengthUnits);
+        o->setProperty ("startTick", c.startTick); // 0.42.0: ticks (before, "start" / "length" in whole patterns)
+        o->setProperty ("lengthTicks", c.lengthTicks);
+        if (c.offsetTicks != 0)
+            o->setProperty ("offsetTicks", c.offsetTicks);
         clipList.add (juce::var (o));
     }
     root->setProperty ("clips", clipList);
@@ -608,7 +608,10 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
             for (int s = 0; s < std::min (slots->size(), kSlotsPerTrack); ++s)
                 d.masterSlots[static_cast<size_t> (s)] = readSlot ((*slots)[s], d.pluginSpecs, PluginSpec::Place::Master, 0, s);
 
-    // --- pattern length (0.15.0; older files: two bars)
+    // --- pattern length (0.15.0 in bars, older files: two bars; 0.42.0 in quarter notes)
+    if (root->hasProperty ("patternBeats"))
+        d.arrangement.patternTicks = readInt (root->getProperty ("patternBeats"), kMinPatternBeats, kMinPatternBeats, kMaxPatternBeats) * kTicksPerBeat;
+    else
     {
         const int bars = readInt (root->getProperty ("patternBars"), 2, 1, 8);
         const bool offered = std::find (std::begin (kPatternBarChoices), std::end (kPatternBarChoices), bars) != std::end (kPatternBarChoices);
@@ -675,12 +678,16 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
                                       { return a.startTick != b.startTick ? a.startTick < b.startTick : a.pitch < b.pitch; });
                 }
 
-        pattern.steps.assign (numChannels, steps::patternSteps (d.arrangement.patternTicks));
+        pattern.steps.assign (numChannels, 0);
         if (auto* stepList = o->getProperty ("steps").getArray())
-            for (int c = 0; c < static_cast<int> (numChannels); ++c)
-                pattern.steps[static_cast<size_t> (c)] = c < stepList->size()
-                                                             ? readInt ((*stepList)[c], 0, 0, steps::patternSteps (d.arrangement.patternTicks))
-                                                             : 0;
+            // Saved by 0.31.0 - 0.41.0: a step channel repeated its active part to the end of the pattern. Written out as notes, so
+            // it sounds the same now that the grid does not repeat by itself.
+            for (int c = 0; c < static_cast<int> (numChannels) && c < static_cast<int> (d.channels.size()); ++c)
+            {
+                const int set = c < stepList->size() ? readInt ((*stepList)[c], 0, 0, steps::patternSteps (d.arrangement.patternTicks)) : 0;
+                steps::bakeLegacyRepeats (pattern.notes[static_cast<size_t> (c)], set, d.arrangement.patternTicks,
+                                          steps::stepPitch (d.channels[static_cast<size_t> (c)]));
+            }
 
         d.arrangement.patterns.push_back (std::move (pattern));
     }
@@ -715,8 +722,18 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
             {
                 clip.pattern = readInt (o->getProperty ("pattern"), -1, -1, 1000);
                 clip.track = readInt (o->getProperty ("track"), -1, -1, 1000);
-                clip.startUnit = readInt (o->getProperty ("start"), -1, -1, 100000);
-                clip.lengthUnits = readInt (o->getProperty ("length"), 0, 0, 100000);
+                if (o->hasProperty ("startTick"))
+                {
+                    clip.startTick = readInt (o->getProperty ("startTick"), -1, -1, 1 << 28);
+                    clip.lengthTicks = readInt (o->getProperty ("lengthTicks"), 0, 0, 1 << 28);
+                    clip.offsetTicks = readInt (o->getProperty ("offsetTicks"), 0, 0, d.arrangement.patternTicks - 1);
+                }
+                else
+                {
+                    // Before 0.42.0: whole pattern lengths.
+                    clip.startTick = readInt (o->getProperty ("start"), -1, -1, 100000) * d.arrangement.patternTicks;
+                    clip.lengthTicks = readInt (o->getProperty ("length"), 0, 0, 100000) * d.arrangement.patternTicks;
+                }
             }
             if (o != nullptr && d.arrangement.canPlace (clip))
                 d.arrangement.clips.push_back (clip);

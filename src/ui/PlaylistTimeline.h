@@ -206,6 +206,7 @@ private:
     void paintAutomationClip (juce::Graphics& g, const AutomationClip& c, bool selected);
     int unitToX (int unit) const noexcept;
     int xToUnit (int x) const noexcept;       // clamped to the timeline
+    int floorToGrid (int tick) const noexcept; // the start of the grid square that holds `tick` (0.42.0)
     int yToTrack (int y) const noexcept;      // clamped to the tracks
     juce::Rectangle<int> clipRect (const Clip& c) const noexcept;
     int tickToX (int tick) const noexcept;
@@ -261,7 +262,6 @@ private:
 
     Drag drag = Drag::None;
     int dragClip = -1;
-    int grabOffsetUnits = 0;
     int grabOffsetTicks = 0;
     int dragStartTick = 0, dragEndTick = 0; // Cut / zoom range, in ticks
     int dragTrack = 0;

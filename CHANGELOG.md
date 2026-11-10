@@ -2,6 +2,29 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.42.0 - 2026-11-10
+
+Correction of the Channel Rack and the Playlist, as specified on 2026-11-10.
+
+### Changed
+- **Channel Rack grid = the pattern.** A new project (and a new channel) shows exactly **one bar of 4/4: 4 quarters, 16 steps**,
+  all usable. No greyed steps, no repeats, no handle, nothing that grows by itself.
+- **- and + buttons** in a bar at the top of the Channel Rack: + adds **one quarter** (4 steps), - takes one away; 4 quarters is
+  the minimum (- is disabled there), 64 the maximum. The length is shared by every pattern and undoable; the bar reads it out
+  (*Pattern: 5 quarters (1 bar + 1/4) - 20 steps*). The pattern menu's 1 / 2 / 4 / 8 bars stays, and 1 bar is now the default.
+- **Playlist: pattern clips placed freely.** They are now positioned in ticks, like audio clips: placed, moved, lengthened and
+  shortened by **grid squares** (the Grid box: bar, beat, 16th... down to a tick) instead of whole patterns, and with **Alt** with
+  no snap at all, so clips can start out of step with each other (micro-timing). A clip's length need not be a whole number of
+  patterns; thin marks show where each repeat starts.
+- **Split and Cut** work on pattern clips at any grid square; the right part remembers where in the pattern it starts, so the
+  sound does not change.
+- The demo project uses one-bar patterns ("Pattern 1", "Pattern 2", "Drums").
+
+### Compatibility
+- Projects saved before 0.42.0 open with their clips in the same places and lengths; step sequences that repeated a shorter part
+  (0.31.0 - 0.41.0) open with the repeats written out as steps, so they sound as before.
+- FL Studio export: a clip that starts inside its pattern (after a split) is written from the pattern's start; the message says so.
+
 ## 0.41.0 - 2026-11-10
 
 Finishing what earlier releases left half done.

@@ -85,9 +85,9 @@ void MainComponent::showNewPatternMenu (juce::Component& target)
     menu.addItem (2, "Clone current pattern");
     menu.addItem (3, "Loop Starter...");
     juce::PopupMenu lengths;
-    const int bars = arrangement.patternTicks / (4 * kTicksPerBeat);
     for (const int choice : kPatternBarChoices)
-        lengths.addItem (100 + choice, juce::String (choice) + (choice == 1 ? " bar" : " bars"), true, choice == bars);
+        lengths.addItem (100 + choice, juce::String (choice) + (choice == 1 ? " bar" : " bars"), true,
+                         arrangement.patternTicks == choice * 4 * kTicksPerBeat); // 5 quarters ticks none
     menu.addSeparator();
     menu.addSubMenu ("Pattern length (all patterns)", lengths);
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&target),
@@ -116,32 +116,41 @@ void MainComponent::showPatternLength()
     if (drumWindow != nullptr)
         drumWindow->view().setLoopTicks (ticks);
     noteRecorder.configure (ticks, noteQuantize);
+    rackBody.setPatternBeats (ticks / kTicksPerBeat);
 }
 
-// Every pattern gets the new length (a playlist unit is one pattern long, so pattern clips keep their place in units:
-// with longer patterns the song gets longer). Notes past the end of a shorter pattern are kept but not played, and come
-// back when the patterns are made longer again. Refused when something would no longer fit in the timeline.
+// Every pattern gets the new length, counted in quarter notes (0.42.0): the Channel Rack's + and - change it one quarter at a time,
+// the pattern menu offers whole bars. Notes past the end of a shorter pattern are kept but not played, and come back when the
+// patterns are made longer again. Playlist clips stay where they are (they are placed in ticks); a clip that was a whole number of
+// patterns long keeps that number of repeats. Refused when something would no longer fit in the timeline.
 void MainComponent::setPatternLength (int bars)
 {
-    const int ticks = bars * 4 * kTicksPerBeat;
+    setPatternBeats (bars * 4);
+}
+
+void MainComponent::setPatternBeats (int beats)
+{
+    beats = std::clamp (beats, kMinPatternBeats, kMaxPatternBeats);
+    const int ticks = beats * kTicksPerBeat;
     if (ticks == arrangement.patternTicks)
         return;
     auto changed = arrangement;
-    changed.patternTicks = ticks;
+    changed.setPatternLengthKeepingClips (ticks);
     bool fits = true;
     for (const auto& c : changed.clips)
-        fits = fits && c.endUnit() <= changed.timelineUnits();
+        fits = fits && c.endTick() <= changed.timelineTicks();
     for (const auto& a : changed.audioClips)
         fits = fits && a.endTick() <= changed.timelineTicks();
     for (const auto& a : changed.automationClips)
         fits = fits && a.endTick() <= changed.timelineTicks();
     if (! fits)
     {
-        statusLabel.setText ("The playlist would not fit in the timeline with " + juce::String (bars) + "-bar patterns: move the last clips first",
+        statusLabel.setText ("The playlist would not fit in the timeline with patterns of " + juce::String (beats) + " quarters: move the last clips first",
                              juce::dontSendNotification);
         return;
     }
     commitCurrentPattern();
+    arrangement.clips = changed.clips;
     arrangement.patternTicks = ticks;
     if (! arrangement.hasLoop())
         arrangement.clearLoop();
@@ -151,7 +160,7 @@ void MainComponent::setPatternLength (int bars)
     pianoRoll.setNotes (channels[static_cast<size_t> (selected)].notes);
     songStartTick = std::min (songStartTick, arrangement.timelineTicks() - 1);
     publishProject();
-    statusLabel.setText ("Patterns are " + juce::String (bars) + (bars == 1 ? " bar" : " bars") + " long", juce::dontSendNotification);
+    statusLabel.setText ("Patterns are " + juce::String (beats) + " quarters long (" + juce::String (beats * 4) + " steps)", juce::dontSendNotification);
 }
 
 void MainComponent::renamePattern (int index)

@@ -14,7 +14,7 @@ strumento sta in un pannello mobile che puoi spostare, ridimensionare, sovrappor
 Sun Loops Studio si ispira al modo di lavorare dei DAW a loop come FL Studio. È un progetto indipendente: non usa
 codice, nomi, grafica o risorse di altri prodotti e non è affiliato né approvato dai loro produttori.
 
-**Stato: alpha (0.41.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
+**Stato: alpha (0.42.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
 La riproduzione è stata confermata su un vero PC Nobara per la versione 0.3; tutto ciò che è stato aggiunto dopo
 (pannelli, pattern, playlist, browser, pitch/swing, mixer espanso ed effetti, salvataggio dei progetti, AppImage, clip audio, trascinamento
 dei file, registrazione, MIDI, metronomo e formati di esportazione) è stato provato con test automatici e in un display virtuale con un
@@ -32,8 +32,8 @@ plugin commerciali. Vedi [docs/roadmap.md](docs/roadmap.md) per sapere con preci
   *Presets* e *Plugin*, una casella di ricerca rapida e il trascinamento (o il doppio clic) dei suoni su un canale
   del Channel Rack. I tuoi file stanno in `~/Music/Sun Loops Studio/`.
 - **Channel Rack** - fino a 32 canali, ognuno synth, sampler o drum machine. Sequencer a step da 16esimi come in FL Studio
-  (0.31.0): ogni nuovo canale parte con i quadratini (clic sinistro scrive, destro cancella); gli step dopo la prima battuta sono
-  grigi e la ripetono, e trascinando la fine della sequenza (o scrivendo nella parte grigia) la si allunga; appena il Piano Roll
+  (0.31.0): ogni nuovo canale parte con i quadratini (clic sinistro scrive, destro cancella); la griglia è esattamente il pattern - una
+  battuta in 4/4, 16 step, in un progetto nuovo - e i pulsanti **-** / **+** del rack tolgono o aggiungono **un quarto** alla volta (0.42.0); appena il Piano Roll
   scrive altre note la riga ne mostra l'anteprima (un clic apre il Piano Roll), e cancellandole tornano i quadratini. Per canale: volume, pan, manopola **Pitch** (semitoni), manopola **Swing** e
   un display **Track N** che manda il canale a una traccia del mixer. Tasto destro su un canale: *Piano roll*,
   *Instrument*, *Load sample...*, *Rename...*, *Clone*, *Move up / down*, *Delete*, *Assign free mixer track*, *Save as preset...*.
@@ -51,7 +51,7 @@ plugin commerciali. Vedi [docs/roadmap.md](docs/roadmap.md) per sapere con preci
   reggaeton, rock, synthwave): batteria, basso, accordi e una melodia che stanno insieme, nella tonalità scelta, al tempo del genere, con
   i suoni incorporati, come nuovo pattern. Fatto con regole e caso (niente IA, niente in rete); ogni variante è diversa.
 - **Pattern e Playlist** - più pattern (nuovi, copiati, rinominati o eliminati con i pulsanti sopra la playlist) disposti come clip su 8 tracce (ognuna con nome e colore propri, e le clip possono stare una sopra l'altra: 0.33.0). Il pulsante *Pattern / Song*
-  sceglie se ripetere il pattern selezionato o suonare tutta la playlist; i pattern durano 1, 2, 4 o 8 battute. **Clic sul righello per spostare il
+  sceglie se ripetere il pattern selezionato o suonare tutta la playlist; i pattern durano da 4 a 64 quarti, e le clip di pattern si spostano per quadrati della griglia (o liberamente con Alt), quindi possono partire sfasate tra loro (0.42.0). **Clic sul righello per spostare il
   cursore, anche in riproduzione; trascinamento col destro per disegnare una zona di loop** (tasto destro sulla zona per spostarla, ridimensionarla o eliminarla).
 - **Audio nella Playlist** - trascina file audio (`.wav .aiff .flac .ogg .oga .mp3 .aac`) o video (ne viene presa la
   traccia audio) dal file manager sulla Playlist: diventano clip con la forma d'onda. Gli **strumenti Select, Split, Cut, Erase e Zoom**,

@@ -60,8 +60,9 @@ void MainComponent::importMidiFile (const juce::File& file)
     if (! parsed.ok)
         return fail (juce::String (parsed.error));
 
-    const int startUnit = arrangement.songLengthUnits();
-    const int room = std::min (kMaxPatterns - static_cast<int> (arrangement.patterns.size()), arrangement.timelineUnits() - startUnit);
+    const int startTick = arrangement.songLengthTicks();
+    const int room = std::min (kMaxPatterns - static_cast<int> (arrangement.patterns.size()),
+                               (arrangement.timelineTicks() - startTick) / std::max (1, arrangement.patternTicks));
     if (room <= 0)
         return fail ("there is no room left for new patterns on the playlist");
 
@@ -101,7 +102,7 @@ void MainComponent::importMidiFile (const juce::File& file)
         for (size_t k = 0; k < newChannels.size() && k < plan.patternNotes[static_cast<size_t> (p)].size(); ++k)
             pattern.notes[static_cast<size_t> (newChannels[k])] = plan.patternNotes[static_cast<size_t> (p)][k];
         arrangement.patterns.push_back (std::move (pattern));
-        arrangement.clips.push_back ({ firstPattern + p, 0, startUnit + p, 1 });
+        arrangement.clips.push_back ({ firstPattern + p, 0, startTick + p * arrangement.patternTicks, arrangement.patternTicks, 0 });
     }
 
     juce::String message = "Imported " + file.getFileName() + ": " + juce::String (static_cast<int> (newChannels.size()))

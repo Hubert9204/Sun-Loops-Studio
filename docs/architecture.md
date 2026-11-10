@@ -324,12 +324,12 @@ voices -> channel (smoothed gain, equal-power pan, channel mute/solo)
   selected channel, Rec notes and the score log exactly as a MIDI keyboard's; `keyStateChanged` and the timer send the note offs.
   Note names: `theory::noteName` uses FL Studio's octave numbers (MIDI 60 = C5); the sound library's internal sample titles keep
   their own names (they are file keys, not shown as note names).
-- Step sequencer (0.31.0): `src/audio/StepSequence.h` (JUCE-free) decides whether a channel's notes in a pattern are a step sequence
-  (all one 16th or shorter, on the grid, on `stepPitch`: the root, or 36 on a drum channel), its active length (`Pattern::steps[c]`,
-  mirrored in `Channel::steps` for the current pattern like `notes`; 0 = one bar or the notes' whole bars) and the repeats.
-  `compilePattern` / `compileSong` call `steps::playedNotes`, so the audio thread only ever sees ordinary notes. `StepGrid` edits
-  through `steps::setStep` / `steps::resize` and draws from the notes on every paint. Files before 0.31.0 have no `steps`: every
-  channel is set to the whole pattern on load.
+- Step sequencer (0.31.0, reworked in 0.42.0): `src/audio/StepSequence.h` (JUCE-free) decides whether a channel's notes in a pattern
+  are a step sequence (all one 16th or shorter, on the grid, on `stepPitch`: the root, or 36 on a drum channel). Since 0.42.0 the
+  grid is the whole pattern (`patternSteps`): no active part, no repeats, `playedNotes` returns the notes unchanged. `StepGrid` edits
+  through `steps::setStep` and draws from the notes on every paint. `RackBody` (RackView.h) puts the length bar above the rack:
+  its - / + buttons call `MainComponent::setPatternBeats` (4 to 64 quarters, `Arrangement::setPatternLengthKeepingClips`, one undo
+  step). Files from 0.31.0 to 0.41.0 still carry `steps`: `steps::bakeLegacyRepeats` writes the old repeats out as notes on load.
 - Loop Starter (0.30.0): `src/audio/LoopStarter.{h,cpp}` (JUCE-free) builds a `Loop` from a genre, key, mode and variation: drum
   grooves per genre on the General MIDI keys of the built-in kits, and bass, chords and melody from `theory::progressionChords`,
   `basslineNotes`, `progressionNotes` and its own motif generator, with a portable xorshift generator so a variation is the same
@@ -548,6 +548,17 @@ and ranks with BM25 (k1 1.4, b 0.75) plus a title bonus, a bonus for sections ho
 question's language. The index is built the first time Helios opens. Commands are `HeliosCommand`s (name, keywords, a function)
 made by `MainComponent::heliosCommands`, matched by the share of the question's words they contain.
 
+### Channel Rack length and free playlist (0.42.0)
+
+- `Arrangement::patternTicks` is a number of quarters (4 to 64; `kMinPatternBeats`, `kMaxPatternBeats`), saved as `patternBeats`
+  (and `patternBars` when whole bars, for older readers).
+- `Clip` is in ticks: `startTick`, `lengthTicks` and `offsetTicks` (where in the pattern the clip starts, after a split).
+  `compileSong` lays the pattern from `startTick - offset` every `patternTicks` while inside the clip, skipping notes before the
+  clip and cutting notes at the pattern's end and the clip's end. Old files (`start` / `length` in pattern units) are converted on load.
+- `PlaylistTimeline` snaps pattern clips like audio clips (`snapTick`, the Grid box; Alt: none). `splitPatternClip` /
+  `cutPatternRange` (ClipEdit.h) give the right part an `offsetTicks`. The FLP export writes one item per pass and warns when an
+  offset clip is written from its pattern's start.
+
 ### Finished in 0.41.0
 
 - **SFZ**: `src/library/Sfz.{h,cpp}` parses the text (comments, headers, opcodes whose values may hold spaces) into regions with
@@ -571,15 +582,16 @@ ring, applies a Hann window and the library-free radix-2 FFT of `SpectrumAnalyse
 ## Patterns and the playlist
 
 `Arrangement` is the song as the user edits it: **patterns** (notes per channel, ticks relative to the pattern start)
-and **clips** (pattern, track, start unit, length in units). One *unit* is one pattern length (two bars in the demo
-project). Limits: 8 playlist tracks, a 32-unit timeline, 64 patterns.
+and **clips** (pattern, track, start tick, length in ticks, offset into the pattern; in pattern units before 0.42.0). The
+pattern length is shared by all patterns (one bar of 4/4 by default). Limits: 8 playlist tracks, a timeline of at least 32 pattern
+lengths and 64 bars, 64 patterns.
 
 It is never played directly. It is *compiled* into an ordinary `Project`:
 
 - `compilePattern(channels, arrangement, index)` - the loop of one pattern.
-- `compileSong(channels, arrangement)` - every clip's notes laid on one timeline, repeated once per unit of the clip;
-  the loop length is the end of the last clip (an empty playlist is one silent unit). Notes starting outside their
-  pattern are skipped and notes are cut at the end of their pattern so they cannot leak into the next unit.
+- `compileSong(channels, arrangement)` - every clip's notes laid on one timeline, the pattern repeated for as long as the clip
+  lasts (from its offset); the loop length is the end of the last clip rounded up to a bar (an empty playlist is one silent
+  pattern). Notes starting outside their pattern are skipped and notes are cut at the end of their pattern and of the clip.
 
 The audio engine, the `Player` and the renderer know nothing about patterns, so the verified real-time core is
 unchanged by the arrangement feature.

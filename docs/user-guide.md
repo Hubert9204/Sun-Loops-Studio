@@ -193,21 +193,21 @@ One row per channel: a **Track N** display and the name, **M** (mute), **S** (so
   - Every new channel starts with squares, one per 16th note of the pattern. **Left click** (or drag) writes steps,
     **right click** (or drag) erases them. A step plays the channel's root note (MIDI note 60 unless the sampler's *Root* is set otherwise),
     or the kick (pad 1) on a drum channel. The step the song is on lights up while it plays.
-  - The first **16 steps** (one bar of 4 quarter notes) are **active**; the steps after them, up to the end of the
-    pattern, are **greyed out**: they play the active steps again, so a one-bar beat fills a longer pattern.
-  - Writing (or erasing) a step in the greyed part makes the sequence a bar longer: that bar becomes active, filled
-    with what it was playing, plus your change. Nothing else changes in the sound.
-  - **Drag the handle** at the end of the active steps (the cursor becomes a left-right arrow) to make the sequence
-    longer or shorter by whole bars, or by single steps with **Alt** held (a 12-step sequence repeats every 12
-    steps against the others: polymeter). Made shorter, the steps after the new end are deleted (Ctrl+Z brings them
-    back). Dragged past the end of the pattern, the pattern gets longer (every pattern: 1, 2, 4, 8 bars).
+  - **The grid is exactly the pattern** (0.42.0). A new project starts with **one bar of 4/4: 4 quarters, 16 steps**,
+    all of them usable; nothing is greyed out and nothing repeats or grows by itself.
+  - The bar at the top of the Channel Rack reads the length (*Pattern: 4 quarters (1 bar) - 16 steps*) and has two
+    buttons: **+** adds **one quarter** (4 more steps) and **-** takes one away. The shortest is 4 quarters (the - button
+    is then disabled), the longest 64 (16 bars). The length is the same for every pattern; steps past a shorter end are
+    kept but not played, and come back with +. Playlist clips stay where they are (see *Patterns*). Ctrl+Z undoes it.
   - As soon as the channel has a note that is not a plain step - another pitch, a longer note, a note off the 16th
     grid, written in the Piano Roll, the drum machine, recorded or generated - the row shows the **preview of the
-    Piano Roll** instead, and its notes play as written (no repeats). **Left click** on the preview opens the Piano
+    Piano Roll** instead. **Left click** on the preview opens the Piano
     Roll (the drum machine for a drum channel), or brings it forward; right click opens the channel's menu.
   - Delete every note in the Piano Roll and the row goes back to squares.
   - Squares are drawn from the notes every time, so they always show what plays.
   - Projects from before 0.31.0 open with every channel's sequence as long as the pattern, so they play exactly as before.
+    Projects from 0.31.0 to 0.41.0 whose sequences repeated a shorter part open with those repeats written out as steps, so
+    they sound the same too.
 - The **Load** button of a sampler channel picks a sample file.
 - Click a row to select that channel (the Piano Roll and the Mixer follow the selection).
 - **+ Add channel** under the last row adds a synth, sampler or drum-machine channel, up to 32 channels in total
@@ -367,7 +367,7 @@ so you can hear the velocity layers). Right-click a pad for *Load a sound*, *Cle
 | Level, Pan, Tuning | Level 0 to 150 %, pan -100 to +100, tuning -24 to +24 semitones (tuning changes the length of the sound too). Double-click a slider to reset it. |
 | Swing | 0 to 100 %: delays this pad's off-beat 16th steps (up to half a 16th). The channel's own Swing knob is hidden: a drum channel does not use it. |
 
-**Steps.** The grid at the bottom has one row per pad and one step per 16th of the pattern (32 for two bars). Click a step to switch it on or off (you hear the pad), drag to paint or erase a run, right-click to erase.
+**Steps.** The grid at the bottom has one row per pad and one step per 16th of the pattern (16 for the default bar). Click a step to switch it on or off (you hear the pad), drag to paint or erase a run, right-click to erase.
 Shift+click puts a soft step (velocity 0.45), Ctrl+click an accented one (1.0), a plain click 0.8; the brightness of a step shows its velocity. A click on a row label selects (and plays) that pad.
 The grid edits the channel's notes of the **current pattern** (undo and redo of notes work), shows notes made elsewhere (a note belongs to the step it starts in), and a line follows the playhead in Pattern mode.
 
@@ -487,19 +487,20 @@ still be sounding when the linked note starts, so the two should touch or overla
 a 16th early; a note that stops earlier leaves a gap and the linked note then just plays normally, with its own attack). It works on synth
 and sampler channels and is saved in the project.
 
-Notes snap to 16th notes. A pattern is two bars long unless you chose another length (see *Patterns*). A synth note ends at its length or at the end of the pattern,
+Notes snap to 16th notes. A pattern is one bar (4 quarters) long unless you chose another length (see *Patterns*). A synth note ends at its length or at the end of the pattern,
 whichever comes first. When you open a channel the view scrolls to its notes.
 
 ## Patterns
 
 A **pattern** holds the notes of every channel. The pattern box in the toolbar selects the current pattern: the
 Channel Rack and the Piano Roll show and edit that pattern. The **+** button next to it offers **New empty pattern**,
-**Clone current pattern** and **Pattern length (all patterns)**: 1, 2 (the default), 4 or 8 bars. The length applies to every pattern; the step
-sequencer, the piano roll and the drum machine follow. Pattern clips keep their place in pattern units, so with longer patterns the song
-gets longer. Notes past the end of a shorter pattern are kept but not played, and come back if you make the patterns longer again. The change
+**Clone current pattern** and **Pattern length (all patterns)**: 1 (the default), 2, 4 or 8 bars; the **-** and **+** buttons of the
+Channel Rack change it by **one quarter** at a time (4 to 64 quarters). The length applies to every pattern; the step
+sequencer, the piano roll and the drum machine follow. Pattern clips stay where they are (0.42.0): a clip that was a whole number of
+patterns long keeps that number of repeats, any other keeps its length. Notes past the end of a shorter pattern are kept but not played, and come back if you make the patterns longer again. The change
 is refused if the playlist would no longer fit in the timeline. New patterns get the next name automatically (Pattern 3, Pattern 4, ...). The demo project starts
-with "Pattern 1" (the full groove: drums, grand piano, electric bass and a plucked synth, 100 BPM) and "Drums" (the drums and the
-bass), played with the built-in sounds.
+with "Pattern 1" and "Pattern 2" (the two bars of the full groove: drums, grand piano, electric bass and a plucked synth, 100 BPM) and
+"Drums" (the drums and the bass of the first bar), played with the built-in sounds.
 
 **Loop Starter (0.30.0).** *Loop Starter...* in the **+** menu makes a starting loop for a track. Choose the **genre** (house, techno,
 hip-hop, trap, drum & bass, pop, lo-fi, reggaeton, rock or synthwave, each with its tempo), the **key**, the **mode** (minor, major or
@@ -546,11 +547,12 @@ Studio's **.flp** files, with code written for this program (no FL Studio code o
   colours. FL Studio's own synths and plugins have no equivalent here: a default synth plays their notes. A sample whose stored
   path does not exist (a Windows path, FL Studio's own folders) is looked for by its name next to the .flp and in the folders beside
   it. Patterns get one length here (1, 2, 4 or 8 bars: the shortest that holds the longest), FL Studio's 500 playlist tracks go onto
-  the 8 here in their order, and clips are placed on whole pattern lengths.
+  the 8 here in their order, and clips keep their position and length.
 - **Export as FL Studio project (.flp)...** writes the current project in FL Studio 20.8's layout at 960 PPQ (exact: twice this
   program's 480). Sampler channels keep their sample file; synths, drum machines, plugins and built-in sounds become empty Sampler
-  channels that keep their notes; step sequences that repeat are written out in full; a pattern clip repeated over several pattern
-  lengths becomes one clip per repeat; audio clips play their file from its start.
+  channels that keep their notes; a pattern clip repeated over several pattern lengths becomes one clip per repeat; audio clips play
+  their file from its start. A clip that starts inside its pattern (after a split) is written from the pattern's start, and the
+  message says so.
 - Neither direction carries effects, the mixer, automation or plugin settings; a message after each lists what was left out.
 - **Checked**: the files written here were read back by this program and by an independent reader (PyFLP), and a real FL Studio
   20.8 project from PyFLP's tests was opened. **Not checked**: opening the exported files in FL Studio itself, which is not
@@ -589,9 +591,9 @@ numbers. The orange vertical line marks the end of the song: in Song mode playba
 
 | Action | How |
 | --- | --- |
-| Place a clip (Select tool) | Click an empty cell. The clip holds the pattern selected in the pattern box and is one pattern long. Drag right straight away to make it longer. |
-| Move a clip | Drag it (it snaps to pattern boundaries and can change track). |
-| Repeat / shorten | Drag the right edge of the clip: the pattern repeats once per pattern length. |
+| Place a clip (Select tool) | Click anywhere on a track. The clip starts on the **grid square** you clicked (the Grid box: a bar, a beat, a 16th...; with **Alt**, exactly where you clicked), holds the pattern selected in the pattern box and is one pattern long. Drag right straight away to make it longer. |
+| Move a clip | Drag it: it moves by **grid squares** (0.42.0), not by whole patterns, so clips can start out of step with each other (a beat or a 16th later); hold **Alt** for no snap at all (micro-timing). It can change track. |
+| Repeat / shorten | Drag the right edge of the clip, by grid squares (Alt: freely): the pattern repeats as long as the clip lasts; a length that is not a whole number of patterns stops in the middle of the last repeat (thin marks show where each repeat starts). |
 | Delete | Right-click the clip > Delete, or select it and press Delete (or use the Erase tool). |
 | Select its pattern | Double-click the clip. |
 | Zoom in / out | Mouse wheel (up: in, down: out), around the mouse, anywhere on the playlist. |
@@ -610,7 +612,8 @@ The toolbar under the pattern box has five tools (keys **1** - **5** while the m
 | **Zoom** (5) | Click zooms in, right-click or Shift+click zooms out, drag a stretch to zoom to it. |
 
 **Grid** (the box next to the tools) is what audio clips snap to when moved, trimmed, split or cut: a bar, half a bar (1/2,
-0.32.0), a beat and so on down to a single tick (1 beat = 480 ticks); hold **Alt** while dragging to ignore it. Pattern clips always sit on whole patterns.
+0.32.0), a beat and so on down to a single tick (1 beat = 480 ticks); hold **Alt** while dragging to ignore it. Since 0.42.0
+pattern clips snap to the same grid (before, they sat on whole patterns).
 **-**, **+** and **Fit** zoom out, in and to the whole song; the **mouse wheel** zooms in and out around the mouse, and
 Shift+wheel and the scroll bar move in time. The ruler shows **minutes:seconds.milliseconds** and the bar numbers (only as many as fit at the
 current zoom), and the two lines under the timeline read out, for the position under the mouse, *time - bar:beat:tick*, and
@@ -629,7 +632,8 @@ sample editor: switch *Reverse* off first. These settings are saved with the pro
 **Undo / Redo** (buttons, **Ctrl+Z** and **Ctrl+Y**) cover everything done to clips in the Playlist. **Ctrl+C / X / V** copy,
 cut and paste the selected clip at the mouse and **Ctrl+D** duplicates it; **Delete** removes it. The undo history is
 forgotten when something outside the Playlist changes the arrangement (opening a project, a new recording, deleting a pattern).
-Split and Cut also work on pattern clips, but only on whole pattern lengths. A clip made by splitting an audio clip remembers where it
+Split and Cut also work on pattern clips, at any grid square (0.42.0): the right-hand part goes on from the same place in the
+pattern (it remembers how far into the pattern it starts), so a split clip sounds exactly as before. A clip made by splitting an audio clip remembers where it
 starts in the sound **in seconds, at the BPM it was cut at**: if you change the BPM afterwards the sound still plays at its
 original speed, so the cut points no longer fall on the beat they were cut on.
 
@@ -1036,7 +1040,7 @@ The metronome is never part of an export. It is remembered between runs.
 
 ## Export
 
-**File > Export audio** writes the current mode: the pattern (two bars) or the song (up to the end of the last clip, audio
+**File > Export audio** writes the current mode: the pattern (one bar unless you changed it) or the song (up to the end of the last clip, audio
 clips included), plus one second of tail so releases and drum tails are not cut. It is rendered at 48 kHz stereo, at the
 BPM set in the toolbar, by the same engine that plays, so it sounds like what you hear. Choose the format in the submenu:
 
@@ -1091,7 +1095,7 @@ a heavier song or a plugin-heavy mixer can still need a bigger size.
   at least 32 patterns and 64 bars, 4 automation lanes, 64 automation clips of up to 256 points each, 32 simultaneous voices.
 - The effects use about 15 MB of memory at 48 kHz to start with, plus about 0.8 MB for every reverb, delay, chorus and Pitch Corrector beyond
   the sixteenth (more at higher sample rates). Memory made for them stays until the audio device restarts.
-- Patterns are 1, 2, 4 or 8 bars long (the same for all patterns), 4/4, 16th-note grid; one tempo for the whole song.
+- Patterns are 4 to 64 quarters long (the same for all patterns), 4/4, 16th-note grid; one tempo for the whole song.
 - Samples are mono or stereo, at most 30 seconds. The sampler has one envelope and one filter per channel (no filter envelope, LFO or modulation);
   at most four zones sound per note. Audio clips: up to 5 minutes per file, 64 clips.
 - The synth: one LFO and one filter per channel, two oscillators, no unison, no additive engine yet, no modulation of the envelopes by

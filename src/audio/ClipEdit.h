@@ -140,60 +140,70 @@ inline AudioClip trimmedAudioStart (const AudioClip& clip, int newStart, double 
     return out;
 }
 
-// Pattern clips are whole patterns long: they are cut at pattern boundaries ("units").
-// Splits pattern clip `index` at the boundary `unit` (strictly inside it). Returns the new right-hand clip's index or -1.
-inline int splitPatternClip (Arrangement& a, int index, int unit)
+// Pattern clips (0.42.0) are cut at any tick: the right-hand part goes on playing the pattern from where it had got to, so the
+// music does not change (its `offsetTicks` says where in the pattern it starts).
+inline int patternOffsetAfter (const Arrangement& a, const Clip& c, int ticksIn)
+{
+    const int length = std::max (1, a.patternTicks);
+    return ((c.offsetTicks + ticksIn) % length + length) % length;
+}
+
+// Splits pattern clip `index` at `tick` (strictly inside it). Returns the new right-hand clip's index or -1.
+inline int splitPatternClip (Arrangement& a, int index, int tick)
 {
     if (index < 0 || index >= static_cast<int> (a.clips.size()))
         return -1;
 
     auto& left = a.clips[static_cast<size_t> (index)];
-    if (unit <= left.startUnit || unit >= left.endUnit())
+    if (tick <= left.startTick || tick >= left.endTick())
         return -1;
 
     Clip right = left;
-    right.startUnit = unit;
-    right.lengthUnits = left.endUnit() - unit;
-    left.lengthUnits = unit - left.startUnit;
+    right.startTick = tick;
+    right.lengthTicks = left.endTick() - tick;
+    right.offsetTicks = patternOffsetAfter (a, left, tick - left.startTick);
+    left.lengthTicks = tick - left.startTick;
     a.clips.push_back (right);
     return static_cast<int> (a.clips.size()) - 1;
 }
 
-// Removes the units [fromUnit, toUnit) of pattern clip `index`; same results as cutAudioRange.
-inline int cutPatternRange (Arrangement& a, int index, int fromUnit, int toUnit)
+// Removes the ticks [fromTick, toTick) of pattern clip `index`; same results as cutAudioRange.
+inline int cutPatternRange (Arrangement& a, int index, int fromTick, int toTick)
 {
     if (index < 0 || index >= static_cast<int> (a.clips.size()))
         return -1;
 
     const auto clip = a.clips[static_cast<size_t> (index)];
-    fromUnit = std::max (fromUnit, clip.startUnit);
-    toUnit = std::min (toUnit, clip.endUnit());
-    if (toUnit <= fromUnit)
+    fromTick = std::max (fromTick, clip.startTick);
+    toTick = std::min (toTick, clip.endTick());
+    if (toTick <= fromTick)
         return -1;
 
-    if (fromUnit <= clip.startUnit && toUnit >= clip.endUnit())
+    if (fromTick <= clip.startTick && toTick >= clip.endTick())
     {
         a.clips.erase (a.clips.begin() + index);
         return 0;
     }
 
     auto& stored = a.clips[static_cast<size_t> (index)];
-    if (fromUnit <= clip.startUnit)
+    if (fromTick <= clip.startTick)
     {
-        stored.startUnit = toUnit;
-        stored.lengthUnits = clip.endUnit() - toUnit;
+        stored.startTick = toTick;
+        stored.lengthTicks = clip.endTick() - toTick;
+        stored.offsetTicks = patternOffsetAfter (a, clip, toTick - clip.startTick);
         return 1;
     }
-    if (toUnit >= clip.endUnit())
+    if (toTick >= clip.endTick())
     {
-        stored.lengthUnits = fromUnit - clip.startUnit;
+        stored.lengthTicks = fromTick - clip.startTick;
         return 1;
     }
 
     Clip right = clip;
-    right.startUnit = toUnit;
-    right.lengthUnits = clip.endUnit() - toUnit;
-    stored.lengthUnits = fromUnit - clip.startUnit;
+    right.startTick = toTick;
+    right.lengthTicks = clip.endTick() - toTick;
+    right.offsetTicks = patternOffsetAfter (a, clip, toTick - clip.startTick);
+    stored.lengthTicks = fromTick - clip.startTick;
     a.clips.push_back (right);
     return 2;
 }

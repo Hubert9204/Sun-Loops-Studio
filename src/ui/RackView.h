@@ -7,6 +7,7 @@
 
 #include "ui/ChannelStrip.h"
 #include "ui/DragItems.h"
+#include "audio/Arrangement.h"
 
 namespace sls
 {
@@ -116,5 +117,69 @@ private:
     Inner inner;
     juce::TextButton addButton { "+ Add channel" };
     std::vector<ChannelStrip*> strips;
+};
+
+// The Channel Rack panel (0.42.0): a bar with the pattern length and its - / + buttons (one quarter note at a time, at least the
+// 4 quarters of one bar of 4/4), and the rack below it. The bar stays in place while the channels scroll.
+class RackBody : public juce::Component
+{
+public:
+    explicit RackBody (RackView& rackToShow) : rack (rackToShow)
+    {
+        addAndMakeVisible (rack);
+        lengthLabel.setFont (juce::FontOptions (12.0f));
+        lengthLabel.setColour (juce::Label::textColourId, juce::Colour (0xffd0d4dc));
+        lengthLabel.setTooltip ("The pattern's length: the step grid shows it all, 4 steps per quarter note");
+        addAndMakeVisible (lengthLabel);
+        for (auto* b : { &shorterButton, &longerButton })
+        {
+            b->setMouseClickGrabsKeyboardFocus (false);
+            addAndMakeVisible (*b);
+        }
+        shorterButton.setTooltip ("One quarter note shorter (not below one bar of 4/4)");
+        longerButton.setTooltip ("One quarter note longer");
+        shorterButton.onClick = [this] { if (onPatternBeats) onPatternBeats (beats - 1); };
+        longerButton.onClick = [this] { if (onPatternBeats) onPatternBeats (beats + 1); };
+        setPatternBeats (4);
+    }
+
+    void setPatternBeats (int newBeats)
+    {
+        beats = newBeats;
+        const int bars = beats / 4, rest = beats % 4;
+        lengthLabel.setText ("Pattern: " + juce::String (beats) + " quarters (" + juce::String (bars) + (bars == 1 ? " bar" : " bars")
+                                 + (rest > 0 ? " + " + juce::String (rest) + "/4" : juce::String()) + ") - " + juce::String (beats * 4) + " steps",
+                             juce::dontSendNotification);
+        shorterButton.setEnabled (beats > kMinPatternBeats);
+        longerButton.setEnabled (beats < kMaxPatternBeats);
+    }
+
+    std::function<void (int)> onPatternBeats; // the length asked for, in quarter notes
+
+    void paint (juce::Graphics& g) override
+    {
+        g.setColour (juce::Colour (0xff23272e));
+        g.fillRect (getLocalBounds().removeFromTop (kBarHeight));
+    }
+
+    void resized() override
+    {
+        auto area = getLocalBounds();
+        auto bar = area.removeFromTop (kBarHeight).reduced (6, 3);
+        longerButton.setBounds (bar.removeFromRight (28));
+        bar.removeFromRight (4);
+        shorterButton.setBounds (bar.removeFromRight (28));
+        bar.removeFromRight (8);
+        lengthLabel.setBounds (bar);
+        rack.setBounds (area);
+    }
+
+    static constexpr int kBarHeight = 28;
+
+private:
+    RackView& rack;
+    int beats = 4;
+    juce::Label lengthLabel;
+    juce::TextButton shorterButton { "-" }, longerButton { "+" };
 };
 } // namespace sls

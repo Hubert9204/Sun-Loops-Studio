@@ -34,7 +34,6 @@ public:
     std::function<void()> onStepsEdited;      // a step was written or erased, or the active part was resized
     std::function<void()> onOpenEditor;       // the preview was clicked: open the piano roll (the drum machine for drums)
     std::function<void()> onContextMenu;      // right click on the preview
-    std::function<void()> onWantsLongerPattern; // the end of the active part was dragged past the end of the pattern
 
     void paint (juce::Graphics&) override;
     void mouseDown (const juce::MouseEvent&) override;
@@ -49,15 +48,13 @@ private:
     int stepCount() const noexcept { return steps::patternSteps (loopLengthTicks); }
     float stepWidth() const noexcept { return static_cast<float> (getWidth()) / static_cast<float> (stepCount()); }
     int stepAt (int x) const noexcept;
-    bool overEdge (int x) const noexcept; // on the handle at the end of the active part
     void paintStep (int step, bool on);   // left button writes, right button erases
 
     enum class Drag
     {
         None,
         Paint,
-        Erase,
-        Edge
+        Erase
     };
 
     Channel& channel;
@@ -65,8 +62,6 @@ private:
     int playheadTick = -1;
     Drag drag = Drag::None;
     int lastStep = -1;
-    bool askedForLongerPattern = false;
-    bool hoverEdge = false;
 };
 
 // One row of the channel rack, doubling as the channel's mixer strip.
@@ -90,7 +85,6 @@ public:
     std::function<void (int)> onLoadSample;    // "Load" pressed (sampler channels)
     std::function<void (int)> onEditSample;    // "Edit sample..." chosen (sampler channels with a sample)
     std::function<void (int)> onOpenPianoRoll; // context menu "Piano roll", or double click on the name / note preview
-    std::function<void (int)> onWantsLongerPattern; // the step grid's end was dragged past the end of the pattern (0.31.0)
     std::function<void (int)> onOpenDrumMachine; // drum channels: "Drum machine..." in the menu, or a double click (instead of the piano roll)
     std::function<void (int, Instrument)> onInstrumentChosen; // context menu "Instrument"
     std::function<void (int)> onOpenPlugin;      // plugin channels: "Plugin window..." in the menu, or a double click (0.17.0)

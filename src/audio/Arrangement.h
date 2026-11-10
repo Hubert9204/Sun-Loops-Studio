@@ -20,8 +20,12 @@ namespace sls
 // renderer know nothing about patterns: they just play notes in a loop.
 
 constexpr int kPlaylistTracks = 8;
-constexpr int kPlaylistUnits = 32;     // the timeline holds at least this many patterns (see Arrangement::timelineUnits); one unit = one pattern length
-constexpr int kPatternBarChoices[] = { 1, 2, 4, 8 }; // the pattern lengths offered, in bars of 4/4
+constexpr int kPlaylistUnits = 32;     // the timeline holds at least this many pattern lengths (see Arrangement::timelineTicks)
+constexpr int kPatternBarChoices[] = { 1, 2, 4, 8 }; // the pattern lengths offered in the pattern menu, in bars of 4/4
+// The pattern length (0.42.0) is counted in quarter notes: 4 (one bar of 4/4, the default) at least, changed one quarter at a time
+// by the Channel Rack's + and - buttons.
+constexpr int kMinPatternBeats = 4;
+constexpr int kMaxPatternBeats = 64;
 constexpr int kMaxPatterns = 64;
 
 struct Pattern
@@ -38,15 +42,19 @@ struct Pattern
     bool hasLoop (int patternTicks) const noexcept { return loopStartTick >= 0 && loopEndTick > loopStartTick && loopEndTick <= patternTicks; }
 };
 
-// A clip plays `pattern` on `track`, repeating it over `lengthUnits` pattern lengths.
+// A clip plays `pattern` on `track` from `startTick` for `lengthTicks`, repeating the pattern as often as the length asks
+// (0.42.0: positions and lengths in ticks, so clips go anywhere on the playlist's grid, or off it with Alt; before, they were
+// whole pattern lengths). `offsetTicks` is where in the pattern the clip starts playing (a clip split in the middle of a
+// pattern goes on from there), 0 .. the pattern length.
 struct Clip
 {
     int pattern = 0;
     int track = 0;
-    int startUnit = 0;
-    int lengthUnits = 1;
+    int startTick = 0;
+    int lengthTicks = 4 * kTicksPerBeat;
+    int offsetTicks = 0;
 
-    int endUnit() const noexcept { return startUnit + lengthUnits; }
+    int endTick() const noexcept { return startTick + lengthTicks; }
 };
 
 constexpr int kMaxAudioClips = 64;
@@ -97,7 +105,7 @@ struct Arrangement
     std::vector<Pattern> patterns;
     std::vector<Clip> clips;
     std::vector<AudioClip> audioClips;
-    int patternTicks = 8 * kTicksPerBeat; // length of one pattern = one playlist unit
+    int patternTicks = kMinPatternBeats * kTicksPerBeat; // the patterns' length (0.42.0: one bar of 4/4 to start with)
     std::vector<AutomationClip> automationClips; // on the lanes under the tracks; they play in Song mode
     // The loop region drawn on the playlist's ruler (ticks; -1 / -1 when there is none). In Song mode the transport goes
     // back to its start when it reaches its end.
@@ -120,9 +128,8 @@ struct Arrangement
     }
     void clearLoop() noexcept { loopStartTick = loopEndTick = -1; }
 
-    // The timeline holds at least kPlaylistUnits patterns and at least 64 bars (shorter patterns: more of them).
-    int timelineUnits() const noexcept { return std::max (kPlaylistUnits, kPlaylistUnits * 8 * kTicksPerBeat / std::max (1, patternTicks)); }
-    int timelineTicks() const noexcept { return timelineUnits() * patternTicks; }
+    // The timeline holds at least kPlaylistUnits pattern lengths and at least 64 bars.
+    int timelineTicks() const noexcept { return std::max (kPlaylistUnits * patternTicks, kPlaylistUnits * 8 * kTicksPerBeat); }
 
     // Does an audio clip fit: inside the timeline, on an existing track? (Audio clips start on any tick: the playlist's snap
     // setting decides how coarse the positions you can drag them to are.) Since 0.33.0 clips may overlap on a track, pattern and
@@ -241,30 +248,46 @@ struct Arrangement
             return false;
         if (c.track < 0 || c.track >= kPlaylistTracks)
             return false;
-        return c.startUnit >= 0 && c.lengthUnits >= 1 && c.endUnit() <= timelineUnits();
+        return c.startTick >= 0 && c.lengthTicks >= 1 && c.offsetTicks >= 0 && c.endTick() <= timelineTicks();
     }
 
-    // Index of the clip covering (track, unit), or -1; of overlapping clips, the one drawn on top (the last).
-    int clipAt (int track, int unit) const
+    // Index of the clip covering (track, tick), or -1; of overlapping clips, the one drawn on top (the last).
+    int clipAt (int track, int tick) const
     {
         for (int i = static_cast<int> (clips.size()) - 1; i >= 0; --i)
         {
             const auto& c = clips[static_cast<size_t> (i)];
-            if (c.track == track && unit >= c.startUnit && unit < c.endUnit())
+            if (c.track == track && tick >= c.startTick && tick < c.endTick())
                 return i;
         }
         return -1;
     }
 
-    // Number of units up to the end of the last clip (0 for an empty playlist).
-    int songLengthUnits() const
+    // Where the song ends: the end of the last pattern or audio clip, rounded up to a whole bar (0 for an empty playlist).
+    int songLengthTicks() const
     {
         int end = 0;
         for (const auto& c : clips)
-            end = std::max (end, c.endUnit());
+            end = std::max (end, c.endTick());
         for (const auto& a : audioClips)
-            end = std::max (end, (a.endTick() + patternTicks - 1) / patternTicks);
-        return end;
+            end = std::max (end, a.endTick());
+        constexpr int bar = 4 * kTicksPerBeat;
+        return (end + bar - 1) / bar * bar;
+    }
+
+    // The patterns get a new length (0.42.0): clips stay where they are; a clip that was a whole number of patterns long keeps that
+    // number of repeats, any other keeps its length; offsets stay inside the pattern.
+    void setPatternLengthKeepingClips (int newTicks)
+    {
+        const int old = std::max (1, patternTicks);
+        newTicks = std::clamp (newTicks, kMinPatternBeats * kTicksPerBeat, kMaxPatternBeats * kTicksPerBeat);
+        for (auto& c : clips)
+        {
+            if (c.lengthTicks % old == 0)
+                c.lengthTicks = c.lengthTicks / old * newTicks;
+            c.offsetTicks = std::min (c.offsetTicks, newTicks - 1);
+        }
+        patternTicks = newTicks;
     }
 
     // Make every pattern hold one note list per channel (after channels were added).
@@ -330,10 +353,7 @@ inline Project compilePattern (const std::vector<Channel>& channelSettings, cons
         {
             const auto& notes = arrangement.patterns[static_cast<size_t> (patternIndex)].notes;
             if (c < notes.size())
-            {
-                const auto& pattern = arrangement.patterns[static_cast<size_t> (patternIndex)];
-                channels[c].notes = steps::playedNotes (channelSettings[c], notes[c], pattern.stepsOf (c), arrangement.patternTicks);
-            }
+                channels[c].notes = steps::playedNotes (notes[c], arrangement.patternTicks);
         }
     }
     return Project::make (std::move (channels), arrangement.patternTicks, std::move (tracks), masterSlots, {}, {}, std::move (console));
@@ -395,30 +415,30 @@ inline Project compileSong (const std::vector<Channel>& channelSettings, const A
     for (auto& c : channels)
         c.notes.clear();
 
-    const int units = std::max (1, arrangement.songLengthUnits());
+    const int songTicks = std::max (arrangement.patternTicks, arrangement.songLengthTicks());
+    const int patternTicks = std::max (1, arrangement.patternTicks);
 
     for (const auto& clip : arrangement.clips)
     {
-        if (clip.pattern < 0 || clip.pattern >= static_cast<int> (arrangement.patterns.size()))
+        if (clip.pattern < 0 || clip.pattern >= static_cast<int> (arrangement.patterns.size()) || clip.lengthTicks <= 0)
             continue;
 
         const auto& source = arrangement.patterns[static_cast<size_t> (clip.pattern)];
-        std::vector<std::vector<Note>> notes (std::min (channels.size(), source.notes.size()));
-        for (size_t c = 0; c < notes.size(); ++c)
-            notes[c] = steps::playedNotes (channelSettings[c], source.notes[c], source.stepsOf (c), arrangement.patternTicks);
-        for (int repeat = 0; repeat < clip.lengthUnits; ++repeat)
-        {
-            const int offset = (clip.startUnit + repeat) * arrangement.patternTicks;
-            for (size_t c = 0; c < channels.size() && c < notes.size(); ++c)
-                for (auto n : notes[c])
+        // The pattern repeats from `offsetTicks` into it, for the clip's length: pass k starts at clip time k * pattern - offset.
+        const int offset = ((clip.offsetTicks % patternTicks) + patternTicks) % patternTicks;
+        for (size_t c = 0; c < channels.size() && c < source.notes.size(); ++c)
+            for (int passStart = -offset; passStart < clip.lengthTicks; passStart += patternTicks)
+                for (auto n : source.notes[c])
                 {
-                    if (n.startTick < 0 || n.startTick >= arrangement.patternTicks)
-                        continue; // outside its pattern: would leak into the next unit
-                    n.lengthTicks = std::min (n.lengthTicks, arrangement.patternTicks - n.startTick);
-                    n.startTick += offset;
+                    if (n.startTick < 0 || n.startTick >= patternTicks)
+                        continue; // outside its pattern: would leak into the next pass
+                    const int at = passStart + n.startTick; // relative to the clip's start
+                    if (at < 0 || at >= clip.lengthTicks)
+                        continue;
+                    n.lengthTicks = std::min ({ n.lengthTicks, patternTicks - n.startTick, clip.lengthTicks - at });
+                    n.startTick = clip.startTick + at;
                     channels[c].notes.push_back (n);
                 }
-        }
     }
 
     std::vector<AudioEvent> events;
@@ -437,7 +457,7 @@ inline Project compileSong (const std::vector<Channel>& channelSettings, const A
         e.fadeOutSeconds = a.fadeOutSeconds;
         events.push_back (std::move (e));
     }
-    return Project::make (std::move (channels), units * arrangement.patternTicks, std::move (tracks), masterSlots,
+    return Project::make (std::move (channels), songTicks, std::move (tracks), masterSlots,
                           std::move (events), arrangement.automationClips, std::move (console));
 }
 } // namespace sls

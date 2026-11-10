@@ -284,6 +284,7 @@ private:
     int loopStarterGenre = 0, loopStarterKey = 9, loopStarterParts = 0; // the last choices (A, all parts)
     std::uint32_t loopStarterVariation = 0;
     void setPatternLength (int bars);
+    void setPatternBeats (int beats); // 0.42.0: the Channel Rack's + / - (one quarter at a time)
     void showPatternLength(); // the editors follow arrangement.patternTicks
     void renamePattern (int index);
     void deletePattern (int index);
@@ -370,6 +371,7 @@ private:
     // Panel contents first, then the panels that show them, then the workspace holding the panels.
     // Members are destroyed in reverse order, so a panel never outlives the content it points to.
     RackView rackView;
+    RackBody rackBody { rackView }; // the rack with its pattern-length bar (0.42.0)
     PianoRoll pianoRoll;
     PianoRollToolbar pianoToolbar { pianoRoll };
     PianoRollEditor pianoEditor { pianoToolbar, pianoRoll }; // the toolbar above the roll: the piano roll panel's content

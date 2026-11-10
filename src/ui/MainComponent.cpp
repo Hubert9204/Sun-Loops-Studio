@@ -204,18 +204,37 @@ MainComponent::MainComponent()
 
     library.ensureExists(); // ~/Music/Sun Loops Studio/{Samples,Drum Kits,Presets}: where the browser looks
 
-    // Demo song: "Pattern 1" is the full groove, "Drums" is the drums and the bass alone. The playlist is Drums, three times
-    // Pattern 1, Drums.
-    arrangement.patternTicks = kLoopTicks;
-    arrangement.patterns.resize (2);
+    // Demo song (0.42.0: patterns of one bar of 4/4): the two-bar groove is "Pattern 1" (its first bar, Am9) and "Pattern 2" (its
+    // second, Fmaj7 and the pick-up); "Drums" is the drums and the bass of the first bar. The playlist is two bars of Drums, the
+    // groove three times, two bars of Drums.
+    constexpr int bar = 4 * kTicksPerBeat;
+    arrangement.patternTicks = bar;
+    arrangement.patterns.resize (3);
     arrangement.patterns[0].name = "Pattern 1";
-    arrangement.patterns[1].name = "Drums";
+    arrangement.patterns[1].name = "Pattern 2";
+    arrangement.patterns[2].name = "Drums";
     arrangement.ensureChannelCount (channels.size());
-    commitCurrentPattern();
     for (size_t c = 0; c < channels.size(); ++c)
-        if (channels[c].instrument == Instrument::Drums || channels[c].name == "Bass")
-            arrangement.patterns[1].notes[c] = channels[c].notes;
-    arrangement.clips = { { 1, 0, 0, 1 }, { 0, 0, 1, 3 }, { 1, 0, 4, 1 } };
+    {
+        for (const auto& n : channels[c].notes)
+        {
+            auto note = n;
+            const int which = n.startTick < bar ? 0 : 1;
+            note.startTick -= which * bar;
+            note.lengthTicks = std::min (note.lengthTicks, bar - note.startTick);
+            arrangement.patterns[static_cast<size_t> (which)].notes[c].push_back (note);
+            if (which == 0 && (channels[c].instrument == Instrument::Drums || channels[c].name == "Bass"))
+                arrangement.patterns[2].notes[c].push_back (note);
+        }
+        channels[c].notes = arrangement.patterns[0].notes[c]; // the channels show the current pattern
+    }
+    arrangement.clips = { { 2, 0, 0, 2 * bar, 0 } };
+    for (int g = 0; g < 3; ++g)
+    {
+        arrangement.clips.push_back ({ 0, 0, (2 + 2 * g) * bar, bar, 0 });
+        arrangement.clips.push_back ({ 1, 0, (3 + 2 * g) * bar, bar, 0 });
+    }
+    arrangement.clips.push_back ({ 2, 0, 8 * bar, 2 * bar, 0 });
 
     for (size_t i = 0; i < channels.size(); ++i)
         createStrip (i);
@@ -359,7 +378,7 @@ MainComponent::MainComponent()
     };
     pianoRoll.onNoteStopped = [this] (int pitch) { engine.liveNoteOff (liveChannel, pitch); };
 
-    pianoRoll.setLoopLengthTicks (kLoopTicks);
+    pianoRoll.setLoopLengthTicks (arrangement.patternTicks);
     pianoRoll.onSeek = [this] (int tick) { seekPattern (tick); };
     pianoRoll.onStatus = [this] (const juce::String& text) { statusLabel.setText (text, juce::dontSendNotification); };
     pianoRoll.onLoopChanged = [this] (int start, int end)
@@ -439,7 +458,9 @@ MainComponent::MainComponent()
     playlistView.setBpm (bpmSlider.getValue());
 
     // Panels
-    rackPanel.setContent (&rackView);
+    rackPanel.setContent (&rackBody);
+    rackBody.onPatternBeats = [this] (int beats) { setPatternBeats (beats); };
+    rackBody.setPatternBeats (arrangement.patternTicks / kTicksPerBeat);
     rackPanel.setMinimumSize (420, 130);
     pianoPanel.setContent (&pianoEditor);
     pianoPanel.setMinimumSize (420, 260);
@@ -1010,19 +1031,6 @@ void MainComponent::createStrip (size_t channelIndex)
     strip->onEditSample = [this] (int idx) { openSampleEditorForChannel (idx); };
     strip->onOpenPianoRoll = [this] (int idx) { openPianoRoll (idx); };
     strip->onOpenDrumMachine = [this] (int idx) { openDrumMachine (idx); };
-    strip->onWantsLongerPattern = [this] (int)
-    {
-        // The next length offered (1, 2, 4, 8 bars): every pattern gets it, as with "Pattern length" in the pattern menu.
-        const int bars = arrangement.patternTicks / (4 * kTicksPerBeat);
-        for (const int choice : kPatternBarChoices)
-            if (choice > bars)
-            {
-                setPatternLength (choice);
-                return;
-            }
-        statusLabel.setText ("Patterns are at most " + juce::String (kPatternBarChoices[std::size (kPatternBarChoices) - 1]) + " bars long",
-                             juce::dontSendNotification);
-    };
     strip->onOpenPlugin = [this] (int idx) { openChannelPlugin (idx); };
     strip->listInstrumentPlugins = [this]
     {

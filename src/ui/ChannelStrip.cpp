@@ -31,14 +31,6 @@ int StepGrid::stepAt (int x) const noexcept
     return std::clamp (static_cast<int> (static_cast<float> (x) / stepWidth()), 0, stepCount() - 1);
 }
 
-bool StepGrid::overEdge (int x) const noexcept
-{
-    if (! showsSteps())
-        return false;
-    const float edge = static_cast<float> (activeSteps()) * stepWidth();
-    return std::abs (static_cast<float> (x) - edge) <= std::max (3.0f, std::min (6.0f, stepWidth() * 0.35f));
-}
-
 void StepGrid::paint (juce::Graphics& g)
 {
     const auto bounds = getLocalBounds().toFloat();
@@ -48,33 +40,20 @@ void StepGrid::paint (juce::Graphics& g)
 
     if (showsSteps())
     {
-        // Each square is drawn from the notes on every paint (nothing is cached), so what is shown is always what plays. The steps
-        // after the active part are greyed out: they play the active ones again.
+        // Each square is drawn from the notes on every paint (nothing is cached), so what is shown is always what plays. Since
+        // 0.42.0 every step of the pattern is a real step: 16 for a bar of 4/4, 4 more for each quarter the rack's + adds, in groups
+        // of four (one quarter note each).
         const int pitch = steps::stepPitch (channel);
-        const int active = activeSteps();
         for (int s = 0; s < stepTotal; ++s)
         {
-            const bool inActive = s < active;
-            const bool on = inActive ? steps::stepOn (channel.notes, s, pitch) : steps::repeatedStepOn (channel.notes, s, active, pitch);
+            const bool on = steps::stepOn (channel.notes, s, pitch);
             const auto r = juce::Rectangle<float> (bounds.getX() + static_cast<float> (s) * w, bounds.getY(), w, bounds.getHeight()).reduced (std::min (1.5f, w * 0.12f));
             auto colour = on ? kStepOn : ((s / 4) % 2 == 0 ? kStepOff : kStepOffAlt);
-            if (! inActive)
-                colour = on ? kStepOn.withMultipliedSaturation (0.35f).withMultipliedBrightness (0.55f) : colour.withMultipliedBrightness (0.6f);
             if (s == playingStep)
                 colour = colour.brighter (on ? 0.5f : 0.35f);
             g.setColour (colour);
             g.fillRoundedRectangle (r, 2.0f);
-            if (! inActive)
-            {
-                g.setColour (juce::Colours::black.withAlpha (0.25f));
-                g.drawRoundedRectangle (r, 2.0f, 1.0f);
-            }
         }
-
-        // The handle at the end of the active part: drag it to make the sequence longer or shorter.
-        const float edge = bounds.getX() + static_cast<float> (active) * w;
-        g.setColour (hoverEdge || drag == Drag::Edge ? kPlayhead : juce::Colour (0xffb8bec9).withAlpha (0.8f));
-        g.fillRect (juce::Rectangle<float> (std::min (edge, bounds.getRight() - 3.0f) - 1.0f, bounds.getY(), 3.0f, bounds.getHeight()));
     }
     else
     {
@@ -128,7 +107,6 @@ void StepGrid::mouseDown (const juce::MouseEvent& e)
 {
     drag = Drag::None;
     lastStep = -1;
-    askedForLongerPattern = false;
 
     if (! showsSteps())
     {
@@ -143,12 +121,6 @@ void StepGrid::mouseDown (const juce::MouseEvent& e)
         return;
     }
 
-    if (! e.mods.isPopupMenu() && overEdge (e.x))
-    {
-        drag = Drag::Edge;
-        repaint();
-        return;
-    }
     // Squares: the left button writes steps, the right button erases them (both also while dragging across).
     drag = e.mods.isPopupMenu() ? Drag::Erase : Drag::Paint;
     paintStep (stepAt (e.x), drag == Drag::Paint);
@@ -162,28 +134,6 @@ void StepGrid::mouseDrag (const juce::MouseEvent& e)
             paintStep (stepAt (e.x), drag == Drag::Paint);
         return;
     }
-    if (drag != Drag::Edge)
-        return;
-
-    // Past the end of the pattern: the pattern gets a bar longer (once per drag), and the channel takes it in.
-    if (e.x > getWidth() + 8 && ! askedForLongerPattern && activeSteps() >= stepCount())
-    {
-        askedForLongerPattern = true;
-        if (onWantsLongerPattern)
-            onWantsLongerPattern();
-    }
-
-    // Whole bars of 16 steps (4 quarter notes); with Alt held, single steps.
-    const float position = static_cast<float> (e.x) / stepWidth();
-    int wanted = e.mods.isAltDown() ? juce::roundToInt (position)
-                                    : juce::roundToInt (position / static_cast<float> (steps::kBarSteps)) * steps::kBarSteps;
-    wanted = std::clamp (wanted, std::min (e.mods.isAltDown() ? 1 : steps::kBarSteps, stepCount()), stepCount());
-    if (steps::resize (channel.notes, channel.steps, wanted, loopLengthTicks, steps::stepPitch (channel)))
-    {
-        repaint();
-        if (onStepsEdited)
-            onStepsEdited();
-    }
 }
 
 void StepGrid::mouseUp (const juce::MouseEvent&)
@@ -193,25 +143,13 @@ void StepGrid::mouseUp (const juce::MouseEvent&)
     repaint();
 }
 
-void StepGrid::mouseMove (const juce::MouseEvent& e)
+void StepGrid::mouseMove (const juce::MouseEvent&)
 {
-    const bool over = overEdge (e.x);
-    if (over != hoverEdge)
-    {
-        hoverEdge = over;
-        repaint();
-    }
-    setMouseCursor (over ? juce::MouseCursor::LeftRightResizeCursor
-                         : (showsSteps() ? juce::MouseCursor::NormalCursor : juce::MouseCursor::PointingHandCursor));
+    setMouseCursor (showsSteps() ? juce::MouseCursor::NormalCursor : juce::MouseCursor::PointingHandCursor);
 }
 
 void StepGrid::mouseExit (const juce::MouseEvent&)
 {
-    if (hoverEdge)
-    {
-        hoverEdge = false;
-        repaint();
-    }
 }
 
 // ------------------------------------------------------------------------- ChannelStrip
@@ -305,7 +243,6 @@ ChannelStrip::ChannelStrip (Channel& channelToControl, int channelIndex)
         else if (onOpenPianoRoll)
             onOpenPianoRoll (index);
     };
-    grid.onWantsLongerPattern = [this] { if (onWantsLongerPattern) onWantsLongerPattern (index); };
     grid.onContextMenu = [this] { showContextMenu(); };
 
     for (auto* c : std::initializer_list<juce::Component*> { &nameLabel, &trackSelector, &muteButton, &soloButton,

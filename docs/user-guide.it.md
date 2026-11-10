@@ -204,23 +204,23 @@ Una riga per canale: un display **Track N** e il nome, **M** (mute), **S** (solo
     scrive gli step, **clic destro** (o trascinamento) li cancella. Uno step suona la nota base del canale (la nota MIDI
     60, salvo un'altra impostazione *Root* del sampler), o la cassa (pad 1) su un canale drum. Durante la riproduzione si illumina lo
     step in corso.
-  - I primi **16 step** (una battuta di 4 quarti) sono **attivi**; quelli dopo, fino alla fine del pattern, sono
-    **grigi**: ripetono gli step attivi, così un ritmo di una battuta riempie un pattern più lungo.
-  - Scrivere (o cancellare) uno step nella parte grigia allunga la sequenza di una battuta: quella battuta diventa
-    attiva, riempita con ciò che suonava, più la tua modifica. Il resto del suono non cambia.
-  - **Trascina la maniglia** alla fine degli step attivi (il cursore diventa una freccia destra-sinistra) per
-    allungare o accorciare la sequenza a battute intere, o a singoli step tenendo premuto **Alt** (una sequenza di 12
-    step si ripete ogni 12 contro le altre: poliritmia). Accorciando, gli step dopo la nuova fine vengono cancellati
-    (Ctrl+Z li riporta). Trascinando oltre la fine del pattern, il pattern si allunga (tutti i pattern: 1, 2, 4, 8 battute).
+  - **La griglia è esattamente il pattern** (0.42.0). Un progetto nuovo parte con **una battuta in 4/4: 4 quarti, 16
+    step**, tutti utilizzabili; niente step grigi, niente che si ripete o si allunga da solo.
+  - La barra in cima al Channel Rack indica la lunghezza (*Pattern: 4 quarters (1 bar) - 16 steps*) e ha due pulsanti:
+    **+** aggiunge **un quarto** (4 step in più) e **-** ne toglie uno. Il minimo è 4 quarti (il pulsante - è allora
+    disattivato), il massimo 64 (16 battute). La lunghezza è la stessa per tutti i pattern; gli step oltre una fine più
+    corta restano conservati ma non suonano, e tornano con +. Le clip della Playlist restano dove sono (vedi *Pattern*).
+    Ctrl+Z annulla.
   - Appena il canale ha una nota che non è un semplice step - un'altra altezza, una nota più lunga, una nota fuori
     dalla griglia dei sedicesimi, scritta nel Piano Roll, nella drum machine, registrata o generata - la riga mostra
-    invece l'**anteprima del Piano Roll** e le sue note suonano come sono scritte (senza ripetizioni). Il **clic
+    invece l'**anteprima del Piano Roll**. Il **clic
     sinistro** sull'anteprima apre il Piano Roll (la drum machine per un canale drum) o lo porta in primo piano; il
     clic destro apre il menu del canale.
   - Se cancelli tutte le note nel Piano Roll, la riga torna ai quadratini.
   - I quadratini vengono disegnati ogni volta dalle note, quindi mostrano sempre ciò che suona.
   - I progetti di prima della 0.31.0 si aprono con la sequenza di ogni canale lunga quanto il pattern, quindi suonano
-    esattamente come prima.
+    esattamente come prima. I progetti dalla 0.31.0 alla 0.41.0 le cui sequenze ripetevano una parte più corta si aprono
+    con quelle ripetizioni scritte come step, quindi suonano uguali anche loro.
 - Il pulsante **Load** di un canale sampler sceglie un file audio.
 - Clic su una riga per selezionare il canale (Piano Roll e Mixer seguono la selezione).
 - **+ Add channel** sotto l'ultima riga aggiunge un canale synth, sampler o drum machine, fino a 32 canali in tutto
@@ -382,7 +382,7 @@ MIDI suona i pad e le note importate in quell'intervallo li suonano. Clic su un 
 | Level, Pan, Tuning | Livello da 0 a 150 %, pan da -100 a +100, intonazione da -24 a +24 semitoni (cambia anche la lunghezza del suono). Doppio clic su un cursore per riportarlo al valore iniziale. |
 | Swing | Da 0 a 100 %: ritarda gli step di sedicesimo in levare di questo pad (fino a mezzo sedicesimo). La manopola Swing del canale è nascosta: un canale drum non la usa. |
 
-**Step.** La griglia in basso ha una riga per pad e uno step per ogni sedicesimo del pattern (32 per due battute). Clic su uno step per accenderlo o spegnerlo (senti il pad), trascina per dipingere o cancellare una serie, tasto destro
+**Step.** La griglia in basso ha una riga per pad e uno step per ogni sedicesimo del pattern (16 per la battuta predefinita). Clic su uno step per accenderlo o spegnerlo (senti il pad), trascina per dipingere o cancellare una serie, tasto destro
 per cancellare. Maiusc+clic mette uno step piano (velocità 0,45), Ctrl+clic uno accentato (1,0), un clic semplice 0,8; la luminosità di uno step mostra la sua velocità. Un clic sull'etichetta di una riga
 seleziona (e suona) quel pad. La griglia modifica le note del canale nel **pattern corrente** (annulla e ripristina delle note funzionano), mostra le note fatte altrove (una nota appartiene allo step in cui
 inizia) e in modalità Pattern una linea segue il playhead.
@@ -506,18 +506,20 @@ funzioni la nota precedente deve suonare ancora quando parte quella collegata, q
 una nota che finisce fino a un sedicesimo prima viene allungata; se finisce prima resta un vuoto e la nota collegata suona normalmente, con il
 suo attacco). Funziona su canali synth e sampler e viene salvato nel progetto.
 
-Le note si agganciano ai sedicesimi. Un pattern dura due battute, se non hai scelto un'altra lunghezza (vedi *Pattern*). Una nota synth termina alla sua lunghezza o alla
+Le note si agganciano ai sedicesimi. Un pattern dura una battuta (4 quarti), se non hai scelto un'altra lunghezza (vedi *Pattern*). Una nota synth termina alla sua lunghezza o alla
 fine del pattern, quale viene prima. Quando apri un canale la vista scorre fino alle sue note.
 
 ## Pattern
 
 Un **pattern** contiene le note di tutti i canali. Il menu dei pattern nella barra sceglie il pattern corrente: il
 Channel Rack e il Piano Roll mostrano e modificano quello. Il pulsante **+** accanto offre **New empty pattern**,
-**Clone current pattern** e **Pattern length (all patterns)**: 1, 2 (predefinito), 4 o 8 battute. La lunghezza vale per tutti i pattern; step
-sequencer, piano roll e drum machine si adeguano. Le clip dei pattern mantengono la loro posizione in unità di pattern, quindi con pattern più lunghi
-il brano si allunga. Le note oltre la fine di un pattern più corto restano conservate ma non suonano, e tornano se allunghi di nuovo i pattern. Il
-cambio viene rifiutato se la playlist non entrerebbe più nella linea del tempo. I nuovi pattern prendono da soli il nome successivo (Pattern 3, Pattern 4, ...). Il progetto dimostrativo parte con "Pattern 1" (il groove completo: batteria,
-pianoforte a coda, basso elettrico e un synth pizzicato, 100 BPM) e "Drums" (batteria e basso), suonati con i suoni incorporati.
+**Clone current pattern** e **Pattern length (all patterns)**: 1 (predefinito), 2, 4 o 8 battute; i pulsanti **-** e **+** del Channel
+Rack la cambiano di **un quarto** alla volta (da 4 a 64 quarti). La lunghezza vale per tutti i pattern; step
+sequencer, piano roll e drum machine si adeguano. Le clip dei pattern restano dove sono (0.42.0): una clip lunga un numero intero di
+pattern mantiene quel numero di ripetizioni, le altre mantengono la loro lunghezza. Le note oltre la fine di un pattern più corto restano conservate ma non suonano, e tornano se allunghi di nuovo i pattern. Il
+cambio viene rifiutato se la playlist non entrerebbe più nella linea del tempo. I nuovi pattern prendono da soli il nome successivo (Pattern 3, Pattern 4, ...). Il progetto dimostrativo parte con "Pattern 1" e "Pattern 2" (le due battute del
+groove completo: batteria, pianoforte a coda, basso elettrico e un synth pizzicato, 100 BPM) e "Drums" (batteria e basso della prima battuta),
+suonati con i suoni incorporati.
 
 **Loop Starter (0.30.0).** *Loop Starter...* nel menu del **+** crea un loop di partenza per un brano. Scegli il **genere** (house,
 techno, hip-hop, trap, drum & bass, pop, lo-fi, reggaeton, rock o synthwave, ognuno con il suo tempo), la **tonalità**, il **modo**
@@ -566,12 +568,13 @@ file **.flp** di FL Studio, con codice scritto per questo programma (non si usa 
   nomi e colori delle tracce. I synth e i plugin di FL Studio qui non esistono: le loro note le suona un synth predefinito. Un
   campione il cui percorso salvato non esiste (un percorso Windows, le cartelle di FL Studio) viene cercato per nome accanto al
   .flp e nelle cartelle vicine. Qui i pattern hanno una sola lunghezza (1, 2, 4 o 8 battute: la più corta che contiene il più
-  lungo), le 500 tracce della playlist di FL Studio finiscono sulle 8 di qui nel loro ordine e le clip si posano su lunghezze di
-  pattern intere.
+  lungo), le 500 tracce della playlist di FL Studio finiscono sulle 8 di qui nel loro ordine e le clip mantengono posizione e
+  lunghezza.
 - **Export as FL Studio project (.flp)...** scrive il progetto corrente nella struttura di FL Studio 20.8 a 960 PPQ (esatto: il
   doppio dei 480 di questo programma). I canali sampler mantengono il loro file; synth, drum machine, plugin e suoni incorporati
-  diventano canali Sampler vuoti che mantengono le note; le sequenze di step che si ripetono vengono scritte per intero; una clip
-  di pattern ripetuta su più lunghezze diventa una clip per ripetizione; le clip audio suonano il loro file dall'inizio.
+  diventano canali Sampler vuoti che mantengono le note; una clip di pattern ripetuta su più lunghezze diventa una clip per
+  ripetizione; le clip audio suonano il loro file dall'inizio. Una clip che parte a metà del suo pattern (dopo uno Split) viene
+  scritta dall'inizio del pattern, e il messaggio lo dice.
 - In nessuna delle due direzioni passano effetti, mixer, automazioni e impostazioni dei plugin; dopo ognuna un messaggio elenca
   cosa è stato lasciato fuori.
 - **Verificato**: i file scritti qui sono stati riletti da questo programma e da un lettore indipendente (PyFLP), ed è stato
@@ -613,9 +616,9 @@ loop, sotto).
 
 | Azione | Come |
 | --- | --- |
-| Piazzare una clip (strumento Select) | Clic su una cella vuota. La clip contiene il pattern scelto nel menu ed è lunga un pattern. Trascina subito a destra per allungarla. |
-| Spostare una clip | Trascinala (si aggancia ai confini dei pattern e può cambiare traccia). |
-| Ripetere / accorciare | Trascina il bordo destro della clip: il pattern si ripete una volta per ogni lunghezza di pattern. |
+| Piazzare una clip (strumento Select) | Clic in un punto qualsiasi di una traccia. La clip parte dal **quadrato della griglia** cliccato (il menu Grid: una battuta, un quarto, un sedicesimo...; con **Alt**, esattamente dove hai cliccato), contiene il pattern scelto nel menu ed è lunga un pattern. Trascina subito a destra per allungarla. |
+| Spostare una clip | Trascinala: si muove per **quadrati della griglia** (0.42.0), non per pattern interi, quindi le clip possono partire sfasate tra loro (un quarto o un sedicesimo dopo); tieni **Alt** per nessun aggancio (micro-timing). Può cambiare traccia. |
+| Ripetere / accorciare | Trascina il bordo destro della clip, per quadrati della griglia (Alt: liberamente): il pattern si ripete finché dura la clip; una lunghezza che non è un numero intero di pattern si ferma a metà dell'ultima ripetizione (sottili tacche mostrano dove inizia ogni ripetizione). |
 | Eliminare | Tasto destro sulla clip > Delete, oppure selezionala e premi Canc (o usa lo strumento Erase). |
 | Selezionare il suo pattern | Doppio clic sulla clip. |
 | Ingrandire / rimpicciolire | Rotella del mouse (su: ingrandisce, giù: rimpicciolisce), intorno al mouse, in tutta la playlist. |
@@ -634,8 +637,8 @@ La barra sotto il menu dei pattern ha cinque strumenti (tasti **1** - **5** con 
 | **Zoom** (5) | Il clic ingrandisce, il tasto destro o Maiusc+clic rimpicciolisce, trascinando un tratto si ingrandisce su quel tratto. |
 
 **Grid** (il menu accanto agli strumenti) è la griglia a cui si agganciano le clip audio quando vengono spostate, ritagliate, divise
-o tagliate: una battuta, mezza battuta (1/2, 0.32.0), un quarto e così via fino al singolo tick (1 battito = 480 tick); tieni premuto **Alt** mentre trascini per ignorarla. Le clip
-di pattern stanno sempre su pattern interi. **-**, **+** e **Fit** rimpiccioliscono, ingrandiscono e mostrano tutto il brano;
+o tagliate: una battuta, mezza battuta (1/2, 0.32.0), un quarto e così via fino al singolo tick (1 battito = 480 tick); tieni premuto **Alt** mentre trascini per ignorarla. Dalla 0.42.0
+anche le clip di pattern si agganciano alla stessa griglia (prima stavano su pattern interi). **-**, **+** e **Fit** rimpiccioliscono, ingrandiscono e mostrano tutto il brano;
 la **rotella del mouse** ingrandisce e rimpicciolisce intorno al mouse, Shift+rotella e la barra di scorrimento muovono nel tempo. Il righello mostra
 **minuti:secondi.millisecondi** e i numeri di battuta (solo quanti ne stanno allo zoom attuale); le due righe sotto la linea del
 tempo indicano, per la posizione sotto il mouse, *tempo - battuta:battito:tick* e, per la clip selezionata, nome, inizio, durata e fine
@@ -654,7 +657,8 @@ si apre nell'editor dei campioni: prima togli *Reverse*. Le impostazioni si salv
 **Annulla / Ripristina** (pulsanti, **Ctrl+Z** e **Ctrl+Y**) coprono tutto ciò che si fa alle clip nella Playlist. **Ctrl+C / X / V**
 copiano, tagliano e incollano la clip selezionata dove sta il mouse, **Ctrl+D** la duplica, **Canc** la elimina. La cronologia viene
 dimenticata quando qualcosa fuori dalla Playlist cambia la disposizione (apertura di un progetto, una nuova registrazione,
-l'eliminazione di un pattern). Split e Cut funzionano anche sulle clip di pattern, ma solo su lunghezze intere di pattern. Una clip
+l'eliminazione di un pattern). Split e Cut funzionano anche sulle clip di pattern, su qualsiasi quadrato della griglia (0.42.0): la parte destra prosegue dallo
+stesso punto del pattern (ricorda quanto dentro il pattern parte), quindi una clip divisa suona esattamente come prima. Una clip
 ottenuta dividendo una clip audio ricorda dove inizia nel suono **in secondi, al BPM a cui è stata tagliata**: se in seguito cambi il
 BPM il suono continua a suonare alla velocità originale, quindi i punti di taglio non cadono più sul battito su cui erano stati fatti.
 
@@ -1063,7 +1067,7 @@ parte di un'esportazione. Viene ricordato tra una sessione e l'altra.
 
 ## Esportazione
 
-**File > Export audio** scrive la modalità corrente: il pattern (due battute) o il brano (fino alla fine dell'ultima clip,
+**File > Export audio** scrive la modalità corrente: il pattern (una battuta, se non l'hai cambiata) o il brano (fino alla fine dell'ultima clip,
 clip audio comprese), più un secondo di coda per non tagliare i rilasci e le code della batteria. Viene generato a 48 kHz
 stereo, al BPM impostato nella barra, dallo stesso motore che suona, quindi suona come ciò che ascolti. Scegli il formato
 nel sottomenu:
@@ -1122,7 +1126,7 @@ occupato più tardi, un brano più pesante o un mixer pieno di effetti possono r
   tempo di almeno 32 pattern e 64 battute, 4 corsie di automazione, 64 clip di automazione di al massimo 256 punti, 32 voci simultanee.
 - Gli effetti usano circa 15 MB di memoria a 48 kHz all'inizio, più circa 0,8 MB per ogni riverbero, delay, chorus e Pitch Corrector oltre
   il sedicesimo (di più a frequenze di campionamento maggiori). La memoria preparata resta finché il dispositivo audio non riparte.
-- I pattern durano 1, 2, 4 o 8 battute (uguale per tutti), 4/4, griglia di sedicesimi; un solo tempo per tutto il brano.
+- I pattern durano da 4 a 64 quarti (uguale per tutti), 4/4, griglia di sedicesimi; un solo tempo per tutto il brano.
 - I sample sono mono o stereo, al massimo 30 secondi. Il sampler ha un inviluppo e un filtro per canale (niente inviluppo del filtro, LFO o
   modulazione); al massimo quattro zone suonano per nota. Clip audio: fino a 5 minuti per file, 64 clip.
 - Il synth: un LFO e un filtro per canale, due oscillatori, niente unisono, ancora niente motore additivo, la velocity non modula gli

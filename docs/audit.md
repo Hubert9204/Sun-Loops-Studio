@@ -27,6 +27,12 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.42.0
+The clip model changed from pattern units to ticks; every reader of clips (compiler, playlist, FLP import / export, MIDI import,
+project file) was moved over and the old file layout is converted on load (tested both ways). `compileSong` runs on the message
+thread as before; a clip's passes are bounded by its length over the pattern length (at most the timeline). The rack's length
+buttons go through the same path as the menu (`setPatternBeats`), with its timeline check and one undo step.
+
 ## After 0.41.0
 The SFZ parser reads untrusted text: files over 16 MB are refused, numbers are parsed with strtod and range-checked, keys and
 velocities clamped, loops checked against the sample's length after loading; `#include` is not followed (it could name any file).
