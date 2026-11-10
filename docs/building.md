@@ -5,10 +5,11 @@
 - A C++20 compiler: GCC 13 or newer. The automated checks run with GCC 13; the maintainer builds and runs it on
   Nobara 44 (GCC 16).
 - CMake 3.22 or newer (3.28 or newer for a clean `cmake --install`, see below) and Ninja.
-- Development files for ALSA, JACK, FreeType, Fontconfig, X11 and OpenGL.
+- Development files for ALSA, JACK, FreeType, Fontconfig, X11, OpenGL and **libcurl** (since 0.43.0: the update check and crash reports).
 - Optional, at run time: **ffmpeg** (`sudo dnf install ffmpeg` on Nobara / Fedora) for exporting MP3 and AAC and for
   importing AAC and the sound of video files. Everything else works without it.
-- Network access the first time you configure: CMake downloads JUCE 8.0.4 from GitHub (shallow clone, pinned tag).
+- Network access the first time you configure: CMake downloads JUCE 8.0.4 and spdlog 1.14.1 from GitHub (shallow clones, pinned
+  tags) and nlohmann/json 3.11.3 (release archive, checked by SHA-256).
 
 ### Nobara / Fedora
 
@@ -18,7 +19,7 @@
 
 The script runs `sudo dnf install` for: `gcc-c++ cmake ninja-build git pkgconf-pkg-config alsa-lib-devel
 pipewire-jack-audio-connection-kit-devel freetype-devel fontconfig-devel libX11-devel libXext-devel
-libXinerama-devel libXrandr-devel libXcursor-devel libXrender-devel libXcomposite-devel mesa-libGL-devel ladspa-devel`
+libXinerama-devel libXrandr-devel libXcursor-devel libXrender-devel libXcomposite-devel mesa-libGL-devel libcurl-devel ladspa-devel`
 (`ladspa-devel` only provides `ladspa.h`: without it the program builds but cannot host LADSPA plugins; VST3 and LV2 need nothing extra).
 It only installs packages: it does not upgrade the system or touch audio services. On Fedora with PipeWire the
 JACK headers come from `pipewire-jack-audio-connection-kit-devel`; do not also install
@@ -28,7 +29,7 @@ JACK headers come from `pipewire-jack-audio-connection-kit-devel`; do not also i
 
 Install the equivalents yourself. On Debian / Ubuntu the usual names are `build-essential cmake ninja-build git
 libasound2-dev libjack-jackd2-dev libfreetype-dev libfontconfig1-dev libx11-dev libxext-dev libxinerama-dev
-libxrandr-dev libxcursor-dev libxrender-dev libxcomposite-dev libgl1-mesa-dev`. This path has not been tested.
+libxrandr-dev libxcursor-dev libxrender-dev libxcomposite-dev libgl1-mesa-dev libcurl4-openssl-dev`. This path has not been tested.
 
 ## Build
 
@@ -120,3 +121,15 @@ not part of the repository.
 JUCE has no native PipeWire backend: on Linux it uses ALSA and JACK, and PipeWire serves both through
 `pipewire-alsa` and `pipewire-jack`, which Nobara installs by default. JUCE draws through X11; on a Wayland session
 it runs through XWayland.
+
+## Crash reports and the update check (0.43.0)
+
+- `-DSLS_GITHUB_REPO=owner/repo` (default `Hubert9204/Sun-Loops-Studio`) is where crash reports go and updates come from.
+- `-DSLS_CRASH_REPORT_TOKEN=...` builds a GitHub token into the program so that *Send report* works without the user setting one.
+  Never commit it and think before using it: **anyone who has the program can read a built-in token** and use it to open issues
+  (give it *Issues: Read and write* on that one repository and nothing else, and be ready to revoke it). Without it, users paste their
+  own token in the program or send the report from the browser.
+- `SLS_GITHUB_TOKEN` (environment) sets a token for one run; `SLS_GITHUB_API` points both calls at another server (tests, GitHub
+  Enterprise).
+- The AppImage keeps the program's symbol table (`NO_STRIP=1`, about 0.5 MB) so stack traces name every function; the program's own
+  symbols are also exported (`--export-dynamic-symbol=_ZN3sls*` and `_ZN4juce*`), which names them even in a stripped build.

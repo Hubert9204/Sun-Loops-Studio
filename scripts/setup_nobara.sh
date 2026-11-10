@@ -13,6 +13,7 @@ packages=(
     libX11-devel libXext-devel libXinerama-devel libXrandr-devel
     libXcursor-devel libXrender-devel libXcomposite-devel
     mesa-libGL-devel
+    libcurl-devel   # HTTPS for the update check and crash reports (0.43.0)
     ladspa-devel    # the LADSPA header: hosting LADSPA plugins (VST3 and LV2 need nothing extra)
 )
 

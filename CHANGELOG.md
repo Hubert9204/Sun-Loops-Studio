@@ -2,6 +2,32 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.43.0 - 2026-11-10
+
+Crash reports, a session log and an update check.
+
+### Added
+- **Session log** with spdlog: `~/.local/state/SunLoopsStudio/logs/session.log`, rotated at 5 MB (three old files kept): start-up,
+  system, audio device, every status message, problems, update checks and crash reports.
+- **Crash handler** for SIGSEGV, SIGABRT, SIGFPE, SIGILL and SIGBUS (and uncaught exceptions), async-signal-safe, on its own stack:
+  writes the signal, address, thread, version, system, audio driver / device / rate / buffer and the stack trace to
+  `crash_last_session.log`, then lets the program end as it would have.
+- **Crash report at the next start**: "Sun Loops Studio closed unexpectedly during the last session..." (in Italian when the system
+  is) with **Send report**, **Show log before sending** and **Ignore / Delete**. Sending creates a GitHub issue with libcurl
+  (`POST /repos/{owner}/{repo}/issues`): title with the signal and function, system table, stack trace and the last 40 log lines in
+  Markdown code blocks, home folder and user name removed; the crash file is archived only after 201 Created. Function names come
+  from the program's ELF symbol table (the same build) as well as its exported symbols. Without a GitHub token the report opens in
+  the browser instead. *File > Updates and crash reports* sets the token.
+- **Update check**: `UpdateChecker` asks `releases/latest` on its own thread (libcurl, 5 s timeout, no network = no message),
+  parses it with nlohmann/json, compares versions by Semantic Versioning and passes an `UpdateInfo` (version, download link,
+  short changelog) to the main thread; a window offers Download, Later or Skip this version. It can be switched off
+  (*Check for updates at start-up*), and *Check for updates now* asks at once. Helios knows both commands.
+
+### Build
+- New dependencies: libcurl (`libcurl-devel`), spdlog 1.14.1 and nlohmann/json 3.11.3 (fetched and built in). Options
+  `SLS_GITHUB_REPO` and `SLS_CRASH_REPORT_TOKEN` (see docs/building.md before using a built-in token). The AppImage keeps the
+  symbol table.
+
 ## 0.42.0 - 2026-11-10
 
 Correction of the Channel Rack and the Playlist, as specified on 2026-11-10.

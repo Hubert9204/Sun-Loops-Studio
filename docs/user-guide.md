@@ -64,12 +64,52 @@ computer and opens there with its sounds. Built-in sounds stay built-in; a file 
 
 **Backup, autosave and recovery.** Saving over an existing project first keeps the previous version next to it as `<name>.slp.bak` (one
 generation). While there are unsaved changes the project is also written **once a minute** to `~/Music/Sun Loops Studio/Autosave/Autosave.slp`.
-That file is deleted when the program closes normally; if the program crashed (or was killed), the next start asks **Recover your work?** and
+That file is deleted when the program closes normally; if the program crashed (or was killed), the next start asks **Recover your work?**
+(after the crash report question, see *Crash reports* below) and
 *Open the recovered project* opens it (marked as not saved, under its old name if it had one: `Ctrl+S` puts it back where it belongs).
 
 **Damaged files.** A file that is not a Sun Loops Studio project, is damaged or was written by a newer version is
 refused with a message and your current project is left untouched. Values that are out of range are clamped and notes
 or clips that cannot be placed are dropped, with a message saying so.
+
+## Crash reports, session log and updates (0.43.0)
+
+**Session log.** Every session writes a log to `~/.local/state/SunLoopsStudio/logs/session.log` (or `$XDG_STATE_HOME/SunLoopsStudio`):
+the version and system at the start, the audio device, every message of the status line, problems and the update check. When the file
+reaches **5 MB** it becomes `session.1.log` (then `session.2.log`, `session.3.log`; older ones are deleted). *File > Updates and crash
+reports > Show the session log folder* opens the folder.
+
+**When the program crashes.** If Sun Loops Studio is ended by a crash (SIGSEGV, SIGABRT, SIGFPE, SIGILL or SIGBUS, or an uncaught
+error), it writes what happened to `crash_last_session.log` in the same folder before closing: the signal, the stack trace (the
+functions that were running), the version, the system and the audio driver, device, sample rate and buffer. At the next start it asks:
+
+> *Sun Loops Studio closed unexpectedly during the last session. Do you want to send an anonymous bug report to GitHub to help us fix it?*
+
+| Button | What it does |
+| --- | --- |
+| **Send report** | Creates an issue in the project's GitHub repository (Hubert9204/Sun-Loops-Studio) with the crash, the system and the stack trace in Markdown code blocks, and shows its number. The crash file is moved to `crashes/` only after GitHub confirmed it; if sending fails, the reason is shown and the file stays. |
+| **Show log before sending** | Shows the whole report exactly as it will be sent, then Send or Ignore. |
+| **Ignore / Delete** | Deletes the crash file; nothing is sent. |
+
+Closing the window keeps the file: the question comes back at the next start. Then **Recover your work?** follows as before.
+
+**What is sent, and what is not.** The report holds the signal, the stack trace, the program version, the operating system,
+kernel and processor, the audio driver, device name, sample rate and buffer size, and the last 40 lines of the session log before
+the crash. Your home folder is replaced by `~` and your user name by `<user>`. No project, no sound and no file is sent, and nothing is
+sent without your click.
+
+**The GitHub token.** Creating an issue through GitHub's API needs a token. *File > Updates and crash reports > GitHub token for crash
+reports...* takes one (a fine-grained token with *Issues: Read and write* on the repository only); it is kept in the settings file,
+readable only by you. Without a token, **Send report** opens GitHub's *new issue* page in your browser with the report filled in
+(you need a GitHub account): press *Submit new issue* there, then *I sent it: delete the file* in the program.
+
+**Checking for updates.** A few seconds after the start the program asks GitHub, in the background, for the latest release
+(`releases/latest`, 5 seconds at most; no network or no answer is simply ignored). When a newer version exists (compared by
+Semantic Versioning: 0.43.0 is newer than 0.42.0, 1.0.0 is newer than 1.0.0-rc.1), a window shows it with the start of its notes:
+**Download** opens the AppImage (or the release page), **Later** asks again at the next start, **Skip this version** stops asking
+about that one. *Check for updates at start-up* in the same menu turns the automatic check off; *Check for updates now* asks at
+once and also tells you when you are up to date. The check sends no personal data (only the program name and version, as the
+User-Agent GitHub requires).
 
 ## Panels
 

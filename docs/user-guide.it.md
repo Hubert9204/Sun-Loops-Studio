@@ -67,12 +67,54 @@ mantiene il vecchio percorso.
 **Copia di sicurezza, salvataggio automatico e recupero.** Salvando sopra un progetto esistente, la versione precedente resta accanto come
 `<nome>.slp.bak` (una sola generazione). Finché ci sono modifiche non salvate, il progetto viene anche scritto **una volta al minuto** in
 `~/Music/Sun Loops Studio/Autosave/Autosave.slp`. Quel file viene cancellato quando il programma si chiude normalmente; se il programma si è
-bloccato (o è stato terminato), al prossimo avvio compare **Recover your work?** e *Open the recovered project* lo apre (segnato come non salvato,
+bloccato (o è stato terminato), al prossimo avvio compare **Recover your work?** (dopo la domanda sul report del crash, vedi *Report dei crash* sotto) e *Open the recovered project* lo apre (segnato come non salvato,
 con il vecchio nome se ne aveva uno: `Ctrl+S` lo rimette al suo posto).
 
 **File danneggiati.** Un file che non è un progetto di Sun Loops Studio, è rovinato o è stato scritto da una versione
 più recente viene rifiutato con un messaggio e il progetto corrente resta intatto. I valori fuori limite vengono
 riportati nei limiti e le note o clip che non si possono collocare vengono scartate, con un messaggio.
+
+## Report dei crash, log di sessione e aggiornamenti (0.43.0)
+
+**Log di sessione.** Ogni sessione scrive un log in `~/.local/state/SunLoopsStudio/logs/session.log` (o `$XDG_STATE_HOME/SunLoopsStudio`):
+la versione e il sistema all'avvio, il dispositivo audio, ogni messaggio della riga di stato, i problemi e il controllo degli
+aggiornamenti. Quando il file arriva a **5 MB** diventa `session.1.log` (poi `session.2.log`, `session.3.log`; i più vecchi vengono
+eliminati). *File > Updates and crash reports > Show the session log folder* apre la cartella.
+
+**Quando il programma va in crash.** Se Sun Loops Studio viene chiuso da un crash (SIGSEGV, SIGABRT, SIGFPE, SIGILL o SIGBUS, o un
+errore non gestito), prima di chiudersi scrive cosa è successo in `crash_last_session.log` nella stessa cartella: il segnale, lo stack
+trace (le funzioni in esecuzione), la versione, il sistema e driver, dispositivo, frequenza di campionamento e buffer audio. Al
+prossimo avvio chiede:
+
+> *Sun Loops Studio si è chiuso in modo anomalo durante l'ultima sessione. Vuoi inviare un report anonimo del bug su GitHub per aiutarci a risolverlo?*
+
+(in italiano se la lingua del sistema è l'italiano, altrimenti in inglese)
+
+| Pulsante | Cosa fa |
+| --- | --- |
+| **Invia Report** | Crea una issue nel repository GitHub del progetto (Hubert9204/Sun-Loops-Studio) con il crash, il sistema e lo stack trace in blocchi di codice Markdown, e ne mostra il numero. Il file del crash viene spostato in `crashes/` solo dopo la conferma di GitHub; se l'invio non riesce, il motivo viene mostrato e il file resta. |
+| **Mostra Log prima di inviare** | Mostra tutto il report esattamente come verrà inviato, poi Invia o Ignora. |
+| **Ignora/Elimina** | Elimina il file del crash; non viene inviato nulla. |
+
+Chiudere la finestra conserva il file: la domanda torna al prossimo avvio. Poi segue come prima **Recover your work?**.
+
+**Cosa viene inviato e cosa no.** Il report contiene il segnale, lo stack trace, la versione del programma, il sistema operativo,
+il kernel e il processore, driver audio, nome del dispositivo, frequenza di campionamento e dimensione del buffer, e le ultime 40
+righe del log di sessione prima del crash. La tua cartella home viene sostituita da `~` e il tuo nome utente da `<user>`. Non vengono
+inviati progetti, suoni o file, e non viene inviato nulla senza il tuo clic.
+
+**Il token GitHub.** Creare una issue con l'API di GitHub richiede un token. *File > Updates and crash reports > GitHub token for crash
+reports...* ne accetta uno (un token fine-grained con *Issues: Read and write* solo sul repository); viene conservato nel file delle
+impostazioni, leggibile solo da te. Senza token, **Invia Report** apre nel browser la pagina *new issue* di GitHub con il report già
+compilato (serve un account GitHub): premi lì *Submit new issue*, poi nel programma *L'ho inviato: elimina il file*.
+
+**Controllo degli aggiornamenti.** Qualche secondo dopo l'avvio il programma chiede a GitHub, in background, l'ultima release
+(`releases/latest`, al massimo 5 secondi; senza rete o senza risposta semplicemente non succede nulla). Se esiste una versione più
+recente (confronto Semantic Versioning: 0.43.0 è più recente di 0.42.0, 1.0.0 di 1.0.0-rc.1), una finestra la mostra con l'inizio
+delle note: **Download** apre l'AppImage (o la pagina della release), **Later** richiede al prossimo avvio, **Skip this version** non
+chiede più di quella. *Check for updates at start-up* nello stesso menu spegne il controllo automatico; *Check for updates now* chiede
+subito e dice anche quando sei aggiornato. Il controllo non invia dati personali (solo nome e versione del programma, come
+User-Agent richiesto da GitHub).
 
 ## Pannelli
 

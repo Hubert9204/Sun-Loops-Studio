@@ -1,5 +1,7 @@
 #include "ui/MainComponent.h"
 
+#include <spdlog/spdlog.h>
+
 #include "audio/TimeFormat.h"
 
 #include "ui/AssignTrackDialog.h"
@@ -587,11 +589,20 @@ MainComponent::MainComponent()
     engine.getDeviceManager().addChangeListener (this); // from now on the device and buffer size are remembered
     deviceLabel.setText (error.isEmpty() ? engine.describeDevice() : "Audio error: " + error,
                          juce::dontSendNotification);
+    noteAudioDevice();
+    if (error.isNotEmpty())
+        spdlog::warn ("Audio error: {}", error.toStdString());
 
     resetNoteHistory();
     lastAutosaveMs = juce::Time::getMillisecondCounter();
     startSession();
     startTimerHz (30);
+    // The update check (0.43.0): a few seconds after the start, in the background, unless switched off in the File menu.
+    juce::Timer::callAfterDelay (4000, [safe = juce::Component::SafePointer<MainComponent> (this)]
+    {
+        if (safe != nullptr && safe->checksForUpdatesAutomatically())
+            safe->checkForUpdates (false);
+    });
 
     // Space and F5/F6/F7/F9 work from the start, without needing a click first.
     juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<MainComponent> (this)]
@@ -612,6 +623,7 @@ void MainComponent::refreshRackStrips()
 MainComponent::~MainComponent()
 {
     stopTimer();
+    updateChecker.reset(); // cancels a check in progress
     endSession();
     automationWindow.reset();
     sampleEditorWindow.reset();
@@ -824,6 +836,7 @@ void MainComponent::setTypingOn (bool on)
 void MainComponent::timerCallback()
 {
     autosaveIfNeeded();
+    logStatusChanges();
     if (! typingHeld.empty())
         releaseTypingKeys (! juce::Process::isForegroundProcess()); // keys let go while another window had the keyboard
 
@@ -1380,6 +1393,7 @@ void MainComponent::changeListenerCallback (juce::ChangeBroadcaster*)
         settings->saveIfNeeded();
     }
     deviceLabel.setText (engine.describeDevice(), juce::dontSendNotification);
+    noteAudioDevice();
 }
 
 void MainComponent::chooseSampleFor (int channelIndex)

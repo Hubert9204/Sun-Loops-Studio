@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(SunLoopsStudio VERSION 0.42.0 LANGUAGES C CXX ASM)
+project(SunLoopsStudio VERSION 0.43.0 LANGUAGES C CXX ASM)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -21,6 +21,37 @@ FetchContent_Declare(
     ${SLS_JUCE_FETCH_OPTIONS}
 )
 FetchContent_MakeAvailable(JUCE)
+
+# Session log, crash reports and the update check (0.43.0): spdlog (session log), nlohmann/json (GitHub API answers) and
+# libcurl (HTTPS; Fedora / Nobara: libcurl-devel). Both libraries are pinned and built in; their headers are SYSTEM so their
+# code does not add warnings.
+set(SPDLOG_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+set(SPDLOG_INSTALL OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    spdlog
+    GIT_REPOSITORY https://github.com/gabime/spdlog.git
+    GIT_TAG v1.14.1
+    GIT_SHALLOW ON
+    SYSTEM
+    ${SLS_JUCE_FETCH_OPTIONS}
+)
+FetchContent_Declare(
+    nlohmann_json
+    URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
+    URL_HASH SHA256=d6c65aca6b1ed68e7a182f4757257b107ae403032760ed6ef121c9d55e81757d
+    DOWNLOAD_EXTRACT_TIMESTAMP ON
+    SYSTEM
+    ${SLS_JUCE_FETCH_OPTIONS}
+)
+FetchContent_MakeAvailable(spdlog nlohmann_json)
+set_target_properties(spdlog PROPERTIES POSITION_INDEPENDENT_CODE ON)
+find_package(CURL REQUIRED)
+
+# GitHub repository that crash reports go to and updates come from. A token for creating issues can be built in with
+# -DSLS_CRASH_REPORT_TOKEN=... (never commit one: anyone with the program can read it); without one the user can paste their
+# own in the program, or the report opens in the browser instead.
+set(SLS_GITHUB_REPO "Hubert9204/Sun-Loops-Studio" CACHE STRING "owner/repo for crash reports and update checks")
+set(SLS_CRASH_REPORT_TOKEN "" CACHE STRING "GitHub token built in for crash reports (empty: none)")
 
 # The start-up sound, built into the program (see resources/sounds/README.md).
 juce_add_binary_data(SunLoopsSounds
@@ -78,7 +109,14 @@ set(SLS_CORE_SOURCES
     src/library/HelpIndex.cpp
     src/library/Sfz.cpp
     src/plugins/PluginScanner.cpp
-    src/plugins/PluginHost.cpp)
+    src/plugins/PluginHost.cpp
+    src/support/Logging.cpp
+    src/support/CrashHandler.cpp
+    src/support/CrashReport.cpp
+    src/support/Http.cpp
+    src/support/GitHub.cpp
+    src/support/UpdateChecker.cpp
+)
 
 # LADSPA plugins can be hosted only when the LADSPA header is installed (Fedora / Nobara: ladspa-devel).
 include(CheckIncludeFileCXX)
@@ -158,6 +196,8 @@ target_sources(SunLoopsStudio PRIVATE
     src/ui/MainComponentStems.cpp
     src/ui/HeliosWindow.cpp
     src/ui/MainComponentHelios.cpp
+    src/ui/MainComponentSupport.cpp
+    src/ui/CrashReportDialog.cpp
     src/ui/MetersView.cpp
     src/ui/SampleEditor.cpp
     ${SLS_CORE_SOURCES})
@@ -168,9 +208,16 @@ target_include_directories(SunLoopsStudio SYSTEM PRIVATE third_party/signalsmith
 target_compile_definitions(SunLoopsStudio PRIVATE
     ${SLS_COMMON_DEFINITIONS}
     JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:SunLoopsStudio,JUCE_PRODUCT_NAME>"
-    JUCE_APPLICATION_VERSION_STRING="${PROJECT_VERSION}")
+    JUCE_APPLICATION_VERSION_STRING="${PROJECT_VERSION}"
+    SLS_GITHUB_REPO="${SLS_GITHUB_REPO}"
+    SLS_CRASH_REPORT_TOKEN="${SLS_CRASH_REPORT_TOKEN}")
+# Function names in crash stack traces (they survive stripping): the program's own and JUCE's symbols are exported.
+target_link_options(SunLoopsStudio PRIVATE "LINKER:--export-dynamic-symbol=_ZN3sls*" "LINKER:--export-dynamic-symbol=_ZN4juce*")
 
 target_link_libraries(SunLoopsStudio PRIVATE
+    spdlog::spdlog
+    nlohmann_json::nlohmann_json
+    CURL::libcurl
     SunLoopsSounds
     SunLoopsLibraryData
     SunLoopsHelp
@@ -203,13 +250,18 @@ juce_add_console_app(SunLoopsStudioTests
 
 target_sources(SunLoopsStudioTests PRIVATE
     tests/test_core.cpp
+    tests/test_support.cpp
     ${SLS_CORE_SOURCES})
 
 target_include_directories(SunLoopsStudioTests PRIVATE src)
 target_include_directories(SunLoopsStudioTests SYSTEM PRIVATE third_party/signalsmith third_party/tinysoundfont)
 target_compile_definitions(SunLoopsStudioTests PRIVATE ${SLS_COMMON_DEFINITIONS})
+target_link_options(SunLoopsStudioTests PRIVATE "LINKER:--export-dynamic-symbol=_ZN3sls*")
 
 target_link_libraries(SunLoopsStudioTests PRIVATE
+    spdlog::spdlog
+    nlohmann_json::nlohmann_json
+    CURL::libcurl
     SunLoopsSounds
     SunLoopsLibraryData
     juce::juce_audio_formats

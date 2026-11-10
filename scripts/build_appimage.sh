@@ -49,6 +49,8 @@ DESTDIR="$appdir" cmake --install "$build" --prefix /usr
 # linuxdeploy copies the libraries the program needs into the AppDir (skipping the ones every system provides,
 # such as glibc and the ALSA/GL/X11 client libraries) and writes AppRun.
 export LDAI_NO_APPSTREAM=1
+# Keep the program's symbol table (about 0.5 MB in the AppImage): crash reports name every function with it (0.43.0).
+export NO_STRIP=1
 "$tools/linuxdeploy-x86_64.AppImage" --appdir "$appdir" \
     --executable "$appdir/usr/bin/sun-loops-studio" \
     --desktop-file "$appdir/usr/share/applications/sun-loops-studio.desktop" \

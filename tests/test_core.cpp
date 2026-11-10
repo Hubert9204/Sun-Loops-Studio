@@ -10597,6 +10597,12 @@ void testPluginHosting()
 }
 #endif
 
+// tests/test_support.cpp (0.43.0)
+void supportCheck (bool ok, const char* name) { check (ok, name); }
+void testSemVerAndUpdates();
+void testCrashReports();
+void testSessionLog();
+
 int main()
 {
     testProjectModel();
@@ -10654,6 +10660,9 @@ int main()
     testSfz();
     testSfzFiles();
     testFreePlaylist();
+    testSemVerAndUpdates();
+    testCrashReports();
+    testSessionLog();
     testMidiNotes();
     testPlayerRewind();
     testClipEditing();

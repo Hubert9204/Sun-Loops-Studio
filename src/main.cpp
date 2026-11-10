@@ -2,6 +2,11 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include <spdlog/spdlog.h>
+
+#include "support/CrashHandler.h"
+#include "support/CrashReport.h"
+#include "support/Logging.h"
 #include "ui/MainComponent.h"
 
 class SunLoopsStudioApplication : public juce::JUCEApplication
@@ -13,11 +18,25 @@ public:
 
     void initialise (const juce::String&) override
     {
+        // 0.43.0: the session log and the crash handler come first, so everything after them is covered. A crash file left by
+        // the last session gets that session's last log lines before the new session starts writing to the log.
+        const auto state = sls::logging::stateDirectory();
+        const auto crashFile = sls::crash::crashFile (state);
+        if (std::error_code e; std::filesystem::exists (crashFile, e))
+            sls::crash::attachLog (crashFile, sls::logging::lastLines (state / "logs" / "session.log", 40));
+        sls::logging::start ({ state / "logs" });
+        sls::crash::install ({ state, JUCE_APPLICATION_VERSION_STRING });
+        std::string system;
+        for (const auto& [key, value] : sls::crash::systemFields())
+            system += (system.empty() ? "" : ", ") + value;
+        spdlog::info ("Sun Loops Studio {} started ({})", JUCE_APPLICATION_VERSION_STRING, system);
+
        #if JUCE_LINUX
         // JUCE draws through X11 (XWayland under Wayland): without a display it would crash, so say so and stop instead.
         if (juce::SystemStats::getEnvironmentVariable ("DISPLAY", {}).isEmpty())
         {
             std::fputs ("Sun Loops Studio: no graphical display (DISPLAY is not set). Start it from a desktop session.\n", stderr);
+            spdlog::warn ("No graphical display (DISPLAY is not set): closing");
             setApplicationReturnValue (1);
             quit();
             return;
@@ -38,7 +57,12 @@ public:
         }
     }
 
-    void shutdown() override { mainWindow = nullptr; }
+    void shutdown() override
+    {
+        mainWindow = nullptr;
+        spdlog::info ("Closed normally");
+        sls::logging::stop(); // the crash handler stays: a crash while closing is still reported
+    }
 
     // Closing the window (or the session ending) first asks about unsaved changes.
     void systemRequestedQuit() override

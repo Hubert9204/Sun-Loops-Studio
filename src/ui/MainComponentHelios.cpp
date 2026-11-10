@@ -49,6 +49,9 @@ std::vector<HeliosCommand> MainComponent::heliosCommands()
         { "Import audio, video or MIDI", "import audio video midi file importa", run ([] (MainComponent& m) { m.chooseMediaToImport(); }) },
         { "Undo (Ctrl+Z)", "undo annulla", run ([] (MainComponent& m) { m.undoEdit(); }) },
         { "Redo (Ctrl+Y)", "redo ripeti", run ([] (MainComponent& m) { m.redoEdit(); }) },
+        { "Check for updates", "update updates new version release aggiornamento aggiornamenti nuova versione", run ([] (MainComponent& m) { m.checkForUpdates (true); }) },
+        { "Show the session log folder", "log logs crash report folder registro cartella arresto anomalo", run ([] (MainComponent& m) { m.showLogFolder(); }) },
+        { "GitHub token for crash reports", "github token crash report bug segnalazione arresto anomalo", run ([] (MainComponent& m) { m.askForGitHubToken(); }) },
         { "Restore the panel layout", "reset layout panels windows ripristina pannelli finestre", run ([] (MainComponent& m) { m.resetLayout(); }) },
     };
 }

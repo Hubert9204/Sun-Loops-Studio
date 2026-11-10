@@ -41,14 +41,12 @@ void MainComponent::startSession()
         settings->setValue (kRunningKey, true);
         settings->saveIfNeeded();
     }
-    if (! crashed || ! autosave.existsAsFile())
-        return;
-
+    const bool offerRecovery = crashed && autosave.existsAsFile();
     const auto original = settings != nullptr ? settings->getValue (kAutosaveOriginalKey) : juce::String();
     const auto when = autosave.getLastModificationTime().toString (true, true, false, true);
-    juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<MainComponent> (this), autosave, original, when]
+    auto recover = [safe = juce::Component::SafePointer<MainComponent> (this), autosave, original, when, offerRecovery]
     {
-        if (safe == nullptr)
+        if (safe == nullptr || ! offerRecovery)
             return;
         juce::AlertWindow::showOkCancelBox (
             juce::MessageBoxIconType::QuestionIcon, "Recover your work?",
@@ -72,6 +70,12 @@ void MainComponent::startSession()
                 safe->updateWindowTitle();
                 safe->statusLabel.setText ("Recovered the autosaved project: save it to keep it", juce::dontSendNotification);
             }));
+    };
+    // 0.43.0: a crash report from the last session is offered first, then the autosaved project.
+    juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<MainComponent> (this), recover]
+    {
+        if (safe != nullptr && ! safe->offerCrashReport (recover))
+            recover();
     });
 }
 

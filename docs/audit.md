@@ -27,6 +27,16 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.43.0
+New attack surface: the program now talks to the network (only api.github.com, over HTTPS with certificate checks, redirects
+limited to HTTPS, answers capped at 1-2 MB, 5 s / 20 s timeouts) and parses JSON from it with nlohmann/json without exceptions
+(`parse (..., nullptr, false)`, type-checked fields). The update check sends only the User-Agent; a crash report is sent only after a
+click and can be read first; home folder and user name are redacted (other personal text in the last log lines - project and file
+names - is visible in the preview). A GitHub token is stored in plain text in the settings file, which is set to mode 0600 when the
+token is saved; a token built in with `SLS_CRASH_REPORT_TOKEN` can be read by anyone with the binary (documented). The signal
+handler is async-signal-safe except for `backtrace_symbols_fd` and `prctl`, which are safe in practice on glibc (no malloc); a second
+crashing thread waits instead of writing. The crash file and its archive hold at most 10 old reports.
+
 ## After 0.42.0
 The clip model changed from pattern units to ticks; every reader of clips (compiler, playlist, FLP import / export, MIDI import,
 project file) was moved over and the old file layout is converted on load (tested both ways). `compileSong` runs on the message

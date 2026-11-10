@@ -548,6 +548,25 @@ and ranks with BM25 (k1 1.4, b 0.75) plus a title bonus, a bonus for sections ho
 question's language. The index is built the first time Helios opens. Commands are `HeliosCommand`s (name, keywords, a function)
 made by `MainComponent::heliosCommands`, matched by the share of the question's words they contain.
 
+### Crash reports, session log and updates (0.43.0)
+
+`src/support/` is plain C++ (no JUCE) and tested headless:
+- `Logging` starts spdlog's rotating file sink (5 MB x 3) in `stateDirectory()` (`$XDG_STATE_HOME` or `~/.local/state`) as the
+  default logger; `main.cpp` starts it first. MainComponent copies status-line changes to it from its timer; the audio thread never logs.
+- `CrashHandler` installs `sigaction` handlers (SA_SIGINFO | SA_ONSTACK | SA_RESETHAND, a 64 KB alternate stack for the main thread)
+  and a terminate handler. Everything the handler writes is prepared in fixed buffers (path, version, system; the audio context
+  in two buffers swapped atomically by `setContext`); in the handler only `open`, `write`, `backtrace`, `backtrace_symbols_fd`,
+  `prctl`, `time` and `raise`. `backtrace` is warmed up at install (it allocates the first time).
+- `CrashReport` parses the file (fields, frames, the log lines added at the next start), names frames from the executable's ELF
+  `.symtab` when the version matches (`symbolize`, a small ELF64 reader), finds the crash frame after the handler and the signal /
+  unwinding frames, and writes the issue title and Markdown body (redacted home and user name).
+- `Http` wraps libcurl (timeouts, cancellation through the progress callback, a size limit, CA bundle found per distribution,
+  proxies from the environment). `GitHub` makes the issue request and the browser link; `UpdateChecker` runs the release request
+  on a `std::thread`, evaluates it (`SemVer.h`) and delivers the result through a dispatcher (MessageManager::callAsync in the
+  program) guarded by a shared "alive" flag, so no callback runs after it is destroyed.
+- UI: `CrashReportDialog` (modal, before the recovery question; sending runs on a detached thread that archives the file on 201
+  and reports back through callAsync + SafePointer) and `MainComponentSupport.cpp` (token, update window, menu items, audio context).
+
 ### Channel Rack length and free playlist (0.42.0)
 
 - `Arrangement::patternTicks` is a number of quarters (4 to 64; `kMinPatternBeats`, `kMaxPatternBeats`), saved as `patternBeats`

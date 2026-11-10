@@ -22,6 +22,7 @@
 #include "ui/PitchEditor.h"
 #include "audio/StemSplit.h"
 #include "ui/HeliosWindow.h"
+#include "support/UpdateChecker.h"
 #include "ui/SynthPanel.h"
 #include "ui/SampleEditor.h"
 #include "ui/MetersView.h"
@@ -146,6 +147,17 @@ private:
     void autosaveIfNeeded();
     void startSession(); // offers the autosaved project if the program did not close normally last time
     void endSession();
+    // Crash reports, updates and the session log (0.43.0, MainComponentSupport.cpp).
+    bool offerCrashReport (std::function<void()> then);
+    void checkForUpdates (bool manual);
+    void showUpdateResult (const updates::Result& result, bool manual);
+    bool checksForUpdatesAutomatically() const;
+    void setCheckForUpdatesAutomatically (bool shouldCheck);
+    std::string githubToken() const;
+    void askForGitHubToken();
+    void showLogFolder();
+    void noteAudioDevice();
+    void logStatusChanges();
     void exportProjectFolder();
     juce::uint32 lastAutosaveMs = 0;
 
@@ -351,6 +363,8 @@ private:
     std::unique_ptr<SlicerWindow> slicerWindow;
     std::unique_ptr<PitchEditorWindow> pitchEditorWindow;
     std::unique_ptr<HeliosWindow> heliosWindow;
+    std::unique_ptr<updates::UpdateChecker> updateChecker; // made at the first check
+    juce::String lastLoggedStatus;
     std::unique_ptr<HelpIndex> help; // built the first time Helios opens
     int slicerWindowChannel = -1;
     std::unique_ptr<SynthWindow> synthWindow;
