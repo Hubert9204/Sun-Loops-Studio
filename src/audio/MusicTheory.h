@@ -33,7 +33,7 @@ struct Scale
 };
 
 const char* pitchClassName (int pitchClass); // "C", "C#", ...
-std::string noteName (int pitch);            // "C4" (MIDI 60)
+std::string noteName (int pitch);            // "C5" (MIDI 60): FL Studio's octave numbers (0.32.0; C4 before)
 
 // --- chords -----------------------------------------------------------------------------------------------------------------
 struct ChordInfo

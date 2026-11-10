@@ -11,7 +11,7 @@ const juce::Colour kPanelDim { 0xff8a919d };
 juce::String noteName (int key)
 {
     static const char* names[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
-    return juce::String (names[((key % 12) + 12) % 12]) + juce::String (key / 12 - 1);
+    return juce::String (names[((key % 12) + 12) % 12]) + juce::String (key / 12); // FL Studio's names: MIDI 60 = C5
 }
 } // namespace
 

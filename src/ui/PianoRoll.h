@@ -12,7 +12,9 @@ namespace sls
 {
 // Note editor.
 //   Left click on empty grid   : create a note (drag right to set its length); with a chord chosen in the toolbar, the whole chord
-//   Left drag on a note        : move it (drag its right edge to resize); on a selected note, every selected note moves / resizes
+//   Left drag on a note        : move it (drag its left or right edge to resize: the cursor becomes a left-right arrow there); on a
+//                                selected note, every selected note moves / resizes. A click on a note also makes its length the
+//                                length of the next notes drawn (0.32.0, as in FL Studio)
 //   Ctrl + click on a note     : add it to the selection or take it out
 //   Ctrl + drag on empty grid  : select the notes in a rectangle (with Shift: add them to the selection)
 //   Right click on a note      : delete it (on a selected note: every selected note)
@@ -97,7 +99,7 @@ public:
     void visibilityChanged() override;
 
 private:
-    enum class Drag { None, Move, Resize, Seek, LoopCreate, LoopMove, LoopResize, Select, Velocity };
+    enum class Drag { None, Move, Resize, ResizeStart, Seek, LoopCreate, LoopMove, LoopResize, Select, Velocity };
     enum class LoopMode { None, Move, Resize }; // following the mouse after the region's menu
 
     juce::Rectangle<int> rulerArea() const;
@@ -127,6 +129,7 @@ private:
     int snap (double tick) const noexcept;               // to the grid
     int snapDown (double tick) const noexcept;           // the grid line at or before
     juce::Rectangle<float> noteRect (const Note& n) const noexcept;
+    int noteEdgeAt (juce::Point<float> p, int index) const noexcept; // -1 on the note's left edge, +1 on its right edge, 0 inside
     int noteIndexAt (juce::Point<float> p) const noexcept;
     int soundingNoteBefore (int index) const noexcept; // the note that a legato / slide note takes over from, or -1
     void clampScroll();

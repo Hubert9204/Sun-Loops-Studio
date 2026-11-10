@@ -16,7 +16,7 @@ Sun Loops Studio is inspired by the workflow of loop-based DAWs such as FL Studi
 that uses no code, names, graphics or assets from other products, and it is not affiliated with or endorsed by
 their makers.
 
-**Status: alpha (0.31.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
+**Status: alpha (0.32.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
 display. Playback was confirmed on a real Nobara machine for version 0.3; everything added since (panels, patterns,
 playlist, browser, pitch/swing, the expanded mixer and its effects, saving projects, the AppImage, audio clips, drag and
 drop, recording, MIDI, the metronome and the export formats) was tested headless and in a virtual display with a silent
@@ -44,6 +44,8 @@ See [docs/roadmap.md](docs/roadmap.md) for exactly what is and is not verified a
   the grid (with snap to scale), **chords placed with one click**, a **velocity lane**, editing tools (quantize, humanize, legato,
   staccato, strum, arpeggiate, chop, flip, velocity ramps) and **generators** of chord progressions and basslines (also following the
   chords of another channel).
+- **Typing keyboard** (0.32.0) - the computer keyboard plays the selected channel: A S D F... from C5 (note names as in FL
+  Studio, MIDI 60 = C5), Z / X for the octave, C / V for the velocity; recorded by Rec notes like a MIDI keyboard.
 - **Loop Starter** (0.30.0) - a starting loop in one of ten genres (house, techno, hip-hop, trap, drum & bass, pop, lo-fi,
   reggaeton, rock, synthwave): drums, bass, chords and a melody that fit together, in the key you choose, at the genre's tempo, with the
   built-in sounds, as a new pattern. Made by rules and chance (no AI, nothing online); each variation is different.

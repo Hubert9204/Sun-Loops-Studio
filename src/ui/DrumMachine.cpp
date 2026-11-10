@@ -713,7 +713,7 @@ void DrumMachineView::paint (juce::Graphics& g)
         g.drawFittedText (juce::String (p.name), r.reduced (6.0f, 18.0f).toNearestInt(), juce::Justification::centred, 2);
         g.setColour (kDim);
         g.setFont (juce::FontOptions (10.0f));
-        g.drawText (juce::String (i + 1) + "  " + juce::MidiMessage::getMidiNoteName (DrumKit::pitchForPad (i), true, true, 4), r.reduced (6.0f, 3.0f).toNearestInt(),
+        g.drawText (juce::String (i + 1) + "  " + juce::MidiMessage::getMidiNoteName (DrumKit::pitchForPad (i), true, true, 5), r.reduced (6.0f, 3.0f).toNearestInt(),
                     juce::Justification::topLeft);
         if (muted)
             g.drawText ("M", r.reduced (6.0f, 3.0f).toNearestInt(), juce::Justification::topRight);

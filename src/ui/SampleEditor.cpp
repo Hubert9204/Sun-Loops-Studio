@@ -111,7 +111,7 @@ SampleEditor::SampleEditor (AudioEngine& engineToUse) : engine (engineToUse)
     partsButton.onClick = [this] { sliceByEqualParts(); };
     clearMarkersButton.onClick = [this] { markers.clear(); setStatus ("Markers cleared."); repaint(); updateButtons(); };
     applyButton.onClick = [this] { applyAndClose(); };
-    toSamplerButton.setTooltip ("A new sampler channel that plays slice n on key C4 + n, with one note per slice in the current pattern");
+    toSamplerButton.setTooltip ("A new sampler channel that plays slice n on key C5 + n, with one note per slice in the current pattern");
     toSamplerButton.onClick = [this]
     {
         if (current == nullptr || markers.empty() || ! onSlicesToSampler)

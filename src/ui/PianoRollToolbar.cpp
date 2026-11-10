@@ -11,9 +11,12 @@ struct SnapChoice
     const char* name;
     int ticks;
 };
-constexpr SnapChoice kSnaps[] = { { "Bar", 4 * kTicksPerBeat },     { "Beat", kTicksPerBeat },          { "1/8", kTicksPerBeat / 2 },
-                                  { "1/16", kTicksPerBeat / 4 },    { "1/32", kTicksPerBeat / 8 },      { "1/8 triplet", kTicksPerBeat / 3 },
-                                  { "1/16 triplet", kTicksPerBeat / 6 }, { "None", 1 } };
+// Note values (0.32.0: 1/2 and 1/64 added): 1/4 is a beat.
+constexpr SnapChoice kSnaps[] = { { "Bar", 4 * kTicksPerBeat },         { "1/2", 2 * kTicksPerBeat },       { "1/4 (beat)", kTicksPerBeat },
+                                  { "1/8", kTicksPerBeat / 2 },         { "1/16", kTicksPerBeat / 4 },      { "1/32", kTicksPerBeat / 8 },
+                                  { "1/64", kTicksPerBeat / 16 },       { "1/8 triplet", kTicksPerBeat / 3 }, { "1/16 triplet", kTicksPerBeat / 6 },
+                                  { "None", 1 } };
+constexpr int kDefaultSnap = 4; // 1/16
 
 std::uint32_t freshSeed()
 {
@@ -34,7 +37,7 @@ PianoRollToolbar::PianoRollToolbar (PianoRoll& rollToEdit) : roll (rollToEdit)
 
     for (size_t i = 0; i < std::size (kSnaps); ++i)
         snapBox.addItem (kSnaps[i].name, static_cast<int> (i) + 1);
-    snapBox.setSelectedId (4, juce::dontSendNotification); // 1/16
+    snapBox.setSelectedId (kDefaultSnap + 1, juce::dontSendNotification);
     snapBox.setTooltip ("Where notes snap when they are drawn, moved and resized (hold Alt while dragging for no snap)");
     snapBox.onChange = [this] { roll.setGridTicks (kSnaps[static_cast<size_t> (std::max (0, snapBox.getSelectedId() - 1))].ticks); };
 

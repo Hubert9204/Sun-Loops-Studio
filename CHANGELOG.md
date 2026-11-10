@@ -2,6 +2,21 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.32.0 - 2026-11-10
+
+### Added
+- **Typing keyboard**: the computer keyboard plays the selected channel like a MIDI keyboard (and Rec notes and the score log
+  take it): A S D F G H J K L ; ' are the white keys from **C5** (MIDI 60), W E T Y U O P the black keys; Z / X move it an
+  octave, C / V change the velocity. A **Typing keys** button switches it on and off (on by default, remembered).
+- Piano Roll: snap to **1/2** and **1/64** (now Bar, 1/2, 1/4, 1/8, 1/16, 1/32, 1/64, triplets, None); Playlist grid: **1/2**.
+- Piano Roll: notes can be resized from their **left edge** too (the start moves, the end stays), and the cursor becomes a
+  left-right arrow over either edge.
+- Piano Roll: a click on a note makes its length the **length of the next notes drawn**, as in FL Studio.
+
+### Changed
+- **Note names follow FL Studio**: MIDI 60 is **C5** (it was C4), everywhere (piano roll keyboard and status line, sampler root
+  key, drum pads, *Play C5* in the synth window, slices from C5). Only the names moved; every note plays as before.
+
 ## 0.31.0 - 2026-11-10
 
 ### Added

@@ -12,6 +12,7 @@
 #include "audio/AudioEngine.h"
 #include "audio/NoteRecorder.h"
 #include "audio/Project.h"
+#include "audio/TypingKeyboard.h"
 #include "ui/AudioMeter.h"
 #include "ui/AutomationEditor.h"
 #include "ui/DrumMachine.h"
@@ -63,6 +64,7 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
     bool keyPressed (const juce::KeyPress&) override;
+    bool keyStateChanged (bool isKeyDown) override;
     void parentHierarchyChanged() override { updateWindowTitle(); } // the title can be set once there is a window
 
     // Projects. A project is "untitled" until it is saved with a name or opened from a file.
@@ -386,6 +388,21 @@ private:
     juce::TextButton mixerToggle { "Mixer F9" };
     juce::TextButton resetButton { "Reset" };
     juce::TextButton metersButton { "Meters" };
+    // The computer keyboard as a MIDI keyboard (0.32.0, see TypingKeyboard.h): notes go to the selected channel like a MIDI
+    // keyboard's (so Rec notes and the score log take them too).
+    juce::TextButton typingButton { "Typing keys" };
+    bool typingOn = true;
+    int typingOctave = 0;
+    int typingVelocity = 100;
+    struct HeldTypingKey
+    {
+        int keyCode;
+        int pitch; // -1 for a command key (octave, velocity): held so that the key's repeat does nothing
+    };
+    std::vector<HeldTypingKey> typingHeld;
+    bool handleTypingKey (const juce::KeyPress& key);
+    void releaseTypingKeys (bool all); // note off for the keys let go (all: every key)
+    void setTypingOn (bool on);
     std::unique_ptr<MetersWindow> metersWindow;
     RightClickButton metronomeButton { "Metronome" };
     RightClickButton recordButton { "Record" };

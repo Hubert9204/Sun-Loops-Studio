@@ -111,6 +111,22 @@ the panels saves the new ones.
 The keys work when the main window is active. Typing into a text field (for example renaming a channel) takes the
 keyboard for that field.
 
+### Playing from the computer keyboard (Typing keys)
+
+With **Typing keys** on (the toolbar button, on by default; remembered), the computer keyboard plays the **selected channel**
+like a MIDI keyboard (0.32.0), whether the song is playing or not; **Rec notes** records it and the score log keeps it.
+
+```
+  W E   T Y U   O P          C#  D#    F#  G#  A#    C#  D#
+ A S D F G H J K L ; '       C  D  E  F  G  A  B  C  D  E  F
+```
+
+**A** plays **C5** (MIDI note 60). **Z** / **X** move the keyboard an octave down / up, **C** / **V** make the notes softer /
+louder (velocity 1, 20, 40, 60, 80, 100, 110, 127; 100 at first); the status line shows where A is and the velocity. On an
+Italian keyboard the keys where ; and ' are (**ò** and **à**) play E and F; the letters are what count, so on a German
+keyboard Z and Y swap places. The keys take effect when no text field has the keyboard; with Ctrl or Alt held they keep
+their usual meaning, and with the mouse over the Playlist its own keys (S splits, 1 to 5 choose a tool) come first. Note names follow FL Studio: middle C (MIDI 60) is **C5**.
+
 ## Browser
 
 *(New in 0.22.0: **Drum Kits** lists every built-in kit (each pad can be dragged), and **Presets > Factory** is filed in **Keys**
@@ -210,13 +226,13 @@ channels double-clicking the steps is not special: every click toggles a step.
 Right-click a synth channel > **Synth settings...** opens its synth window. Every synth channel starts with the **Classic** engine, the
 original sound of Sun Loops Studio (a sine with two harmonics), so older projects sound as they did. Switch **Engine** to **Subtractive**,
 or pick a ready-made sound from the menu at the top (*Saw Lead, Square Bass, Acid Bass, Soft Pad, Pluck, Brass, 808 Sub, Organ, PWM Strings*),
-to shape the sound. **Play C4** sounds the channel while you hold it. The same sounds are in the browser under *Presets > Factory*.
+to shape the sound. **Play C5** sounds the channel while you hold it. The same sounds are in the browser under *Presets > Factory*.
 
 | Section | Settings |
 | --- | --- |
 | Oscillator 1 and 2 | Wave (sine, triangle, saw, square), level, octave (-3..+3), semitone (-12..+12), fine tuning in cents, pulse width (square only). Saw and square are band-limited (PolyBLEP), so high notes do not alias much. |
 | Noise | Level of white noise added to the oscillators. |
-| Filter | Off, low-pass, high-pass or band-pass; **24 dB / octave** puts two filters in a row; cutoff, resonance, how far the filter envelope moves the cutoff (up to 6 octaves up or down) and key tracking (the cutoff follows the note, from C4). |
+| Filter | Off, low-pass, high-pass or band-pass; **24 dB / octave** puts two filters in a row; cutoff, resonance, how far the filter envelope moves the cutoff (up to 6 octaves up or down) and key tracking (the cutoff follows the note, from C5, MIDI 60). |
 | Amplifier envelope | Attack, decay, sustain, release: the note sounds while it is held, then fades with the release. |
 | Filter envelope | Attack, decay, sustain, release of the cutoff movement. |
 | LFO | Target (pitch: vibrato up to 2 semitones; cutoff: up to 3 octaves; level: tremolo; pulse width; morph: additive only), wave, rate (0.05-20 Hz), depth. The LFO starts again with every note. |
@@ -261,7 +277,7 @@ Every change can be undone with `Ctrl+Z`.
 Right-click a sampler channel > **Sampler settings...** opens a window for that channel:
 
 - **Sound**: the sample (or the SoundFont preset / slice program) the channel plays, **Load sample...**, **Load SoundFont (.sf2)...**, and **Use the
-  sample** (forgets a program, the channel plays its own sample again). **Root key**: the key at which the sample plays at its own pitch (C4 = 60).
+  sample** (forgets a program, the channel plays its own sample again). **Root key**: the key at which the sample plays at its own pitch (C5 = 60).
 - **Envelope**: off (the default), a note plays its sample once to the end, whatever its length, as in every earlier version. On, a note sounds while
   it is held: **Attack** (fade in), **Decay** to the **Sustain** level, and **Release** after the note ends. Notes played by hand (piano roll, MIDI
   keyboard) are held too.
@@ -275,7 +291,7 @@ pan and loop, exactly as the file says, and the envelope is set from the file (y
 chorus / reverb sends and exclusive classes. Files up to 512 MB.
 
 **Slices to notes.** In the sample editor (a clip or a sampler channel), place markers (*Find hits*, *Equal parts...* or double-click) and press
-**Slices to sampler channel**: the edited audio is saved as a new WAV file, a **new sampler channel** plays slice 1 on C4, slice 2 on C#4 and so on
+**Slices to sampler channel**: the edited audio is saved as a new WAV file, a **new sampler channel** plays slice 1 on C5, slice 2 on C#5 and so on
 (one key each, at their own pitch), and the current pattern gets **one note per slice at the time it had in the audio**, so the pattern plays the
 loop as it was and you can move, repeat or delete the notes to make a new groove.
 
@@ -285,7 +301,7 @@ A **drum channel** is one channel with 16 pads. Add one with **+ Add channel** >
 or by right-clicking a channel > *Instrument* > *Drum machine (16 pads)*. A new drum channel starts with the Sun Loops Basic Kit (kick, snare and hat on pads 1 to 3).
 **Double-click** the channel (or right-click > *Drum machine...*) to open its window; its volume, pan, pitch, mute / solo, mixer track and automation work like those of any channel.
 
-**Pads.** The 4 x 4 grid has pad 1 at the bottom left. Pad *n* plays when the channel gets the MIDI note **36 + n** (pad 1 = C2, pad 16 = D#3): the same notes show up in the
+**Pads.** The 4 x 4 grid has pad 1 at the bottom left. Pad *n* plays when the channel gets the MIDI note **36 + n** (pad 1 = C3, pad 16 = D#4): the same notes show up in the
 Piano Roll, a MIDI keyboard plays the pads, and imported notes in that range play them. Click a pad to hear it and select it (Shift+click = soft, Ctrl+click = hard,
 so you can hear the velocity layers). Right-click a pad for *Load a sound*, *Clear this pad*, *Mute* and *Solo*. Drag a sound from the browser onto a pad to put it on layer 1.
 
@@ -368,7 +384,8 @@ It is closed at start and opens from a channel, as above.
 | Play a note | Left button on a key of the keyboard (held = sounds). |
 | Add a note | Click an empty cell; keep the button down and drag to the right to set its length. It sounds while you hold. |
 | Move a note | Drag it (Alt while dragging: no snap). Dragging a **selected** note moves every selected note. |
-| Change its length | Drag its right edge (on a selected note: every selected note changes by the same amount). |
+| Change its length | Drag its right edge, or its **left edge** to move its start keeping its end (0.32.0); over either edge the cursor becomes a left-right arrow. On a selected note every selected note changes by the same amount. |
+| Reuse a length | Click a note: its length becomes the length of the next notes you draw (0.32.0, as in FL Studio). |
 | Delete a note | Right-click it (a selected note: the whole selection). |
 | Select notes | **Ctrl + drag** on an empty part draws a rectangle (with Shift it adds to the selection); **Ctrl + click** a note adds or removes it; **Ctrl + A** selects all, **Escape** none. Selected notes are bright with a white border. |
 | Copy, cut, paste, duplicate | **Ctrl + C / X / V** (paste puts the first note under the mouse), **Ctrl + D** (a copy right after the selection). **Delete** removes the selection. |
@@ -384,7 +401,7 @@ It is closed at start and opens from a channel, as above.
 
 **The toolbar** (0.23.0), above the notes:
 
-- **Snap**: Bar, Beat, 1/8, 1/16 (the default), 1/32, 1/8 and 1/16 triplets, None. Notes are drawn, moved and resized on it.
+- **Snap**: Bar, 1/2, 1/4 (a beat), 1/8, 1/16 (the default), 1/32, 1/64, 1/8 and 1/16 triplets, None. Notes are drawn, moved and resized on it.
 - **Scale**: a key and a scale (major, the minors, the modes, the pentatonics, blues). The rows of the notes outside the scale are
   darker and the root is named in green on the keyboard. **Snap to scale** makes new and moved notes land on the scale.
 - **Chord**: with a chord chosen (major, minor, sevenths, ninths, sus, 6, power ...) and its inversion, one click places the whole
@@ -519,8 +536,8 @@ The toolbar under the pattern box has five tools (keys **1** - **5** while the m
 | **Erase** (4) | Click a clip to delete it, or drag across several. |
 | **Zoom** (5) | Click zooms in, right-click or Shift+click zooms out, drag a stretch to zoom to it. |
 
-**Grid** (the box next to the tools) is what audio clips snap to when moved, trimmed, split or cut: from a bar down to a
-single tick (1 beat = 480 ticks); hold **Alt** while dragging to ignore it. Pattern clips always sit on whole patterns.
+**Grid** (the box next to the tools) is what audio clips snap to when moved, trimmed, split or cut: a bar, half a bar (1/2,
+0.32.0), a beat and so on down to a single tick (1 beat = 480 ticks); hold **Alt** while dragging to ignore it. Pattern clips always sit on whole patterns.
 **-**, **+** and **Fit** zoom out, in and to the whole song; the **mouse wheel** zooms in and out around the mouse, and
 Shift+wheel and the scroll bar move in time. The ruler shows **minutes:seconds.milliseconds** and the bar numbers (only as many as fit at the
 current zoom), and the two lines under the timeline read out, for the position under the mouse, *time - bar:beat:tick*, and
@@ -931,5 +948,5 @@ a heavier song or a plugin-heavy mixer can still need a bigger size.
   with a delay of one sample (as in most matrix FM synths).
 - Plugins: VST3, LV2 and LADSPA (no VST2, no Audio Units); stereo in and out (extra outputs and side-chain inputs are not used); their parameters
   cannot be automated; edits made in a plugin's window are saved with the project but are not in the undo history.
-- Not available yet: playing notes from the computer keyboard, time-stretching of samples in the Sampler (only audio clips on the playlist can be stretched), automation of anything except volumes, pans and effect parameters, turning guitar or voice pitch into notes,
+- Not available yet: time-stretching of samples in the Sampler (only audio clips on the playlist can be stretched), automation of anything except volumes, pans and effect parameters, turning guitar or voice pitch into notes,
   punch-in and count-in for recording, fades and per-clip effects. See [roadmap.md](roadmap.md).

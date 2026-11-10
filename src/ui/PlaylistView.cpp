@@ -54,7 +54,7 @@ PlaylistView::PlaylistView (Arrangement& arrangementToEdit) : timeline (arrangem
     selectTool.setToggleState (true, juce::dontSendNotification);
 
     struct SnapOption { const char* label; int ticks; };
-    static constexpr SnapOption options[] = { { "Bar", kTicksPerBar }, { "Beat (1/4)", kTicksPerBeat }, { "1/8", kTicksPerBeat / 2 },
+    static constexpr SnapOption options[] = { { "Bar", kTicksPerBar }, { "1/2", kTicksPerBar / 2 }, { "Beat (1/4)", kTicksPerBeat }, { "1/8", kTicksPerBeat / 2 },
                                               { "1/16", kTicksPerBeat / 4 }, { "1/32", kTicksPerBeat / 8 }, { "1/64", kTicksPerBeat / 16 },
                                               { "Off (1 tick)", 1 } };
     for (const auto& o : options)
@@ -62,7 +62,7 @@ PlaylistView::PlaylistView (Arrangement& arrangementToEdit) : timeline (arrangem
         snapValues.push_back (o.ticks);
         snapBox.addItem (o.label, static_cast<int> (snapValues.size()));
     }
-    snapBox.setSelectedId (2, juce::dontSendNotification); // Beat
+    snapBox.setSelectedId (3, juce::dontSendNotification); // Beat
     snapBox.setTooltip ("The grid that audio clips snap to when moved, trimmed, split or cut. Hold Alt while dragging to ignore it.");
     snapBox.setWantsKeyboardFocus (false);
     snapBox.onChange = [this]

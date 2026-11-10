@@ -17,6 +17,7 @@
 #include <juce_audio_formats/juce_audio_formats.h>
 
 #include "audio/Arrangement.h"
+#include "audio/TypingKeyboard.h"
 #include "audio/AudioExport.h"
 #include "audio/AudioImport.h"
 #include "audio/BufferTuning.h"
@@ -3600,6 +3601,39 @@ void testAudioClips()
 // --- per-clip pan, reverse and fades (0.27.0) -------------------------------------------------------------------------------
 // --- the score log (0.28.0) ------------------------------------------------------------------------------------------------
 // --- the Loop Starter (0.30.0) ----------------------------------------------------------------------------------------------
+void testTypingKeyboard()
+{
+    std::cout << "Typing keyboard (0.32.0)\n";
+    namespace ty = sls::typing;
+    check (ty::pitchFor ('a', 0) == 60 && sls::theory::noteName (ty::pitchFor ('a', 0)) == "C5", "A plays C5 (MIDI 60)");
+    const char32_t whites[] = { 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'' };
+    const int whitePitches[] = { 60, 62, 64, 65, 67, 69, 71, 72, 74, 76, 77 };
+    bool allWhite = true;
+    for (size_t i = 0; i < std::size (whites); ++i)
+        allWhite = allWhite && ty::pitchFor (whites[i], 0) == whitePitches[i];
+    check (allWhite, "the home row is the white keys: C D E F G A B C D E F");
+    const char32_t blacks[] = { 'w', 'e', 't', 'y', 'u', 'o', 'p' };
+    const int blackPitches[] = { 61, 63, 66, 68, 70, 73, 75 };
+    bool allBlack = true;
+    for (size_t i = 0; i < std::size (blacks); ++i)
+        allBlack = allBlack && ty::pitchFor (blacks[i], 0) == blackPitches[i];
+    check (allBlack, "the row above is the black keys: C# D# F# G# A# C# D#");
+    check (ty::pitchFor ('A', 0) == 60 && ty::pitchFor ('W', 0) == 61, "capital letters (Caps Lock, Shift) play the same notes");
+    check (ty::pitchFor (U'ò', 0) == 76 && ty::pitchFor (U'à', 0) == 77, "the Italian keys where ; and ' are (ò, à) play E and F");
+    check (ty::pitchFor ('q', 0) < 0 && ty::pitchFor ('1', 0) < 0 && ty::pitchFor (' ', 0) < 0 && ty::pitchFor ('z', 0) < 0,
+           "other keys play nothing (Z and X move the octave)");
+    check (ty::pitchFor ('a', -1) == 48 && ty::pitchFor ('a', 2) == 84, "an octave down and up");
+    check (ty::pitchFor ('a', 99) == 108 && ty::pitchFor ('a', -99) == 0, "the octave stays in its range");
+    check (ty::pitchFor ('\'', ty::kMaxOctave) >= 0 && ty::pitchFor ('\'', ty::kMaxOctave) <= 127, "every key stays a MIDI note at the top octave");
+    check (ty::commandFor ('z') == ty::Command::OctaveDown && ty::commandFor ('X') == ty::Command::OctaveUp
+               && ty::commandFor ('c') == ty::Command::VelocityDown && ty::commandFor ('v') == ty::Command::VelocityUp
+               && ty::commandFor ('a') == ty::Command::None,
+           "Z / X move the octave, C / V the velocity");
+    check (ty::nextVelocity (100, true) == 110 && ty::nextVelocity (100, false) == 80 && ty::nextVelocity (127, true) == 127
+               && ty::nextVelocity (1, false) == 1 && ty::nextVelocity (90, true) == 100,
+           "velocity steps");
+}
+
 void testStepSequencer()
 {
     std::cout << "Step sequencer (0.31.0)\n";
@@ -5740,8 +5774,8 @@ void testMusicTheory()
         check (cMajor.step (60, 1) == 62 && cMajor.step (60, 2) == 64 && cMajor.step (64, 1) == 65 && cMajor.step (60, -1) == 59 && cMajor.step (60, 7) == 72
                    && cMajor.step (127, 3) == 127 && cMajor.step (0, -2) == 0,
                "stepping through the scale (seven steps = an octave), stopping at the ends of the keyboard");
-        check (th::noteName (60) == "C4" && th::noteName (21) == "A0" && th::noteName (61) == "C#4" && th::noteName (0) == "C-1",
-               "note names: middle C is C4");
+        check (th::noteName (60) == "C5" && th::noteName (21) == "A1" && th::noteName (61) == "C#5" && th::noteName (0) == "C0" && th::noteName (127) == "G10",
+               "note names as in FL Studio: MIDI 60 is C5, 0 is C0");
     }
     {   // chords
         check (th::chords().size() == 18 && th::chordPitches (60, 0) == std::vector<int> { 60, 64, 67 } && th::chordPitches (60, 1) == std::vector<int> { 60, 63, 67 }
@@ -9478,6 +9512,7 @@ int main()
     testScoreLog();
     testLoopStarter();
     testStepSequencer();
+    testTypingKeyboard();
     testAudioImport();
     testInputRecorder();
     testMidiNotes();

@@ -239,6 +239,13 @@ void PianoRoll::mouseMove (const juce::MouseEvent& e)
     }
     if (rulerArea().contains (e.getPosition()))
         setMouseCursor (loopEdgeAt (e.x) != 0 ? juce::MouseCursor::LeftRightResizeCursor : juce::MouseCursor::NormalCursor);
+    else if (gridArea().contains (e.getPosition()))
+    {
+        // On the side edges of a note: the resize cursor (0.32.0).
+        const int hit = noteIndexAt (e.position);
+        setMouseCursor (hit >= 0 && noteEdgeAt (e.position, hit) != 0 ? juce::MouseCursor::LeftRightResizeCursor
+                                                                       : juce::MouseCursor::NormalCursor);
+    }
     else
         setMouseCursor (juce::MouseCursor::NormalCursor);
 }
@@ -291,6 +298,19 @@ juce::Rectangle<float> PianoRoll::noteRect (const Note& n) const noexcept
     const float x = tickToX (n.startTick);
     const float w = static_cast<float> (n.lengthTicks * pixelsPerTick());
     return { x, pitchToY (n.pitch) + 1.0f, std::max (3.0f, w - 1.0f), static_cast<float> (kRowHeight - 2) };
+}
+
+int PianoRoll::noteEdgeAt (juce::Point<float> p, int index) const noexcept
+{
+    if (index < 0 || index >= static_cast<int> (notes.size()))
+        return 0;
+    const auto r = noteRect (notes[static_cast<size_t> (index)]);
+    const float zone = std::min (6.0f, r.getWidth() / 3.0f); // a short note keeps a middle to grab
+    if (p.x >= r.getRight() - zone)
+        return 1;
+    if (p.x <= r.getX() + zone)
+        return -1;
+    return 0;
 }
 
 int PianoRoll::noteIndexAt (juce::Point<float> p) const noexcept
@@ -752,8 +772,9 @@ void PianoRoll::mouseDown (const juce::MouseEvent& e)
         const auto& n = notes[static_cast<size_t> (hit)];
         dragIndex = hit;
         dragOriginal = notes;
-        const bool nearRightEdge = pos.x > noteRect (n).getRight() - 6.0f;
-        dragMode = nearRightEdge ? Drag::Resize : Drag::Move;
+        const int edge = noteEdgeAt (pos, hit);
+        dragMode = edge > 0 ? Drag::Resize : (edge < 0 ? Drag::ResizeStart : Drag::Move);
+        lastLengthTicks = n.lengthTicks; // the clicked note's length becomes the length of the next notes drawn (0.32.0)
         grabOffsetTicks = static_cast<int> (xToTick (pos.x)) - n.startTick;
         sound (n.pitch);
         say (describe (n));
@@ -879,6 +900,34 @@ void PianoRoll::mouseDrag (const juce::MouseEvent& e)
         {
             dragChanged = true;
             sound (notes[static_cast<size_t> (dragIndex)].pitch);
+        }
+    }
+    else if (dragMode == Drag::ResizeStart)
+    {
+        // The left edge (0.32.0): every selected note starts earlier or later by the same amount, its end staying put.
+        const double wantedStart = xToTick (e.position.x);
+        const int start = free ? static_cast<int> (std::llround (wantedStart)) : snap (wantedStart);
+        int delta = start - grabbed.startTick;
+        const int shortest = free ? 10 : gridTicks;
+        for (size_t i = 0; i < notes.size(); ++i)
+            if (selected[i])
+            {
+                const auto& o = dragOriginal[i];
+                delta = std::clamp (delta, -o.startTick, std::max (0, o.lengthTicks - std::min (shortest, o.lengthTicks)));
+            }
+        bool changed = false;
+        for (size_t i = 0; i < notes.size(); ++i)
+            if (selected[i])
+            {
+                const auto& o = dragOriginal[i];
+                changed = changed || o.startTick + delta != notes[i].startTick;
+                notes[i].startTick = o.startTick + delta;
+                notes[i].lengthTicks = o.lengthTicks - delta;
+            }
+        if (changed)
+        {
+            dragChanged = true;
+            lastLengthTicks = notes[static_cast<size_t> (dragIndex)].lengthTicks;
         }
     }
     else

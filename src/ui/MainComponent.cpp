@@ -468,6 +468,12 @@ MainComponent::MainComponent()
     pianoToggle.onClick = [this] { togglePanel (pianoPanel); };
     mixerToggle.onClick = [this] { togglePanel (mixerPanelWindow); };
     metersButton.onClick = [this] { toggleMeters(); };
+    typingButton.setClickingTogglesState (false);
+    typingButton.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xffe8943a));
+    typingButton.setTooltip ("Play the selected channel from the computer keyboard: A S D F G H J K L are the white keys from C5, "
+                             "W E T Y U O P the black keys; Z / X an octave down / up, C / V softer / louder");
+    typingButton.onClick = [this] { setTypingOn (! typingOn); };
+    typingButton.setToggleState (typingOn, juce::dontSendNotification);
     metersButton.setTooltip ("Loudness (LUFS), true peak, spectrum and goniometer of the output");
     resetButton.onClick = [this] { resetLayout(); };
     resetButton.setTooltip ("Restore the default panel layout");
@@ -482,7 +488,7 @@ MainComponent::MainComponent()
 
     // Space and F5/F6/F7/F9 are handled by this component, so these controls must not steal keyboard focus.
     for (juce::Button* b : std::initializer_list<juce::Button*> { &fileButton, &playButton, &clearButton, &modeButton, &patternAddButton, &deviceButton, &metronomeButton, &recordButton, &recordMenuButton, &noteRecordButton,
-                     &browserToggle, &browserTab, &rackToggle, &playlistToggle, &pianoToggle, &mixerToggle, &resetButton, &metersButton })
+                     &browserToggle, &browserTab, &rackToggle, &playlistToggle, &pianoToggle, &mixerToggle, &resetButton, &metersButton, &typingButton })
         b->setMouseClickGrabsKeyboardFocus (false);
     patternBox.setMouseClickGrabsKeyboardFocus (false);
     patternBox.setWantsKeyboardFocus (false);
@@ -490,7 +496,7 @@ MainComponent::MainComponent()
     for (auto* c : std::initializer_list<juce::Component*> { &fileButton, &playButton, &modeButton, &patternBox, &patternAddButton,
                                                               &clearButton, &deviceButton, &metronomeButton, &recordButton, &recordMenuButton, &noteRecordButton,
                                                               &browserToggle, &rackToggle, &playlistToggle, &pianoToggle,
-                                                              &mixerToggle, &resetButton, &metersButton, &bpmSlider, &volumeSlider,
+                                                              &mixerToggle, &resetButton, &metersButton, &typingButton, &bpmSlider, &volumeSlider,
                                                               &bpmLabel, &volumeLabel, &deviceLabel, &statusLabel, &meter,
                                                               &browser, &browserTab, &workspace })
         addAndMakeVisible (c);
@@ -518,6 +524,8 @@ MainComponent::MainComponent()
         recordChannels = settings->getBoolValue ("record.stereo", false) ? InputRecorder::Channels::Stereo : InputRecorder::Channels::Mono;
         monitorInput = settings->getBoolValue ("record.monitor", false);
         metronomeOn = settings->getBoolValue ("metronome.on", false);
+        typingOn = settings->getBoolValue ("typing.on", true);
+        typingButton.setToggleState (typingOn, juce::dontSendNotification);
         metronomeVolume = static_cast<float> (settings->getDoubleValue ("metronome.volume", 0.5));
         noteQuantize = std::clamp (settings->getIntValue ("midirec.quantize", kTicksPerBeat / 4), 0, kTicksPerBeat);
         recordTarget = settings->getIntValue ("record.target", 0) == 1 ? RecordTarget::SamplerChannel : RecordTarget::PlaylistTrack;
@@ -630,6 +638,8 @@ void MainComponent::resized()
     clearButton.setBounds (views.removeFromLeft (90));
     views.removeFromLeft (4);
     metersButton.setBounds (views.removeFromLeft (80));
+    views.removeFromLeft (4);
+    typingButton.setBounds (views.removeFromLeft (96));
 
     area.removeFromTop (6);
     auto info = area.removeFromTop (20);
@@ -681,6 +691,9 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
     if (pianoPanel.isOpen() && pianoRoll.isShowing() && pianoRoll.isMouseOver (true) && pianoRoll.handleKey (key))
         return true;
 
+    if (handleTypingKey (key))
+        return true;
+
     if (key == juce::KeyPress::spaceKey)
     {
         setPlaying (! engine.isPlaying());
@@ -694,9 +707,75 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
     return false;
 }
 
+bool MainComponent::keyStateChanged (bool)
+{
+    releaseTypingKeys (false);
+    return false;
+}
+
+bool MainComponent::handleTypingKey (const juce::KeyPress& key)
+{
+    const auto mods = key.getModifiers();
+    if (! typingOn || mods.isCommandDown() || mods.isCtrlDown() || mods.isAltDown())
+        return false;
+    const auto c = static_cast<char32_t> (key.getTextCharacter());
+    const int code = key.getKeyCode();
+    for (const auto& h : typingHeld)
+        if (h.keyCode == code)
+            return true; // the key's auto-repeat
+
+    if (const auto command = typing::commandFor (c); command != typing::Command::None)
+    {
+        typingHeld.push_back ({ code, -1 });
+        if (command == typing::Command::OctaveDown || command == typing::Command::OctaveUp)
+            typingOctave = std::clamp (typingOctave + (command == typing::Command::OctaveUp ? 1 : -1), typing::kMinOctave, typing::kMaxOctave);
+        else
+            typingVelocity = typing::nextVelocity (typingVelocity, command == typing::Command::VelocityUp);
+        statusLabel.setText ("Typing keyboard: A = " + juce::String (theory::noteName (typing::pitchFor ('a', typingOctave)))
+                                 + ", velocity " + juce::String (typingVelocity),
+                             juce::dontSendNotification);
+        return true;
+    }
+
+    const int pitch = typing::pitchFor (c, typingOctave);
+    if (pitch < 0)
+        return false;
+    engine.handleMidi (juce::MidiMessage::noteOn (1, pitch, static_cast<juce::uint8> (typingVelocity)));
+    typingHeld.push_back ({ code, pitch });
+    return true;
+}
+
+void MainComponent::releaseTypingKeys (bool all)
+{
+    for (auto it = typingHeld.begin(); it != typingHeld.end();)
+    {
+        if (all || ! juce::KeyPress::isKeyCurrentlyDown (it->keyCode))
+        {
+            if (it->pitch >= 0)
+                engine.handleMidi (juce::MidiMessage::noteOff (1, it->pitch));
+            it = typingHeld.erase (it);
+        }
+        else
+            ++it;
+    }
+}
+
+void MainComponent::setTypingOn (bool on)
+{
+    typingOn = on;
+    if (! on)
+        releaseTypingKeys (true);
+    typingButton.setToggleState (on, juce::dontSendNotification);
+    if (settings != nullptr)
+        settings->setValue ("typing.on", on);
+    statusLabel.setText (on ? "Typing keyboard on: A S D F... play the selected channel from C5" : "Typing keyboard off", juce::dontSendNotification);
+}
+
 void MainComponent::timerCallback()
 {
     autosaveIfNeeded();
+    if (! typingHeld.empty())
+        releaseTypingKeys (! juce::Process::isForegroundProcess()); // keys let go while another window had the keyboard
 
     // A plugin's settings changed in its own window: the project needs saving (plugin edits are not in the undo history).
     if (++pluginPollTicks >= 10)

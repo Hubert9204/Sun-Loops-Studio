@@ -115,6 +115,25 @@ state rinominate); **Reset**, o semplicemente spostare i pannelli, salva quelle 
 I tasti funzionano quando la finestra principale è attiva. Mentre scrivi in un campo di testo (per esempio per
 rinominare un canale) la tastiera è del campo.
 
+### Suonare con la tastiera del computer (Typing keys)
+
+Con **Typing keys** acceso (il pulsante nella barra, acceso all'inizio; la scelta viene ricordata), la tastiera del computer
+suona il **canale selezionato** come una tastiera MIDI (0.32.0), che il brano suoni o no; **Rec notes** la registra e lo
+score log la conserva.
+
+```
+  W E   T Y U   O P          C#  D#    F#  G#  A#    C#  D#
+ A S D F G H J K L ò à       C  D  E  F  G  A  B  C  D  E  F
+```
+
+**A** suona **C5** (la nota MIDI 60). **Z** / **X** spostano la tastiera di un'ottava in giù / in su, **C** / **V** rendono
+le note più piano / più forte (velocity 1, 20, 40, 60, 80, 100, 110, 127; all'inizio 100); la riga di stato dice dov'è la A e
+la velocity. Sulla tastiera italiana **ò** e **à** suonano Mi e Fa (sulle tastiere americane sono ; e '); contano le lettere,
+quindi su una tastiera tedesca Z e Y si scambiano di posto. I tasti funzionano quando nessun campo di testo ha la tastiera; con
+Ctrl o Alt premuti mantengono il loro significato abituale, e con il mouse sopra la Playlist vengono prima i suoi tasti (S divide,
+da 1 a 5 scelgono uno strumento). I nomi delle note seguono FL Studio: il Do centrale (MIDI 60)
+è **C5**.
+
 ## Browser
 
 *(Novità della 0.22.0: **Drum Kits** elenca tutti i kit incorporati (ogni pad si può trascinare) e **Presets > Factory** è diviso in **Keys**
@@ -221,13 +240,13 @@ disattiva uno step.
 Clic destro su un canale synth > **Synth settings...** apre la finestra del synth. Ogni canale synth parte con il motore **Classic**, il
 suono originale di Sun Loops Studio (un seno con due armoniche), così i progetti vecchi suonano come prima. Imposta **Engine** su
 **Subtractive**, oppure scegli un suono pronto dal menu in alto (*Saw Lead, Square Bass, Acid Bass, Soft Pad, Pluck, Brass, 808 Sub, Organ,
-PWM Strings*), per modellare il suono. **Play C4** suona il canale finché lo tieni premuto. Gli stessi suoni sono nel browser in *Presets > Factory*.
+PWM Strings*), per modellare il suono. **Play C5** suona il canale finché lo tieni premuto. Gli stessi suoni sono nel browser in *Presets > Factory*.
 
 | Sezione | Impostazioni |
 | --- | --- |
 | Oscillator 1 e 2 | Forma d'onda (seno, triangolo, dente di sega, quadra), livello, ottava (-3..+3), semitono (-12..+12), intonazione fine in centesimi, larghezza dell'impulso (solo quadra). Dente di sega e quadra sono a banda limitata (PolyBLEP), quindi le note alte hanno poco aliasing. |
 | Noise | Livello di rumore bianco aggiunto agli oscillatori. |
-| Filter | Spento, passa-basso, passa-alto o passa-banda; **24 dB / octave** mette due filtri in serie; cutoff, risonanza, quanto l'inviluppo del filtro sposta il cutoff (fino a 6 ottave in su o in giù) e key tracking (il cutoff segue la nota, a partire da C4). |
+| Filter | Spento, passa-basso, passa-alto o passa-banda; **24 dB / octave** mette due filtri in serie; cutoff, risonanza, quanto l'inviluppo del filtro sposta il cutoff (fino a 6 ottave in su o in giù) e key tracking (il cutoff segue la nota, a partire da C5, MIDI 60). |
 | Amplifier envelope | Attacco, decadimento, sostegno, rilascio: la nota suona finché è tenuta, poi sfuma con il rilascio. |
 | Filter envelope | Attacco, decadimento, sostegno, rilascio del movimento del cutoff. |
 | LFO | Destinazione (pitch: vibrato fino a 2 semitoni; cutoff: fino a 3 ottave; livello: tremolo; larghezza dell'impulso), forma d'onda, velocità (0,05-20 Hz), profondità. L'LFO riparte a ogni nota. |
@@ -273,7 +292,7 @@ suono. Ogni modifica si annulla con `Ctrl+Z`.
 Tasto destro su un canale sampler > **Sampler settings...** apre una finestra per quel canale:
 
 - **Sound**: il sample (o il preset SoundFont / programma di slice) che il canale suona, **Load sample...**, **Load SoundFont (.sf2)...** e **Use the
-  sample** (dimentica il programma: il canale torna a suonare il suo sample). **Root key**: il tasto a cui il sample suona alla sua altezza (C4 = 60).
+  sample** (dimentica il programma: il canale torna a suonare il suo sample). **Root key**: il tasto a cui il sample suona alla sua altezza (C5 = 60).
 - **Envelope** (inviluppo): spento (predefinito), una nota suona il sample una volta fino in fondo, qualunque sia la sua lunghezza, come in tutte le
   versioni precedenti. Acceso, una nota suona finché è tenuta: **Attack** (entrata), **Decay** fino al livello di **Sustain**, e **Release** dopo la fine
   della nota. Anche le note suonate a mano (piano roll, tastiera MIDI) vengono tenute.
@@ -287,8 +306,8 @@ e il preset, ed *Export project with samples* copia il `.sf2`. Non vengono presi
 modulazione, mandate di chorus / riverbero e classi esclusive. File fino a 512 MB.
 
 **Dalle slice alle note.** Nell'editor di campioni (una clip o un canale sampler) metti dei marcatori (*Find hits*, *Equal parts...* o doppio clic) e
-premi **Slices to sampler channel**: l'audio modificato viene salvato come nuovo file WAV, un **nuovo canale sampler** suona la slice 1 su C4, la 2 su
-C#4 e così via (un tasto ciascuna, alla loro altezza), e il pattern corrente riceve **una nota per slice nel momento in cui era nell'audio**, quindi il
+premi **Slices to sampler channel**: l'audio modificato viene salvato come nuovo file WAV, un **nuovo canale sampler** suona la slice 1 su C5, la 2 su
+C#5 e così via (un tasto ciascuna, alla loro altezza), e il pattern corrente riceve **una nota per slice nel momento in cui era nell'audio**, quindi il
 pattern suona il loop com'era e puoi spostare, ripetere o eliminare le note per fare un groove nuovo.
 
 ## Drum machine
@@ -297,7 +316,7 @@ Un **canale drum** è un canale con 16 pad. Si aggiunge con **+ Add channel** > 
 su un canale > *Instrument* > *Drum machine (16 pads)*. Un nuovo canale drum parte con il Sun Loops Basic Kit (cassa, rullante e hi-hat sui pad da 1 a 3). Il **doppio clic** sul canale (o tasto destro >
 *Drum machine...*) apre la sua finestra; volume, pan, pitch, mute / solo, traccia del mixer e automazione funzionano come per ogni canale.
 
-**Pad.** La griglia 4 x 4 ha il pad 1 in basso a sinistra. Il pad *n* suona quando il canale riceve la nota MIDI **36 + n** (pad 1 = C2, pad 16 = D#3): le stesse note compaiono nel Piano Roll, una tastiera
+**Pad.** La griglia 4 x 4 ha il pad 1 in basso a sinistra. Il pad *n* suona quando il canale riceve la nota MIDI **36 + n** (pad 1 = C3, pad 16 = D#4): le stesse note compaiono nel Piano Roll, una tastiera
 MIDI suona i pad e le note importate in quell'intervallo li suonano. Clic su un pad per sentirlo e selezionarlo (Maiusc+clic = piano, Ctrl+clic = forte, così senti i layer di velocità). Tasto destro su un pad:
 *Load a sound*, *Clear this pad*, *Mute*, *Solo*. Trascina un suono dal browser su un pad per metterlo sul layer 1.
 
@@ -382,7 +401,8 @@ chiuso all'avvio e si apre da un canale, come sopra.
 | Suonare una nota | Pulsante sinistro su un tasto della tastiera (tenuto premuto = suona). |
 | Aggiungere una nota | Clic su una cella vuota; tieni premuto e trascina a destra per scegliere la lunghezza. Suona finché tieni premuto. |
 | Spostare una nota | Trascinala (Alt mentre trascini: senza snap). Trascinando una nota **selezionata** si spostano tutte le note selezionate. |
-| Cambiare la lunghezza | Trascina il bordo destro (su una nota selezionata: tutte le selezionate cambiano della stessa quantità). |
+| Cambiare la lunghezza | Trascina il bordo destro, oppure il **bordo sinistro** per spostarne l'inizio tenendo ferma la fine (0.32.0); sopra i due bordi il cursore diventa una freccia destra-sinistra. Su una nota selezionata tutte le selezionate cambiano della stessa quantità. |
+| Riusare una lunghezza | Clic su una nota: la sua lunghezza diventa quella delle prossime note che disegni (0.32.0, come in FL Studio). |
 | Eliminare una nota | Tasto destro sulla nota (su una nota selezionata: tutta la selezione). |
 | Selezionare note | **Ctrl + trascinamento** su una parte vuota disegna un rettangolo (con Maiusc aggiunge alla selezione); **Ctrl + clic** su una nota la aggiunge o la toglie; **Ctrl + A** seleziona tutto, **Esc** niente. Le note selezionate sono chiare con il bordo bianco. |
 | Copiare, tagliare, incollare, duplicare | **Ctrl + C / X / V** (incolla mettendo la prima nota sotto il mouse), **Ctrl + D** (una copia subito dopo la selezione). **Canc** elimina la selezione. |
@@ -398,7 +418,7 @@ chiuso all'avvio e si apre da un canale, come sopra.
 
 **La barra degli strumenti** (0.23.0), sopra le note:
 
-- **Snap**: Bar, Beat, 1/8, 1/16 (predefinito), 1/32, terzine di 1/8 e 1/16, None. Le note si disegnano, spostano e ridimensionano su questa griglia.
+- **Snap**: Bar, 1/2, 1/4 (un quarto), 1/8, 1/16 (predefinito), 1/32, 1/64, terzine di 1/8 e 1/16, None. Le note si disegnano, spostano e ridimensionano su questa griglia.
 - **Scale**: una tonalità e una scala (maggiore, le minori, i modi, le pentatoniche, blues). Le righe delle note fuori scala sono più
   scure e la tonica è scritta in verde sulla tastiera. **Snap to scale** fa cadere le note nuove e spostate sulla scala.
 - **Chord**: scelto un accordo (maggiore, minore, settime, none, sus, sesta, power...) e il suo rivolto, un clic posa l'accordo intero
@@ -539,7 +559,7 @@ La barra sotto il menu dei pattern ha cinque strumenti (tasti **1** - **5** con 
 | **Zoom** (5) | Il clic ingrandisce, il tasto destro o Maiusc+clic rimpicciolisce, trascinando un tratto si ingrandisce su quel tratto. |
 
 **Grid** (il menu accanto agli strumenti) è la griglia a cui si agganciano le clip audio quando vengono spostate, ritagliate, divise
-o tagliate: da una battuta fino al singolo tick (1 battito = 480 tick); tieni premuto **Alt** mentre trascini per ignorarla. Le clip
+o tagliate: una battuta, mezza battuta (1/2, 0.32.0), un quarto e così via fino al singolo tick (1 battito = 480 tick); tieni premuto **Alt** mentre trascini per ignorarla. Le clip
 di pattern stanno sempre su pattern interi. **-**, **+** e **Fit** rimpiccioliscono, ingrandiscono e mostrano tutto il brano;
 la **rotella del mouse** ingrandisce e rimpicciolisce intorno al mouse, Shift+rotella e la barra di scorrimento muovono nel tempo. Il righello mostra
 **minuti:secondi.millisecondi** e i numeri di battuta (solo quanti ne stanno allo zoom attuale); le due righe sotto la linea del
@@ -951,5 +971,5 @@ occupato più tardi, un brano più pesante o un mixer pieno di effetti possono r
   ritardo di un campione (come nella maggior parte dei synth FM a matrice).
 - Plugin: VST3, LV2 e LADSPA (niente VST2, niente Audio Unit); stereo in ingresso e in uscita (uscite extra e ingressi sidechain non sono usati);
   i loro parametri non si possono automatizzare; le modifiche fatte nella finestra di un plugin si salvano col progetto ma non entrano nell'annulla.
-- Non ancora disponibili: suonare le note con la tastiera del computer, time-stretch dei campioni nel Sampler (si possono modificare solo le clip audio della playlist), automazione di qualsiasi cosa tranne volumi, pan e parametri degli effetti, trasformare l'altezza di
+- Non ancora disponibili: time-stretch dei campioni nel Sampler (si possono modificare solo le clip audio della playlist), automazione di qualsiasi cosa tranne volumi, pan e parametri degli effetti, trasformare l'altezza di
   chitarra o voce in note, punch-in e conteggio iniziale per la registrazione, dissolvenze ed effetti per clip. Vedi [roadmap.md](roadmap.md) (in inglese).

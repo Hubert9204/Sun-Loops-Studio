@@ -206,7 +206,7 @@ juce::String MainComponent::slicesToSampler (const std::shared_ptr<const SampleD
     strips[static_cast<size_t> (index)]->refreshFromChannel();
     selectChannel (index);
     publishProject();
-    statusLabel.setText ("New sampler channel with " + juce::String (static_cast<int> (program->zones.size())) + " slices on the keys from C4, and one note per slice in "
+    statusLabel.setText ("New sampler channel with " + juce::String (static_cast<int> (program->zones.size())) + " slices on the keys from C5, and one note per slice in "
                              + juce::String (arrangement.patterns[static_cast<size_t> (currentPattern)].name),
                          juce::dontSendNotification);
     return {};

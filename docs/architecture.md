@@ -297,6 +297,11 @@ voices -> channel (smoothed gain, equal-power pan, channel mute/solo)
   is active in the audio callback and the feedback loops flush tiny values.
 - The piano roll's loop region (0.20.0) lives in `Pattern::loopStartTick / loopEndTick`; in Pattern mode `publishProject` copies the current
   pattern's region into the snapshot's `loopStartTick / loopEndTick`, which the `Player` already handles for the playlist's region.
+- Typing keyboard (0.32.0): `src/audio/TypingKeyboard.h` maps characters to notes (A = MIDI 60) and commands (Z / X / C / V);
+  `MainComponent::handleTypingKey` sends `juce::MidiMessage` note ons through `AudioEngine::handleMidi`, so the notes reach the
+  selected channel, Rec notes and the score log exactly as a MIDI keyboard's; `keyStateChanged` and the timer send the note offs.
+  Note names: `theory::noteName` uses FL Studio's octave numbers (MIDI 60 = C5); the sound library's internal sample titles keep
+  their own names (they are file keys, not shown as note names).
 - Step sequencer (0.31.0): `src/audio/StepSequence.h` (JUCE-free) decides whether a channel's notes in a pattern are a step sequence
   (all one 16th or shorter, on the grid, on `stepPitch`: the root, or 36 on a drum channel), its active length (`Pattern::steps[c]`,
   mirrored in `Channel::steps` for the current pattern like `notes`; 0 = one bar or the notes' whole bars) and the repeats.

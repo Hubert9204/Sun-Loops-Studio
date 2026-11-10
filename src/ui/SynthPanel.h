@@ -37,7 +37,7 @@ public:
 
     std::function<Channel*()> getChannel;
     std::function<void()> onChanged;               // a setting changed: publish the project
-    std::function<void (bool down)> onPreview;     // the "Play C4" button is pressed (true) or released (false)
+    std::function<void (bool down)> onPreview;     // the "Play C5" button is pressed (true) or released (false)
 
     void refresh(); // show the channel as it is now
 
@@ -85,7 +85,7 @@ private:
 
     juce::Label titleLabel, noteLabel;
     juce::ComboBox patchBox;
-    juce::TextButton previewButton { "Play C4" };
+    juce::TextButton previewButton { "Play C5" };
     juce::ToggleButton steepToggle { "24 dB / octave" };
     std::vector<std::unique_ptr<Param>> params;
     std::vector<std::unique_ptr<Choice>> choices;

@@ -184,7 +184,7 @@ const char* pitchClassName (int pitchClass)
 
 std::string noteName (int pitch)
 {
-    return std::string (pitchClassName (pitch)) + std::to_string (pitch / 12 - 1);
+    return std::string (pitchClassName (pitch)) + std::to_string (pitch / 12); // FL Studio's names (0.32.0): MIDI 60 = C5
 }
 
 // --- chords -----------------------------------------------------------------------------------------------------------------

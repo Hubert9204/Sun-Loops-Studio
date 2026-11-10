@@ -27,6 +27,11 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.32.0
+The typing keyboard goes through `AudioEngine::handleMidi`, the path a MIDI keyboard takes (the same lock-free queue), so it
+adds nothing to the audio thread. Keys let go are found with `KeyPress::isKeyCurrentlyDown` on every key change and on every
+timer tick (a key let go while another window had the keyboard still ends its note). The mapping is JUCE-free and tested.
+
 ## After 0.31.0
 The step sequencer's rules live in `src/audio/StepSequence.h` (JUCE-free, tested); the rack repaints its rows from the notes on
 every paint, nothing is cached. The repeats of a short sequence are made when the project snapshot is compiled, on the message
