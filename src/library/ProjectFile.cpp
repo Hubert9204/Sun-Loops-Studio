@@ -23,6 +23,9 @@ const char* automationKindName (AutomationKind k)
         case AutomationKind::TrackPan:      return "trackPan";
         case AutomationKind::TrackEffect:   return "trackEffect";
         case AutomationKind::MasterEffect:  return "masterEffect";
+        case AutomationKind::ChannelPlugin: return "channelPlugin";
+        case AutomationKind::TrackPlugin:   return "trackPlugin";
+        case AutomationKind::MasterPlugin:  return "masterPlugin";
     }
     return "trackVolume";
 }
@@ -30,7 +33,7 @@ const char* automationKindName (AutomationKind k)
 AutomationKind automationKindFromName (const std::string& name, bool& known)
 {
     known = true;
-    for (int i = 0; i < 6; ++i)
+    for (int i = 0; i < kAutomationKindCount; ++i)
         if (name == automationKindName (static_cast<AutomationKind> (i)))
             return static_cast<AutomationKind> (i);
     known = false;
@@ -774,7 +777,7 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
                 clip.target.kind = automationKindFromName (o->getProperty ("kind").toString().toStdString(), kindKnown);
                 clip.target.index = readInt (o->getProperty ("index"), 0, 0, 1000);
                 clip.target.slot = readInt (o->getProperty ("slot"), 0, 0, 1000);
-                clip.target.param = readInt (o->getProperty ("param"), 0, 0, 1000);
+                clip.target.param = readInt (o->getProperty ("param"), 0, 0, kMaxPluginParams - 1);
                 clip.lane = readInt (o->getProperty ("lane"), -1, -1, 1000);
                 clip.startTick = readInt (o->getProperty ("startTick"), -1, -1, 100000000);
                 clip.lengthTicks = readInt (o->getProperty ("lengthTicks"), 0, 0, 100000000);

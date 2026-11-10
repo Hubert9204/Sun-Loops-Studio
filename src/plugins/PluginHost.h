@@ -9,6 +9,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include "audio/Automation.h"
 #include "audio/HostedPlugin.h"
 
 namespace sls
@@ -30,6 +31,14 @@ public:
     bool isInstrument() const noexcept override { return instrument; }
     bool isLoaded() const noexcept override { return instance != nullptr; }
     const std::string& displayName() const noexcept override { return name; }
+
+    int parameterCount() const noexcept override { return static_cast<int> (parameters.size()); }
+    void setParameter (int index, float value) noexcept override;
+    float parameterValue (int index) const noexcept override;
+    float parameterDefault (int index) const noexcept override;
+    std::string parameterName (int index) const override;
+    std::string parameterText (int index, float value) const override;
+    int lastTouchedParameter() const noexcept override { return lastTouched.load (std::memory_order_relaxed); }
 
     // Message thread, never while the audio thread may call process() (before the plugin is published, while the device is stopped, or
     // while the engine is suspended).
@@ -57,8 +66,21 @@ private:
     juce::AudioBuffer<float> buffer;
     juce::MidiBuffer midi;
     std::atomic<bool> changed { false };
+    // The plugin's parameters, read once (the instance owns them), and the value automation set last on each (NaN: none yet).
+    std::vector<juce::AudioProcessorParameter*> parameters;
+    std::unique_ptr<std::atomic<float>[]> automated;
+    std::atomic<int> lastTouched { -1 };
+    std::atomic<bool> settingFromAutomation { false };
 
-    void audioProcessorParameterChanged (juce::AudioProcessor*, int, float) override { changed.store (true, std::memory_order_release); }
+    void audioProcessorParameterChanged (juce::AudioProcessor*, int index, float) override
+    {
+        // A change the automation made itself (some formats report it back) is neither an edit of the project nor a touch.
+        if (settingFromAutomation.load (std::memory_order_relaxed))
+            return;
+        changed.store (true, std::memory_order_release);
+        lastTouched.store (index, std::memory_order_relaxed);
+    }
+    void audioProcessorParameterChangeGestureBegin (juce::AudioProcessor*, int index) override { lastTouched.store (index, std::memory_order_relaxed); }
     void audioProcessorChanged (juce::AudioProcessor*, const ChangeDetails& d) override
     {
         if (d.parameterInfoChanged || d.programChanged || d.nonParameterStateChanged)

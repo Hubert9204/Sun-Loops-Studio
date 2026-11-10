@@ -3875,6 +3875,35 @@ void testFlpFiles()
     }
 }
 
+void testPluginAutomationFile()
+{
+    std::cout << "Plugin automation in the project file (0.35.0)\n";
+    auto doc = richDocument();
+    for (const auto kind : { sls::AutomationKind::ChannelPlugin, sls::AutomationKind::TrackPlugin, sls::AutomationKind::MasterPlugin })
+    {
+        sls::AutomationTarget t { kind, kind == sls::AutomationKind::MasterPlugin ? 0 : 1, kind == sls::AutomationKind::ChannelPlugin ? 0 : 3, 1234 };
+        auto clip = sls::makeFlatAutomationClip (t, static_cast<int> (doc.arrangement.automationClips.size()) % sls::kAutomationLanes,
+                                                 static_cast<int> (doc.arrangement.automationClips.size()) * 4000, 960, 0.75f);
+        doc.arrangement.automationClips.push_back (clip);
+    }
+    const auto back = sls::ProjectDocument::fromJson (doc.toJson());
+    int found = 0;
+    if (back.document.has_value())
+        for (const auto& c : back.document->arrangement.automationClips)
+            found += sls::isPluginAutomation (c.target.kind) && c.target.param == 1234 && std::abs (c.points[0].value - 0.75f) < 1.0e-6f ? 1 : 0;
+    check (found == 3, "clips for a channel's plugin, a track's and the master's plugin parameter survive a round trip (parameter 1234)");
+
+    // Moving channels moves a channel plugin's automation with them.
+    sls::Arrangement a;
+    a.patterns.resize (1);
+    a.ensureChannelCount (2);
+    a.automationClips = { sls::makeFlatAutomationClip ({ sls::AutomationKind::ChannelPlugin, 0, 0, 7 }, 0, 0, 960, 0.5f) };
+    sls::remapArrangementChannels (a, { 1, 0 }, 2);
+    check (a.automationClips.size() == 1 && a.automationClips[0].target.index == 1, "a channel plugin's automation follows its channel");
+    sls::remapArrangementChannels (a, { 0 }, 2);
+    check (a.automationClips.empty(), "and goes with it when the channel is deleted");
+}
+
 void testTypingKeyboard()
 {
     std::cout << "Typing keyboard (0.32.0)\n";
@@ -5799,7 +5828,8 @@ void testAutomation()
         clips.push_back (nan);
         clips.push_back (sls::makeFlatAutomationClip ({ sls::AutomationKind::TrackEffect, 0, 2, 0 }, 0, 0, 960, 5.0f)); // empty slot
 
-        const auto events = sls::makeAutomationEvents (clips, 2, 8, [] (const sls::AutomationTarget&) { return sls::EffectType::None; });
+        const auto events = sls::makeAutomationEvents (clips, 2, 8, [] (const sls::AutomationTarget&) { return sls::EffectType::None; },
+                                                       [] (const sls::AutomationTarget&) { return 0; });
         check (events.size() == 4, "clips for a parameter that does not exist, without points, or for an empty effect slot are dropped (4 of 7 stay)");
         check (events[0].target.kind == sls::AutomationKind::ChannelPan && events[0].points[0].value == 1.0f,
                "values are clamped to the range of the parameter");
@@ -9645,6 +9675,97 @@ void testPluginHosting()
         check (lv2Gain != nullptr && ! lv2Gain->isInstrument(), "an LV2 effect is created");
     }
 
+    // Automation of plugin parameters (0.35.0): the gain plugin's Gain follows a clip in Song mode, VST3 and LV2 alike.
+    for (const auto& desc : { gainVst3Copy, gainLv2Copy })
+    {
+        if (desc.name.isEmpty())
+            continue;
+        const std::string format = desc.pluginFormatName.toStdString();
+        auto automatedGain = host.create (desc, kSr, sls::Player::kChunk, error);
+        if (automatedGain == nullptr)
+        {
+            check (false, ("a " + format + " gain plugin for automation").c_str());
+            continue;
+        }
+        // The formats list the parameters in their own order (JUCE's LV2 wrapper puts its Bypass first): find Gain by name.
+        int gainParam = -1;
+        for (int i = 0; i < automatedGain->parameterCount(); ++i)
+            if (automatedGain->parameterName (i) == "Gain")
+                gainParam = i;
+        check (gainParam >= 0 && std::abs (automatedGain->parameterDefault (gainParam) - 0.5f) < 1.0e-3f
+                   && automatedGain->parameterText (gainParam, 0.25f).find ("0.25") != std::string::npos,
+               ("the " + format + " plugin's parameters: Gain found by name, its default and text").c_str());
+        if (gainParam < 0)
+            continue;
+
+        sls::Arrangement a;
+        a.patternTicks = 8 * kBeat;
+        a.patterns.resize (1);
+        a.ensureChannelCount (1);
+        a.patterns[0].notes[0] = { { 69, 0, 8 * kBeat, 0.8f } };
+        a.patterns[0].steps = { 64 };
+        a.clips = { { 0, 0, 0, 1 } };
+        const std::vector<sls::Channel> chans { synthChannel ({}) };
+        auto tracks = sls::Project::defaultTracks();
+        const auto dry = [&]
+        {
+            sls::Player q;
+            q.prepare (kSr);
+            return renderBlocks (q, sls::compileSong (chans, a, tracks), true, 2.0);
+        }();
+        tracks[0].slots[0].type = sls::EffectType::Plugin;
+        tracks[0].slots[0].plugin = automatedGain;
+        sls::AutomationClip clip;
+        clip.target = { sls::AutomationKind::TrackPlugin, 0, 0, gainParam };
+        clip.lane = 0;
+        clip.startTick = 0;
+        clip.lengthTicks = 8 * kBeat;
+        clip.points = { { 0.0, 1.0f, sls::AutomationShape::Hold }, { 2.0 * kBeat, 0.25f, sls::AutomationShape::Hold } };
+        a.automationClips = { clip };
+        const auto song = sls::compileSong (chans, a, tracks);
+        check (song.automation.size() == 1, ("the " + format + " clip reaches the player").c_str());
+        sls::Player q;
+        q.prepare (kSr);
+        const auto wet = renderBlocks (q, song, true, 2.0);
+        check (std::abs (automatedGain->parameterValue (gainParam) - 0.25f) < 1.0e-3f, ("the " + format + " plugin keeps the last value").c_str());
+        {
+            // Moving a plugin's parameter allocates nothing on the audio thread (a ramp: a new value every chunk).
+            auto ramp = a;
+            ramp.automationClips[0].points = { { 0.0, 0.0f, sls::AutomationShape::Linear }, { 8.0 * kBeat, 1.0f, sls::AutomationShape::Linear } };
+            const auto rampSong = sls::compileSong (chans, ramp, tracks);
+            sls::Player rp;
+            rp.prepare (kSr);
+            std::vector<float> l (256), r (256);
+            float* ch[2] = { l.data(), r.data() };
+            rp.render (rampSong, 120.0, true, ch, 2, 256);
+            tAllocs = 0;
+            tCounting = true;
+            for (int i = 0; i < 400; ++i)
+                rp.render (rampSong, 120.0, true, ch, 2, 256);
+            tCounting = false;
+            check (tAllocs == 0, ("a " + format + " parameter moved by automation allocates nothing while rendering").c_str());
+        }
+        const float first = rmsWindow (wet, 0.2, 0.9) / std::max (1.0e-9f, rmsWindow (dry, 0.2, 0.9));
+        const float second = rmsWindow (wet, 1.1, 1.9) / std::max (1.0e-9f, rmsWindow (dry, 1.1, 1.9));
+        std::cout << "    (" << format << ": gain " << first << " then " << second << ")\n";
+        check (std::abs (first - 1.0f) < 0.03f && std::abs (second - 0.25f) < 0.03f,
+               ("the " + format + " plugin's gain follows the clip: 1 for two beats, then 0.25").c_str());
+
+        // A parameter the plugin does not have, or no plugin there: the clip does not play (and nothing breaks).
+        auto missingParam = a;
+        missingParam.automationClips[0].target.param = automatedGain->parameterCount();
+        check (sls::compileSong (chans, missingParam, tracks).automation.empty(), ("a parameter the " + format + " plugin does not have is left out").c_str());
+        auto noPlugin = tracks;
+        noPlugin[0].slots[0] = {};
+        check (sls::compileSong (chans, a, noPlugin).automation.empty(), "a clip for a slot with no plugin is left out");
+    }
+    {
+        // The plugin kinds have their own numbers (before 0.35.0 track 16 and up could share a number with another kind).
+        const sls::AutomationTarget t16 { sls::AutomationKind::TrackVolume, 16, 0, 0 }, pan0 { sls::AutomationKind::TrackPan, 0, 0, 0 };
+        const sls::AutomationTarget plug { sls::AutomationKind::TrackPlugin, 499, 7, 65535 }, plug2 { sls::AutomationKind::MasterPlugin, 0, 7, 65535 };
+        check (t16.key() != pan0.key() && plug.key() != plug2.key() && t16.key() < pan0.key(), "every automated parameter has its own number");
+    }
+
     // LADSPA (the SDK's example plugins, when they are installed).
     if (host.formatNames().contains ("LADSPA"))
     {
@@ -9791,6 +9912,7 @@ int main()
     testTypingKeyboard();
     testPlaylistLayering();
     testFlpFiles();
+    testPluginAutomationFile();
     testAudioImport();
     testInputRecorder();
     testMidiNotes();

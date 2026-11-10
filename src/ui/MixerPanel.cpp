@@ -531,6 +531,7 @@ FxPanel::FxPanel()
     addAndMakeVisible (effectLabel);
     addAndMakeVisible (notePlaceholder);
     addChildComponent (pluginButton);
+    addChildComponent (automatePluginButton);
     addChildComponent (presetButton);
     presetButton.setTooltip ("Ready-made settings of this effect");
 
@@ -641,6 +642,13 @@ void FxPanel::rebuildParameters()
     presetButton.onClick = [this] { showPresetMenu(); };
     if (isPlugin)
         pluginButton.onClick = [this, plugin = slot.plugin] { if (openPluginWindow) openPluginWindow (plugin); };
+    automatePluginButton.setVisible (isPlugin && trackIndex < kAuxIndexBase && slot.plugin->parameterCount() > 0);
+    automatePluginButton.onClick = [this]
+    {
+        if (onAutomate && trackIndex < kAuxIndexBase)
+            onAutomate (trackIndex == kMasterIndex ? AutomationTarget { AutomationKind::MasterPlugin, 0, selectedSlot, -1 }
+                                                   : AutomationTarget { AutomationKind::TrackPlugin, trackIndex, selectedSlot, -1 });
+    };
 
     for (int i = 0; i < kMaxEffectParams; ++i)
     {
@@ -852,6 +860,7 @@ void FxPanel::resized()
     area.removeFromTop (4);
     notePlaceholder.setBounds (area);
     pluginButton.setBounds (area.getX(), area.getY(), std::min (200, area.getWidth()), 26);
+    automatePluginButton.setBounds (area.getX(), area.getY() + 32, std::min (200, area.getWidth()), 26);
 
     for (auto& row : params)
     {

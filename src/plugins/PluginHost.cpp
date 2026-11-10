@@ -1,6 +1,8 @@
 #include "plugins/PluginHost.h"
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
 
 namespace sls
 {
@@ -13,7 +15,59 @@ JucePlugin::JucePlugin (std::unique_ptr<juce::AudioPluginInstance> instanceToUse
     instrument = d.isInstrument;
     midi.ensureSize (8192);
     if (instance != nullptr)
+    {
+        for (auto* p : instance->getParameters())
+            if (p != nullptr && static_cast<int> (parameters.size()) < kMaxPluginParams)
+                parameters.push_back (p);
+        automated = std::make_unique<std::atomic<float>[]> (std::max<size_t> (1, parameters.size()));
+        for (size_t i = 0; i < parameters.size(); ++i)
+            automated[i].store (std::numeric_limits<float>::quiet_NaN(), std::memory_order_relaxed);
         instance->addListener (this);
+    }
+}
+
+void JucePlugin::setParameter (int index, float value) noexcept
+{
+    if (index < 0 || index >= static_cast<int> (parameters.size()) || ! std::isfinite (value))
+        return;
+    value = std::clamp (value, 0.0f, 1.0f);
+    auto& last = automated[static_cast<size_t> (index)];
+    const float previous = last.load (std::memory_order_relaxed);
+    if (std::isfinite (previous) && std::abs (previous - value) < 1.0e-6f)
+        return;
+    last.store (value, std::memory_order_relaxed);
+    // JUCE's hosted parameters take a value from any thread without locking (VST3 and LV2 queue it for the plugin's next block).
+    settingFromAutomation.store (true, std::memory_order_relaxed);
+    parameters[static_cast<size_t> (index)]->setValue (value);
+    settingFromAutomation.store (false, std::memory_order_relaxed);
+}
+
+float JucePlugin::parameterValue (int index) const noexcept
+{
+    return index >= 0 && index < static_cast<int> (parameters.size()) ? parameters[static_cast<size_t> (index)]->getValue() : 0.0f;
+}
+
+float JucePlugin::parameterDefault (int index) const noexcept
+{
+    return index >= 0 && index < static_cast<int> (parameters.size()) ? parameters[static_cast<size_t> (index)]->getDefaultValue() : 0.0f;
+}
+
+std::string JucePlugin::parameterName (int index) const
+{
+    if (index < 0 || index >= static_cast<int> (parameters.size()))
+        return {};
+    const auto n = parameters[static_cast<size_t> (index)]->getName (64).trim();
+    return (n.isEmpty() ? "Parameter " + juce::String (index + 1) : n).toStdString();
+}
+
+std::string JucePlugin::parameterText (int index, float value) const
+{
+    if (index < 0 || index >= static_cast<int> (parameters.size()))
+        return {};
+    auto* p = parameters[static_cast<size_t> (index)];
+    const auto text = p->getText (std::clamp (value, 0.0f, 1.0f), 32).trim();
+    const auto label = p->getLabel().trim();
+    return (text + (label.isNotEmpty() && ! text.endsWith (label) ? " " + label : juce::String())).toStdString();
 }
 
 std::shared_ptr<JucePlugin> JucePlugin::placeholder (const juce::PluginDescription& d, juce::MemoryBlock savedState, bool isInstrumentPlugin)

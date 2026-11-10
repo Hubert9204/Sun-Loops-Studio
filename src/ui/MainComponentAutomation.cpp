@@ -2,6 +2,7 @@
 #include "ui/MainComponent.h"
 
 #include "ui/AutomationEditor.h"
+#include "ui/PluginParameterPicker.h"
 
 namespace sls
 {
@@ -24,8 +25,40 @@ EffectType MainComponent::effectTypeFor (const AutomationTarget& t) const
     return EffectType::None;
 }
 
+std::shared_ptr<HostedPlugin> MainComponent::pluginFor (const AutomationTarget& t) const
+{
+    const bool slotOk = t.slot >= 0 && t.slot < kSlotsPerTrack;
+    switch (t.kind)
+    {
+        case AutomationKind::ChannelPlugin:
+            if (t.index >= 0 && t.index < static_cast<int> (channels.size()) && channels[static_cast<size_t> (t.index)].instrument == Instrument::Plugin)
+                return channels[static_cast<size_t> (t.index)].plugin;
+            break;
+        case AutomationKind::TrackPlugin:
+            if (slotOk && t.index >= 0 && t.index < static_cast<int> (tracks.size()))
+                return tracks[static_cast<size_t> (t.index)].slots[static_cast<size_t> (t.slot)].plugin;
+            break;
+        case AutomationKind::MasterPlugin:
+            if (slotOk)
+                return masterTrack.slots[static_cast<size_t> (t.slot)].plugin;
+            break;
+        case AutomationKind::ChannelVolume:
+        case AutomationKind::ChannelPan:
+        case AutomationKind::TrackVolume:
+        case AutomationKind::TrackPan:
+        case AutomationKind::TrackEffect:
+        case AutomationKind::MasterEffect: break;
+    }
+    return nullptr;
+}
+
 float MainComponent::currentValueOf (const AutomationTarget& t) const
 {
+    if (isPluginAutomation (t.kind))
+    {
+        const auto plugin = pluginFor (t);
+        return plugin != nullptr && t.param < plugin->parameterCount() ? plugin->parameterValue (t.param) : 0.5f;
+    }
     const auto at = [] (const auto& v, int i) { return i >= 0 && i < static_cast<int> (v.size()); };
     switch (t.kind)
     {
@@ -41,6 +74,9 @@ float MainComponent::currentValueOf (const AutomationTarget& t) const
             if (t.slot >= 0 && t.slot < kSlotsPerTrack && t.param >= 0 && t.param < kMaxEffectParams)
                 return masterTrack.slots[static_cast<size_t> (t.slot)].params[static_cast<size_t> (t.param)];
             break;
+        case AutomationKind::ChannelPlugin:
+        case AutomationKind::TrackPlugin:
+        case AutomationKind::MasterPlugin: break; // handled above
     }
     return automationRange (t, effectTypeFor (t)).def;
 }
@@ -68,6 +104,22 @@ juce::String MainComponent::automationLabelFor (const AutomationTarget& t) const
             const auto type = effectTypeFor (t);
             return juce::String ("Master ") + effectName (type) + " " + effectParamNameFor (type, t.param);
         }
+        case AutomationKind::ChannelPlugin:
+        case AutomationKind::TrackPlugin:
+        case AutomationKind::MasterPlugin:
+        {
+            const auto plugin = pluginFor (t);
+            const juce::String where = t.kind == AutomationKind::ChannelPlugin ? channelName (t.index)
+                                     : t.kind == AutomationKind::TrackPlugin   ? "Track " + juce::String (t.index + 1)
+                                                                               : juce::String ("Master");
+            if (plugin == nullptr)
+                return where + " plugin parameter " + juce::String (t.param + 1) + " (no plugin there)";
+            const juce::String pluginName (plugin->displayName());
+            // A channel is named after its plugin when it is created: "SLS Test Synth Cutoff", not "SLS Test Synth SLS Test Synth Cutoff".
+            const auto prefix = where == pluginName ? where : where + " " + pluginName;
+            return prefix + " "
+                 + (t.param < plugin->parameterCount() ? juce::String (plugin->parameterName (t.param)) : "parameter " + juce::String (t.param + 1));
+        }
     }
     return "Automation";
 }
@@ -89,12 +141,47 @@ juce::String MainComponent::automationValueText (const AutomationTarget& t, floa
             const juce::String unit (info.unit);
             return juce::String (v, decimals) + (unit.isEmpty() ? juce::String() : " " + unit);
         }
+        case AutomationKind::ChannelPlugin:
+        case AutomationKind::TrackPlugin:
+        case AutomationKind::MasterPlugin:
+        {
+            const auto plugin = pluginFor (t);
+            const auto text = plugin != nullptr && t.param < plugin->parameterCount() ? juce::String (plugin->parameterText (t.param, v)) : juce::String();
+            return text.isNotEmpty() ? text : juce::String (juce::roundToInt (v * 100.0f)) + " %";
+        }
     }
     return juce::String (v, 2);
 }
 
 void MainComponent::createAutomationFor (const AutomationTarget& target)
 {
+    if (isPluginAutomation (target.kind))
+    {
+        const auto plugin = pluginFor (target);
+        if (plugin == nullptr || ! plugin->isLoaded() || plugin->parameterCount() == 0)
+        {
+            statusLabel.setText (plugin == nullptr ? "There is no plugin here to automate."
+                                                   : juce::String (plugin->displayName()) + " has no parameters to automate"
+                                                         + (plugin->isLoaded() ? "." : " (it is not installed on this computer)."),
+                                 juce::dontSendNotification);
+            return;
+        }
+        if (target.param < 0 || target.param >= plugin->parameterCount())
+        {
+            // Which parameter: the plugin's list, the one last moved in its window chosen at first.
+            PluginParameterPicker::show (plugin, "Automate a parameter of " + juce::String (plugin->displayName()),
+                                         [safe = juce::Component::SafePointer<MainComponent> (this), target] (int param)
+                                         {
+                                             if (safe == nullptr)
+                                                 return;
+                                             auto t = target;
+                                             t.param = param;
+                                             safe->createAutomationFor (t);
+                                         });
+            return;
+        }
+    }
+
     const auto type = effectTypeFor (target);
     if ((target.kind == AutomationKind::TrackEffect || target.kind == AutomationKind::MasterEffect)
         && (type == EffectType::None || target.param >= effectParamCount (type)))

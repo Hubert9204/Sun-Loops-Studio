@@ -280,6 +280,7 @@ private:
     // Automation (MainComponentAutomation.cpp).
     EffectType effectTypeFor (const AutomationTarget& t) const;
     float currentValueOf (const AutomationTarget& t) const;
+    std::shared_ptr<HostedPlugin> pluginFor (const AutomationTarget& t) const; // the plugin a plugin target points at (0.35.0)
     juce::String automationLabelFor (const AutomationTarget& t) const;
     juce::String automationValueText (const AutomationTarget& t, float v) const;
     void createAutomationFor (const AutomationTarget& target); // right click on a control

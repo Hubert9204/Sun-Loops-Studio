@@ -372,7 +372,8 @@ inline void remapArrangementChannels (Arrangement& arrangement, const std::vecto
     clips.erase (std::remove_if (clips.begin(), clips.end(),
                                  [&] (AutomationClip& c)
                                  {
-                                     if (c.target.kind != AutomationKind::ChannelVolume && c.target.kind != AutomationKind::ChannelPan)
+                                     if (c.target.kind != AutomationKind::ChannelVolume && c.target.kind != AutomationKind::ChannelPan
+                                         && c.target.kind != AutomationKind::ChannelPlugin)
                                          return false;
                                      if (c.target.index < 0 || static_cast<size_t> (c.target.index) >= oldCount
                                          || oldToNew[static_cast<size_t> (c.target.index)] < 0)

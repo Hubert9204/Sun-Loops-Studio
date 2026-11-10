@@ -2,6 +2,17 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.35.0 - 2026-11-10
+
+### Added
+- **Automation of plugin parameters** (VST3, LV2, LADSPA), as in FL Studio: right-click a plugin channel in the Channel Rack >
+  *Automate a plugin parameter...*, or select a plugin in a mixer slot (any track, or the master) > *Automate a parameter...*.
+  A list of the plugin's parameters opens with their current values, a box to filter them by name, and the parameter last moved
+  in the plugin's own window already chosen ("last tweaked"). The clip starts at the parameter's current value, shows the
+  plugin's own value text (dB, Hz, On/Off) and plays in Song mode like any other automation clip. Clips are saved with the
+  project; a clip whose plugin is missing, or whose parameter the plugin no longer has, stays in the project and does nothing.
+  The value is applied once per 64 samples, only when it changes, without allocating.
+
 ## 0.34.0 - 2026-11-10
 
 ### Changed

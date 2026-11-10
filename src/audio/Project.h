@@ -11,6 +11,7 @@
 #include "audio/Automation.h"
 #include "audio/DrumKit.h"
 #include "audio/Effects.h"
+#include "audio/HostedPlugin.h"
 #include "audio/NoteSequence.h"
 #include "audio/SampleData.h"
 #include "audio/SamplerProgram.h"
@@ -240,6 +241,18 @@ struct Project
                                                  if (t.kind == AutomationKind::MasterEffect)
                                                      return p.masterSlots[static_cast<size_t> (t.slot)].type;
                                                  return EffectType::None;
+                                             },
+                                             [&p] (const AutomationTarget& t)
+                                             {
+                                                 const HostedPlugin* plugin = nullptr;
+                                                 if (t.kind == AutomationKind::ChannelPlugin)
+                                                     plugin = p.channels[static_cast<size_t> (t.index)].instrument == Instrument::Plugin
+                                                                  ? p.channels[static_cast<size_t> (t.index)].plugin.get() : nullptr;
+                                                 else if (t.kind == AutomationKind::TrackPlugin)
+                                                     plugin = p.tracks[static_cast<size_t> (t.index)].slots[static_cast<size_t> (t.slot)].plugin.get();
+                                                 else if (t.kind == AutomationKind::MasterPlugin)
+                                                     plugin = p.masterSlots[static_cast<size_t> (t.slot)].plugin.get();
+                                                 return plugin != nullptr ? plugin->parameterCount() : 0;
                                              });
         return p;
     }

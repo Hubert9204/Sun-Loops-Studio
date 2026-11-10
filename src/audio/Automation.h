@@ -24,9 +24,19 @@ constexpr int kMaxAutomationPoints = 256;
 
 inline double finiteOrZero (double v) noexcept { return std::isfinite (v) ? v : 0.0; }
 
-enum class AutomationKind : std::uint8_t { ChannelVolume, ChannelPan, TrackVolume, TrackPan, TrackEffect, MasterEffect };
+// The three plugin kinds (0.35.0) move a parameter of a third-party plugin: the instrument of a channel, or an effect in a mixer
+// slot. Their values are the plugin's normalised 0..1 (what the plugin shows for them is the plugin's business).
+enum class AutomationKind : std::uint8_t { ChannelVolume, ChannelPan, TrackVolume, TrackPan, TrackEffect, MasterEffect,
+                                           ChannelPlugin, TrackPlugin, MasterPlugin };
+constexpr int kAutomationKindCount = 9;
+constexpr int kMaxPluginParams = 65536; // a parameter number beyond this is not a plugin's
 
-// What an automation clip moves. `index` is the channel or the mixer track, `slot` and `param` apply to effects.
+inline bool isPluginAutomation (AutomationKind k) noexcept
+{
+    return k == AutomationKind::ChannelPlugin || k == AutomationKind::TrackPlugin || k == AutomationKind::MasterPlugin;
+}
+
+// What an automation clip moves. `index` is the channel or the mixer track, `slot` and `param` apply to effects and plugins.
 struct AutomationTarget
 {
     AutomationKind kind = AutomationKind::TrackVolume;
@@ -39,10 +49,11 @@ struct AutomationTarget
         return kind == o.kind && index == o.index && slot == o.slot && param == o.param;
     }
 
-    // One number per parameter, for sorting and for finding clips of the same parameter.
-    int key() const noexcept
+    // One number per parameter, for sorting and for finding clips of the same parameter (wide enough for 500 tracks and the
+    // parameters of any plugin: before 0.35.0 a track number from 16 up could share its number with another kind's).
+    std::int64_t key() const noexcept
     {
-        return ((static_cast<int> (kind) * 16 + index) * 8 + slot) * 8 + param;
+        return ((static_cast<std::int64_t> (kind) * 1024 + (index & 1023)) * 64 + (slot & 63)) * kMaxPluginParams + (param & (kMaxPluginParams - 1));
     }
 };
 
@@ -67,6 +78,9 @@ inline AutomationRange automationRange (const AutomationTarget& t, EffectType ef
             const auto info = effectParamInfo (effectType, t.param);
             return { info.min, info.max, info.def };
         }
+        case AutomationKind::ChannelPlugin:
+        case AutomationKind::TrackPlugin:
+        case AutomationKind::MasterPlugin:  return { 0.0f, 1.0f, 0.5f };
     }
     return {};
 }
@@ -83,6 +97,10 @@ inline bool automationTargetExists (const AutomationTarget& t, int numChannels, 
         case AutomationKind::TrackEffect:   return t.index >= 0 && t.index < numTracks && t.slot >= 0 && t.slot < kSlotsPerTrack
                                                    && t.param >= 0 && t.param < kMaxEffectParams;
         case AutomationKind::MasterEffect:  return t.slot >= 0 && t.slot < kSlotsPerTrack && t.param >= 0 && t.param < kMaxEffectParams;
+        case AutomationKind::ChannelPlugin: return t.index >= 0 && t.index < numChannels && t.param >= 0 && t.param < kMaxPluginParams;
+        case AutomationKind::TrackPlugin:   return t.index >= 0 && t.index < numTracks && t.slot >= 0 && t.slot < kSlotsPerTrack
+                                                   && t.param >= 0 && t.param < kMaxPluginParams;
+        case AutomationKind::MasterPlugin:  return t.slot >= 0 && t.slot < kSlotsPerTrack && t.param >= 0 && t.param < kMaxPluginParams;
     }
     return false;
 }
@@ -147,10 +165,11 @@ struct AutomationEvent
 };
 
 // Sorts by parameter and start, drops what cannot play (missing parameter, no usable point, no length), keeps the points
-// in range and in order. `typeAt` says which effect sits in a slot (it gives the range of an effect parameter).
-template <typename SlotTypeFn>
+// in range and in order. `typeAt` says which effect sits in a slot (it gives the range of an effect parameter);
+// `pluginParams` how many parameters the plugin a plugin target points at has (0: no plugin there).
+template <typename SlotTypeFn, typename PluginParamsFn>
 std::vector<AutomationEvent> makeAutomationEvents (const std::vector<AutomationClip>& clips, int numChannels, int numTracks,
-                                                   SlotTypeFn typeAt)
+                                                   SlotTypeFn typeAt, PluginParamsFn pluginParams)
 {
     std::vector<AutomationEvent> out;
     for (const auto& c : clips)
@@ -160,6 +179,8 @@ std::vector<AutomationEvent> makeAutomationEvents (const std::vector<AutomationC
         if ((c.target.kind == AutomationKind::TrackEffect || c.target.kind == AutomationKind::MasterEffect)
             && (c.target.param >= effectParamCount (typeAt (c.target)) ))
             continue; // no such parameter in the effect that sits there now
+        if (isPluginAutomation (c.target.kind) && c.target.param >= pluginParams (c.target))
+            continue; // no plugin there now, or one without that parameter
 
         const auto range = automationRange (c.target, typeAt (c.target));
         AutomationEvent e;

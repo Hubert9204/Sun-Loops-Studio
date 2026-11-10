@@ -768,7 +768,9 @@ L'automazione fa muovere un controllo da solo mentre il brano suona. Funziona su
 
 - **volume** e **pan** di un canale (i due slider del Channel Rack);
 - **fader** e **bilanciamento** di una traccia (Mixer);
-- ogni **parametro di un effetto** in uno slot di traccia o del master (gli slider del pannello effetti).
+- ogni **parametro di un effetto** in uno slot di traccia o del master (gli slider del pannello effetti);
+- ogni **parametro di un plugin** (VST3, LV2, LADSPA): di uno strumento plugin nel Channel Rack e di un effetto plugin in uno slot di
+  traccia o del master (dalla 0.35.0, vedi *Parametri dei plugin* più sotto).
 
 **Non ancora automatizzabili:** le manopole Pitch e Swing, il volume master, mute e solo, i send, i bus aux e i gruppi VCA (compresi i
 parametri degli effetti di un bus aux) e tutto il resto.
@@ -798,6 +800,25 @@ L'asse a sinistra mostra l'unità del controllo (dB per i volumi, numeri semplic
 ultima; al suo interno il valore segue la curva, dopo la fine resta l'ultimo valore, prima della prima clip vale il valore del controllo. Mentre il brano suona con automazione i **controlli sullo schermo non si muovono**
 (mostrano il valore che hai impostato) e toccarne uno non ha effetto duraturo su un parametro che ha una clip sotto il cursore. Il valore si aggiorna
 ogni 64 campioni (1,3 ms a 48 kHz): rapido per qualsiasi uso musicale, ma non è una rampa campione per campione. Le clip si salvano nel progetto.
+
+### Parametri dei plugin
+
+I controlli di un plugin stanno nella sua finestra, dove non c'è il nostro menu del tasto destro, quindi i parametri si scelgono da un elenco:
+
+- uno **strumento plugin**: tasto destro sul canale nel Channel Rack > *Automate a plugin parameter...* (grigio per gli altri
+  strumenti e per un plugin senza parametri o non trovato);
+- un **effetto plugin**: apri il Mixer, seleziona lo slot che lo contiene, poi *Automate a parameter...* sotto *Open plugin window*
+  (non per i bus aux, come per gli altri effetti).
+
+L'elenco mostra tutti i parametri del plugin con il valore attuale, scritto come lo scrive il plugin. Scrivi nella casella in alto per
+filtrarlo per nome (più parole: devono esserci tutte). **Muovi prima un controllo nella finestra del plugin** e quel parametro è già
+scelto quando l'elenco si apre: la riga sopra la casella lo nomina (il "last tweaked" di FL Studio). Doppio clic su una riga, Invio
+o *Automate*. La clip parte dal valore attuale del parametro; il suo editor mostra i valori del plugin (On / Off, dB, Hz...) quando il
+plugin li fornisce, altrimenti 0-100 %.
+
+Note: molti plugin elencano anche parametri tecnici (i plugin VST3 fatti con JUCE aggiungono voci *MIDI CC* e un *Bypass*); il filtro
+è il modo più rapido per superarli. Una clip il cui plugin manca quando il progetto si apre, o il cui parametro il plugin non ha più,
+resta nel progetto e non fa nulla. La finestra del plugin può non seguire l'automazione mentre il brano suona, come gli altri controlli.
 
 ## Mixer
 
@@ -1000,5 +1021,5 @@ occupato più tardi, un brano più pesante o un mixer pieno di effetti possono r
   ritardo di un campione (come nella maggior parte dei synth FM a matrice).
 - Plugin: VST3, LV2 e LADSPA (niente VST2, niente Audio Unit); stereo in ingresso e in uscita (uscite extra e ingressi sidechain non sono usati);
   i loro parametri non si possono automatizzare; le modifiche fatte nella finestra di un plugin si salvano col progetto ma non entrano nell'annulla.
-- Non ancora disponibili: time-stretch dei campioni nel Sampler (si possono modificare solo le clip audio della playlist), automazione di qualsiasi cosa tranne volumi, pan e parametri degli effetti, trasformare l'altezza di
+- Non ancora disponibili: time-stretch dei campioni nel Sampler (si possono modificare solo le clip audio della playlist), automazione di qualsiasi cosa tranne volumi, pan, parametri degli effetti e dei plugin, trasformare l'altezza di
   chitarra o voce in note, punch-in e conteggio iniziale per la registrazione, dissolvenze ed effetti per clip. Vedi [roadmap.md](roadmap.md) (in inglese).

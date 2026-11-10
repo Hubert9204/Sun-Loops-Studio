@@ -972,7 +972,7 @@ void MainComponent::createStrip (size_t channelIndex)
         publishProject();
         recordNoteChange(); // (does nothing unless a step was edited)
     };
-    strip->onAutomate = [this] (int idx, AutomationKind kind) { createAutomationFor ({ kind, idx, 0, 0 }); };
+    strip->onAutomate = [this] (int idx, AutomationKind kind) { createAutomationFor ({ kind, idx, 0, kind == AutomationKind::ChannelPlugin ? -1 : 0 }); };
     strip->onSavePreset = [this] (int idx) { savePresetFor (idx); };
     strip->onAssignTrack = [this] (int idx) { openAssignTrack (idx); };
     strip->onItemDropped = [this] (int idx, const drag::Item& item) { applyBrowserItem (idx, item); };
@@ -1262,7 +1262,7 @@ void MainComponent::removeLastMixerTrack()
             reason = "it has effects";
     for (const auto& a : arrangement.automationClips)
         if (reason.isEmpty() && (a.target.kind == AutomationKind::TrackVolume || a.target.kind == AutomationKind::TrackPan
-                                 || a.target.kind == AutomationKind::TrackEffect)
+                                 || a.target.kind == AutomationKind::TrackEffect || a.target.kind == AutomationKind::TrackPlugin)
             && a.target.index == last)
             reason = "an automation clip controls it";
     if (reason.isNotEmpty())

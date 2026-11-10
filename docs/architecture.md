@@ -65,6 +65,7 @@ src/ui/
                                 export with samples
   AutomatableSlider.h           A slider whose right-click menu offers "Create automation clip"
   AutomationEditor.*            The point editor window for one automation clip
+  PluginParameterPicker.*       The list a plugin parameter to automate is chosen from (0.35.0): filter, current values, last-touched preselected
   MetersView.*                  The Meters window: loudness read-outs, true peak, spectrum, goniometer, correlation
   SamplerPanel.*                The sampler settings window (MainComponentSampler.cpp opens and wires it, loads SoundFonts, makes slice channels)
   SynthPanel.*                  The synth window (0.18.0; MainComponentSynth.cpp opens and wires it)
@@ -486,6 +487,15 @@ to the channel gains, the track faders / balances and **copies** of the effect s
 smoothed by the effect itself). The UI side: `AutomatableSlider` raises `onAutomate`, `MainComponent::createAutomationFor` makes a flat clip
 and `Playlist` places it on a lane; `PlaylistTimeline` draws and edits the lanes with the same undo snapshots as other clips; `AutomationEditor`
 edits the points through `insertAutomationPoint`, `moveAutomationPoint` and `removeAutomationPoint`. The project file keeps `"automation"`.
+
+**Plugin parameters (0.35.0).** Three more kinds, `ChannelPlugin`, `TrackPlugin` and `MasterPlugin`, with the parameter's index (up to
+65535) in `param` and the plugin's own normalised 0..1 range. `HostedPlugin` gained `parameterCount`, `setParameter` (audio thread),
+`parameterValue / Default / Name / Text` and `lastTouchedParameter`; `PluginHost.cpp` implements them over `juce::AudioProcessorParameter`
+(the list is cached when the plugin is wrapped, so the audio thread never asks JUCE to build it). `setParameter` keeps the last value it
+set in an atomic per parameter and does nothing when it is unchanged, so a held clip does not call into the plugin every chunk; a
+parameter listener records the last parameter moved by the user (ignoring the changes it makes itself). `makeAutomationEvents` takes a
+second callback giving the plugin's parameter count, so clips for a missing plugin or parameter are dropped when the snapshot is made.
+The UI picks the parameter with `PluginParameterPicker` (`MainComponent::createAutomationFor` opens it when `param` is -1).
 
 ### Metering (0.11.0)
 

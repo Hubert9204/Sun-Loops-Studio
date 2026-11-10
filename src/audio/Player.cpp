@@ -1433,6 +1433,21 @@ void applyAutomation (const Project& project, double tick, size_t numChannels, s
                 case AutomationKind::MasterEffect:
                     masterSlots[static_cast<size_t> (target.slot)].params[static_cast<size_t> (target.param)] = v;
                     break;
+                // Plugin parameters (0.35.0): the plugin takes the value before it processes this chunk. setParameter() skips a
+                // value that did not change, so a held value costs nothing.
+                case AutomationKind::ChannelPlugin:
+                    if (idx < numChannels && project.channels[idx].instrument == Instrument::Plugin && project.channels[idx].plugin != nullptr)
+                        project.channels[idx].plugin->setParameter (target.param, v);
+                    break;
+                case AutomationKind::TrackPlugin:
+                    if (idx < numTracks)
+                        if (auto& plugin = trackSlots[idx][static_cast<size_t> (target.slot)].plugin; plugin != nullptr)
+                            plugin->setParameter (target.param, v);
+                    break;
+                case AutomationKind::MasterPlugin:
+                    if (auto& plugin = masterSlots[static_cast<size_t> (target.slot)].plugin; plugin != nullptr)
+                        plugin->setParameter (target.param, v);
+                    break;
             }
         }
         first = last;

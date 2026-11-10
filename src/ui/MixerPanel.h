@@ -202,6 +202,7 @@ private:
     juce::Label effectLabel;
     juce::Label notePlaceholder;
     juce::TextButton pluginButton { "Open plugin window" };
+    juce::TextButton automatePluginButton { "Automate a parameter..." }; // 0.35.0
     juce::TextButton presetButton { "Presets..." }; // the built-in effect's ready-made settings (0.21.0)
     struct ParamRow
     {

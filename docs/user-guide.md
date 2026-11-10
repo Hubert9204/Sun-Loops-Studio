@@ -743,7 +743,9 @@ Automation makes a control move by itself while the song plays. It works on:
 
 - a channel's **volume** and **pan** (the two sliders in the Channel Rack);
 - a track's **fader** and **balance** (Mixer);
-- every **parameter of an effect** in a track slot or in a master slot (the sliders of the effects panel).
+- every **parameter of an effect** in a track slot or in a master slot (the sliders of the effects panel);
+- every **parameter of a plugin** (VST3, LV2, LADSPA): of a plugin instrument in the Channel Rack and of a plugin effect in a track or
+  master slot (since 0.35.0, see *Plugin parameters* below).
 
 **Not automatable yet:** the pitch and swing knobs, the master volume, mute and solo, the sends, the aux buses and VCA groups
 (including the parameters of effects on an aux bus), and anything else.
@@ -774,6 +776,26 @@ last (and has begun) decides; inside it the value follows the curve, after its e
 own value is used. While the song plays with automation the **on-screen controls do not move** (they keep showing the value you set), and
 touching one has no lasting effect on a parameter that has a clip under the playhead. The value is updated once per 64 samples
 (1.3 ms at 48 kHz): fast for any musical use, but it is not a per-sample ramp. Clips are saved in the project.
+
+### Plugin parameters
+
+A plugin's controls are in its own window, where there is no right-click menu of ours, so plugin parameters are chosen from a list:
+
+- a **plugin instrument**: right-click the channel in the Channel Rack > *Automate a plugin parameter...* (greyed out for the
+  other instruments, and for a plugin that has no parameters or could not be found);
+- a **plugin effect**: open the Mixer, select the slot that holds it, then *Automate a parameter...* under *Open plugin window*
+  (not for aux buses, as for the other effects).
+
+The list shows every parameter the plugin offers with its current value, written as the plugin writes it. Type in the box at the
+top to filter it by name (several words: all must appear). **Move a control in the plugin's window first** and that parameter is
+already chosen when the list opens - the line above the box names it (FL Studio's "last tweaked"). Double-click a row, press
+Enter or click *Automate*. The clip starts at the parameter's current value; its editor shows the plugin's values (On / Off, dB,
+Hz...) where the plugin gives them, otherwise 0-100 %.
+
+Notes: many plugins also list technical parameters (VST3 plugins built with JUCE add *MIDI CC* entries and a *Bypass*); the filter
+is the quickest way through them. A clip whose plugin is missing when the project opens, or whose parameter the plugin no longer
+has, stays in the project and does nothing. The plugin's window may not follow the automation while the song plays, as the other
+controls do not.
 
 ## Mixer
 
@@ -973,5 +995,5 @@ a heavier song or a plugin-heavy mixer can still need a bigger size.
   with a delay of one sample (as in most matrix FM synths).
 - Plugins: VST3, LV2 and LADSPA (no VST2, no Audio Units); stereo in and out (extra outputs and side-chain inputs are not used); their parameters
   cannot be automated; edits made in a plugin's window are saved with the project but are not in the undo history.
-- Not available yet: time-stretching of samples in the Sampler (only audio clips on the playlist can be stretched), automation of anything except volumes, pans and effect parameters, turning guitar or voice pitch into notes,
+- Not available yet: time-stretching of samples in the Sampler (only audio clips on the playlist can be stretched), automation of anything except volumes, pans, effect and plugin parameters, turning guitar or voice pitch into notes,
   punch-in and count-in for recording, fades and per-clip effects. See [roadmap.md](roadmap.md).

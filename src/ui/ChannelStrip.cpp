@@ -459,6 +459,7 @@ void ChannelStrip::showContextMenu()
 
     juce::PopupMenu menu;
     menu.addItem (18, "Plugin window...", channel.instrument == Instrument::Plugin && channel.plugin != nullptr);
+    menu.addItem (20, "Automate a plugin parameter...", channel.instrument == Instrument::Plugin && channel.plugin != nullptr && channel.plugin->parameterCount() > 0);
     menu.addItem (10, "Drum machine...", channel.instrument == Instrument::Drums);
     menu.addItem (1, "Piano roll");
     menu.addSeparator();
@@ -493,6 +494,7 @@ void ChannelStrip::showContextMenu()
                             switch (result)
                             {
                                 case 1: if (safe->onOpenPianoRoll) safe->onOpenPianoRoll (i); break;
+                                case 20: if (safe->onAutomate) safe->onAutomate (i, AutomationKind::ChannelPlugin); break;
                                 case 2: if (safe->onInstrumentChosen) safe->onInstrumentChosen (i, Instrument::Synth); break;
                                 case 3: if (safe->onInstrumentChosen) safe->onInstrumentChosen (i, Instrument::Sampler); break;
                                 case 4: if (safe->onLoadSample) safe->onLoadSample (i); break;

@@ -26,6 +26,16 @@ public:
     virtual void process (float* left, float* right, int numSamples, const PluginMidiEvent* events, int numEvents) noexcept = 0;
 
     virtual bool isInstrument() const noexcept = 0;
+
+    // Parameters (0.35.0), for automation. Values are the plugin's normalised 0..1. setParameter is for the audio thread (it does
+    // nothing when the value is the one it set last); the others are for the message thread. A placeholder has none.
+    virtual int parameterCount() const noexcept { return 0; }
+    virtual void setParameter (int /*index*/, float /*value*/) noexcept {}
+    virtual float parameterValue (int /*index*/) const noexcept { return 0.0f; }
+    virtual float parameterDefault (int /*index*/) const noexcept { return 0.0f; }
+    virtual std::string parameterName (int /*index*/) const { return {}; }
+    virtual std::string parameterText (int /*index*/, float /*value*/) const { return {}; } // the value as the plugin writes it
+    virtual int lastTouchedParameter() const noexcept { return -1; } // the one last moved in the plugin's own window, or -1
     virtual bool isLoaded() const noexcept = 0; // false: the plugin could not be found when the project was opened (it keeps its settings)
     virtual const std::string& displayName() const noexcept = 0;
 };

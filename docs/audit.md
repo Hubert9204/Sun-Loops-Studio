@@ -27,6 +27,13 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.35.0
+Plugin parameters are set from the audio thread through `juce::AudioProcessorParameter::setValue`, as JUCE's own hosts do; what a
+plugin does inside that call is the plugin's business (most only store an atomic). The call is skipped when the value has not
+changed. The parameter list is cached on the message thread when the plugin is wrapped; plugins that change their parameter list
+after loading (rare; JUCE reports it through `audioProcessorChanged`) are not followed: their new parameters cannot be automated
+until the project is opened again. Automation has no per-sample smoothing of plugin parameters (64-sample steps).
+
 ## After 0.34.0
 The .flp reader takes untrusted input: every size is checked against what is left of the file before it is used, lengths and
 positions are clamped, 7-bit size groups stop after 35 bits, and a file whose data chunk claims more than the file holds is
