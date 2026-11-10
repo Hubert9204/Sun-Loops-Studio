@@ -252,11 +252,23 @@ MainComponent::MainComponent()
         menu.addItem (2, "Sampler channel (load a sample)");
         menu.addItem (3, "Drum machine (16 pads)");
         menu.addItem (4, "Slicer (slice a loop)...");
+        juce::String sunburst; // the synthesizer plugin that comes with the program (0.48.0)
+        for (const auto& p : foundPlugins)
+            if (p.isInstrument && p.name == "SunBurst" && p.format == "VST3")
+                sunburst = p.identifier;
+        if (sunburst.isNotEmpty())
+            menu.addItem (5, "SunBurst synthesizer");
+
         menu.showMenuAsync (juce::PopupMenu::Options(),
-                            [safe = juce::Component::SafePointer<MainComponent> (this)] (int result)
+                            [safe = juce::Component::SafePointer<MainComponent> (this), sunburst] (int result)
                             {
                                 if (safe == nullptr || result == 0)
                                     return;
+                                if (result == 5)
+                                {
+                                    safe->setPluginInstrument (-1, sunburst);
+                                    return;
+                                }
                                 if (result == 4)
                                 {
                                     safe->chooseLoopForSlicer();

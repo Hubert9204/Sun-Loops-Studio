@@ -466,6 +466,50 @@ Plugins run inside Sun Loops Studio: **a plugin that crashes closes the program*
 A plugin that crashed the scan is skipped by the next scan. Cloning a plugin channel makes a second copy of the plugin with
 the same settings.
 
+### SunBurst, the built-in synthesizer plugin (0.48.0)
+
+**SunBurst** is a polyphonic synthesizer for electronic sounds that comes with Sun Loops Studio. It is a real **VST3** plugin
+(it also works in other programs that load VST3, and as a program of its own, *SunBurst* Standalone), installed next to Sun
+Loops Studio and found by it at start-up without a scan. Add it with **Browser > Instruments > SunBurst (synthesizer)**
+(double-click or drag), or with the Channel Rack's **+** > *SunBurst synthesizer*. Its window opens at once; reopen it like any
+plugin's. Its sound and settings are saved with the project, and every one of its parameters can be automated.
+
+Its window has three pages and a keyboard to try sounds with the mouse:
+
+- **SYNTH**
+  - **Oscillators 1-3** (the LED switches each on): *Sine, Triangle, Saw, Square* (with *Width*, the pulse width), *Noise* and
+    **Wavetable** (eight tables: Analog Morph, Pulse Width, Harmonic Sweep, Formant, Digital Bells, Organ, Hard Sync, Growl; *WT POS*
+    moves through them). *Octave, Semi, Fine, Level, Pan*. **Unison** stacks up to 16 voices: *Detune* spreads their pitch (up to
+    a wide "fat saw"), *Blend* sets the outer voices against the centre one, *Spread* places them across the stereo field;
+    *Random phase* starts each note at a random point (a fuller sound; off for clicky, punchy attacks). All tables are
+    band-limited: no aliasing on high notes.
+  - **Sub & noise**: a sub-oscillator one or two octaves below (sine or square) and a noise generator with a colour (white to dark).
+  - **Filter**: low-pass, high-pass, band-pass (12 or 24 dB/octave), notch and peak, with *Cutoff, Reso* (resonance), *Drive*,
+    *Env amt* (from envelope 2), *Key* (follows the note) and *Velocity*.
+  - **Envelopes**: *AMP* (the volume, with *Velocity*), *FILTER* (envelope 2) and *MOD* (envelope 3, with *To pitch* for pitch
+    sweeps, zaps and risers), each attack, decay, sustain, release.
+  - **LFO 1-3**: sine, triangle, saw up and down, square, sample & hold, smooth random; *Rate* in Hz or synced to the tempo
+    (*Sync*, *Division* from 4 bars to 1/32 with dotted and triplet values), *Fade in*, *Retrigger* (from the start with each note,
+    or free running), *Unipolar*.
+  - **Voice**: *Poly*, *Mono* or *Legato* (no new attack while a key is held), polyphony (up to 32), *Glide*, pitch-bend range.
+- **MOD MATRIX**: 16 slots, each *source > destination* with an amount from -1 to +1. Sources: the three LFOs, envelopes 2 and 3,
+  velocity, the mod wheel, aftertouch, pitch bend, key, a random value per note and the four **macros**. Destinations: each
+  oscillator's pitch, wavetable position, pulse width, level, detune and pan; all pitch, sub and noise levels; cutoff, resonance,
+  drive, amplitude, pan; the LFOs' rates; and the effects' distortion drive, filter cutoff, chorus, delay and reverb mix.
+- **EFFECTS & ARP**: distortion (soft, hard, tube, fold, bit crush), a three-band EQ, a multimode filter, chorus, a stereo or
+  ping-pong delay (in time with the song or in ms, with feedback and tone) and a reverb (size, damping, width, pre-delay, mix),
+  in this order, each with its switch. The **arpeggiator** plays the held keys up, down, up and down, at random, as played or as
+  chords, at 1/4 to 1/32 (with triplets) over 1 to 4 octaves, with a gate length.
+
+The top bar holds the **preset browser** (click the name for the menu by category, **<** / **>** step through them), **Save**
+(a name and a category; your presets go to `~/.config/SunBurst/Presets` and appear in the menu), the four **macros**, the
+**master** volume and the output meter. **43 factory presets** in eight categories: Lead, Pad, Strings, Bass (fat saw,
+Reese, sub, acid, growl, wobble), Arp, Pluck, Keys and FX. In every factory preset the mod wheel opens the filter, Macro 1 =
+brightness, Macro 2 = reverb, Macro 3 = unison width, Macro 4 = filter drive.
+
+Tempo: inside Sun Loops Studio SunBurst follows the song's tempo (synced LFOs, delay and arpeggiator; 0.48.0 passes the tempo
+and position to every plugin instrument). The window can be resized (drag its corner); it keeps its proportions.
+
 ## Piano Roll
 
 Edits the notes of the selected channel in the current pattern. The title shows the channel ("Piano Roll - Lead").

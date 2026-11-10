@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(SunLoopsStudio VERSION 0.47.0 LANGUAGES C CXX ASM)
+project(SunLoopsStudio VERSION 0.48.0 LANGUAGES C CXX ASM)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -246,6 +246,43 @@ install(FILES resources/icons/app_icon_16.png
         DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/16x16/apps
         RENAME sun-loops-studio.png)
 
+# --- SunBurst: the synthesizer plugin (0.48.0), VST3 and Standalone --------------------------------------------
+set(SUNBURST_SOURCES
+    src/sunburst/SunBurstParams.cpp
+    src/sunburst/Wavetables.cpp
+    src/sunburst/Voice.cpp
+    src/sunburst/Fx.cpp
+    src/sunburst/Presets.cpp
+    src/sunburst/SunBurstProcessor.cpp)
+
+option(SLS_BUILD_SUNBURST "Build the SunBurst synthesizer plugin (VST3 and Standalone)" ON)
+if(SLS_BUILD_SUNBURST)
+    juce_add_plugin(SunBurst
+        COMPANY_NAME "Sun Loops Studio"
+        PRODUCT_NAME "SunBurst"
+        VERSION ${PROJECT_VERSION}
+        PLUGIN_MANUFACTURER_CODE Sunl
+        PLUGIN_CODE Sbst
+        IS_SYNTH TRUE
+        NEEDS_MIDI_INPUT TRUE
+        FORMATS VST3 Standalone
+        VST3_CATEGORIES Instrument Synth
+        COPY_PLUGIN_AFTER_BUILD FALSE)
+    target_sources(SunBurst PRIVATE ${SUNBURST_SOURCES} plugins/sunburst/SunBurstEditor.cpp plugins/sunburst/PluginMain.cpp)
+    target_include_directories(SunBurst PRIVATE src plugins)
+    target_compile_definitions(SunBurst PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
+    target_link_libraries(SunBurst PRIVATE
+        juce::juce_audio_utils
+        juce::juce_dsp
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_warning_flags)
+    # Installed next to the program: Sun Loops Studio finds it in ../lib/vst3 (also inside the AppImage).
+    install(DIRECTORY "${CMAKE_BINARY_DIR}/SunBurst_artefacts/$<CONFIG>/VST3/SunBurst.vst3"
+            DESTINATION lib/vst3
+            USE_SOURCE_PERMISSIONS)
+    add_dependencies(SunLoopsStudio SunBurst_VST3)
+endif()
+
 # --- Headless tests ----------------------------------------------------------
 juce_add_console_app(SunLoopsStudioTests
     PRODUCT_NAME "SunLoopsStudioTests")
@@ -253,7 +290,9 @@ juce_add_console_app(SunLoopsStudioTests
 target_sources(SunLoopsStudioTests PRIVATE
     tests/test_core.cpp
     tests/test_support.cpp
-    ${SLS_CORE_SOURCES})
+    tests/test_sunburst.cpp
+    ${SLS_CORE_SOURCES}
+    ${SUNBURST_SOURCES})
 
 target_include_directories(SunLoopsStudioTests PRIVATE src)
 target_include_directories(SunLoopsStudioTests SYSTEM PRIVATE third_party/signalsmith third_party/tinysoundfont)
@@ -268,6 +307,7 @@ target_link_libraries(SunLoopsStudioTests PRIVATE
     SunLoopsLibraryData
     juce::juce_audio_formats
     juce::juce_audio_processors
+    juce::juce_dsp
     juce::juce_recommended_config_flags
     juce::juce_recommended_warning_flags)
 
@@ -301,6 +341,10 @@ if(SLS_BUILD_TEST_PLUGINS)
     endforeach()
     target_compile_definitions(SunLoopsStudioTests PRIVATE
         SLS_TEST_PLUGIN_DIR="${CMAKE_BINARY_DIR}")
+endif()
+
+if(SLS_BUILD_SUNBURST)
+    add_dependencies(SunLoopsStudioTests SunBurst_VST3)
 endif()
 
 enable_testing()

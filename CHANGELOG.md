@@ -2,6 +2,27 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.48.0 - 2026-11-11
+
+### Added
+- **SunBurst**, a polyphonic synthesizer plugin for electronic sounds, built from this repository as **VST3** and **Standalone**
+  and installed with the program (also inside the AppImage):
+  - three oscillators: sine, triangle, saw, square with pulse width, noise and eight band-limited wavetables with a position
+    control; octave, semitone and fine tuning, level, pan; **unison** up to 16 voices with detune, blend and stereo spread;
+  - a sub-oscillator and a coloured noise generator;
+  - a multimode filter (low, high and band-pass at 12 / 24 dB, notch, peak) with resonance, drive, envelope, key and velocity amounts;
+  - three ADSR envelopes (amplitude, filter, modulation with a pitch amount), three LFOs (seven shapes, tempo sync, fade in,
+    retrigger, unipolar);
+  - a **16-slot modulation matrix** (LFOs, envelopes, velocity, mod wheel, aftertouch, bend, key, random, four macros, to 34
+    destinations including the effects);
+  - an effect rack: distortion (five types), 3-band EQ, filter, chorus, delay (synced or free, ping-pong), reverb;
+  - an **arpeggiator** (six modes, 1/4 - 1/32, 1-4 octaves, gate); poly, mono and legato with glide; up to 32 voices;
+  - a resizable hardware-style window (metal knobs with value rings, LED switches, wave, envelope and LFO displays, an on-screen
+    keyboard) and a preset browser with **43 factory presets** in 8 categories and user presets.
+- Sun Loops Studio finds the bundled SunBurst without a scan and offers it in *Browser > Instruments* and in the Channel Rack's **+**.
+- Plugin instruments are told the song's tempo, position and play state (a play head), so their synced LFOs, delays and
+  arpeggiators follow the song.
+
 ## 0.47.0 - 2026-11-10
 
 ### Added

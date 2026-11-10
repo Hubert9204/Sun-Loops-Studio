@@ -29,6 +29,12 @@ public:
 
     void process (float* left, float* right, int numSamples, const PluginMidiEvent* events, int numEvents) noexcept override;
     bool isInstrument() const noexcept override { return instrument; }
+    void setTransport (double bpm, double quarters, bool playing) noexcept override
+    {
+        head.bpm = bpm;
+        head.quarters = quarters;
+        head.playing = playing;
+    }
     bool isLoaded() const noexcept override { return instance != nullptr; }
     const std::string& displayName() const noexcept override { return name; }
 
@@ -66,6 +72,22 @@ private:
     juce::AudioBuffer<float> buffer;
     juce::MidiBuffer midi;
     std::atomic<bool> changed { false };
+
+    // What the plugin is told about the song (set and read on the audio thread).
+    struct Head final : juce::AudioPlayHead
+    {
+        double bpm = 120.0, quarters = 0.0;
+        bool playing = false;
+        juce::Optional<PositionInfo> getPosition() const override
+        {
+            PositionInfo info;
+            info.setBpm (bpm);
+            info.setPpqPosition (quarters);
+            info.setIsPlaying (playing);
+            info.setTimeSignature (juce::AudioPlayHead::TimeSignature {});
+            return info;
+        }
+    } head;
     // The plugin's parameters, read once (the instance owns them), and the value automation set last on each (NaN: none yet).
     std::vector<juce::AudioProcessorParameter*> parameters;
     std::unique_ptr<std::atomic<float>[]> automated;
@@ -110,6 +132,10 @@ public:
     // Folders JUCE's own defaults leave out on Fedora / Nobara (64-bit libraries live in lib64), for scan()'s `extraPaths`:
     // VST3 /usr/lib64/vst3 and /usr/local/lib64/vst3; LV2 both lib and lib64 folders; LADSPA /usr/lib64/ladspa, /usr/local/lib64/ladspa, ~/.ladspa.
     static juce::FileSearchPath distributionPaths (const juce::String& formatName);
+    // The plugins that come with the program (SunBurst, 0.48.0): VST3 bundles in ../lib/vst3 or ../lib64/vst3 next to the program
+    // (also inside the AppImage), or in the build folder. They are added to the known list at start-up, without a scan.
+    static juce::FileSearchPath bundledPaths();
+    int addBundledPlugins();
 
     void loadKnownList (const juce::File& file);
     void saveKnownList (const juce::File& file) const;

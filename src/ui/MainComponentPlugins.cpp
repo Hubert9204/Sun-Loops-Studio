@@ -20,6 +20,8 @@ juce::File MainComponent::pluginSettingsFile (const juce::String& name) const
 void MainComponent::initPlugins()
 {
     pluginHost->loadKnownList (pluginSettingsFile ("plugins.xml"));
+    if (pluginHost->addBundledPlugins() > 0) // SunBurst, the synthesizer that comes with the program (0.48.0)
+        pluginHost->saveKnownList (pluginSettingsFile ("plugins.xml"));
     refreshFoundPlugins();
     if (! foundPlugins.empty())
     {

@@ -10760,6 +10760,40 @@ void testPluginProjectFile()
            "a plugin slot saved without its plugin reads back empty");
 }
 
+// SunBurst (0.48.0) as Sun Loops Studio finds and plays it: the VST3 built next to the program, added without a scan.
+void testSunBurstInHost()
+{
+    std::cout << "SunBurst inside Sun Loops Studio (0.48.0)\n";
+    sls::PluginHost host;
+    if (sls::PluginHost::bundledPaths().getNumPaths() == 0)
+    {
+        std::cout << "  (SunBurst was not built: skipped)\n";
+        return;
+    }
+    check (host.addBundledPlugins() >= 1 && host.addBundledPlugins() == 0, "the bundled SunBurst is added to the known plugins once, without a scan");
+    const auto* found = findPlugin (host, "SunBurst", "VST3");
+    check (found != nullptr && found->isInstrument, "it is listed as a VST3 instrument");
+    if (found == nullptr)
+        return;
+    juce::String error;
+    auto synth = host.create (*found, kSr, sls::Player::kChunk, error);
+    check (synth != nullptr && synth->isLoaded() && synth->parameterCount() > 150, "it loads, with its parameters for automation");
+    if (synth == nullptr)
+        return;
+    sls::Channel c;
+    c.instrument = sls::Instrument::Plugin;
+    c.plugin = synth;
+    c.volume = 1.0f;
+    c.notes = { { 60, 0, kBeat, 0.9f }, { 64, 0, kBeat, 0.9f } };
+    sls::Player p;
+    p.prepare (kSr);
+    const auto out = renderBlocks (p, sls::Project::make ({ c }, 16 * kBeat), true, 1.0);
+    bool finite = true;
+    for (const float v : out)
+        finite = finite && std::isfinite (v);
+    check (finite && rmsWindow (out, 0.05, 0.4) > 0.01f, "a chord plays through SunBurst in the Player");
+}
+
 void testPluginHosting()
 {
     std::cout << "Plugin hosting (VST3, LV2, LADSPA)\n";
@@ -11103,6 +11137,7 @@ void testPluginHosting()
 // tests/test_support.cpp (0.43.0)
 void supportCheck (bool ok, const char* name) { check (ok, name); }
 void testSemVerAndUpdates();
+void testSunBurst();
 void testCrashReports();
 void testSessionLog();
 
@@ -11168,6 +11203,8 @@ int main()
     testTempoAndMeter046();
     testMixAutomation047();
     testRecording047();
+    testSunBurst();
+    testSunBurstInHost();
     testSemVerAndUpdates();
     testCrashReports();
     testSessionLog();

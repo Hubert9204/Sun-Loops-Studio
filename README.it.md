@@ -14,7 +14,7 @@ strumento sta in un pannello mobile che puoi spostare, ridimensionare, sovrappor
 Sun Loops Studio si ispira al modo di lavorare dei DAW a loop come FL Studio. È un progetto indipendente: non usa
 codice, nomi, grafica o risorse di altri prodotti e non è affiliato né approvato dai loro produttori.
 
-**Stato: alpha (0.47.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
+**Stato: alpha (0.48.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
 La riproduzione è stata confermata su un vero PC Nobara per la versione 0.3; tutto ciò che è stato aggiunto dopo
 (pannelli, pattern, playlist, browser, pitch/swing, mixer espanso ed effetti, salvataggio dei progetti, AppImage, clip audio, trascinamento
 dei file, registrazione, MIDI, metronomo e formati di esportazione) è stato provato con test automatici e in un display virtuale con un
@@ -81,6 +81,10 @@ plugin commerciali. Vedi [docs/roadmap.md](docs/roadmap.md) per sapere con preci
   morphing fra loro, un filtro che agisce sulle armoniche e quindi non produce aliasing) o a un **modello fisico** (0.24.0: corda
   pizzicata con smorzamento, rigidità e cassa armonica; marimba, vibrafono, vetro, campana, lastra di metallo); 29 suoni pronti,
   raggruppati per motore (anche come preset nel browser).
+- **SunBurst** (0.48.0) - un sintetizzatore polifonico in forma di plugin (VST3 e Standalone) incluso col programma: tre oscillatori con
+  wavetable a banda limitata e fino a 16 voci di unison ("fat saw"), sub e rumore, filtro multimodo, tre inviluppi, tre LFO, una
+  matrice di modulazione a 16 slot, quattro macro, distorsione / EQ / filtro / chorus / delay / riverbero, arpeggiatore, finestra in
+  stile hardware e 43 preset (lead, pad, archi, bassi, arpeggi, pluck, tastiere, FX). Browser > Instruments > SunBurst.
 - **Plugin** - strumenti ed effetti VST3, LV2 e LADSPA: si cercano dal browser, doppio clic o trascinamento di uno strumento per un canale,
   un effetto si sceglie in uno slot del mixer, ognuno ha la sua finestra; le impostazioni si salvano nel progetto, anche se il plugin manca.
 - **Mixer** (`F9`) - 8 tracce verticali all'inizio e fino a **500** (0.29.0: il **+** dopo l'ultima traccia ne aggiunge altre), ognuna con fader e dB, bilanciamento stereo, mute, solo, indicatore

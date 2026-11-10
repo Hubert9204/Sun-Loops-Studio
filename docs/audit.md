@@ -27,6 +27,13 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.48.0
+SunBurst allocates only on the message thread (wavetables built once, about 6 MB; effect buffers in prepareToPlay; the arpeggiator's
+MIDI buffer reserved). Its audio thread reads parameters with relaxed atomic loads, clamps every modulated value, and keeps the
+output under a soft limiter. Presets and states are parsed with JUCE's XML reader; an unknown parameter in a preset is ignored. User
+presets are written only to its own folder, with a legal file name. Sun Loops Studio loads the bundled VST3 from next to its own
+executable (or the build folder) only.
+
 ## After 0.47.0
 The new automation kinds index the two aux buses and VCA groups by `slot`, checked against the counts before use (a
 `static_assert` keeps the counts equal to Project's). The Player's send levels per track live in a preallocated member array; a VCA

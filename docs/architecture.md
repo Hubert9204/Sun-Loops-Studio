@@ -548,6 +548,20 @@ and ranks with BM25 (k1 1.4, b 0.75) plus a title bonus, a bonus for sections ho
 question's language. The index is built the first time Helios opens. Commands are `HeliosCommand`s (name, keywords, a function)
 made by `MainComponent::heliosCommands`, matched by the share of the question's words they contain.
 
+### SunBurst, the synthesizer plugin (0.48.0)
+
+- `src/sunburst/`: plain DSP and the `SunBurstProcessor` (a `juce::AudioProcessor` with an `AudioProcessorValueTreeState`);
+  compiled into the plugin and into the tests. `SunBurstParams` names every parameter and the choice lists; `ParamRefs` keeps raw
+  pointers read once per block into a `Patch`. `Wavetables` builds 8 sets x 8 frames x 11 band-limited mip levels by FFT;
+  `Voice` renders 3 oscillators (PolyBLEP saw / square, table sine / triangle / wavetables, unison with detune, blend, spread),
+  sub, noise, the `MultiFilter` (TPT state-variable, 12 / 24 dB) and three envelopes, with modulation every 32 samples from the
+  matrix; `FxRack` runs distortion, RBJ EQ, filter, chorus, delay and an 8-line FDN reverb; `Arpeggiator` rewrites the block's MIDI.
+  `Presets.cpp` holds the factory presets as parameter values.
+- `plugins/sunburst/`: the editor (`SunBurstLook`, `Panel` grid layout, knobs bound with attachments, displays) and
+  `createPluginFilter`. CMake builds `SunBurst_VST3` and `SunBurst_Standalone`; the VST3 is installed to `lib/vst3`.
+- `PluginHost::bundledPaths()` / `addBundledPlugins()` add it to the known list at start-up; `Library` lists it under
+  Instruments. `HostedPlugin::setTransport` (called by the Player before an instrument plugin processes) feeds `JucePlugin`'s play head.
+
 ### Automation targets, following controls, count-in and loop takes (0.47.0)
 
 - `AutomationKind` gained `TrackSend` (index = track, slot = bus), `AuxVolume`, `AuxPan` (slot = bus) and `VcaLevel` (slot =

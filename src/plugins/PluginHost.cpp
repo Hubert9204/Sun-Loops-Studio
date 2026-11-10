@@ -23,6 +23,10 @@ JucePlugin::JucePlugin (std::unique_ptr<juce::AudioPluginInstance> instanceToUse
         for (size_t i = 0; i < parameters.size(); ++i)
             automated[i].store (std::numeric_limits<float>::quiet_NaN(), std::memory_order_relaxed);
         instance->addListener (this);
+        // Instruments are told the song's tempo and position (arpeggiators, synced LFOs). Effects are not yet: with a play head set,
+        // a VST3 effect's parameter set from the host did not reach its saved state in the tests (to be looked at).
+        if (instrument)
+            instance->setPlayHead (&head);
     }
 }
 
@@ -214,6 +218,38 @@ int PluginHost::scan (const std::function<juce::FileSearchPath (const juce::Stri
     return knownPlugins.getNumTypes();
 }
 
+juce::FileSearchPath PluginHost::bundledPaths()
+{
+    juce::FileSearchPath paths;
+    const auto exe = juce::File::getSpecialLocation (juce::File::currentExecutableFile);
+    const auto prefix = exe.getParentDirectory().getParentDirectory();
+    for (const auto& dir : { prefix.getChildFile ("lib/vst3"), prefix.getChildFile ("lib64/vst3"),
+                             // a development build: build/SunLoopsStudio_artefacts/Release/Sun Loops Studio -> build/SunBurst_artefacts/Release/VST3
+                             prefix.getParentDirectory().getChildFile ("SunBurst_artefacts/Release/VST3"),
+                             prefix.getParentDirectory().getChildFile ("SunBurst_artefacts/Debug/VST3") })
+        if (dir.getChildFile ("SunBurst.vst3").isDirectory())
+            paths.addIfNotAlreadyThere (dir);
+    return paths;
+}
+
+int PluginHost::addBundledPlugins()
+{
+    int added = 0;
+    const auto paths = bundledPaths();
+    for (auto* format : formatManager.getFormats())
+        if (format->getName() == "VST3")
+            for (int i = 0; i < paths.getNumPaths(); ++i)
+                for (const auto& bundle : paths[i].findChildFiles (juce::File::findDirectories, false, "*.vst3"))
+                {
+                    juce::OwnedArray<juce::PluginDescription> types;
+                    format->findAllTypesForFile (types, bundle.getFullPathName());
+                    for (auto* t : types)
+                        if (knownPlugins.addType (*t))
+                            ++added;
+                }
+    return added;
+}
+
 juce::FileSearchPath PluginHost::distributionPaths (const juce::String& formatName)
 {
     juce::FileSearchPath paths;
@@ -224,8 +260,13 @@ juce::FileSearchPath PluginHost::distributionPaths (const juce::String& formatNa
             paths.add (f);
     };
     if (formatName == "VST3")
+    {
         for (const char* p : { "/usr/lib64/vst3", "/usr/local/lib64/vst3" })
             addIfThere (p);
+        const auto bundled = bundledPaths();
+        for (int i = 0; i < bundled.getNumPaths(); ++i)
+            paths.addIfNotAlreadyThere (bundled[i]);
+    }
     else if (formatName == "LV2")
         for (const char* p : { "/usr/lib/lv2", "/usr/lib64/lv2", "/usr/local/lib/lv2", "/usr/local/lib64/lv2" })
             addIfThere (p);

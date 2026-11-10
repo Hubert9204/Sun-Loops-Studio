@@ -2011,6 +2011,7 @@ void Player::render (const Project& project, double bpm, bool playing,
                 continue;
             std::fill_n (pluginL.begin(), n, 0.0f);
             std::fill_n (pluginR.begin(), n, 0.0f);
+            c.plugin->setTransport (ticksPerSample * sampleRate * 60.0 / kTicksPerBeat, tickPos / kTicksPerBeat, playing);
             c.plugin->process (pluginL.data(), pluginR.data(), n, pluginEvents[ch].data(), count);
             const float g = smoothedGain[ch];
             for (int i = 0; i < n; ++i)

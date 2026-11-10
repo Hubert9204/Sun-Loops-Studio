@@ -199,6 +199,13 @@ BrowserNode buildBrowserTree (const LibraryPaths& paths, const std::vector<Plugi
         instruments.children.push_back (leaf ("Synth", NodeKind::Instrument, "synth"));
         instruments.children.push_back (leaf ("Sampler", NodeKind::Instrument, "sampler"));
         instruments.children.push_back (leaf ("Drum machine", NodeKind::Instrument, "drums"));
+        // SunBurst (0.48.0), the synthesizer plugin that comes with the program, when it has been found.
+        for (const auto& p : plugins)
+            if (p.isInstrument && p.name == "SunBurst" && p.format == "VST3")
+            {
+                instruments.children.push_back (leaf ("SunBurst (synthesizer)", NodeKind::Plugin, ("instrument|" + p.identifier).toStdString()));
+                break;
+            }
         root.children.push_back (std::move (instruments));
     }
 

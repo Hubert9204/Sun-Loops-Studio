@@ -45,13 +45,18 @@ later builds only recompile what changed. To update: `git pull`, then `cmake --b
 
 Use `-DCMAKE_BUILD_TYPE=Debug` while developing: it enables JUCE's `jassert` checks.
 
+The build also makes **SunBurst** (0.48.0), the synthesizer plugin: `build/SunBurst_artefacts/Release/VST3/SunBurst.vst3` and the
+standalone program `build/SunBurst_artefacts/Release/Standalone/SunBurst`. Sun Loops Studio run from the build folder finds the
+VST3 there. `-DSLS_BUILD_SUNBURST=OFF` leaves it out. To use it in another program, copy `SunBurst.vst3` to `~/.vst3`.
+
 ## Install
 
 ```bash
 cmake --install build --prefix ~/.local
 ```
 
-Installs, under the prefix: the `sun-loops-studio` command (`bin/`), the application-menu entry
+Installs, under the prefix: the `sun-loops-studio` command (`bin/`), the SunBurst plugin (`lib/vst3/SunBurst.vst3`, found by the
+program next to it), the application-menu entry
 (`share/applications/sun-loops-studio.desktop`), the icons (`share/icons/hicolor/{16x16,256x256}/apps/`) and the
 file type of `.slp` projects (`share/mime/packages/sun-loops-studio.xml`).
 Make sure `~/.local/bin` is in your `PATH`. KDE normally picks the menu entry up within moments; if not, log out and
