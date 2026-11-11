@@ -131,12 +131,12 @@ it runs through XWayland.
 
 ## Releases (0.51.0)
 
-Pushing a version tag publishes a release: `git tag v0.51.0 && git push origin v0.51.0`. The workflow
-`.github/workflows/release.yml` checks that the tag matches the version in `CMakeLists.txt`, builds the AppImage on Ubuntu 24.04
-with `scripts/build_appimage.sh`, and attaches it and `SHA256SUMS.txt` to a GitHub release whose text is that version's
-CHANGELOG section (`scripts/release_notes.py 0.51.0` prints it). From then on every copy of the program from 0.43.0 on finds the
-release through its update check and offers the AppImage. *Run workflow* on the Release workflow (with an existing tag)
-publishes a tag again, replacing its files.
+On GitHub, *Actions > Release > Run workflow* (branch `main`, tag left empty) releases the version written in `CMakeLists.txt`:
+the workflow `.github/workflows/release.yml` builds the AppImage on Ubuntu 24.04 with `scripts/build_appimage.sh`, creates the
+tag `v<version>` on that commit and attaches the AppImage and `SHA256SUMS.txt` to a GitHub release whose text is that version's
+CHANGELOG section (`scripts/release_notes.py 0.51.0` prints it). Pushing a tag (`git push origin v0.51.0`) does the same, after
+checking that the tag matches `CMakeLists.txt`; *Run workflow* with an existing tag publishes it again, replacing its files.
+From then on every copy of the program from 0.43.0 on finds the release through its update check and offers the AppImage.
 
 ## Crash reports and the update check (0.43.0)
 

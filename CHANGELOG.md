@@ -21,8 +21,8 @@ program, SunBurst and HexForge work as before.
 - The Playlist works out the pitch range of a pattern's notes (for the clip previews) only for the clips in sight.
 
 ### Added
-- **Releases**: pushing a version tag (`v0.51.0`) builds the AppImage on GitHub and publishes it as a release with its checksum and
-  this changelog's section (`.github/workflows/release.yml`, `scripts/release_notes.py`). The program's update check (since
+- **Releases**: *Actions > Release > Run workflow* on GitHub (or pushing a version tag such as `v0.51.0`) builds the AppImage
+  there and publishes it as a release with its checksum and this changelog's section (`.github/workflows/release.yml`, `scripts/release_notes.py`). The program's update check (since
   0.43.0) finds it, so from now on new versions can be downloaded from inside the program (*Check for updates now*).
 
 ### Removed
