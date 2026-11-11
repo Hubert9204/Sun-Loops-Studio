@@ -48,7 +48,8 @@ const juce::StringArray& waveNames()
 }
 const juce::StringArray& wavetableNames()
 {
-    static const juce::StringArray names { "Analog Morph", "Pulse Width", "Harmonic Sweep", "Formant", "Digital Bells", "Organ", "Hard Sync", "Growl" };
+    static const juce::StringArray names { "Analog Morph", "Pulse Width", "Harmonic Sweep", "Formant", "Digital Bells", "Organ", "Hard Sync", "Growl",
+                                           "Brass", "FM Bell", "Wavefold", "Vowel Bass", "Chord Saw", "Metallic" }; // the last six since 0.49.0
     return names;
 }
 const juce::StringArray& filterNames()

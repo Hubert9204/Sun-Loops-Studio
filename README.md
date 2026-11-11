@@ -16,7 +16,7 @@ Sun Loops Studio is inspired by the workflow of loop-based DAWs such as FL Studi
 that uses no code, names, graphics or assets from other products, and it is not affiliated with or endorsed by
 their makers.
 
-**Status: alpha (0.48.1).** It builds, the automated tests pass and the interface has been exercised in a virtual
+**Status: alpha (0.49.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
 display. Playback was confirmed on a real Nobara machine for version 0.3; everything added since (panels, patterns,
 playlist, browser, pitch/swing, the expanded mixer and its effects, saving projects, the AppImage, audio clips, drag and
 drop, recording, MIDI, the metronome and the export formats) was tested headless and in a virtual display with a silent
@@ -90,7 +90,7 @@ See [docs/roadmap.md](docs/roadmap.md) for exactly what is and is not verified a
 - **SunBurst** (0.48.0) - a polyphonic synthesizer plugin (VST3 and Standalone) included with the program: three oscillators with
   band-limited wavetables and up to 16 unison voices ("fat saw"), sub and noise, a multimode filter, three envelopes, three LFOs,
   a 16-slot modulation matrix, four macros, distortion / EQ / filter / chorus / delay / reverb, an arpeggiator, a hardware-style
-  window and 43 presets (leads, pads, strings, basses, arps, plucks, keys, FX). Browser > Instruments > SunBurst.
+  window and 101 presets (leads, pads, strings, basses, arps, plucks, keys, FX). Browser > Instruments > SunBurst.
 - **Plugins** - VST3, LV2 and LADSPA instruments and effects: scan them from the browser, double-click or drag an instrument for a channel,
   pick an effect in a mixer slot, open the plugin's own window; their settings are saved in the project, and a missing plugin keeps them.
 - **Automation** - right-click a volume, pan, fader or effect parameter > *Create automation clip*; clips live on four lanes under the

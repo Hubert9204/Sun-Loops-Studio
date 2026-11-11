@@ -552,7 +552,7 @@ made by `MainComponent::heliosCommands`, matched by the share of the question's 
 
 - `src/sunburst/`: plain DSP and the `SunBurstProcessor` (a `juce::AudioProcessor` with an `AudioProcessorValueTreeState`);
   compiled into the plugin and into the tests. `SunBurstParams` names every parameter and the choice lists; `ParamRefs` keeps raw
-  pointers read once per block into a `Patch`. `Wavetables` builds 8 sets x 8 frames x 11 band-limited mip levels by FFT;
+  pointers read once per block into a `Patch`. `Wavetables` builds 14 sets (8 until 0.48.x) x 8 frames x 11 band-limited mip levels by FFT;
   `Voice` renders 3 oscillators (PolyBLEP saw / square, table sine / triangle / wavetables, unison with detune, blend, spread),
   sub, noise, the `MultiFilter` (TPT state-variable, 12 / 24 dB) and three envelopes, with modulation every 32 samples from the
   matrix; `FxRack` runs distortion, RBJ EQ, filter, chorus, delay and an 8-line FDN reverb; `Arpeggiator` rewrites the block's MIDI.

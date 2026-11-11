@@ -155,7 +155,7 @@ void testSunBurst()
                 bad.add (presets[i].name + " (" + juce::String (level) + ")");
             categories.insert (presets[i].category);
         }
-        supportCheck (good == static_cast<int> (presets.size()) && presets.size() >= 40,
+        supportCheck (good == static_cast<int> (presets.size()) && presets.size() >= 100,
                       ("SunBurst: all " + juce::String (static_cast<int> (presets.size())) + " factory presets play a chord" + (bad.isEmpty() ? "" : ": " + bad.joinIntoString (", ")))
                           .toRawUTF8());
         supportCheck (categories.size() == 8, "SunBurst: presets in 8 categories (leads, pads, strings, basses, arps, plucks, keys, FX)");

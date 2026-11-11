@@ -10,7 +10,7 @@ namespace sunburst
 constexpr int kTableSize = 2048;
 constexpr int kTableLevels = 11;
 constexpr int kFrames = 8;
-constexpr int kNumWavetables = 8;
+constexpr int kNumWavetables = 14;
 
 class Wavetables
 {

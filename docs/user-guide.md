@@ -478,7 +478,8 @@ Its window has three pages and a keyboard to try sounds with the mouse:
 
 - **SYNTH**
   - **Oscillators 1-3** (the LED switches each on): *Sine, Triangle, Saw, Square* (with *Width*, the pulse width), *Noise* and
-    **Wavetable** (eight tables: Analog Morph, Pulse Width, Harmonic Sweep, Formant, Digital Bells, Organ, Hard Sync, Growl; *WT POS*
+    **Wavetable** (14 tables: Analog Morph, Pulse Width, Harmonic Sweep, Formant, Digital Bells, Organ, Hard Sync, Growl, and since
+    0.49.0 Brass, FM Bell, Wavefold, Vowel Bass, Chord Saw, Metallic; *WT POS*
     moves through them). *Octave, Semi, Fine, Level, Pan*. **Unison** stacks up to 16 voices: *Detune* spreads their pitch (up to
     a wide "fat saw"), *Blend* sets the outer voices against the centre one, *Spread* places them across the stereo field;
     *Random phase* starts each note at a random point (a fuller sound; off for clicky, punchy attacks). All tables are
@@ -503,7 +504,7 @@ Its window has three pages and a keyboard to try sounds with the mouse:
 
 The top bar holds the **preset browser** (click the name for the menu by category, **<** / **>** step through them), **Save**
 (a name and a category; your presets go to `~/.config/SunBurst/Presets` and appear in the menu), the four **macros**, the
-**master** volume and the output meter. **43 factory presets** in eight categories: Lead, Pad, Strings, Bass (fat saw,
+**master** volume and the output meter. **101 factory presets** (43 until 0.48) in eight categories, levelled to a similar loudness,: Lead, Pad, Strings, Bass (fat saw,
 Reese, sub, acid, growl, wobble), Arp, Pluck, Keys and FX. In every factory preset the mod wheel opens the filter, Macro 1 =
 brightness, Macro 2 = reverb, Macro 3 = unison width, Macro 4 = filter drive.
 
@@ -655,7 +656,9 @@ imported channels are plain synths: give them a sampler or another sound afterwa
 
 ## Playlist
 
-The Playlist arranges patterns in time. Its **tracks** (0.44.0):
+The Playlist arranges patterns in time. A **pattern clip** (0.49.0) is a see-through block in the pattern's colour with a small
+piano roll of the pattern's notes inside, repeated as often as the clip repeats the pattern, so you can tell patterns apart
+at a glance; on tall tracks the name sits in a title bar above the notes, on short ones over them. Its **tracks** (0.44.0):
 
 - A new project starts with **4 free tracks** (*Track 1-4*, for recordings, audio files or anything) and, below them, **one track
   for each pattern**, named and coloured after it. Every pattern made afterwards (*New*, *Clone*, the Loop Starter, a MIDI import)

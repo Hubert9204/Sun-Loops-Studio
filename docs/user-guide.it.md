@@ -497,7 +497,8 @@ La finestra ha tre pagine e una tastiera per provare i suoni col mouse:
 
 - **SYNTH**
   - **Oscillatori 1-3** (il LED accende ciascuno): *Sine, Triangle, Saw, Square* (con *Width*, l'ampiezza dell'impulso), *Noise*
-    e **Wavetable** (otto tabelle: Analog Morph, Pulse Width, Harmonic Sweep, Formant, Digital Bells, Organ, Hard Sync, Growl;
+    e **Wavetable** (14 tabelle: Analog Morph, Pulse Width, Harmonic Sweep, Formant, Digital Bells, Organ, Hard Sync, Growl e dalla
+    0.49.0 Brass, FM Bell, Wavefold, Vowel Bass, Chord Saw, Metallic;
     *WT POS* le percorre). *Octave, Semi, Fine, Level, Pan*. **Unison** sovrappone fino a 16 voci: *Detune* ne allarga
     l'intonazione (fino a un "fat saw" molto largo), *Blend* dosa le voci esterne rispetto a quella centrale, *Spread* le apre
     nello stereo; *Random phase* fa partire ogni nota da un punto casuale (suono più pieno; spento per attacchi secchi). Tutte le
@@ -524,7 +525,7 @@ La finestra ha tre pagine e una tastiera per provare i suoni col mouse:
 
 La barra in alto ha il **browser dei preset** (clic sul nome per il menu per categoria, **<** / **>** per scorrerli), **Save**
 (nome e categoria; i tuoi preset vanno in `~/.config/SunBurst/Presets` e compaiono nel menu), le quattro **macro**, il volume
-**master** e il misuratore d'uscita. **43 preset di fabbrica** in otto categorie: Lead, Pad, Strings, Bass (fat saw, Reese, sub,
+**master** e il misuratore d'uscita. **101 preset di fabbrica** (43 fino alla 0.48) in otto categorie, con volumi pareggiati,: Lead, Pad, Strings, Bass (fat saw, Reese, sub,
 acid, growl, wobble), Arp, Pluck, Keys e FX. In tutti la mod wheel apre il filtro, Macro 1 = brillantezza, Macro 2 = riverbero,
 Macro 3 = larghezza dell'unison, Macro 4 = drive del filtro.
 
@@ -682,7 +683,10 @@ sono semplici synth: dopo puoi dare loro un sampler o un altro suono.
 
 ## Playlist
 
-La Playlist dispone i pattern nel tempo. Le sue **tracce** (0.44.0):
+La Playlist dispone i pattern nel tempo. Una **clip di pattern** (0.49.0) è un blocco trasparente del colore del pattern con
+dentro un piccolo piano roll delle sue note, ripetuto quante volte la clip ripete il pattern, così i pattern si riconoscono a
+colpo d'occhio; sulle tracce alte il nome sta in una barra sopra le note, su quelle basse sopra le note stesse. Le sue
+**tracce** (0.44.0):
 
 - Un progetto nuovo parte con **4 tracce libere** (*Track 1-4*, per registrazioni, file audio o qualsiasi uso) e, sotto, **una
   traccia per ogni pattern**, col suo nome e colore. Ogni pattern creato dopo (*New*, *Clone*, il Loop Starter, un'importazione

@@ -170,6 +170,52 @@ Frame makeFrame (int set, int f)
             const double ratio = 1.0 + t * 7.0;
             return fromFunction ([ratio] (double x) { return naiveSaw (std::fmod (x * ratio, 1.0)); });
         }
+        case 8: // Brass: harmonics falling steeply when soft, gently when loud, with a bump around 1.2 kHz (on a 220 Hz note)
+        {
+            const double slope = 2.2 - 1.6 * t;
+            return additive ([slope, t] (int k)
+            {
+                const double hz = 220.0 * k;
+                const double bump = 1.0 + (0.5 + t) * std::exp (-0.5 * std::pow ((hz - 1200.0) / 500.0, 2.0));
+                return bump / std::pow (static_cast<double> (k), slope);
+            }, 90);
+        }
+        case 9: // FM Bell: a sine phase-modulated by its 2nd (later its 3rd) harmonic, the index rising to 6
+        {
+            const double index = t * 6.0;
+            const double ratio = f < 4 ? 2.0 : 3.0;
+            return fromFunction ([index, ratio] (double x) { return std::sin (kTwoPi * x + index * std::sin (kTwoPi * ratio * x)); });
+        }
+        case 10: // Wavefold: a sine folded back on itself, harder and harder (the "west coast" sound)
+        {
+            const double gain = 1.0 + t * 7.0;
+            return fromFunction ([gain] (double x) { return std::sin (1.5707963 * gain * std::sin (kTwoPi * x)); });
+        }
+        case 11: // Vowel Bass: a saw through a resonant peak that moves from the 2nd to the 24th harmonic
+        {
+            const double centre = 2.0 * std::pow (12.0, t);
+            return additive ([centre] (int k)
+            {
+                const double peak = 4.0 * std::exp (-0.5 * std::pow ((k - centre) / (0.6 + centre * 0.15), 2.0));
+                return (1.0 + peak) / k;
+            }, 200);
+        }
+        case 12: // Chord Saw: a saw with its octave and fifth above (harmonics 2 and 3) faded in
+            return fromFunction ([t] (double x)
+            {
+                return naiveSaw (x) + t * 0.7 * naiveSaw (std::fmod (2.0 * x, 1.0)) + t * t * 0.6 * naiveSaw (std::fmod (3.0 * x, 1.0));
+            });
+        case 13: // Metallic: a fixed random set of harmonics, more of them at each frame
+        {
+            const int count = 3 + f * 5;
+            return additive ([count] (int k)
+            {
+                juce::Random r (static_cast<juce::int64> (k) * 7919);
+                const bool on = k == 1 || (k < 120 && r.nextInt (120) < count);
+                return on ? (k == 1 ? 1.0 : 0.25 + 0.5 * r.nextDouble()) / std::sqrt (static_cast<double> (k)) : 0.0;
+            }, 120);
+        }
+        case 7:
         default: // Growl: a saw with a sine, ever more driven
         {
             const double drive = 1.0 + t * t * 14.0;

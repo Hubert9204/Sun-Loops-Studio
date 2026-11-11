@@ -904,31 +904,106 @@ void PlaylistTimeline::paint (juce::Graphics& g)
         // The tracks' clips, kept inside the tracks' area when the tracks scroll (0.44.0).
         g.saveState();
         g.reduceClipRegion (kNameWidth, kRulerHeight, getWidth() - kNameWidth, tracksViewHeight());
+        // The notes' pitch range of each pattern, for the previews below (0.49.0).
+        std::vector<std::pair<int, int>> pitchRange (arrangement.patterns.size(), { 128, -1 });
+        for (size_t p = 0; p < arrangement.patterns.size(); ++p)
+            for (const auto& channelNotes : arrangement.patterns[p].notes)
+                for (const auto& n : channelNotes)
+                {
+                    pitchRange[p].first = std::min (pitchRange[p].first, n.pitch);
+                    pitchRange[p].second = std::max (pitchRange[p].second, n.pitch);
+                }
+
+        const auto visibleClip = g.getClipBounds();
         for (int i = 0; i < static_cast<int> (arrangement.clips.size()); ++i)
         {
             const auto& clip = arrangement.clips[static_cast<size_t> (i)];
             const auto r = clipRect (clip).reduced (0, 2).withTrimmedRight (1);
+            if (! r.intersects (visibleClip))
+                continue;
             const auto colour = colourForPattern (clip.pattern);
-            g.setColour (colour);
+            const bool known = clip.pattern >= 0 && clip.pattern < static_cast<int> (arrangement.patterns.size());
+
+            // 0.49.0: a see-through block with a title bar and a small piano roll of the pattern's notes, as in FL Studio.
+            g.setColour (colour.withAlpha (0.2f));
             g.fillRoundedRectangle (r.toFloat(), 3.0f);
-            g.setColour (colour.darker (0.7f)); // an outline, so clips laid over each other (0.33.0) stay apart
+            // Tall rows get a title bar above the notes; short ones show the notes across the whole block, the name over them.
+            const bool titleBar = r.getHeight() >= 30;
+            const int titleHeight = titleBar ? 13 : 0;
+            const auto title = titleBar ? r.withHeight (titleHeight) : r.withHeight (std::min (r.getHeight(), 14));
+            if (titleBar)
+            {
+                g.setColour (colour.withAlpha (0.75f));
+                g.fillRoundedRectangle (title.toFloat(), 3.0f);
+                g.fillRect (title.withTrimmedTop (titleHeight / 2)); // square bottom corners where the notes begin
+            }
+
+            const auto notesArea = r.withTrimmedTop (titleHeight + 2).withTrimmedBottom (2).reduced (2, 0);
+            if (known && notesArea.getHeight() >= 5 && notesArea.getWidth() >= 6)
+            {
+                const auto& pattern = arrangement.patterns[static_cast<size_t> (clip.pattern)];
+                const auto [low, high] = pitchRange[static_cast<size_t> (clip.pattern)];
+                if (high >= low)
+                {
+                    juce::Graphics::ScopedSaveState inside (g);
+                    g.reduceClipRegion (notesArea);
+                    const int length = std::max (1, arrangement.patternTicks);
+                    const int offset = ((clip.offsetTicks % length) + length) % length;
+                    const int rows = std::max (high - low + 1, 6); // a few notes do not fill the height with fat bars
+                    const float rowHeight = static_cast<float> (notesArea.getHeight()) / static_cast<float> (rows);
+                    const float barHeight = std::clamp (rowHeight * 0.8f, 1.5f, 5.0f);
+                    const int bottomPad = (rows - (high - low + 1)) / 2;
+                    g.setColour (colour.brighter (0.45f).withAlpha (0.95f));
+                    // Each repeat of the pattern inside the clip, only those in view.
+                    const int firstVisibleTick = std::max (clip.startTick, xToTick (visibleClip.getX()) - length);
+                    const int lastVisibleTick = std::min (clip.endTick(), xToTick (visibleClip.getRight()) + 1);
+                    for (int repeatStart = clip.startTick - offset; repeatStart < lastVisibleTick; repeatStart += length)
+                    {
+                        if (repeatStart + length <= firstVisibleTick)
+                            continue;
+                        for (const auto& channelNotes : pattern.notes)
+                            for (const auto& n : channelNotes)
+                            {
+                                const int from = std::max (repeatStart + n.startTick, clip.startTick);
+                                const int to = std::min ({ repeatStart + n.startTick + std::max (1, n.lengthTicks), repeatStart + length, clip.endTick() });
+                                if (to <= from || n.startTick >= length)
+                                    continue;
+                                const float x0 = static_cast<float> (tickToX (from)), x1 = static_cast<float> (tickToX (to));
+                                const float y = static_cast<float> (notesArea.getBottom())
+                                              - (static_cast<float> (n.pitch - low + bottomPad) + 0.5f) * rowHeight - barHeight * 0.5f;
+                                g.fillRect (x0, y, std::max (1.5f, x1 - x0 - 0.5f), barHeight);
+                            }
+                    }
+                }
+            }
+
+            g.setColour (colour.withAlpha (0.9f)); // an outline, so clips laid over each other (0.33.0) stay apart
             g.drawRoundedRectangle (r.toFloat().reduced (0.5f), 3.0f, 1.0f);
 
             // A mark where each repeat of the pattern begins.
-            g.setColour (colour.darker (0.5f));
+            g.setColour (colour.withAlpha (0.6f));
             {
                 const int length = std::max (1, arrangement.patternTicks);
                 const int offset = ((clip.offsetTicks % length) + length) % length;
                 for (int t = clip.startTick + (offset == 0 ? length : length - offset); t < clip.endTick(); t += length)
-                    g.drawVerticalLine (tickToX (t), static_cast<float> (r.getY() + 3), static_cast<float> (r.getBottom() - 3));
+                    g.drawVerticalLine (tickToX (t), static_cast<float> (r.getY() + titleHeight), static_cast<float> (r.getBottom() - 2));
             }
 
-            if (clip.pattern >= 0 && clip.pattern < static_cast<int> (arrangement.patterns.size()))
+            if (known)
             {
-                g.setColour (juce::Colours::black.withAlpha (0.8f));
-                g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
-                g.drawText (juce::String (arrangement.patterns[static_cast<size_t> (clip.pattern)].name),
-                            r.reduced (5, 0), juce::Justification::centredLeft, true);
+                const juce::String name (arrangement.patterns[static_cast<size_t> (clip.pattern)].name);
+                g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
+                if (titleBar)
+                    g.setColour (juce::Colours::black.withAlpha (0.85f));
+                else
+                {
+                    // A small dark label behind the name, so it reads over the notes.
+                    const int w = std::min (title.getWidth() - 2, juce::GlyphArrangement::getStringWidthInt (juce::FontOptions (11.0f, juce::Font::bold), name) + 8);
+                    g.setColour (juce::Colours::black.withAlpha (0.45f));
+                    g.fillRoundedRectangle (title.withWidth (w).reduced (1).toFloat(), 2.0f);
+                    g.setColour (colour.brighter (0.7f));
+                }
+                g.drawText (name, title.reduced (5, 0), juce::Justification::centredLeft, true);
             }
 
             if (selection.kind == Kind::Pattern && selection.index == i)

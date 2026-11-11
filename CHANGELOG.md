@@ -2,6 +2,21 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.49.0 - 2026-11-11
+
+### Added
+- **SunBurst**: 58 new factory presets (101 in all) across the eight categories - leads (Hoover, Brass, Wavefold, Screech, Lofi...),
+  pads (FM Glass, Dream, Warm Choir, Rhythmic Gate, Wind...), strings (Solo Violin, Pizzicato, Cello Section, 80s, Tremolo),
+  basses (Vowel, Talking, FM, Moog-ish, Hard Sync, Deep House, Neuro, Trap 808, Funk Slap, Chord Saw), arps, plucks (Bell, House,
+  Guitar, Koto, Steel Drum...), keys (FM Electric Piano, Rock and Church Organ, Wurly, Vibraphone, Toy Piano...) and FX (risers,
+  impacts, sci-fi sweeps, robot voice, bubbles, siren).
+- **SunBurst**: six new wavetables - Brass, FM Bell, Wavefold, Vowel Bass, Chord Saw, Metallic (14 in all).
+- **Playlist**: pattern clips are see-through blocks with a small piano roll of the pattern's notes inside (as in FL Studio),
+  repeated with the clip; the name in a title bar on tall tracks, over the notes on short ones.
+
+### Changed
+- SunBurst's factory presets have levelled volumes (a four-note chord about as loud in each), and are listed by category.
+
 ## 0.48.1 - 2026-11-11
 
 ### Fixed
