@@ -19,16 +19,18 @@ permissions:
 
 jobs:
   appimage:
-    runs-on: ubuntu-latest
-    container: ubuntu:24.04
+    # Directly on GitHub's Ubuntu 24.04 machine (not in a container, whose name lookups failed on the first run), pinned so
+    # that "ubuntu-latest" moving to 26.04 does not raise the glibc the AppImage needs.
+    runs-on: ubuntu-24.04
     env:
       TAG: ${{ github.event_name == 'push' && github.ref_name || github.event.inputs.tag }}
+      APPIMAGE_EXTRACT_AND_RUN: 1 # linuxdeploy and appimagetool run without FUSE
     steps:
       - name: Install the build dependencies
         run: |
-          apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential cmake ninja-build git \
-            curl ca-certificates file python3 desktop-file-utils gh libasound2-dev libjack-jackd2-dev libfreetype-dev \
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential cmake ninja-build \
+            git curl ca-certificates file python3 desktop-file-utils libasound2-dev libjack-jackd2-dev libfreetype-dev \
             libfontconfig1-dev libx11-dev libxext-dev libxinerama-dev libxrandr-dev libxcursor-dev libxrender-dev \
             libxcomposite-dev libgl1-mesa-dev libcurl4-openssl-dev ladspa-sdk
       - uses: actions/checkout@v4
@@ -41,7 +43,7 @@ jobs:
           [ "v$version" = "$TAG" ] || { echo "tag $TAG does not match version $version" >&2; exit 1; }
           echo "VERSION=$version" >> "$GITHUB_ENV"
           echo "TAG=$TAG" >> "$GITHUB_ENV"
-          echo "COMMIT=$(git -c safe.directory='*' rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - name: Build the AppImage
         run: scripts/build_appimage.sh
       - name: Write the checksum and the notes
@@ -55,7 +57,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           files="dist/Sun-Loops-Studio-$VERSION-x86_64.AppImage dist/SHA256SUMS.txt"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$TAG" $files --clobber --repo "$GITHUB_REPOSITORY"
