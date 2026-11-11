@@ -27,6 +27,12 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.50.0
+HexForge reads a WAV for a spectral wave on the message thread with JUCE's readers (at most 4096 samples), and parses spectra
+from its state with clamped values (a malformed one falls back to the default). A new spectral table is built off the audio
+thread into the buffer not in use and then swapped; the editor sends one at most every 80 ms while drawing. Like SunBurst, it
+allocates nothing on the audio thread (its doubled-rate buffer is made in prepareToPlay).
+
 ## After 0.48.0
 SunBurst allocates only on the message thread (wavetables built once, about 6 MB; effect buffers in prepareToPlay; the arpeggiator's
 MIDI buffer reserved). Its audio thread reads parameters with relaxed atomic loads, clamps every modulated value, and keeps the

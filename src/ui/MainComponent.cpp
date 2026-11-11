@@ -252,21 +252,28 @@ MainComponent::MainComponent()
         menu.addItem (2, "Sampler channel (load a sample)");
         menu.addItem (3, "Drum machine (16 pads)");
         menu.addItem (4, "Slicer (slice a loop)...");
-        juce::String sunburst; // the synthesizer plugin that comes with the program (0.48.0)
+        juce::String sunburst, hexforge; // the synthesizer plugins that come with the program (0.48.0, 0.50.0)
         for (const auto& p : foundPlugins)
-            if (p.isInstrument && p.name == "SunBurst" && p.format == "VST3")
-                sunburst = p.identifier;
+            if (p.isInstrument && p.format == "VST3")
+            {
+                if (p.name == "SunBurst")
+                    sunburst = p.identifier;
+                else if (p.name == "HexForge")
+                    hexforge = p.identifier;
+            }
         if (sunburst.isNotEmpty())
             menu.addItem (5, "SunBurst synthesizer");
+        if (hexforge.isNotEmpty())
+            menu.addItem (6, "HexForge FM synthesizer");
 
         menu.showMenuAsync (juce::PopupMenu::Options(),
-                            [safe = juce::Component::SafePointer<MainComponent> (this), sunburst] (int result)
+                            [safe = juce::Component::SafePointer<MainComponent> (this), sunburst, hexforge] (int result)
                             {
                                 if (safe == nullptr || result == 0)
                                     return;
-                                if (result == 5)
+                                if (result == 5 || result == 6)
                                 {
-                                    safe->setPluginInstrument (-1, sunburst);
+                                    safe->setPluginInstrument (-1, result == 5 ? sunburst : hexforge);
                                     return;
                                 }
                                 if (result == 4)

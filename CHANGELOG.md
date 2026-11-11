@@ -2,6 +2,25 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.50.0 - 2026-11-11
+
+### Added
+- **HexForge**, a second synthesizer plugin (VST3 and Standalone, bundled like SunBurst): hybrid FM + subtractive, for
+  cyberpunk, dark synth, industrial, drum & bass, dubstep and neurofunk sounds:
+  - six operators, each with 32 band-limited classic waves or one of two spectral waves (64 harmonics drawn with the mouse,
+    generated, or read from a single-cycle WAV), ratio 1/4 - 16, fine, level, output, pan, velocity and its own ADSR;
+  - a 6 x 6 FM matrix in one panel (the diagonal is feedback) with an overall FM depth; unison up to 8, pitch drop;
+  - an analog-modelled four-pole ladder filter (LP 24 / 12, HP 24 / 12, BP) with drive, its own ADSR, its own LFO (free or
+    tempo-synced), key tracking and velocity;
+  - amp ADSR, LFO 2, an 8-slot modulation matrix, four macros, distortion / EQ / chorus / delay / reverb;
+  - voices rendered at twice the sample rate and filtered back down; poly / mono / legato with glide;
+  - 40 factory presets in 8 categories with levelled volumes, user presets, a resizable hardware-style window.
+- Sun Loops Studio finds both bundled plugins and offers HexForge under Instruments and in the rack's **+**.
+
+### Changed
+- SunBurst's knobs, switches and panels moved to a shared file (`plugins/common/HardwareUi`) used by both plugins; SunBurst
+  looks and sounds the same.
+
 ## 0.49.0 - 2026-11-11
 
 ### Added

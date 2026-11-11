@@ -231,12 +231,16 @@ juce::FileSearchPath PluginHost::bundledPaths()
     if (self.isSymbolicLink())
         prefixes.add (self.getLinkedTarget().getParentDirectory().getParentDirectory());
     for (const auto& prefix : prefixes)
-        for (const auto& dir : { prefix.getChildFile ("lib/vst3"), prefix.getChildFile ("lib64/vst3"),
-                                 // a development build: build/SunLoopsStudio_artefacts/Release/Sun Loops Studio -> build/SunBurst_artefacts/Release/VST3
-                                 prefix.getParentDirectory().getChildFile ("SunBurst_artefacts/Release/VST3"),
-                                 prefix.getParentDirectory().getChildFile ("SunBurst_artefacts/Debug/VST3") })
-            if (dir.getChildFile ("SunBurst.vst3").isDirectory())
+    {
+        juce::Array<juce::File> dirs { prefix.getChildFile ("lib/vst3"), prefix.getChildFile ("lib64/vst3") };
+        // A development build: build/SunLoopsStudio_artefacts/Release/Sun Loops Studio -> build/<Plugin>_artefacts/Release/VST3
+        for (const char* name : { "SunBurst", "HexForge" })
+            for (const char* config : { "Release", "Debug" })
+                dirs.add (prefix.getParentDirectory().getChildFile (juce::String (name) + "_artefacts/" + config + "/VST3"));
+        for (const auto& dir : dirs)
+            if (dir.getChildFile ("SunBurst.vst3").isDirectory() || dir.getChildFile ("HexForge.vst3").isDirectory())
                 paths.addIfNotAlreadyThere (dir);
+    }
     return paths;
 }
 
@@ -246,7 +250,7 @@ int PluginHost::addBundledPlugins()
     const auto paths = bundledPaths();
     // An AppImage is mounted somewhere else each time it runs: forget bundled plugins listed from a place that is gone.
     for (const auto& t : knownPlugins.getTypes())
-        if (t.pluginFormatName == "VST3" && t.name == "SunBurst" && ! juce::File (t.fileOrIdentifier).exists())
+        if (t.pluginFormatName == "VST3" && (t.name == "SunBurst" || t.name == "HexForge") && ! juce::File (t.fileOrIdentifier).exists())
             knownPlugins.removeType (t);
     for (auto* format : formatManager.getFormats())
         if (format->getName() == "VST3")

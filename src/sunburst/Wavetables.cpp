@@ -229,6 +229,12 @@ Frame makeFrame (int set, int f)
 }
 } // namespace
 
+void Wavetables::buildMips (const std::vector<double>& cycle, float* dest)
+{
+    if (static_cast<int> (cycle.size()) == kTableSize)
+        bandLimit (cycle, dest);
+}
+
 const Wavetables& Wavetables::get()
 {
     static const Wavetables tables;

@@ -548,6 +548,15 @@ and ranks with BM25 (k1 1.4, b 0.75) plus a title bonus, a bonus for sections ho
 question's language. The index is built the first time Helios opens. Commands are `HeliosCommand`s (name, keywords, a function)
 made by `MainComponent::heliosCommands`, matched by the share of the question's words they contain.
 
+### HexForge, the FM synthesizer plugin (0.50.0)
+
+- `src/hexforge/`: `HexParams` (parameters), `HexWaves` (the 32 classic waves built with `sunburst::Wavetables::buildMips`;
+  `Spectrum` and the double-buffered `SpectralBank`), `HexVoice` (six phase-modulation operators with one sample of delay
+  between them, so any routing and feedback works; unison; the `Ladder` filter: four TPT one-pole stages with tanh feedback,
+  modes mixed from the stages), `HexProcessor` (voices at twice the rate, a 31-tap windowed-sinc decimator, SunBurst's
+  `FxRack`), `HexPresets`. `plugins/hexforge/`: the editor (operator displays, the matrix grid, the spectral editor) and the
+  entry point. `plugins/common/HardwareUi` holds the controls both plugins share (`hwui::Look` takes a colour `Theme`).
+
 ### SunBurst, the synthesizer plugin (0.48.0)
 
 - `src/sunburst/`: plain DSP and the `SunBurstProcessor` (a `juce::AudioProcessor` with an `AudioProcessorValueTreeState`);

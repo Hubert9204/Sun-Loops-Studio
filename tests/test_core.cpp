@@ -10804,6 +10804,24 @@ void testSunBurstInHost()
     for (const float v : out)
         finite = finite && std::isfinite (v);
     check (finite && rmsWindow (out, 0.05, 0.4) > 0.01f, "a chord plays through SunBurst in the Player");
+
+    // HexForge (0.50.0), bundled the same way.
+    const auto* hex = findPlugin (host, "HexForge", "VST3");
+    check (hex != nullptr && hex->isInstrument, "HexForge is listed next to it as a VST3 instrument");
+    if (hex == nullptr)
+        return;
+    auto fm = host.create (*hex, kSr, sls::Player::kChunk, error);
+    check (fm != nullptr && fm->isLoaded() && fm->parameterCount() > 150, "HexForge loads, with its parameters for automation");
+    if (fm == nullptr)
+        return;
+    c.plugin = fm;
+    sls::Player q;
+    q.prepare (kSr);
+    const auto hexOut = renderBlocks (q, sls::Project::make ({ c }, 16 * kBeat), true, 1.0);
+    bool hexFinite = true;
+    for (const float v : hexOut)
+        hexFinite = hexFinite && std::isfinite (v);
+    check (hexFinite && rmsWindow (hexOut, 0.05, 0.4) > 0.01f, "a chord plays through HexForge in the Player");
 }
 
 void testPluginHosting()
@@ -11150,6 +11168,7 @@ void testPluginHosting()
 void supportCheck (bool ok, const char* name) { check (ok, name); }
 void testSemVerAndUpdates();
 void testSunBurst();
+void testHexForge();
 void testCrashReports();
 void testSessionLog();
 
@@ -11217,6 +11236,7 @@ int main()
     testRecording047();
     testSunBurst();
     testSunBurstInHost();
+    testHexForge();
     testSemVerAndUpdates();
     testCrashReports();
     testSessionLog();

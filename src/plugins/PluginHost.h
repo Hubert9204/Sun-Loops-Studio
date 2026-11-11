@@ -132,7 +132,7 @@ public:
     // Folders JUCE's own defaults leave out on Fedora / Nobara (64-bit libraries live in lib64), for scan()'s `extraPaths`:
     // VST3 /usr/lib64/vst3 and /usr/local/lib64/vst3; LV2 both lib and lib64 folders; LADSPA /usr/lib64/ladspa, /usr/local/lib64/ladspa, ~/.ladspa.
     static juce::FileSearchPath distributionPaths (const juce::String& formatName);
-    // The plugins that come with the program (SunBurst, 0.48.0): VST3 bundles in ../lib/vst3 or ../lib64/vst3 next to the program
+    // The plugins that come with the program (SunBurst 0.48.0, HexForge 0.50.0): VST3 bundles in ../lib/vst3 or ../lib64/vst3 next to the program
     // (also inside the AppImage), or in the build folder. They are added to the known list at start-up, without a scan.
     static juce::FileSearchPath bundledPaths();
     int addBundledPlugins();

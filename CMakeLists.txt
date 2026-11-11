@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(SunLoopsStudio VERSION 0.49.0 LANGUAGES C CXX ASM)
+project(SunLoopsStudio VERSION 0.50.0 LANGUAGES C CXX ASM)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -268,7 +268,7 @@ if(SLS_BUILD_SUNBURST)
         FORMATS VST3 Standalone
         VST3_CATEGORIES Instrument Synth
         COPY_PLUGIN_AFTER_BUILD FALSE)
-    target_sources(SunBurst PRIVATE ${SUNBURST_SOURCES} plugins/sunburst/SunBurstEditor.cpp plugins/sunburst/PluginMain.cpp)
+    target_sources(SunBurst PRIVATE ${SUNBURST_SOURCES} plugins/common/HardwareUi.cpp plugins/sunburst/SunBurstEditor.cpp plugins/sunburst/PluginMain.cpp)
     target_include_directories(SunBurst PRIVATE src plugins)
     target_compile_definitions(SunBurst PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
     target_link_libraries(SunBurst PRIVATE
@@ -283,6 +283,43 @@ if(SLS_BUILD_SUNBURST)
     add_dependencies(SunLoopsStudio SunBurst_VST3)
 endif()
 
+# --- HexForge: the hybrid FM + subtractive synthesizer plugin (0.50.0) ----------------------------------------------
+set(HEXFORGE_SOURCES
+    src/hexforge/HexParams.cpp
+    src/hexforge/HexWaves.cpp
+    src/hexforge/HexVoice.cpp
+    src/hexforge/HexPresets.cpp
+    src/hexforge/HexProcessor.cpp)
+
+option(SLS_BUILD_HEXFORGE "Build the HexForge synthesizer plugin (VST3 and Standalone)" ON)
+if(SLS_BUILD_HEXFORGE)
+    juce_add_plugin(HexForge
+        COMPANY_NAME "Sun Loops Studio"
+        PRODUCT_NAME "HexForge"
+        VERSION ${PROJECT_VERSION}
+        PLUGIN_MANUFACTURER_CODE Sunl
+        PLUGIN_CODE Hxfg
+        IS_SYNTH TRUE
+        NEEDS_MIDI_INPUT TRUE
+        FORMATS VST3 Standalone
+        VST3_CATEGORIES Instrument Synth
+        COPY_PLUGIN_AFTER_BUILD FALSE)
+    # It shares SunBurst's band-limited tables, building blocks and effects.
+    target_sources(HexForge PRIVATE ${HEXFORGE_SOURCES} src/sunburst/Wavetables.cpp src/sunburst/Fx.cpp
+                   plugins/common/HardwareUi.cpp plugins/hexforge/HexEditor.cpp plugins/hexforge/PluginMain.cpp)
+    target_include_directories(HexForge PRIVATE src plugins)
+    target_compile_definitions(HexForge PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
+    target_link_libraries(HexForge PRIVATE
+        juce::juce_audio_utils
+        juce::juce_dsp
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_warning_flags)
+    install(DIRECTORY "${CMAKE_BINARY_DIR}/HexForge_artefacts/$<CONFIG>/VST3/HexForge.vst3"
+            DESTINATION lib/vst3
+            USE_SOURCE_PERMISSIONS)
+    add_dependencies(SunLoopsStudio HexForge_VST3)
+endif()
+
 # --- Headless tests ----------------------------------------------------------
 juce_add_console_app(SunLoopsStudioTests
     PRODUCT_NAME "SunLoopsStudioTests")
@@ -291,8 +328,10 @@ target_sources(SunLoopsStudioTests PRIVATE
     tests/test_core.cpp
     tests/test_support.cpp
     tests/test_sunburst.cpp
+    tests/test_hexforge.cpp
     ${SLS_CORE_SOURCES}
-    ${SUNBURST_SOURCES})
+    ${SUNBURST_SOURCES}
+    ${HEXFORGE_SOURCES})
 
 target_include_directories(SunLoopsStudioTests PRIVATE src)
 target_include_directories(SunLoopsStudioTests SYSTEM PRIVATE third_party/signalsmith third_party/tinysoundfont)
@@ -345,6 +384,9 @@ endif()
 
 if(SLS_BUILD_SUNBURST)
     add_dependencies(SunLoopsStudioTests SunBurst_VST3)
+endif()
+if(SLS_BUILD_HEXFORGE)
+    add_dependencies(SunLoopsStudioTests HexForge_VST3)
 endif()
 
 enable_testing()

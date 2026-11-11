@@ -25,6 +25,10 @@ public:
     const float* triangle (int level) const noexcept { return tri.data() + static_cast<size_t> (level) * (kTableSize + 1); }
     const float* sine() const noexcept { return sin.data(); }
 
+    // Writes the kTableLevels band-limited versions of one naive cycle (kTableSize samples) into `dest` (kTableLevels x
+    // (kTableSize + 1) floats), normalised to a peak of 1. Message thread (allocates). Also used by HexForge (0.50.0).
+    static void buildMips (const std::vector<double>& cycle, float* dest);
+
     // One interpolated sample: `position` 0..1 across the frames, `phase` 0..1.
     float sample (int set, float position, double phase, int level) const noexcept;
 

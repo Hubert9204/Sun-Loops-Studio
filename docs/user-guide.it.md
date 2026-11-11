@@ -532,6 +532,37 @@ Macro 3 = larghezza dell'unison, Macro 4 = drive del filtro.
 Tempo: dentro Sun Loops Studio SunBurst segue il tempo del brano (LFO a tempo, delay e arpeggiatore; dalla 0.48.0 tempo e
 posizione arrivano a ogni strumento plugin). La finestra si può ridimensionare (trascina l'angolo) e mantiene le proporzioni.
 
+### HexForge, il synth FM incluso (0.50.0)
+
+**HexForge** è un secondo synth plugin incluso in Sun Loops Studio (VST3 e Standalone, trovato all'avvio come SunBurst): un
+synth **ibrido FM + sottrattivo** per timbri taglienti, aggressivi e metallici - cyberpunk, dark synth, industrial, drum &
+bass, dubstep old school e neurofunk. Si aggiunge con **Browser > Instruments > HexForge (FM synthesizer)** o il **+** del
+Channel Rack > *HexForge FM synthesizer*. La finestra ha un aspetto in acciaio scuro con luci rosse e azzurre e quattro pagine:
+
+- **OPERATORS**: sei **operatori**, ognuno con un'**onda** - 32 onde classiche a banda limitata (sinusoide, triangolo, dente
+  di sega, rampa, quadra, impulsi, mezza / intera / quarto di sinusoide, camel, organo, clarinetto, seghe brillanti e morbide,
+  trapezio, scala, esponenziale, parabola, sinusoide ripiegata, sync, vocale, campana, metallo, digitale...) o una delle due
+  **onde spettrali** - un **rapporto** con la nota (da 1/4 a 16), *Fine*, *Level* (quanto è forte, anche come modulatore),
+  *Out* (quanto si sente: 0 = solo modulatore), *Pan*, *Velocity* e un **inviluppo** proprio (attacco, decadimento, sostegno,
+  rilascio). La **matrice FM** accanto è un'unica griglia 6 x 6 di manopole: quella in riga *R*, colonna *C* dice quanto
+  l'operatore *C* modula l'operatore *R*; la diagonale (illuminata) è il **feedback** di ogni operatore. Niente algoritmi da
+  scegliere: giri le manopole che servono. **Engine**: *FM depth* (tutta la matrice insieme), **unison** (1-8 voci, *Detune*,
+  *Spread*), *Octave* e un **pitch drop** (una caduta veloce all'inizio di ogni nota, per zap e bassi d'impatto).
+- **FILTER & AMP**: il **filtro ladder**, modellato sul ladder a quattro poli a transistor di Moog (la risonanza fischia e
+  auto-oscilla, un segnale forte satura): *Ladder LP 24 / LP 12 / HP 24 / HP 12 / BP*, *Cutoff, Resonance, Drive*, la quantità
+  del suo **inviluppo dedicato** (pannello *Filter envelope*, ADSR), *Key track*, *Velocity*; il **Filter LFO** (quantità,
+  forma, velocità o divisione a tempo) muove il cutoff per i wobble. *Amplifier* (ADSR, velocity), *LFO 2* per la pagina delle
+  modulazioni e *Voice* (poly / mono / legato, polifonia fino a 16, glide, estensione del bend).
+- **SPECTRAL & MOD**: disegni **Spectral A** e **Spectral B** come 64 armoniche col mouse, parti da *Saw, Square, Odd, Bright,
+  Formant, Metal, Random* o *Clear*, oppure **Load WAV...** carica un'onda a ciclo singolo (se ne leggono le prime 64
+  armoniche). Si salvano col suono. **Modulation**: 8 slot *sorgente > destinazione* con una quantità.
+- **EFFECTS**: distorsione (accesa di default, tube), EQ, chorus, delay a tempo, riverbero.
+
+Le voci girano a frequenza doppia e vengono filtrate al ritorno, così l'FM spinto e il ladder restano puliti. **40 preset di
+fabbrica** in otto categorie - Neuro, Reese, Dubstep, DnB, Cyberpunk, Dark Synth, Industrial, FX & Metal - con volumi
+pareggiati; in tutti la mod wheel aggiunge FM, Macro 1 = cutoff, Macro 2 = profondità FM, Macro 3 = distorsione, Macro 4 =
+larghezza dell'unison. I tuoi preset vanno in `~/.config/HexForge/Presets`.
+
 ## Piano Roll
 
 Modifica le note del canale selezionato nel pattern corrente. Il titolo mostra il canale ("Piano Roll - Lead"). È
