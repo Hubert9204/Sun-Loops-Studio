@@ -214,17 +214,6 @@ juce::Rectangle<int> PlaylistTimeline::automationClipRect (const AutomationClip&
     return { x0, lanesTop() + c.lane * kLaneHeight, std::max (2, x1 - x0), kLaneHeight };
 }
 
-int PlaylistTimeline::unitToX (int unit) const noexcept
-{
-    return kNameWidth + static_cast<int> (std::lround (unit * unitWidth - scrollX));
-}
-
-int PlaylistTimeline::xToUnit (int x) const noexcept
-{
-    const double unit = (static_cast<double> (x - kNameWidth) + scrollX) / unitWidth;
-    return std::clamp (static_cast<int> (std::floor (unit)), 0, std::max (0, static_cast<int> (arrangement.timelineTicks() / static_cast<double> (std::max (1, arrangement.patternTicks))) - 1));
-}
-
 int PlaylistTimeline::yToTrack (int y) const noexcept
 {
     return std::clamp ((y - kRulerHeight + scrollY) / trackHeight(), 0, trackCount() - 1);
@@ -904,15 +893,24 @@ void PlaylistTimeline::paint (juce::Graphics& g)
         // The tracks' clips, kept inside the tracks' area when the tracks scroll (0.44.0).
         g.saveState();
         g.reduceClipRegion (kNameWidth, kRulerHeight, getWidth() - kNameWidth, tracksViewHeight());
-        // The notes' pitch range of each pattern, for the previews below (0.49.0).
-        std::vector<std::pair<int, int>> pitchRange (arrangement.patterns.size(), { 128, -1 });
-        for (size_t p = 0; p < arrangement.patterns.size(); ++p)
-            for (const auto& channelNotes : arrangement.patterns[p].notes)
-                for (const auto& n : channelNotes)
-                {
-                    pitchRange[p].first = std::min (pitchRange[p].first, n.pitch);
-                    pitchRange[p].second = std::max (pitchRange[p].second, n.pitch);
-                }
+        // The notes' pitch range of each pattern, for the previews below (0.49.0); only worked out for the patterns of the clips in
+        // sight, once per paint (0.51.0).
+        pitchRanges.assign (arrangement.patterns.size(), { 129, -2 }); // (129, -2: not worked out yet)
+        const auto pitchRangeOf = [this] (size_t p)
+        {
+            auto& range = pitchRanges[p];
+            if (range.first == 129)
+            {
+                range = { 128, -1 };
+                for (const auto& channelNotes : arrangement.patterns[p].notes)
+                    for (const auto& n : channelNotes)
+                    {
+                        range.first = std::min (range.first, n.pitch);
+                        range.second = std::max (range.second, n.pitch);
+                    }
+            }
+            return range;
+        };
 
         const auto visibleClip = g.getClipBounds();
         for (int i = 0; i < static_cast<int> (arrangement.clips.size()); ++i)
@@ -942,7 +940,7 @@ void PlaylistTimeline::paint (juce::Graphics& g)
             if (known && notesArea.getHeight() >= 5 && notesArea.getWidth() >= 6)
             {
                 const auto& pattern = arrangement.patterns[static_cast<size_t> (clip.pattern)];
-                const auto [low, high] = pitchRange[static_cast<size_t> (clip.pattern)];
+                const auto [low, high] = pitchRangeOf (static_cast<size_t> (clip.pattern));
                 if (high >= low)
                 {
                     juce::Graphics::ScopedSaveState inside (g);
@@ -1511,14 +1509,6 @@ void PlaylistTimeline::pushUndoPoint()
 {
     beginEdit();
     commitPendingUndo();
-}
-
-void PlaylistTimeline::selectAutomation (int index)
-{
-    if (index >= 0 && index < static_cast<int> (arrangement.automationClips.size()))
-        select (Kind::Automation, index);
-    else
-        clearSelection();
 }
 
 void PlaylistTimeline::showAutomationMenu (int index)
@@ -2311,6 +2301,18 @@ void PlaylistTimeline::mouseDown (const juce::MouseEvent& e)
     }
 }
 
+template <class Clip>
+void PlaylistTimeline::storeDragged (Clip& stored, const Clip& clip, const juce::MouseEvent& e)
+{
+    commitPendingUndo();
+    stored = clip;
+    dragChanged = true;
+    repaint();
+    updateReadout (e.x, e.y);
+    if (onChanged)
+        onChanged();
+}
+
 void PlaylistTimeline::mouseDrag (const juce::MouseEvent& e)
 {
     lastMouseX = e.x;
@@ -2392,13 +2394,7 @@ void PlaylistTimeline::mouseDrag (const juce::MouseEvent& e)
         if ((clip.startTick != stored.startTick || clip.lane != stored.lane || clip.lengthTicks != stored.lengthTicks)
             && arrangement.canPlaceAutomation (clip, dragClip))
         {
-            commitPendingUndo();
-            stored = clip;
-            dragChanged = true;
-            repaint();
-            updateReadout (e.x, e.y);
-            if (onChanged)
-                onChanged();
+            storeDragged (stored, clip, e);
         }
         return;
     }
@@ -2432,13 +2428,7 @@ void PlaylistTimeline::mouseDrag (const juce::MouseEvent& e)
                && std::abs (clip.offsetSeconds - stored.offsetSeconds) < 1.0e-12)
             && arrangement.canPlaceAudio (clip, dragClip))
         {
-            commitPendingUndo();
-            stored = clip;
-            dragChanged = true;
-            repaint();
-            updateReadout (e.x, e.y);
-            if (onChanged)
-                onChanged();
+            storeDragged (stored, clip, e);
         }
         return;
     }
@@ -2465,13 +2455,7 @@ void PlaylistTimeline::mouseDrag (const juce::MouseEvent& e)
     if (! (clip.startTick == stored.startTick && clip.track == stored.track && clip.lengthTicks == stored.lengthTicks)
         && arrangement.canPlace (clip, dragClip))
     {
-        commitPendingUndo();
-        stored = clip;
-        dragChanged = true;
-        repaint();
-        updateReadout (e.x, e.y);
-        if (onChanged)
-            onChanged();
+        storeDragged (stored, clip, e);
     }
 }
 

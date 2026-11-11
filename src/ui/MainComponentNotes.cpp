@@ -1,4 +1,4 @@
-// Part of MainComponent: note undo and redo, recording notes from MIDI keyboards.
+// Part of MainComponent: recording notes from MIDI keyboards.
 #include "ui/MainComponent.h"
 
 #include "ui/AssignTrackDialog.h"
@@ -19,111 +19,6 @@
 
 namespace sls
 {
-// ------------------------------------------------------------------------- Undo / redo of note edits
-
-MainComponent::NoteState MainComponent::captureNoteState() const
-{
-    NoteState s;
-    s.pattern = currentPattern;
-    s.notes.reserve (channels.size());
-    for (const auto& c : channels)
-    {
-        s.notes.push_back (c.notes);
-        s.steps.push_back (c.steps);
-    }
-    return s;
-}
-
-bool MainComponent::sameNoteState (const NoteState& a, const NoteState& b)
-{
-    if (a.pattern != b.pattern || a.notes.size() != b.notes.size() || a.steps != b.steps)
-        return false;
-    for (size_t c = 0; c < a.notes.size(); ++c)
-    {
-        if (a.notes[c].size() != b.notes[c].size())
-            return false;
-        for (size_t i = 0; i < a.notes[c].size(); ++i)
-        {
-            const auto& x = a.notes[c][i];
-            const auto& y = b.notes[c][i];
-            if (x.pitch != y.pitch || x.startTick != y.startTick || x.lengthTicks != y.lengthTicks || std::abs (x.velocity - y.velocity) > 1.0e-6f || x.link != y.link)
-                return false;
-        }
-    }
-    return true;
-}
-
-void MainComponent::recordNoteChange()
-{
-    auto now = captureNoteState();
-    if (sameNoteState (now, lastNoteState))
-        return;
-
-    // The pattern or the number of channels changed since the last state: that is not a note edit, only a new starting point.
-    if (now.pattern == lastNoteState.pattern && now.notes.size() == lastNoteState.notes.size())
-    {
-        noteUndo.push_back (std::move (lastNoteState));
-        if (noteUndo.size() > 200)
-            noteUndo.erase (noteUndo.begin());
-        noteRedo.clear();
-    }
-    lastNoteState = std::move (now);
-}
-
-void MainComponent::resetNoteHistory()
-{
-    noteUndo.clear();
-    noteRedo.clear();
-    lastNoteState = captureNoteState();
-}
-
-void MainComponent::applyNoteState (const NoteState& state)
-{
-    if (state.pattern != currentPattern && state.pattern < static_cast<int> (arrangement.patterns.size()))
-        selectPattern (state.pattern);
-
-    for (size_t c = 0; c < channels.size() && c < state.notes.size(); ++c)
-    {
-        channels[c].notes = state.notes[c];
-        channels[c].steps = c < state.steps.size() ? state.steps[c] : 0;
-        strips[c]->refreshFromChannel();
-    }
-    pianoRoll.setNotes (channels[static_cast<size_t> (selected)].notes);
-    commitCurrentPattern();
-    lastNoteState = captureNoteState();
-    markDirty();
-    publishProject();
-}
-
-void MainComponent::undoNotes()
-{
-    if (noteUndo.empty())
-    {
-        statusLabel.setText ("Nothing to undo in the notes", juce::dontSendNotification);
-        return;
-    }
-    auto target = std::move (noteUndo.back());
-    noteUndo.pop_back();
-    noteRedo.push_back (captureNoteState());
-    applyNoteState (target);
-    statusLabel.setText ("Undid a note edit", juce::dontSendNotification);
-}
-
-void MainComponent::redoNotes()
-{
-    if (noteRedo.empty())
-    {
-        statusLabel.setText ("Nothing to redo in the notes", juce::dontSendNotification);
-        return;
-    }
-    auto target = std::move (noteRedo.back());
-    noteRedo.pop_back();
-    noteUndo.push_back (captureNoteState());
-    applyNoteState (target);
-    statusLabel.setText ("Redid a note edit", juce::dontSendNotification);
-}
-
-
 // ------------------------------------------------------------------------- Recording notes (MIDI keyboards)
 
 void MainComponent::applyNoteRecording()
@@ -220,7 +115,6 @@ void MainComponent::endNoteTake()
         pianoRoll.setNotes (channels[static_cast<size_t> (selected)].notes);
         publishProject();
     }
-    recordNoteChange(); // everything recorded since the take began is one undo step
 }
 
 // Called from the timer: the notes that the audio thread stamped since the last tick become notes of the pattern.
@@ -312,7 +206,6 @@ void MainComponent::dumpScoreLog (bool lastPhraseOnly)
                 strips[c]->repaint();
         pianoRoll.setNotes (channels[static_cast<size_t> (selected)].notes);
         publishProject();
-        recordNoteChange(); // one undo step
     }
     juce::String text = juce::String (added) + (added == 1 ? " note" : " notes") + " from the score log put into "
                       + juce::String (arrangement.patterns[static_cast<size_t> (currentPattern)].name);

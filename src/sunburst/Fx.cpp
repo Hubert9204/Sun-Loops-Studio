@@ -1,5 +1,7 @@
 #include "sunburst/Fx.h"
 
+#include <array>
+
 namespace sunburst
 {
 namespace
@@ -144,18 +146,22 @@ void FxRack::process (float* left, float* right, int n, const FxSettings& s) noe
             chorusL[static_cast<size_t> (chorusWrite)] = left[i];
             chorusR[static_cast<size_t> (chorusWrite)] = right[i];
             float wl = 0.0f, wr = 0.0f;
-            for (int t = 0; t < 3; ++t)
+            // The taps sit a third of a cycle apart, the right side half a cycle from the left: one sine and one cosine give all six
+            // (sin (a + 120 deg) = -sin a / 2 + cos a x sqrt 3 / 2, and the right side is the negative).
+            const double sa = std::sin (kTwoPi * chorusPhase), ca = std::cos (kTwoPi * chorusPhase);
+            const std::array<double, 3> taps { sa, -0.5 * sa + 0.8660254037844386 * ca, -0.5 * sa - 0.8660254037844386 * ca };
+            for (const double sine : taps)
             {
-                const double ph = chorusPhase + t / 3.0;
-                const double ml = (baseMs + depthMs * 0.5 * (1.0 + std::sin (kTwoPi * ph))) * 0.001 * rate;
-                const double mr = (baseMs + depthMs * 0.5 * (1.0 + std::sin (kTwoPi * (ph + 0.5)))) * 0.001 * rate;
+                const double ml = (baseMs + depthMs * 0.5 * (1.0 + sine)) * 0.001 * rate;
+                const double mr = (baseMs + depthMs * 0.5 * (1.0 - sine)) * 0.001 * rate;
                 wl += readDelay (chorusL, chorusWrite, ml);
                 wr += readDelay (chorusR, chorusWrite, mr);
             }
             chorusPhase += inc;
             if (chorusPhase >= 1.0)
                 chorusPhase -= 1.0;
-            chorusWrite = (chorusWrite + 1) % size;
+            if (++chorusWrite == size)
+                chorusWrite = 0;
             left[i] += (wl / 3.0f - left[i]) * s.chorusMix * 0.5f + (wl / 3.0f) * s.chorusMix * 0.5f;
             right[i] += (wr / 3.0f - right[i]) * s.chorusMix * 0.5f + (wr / 3.0f) * s.chorusMix * 0.5f;
         }
@@ -187,7 +193,8 @@ void FxRack::process (float* left, float* right, int n, const FxSettings& s) noe
                 delayL[static_cast<size_t> (delayWrite)] = left[i] + toneL * fb;
                 delayR[static_cast<size_t> (delayWrite)] = right[i] + toneR * fb;
             }
-            delayWrite = (delayWrite + 1) % size;
+            if (++delayWrite == size)
+                delayWrite = 0;
             left[i] += toneL * s.delayMix;
             right[i] += toneR * s.delayMix;
         }
@@ -215,7 +222,8 @@ void FxRack::process (float* left, float* right, int n, const FxSettings& s) noe
             if (readPos < 0)
                 readPos += preSize;
             float x = predelay[static_cast<size_t> (readPos)];
-            predelayWrite = (predelayWrite + 1) % preSize;
+            if (++predelayWrite == preSize)
+                predelayWrite = 0;
             for (size_t d = 0; d < diffusers.size(); ++d)
             {
                 auto& buf = diffusers[d];
@@ -224,7 +232,8 @@ void FxRack::process (float* left, float* right, int n, const FxSettings& s) noe
                 const float in = x + delayed * 0.6f;
                 buf[static_cast<size_t> (pos)] = in;
                 x = delayed - in * 0.6f;
-                pos = (pos + 1) % static_cast<int> (buf.size());
+                if (++pos == static_cast<int> (buf.size()))
+                    pos = 0;
             }
             std::array<float, 8> out {};
             for (size_t l = 0; l < lines.size(); ++l)
@@ -249,7 +258,8 @@ void FxRack::process (float* left, float* right, int n, const FxSettings& s) noe
             for (size_t l = 0; l < lines.size(); ++l)
             {
                 lines[l][static_cast<size_t> (linePos[l])] = h[l] * 0.35355339f + x * ((l & 1u) ? -1.0f : 1.0f);
-                linePos[l] = (linePos[l] + 1) % static_cast<int> (lines[l].size());
+                if (++linePos[l] == static_cast<int> (lines[l].size()))
+                    linePos[l] = 0;
             }
             const float wetL = (out[0] + out[2] + out[4] + out[6]) * 0.5f;
             const float wetR = (out[1] + out[3] + out[5] + out[7]) * 0.5f;

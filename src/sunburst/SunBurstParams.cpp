@@ -6,37 +6,8 @@ namespace
 {
 using Layout = juce::AudioProcessorValueTreeState::ParameterLayout;
 
-juce::NormalisableRange<float> skewed (float lo, float hi, float centre, float step = 0.0f)
-{
-    juce::NormalisableRange<float> r (lo, hi, step);
-    r.setSkewForCentre (centre);
-    return r;
-}
-
-struct Adder
-{
-    std::vector<std::unique_ptr<juce::RangedAudioParameter>>& out;
-
-    void real (const juce::String& id, const juce::String& name, const juce::NormalisableRange<float>& range, float def, const juce::String& unit = {},
-               int decimals = 2)
-    {
-        auto attributes = juce::AudioParameterFloatAttributes().withLabel (unit).withStringFromValueFunction (
-            [decimals, unit] (float v, int) { return juce::String (v, decimals) + (unit.isEmpty() ? juce::String() : " " + unit); });
-        out.push_back (std::make_unique<juce::AudioParameterFloat> (juce::ParameterID { id, 1 }, name, range, def, attributes));
-    }
-    void integer (const juce::String& id, const juce::String& name, int lo, int hi, int def)
-    {
-        out.push_back (std::make_unique<juce::AudioParameterInt> (juce::ParameterID { id, 1 }, name, lo, hi, def));
-    }
-    void choice (const juce::String& id, const juce::String& name, const juce::StringArray& items, int def)
-    {
-        out.push_back (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { id, 1 }, name, items, def));
-    }
-    void toggle (const juce::String& id, const juce::String& name, bool def)
-    {
-        out.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { id, 1 }, name, def));
-    }
-};
+using synthkit::Adder;
+using synthkit::skewed;
 
 juce::String twoDigits (int n) { return juce::String (n + 1); }
 } // namespace
@@ -57,21 +28,6 @@ const juce::StringArray& filterNames()
     static const juce::StringArray names { "Low-pass 12", "Low-pass 24", "High-pass 12", "High-pass 24", "Band-pass 12", "Band-pass 24", "Notch", "Peak" };
     return names;
 }
-const juce::StringArray& lfoShapeNames()
-{
-    static const juce::StringArray names { "Sine", "Triangle", "Saw up", "Saw down", "Square", "Sample & hold", "Smooth random" };
-    return names;
-}
-const juce::StringArray& syncNames()
-{
-    static const juce::StringArray names { "4 bars", "2 bars", "1 bar", "1/2", "1/2T", "1/4.", "1/4", "1/4T", "1/8.", "1/8", "1/8T", "1/16.", "1/16", "1/16T", "1/32" };
-    return names;
-}
-double syncBeats (int index)
-{
-    static const double beats[] { 16.0, 8.0, 4.0, 2.0, 4.0 / 3.0, 1.5, 1.0, 2.0 / 3.0, 0.75, 0.5, 1.0 / 3.0, 0.375, 0.25, 1.0 / 6.0, 0.125 };
-    return beats[std::clamp (index, 0, static_cast<int> (std::size (beats)) - 1)];
-}
 const juce::StringArray& sourceNames()
 {
     static const juce::StringArray names { "-", "LFO 1", "LFO 2", "LFO 3", "Env 2 (filter)", "Env 3 (mod)", "Velocity", "Mod wheel", "Aftertouch",
@@ -89,11 +45,6 @@ const juce::StringArray& destNames()
         "Filter cutoff", "Filter resonance", "Filter drive", "Amp level", "Pan",
         "LFO 1 rate", "LFO 2 rate", "LFO 3 rate",
         "FX distortion drive", "FX filter cutoff", "FX chorus mix", "FX delay mix", "FX reverb mix" };
-    return names;
-}
-const juce::StringArray& distNames()
-{
-    static const juce::StringArray names { "Soft", "Hard", "Tube", "Fold", "Crush" };
     return names;
 }
 const juce::StringArray& arpModeNames()

@@ -218,7 +218,6 @@ void MainComponent::applyDocument (ProjectDocument doc, const juce::File& file, 
     refreshPatternBox();
     playlistView.setSelectedPattern (currentPattern);
     playlistView.clearHistory(); // the arrangement was changed from outside: undo could not restore it safely
-    resetNoteHistory();
     playlistView.repaint();
     songStartTick = arrangement.hasLoop() ? arrangement.loopStartTick : 0;
     setSongMode (doc.songMode);

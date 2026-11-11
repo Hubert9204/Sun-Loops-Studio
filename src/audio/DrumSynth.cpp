@@ -1,5 +1,7 @@
 #include "audio/DrumSynth.h"
 
+#include "audio/Biquad.h"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -40,53 +42,18 @@ struct Rng
     double uniform() noexcept { return 0.5 * (next() + 1.0); } // [0, 1]
 };
 
-// RBJ biquads (transposed direct form II).
-struct Biquad
+// RBJ biquads (Biquad.h) at the drums' rate.
+double omega (double hz) noexcept { return kTwoPi * std::clamp (hz, 10.0, 0.45 * kSr) / kSr; }
+BiquadCoefs lowPass (double hz, double q) noexcept { return BiquadCoefs::lowPass (omega (hz), q); }
+BiquadCoefs highPass (double hz, double q) noexcept { return BiquadCoefs::highPass (omega (hz), q); }
+BiquadCoefs bandPass (double hz, double q) noexcept { return BiquadCoefs::bandPass (omega (hz), q); } // 0 dB at the centre
+
+void filter (Buffer& b, const BiquadCoefs& design)
 {
-    double b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0, z1 = 0, z2 = 0;
-
-    double tick (double x) noexcept
-    {
-        const double y = b0 * x + z1;
-        z1 = b1 * x - a1 * y + z2;
-        z2 = b2 * x - a2 * y;
-        return y;
-    }
-    void process (Buffer& b) noexcept
-    {
-        for (auto& s : b)
-            s = tick (s);
-    }
-
-    static Biquad make (double b0, double b1, double b2, double a0, double a1, double a2) noexcept
-    {
-        Biquad q;
-        q.b0 = b0 / a0;
-        q.b1 = b1 / a0;
-        q.b2 = b2 / a0;
-        q.a1 = a1 / a0;
-        q.a2 = a2 / a0;
-        return q;
-    }
-    static double omega (double hz) noexcept { return kTwoPi * std::clamp (hz, 10.0, 0.45 * kSr) / kSr; }
-    static Biquad lowPass (double hz, double q)
-    {
-        const double w = omega (hz), c = std::cos (w), alpha = std::sin (w) / (2.0 * q);
-        return make ((1 - c) / 2, 1 - c, (1 - c) / 2, 1 + alpha, -2 * c, 1 - alpha);
-    }
-    static Biquad highPass (double hz, double q)
-    {
-        const double w = omega (hz), c = std::cos (w), alpha = std::sin (w) / (2.0 * q);
-        return make ((1 + c) / 2, -(1 + c), (1 + c) / 2, 1 + alpha, -2 * c, 1 - alpha);
-    }
-    static Biquad bandPass (double hz, double q) // 0 dB at the centre
-    {
-        const double w = omega (hz), c = std::cos (w), alpha = std::sin (w) / (2.0 * q);
-        return make (alpha, 0, -alpha, 1 + alpha, -2 * c, 1 - alpha);
-    }
-};
-
-void filter (Buffer& b, Biquad f) { f.process (b); }
+    Biquad<1> f (design);
+    for (auto& s : b)
+        s = f.tick (0, s);
+}
 
 // A sine whose frequency glides from `start` to `end` (exponentially, time constant `glide`) with an exponential decay `decay`.
 void addTone (Buffer& b, double start, double end, double glide, double decay, double amp, double phase = 0.0, double attack = 0.0)
@@ -215,11 +182,11 @@ Buffer kick (const Style& s, double v, Rng& rng)
     addTone (b, start, s.kickBase, s.kickGlide, s.kickDecay * (0.85 + 0.15 * v), 1.0, 0.0, 0.0005);
     // the beater / click: a short burst of high-passed noise and a 1.6 kHz blip, stronger on harder hits
     auto click = noiseBuffer (b.size(), rng, s.kickClick * v, [] (double t) { return expEnv (t, 0.0025); });
-    filter (click, Biquad::highPass (1500.0, 0.7));
+    filter (click, highPass (1500.0, 0.7));
     mix (b, click);
     addTone (b, 1600.0, 1200.0, 0.002, 0.003, 0.25 * s.kickClick * v);
     saturate (b, s.kickDrive * (0.6 + 0.4 * v));
-    filter (b, Biquad::highPass (22.0, 0.7)); // no DC, no sub-sonic rumble
+    filter (b, highPass (22.0, 0.7)); // no DC, no sub-sonic rumble
     return b;
 }
 
@@ -231,8 +198,8 @@ Buffer snare (const Style& s, double v, Rng& rng)
     addTone (b, s.snareTone2 * bend, s.snareTone2, 0.010, s.snareToneDecay * 0.7, 0.45);
     const double tau = s.snareNoiseDecay * (0.7 + 0.3 * v);
     auto noise = noiseBuffer (b.size(), rng, s.snareNoise * (0.7 + 0.5 * v), [tau] (double t) { return expEnv (t, tau) * (1.0 - expEnv (t, 0.0008)); });
-    filter (noise, Biquad::highPass (s.snareNoiseLow, 0.7));
-    filter (noise, Biquad::lowPass (s.snareNoiseHigh * (0.6 + 0.4 * v), 0.7));
+    filter (noise, highPass (s.snareNoiseLow, 0.7));
+    filter (noise, lowPass (s.snareNoiseHigh * (0.6 + 0.4 * v), 0.7));
     mix (b, noise);
     saturate (b, 0.6 * v);
     return b;
@@ -258,8 +225,8 @@ Buffer clap (double v, Rng& rng, double tail)
             env = std::max (env, 0.55 * expEnv (t - at.back(), tail));
         b[i] = rng.next() * env;
     }
-    filter (b, Biquad::bandPass (1050.0 + 400.0 * v, 1.4));
-    filter (b, Biquad::highPass (500.0, 0.7));
+    filter (b, bandPass (1050.0 + 400.0 * v, 1.4));
+    filter (b, highPass (500.0, 0.7));
     return b;
 }
 
@@ -273,10 +240,10 @@ Buffer metal (double seconds, double decay, double v, Rng& rng, double noiseAmou
     for (const double f : kMetal)
         addSquare (b, f * (1.0 + 0.002 * rng.next()), 0.25, env);
     addNoise (b, rng, noiseAmount, env);
-    filter (b, Biquad::bandPass (high, 0.9));
-    filter (b, Biquad::highPass (low * (1.15 - 0.15 * v), 0.7));
-    filter (b, Biquad::highPass (low, 0.7));
-    filter (b, Biquad::lowPass (9000.0 + 8000.0 * v, 0.7));
+    filter (b, bandPass (high, 0.9));
+    filter (b, highPass (low * (1.15 - 0.15 * v), 0.7));
+    filter (b, highPass (low, 0.7));
+    filter (b, lowPass (9000.0 + 8000.0 * v, 0.7));
     return b;
 }
 
@@ -306,7 +273,7 @@ Buffer tom (const Style& s, double pitch, double v, Rng& rng)
     addTone (b, pitch * (1.25 + 0.35 * v), pitch, s.tomGlide, s.tomDecay * (0.85 + 0.15 * v), 1.0, 0.0, 0.0005);
     addTone (b, pitch * 1.5 * (1.2 + 0.3 * v), pitch * 1.5, s.tomGlide, s.tomDecay * 0.4, 0.25);
     auto hit = noiseBuffer (b.size(), rng, s.tomNoise * (0.4 + 0.6 * v), [] (double t) { return expEnv (t, 0.012); });
-    filter (hit, Biquad::bandPass (pitch * 8.0, 0.8));
+    filter (hit, bandPass (pitch * 8.0, 0.8));
     mix (b, hit);
     saturate (b, 0.4 * v);
     return b;
@@ -318,9 +285,9 @@ Buffer rim (double v, Rng& rng)
     addTone (b, 1700.0, 1700.0, 1.0, 0.010, 0.8);
     addTone (b, 460.0, 455.0, 1.0, 0.016, 0.6);
     auto click = noiseBuffer (b.size(), rng, 0.5 * v, [] (double t) { return expEnv (t, 0.0015); });
-    filter (click, Biquad::highPass (3000.0, 0.7));
+    filter (click, highPass (3000.0, 0.7));
     mix (b, click);
-    filter (b, Biquad::bandPass (1250.0, 0.8));
+    filter (b, bandPass (1250.0, 0.8));
     saturate (b, 1.5);
     return b;
 }
@@ -331,10 +298,10 @@ Buffer analogCowbell (double v, Rng& rng)
     auto env = [v] (double t) { return 0.62 * expEnv (t, 0.012) + 0.38 * expEnv (t, 0.10 + 0.04 * v); };
     addSquare (b, 540.0 * (1.0 + 0.001 * rng.next()), 0.5, env);
     addSquare (b, 800.0, 0.5, env);
-    filter (b, Biquad::bandPass (2640.0, 1.3));
-    filter (b, Biquad::bandPass (1700.0 + 900.0 * v, 0.7)); // a harder hit lets more of the upper partials through
+    filter (b, bandPass (2640.0, 1.3));
+    filter (b, bandPass (1700.0 + 900.0 * v, 0.7)); // a harder hit lets more of the upper partials through
     auto click = noiseBuffer (b.size(), rng, 0.3 * v, [] (double t) { return expEnv (t, 0.0012); });
-    filter (click, Biquad::highPass (4000.0, 0.7));
+    filter (click, highPass (4000.0, 0.7));
     mix (b, click);
     return b;
 }
@@ -359,8 +326,8 @@ Buffer shaker (double v, Rng& rng, double length = 0.16)
         const double grain = rng.uniform() < 0.35 ? rng.next() : 0.15 * rng.next();
         b[i] = grain * env;
     }
-    filter (b, Biquad::highPass (4200.0, 0.7));
-    filter (b, Biquad::bandPass (7500.0 + 2500.0 * v, 0.6));
+    filter (b, highPass (4200.0, 0.7));
+    filter (b, bandPass (7500.0 + 2500.0 * v, 0.6));
     return b;
 }
 
@@ -369,7 +336,7 @@ Buffer analogConga (double pitch, double v, Rng& rng)
     auto b = silence (0.5);
     addTone (b, pitch * (1.05 + 0.08 * v), pitch, 0.02, 0.10 + 0.03 * v, 1.0, 0.0, 0.0005);
     auto hit = noiseBuffer (b.size(), rng, 0.15 * v, [] (double t) { return expEnv (t, 0.004); });
-    filter (hit, Biquad::bandPass (pitch * 6.0, 1.0));
+    filter (hit, bandPass (pitch * 6.0, 1.0));
     mix (b, hit);
     return b;
 }
@@ -405,7 +372,7 @@ Buffer handDrum (double pitch, double v, Rng& rng, double decay, double bright, 
     }
     addModes (b, modes, 0.035 * v, 0.04);
     auto slap = noiseBuffer (b.size(), rng, (mute ? 0.5 : 0.25) * (0.4 + 0.6 * v), [] (double t) { return expEnv (t, 0.005); });
-    filter (slap, Biquad::bandPass (pitch * 7.0 * (0.8 + 0.4 * bright), 0.9));
+    filter (slap, bandPass (pitch * 7.0 * (0.8 + 0.4 * bright), 0.9));
     mix (b, slap);
     return b;
 }
@@ -416,7 +383,7 @@ Buffer timbale (double pitch, double v, Rng& rng)
     // the steel shell rings, the stick clicks
     addModes (b, { { pitch * 4.71, 0.10, 0.25 }, { pitch * 6.93, 0.07, 0.18 }, { 3100.0, 0.05 * v, 0.30 } });
     auto stick = noiseBuffer (b.size(), rng, 0.6 * v, [] (double t) { return expEnv (t, 0.0018); });
-    filter (stick, Biquad::highPass (2500.0, 0.7));
+    filter (stick, highPass (2500.0, 0.7));
     mix (b, stick);
     return b;
 }
@@ -430,7 +397,7 @@ Buffer bell (double pitch, double v, Rng& rng, const std::vector<double>& ratios
         modes.push_back ({ pitch * ratios[k], std::pow (0.45 + 0.25 * v, static_cast<double> (k)), decay / (1.0 + 0.6 * static_cast<double> (k)) });
     addModes (b, modes);
     auto stick = noiseBuffer (b.size(), rng, 0.35 * v, [] (double t) { return expEnv (t, 0.0015); });
-    filter (stick, Biquad::bandPass (pitch * 3.0, 0.8));
+    filter (stick, bandPass (pitch * 3.0, 0.8));
     mix (b, stick);
     return b;
 }
@@ -440,7 +407,7 @@ Buffer woodBlock (double pitch, double v, Rng& rng)
     auto b = silence (0.2);
     addModes (b, { { pitch, 1.0, 0.045 }, { pitch * 2.57, 0.45 * v, 0.020 }, { pitch * 4.21, 0.25 * v, 0.010 } });
     auto stick = noiseBuffer (b.size(), rng, 0.4 * v, [] (double t) { return expEnv (t, 0.001); });
-    filter (stick, Biquad::bandPass (pitch * 2.0, 0.7));
+    filter (stick, bandPass (pitch * 2.0, 0.7));
     mix (b, stick);
     return b;
 }
@@ -450,7 +417,7 @@ Buffer realClaves (double v, Rng& rng)
     auto b = silence (0.3);
     addModes (b, { { 2480.0, 1.0, 0.075 }, { 2480.0 * 2.71, 0.3 * v, 0.03 }, { 2480.0 * 5.2, 0.1 * v, 0.015 } });
     auto click = noiseBuffer (b.size(), rng, 0.3 * v, [] (double t) { return expEnv (t, 0.0008); });
-    filter (click, Biquad::highPass (2000.0, 0.7));
+    filter (click, highPass (2000.0, 0.7));
     mix (b, click);
     return b;
 }
@@ -470,7 +437,7 @@ Buffer tambourine (double v, Rng& rng)
     }
     addModes (b, modes);
     auto rattle = noiseBuffer (b.size(), rng, 0.25 * v, [] (double t) { return expEnv (t, 0.03); });
-    filter (rattle, Biquad::highPass (6000.0, 0.7));
+    filter (rattle, highPass (6000.0, 0.7));
     mix (b, rattle);
     // the skin under the hand
     addTone (b, 240.0, 220.0, 0.01, 0.03, 0.15 * v);

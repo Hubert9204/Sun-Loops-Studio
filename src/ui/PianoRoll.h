@@ -58,15 +58,12 @@ public:
     // (start < 0: none). Neither calls back.
     void setStartTick (int tick);
     void setLoopRegion (int startTick, int endTick);
-    int getLoopStart() const noexcept { return loopStart; }
-    int getLoopEnd() const noexcept { return loopEnd; }
     bool cancelLoopMode(); // Escape during Move / Resize from the menu: true if there was one to cancel
 
     // --- the toolbar's settings (0.23.0) ---
     void setGridTicks (int ticks);                 // the snap: 1920 (bar) ... 1 (none)
     int getGridTicks() const noexcept { return gridTicks; }
     void setScale (const theory::Scale& s, bool snapNotes); // the scale shown on the grid; snapNotes: new and moved notes go into it
-    const theory::Scale& getScale() const noexcept { return scale; }
     void setChordStamp (int chord, int inversion); // chord < 0: a click makes one note
     void setVelocityLaneVisible (bool visible);
     bool isVelocityLaneVisible() const noexcept { return velocityLane; }

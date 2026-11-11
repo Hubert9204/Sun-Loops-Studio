@@ -119,30 +119,6 @@ int AudioEngine::getNumActiveInputChannels() const
     return device != nullptr ? device->getActiveInputChannels().countNumberOfSetBits() : 0;
 }
 
-juce::String AudioEngine::enableDefaultInput()
-{
-    auto* device = deviceManager.getCurrentAudioDevice();
-    if (device == nullptr)
-        return "No audio device is running.";
-    if (getNumActiveInputChannels() > 0)
-        return {};
-
-    auto setup = deviceManager.getAudioDeviceSetup();
-    const int available = device->getInputChannelNames().size();
-    if (setup.inputDeviceName.isEmpty())
-        setup.inputDeviceName = setup.outputDeviceName;
-
-    setup.useDefaultInputChannels = false;
-    setup.inputChannels.clear();
-    setup.inputChannels.setRange (0, std::max (1, std::min (2, available)), true);
-
-    const auto error = deviceManager.setAudioDeviceSetup (setup, true);
-    if (error.isNotEmpty() || getNumActiveInputChannels() == 0)
-        return "No audio input could be opened (" + (error.isNotEmpty() ? error : juce::String ("the device has none")) + "). "
-               "Connect a microphone or an audio interface and choose it in the Audio dialog.";
-    return {};
-}
-
 juce::StringArray AudioEngine::getInputChannelNames() const
 {
     auto* device = deviceManager.getCurrentAudioDevice();

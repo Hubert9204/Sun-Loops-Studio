@@ -64,22 +64,12 @@ ImportResult decodeNative (const juce::File& file)
         result.warning = file.getFileName() + " is longer than " + juce::String (static_cast<int> (kMaxImportSeconds / 60.0))
                        + " minutes: only the first " + juce::String (static_cast<int> (kMaxImportSeconds / 60.0)) + " minutes were read.";
 
-    juce::AudioBuffer<float> buffer (2, frames);
-    buffer.clear();
-    if (! reader->read (&buffer, 0, frames, 0, true, true))
+    auto data = readSampleData (*reader, frames, file.getFileNameWithoutExtension().toStdString(), file.getFullPathName().toStdString());
+    if (data == nullptr)
     {
         result.error = "Could not decode " + file.getFileName();
         return result;
     }
-    if (reader->numChannels == 1)
-        buffer.copyFrom (1, 0, buffer, 0, 0, frames);
-
-    auto data = std::make_shared<SampleData>();
-    data->left.assign (buffer.getReadPointer (0), buffer.getReadPointer (0) + frames);
-    data->right.assign (buffer.getReadPointer (1), buffer.getReadPointer (1) + frames);
-    data->sampleRate = reader->sampleRate;
-    data->name = file.getFileNameWithoutExtension().toStdString();
-    data->source = file.getFullPathName().toStdString();
 
     for (float s : data->left)
         if (! std::isfinite (s))
@@ -149,6 +139,24 @@ FileKind classifyMediaFile (const juce::File& file)
     if (hasExtensionIn (file, importableVideoExtensions()))
         return FileKind::Video;
     return FileKind::Unsupported;
+}
+
+std::shared_ptr<SampleData> readSampleData (juce::AudioFormatReader& reader, int frames, std::string name, std::string source)
+{
+    juce::AudioBuffer<float> buffer (2, frames);
+    buffer.clear();
+    if (! reader.read (&buffer, 0, frames, 0, true, true))
+        return nullptr;
+    if (reader.numChannels == 1)
+        buffer.copyFrom (1, 0, buffer, 0, 0, frames);
+
+    auto data = std::make_shared<SampleData>();
+    data->left.assign (buffer.getReadPointer (0), buffer.getReadPointer (0) + frames);
+    data->right.assign (buffer.getReadPointer (1), buffer.getReadPointer (1) + frames);
+    data->sampleRate = reader.sampleRate;
+    data->name = std::move (name);
+    data->source = std::move (source);
+    return data;
 }
 
 ImportResult importAudioFile (const juce::File& file, const juce::File& ffmpegOverride)

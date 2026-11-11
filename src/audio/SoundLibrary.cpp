@@ -1,5 +1,7 @@
 #include "audio/SoundLibrary.h"
 
+#include "audio/AudioImport.h"
+
 #include <algorithm>
 #include <atomic>
 #include <map>
@@ -111,21 +113,7 @@ std::shared_ptr<const SampleData> decode (const juce::MemoryBlock& block, const 
     if (reader == nullptr || reader->numChannels < 1 || reader->lengthInSamples < 2 || reader->lengthInSamples > (1 << 26))
         return nullptr;
 
-    const int frames = static_cast<int> (reader->lengthInSamples);
-    juce::AudioBuffer<float> buffer (2, frames);
-    buffer.clear();
-    if (! reader->read (&buffer, 0, frames, 0, true, true))
-        return nullptr;
-    if (reader->numChannels == 1)
-        buffer.copyFrom (1, 0, buffer, 0, 0, frames);
-
-    auto sample = std::make_shared<SampleData>();
-    sample->left.assign (buffer.getReadPointer (0), buffer.getReadPointer (0) + frames);
-    sample->right.assign (buffer.getReadPointer (1), buffer.getReadPointer (1) + frames);
-    sample->sampleRate = reader->sampleRate;
-    sample->name = name;
-    sample->source = source;
-    return sample;
+    return readSampleData (*reader, static_cast<int> (reader->lengthInSamples), name, source);
 }
 
 SamplerSettings settingsFrom (const juce::var& v)

@@ -5,11 +5,21 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include "synthkit/ParamKit.h"
+
 // SunBurst (0.48.0): a polyphonic synthesizer for electronic sounds, built as a VST3 / Standalone plugin and bundled with
 // Sun Loops Studio. This file names every parameter, its range and the lists (waveforms, filters, modulation sources and
 // destinations) that the engine and the interface share.
 namespace sunburst
 {
+using synthkit::get;
+using synthkit::getb;
+using synthkit::geti;
+using synthkit::distNames;
+using synthkit::lfoShapeNames;
+using synthkit::syncBeats;
+using synthkit::syncNames;
+
 constexpr int kNumOscs = 3;
 constexpr int kNumEnvs = 3;  // 1 = amplitude, 2 = filter, 3 = modulation (also the pitch envelope)
 constexpr int kNumLfos = 3;
@@ -51,12 +61,8 @@ constexpr int kFirstFxDest = static_cast<int> (Dest::DistDrive); // from here on
 const juce::StringArray& waveNames();
 const juce::StringArray& wavetableNames();
 const juce::StringArray& filterNames();
-const juce::StringArray& lfoShapeNames();
-const juce::StringArray& syncNames();      // tempo divisions for the LFOs and the delay
-double syncBeats (int index);              // the length of a division in quarter notes
 const juce::StringArray& sourceNames();
 const juce::StringArray& destNames();
-const juce::StringArray& distNames();
 const juce::StringArray& arpModeNames();
 const juce::StringArray& arpRateNames();
 double arpRateBeats (int index);
@@ -99,7 +105,4 @@ struct ParamRefs
     void attach (juce::AudioProcessorValueTreeState& state);
 };
 
-inline float get (const std::atomic<float>* p) noexcept { return p != nullptr ? p->load (std::memory_order_relaxed) : 0.0f; }
-inline int geti (const std::atomic<float>* p) noexcept { return static_cast<int> (get (p) + 0.5f); }
-inline bool getb (const std::atomic<float>* p) noexcept { return get (p) > 0.5f; }
 } // namespace sunburst

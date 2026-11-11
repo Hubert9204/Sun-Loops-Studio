@@ -32,6 +32,10 @@ struct ImportResult
     juce::String warning;                   // something was cut or repaired, but the import worked
 };
 
+// Reads the first `frames` frames of `reader` as stereo audio (mono is copied to both sides); null when reading fails (0.51.0:
+// the import, the sound library and the built-in sounds share it).
+std::shared_ptr<SampleData> readSampleData (juce::AudioFormatReader& reader, int frames, std::string name, std::string source);
+
 // Decodes an audio file (stereo, at its own sample rate; mono is copied to both sides). `source` of the result is the
 // file's absolute path.
 ImportResult importAudioFile (const juce::File& file, const juce::File& ffmpegOverride = {});

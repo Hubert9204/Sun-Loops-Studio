@@ -60,7 +60,6 @@ void MainComponent::openDrumMachine (int channelIndex)
             if (i == safe->selected)
                 safe->pianoRoll.setNotes (safe->channels[static_cast<size_t> (i)].notes);
             safe->publishProject();
-            safe->recordNoteChange();
         };
         view.onStatus = [safe = juce::Component::SafePointer<MainComponent> (this)] (const juce::String& text)
         {

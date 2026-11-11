@@ -2,6 +2,30 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.51.0 - 2026-11-11
+
+A clean-up release from a review of the whole code for duplicated, obsolete, redundant and slow code. Nothing new to see; the
+program, SunBurst and HexForge work as before.
+
+### Changed
+- **Undo history**: while a mouse button is down (a knob turned, a clip or note dragged) the project is no longer written out
+  and compared at every movement; the edit is recorded once, when the button is let go. Dragging in big projects is lighter.
+  Two separate clicks made within five seconds are now two undo steps (before, they could merge into one).
+- **SunBurst and HexForge** share one plugin base (`src/synthkit`: presets, user preset files, programs, saved state, MIDI and
+  voice allocation, mono / legato key stack) and one set of header controls (`plugins/common/SynthUi`: preset bar, output
+  meter, modulation-matrix row). HexForge now also follows polyphonic aftertouch, like SunBurst.
+- The effects, the drum synthesizer and the loudness meter share one biquad filter (`src/audio/Biquad.h`) instead of three
+  copies; the import, the sound library and the built-in sounds share one reader of decoded audio (`readSampleData`).
+- SunBurst's and HexForge's chorus computes one sine and one cosine per sample instead of six sines; their delay and reverb
+  lines wrap without a division per sample.
+- The Playlist works out the pitch range of a pattern's notes (for the clip previews) only for the clips in sight.
+
+### Removed
+- The old note-only undo, which no command used any more but which still copied every note of every channel at each note edit
+  and kept up to 200 copies in memory.
+- Fourteen functions nothing called (in `AudioEngine`, `PianoRoll`, `PlaylistTimeline`, `MixerPanel`, `AssignTrackDialog`,
+  `DrumMachine` and SunBurst's DSP).
+
 ## 0.50.0 - 2026-11-11
 
 ### Added

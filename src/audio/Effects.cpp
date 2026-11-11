@@ -20,8 +20,8 @@ constexpr float kMaxDelaySeconds = 1.6f; // 1 s plus the right channel's spread 
 
 inline float dbToGain (float db) noexcept { return std::pow (10.0f, db / 20.0f); }
 
-// RBJ filter designs, normalised (a0 = 1).
-struct Coefs { double b0, b1, b2, a1, a2; };
+// RBJ shelf and peak designs (the low-, high- and band-pass ones are in Biquad.h).
+using Coefs = BiquadCoefs;
 
 Coefs shelfCoefs (bool isLow, double hz, double gainDb, double sampleRate) noexcept
 {
@@ -119,16 +119,7 @@ void EffectUnit::prepare (double newSampleRate)
     for (size_t stage = 0; stage < static_cast<size_t> (kAaStages); ++stage)
     {
         const double stageQ = 1.0 / (2.0 * std::cos ((2.0 * static_cast<double> (stage) + 1.0) * kPi / (4.0 * kAaStages)));
-        const double w0 = 2.0 * kPi * fc / osRate;
-        const double alpha = std::sin (w0) / (2.0 * stageQ);
-        const double cw = std::cos (w0);
-        const double a0 = 1.0 + alpha;
-        Biquad q;
-        q.b0 = (1.0 - cw) / 2.0 / a0;
-        q.b1 = (1.0 - cw) / a0;
-        q.b2 = (1.0 - cw) / 2.0 / a0;
-        q.a1 = -2.0 * cw / a0;
-        q.a2 = (1.0 - alpha) / a0;
+        const Biquad q (BiquadCoefs::lowPass (2.0 * kPi * fc / osRate, stageQ));
         upFilter[stage] = q;
         downFilter[stage] = q;
     }
@@ -141,17 +132,7 @@ void EffectUnit::prepare (double newSampleRate)
         const double qs[2] = { 0.54119610, 1.30656296 };
         for (int stage = 0; stage < 2; ++stage)
         {
-            const double w0 = 2.0 * kPi * cutoff / sampleRate;
-            const double alpha = std::sin (w0) / (2.0 * qs[stage]);
-            const double cw = std::cos (w0);
-            const double a0 = 1.0 + alpha;
-            Biquad q;
-            q.b0 = (1.0 - cw) / 2.0 / a0;
-            q.b1 = (1.0 - cw) / a0;
-            q.b2 = (1.0 - cw) / 2.0 / a0;
-            q.a1 = -2.0 * cw / a0;
-            q.a2 = (1.0 - alpha) / a0;
-            (stage == 0 ? pcAa1 : pcAa2) = q;
+            (stage == 0 ? pcAa1 : pcAa2) = Biquad (BiquadCoefs::lowPass (2.0 * kPi * cutoff / sampleRate, qs[stage]));
         }
     }
 
@@ -317,24 +298,15 @@ void EffectUnit::process (const EffectSlot& requested, float* left, float* right
 
 // ------------------------------------------------------------------------- equalizer
 
-void EffectUnit::Biquad::process (float* l, float* r, int n) noexcept
+namespace
+{
+void processStereo (sls::Biquad<2>& q, float* l, float* r, int n) noexcept
 {
     for (int i = 0; i < n; ++i)
     {
-        l[i] = static_cast<float> (tickL (l[i]));
-        r[i] = static_cast<float> (tickR (r[i]));
+        l[i] = static_cast<float> (q.tick (0, l[i]));
+        r[i] = static_cast<float> (q.tick (1, r[i]));
     }
-}
-
-namespace
-{
-void setCoefs (double& b0, double& b1, double& b2, double& a1, double& a2, const Coefs& c) noexcept
-{
-    b0 = c.b0;
-    b1 = c.b1;
-    b2 = c.b2;
-    a1 = c.a1;
-    a2 = c.a2;
 }
 } // namespace
 
@@ -344,15 +316,15 @@ void EffectUnit::runEqualizer (const EffectSlot& s, float* l, float* r, int n) n
     {
         eqCached = s.params;
         eqValid = true;
-        setCoefs (low.b0, low.b1, low.b2, low.a1, low.a2, shelfCoefs (true, 120.0, s.params[0], sampleRate));
-        setCoefs (high.b0, high.b1, high.b2, high.a1, high.a2, shelfCoefs (false, 6000.0, s.params[3], sampleRate));
-        setCoefs (mid.b0, mid.b1, mid.b2, mid.a1, mid.a2, peakCoefs (s.params[2], s.params[1], 0.8, sampleRate));
+        low.setCoefs (shelfCoefs (true, 120.0, s.params[0], sampleRate));
+        high.setCoefs (shelfCoefs (false, 6000.0, s.params[3], sampleRate));
+        mid.setCoefs (peakCoefs (s.params[2], s.params[1], 0.8, sampleRate));
     }
 
     // A band at 0 dB is skipped entirely (and kept clean for when it is raised again).
-    if (std::fabs (s.params[0]) >= 0.01f) low.process (l, r, n); else low.clearState();
-    if (std::fabs (s.params[1]) >= 0.01f) mid.process (l, r, n); else mid.clearState();
-    if (std::fabs (s.params[3]) >= 0.01f) high.process (l, r, n); else high.clearState();
+    if (std::fabs (s.params[0]) >= 0.01f) processStereo (low, l, r, n); else low.clearState();
+    if (std::fabs (s.params[1]) >= 0.01f) processStereo (mid, l, r, n); else mid.clearState();
+    if (std::fabs (s.params[3]) >= 0.01f) processStereo (high, l, r, n); else high.clearState();
 }
 
 void EffectUnit::runParametricEq (const EffectSlot& s, float* l, float* r, int n) noexcept
@@ -361,13 +333,13 @@ void EffectUnit::runParametricEq (const EffectSlot& s, float* l, float* r, int n
     {
         eqCached = s.params;
         eqValid = true;
-        setCoefs (low.b0, low.b1, low.b2, low.a1, low.a2, shelfCoefs (true, s.params[0], s.params[1], sampleRate));
-        setCoefs (mid.b0, mid.b1, mid.b2, mid.a1, mid.a2, peakCoefs (s.params[2], s.params[3], s.params[4], sampleRate));
-        setCoefs (high.b0, high.b1, high.b2, high.a1, high.a2, shelfCoefs (false, s.params[5], s.params[6], sampleRate));
+        low.setCoefs (shelfCoefs (true, s.params[0], s.params[1], sampleRate));
+        mid.setCoefs (peakCoefs (s.params[2], s.params[3], s.params[4], sampleRate));
+        high.setCoefs (shelfCoefs (false, s.params[5], s.params[6], sampleRate));
     }
-    if (std::fabs (s.params[1]) >= 0.01f) low.process (l, r, n); else low.clearState();
-    if (std::fabs (s.params[3]) >= 0.01f) mid.process (l, r, n); else mid.clearState();
-    if (std::fabs (s.params[6]) >= 0.01f) high.process (l, r, n); else high.clearState();
+    if (std::fabs (s.params[1]) >= 0.01f) processStereo (low, l, r, n); else low.clearState();
+    if (std::fabs (s.params[3]) >= 0.01f) processStereo (mid, l, r, n); else mid.clearState();
+    if (std::fabs (s.params[6]) >= 0.01f) processStereo (high, l, r, n); else high.clearState();
     if (std::fabs (s.params[7]) >= 0.01f)
     {
         const float g = dbToGain (s.params[7]);
@@ -607,7 +579,7 @@ void EffectUnit::runOverdrive (const EffectSlot& s, float* l, float* r, int n) n
                 const double u0 = k == 0 ? static_cast<double> (shaped) * kOversample : 0.0;
                 double u = u0;
                 for (auto& q : upFilter)
-                    u = ch == 0 ? q.tickL (u) : q.tickR (u);
+                    u = ch == 0 ? q.tick (0, u) : q.tick (1, u);
                 // First-order antiderivative anti-aliasing of tanh (F = log cosh): the curve's own aliasing, which oversampling alone
                 // leaves when the drive turns a sine into a square, drops by a further 1/n per harmonic.
                 const double v = static_cast<double> (gain) * u + bias;
@@ -616,7 +588,7 @@ void EffectUnit::runOverdrive (const EffectSlot& s, float* l, float* r, int n) n
                 const auto logCosh = [] (double z) { const double a = std::abs (z); return a + std::log1p (std::exp (-2.0 * a)) - 0.6931471805599453; };
                 double d = (std::abs (v - vPrev) < 1.0e-6 ? std::tanh (0.5 * (v + vPrev)) : (logCosh (v) - logCosh (vPrev)) / (v - vPrev)) - biasOffset;
                 for (auto& q : downFilter)
-                    d = ch == 0 ? q.tickL (d) : q.tickR (d);
+                    d = ch == 0 ? q.tick (0, d) : q.tick (1, d);
                 if (k == kOversample - 1)
                     y = static_cast<float> (d);
             }
@@ -1483,7 +1455,7 @@ void EffectUnit::runPitchCorrector (const EffectSlot& slot, float* left, float* 
         lineR[static_cast<size_t> (delayWrite)] = inR;
         preDelay[static_cast<size_t> (preDelayWrite)] = mono;
 
-        const auto filtered = static_cast<float> (pcAa2.tickL (pcAa1.tickL (mono)));
+        const auto filtered = static_cast<float> (pcAa2.tick (0, pcAa1.tick (0, mono)));
         if (++pcPhase >= pcFactor)
         {
             pcPhase = 0;

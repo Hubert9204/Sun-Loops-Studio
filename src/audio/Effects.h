@@ -7,6 +7,7 @@
 #include <memory>
 #include <vector>
 
+#include "audio/Biquad.h"
 #include "audio/HostedPlugin.h"
 
 namespace sls
@@ -392,15 +393,7 @@ public:
     int latencySamples (EffectType t) const noexcept { return t == EffectType::Maximizer ? lookahead : 0; }
 
 private:
-    struct Biquad
-    {
-        double b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0;
-        double z1l = 0, z2l = 0, z1r = 0, z2r = 0;
-        void process (float* l, float* r, int n) noexcept;
-        double tickL (double x) noexcept { const double y = b0 * x + z1l; z1l = b1 * x - a1 * y + z2l; z2l = b2 * x - a2 * y; return y; }
-        double tickR (double x) noexcept { const double y = b0 * x + z1r; z1r = b1 * x - a1 * y + z2r; z2r = b2 * x - a2 * y; return y; }
-        void clearState() noexcept { z1l = z2l = z1r = z2r = 0.0; }
-    };
+    using Biquad = sls::Biquad<2>;
 
     using Comb = EffectMemory::Comb;
     using Allpass = EffectMemory::Allpass;

@@ -1038,15 +1038,6 @@ MixerPanel::MixerPanel()
     };
 }
 
-MixerTrack* MixerPanel::trackFor (int index) noexcept
-{
-    if (index == kMasterIndex)
-        return masterData;
-    if (index >= kAuxIndexBase)
-        return consoleData != nullptr && index - kAuxIndexBase < kAuxBuses ? &consoleData->aux[static_cast<size_t> (index - kAuxIndexBase)] : nullptr;
-    return trackData != nullptr && index >= 0 && index < static_cast<int> (trackData->size()) ? &(*trackData)[static_cast<size_t> (index)] : nullptr;
-}
-
 void MixerPanel::selectAux (int aux)
 {
     if (consoleData == nullptr || aux < 0 || aux >= static_cast<int> (auxStrips.size()))

@@ -3,6 +3,7 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 
 #include "common/HardwareUi.h"
+#include "common/SynthUi.h"
 #include "sunburst/SunBurstProcessor.h"
 
 namespace sunburst
@@ -26,10 +27,6 @@ public:
 private:
     void timerCallback() override;
     void showPage (int page);
-    void showPresetMenu();
-    void stepPreset (int delta);
-    void savePresetDialog();
-    void refreshPresetLabel();
 
     SunBurstProcessor& processor;
     SunBurstLook look;
@@ -37,11 +34,9 @@ private:
     std::vector<std::unique_ptr<juce::Component>> owned;
     juce::OwnedArray<juce::TextButton> pageButtons;
     std::array<juce::Component, 3> pages;
-    juce::TextButton presetButton, prevButton { "<" }, nextButton { ">" }, saveButton { "Save" };
     juce::MidiKeyboardComponent keyboard;
-    std::unique_ptr<juce::Component> meter;
-    std::unique_ptr<juce::AlertWindow> saveWindow;
-    int seenGeneration = -1;
+    hwui::PresetBar presetBar;
+    hwui::Meter meter { juce::Colour (0xffe8442e) };
     int page = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SunBurstEditor)

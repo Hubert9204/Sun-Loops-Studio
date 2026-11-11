@@ -76,13 +76,10 @@ public:
     // Effect memory (0.29.0): call from the message thread's timer. Makes the big buffers that reverbs, delays, choruses and Pitch
     // Correctors in more slots than the player's pool covers are waiting for (see Player::effectMemoryShortfall).
     void serviceEffectMemory();
-    int effectSlotsWaitingForMemory() const noexcept { return player.effectMemoryShortfall(); }
     int timeShapersWithoutMemory() const noexcept { return player.timeShaperShortfall(); } // only shape the volume (0.41.0)
 
     // Audio input. The input is only opened when the user chooses one in the Audio dialog or presses Record.
     int getNumActiveInputChannels() const;
-    // Switches on the device's first input channels (up to two) if none is on. Returns an error message, empty on success.
-    juce::String enableDefaultInput();
     // The names of every input channel of the device (also those that are switched off), in order.
     juce::StringArray getInputChannelNames() const;
     // Switches on these input channels of the device (counted from 0), keeping those already on. Error message, or empty.
@@ -105,7 +102,6 @@ public:
     juce::String startRecording (const std::vector<RecordStream>& streams, bool fromSongStart, int countInBeats = 0);
     bool isCountingIn() const noexcept { return countingIn.load (std::memory_order_relaxed); }
     std::vector<InputRecorder::Take> stopRecording(); // in the order of the streams; the transport keeps running
-    bool isRecording() const noexcept { return captureGate.load (std::memory_order_relaxed); }
     double getRecordedSeconds() const noexcept { return recorders[0].getSecondsRecorded(); }
     float consumeStreamPeak (int stream) noexcept
     {

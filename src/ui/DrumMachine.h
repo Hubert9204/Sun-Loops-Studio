@@ -36,7 +36,6 @@ public:
     void setKitsFolder (const juce::File& folder) { kitsFolder = folder; }
     void refresh(); // the channel changed from outside (another kit, another pattern)
 
-    int selectedPad() const noexcept { return selected; }
     void selectPad (int pad);
 
     void paint (juce::Graphics&) override;

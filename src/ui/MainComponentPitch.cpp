@@ -30,15 +30,9 @@ void MainComponent::openPitchEditorForClip (int index)
         return refuse ("The pitch editor is already open: apply or cancel that edit first.");
     }
 
-    const double rate = clip.data->sampleRate;
-    const int first = static_cast<int> (std::lround (clip.offsetSeconds * rate));
-    const int count = std::max (2, static_cast<int> (std::lround (ticksToSeconds (clip.lengthTicks, bpmSlider.getValue()) * rate)));
-    auto region = cropToRange (clip.data, { first, first + count });
-    if (region == nullptr)
+    auto copy = playedPartOf (clip);
+    if (copy == nullptr)
         return;
-    auto copy = std::make_shared<SampleData> (*region);
-    copy->name = clip.name;
-    copy->source.clear();
 
     pitchEditorWindow = std::make_unique<PitchEditorWindow> (engine);
     auto* window = pitchEditorWindow.get();

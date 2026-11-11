@@ -48,7 +48,8 @@ Use `-DCMAKE_BUILD_TYPE=Debug` while developing: it enables JUCE's `jassert` che
 The build also makes **SunBurst** (0.48.0), the synthesizer plugin: `build/SunBurst_artefacts/Release/VST3/SunBurst.vst3` and the
 standalone program `build/SunBurst_artefacts/Release/Standalone/SunBurst`. Sun Loops Studio run from the build folder finds the
 VST3 there. `-DSLS_BUILD_SUNBURST=OFF` leaves it out. **HexForge** (0.50.0) is built the same way
-(`build/HexForge_artefacts/Release/...`, `-DSLS_BUILD_HEXFORGE=OFF` leaves it out) and installed next to SunBurst. To use it in another program, copy `SunBurst.vst3` to `~/.vst3`.
+(`build/HexForge_artefacts/Release/...`, `-DSLS_BUILD_HEXFORGE=OFF` leaves it out) and installed next to SunBurst. Both compile
+`src/synthkit` (their shared plugin base) and `plugins/common` (their shared controls) into themselves. To use it in another program, copy `SunBurst.vst3` to `~/.vst3`.
 
 ## Install
 

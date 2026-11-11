@@ -5,6 +5,21 @@
 
 namespace sls
 {
+// A copy of the part of the audio that a clip plays (its offset and length), for the sample and pitch editors.
+std::shared_ptr<SampleData> MainComponent::playedPartOf (const AudioClip& clip) const
+{
+    const double rate = clip.data->sampleRate;
+    const int first = static_cast<int> (std::lround (clip.offsetSeconds * rate));
+    const int count = std::max (2, static_cast<int> (std::lround (ticksToSeconds (clip.lengthTicks, bpmSlider.getValue()) * rate)));
+    auto region = cropToRange (clip.data, { first, first + count });
+    if (region == nullptr)
+        return nullptr;
+    auto copy = std::make_shared<SampleData> (*region);
+    copy->name = clip.name;
+    copy->source.clear();
+    return copy;
+}
+
 // "Edit sample..." on an audio clip: the editor opens on exactly the part of the audio the clip plays (so what you see is what you
 // hear), works on a copy, and on Apply writes the result to a NEW WAV file in the Samples folder (the original is never touched)
 // and puts it on the clip, cut at the slice markers if there are any. The clip then plays the whole edited audio from its start.
@@ -38,16 +53,9 @@ void MainComponent::openSampleEditorForClip (int index)
         return;
     }
 
-    // The part the clip plays.
-    const double rate = clip.data->sampleRate;
-    const int first = static_cast<int> (std::lround (clip.offsetSeconds * rate));
-    const int count = std::max (2, static_cast<int> (std::lround (ticksToSeconds (clip.lengthTicks, bpmSlider.getValue()) * rate)));
-    auto region = cropToRange (clip.data, { first, first + count });
-    if (region == nullptr)
+    auto copy = playedPartOf (clip);
+    if (copy == nullptr)
         return;
-    auto copy = std::make_shared<SampleData> (*region);
-    copy->name = clip.name;
-    copy->source.clear();
 
     sampleEditorWindow = std::make_unique<SampleEditorWindow> (engine);
     auto* window = sampleEditorWindow.get();

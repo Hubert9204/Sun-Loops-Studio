@@ -52,7 +52,6 @@ void MainComponent::selectPattern (int index)
     patternBox.setSelectedId (index + 1, juce::dontSendNotification);
     statusLabel.setText ("Pattern: " + juce::String (arrangement.patterns[static_cast<size_t> (index)].name),
                          juce::dontSendNotification);
-    lastNoteState = captureNoteState(); // another pattern is not a note edit
     publishProject();
 }
 
@@ -200,7 +199,6 @@ void MainComponent::loadPatternIntoChannels (int index)
         strips[c]->refreshFromChannel();
     }
     pianoRoll.setNotes (channels[static_cast<size_t> (selected)].notes);
-    resetNoteHistory(); // the pattern numbers behind the old states may be gone
 }
 
 void MainComponent::deletePattern (int index)

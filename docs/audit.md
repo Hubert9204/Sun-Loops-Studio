@@ -27,6 +27,25 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.51.0 (review for duplicated, obsolete, redundant and slow code)
+Method: a script that finds windows of 10 or more identical statements (spaces and comments ignored) across `src` and
+`plugins` (about 53 000 lines); a script that lists names declared in a header and used at most twice; reading of the hot paths
+(Player, the effects, both synthesizers' voices, the Playlist's paint, the undo history).
+
+Fixed: the old note-only undo (never called, but copying every note at each note edit and keeping up to 200 copies); the
+project being serialised to JSON at every mouse movement of a drag (now once when the button is let go); 14 unused functions;
+about 250 duplicated lines between SunBurst and HexForge (now `src/synthkit` and `plugins/common/SynthUi`); three biquad
+copies; three copies of the reader-to-`SampleData` code; the Player's two identical walks over every effect slot; three
+identical drag endings in the Playlist; the clip-region copy shared by the sample and pitch editors; six sines per sample in
+the synthesizers' chorus (now one sine and one cosine) and a division per sample in their delay and reverb lines; the Playlist
+working out every pattern's pitch range on each paint (now only for the clips in sight).
+
+Looked at and left as it is: the old-file compatibility code (`kLegacyPlaylistTracks`, `legacyActiveSteps`, `bakeLegacyRepeats`),
+needed to open projects saved by early versions; SunBurst's float EQ biquad (per-sample float maths in a plugin, not worth moving
+to doubles); the synthesizers' per-block `exp2`, `cos` and `sin` (once per block per voice, not per sample); HexForge's 31-tap
+decimator (its cut-off is 0.23, not a half-band filter, so no taps are zero); the repeated include lists of the
+`MainComponent*.cpp` files.
+
 ## After 0.50.0
 HexForge reads a WAV for a spectral wave on the message thread with JUCE's readers (at most 4096 samples), and parses spectra
 from its state with clamped values (a malformed one falls back to the default). A new spectral table is built off the audio

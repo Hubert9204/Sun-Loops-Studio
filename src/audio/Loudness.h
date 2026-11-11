@@ -7,6 +7,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "audio/Biquad.h"
+
 namespace sls
 {
 // Loudness and peak metering of a stereo signal, as in ITU-R BS.1770-4 and EBU R128 / Tech 3341 / Tech 3342. Free of JUCE.
@@ -75,20 +77,7 @@ private:
     static constexpr int kTaps = 4 * kPerPhase;
     static constexpr int kHistory = 32;     // a power of two, at least kPerPhase
 
-    struct Biquad
-    {
-        double b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0;
-        std::array<double, 2> z1 {}, z2 {}; // one state per channel
-
-        double run (int ch, double x) noexcept
-        {
-            const auto c = static_cast<size_t> (ch);
-            const double y = b0 * x + z1[c];
-            z1[c] = b1 * x - a1 * y + z2[c];
-            z2[c] = b2 * x - a2 * y;
-            return y;
-        }
-    };
+    using Biquad = sls::Biquad<2>;
 
     struct Histogram
     {
@@ -173,7 +162,7 @@ private:
         }
     }
 
-    double weight (int ch, double x) noexcept { return stage2.run (ch, stage1.run (ch, x)); }
+    double weight (int ch, double x) noexcept { return stage2.tick (static_cast<size_t> (ch), stage1.tick (static_cast<size_t> (ch), x)); }
 
     float interpolatedPeak (float l, float r) noexcept
     {

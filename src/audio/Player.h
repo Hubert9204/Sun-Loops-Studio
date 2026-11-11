@@ -313,6 +313,10 @@ private:
     std::array<std::vector<float>, 2 * kTimeBuffers> timeBuffers;
     std::array<EffectUnit*, kTimeBuffers> timeBufferOwner {};
     void lendTimeBuffers (const Project& project) noexcept;
+    // Calls visit (unit, slot) for every effect unit of the tracks (also those beyond the project's, which had more tracks at the
+    // last block: they see an empty slot), the aux buses and the master.
+    template <class Visit>
+    void forEachEffectSlot (const Project& project, const Visit& visit) noexcept;
     std::atomic<int> timeShaperShortfallCount { 0 };
 
 public:

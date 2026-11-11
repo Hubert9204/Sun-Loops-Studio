@@ -42,7 +42,6 @@ void MainComponent::remapChannels (const std::vector<int>& newToOld, int newSele
     refreshRackStrips();
 
     playlistView.clearHistory(); // its snapshots hold automation clips with the old channel numbers
-    resetNoteHistory();
     playlistView.refreshTimeline();
     selectChannel (std::clamp (newSelected, 0, static_cast<int> (channels.size()) - 1));
     updateTrackRouting();

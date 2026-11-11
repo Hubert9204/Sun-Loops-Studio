@@ -649,7 +649,8 @@ to the pattern: they are the same in every pattern. Mixer tracks and their effec
 a take of **Rec notes**), channel settings (volume, pan, pitch, swing, mute/solo, instrument, sample, name, mixer track), channels added,
 cloned, moved or deleted, drum-kit edits, patterns added, renamed or deleted, the pattern length, the playlist, the mixer (faders, balance,
 effects and their settings, sends, VCA groups), tempo and master volume. The File menu has the two commands too. Everything changed while one
-mouse button stays down (a knob turned, a note dragged, steps painted) is one step; the last 100 steps are kept. Opening or creating a project
+mouse button stays down (a knob turned, a note dragged, steps painted) is one step, recorded when you let go of the button; the last
+100 steps are kept. Opening or creating a project
 starts a new history.
 
 With the mouse over the Playlist the same keys use the Playlist's own, finer history of clip edits (its **Undo** / **Redo** buttons do the same).

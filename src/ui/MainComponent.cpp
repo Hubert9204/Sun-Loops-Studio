@@ -340,7 +340,6 @@ MainComponent::MainComponent()
         pianoRoll.setNotes ({});
         strips[static_cast<size_t> (selected)]->repaint();
         publishProject();
-        recordNoteChange();
     };
     deviceButton.onClick = [this] { openAudioSettings(); };
 
@@ -450,7 +449,6 @@ MainComponent::MainComponent()
         channels[static_cast<size_t> (selected)].notes = pianoRoll.getNotes();
         strips[static_cast<size_t> (selected)]->repaint();
         publishProject();
-        recordNoteChange();
     };
 
     playlistView.onChanged = [this]
@@ -626,7 +624,6 @@ MainComponent::MainComponent()
     if (error.isNotEmpty())
         spdlog::warn ("Audio error: {}", error.toStdString());
 
-    resetNoteHistory();
     lastAutosaveMs = juce::Time::getMillisecondCounter();
     startSession();
     startTimerHz (30);
@@ -870,6 +867,7 @@ void MainComponent::setTypingOn (bool on)
 
 void MainComponent::timerCallback()
 {
+    flushHistory();
     autosaveIfNeeded();
     logStatusChanges();
     if (! typingHeld.empty())
@@ -1070,7 +1068,6 @@ void MainComponent::createStrip (size_t channelIndex)
             pianoRoll.setNotes (channels[static_cast<size_t> (idx)].notes);
         updateTrackRouting();
         publishProject();
-        recordNoteChange(); // (does nothing unless a step was edited)
     };
     strip->onAutomate = [this] (int idx, AutomationKind kind) { createAutomationFor ({ kind, idx, 0, kind == AutomationKind::ChannelPlugin ? -1 : 0 }); };
     strip->onSavePreset = [this] (int idx) { savePresetFor (idx); };

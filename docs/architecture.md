@@ -548,6 +548,24 @@ and ranks with BM25 (k1 1.4, b 0.75) plus a title bonus, a bonus for sections ho
 question's language. The index is built the first time Helios opens. Commands are `HeliosCommand`s (name, keywords, a function)
 made by `MainComponent::heliosCommands`, matched by the share of the question's words they contain.
 
+### Shared code after the 0.51.0 review
+
+- `src/synthkit/`: what SunBurst and HexForge share. `SynthProcessor` (a `juce::AudioProcessor` with the parameter tree, the
+  factory presets, the user's preset files in `~/.config/<name>/Presets`, programs and the saved state; hooks `resetExtras`,
+  `applyExtraValue` and `stateRestored` let HexForge keep its spectral waves), `VoiceRouter<Voice, N>` (MIDI messages, voice
+  stealing: the same note, a silent voice, the quietest released one, the oldest; the mono / legato key stack; the sustain pedal)
+  and `ParamKit.h` (`get` / `geti` / `getb`, `Adder`, `skewed`, the LFO-shape, sync and distortion lists).
+- `plugins/common/SynthUi`: `hwui::PresetBar` (the preset menu by category, previous / next, the save dialog), `hwui::Meter`
+  and `hwui::MatrixRow` (with a `Style` for each plugin's layout).
+- `src/audio/Biquad.h`: `BiquadCoefs` (RBJ low-, high- and band-pass designs) and `Biquad<Channels>` (transposed direct form II,
+  one state per channel), used by the effects, the drum synthesizer and the loudness meter. SunBurst's EQ keeps its own float
+  biquad.
+- `readSampleData` (AudioImport.h) turns a JUCE reader into stereo `SampleData` for the import, the sound library and the
+  built-in sounds. `Player::forEachEffectSlot` visits every effect unit once for lending the effects' memory and the Time
+  Shapers' recordings.
+- Undo: `recordHistory()` only notes an edit made with a mouse button down (`historyPending`); `timerCallback` calls
+  `flushHistory()`, which captures and compares the project once the button is up. Undo and redo flush a waiting edit first.
+
 ### HexForge, the FM synthesizer plugin (0.50.0)
 
 - `src/hexforge/`: `HexParams` (parameters), `HexWaves` (the 32 classic waves built with `sunburst::Wavetables::buildMips`;

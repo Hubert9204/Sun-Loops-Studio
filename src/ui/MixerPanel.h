@@ -287,7 +287,6 @@ private:
     void selectMaster();
     void selectAux (int aux);
     void updateVcaMembers();
-    MixerTrack* trackFor (int index) noexcept; // a track, an aux bus or the master (nullptr if there is none)
 
     int selectedTrack = 0;
     std::vector<MixerTrack>* trackData = nullptr;

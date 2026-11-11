@@ -17,8 +17,7 @@ std::function<juce::AudioProcessorEditor* (HexProcessor&)>& HexProcessor::editor
 }
 
 HexProcessor::HexProcessor()
-    : juce::AudioProcessor (BusesProperties().withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
-      state (*this, nullptr, "HexForge", createLayout())
+    : synthkit::SynthProcessor ({ kName, "HexForgePreset", ".hfpreset", 3.0 }, createLayout(), factoryPresets())
 {
     refs.attach (state);
     HexWaves::get(); // build the tables now, not on the audio thread
@@ -39,11 +38,6 @@ HexProcessor::HexProcessor()
     loadFactoryPreset (0);
 }
 
-bool HexProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
-{
-    return layouts.getMainOutputChannelSet() == juce::AudioChannelSet::stereo();
-}
-
 void HexProcessor::prepareToPlay (double sampleRate, int maximumExpectedSamplesPerBlock)
 {
     rate = sampleRate > 0.0 ? sampleRate : 48000.0;
@@ -55,8 +49,7 @@ void HexProcessor::prepareToPlay (double sampleRate, int maximumExpectedSamplesP
     decimR = {};
     filterLfo.reset (0.0f, 11u);
     lfo2.reset (0.0f, 23u);
-    monoCount = 0;
-    sustain = false;
+    router.reset();
     keyboardState.reset();
 }
 
@@ -181,7 +174,7 @@ void HexProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuf
     {
         const int len = std::min (kChunk, n - done);
         for (; it != midi.end() && (*it).samplePosition < done + len; ++it)
-            handleMidi ((*it).getMessage());
+            router.handleMidi ((*it).getMessage(), controls, geti (refs.mode), geti (refs.voices), patch);
 
         // The two LFOs run freely, or lock to the song position when they follow the tempo and the song plays.
         const double seconds = len / rate;
@@ -269,138 +262,6 @@ void HexProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuf
     ppq += n / rate * bpm / 60.0;
 }
 
-void HexProcessor::handleMidi (const juce::MidiMessage& m) noexcept
-{
-    if (m.isNoteOn())
-        noteOn (m.getNoteNumber(), m.getFloatVelocity());
-    else if (m.isNoteOff())
-        noteOff (m.getNoteNumber());
-    else if (m.isPitchWheel())
-        controls.bend = static_cast<float> (m.getPitchWheelValue() - 8192) / 8192.0f;
-    else if (m.isChannelPressure())
-        controls.aftertouch = static_cast<float> (m.getChannelPressureValue()) / 127.0f;
-    else if (m.isController())
-    {
-        const int cc = m.getControllerNumber(), value = m.getControllerValue();
-        if (cc == 1)
-            controls.modWheel = static_cast<float> (value) / 127.0f;
-        else if (cc == 64)
-        {
-            sustain = value >= 64;
-            if (! sustain)
-                for (auto& v : voices)
-                    if (v.isActive() && ! v.keyDown && ! v.isReleasing())
-                        v.release();
-        }
-        else if (cc == 120 || cc == 123)
-            allNotesOff (cc == 120);
-    }
-}
-
-Voice* HexProcessor::findVoiceFor (int note) noexcept
-{
-    const int polyphony = std::clamp (geti (refs.voices), 1, kMaxVoices);
-    Voice* best = nullptr;
-    for (int i = 0; i < polyphony; ++i)
-        if (auto& v = voices[static_cast<size_t> (i)]; v.isActive() && v.note == note)
-            return &v;
-    for (int i = 0; i < polyphony; ++i)
-        if (! voices[static_cast<size_t> (i)].isActive())
-            return &voices[static_cast<size_t> (i)];
-    for (int i = 0; i < polyphony; ++i)
-        if (auto& v = voices[static_cast<size_t> (i)]; v.isReleasing() && (best == nullptr || v.level() < best->level()))
-            best = &v;
-    if (best != nullptr)
-        return best;
-    for (int i = 0; i < polyphony; ++i)
-        if (auto& v = voices[static_cast<size_t> (i)]; best == nullptr || v.age < best->age)
-            best = &v;
-    return best;
-}
-
-void HexProcessor::noteOn (int note, float velocity) noexcept
-{
-    const int mode = geti (refs.mode);
-    const std::uint32_t seed = seedCounter++ * 747796405u + static_cast<std::uint32_t> (note);
-    if (mode == 0)
-    {
-        if (auto* v = findVoiceFor (note))
-        {
-            v->start (note, velocity, lastNote, false, seed, patch);
-            v->age = ++noteCounter;
-        }
-    }
-    else
-    {
-        for (int i = 0; i < monoCount; ++i)
-            if (monoStack[static_cast<size_t> (i)] == note)
-            {
-                for (int j = i; j < monoCount - 1; ++j)
-                    monoStack[static_cast<size_t> (j)] = monoStack[static_cast<size_t> (j) + 1];
-                --monoCount;
-                break;
-            }
-        if (monoCount < static_cast<int> (monoStack.size()))
-            monoStack[static_cast<size_t> (monoCount++)] = note;
-        auto& v = voices[0];
-        const bool legato = mode == 2 && v.isActive() && monoCount > 1;
-        v.start (note, velocity, v.isActive() ? static_cast<double> (v.note >= 0 ? v.note : note) : lastNote, legato, seed, patch);
-        v.age = ++noteCounter;
-    }
-    lastNote = note;
-}
-
-void HexProcessor::noteOff (int note) noexcept
-{
-    const int mode = geti (refs.mode);
-    if (mode == 0)
-    {
-        for (auto& v : voices)
-            if (v.isActive() && v.note == note && v.keyDown)
-            {
-                v.keyDown = false;
-                if (! sustain)
-                    v.release();
-            }
-        return;
-    }
-    for (int i = 0; i < monoCount; ++i)
-        if (monoStack[static_cast<size_t> (i)] == note)
-        {
-            for (int j = i; j < monoCount - 1; ++j)
-                monoStack[static_cast<size_t> (j)] = monoStack[static_cast<size_t> (j) + 1];
-            --monoCount;
-            break;
-        }
-    auto& v = voices[0];
-    if (v.note != note)
-        return;
-    if (monoCount > 0)
-    {
-        const int previous = monoStack[static_cast<size_t> (monoCount - 1)];
-        v.start (previous, v.velocity, note, mode == 2, seedCounter++, patch);
-        lastNote = previous;
-    }
-    else
-    {
-        v.keyDown = false;
-        if (! sustain)
-            v.release();
-    }
-}
-
-void HexProcessor::allNotesOff (bool hard) noexcept
-{
-    for (auto& v : voices)
-    {
-        if (hard)
-            v.kill();
-        else if (v.isActive())
-            v.release();
-    }
-    monoCount = 0;
-}
-
 juce::AudioProcessorEditor* HexProcessor::createEditor()
 {
     if (editorFactory())
@@ -408,7 +269,7 @@ juce::AudioProcessorEditor* HexProcessor::createEditor()
     return new juce::GenericAudioProcessorEditor (*this);
 }
 
-// --- Spectra, presets and state ----------------------------------------------------------------------------------------------
+// --- Spectra and presets ----------------------------------------------------------------------------------------------
 
 void HexProcessor::setSpectrum (int slot, const Spectrum& s)
 {
@@ -416,7 +277,7 @@ void HexProcessor::setSpectrum (int slot, const Spectrum& s)
     state.state.setProperty (slot == 0 ? "spectralA" : "spectralB", s.toString(), nullptr);
 }
 
-void HexProcessor::restoreSpectra()
+void HexProcessor::stateRestored()
 {
     for (int slot = 0; slot < 2; ++slot)
     {
@@ -426,145 +287,17 @@ void HexProcessor::restoreSpectra()
     }
 }
 
-juce::File HexProcessor::userPresetFolder()
-{
-    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("HexForge").getChildFile ("Presets");
-}
-
-std::vector<PresetEntry> HexProcessor::presets() const
-{
-    std::vector<PresetEntry> out;
-    const auto& factory = factoryPresets();
-    for (size_t i = 0; i < factory.size(); ++i)
-        out.push_back ({ factory[i].name, factory[i].category, {}, static_cast<int> (i) });
-    auto files = userPresetFolder().findChildFiles (juce::File::findFiles, true, juce::String ("*") + kPresetExtension);
-    files.sort();
-    for (const auto& f : files)
-    {
-        juce::String category = "User";
-        if (auto xml = juce::parseXML (f))
-            category = xml->getStringAttribute ("category", "User");
-        out.push_back ({ f.getFileNameWithoutExtension(), category, f, -1 });
-    }
-    return out;
-}
-
-void HexProcessor::loadPreset (const PresetEntry& preset)
-{
-    if (preset.factoryIndex >= 0)
-        loadFactoryPreset (preset.factoryIndex);
-    else
-        loadPresetFile (preset.file);
-}
-
-void HexProcessor::applyValues (const std::vector<std::pair<juce::String, float>>& values)
-{
-    for (auto* p : getParameters())
-        if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (p))
-            ranged->setValueNotifyingHost (ranged->getDefaultValue());
-    for (const auto& [id, value] : values)
-    {
-        if (id == "spectralA" || id == "spectralB")
-        {
-            setSpectrum (id == "spectralA" ? 0 : 1, Spectrum::preset (spectralPresetName (static_cast<int> (value))));
-            continue;
-        }
-        if (auto* p = state.getParameter (id))
-            p->setValueNotifyingHost (p->convertTo0to1 (value));
-        else
-            jassertfalse;
-    }
-}
-
-void HexProcessor::loadFactoryPreset (int index)
-{
-    const auto& factory = factoryPresets();
-    if (index < 0 || index >= static_cast<int> (factory.size()))
-        return;
-    setSpectrum (0, Spectrum::preset ("Bright"));
-    setSpectrum (1, Spectrum::preset ("Metal"));
-    const auto& p = factory[static_cast<size_t> (index)];
-    applyValues (p.values);
-    presetName = p.name;
-    presetCategory = p.category;
-    currentProgram = index;
-    ++generation;
-}
-
-void HexProcessor::initPatch()
+void HexProcessor::resetExtras()
 {
     setSpectrum (0, Spectrum::preset ("Bright"));
     setSpectrum (1, Spectrum::preset ("Metal"));
-    applyValues ({});
-    presetName = "Init";
-    presetCategory = "Init";
-    ++generation;
 }
 
-bool HexProcessor::loadPresetFile (const juce::File& file)
+bool HexProcessor::applyExtraValue (const juce::String& id, float value)
 {
-    auto xml = juce::parseXML (file);
-    if (xml == nullptr || ! xml->hasTagName ("HexForgePreset"))
+    if (id != "spectralA" && id != "spectralB")
         return false;
-    auto* params = xml->getChildByName (state.state.getType());
-    if (params == nullptr)
-        return false;
-    state.replaceState (juce::ValueTree::fromXml (*params));
-    restoreSpectra();
-    presetName = file.getFileNameWithoutExtension();
-    presetCategory = xml->getStringAttribute ("category", "User");
-    ++generation;
+    setSpectrum (id == "spectralA" ? 0 : 1, Spectrum::preset (spectralPresetName (static_cast<int> (value))));
     return true;
-}
-
-juce::File HexProcessor::savePreset (const juce::String& name, const juce::String& category)
-{
-    const auto clean = juce::File::createLegalFileName (name.trim());
-    if (clean.isEmpty())
-        return {};
-    auto folder = userPresetFolder();
-    folder.createDirectory();
-    auto file = folder.getChildFile (clean + kPresetExtension);
-    juce::XmlElement root ("HexForgePreset");
-    root.setAttribute ("category", category.isEmpty() ? juce::String ("User") : category);
-    if (auto params = state.copyState().createXml())
-        root.addChildElement (params.release());
-    if (! root.writeTo (file))
-        return {};
-    presetName = clean;
-    presetCategory = category;
-    ++generation;
-    return file;
-}
-
-int HexProcessor::getNumPrograms() { return static_cast<int> (factoryPresets().size()); }
-void HexProcessor::setCurrentProgram (int index) { loadFactoryPreset (index); }
-const juce::String HexProcessor::getProgramName (int index)
-{
-    const auto& factory = factoryPresets();
-    return index >= 0 && index < static_cast<int> (factory.size()) ? factory[static_cast<size_t> (index)].name : juce::String();
-}
-
-void HexProcessor::getStateInformation (juce::MemoryBlock& destData)
-{
-    auto copy = state.copyState();
-    copy.setProperty ("presetName", presetName, nullptr);
-    copy.setProperty ("presetCategory", presetCategory, nullptr);
-    if (auto xml = copy.createXml())
-        copyXmlToBinary (*xml, destData);
-}
-
-void HexProcessor::setStateInformation (const void* data, int sizeInBytes)
-{
-    if (auto xml = getXmlFromBinary (data, sizeInBytes))
-        if (xml->hasTagName (state.state.getType()))
-        {
-            auto tree = juce::ValueTree::fromXml (*xml);
-            presetName = tree.getProperty ("presetName", "Init").toString();
-            presetCategory = tree.getProperty ("presetCategory", "Init").toString();
-            state.replaceState (tree);
-            restoreSpectra();
-            ++generation;
-        }
 }
 } // namespace hexforge

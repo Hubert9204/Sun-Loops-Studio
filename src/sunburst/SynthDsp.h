@@ -12,7 +12,6 @@ namespace sunburst
 constexpr double kPi = 3.141592653589793;
 constexpr double kTwoPi = 6.283185307179586;
 
-inline float semitonesToRatio (float s) noexcept { return std::exp2 (s / 12.0f); }
 inline double noteToHz (double note) noexcept { return 440.0 * std::exp2 ((note - 69.0) / 12.0); }
 
 // xorshift: fast, good enough for noise and random modulation.
@@ -142,7 +141,6 @@ public:
             newCycle();
         phase = p;
     }
-    double getPhase() const noexcept { return phase; }
 
     float advance (double hz, double seconds, LfoShape shape) noexcept
     {

@@ -17,18 +17,11 @@ std::function<juce::AudioProcessorEditor* (SunBurstProcessor&)>& SunBurstProcess
 }
 
 SunBurstProcessor::SunBurstProcessor()
-    : juce::AudioProcessor (BusesProperties().withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
-      state (*this, nullptr, "SunBurst", createLayout())
+    : synthkit::SynthProcessor ({ kName, "SunBurstPreset", ".sbpreset", 4.0 }, createLayout(), factoryPresets())
 {
     refs.attach (state);
     Wavetables::get(); // build the tables now, not on the audio thread
     loadFactoryPreset (0);
-}
-
-bool SunBurstProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
-{
-    const auto out = layouts.getMainOutputChannelSet();
-    return out == juce::AudioChannelSet::stereo();
 }
 
 void SunBurstProcessor::prepareToPlay (double sampleRate, int maximumExpectedSamplesPerBlock)
@@ -41,8 +34,7 @@ void SunBurstProcessor::prepareToPlay (double sampleRate, int maximumExpectedSam
     arpOut.ensureSize (static_cast<size_t> (std::max (4096, maximumExpectedSamplesPerBlock * 6)));
     for (size_t l = 0; l < globalLfos.size(); ++l)
         globalLfos[l].reset (0.0f, 1234u + static_cast<std::uint32_t> (l));
-    monoCount = 0;
-    sustain = false;
+    router.reset();
     keyboardState.reset();
 }
 
@@ -208,7 +200,7 @@ void SunBurstProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
     const bool arpOn = getb (refs.arpOn);
     if (arpOn != arpWasOn)
     {
-        allNotesOff (false);
+        router.allNotesOff (false);
         arp.reset();
         arpWasOn = arpOn;
     }
@@ -238,7 +230,7 @@ void SunBurstProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
     {
         const int len = std::min (kChunk, n - done);
         for (; it != events->end() && (*it).samplePosition < done + len; ++it)
-            handleMidi ((*it).getMessage());
+            router.handleMidi ((*it).getMessage(), controls, geti (refs.mode), geti (refs.voices), patch);
 
         // The free-running LFOs (also what the effects follow); tempo-synced ones lock to the song position when it plays.
         const double seconds = len / rate;
@@ -271,149 +263,6 @@ void SunBurstProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
     ppq += n / rate * bpm / 60.0;
 }
 
-void SunBurstProcessor::handleMidi (const juce::MidiMessage& m) noexcept
-{
-    if (m.isNoteOn())
-        noteOn (m.getNoteNumber(), m.getFloatVelocity());
-    else if (m.isNoteOff())
-        noteOff (m.getNoteNumber());
-    else if (m.isPitchWheel())
-        controls.bend = static_cast<float> (m.getPitchWheelValue() - 8192) / 8192.0f;
-    else if (m.isChannelPressure())
-        controls.aftertouch = static_cast<float> (m.getChannelPressureValue()) / 127.0f;
-    else if (m.isAftertouch())
-        controls.aftertouch = static_cast<float> (m.getAfterTouchValue()) / 127.0f;
-    else if (m.isController())
-    {
-        const int cc = m.getControllerNumber(), value = m.getControllerValue();
-        if (cc == 1)
-            controls.modWheel = static_cast<float> (value) / 127.0f;
-        else if (cc == 64)
-        {
-            sustain = value >= 64;
-            if (! sustain)
-                for (auto& v : voices)
-                    if (v.isActive() && ! v.keyDown && ! v.isReleasing())
-                        v.release();
-        }
-        else if (cc == 120 || cc == 123)
-            allNotesOff (cc == 120);
-    }
-}
-
-Voice* SunBurstProcessor::findVoiceFor (int note) noexcept
-{
-    const int polyphony = std::clamp (geti (refs.voices), 1, kMaxVoices);
-    Voice* best = nullptr;
-    // The same note again: reuse its voice. Otherwise a silent voice, then the quietest released one, then the oldest.
-    for (int i = 0; i < polyphony; ++i)
-        if (auto& v = voices[static_cast<size_t> (i)]; v.isActive() && v.note == note)
-            return &v;
-    for (int i = 0; i < polyphony; ++i)
-        if (! voices[static_cast<size_t> (i)].isActive())
-            return &voices[static_cast<size_t> (i)];
-    for (int i = 0; i < polyphony; ++i)
-    {
-        auto& v = voices[static_cast<size_t> (i)];
-        if (v.isReleasing() && (best == nullptr || v.level() < best->level()))
-            best = &v;
-    }
-    if (best != nullptr)
-        return best;
-    for (int i = 0; i < polyphony; ++i)
-    {
-        auto& v = voices[static_cast<size_t> (i)];
-        if (best == nullptr || v.age < best->age)
-            best = &v;
-    }
-    return best;
-}
-
-void SunBurstProcessor::noteOn (int note, float velocity) noexcept
-{
-    const int mode = geti (refs.mode);
-    const std::uint32_t seed = seedCounter++ * 747796405u + static_cast<std::uint32_t> (note);
-    if (mode == 0)
-    {
-        if (auto* v = findVoiceFor (note))
-        {
-            v->start (note, velocity, lastNote, false, seed, patch);
-            v->age = ++noteCounter;
-        }
-    }
-    else
-    {
-        // Mono and legato: one voice and a stack of held keys (the last one sounds).
-        for (int i = 0; i < monoCount; ++i)
-            if (monoStack[static_cast<size_t> (i)] == note)
-            {
-                for (int j = i; j < monoCount - 1; ++j)
-                    monoStack[static_cast<size_t> (j)] = monoStack[static_cast<size_t> (j) + 1];
-                --monoCount;
-                break;
-            }
-        if (monoCount < static_cast<int> (monoStack.size()))
-            monoStack[static_cast<size_t> (monoCount++)] = note;
-        auto& v = voices[0];
-        const bool legato = mode == 2 && v.isActive() && monoCount > 1;
-        v.start (note, velocity, v.isActive() ? static_cast<double> (v.note >= 0 ? v.note : note) : lastNote, legato, seed, patch);
-        v.age = ++noteCounter;
-    }
-    lastNote = note;
-}
-
-void SunBurstProcessor::noteOff (int note) noexcept
-{
-    const int mode = geti (refs.mode);
-    if (mode == 0)
-    {
-        for (auto& v : voices)
-            if (v.isActive() && v.note == note && v.keyDown)
-            {
-                v.keyDown = false;
-                if (! sustain)
-                    v.release();
-            }
-        return;
-    }
-    for (int i = 0; i < monoCount; ++i)
-        if (monoStack[static_cast<size_t> (i)] == note)
-        {
-            for (int j = i; j < monoCount - 1; ++j)
-                monoStack[static_cast<size_t> (j)] = monoStack[static_cast<size_t> (j) + 1];
-            --monoCount;
-            break;
-        }
-    auto& v = voices[0];
-    if (v.note != note)
-        return;
-    if (monoCount > 0)
-    {
-        // Back to the key still held: in legato without a new attack, in mono with one.
-        const int previous = monoStack[static_cast<size_t> (monoCount - 1)];
-        v.start (previous, v.velocity, note, mode == 2, seedCounter++, patch);
-        lastNote = previous;
-    }
-    else
-    {
-        v.keyDown = false;
-        if (! sustain)
-            v.release();
-    }
-}
-
-void SunBurstProcessor::allNotesOff (bool hard) noexcept
-{
-    for (auto& v : voices)
-    {
-        if (hard)
-            v.kill();
-        else if (v.isActive())
-            v.release();
-    }
-    monoCount = 0;
-}
-
 juce::AudioProcessorEditor* SunBurstProcessor::createEditor()
 {
     if (editorFactory())
@@ -421,142 +270,4 @@ juce::AudioProcessorEditor* SunBurstProcessor::createEditor()
     return new juce::GenericAudioProcessorEditor (*this);
 }
 
-// --- Presets and state ---------------------------------------------------------------------------------------------------
-
-juce::File SunBurstProcessor::userPresetFolder()
-{
-    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("SunBurst").getChildFile ("Presets");
-}
-
-std::vector<PresetEntry> SunBurstProcessor::presets() const
-{
-    std::vector<PresetEntry> out;
-    const auto& factory = factoryPresets();
-    for (size_t i = 0; i < factory.size(); ++i)
-        out.push_back ({ factory[i].name, factory[i].category, {}, static_cast<int> (i) });
-    auto files = userPresetFolder().findChildFiles (juce::File::findFiles, true, juce::String ("*") + kPresetExtension);
-    files.sort();
-    for (const auto& f : files)
-    {
-        juce::String category = "User";
-        if (auto xml = juce::parseXML (f))
-            category = xml->getStringAttribute ("category", "User");
-        out.push_back ({ f.getFileNameWithoutExtension(), category, f, -1 });
-    }
-    return out;
-}
-
-void SunBurstProcessor::loadPreset (const PresetEntry& preset)
-{
-    if (preset.factoryIndex >= 0)
-        loadFactoryPreset (preset.factoryIndex);
-    else
-        loadPresetFile (preset.file);
-}
-
-void SunBurstProcessor::applyValues (const std::vector<std::pair<juce::String, float>>& values)
-{
-    for (auto* p : getParameters())
-        if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (p))
-            ranged->setValueNotifyingHost (ranged->getDefaultValue());
-    for (const auto& [id, value] : values)
-        if (auto* p = state.getParameter (id))
-            p->setValueNotifyingHost (p->convertTo0to1 (value));
-        else
-            jassertfalse; // a preset names a parameter that does not exist
-}
-
-void SunBurstProcessor::loadFactoryPreset (int index)
-{
-    const auto& factory = factoryPresets();
-    if (index < 0 || index >= static_cast<int> (factory.size()))
-        return;
-    const auto& p = factory[static_cast<size_t> (index)];
-    applyValues (p.values);
-    presetName = p.name;
-    presetCategory = p.category;
-    currentProgram = index;
-    ++generation;
-}
-
-void SunBurstProcessor::initPatch()
-{
-    applyValues ({});
-    presetName = "Init";
-    presetCategory = "Init";
-    ++generation;
-}
-
-bool SunBurstProcessor::loadPresetFile (const juce::File& file)
-{
-    auto xml = juce::parseXML (file);
-    if (xml == nullptr || ! xml->hasTagName ("SunBurstPreset"))
-        return false;
-    auto* params = xml->getChildByName (state.state.getType());
-    if (params == nullptr)
-        return false;
-    state.replaceState (juce::ValueTree::fromXml (*params));
-    presetName = file.getFileNameWithoutExtension();
-    presetCategory = xml->getStringAttribute ("category", "User");
-    ++generation;
-    return true;
-}
-
-juce::File SunBurstProcessor::savePreset (const juce::String& name, const juce::String& category)
-{
-    const auto clean = juce::File::createLegalFileName (name.trim());
-    if (clean.isEmpty())
-        return {};
-    auto folder = userPresetFolder();
-    folder.createDirectory();
-    auto file = folder.getChildFile (clean + kPresetExtension);
-    juce::XmlElement root ("SunBurstPreset");
-    root.setAttribute ("category", category.isEmpty() ? juce::String ("User") : category);
-    if (auto params = state.copyState().createXml())
-        root.addChildElement (params.release());
-    if (! root.writeTo (file))
-        return {};
-    presetName = clean;
-    presetCategory = category;
-    ++generation;
-    return file;
-}
-
-int SunBurstProcessor::getNumPrograms()
-{
-    return static_cast<int> (factoryPresets().size());
-}
-
-void SunBurstProcessor::setCurrentProgram (int index)
-{
-    loadFactoryPreset (index);
-}
-
-const juce::String SunBurstProcessor::getProgramName (int index)
-{
-    const auto& factory = factoryPresets();
-    return index >= 0 && index < static_cast<int> (factory.size()) ? juce::String (factory[static_cast<size_t> (index)].name) : juce::String();
-}
-
-void SunBurstProcessor::getStateInformation (juce::MemoryBlock& destData)
-{
-    auto copy = state.copyState();
-    copy.setProperty ("presetName", presetName, nullptr);
-    copy.setProperty ("presetCategory", presetCategory, nullptr);
-    if (auto xml = copy.createXml())
-        copyXmlToBinary (*xml, destData);
-}
-
-void SunBurstProcessor::setStateInformation (const void* data, int sizeInBytes)
-{
-    if (auto xml = getXmlFromBinary (data, sizeInBytes))
-        if (xml->hasTagName (state.state.getType()))
-        {
-            auto tree = juce::ValueTree::fromXml (*xml);
-            presetName = tree.getProperty ("presetName", "Init").toString();
-            presetCategory = tree.getProperty ("presetCategory", "Init").toString();
-            state.replaceState (tree);
-            ++generation;
-        }
-}
 } // namespace sunburst

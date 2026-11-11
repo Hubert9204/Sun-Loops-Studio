@@ -130,7 +130,6 @@ void MainComponent::importMidiFile (const juce::File& file)
     if (! newChannels.empty())
         selectChannel (newChannels.front()); // shows its name and scrolls the piano roll to its notes
     refreshPatternBox();
-    resetNoteHistory();
     playlistView.clearHistory();
     playlistView.repaint();
     markDirty();

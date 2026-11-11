@@ -94,25 +94,6 @@ private:
     void setPlaying (bool shouldPlay);
     void openAudioSettings();
     void openMetronomePanel();
-    // Undo / redo of note edits (piano roll, step sequencer, Clear notes, recorded notes) in the patterns. A state is the notes of
-    // every channel in one pattern; the state before each edit is kept (the last 200). Not covered: channel settings, the mixer,
-    // patterns added or removed, and the playlist (which has its own undo).
-    struct NoteState
-    {
-        int pattern = 0;
-        std::vector<std::vector<Note>> notes; // [channel]
-        std::vector<int> steps;               // [channel]: the step sequencer's active lengths (0.31.0)
-    };
-    NoteState captureNoteState() const;
-    static bool sameNoteState (const NoteState& a, const NoteState& b);
-    void recordNoteChange();  // call after notes may have changed: remembers the earlier state if they did
-    void resetNoteHistory();  // call after the notes were replaced wholesale (a project opened, a pattern deleted, a MIDI import)
-    void applyNoteState (const NoteState& state);
-    void undoNotes();
-    void redoNotes();
-    std::vector<NoteState> noteUndo, noteRedo;
-    NoteState lastNoteState;
-
     // Undo / redo of every edit (MainComponentHistory.cpp): channels, instruments, kits, notes, patterns, the playlist,
     // the mixer and its effects, the console, tempo and master volume. The playlist keeps its own finer clip history too.
     struct EditState
@@ -130,7 +111,9 @@ private:
     };
     static constexpr size_t kMaxHistory = 100;
     EditState captureEditState();
-    void recordHistory();   // called by publishProject()
+    void recordHistory();   // called by publishProject(); while a mouse button is down it only notes the edit
+    void flushHistory();    // called by the timer: records a noted edit once the button is let go
+    void commitHistory (bool undoable);
     void clearHistory();    // a project was opened or created
     void applyEditState (const EditState& state);
     void undoEdit();
@@ -139,8 +122,7 @@ private:
     EditState historyStable;   // the state after the last recorded edit
     bool historyReady = false;
     bool restoringHistory = false;
-    bool lastEditMouseDown = false;
-    juce::uint32 lastEditMs = 0;
+    bool historyPending = false; // an edit made with a mouse button down, not compared yet
 
     // MainComponentSafety.cpp
     juce::File autosaveFile() const;
@@ -362,6 +344,7 @@ private:
     std::unique_ptr<SampleEditorWindow> sampleEditorWindow;
     void openSampleEditorForClip (int audioClipIndex);
     void openPitchEditorForClip (int audioClipIndex);                 // 0.38.0, MainComponentPitch.cpp
+    std::shared_ptr<SampleData> playedPartOf (const AudioClip& clip) const; // the audio a clip plays, for both editors
     void splitClipIntoStems (int audioClipIndex);                     // 0.39.0, MainComponentStems.cpp
     void useStems (int audioClipIndex, const AudioClip& clip, Stems stems);
     // Helios (0.40.0, MainComponentHelios.cpp): the manual searched offline, and commands it can run.

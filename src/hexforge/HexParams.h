@@ -6,11 +6,21 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include "synthkit/ParamKit.h"
+
 // HexForge (0.50.0): a hybrid FM + subtractive synthesizer for sharp, aggressive, metallic sounds (cyberpunk, dark synth,
 // industrial, drum & bass, old-school dubstep and neurofunk). Six operators with 32 band-limited waves and two spectral waves,
 // a 6 x 6 FM matrix in one panel, an analog-modelled ladder filter with its own envelope and LFO. This file names its parameters.
 namespace hexforge
 {
+using synthkit::get;
+using synthkit::getb;
+using synthkit::geti;
+using synthkit::distNames;
+using synthkit::lfoShapeNames;
+using synthkit::syncBeats;
+using synthkit::syncNames;
+
 constexpr int kNumOps = 6;
 constexpr int kNumClassicWaves = 32;
 constexpr int kNumOpWaves = kNumClassicWaves + 2; // + Spectral A, Spectral B
@@ -35,12 +45,8 @@ const juce::StringArray& waveNames();   // 32 classic waves, then "Spectral A", 
 const juce::StringArray& ratioNames();
 double ratioOf (int index);
 const juce::StringArray& ladderNames();
-const juce::StringArray& lfoShapeNames();
-const juce::StringArray& syncNames();
-double syncBeats (int index);
 const juce::StringArray& sourceNames();
 const juce::StringArray& destNames();
-const juce::StringArray& distNames();
 
 juce::String opId (int op, const char* name);   // "op3_ratio" (op from 0)
 juce::String fmId (int target, int source);     // "fm2_5": how much operator 5 modulates operator 2 (from 0); the diagonal is feedback
@@ -75,7 +81,4 @@ struct ParamRefs
     void attach (juce::AudioProcessorValueTreeState& state);
 };
 
-inline float get (const std::atomic<float>* p) noexcept { return p != nullptr ? p->load (std::memory_order_relaxed) : 0.0f; }
-inline int geti (const std::atomic<float>* p) noexcept { return static_cast<int> (std::lround (get (p))); }
-inline bool getb (const std::atomic<float>* p) noexcept { return get (p) > 0.5f; }
 } // namespace hexforge

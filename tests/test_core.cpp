@@ -36,6 +36,7 @@
 #include "library/HelpIndex.h"
 #include "library/Sfz.h"
 #include "audio/Loudness.h"
+#include "audio/Biquad.h"
 #include "audio/Spectrum.h"
 #include "audio/MidiImport.h"
 #include "audio/MidiNotes.h"
@@ -595,6 +596,54 @@ void testWavRoundTrip()
     bad.bitDepth = 32;
     check (! sls::renderToWavFile (project, bad, juce::File::createTempFile (".wav")).wasOk(), "unsupported bit depth is rejected");
 }
+void testSharedDsp()
+{
+    std::cout << "Shared filter and audio reading (0.51.0)\n";
+
+    // The low-pass design passes DC and stops what is near Nyquist; each channel keeps its own state.
+    sls::Biquad<2> lp (sls::BiquadCoefs::lowPass (2.0 * juce::MathConstants<double>::pi * 1000.0 / 48000.0, 0.7071));
+    double dc = 0.0, nyquist = 0.0, right = 0.0;
+    for (int i = 0; i < 4800; ++i)
+    {
+        dc = lp.tick (0, 1.0);
+        right = lp.tick (1, 0.0);
+    }
+    lp.clearState();
+    for (int i = 0; i < 4800; ++i)
+    {
+        const double y = lp.tick (0, (i % 2) == 0 ? 1.0 : -1.0);
+        if (i > 4000)
+            nyquist = std::max (nyquist, std::abs (y));
+    }
+    check (std::abs (dc - 1.0) < 1.0e-6 && right == 0.0 && nyquist < 1.0e-3,
+           "a Biquad low-pass passes DC, stops Nyquist, and keeps one state per channel");
+    const auto hp = sls::BiquadCoefs::highPass (0.2, 0.7071);
+    const auto bp = sls::BiquadCoefs::bandPass (0.2, 1.0);
+    check (std::abs ((hp.b0 + hp.b1 + hp.b2) / (1.0 + hp.a1 + hp.a2)) < 1.0e-9 && std::abs (bp.b0 + bp.b1 + bp.b2) < 1.0e-12,
+           "the high-pass and band-pass designs stop DC");
+
+    // readSampleData: a mono WAV becomes stereo with both sides equal.
+    juce::MemoryBlock block;
+    {
+        auto stream = std::make_unique<juce::MemoryOutputStream> (block, false);
+        std::unique_ptr<juce::AudioFormatWriter> writer (juce::WavAudioFormat().createWriterFor (stream.get(), 44100.0, 1, 16, {}, 0));
+        check (writer != nullptr, "a mono WAV can be written to memory");
+        if (writer == nullptr)
+            return;
+        stream.release(); // (the writer owns it now)
+        juce::AudioBuffer<float> mono (1, 1000);
+        for (int i = 0; i < 1000; ++i)
+            mono.setSample (0, i, 0.5f * std::sin (static_cast<float> (i) * 0.05f));
+        writer->writeFromAudioSampleBuffer (mono, 0, 1000);
+    }
+    std::unique_ptr<juce::AudioFormatReader> reader (
+        juce::WavAudioFormat().createReaderFor (new juce::MemoryInputStream (block.getData(), block.getSize(), false), true));
+    const auto sample = reader != nullptr ? sls::readSampleData (*reader, 1000, "tone", "memory") : nullptr;
+    check (sample != nullptr && sample->numFrames() == 1000 && sample->left == sample->right && sample->sampleRate == 44100.0
+               && sample->name == "tone" && sample->source == "memory" && std::abs (sample->left[20] - 0.5f * std::sin (1.0f)) < 1.0e-3f,
+           "readSampleData reads a mono file as stereo, with its rate, name and source");
+}
+
 void testPluginScanner()
 {
     std::cout << "Plugin scanner\n";
@@ -11185,6 +11234,7 @@ int main()
     testNoAllocationInRender();
     testExchangeStress();
     testWavRoundTrip();
+    testSharedDsp();
     testPluginScanner();
     testPanelLayout();
     testArrangement();

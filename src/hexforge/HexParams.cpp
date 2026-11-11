@@ -6,44 +6,16 @@ namespace hexforge
 {
 namespace
 {
-juce::NormalisableRange<float> skewed (float lo, float hi, float centre)
+using synthkit::Adder;
+using synthkit::skewed;
+
+void addEnv (Adder& a, const juce::String& prefix, const juce::String& name, float attack, float decay, float sustain, float release)
 {
-    juce::NormalisableRange<float> r (lo, hi);
-    r.setSkewForCentre (centre);
-    return r;
+    a.real (prefix + "_a", name + " attack", skewed (0.0f, 10.0f, 0.5f), attack, "s", 3);
+    a.real (prefix + "_d", name + " decay", skewed (0.001f, 10.0f, 0.5f), decay, "s", 3);
+    a.real (prefix + "_s", name + " sustain", { 0.0f, 1.0f }, sustain);
+    a.real (prefix + "_r", name + " release", skewed (0.001f, 15.0f, 0.8f), release, "s", 3);
 }
-
-struct Adder
-{
-    std::vector<std::unique_ptr<juce::RangedAudioParameter>>& out;
-
-    void real (const juce::String& id, const juce::String& name, const juce::NormalisableRange<float>& range, float def, const juce::String& unit = {},
-               int decimals = 2)
-    {
-        auto attributes = juce::AudioParameterFloatAttributes().withLabel (unit).withStringFromValueFunction (
-            [decimals, unit] (float v, int) { return juce::String (v, decimals) + (unit.isEmpty() ? juce::String() : " " + unit); });
-        out.push_back (std::make_unique<juce::AudioParameterFloat> (juce::ParameterID { id, 1 }, name, range, def, attributes));
-    }
-    void integer (const juce::String& id, const juce::String& name, int lo, int hi, int def)
-    {
-        out.push_back (std::make_unique<juce::AudioParameterInt> (juce::ParameterID { id, 1 }, name, lo, hi, def));
-    }
-    void choice (const juce::String& id, const juce::String& name, const juce::StringArray& items, int def)
-    {
-        out.push_back (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { id, 1 }, name, items, def));
-    }
-    void toggle (const juce::String& id, const juce::String& name, bool def)
-    {
-        out.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { id, 1 }, name, def));
-    }
-    void env (const juce::String& prefix, const juce::String& name, float a, float d, float s, float r)
-    {
-        real (prefix + "_a", name + " attack", skewed (0.0f, 10.0f, 0.5f), a, "s", 3);
-        real (prefix + "_d", name + " decay", skewed (0.001f, 10.0f, 0.5f), d, "s", 3);
-        real (prefix + "_s", name + " sustain", { 0.0f, 1.0f }, s);
-        real (prefix + "_r", name + " release", skewed (0.001f, 15.0f, 0.8f), r, "s", 3);
-    }
-};
 
 juce::String one (int n) { return juce::String (n + 1); }
 } // namespace
@@ -76,21 +48,6 @@ const juce::StringArray& ladderNames()
     static const juce::StringArray names { "Ladder LP 24", "Ladder LP 12", "Ladder HP 24", "Ladder HP 12", "Ladder BP" };
     return names;
 }
-const juce::StringArray& lfoShapeNames()
-{
-    static const juce::StringArray names { "Sine", "Triangle", "Saw up", "Saw down", "Square", "Sample & hold", "Smooth random" };
-    return names;
-}
-const juce::StringArray& syncNames()
-{
-    static const juce::StringArray names { "4 bars", "2 bars", "1 bar", "1/2", "1/2T", "1/4.", "1/4", "1/4T", "1/8.", "1/8", "1/8T", "1/16.", "1/16", "1/16T", "1/32" };
-    return names;
-}
-double syncBeats (int index)
-{
-    static const double beats[] { 16.0, 8.0, 4.0, 2.0, 4.0 / 3.0, 1.5, 1.0, 2.0 / 3.0, 0.75, 0.5, 1.0 / 3.0, 0.375, 0.25, 1.0 / 6.0, 0.125 };
-    return beats[std::clamp (index, 0, static_cast<int> (std::size (beats)) - 1)];
-}
 const juce::StringArray& sourceNames()
 {
     static const juce::StringArray names { "-", "Filter LFO", "LFO 2", "Filter env", "Velocity", "Mod wheel", "Aftertouch", "Key track", "Random",
@@ -101,11 +58,6 @@ const juce::StringArray& destNames()
 {
     static const juce::StringArray names { "-", "Op 1 level", "Op 2 level", "Op 3 level", "Op 4 level", "Op 5 level", "Op 6 level", "FM depth", "Pitch",
                                            "Cutoff", "Resonance", "Filter drive", "Unison detune", "Pan", "Amp", "Distortion drive", "LFO 2 rate" };
-    return names;
-}
-const juce::StringArray& distNames()
-{
-    static const juce::StringArray names { "Soft", "Hard", "Tube", "Fold", "Crush" };
     return names;
 }
 
@@ -128,7 +80,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
         a.real (opId (o, "out"), n + "output", { 0.0f, 1.0f }, o == 0 ? 0.8f : 0.0f);
         a.real (opId (o, "pan"), n + "pan", { -1.0f, 1.0f }, 0.0f);
         a.real (opId (o, "vel"), n + "velocity", { 0.0f, 1.0f }, 0.3f);
-        a.env (opId (o, "env"), n + "env", 0.002f, 0.5f, 1.0f, 0.3f);
+        addEnv (a, opId (o, "env"), n + "env", 0.002f, 0.5f, 1.0f, 0.3f);
     }
     for (int t = 0; t < kNumOps; ++t)
         for (int s = 0; s < kNumOps; ++s)
@@ -149,7 +101,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
     a.real ("flt_env", "Filter env amount", { -1.0f, 1.0f }, 0.0f);
     a.real ("flt_key", "Filter key track", { 0.0f, 1.0f }, 0.5f);
     a.real ("flt_vel", "Filter velocity", { 0.0f, 1.0f }, 0.0f);
-    a.env ("fenv", "Filter env", 0.002f, 0.4f, 0.3f, 0.3f);
+    addEnv (a, "fenv", "Filter env", 0.002f, 0.4f, 0.3f, 0.3f);
     a.real ("flfo_amt", "Filter LFO amount", { -1.0f, 1.0f }, 0.0f);
     a.choice ("flfo_shape", "Filter LFO shape", lfoShapeNames(), 0);
     a.real ("flfo_rate", "Filter LFO rate", skewed (0.01f, 40.0f, 2.0f), 2.0f, "Hz", 2);
@@ -160,7 +112,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
     a.toggle ("lfo2_sync", "LFO 2 sync", false);
     a.choice ("lfo2_div", "LFO 2 division", syncNames(), 6);
 
-    a.env ("aenv", "Amp env", 0.002f, 0.3f, 1.0f, 0.15f);
+    addEnv (a, "aenv", "Amp env", 0.002f, 0.3f, 1.0f, 0.15f);
     a.real ("amp_vel", "Velocity to amp", { 0.0f, 1.0f }, 0.4f);
     a.choice ("mode", "Voice mode", { "Poly", "Mono", "Legato" }, 0);
     a.integer ("voices", "Polyphony", 1, kMaxVoices, 8);

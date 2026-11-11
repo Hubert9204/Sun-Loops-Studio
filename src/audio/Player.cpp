@@ -163,6 +163,20 @@ void Player::prepare (double newSampleRate) noexcept
     wasPlaying = false;
 }
 
+template <class Visit>
+void Player::forEachEffectSlot (const Project& project, const Visit& visit) noexcept
+{
+    const size_t visitTracks = std::min (std::max (project.tracks.size(), tracksInUse), static_cast<size_t> (kMaxTracks));
+    for (size_t t = 0; t < visitTracks; ++t)
+        for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
+            visit (effects[t][s], (t < project.tracks.size() ? project.tracks[t] : kDefaultTrack).slots[s]);
+    for (size_t a = 0; a < static_cast<size_t> (kAuxBuses); ++a)
+        for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
+            visit (auxEffects[a][s], project.console.aux[a].slots[s]);
+    for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
+        visit (masterEffects[s], project.masterSlots[s]);
+}
+
 void Player::lendTimeBuffers (const Project& project) noexcept
 {
     // Every unit whose slot is a Time Shaper gets a recording while one is free; a unit whose slot is something else gives its back.
@@ -187,27 +201,12 @@ void Player::lendTimeBuffers (const Project& project) noexcept
                 return;
             }
     };
-    // tracks beyond the project's (it had more at the last block) give theirs back
-    const size_t visitTracks = std::min (std::max (project.tracks.size(), tracksInUse), static_cast<size_t> (kMaxTracks));
-    for (size_t t = 0; t < visitTracks; ++t)
-        for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
-            visit (effects[t][s], (t < project.tracks.size() ? project.tracks[t] : kDefaultTrack).slots[s]);
-    for (size_t a = 0; a < static_cast<size_t> (kAuxBuses); ++a)
-        for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
-            visit (auxEffects[a][s], project.console.aux[a].slots[s]);
-    for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
-        visit (masterEffects[s], project.masterSlots[s]);
+    forEachEffectSlot (project, visit); // (tracks beyond the project's give theirs back)
 
     // How many Time Shapers are left without a recording, for the interface to say so.
     int without = 0;
-    for (size_t t = 0; t < std::min (project.tracks.size(), static_cast<size_t> (kMaxTracks)); ++t)
-        for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
-            without += project.tracks[t].slots[s].type == EffectType::TimeShaper && ! effects[t][s].hasTimeBuffer() ? 1 : 0;
-    for (size_t a = 0; a < static_cast<size_t> (kAuxBuses); ++a)
-        for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
-            without += project.console.aux[a].slots[s].type == EffectType::TimeShaper && ! auxEffects[a][s].hasTimeBuffer() ? 1 : 0;
-    for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
-        without += project.masterSlots[s].type == EffectType::TimeShaper && ! masterEffects[s].hasTimeBuffer() ? 1 : 0;
+    forEachEffectSlot (project, [&without] (const EffectUnit& unit, const EffectSlot& slot)
+                       { without += slot.type == EffectType::TimeShaper && ! unit.hasTimeBuffer() ? 1 : 0; });
     timeShaperShortfallCount.store (without, std::memory_order_relaxed);
 }
 
@@ -252,15 +251,7 @@ void Player::lendEffectMemory (const Project& project) noexcept
         unit.attachMemory (freeMemory.back());
         freeMemory.pop_back();
     };
-    const size_t visitTracks = std::min (std::max (project.tracks.size(), tracksInUse), static_cast<size_t> (kMaxTracks));
-    for (size_t t = 0; t < visitTracks; ++t)
-        for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
-            visit (effects[t][s], (t < project.tracks.size() ? project.tracks[t] : kDefaultTrack).slots[s]);
-    for (size_t a = 0; a < static_cast<size_t> (kAuxBuses); ++a)
-        for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
-            visit (auxEffects[a][s], project.console.aux[a].slots[s]);
-    for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
-        visit (masterEffects[s], project.masterSlots[s]);
+    forEachEffectSlot (project, visit);
     memoryShortfall.store (shortfall, std::memory_order_relaxed);
     memoryCount.store (static_cast<int> (memoryStore.size()), std::memory_order_relaxed);
 }

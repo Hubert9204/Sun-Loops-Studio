@@ -671,8 +671,8 @@ all'uno né all'altro.
 un take di **Rec notes**), impostazioni dei canali (volume, pan, pitch, swing, mute/solo, strumento, sample, nome, traccia del mixer), canali aggiunti,
 clonati, spostati o eliminati, modifiche ai kit di batteria, pattern aggiunti, rinominati o eliminati, la lunghezza dei pattern, la playlist, il mixer
 (fader, bilanciamento, effetti e loro impostazioni, send, gruppi VCA), tempo e volume master. I due comandi sono anche nel menu File. Tutto ciò che
-cambia mentre un tasto del mouse resta premuto (una manopola girata, una nota trascinata, step dipinti) è un solo passo; si ricordano gli ultimi 100
-passi. Aprire o creare un progetto fa partire una nuova cronologia.
+cambia mentre un tasto del mouse resta premuto (una manopola girata, una nota trascinata, step dipinti) è un solo passo, registrato quando si
+rilascia il tasto; si ricordano gli ultimi 100 passi. Aprire o creare un progetto fa partire una nuova cronologia.
 
 Con il mouse sulla Playlist gli stessi tasti usano la cronologia propria della Playlist, più fine, per le modifiche alle clip (i suoi pulsanti
 **Undo** / **Redo** fanno lo stesso).

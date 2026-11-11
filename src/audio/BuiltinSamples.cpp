@@ -1,5 +1,7 @@
 #include "audio/BuiltinSamples.h"
 
+#include "audio/AudioImport.h"
+
 #include "audio/DrumSynth.h"
 #include "audio/SoundLibrary.h"
 
@@ -130,19 +132,6 @@ std::shared_ptr<const SampleData> makeStartupSample()
         juce::WavAudioFormat().createReaderFor (new juce::MemoryInputStream (data, static_cast<size_t> (size), false), true));
     if (reader == nullptr || reader->numChannels < 1 || reader->lengthInSamples < 2)
         return nullptr;
-    const int frames = static_cast<int> (reader->lengthInSamples);
-    juce::AudioBuffer<float> buffer (2, frames);
-    buffer.clear();
-    if (! reader->read (&buffer, 0, frames, 0, true, true))
-        return nullptr;
-    if (reader->numChannels == 1)
-        buffer.copyFrom (1, 0, buffer, 0, 0, frames);
-    auto sample = std::make_shared<SampleData>();
-    sample->left.assign (buffer.getReadPointer (0), buffer.getReadPointer (0) + frames);
-    sample->right.assign (buffer.getReadPointer (1), buffer.getReadPointer (1) + frames);
-    sample->sampleRate = reader->sampleRate;
-    sample->name = "Sun Loops intro";
-    sample->source = std::string ("builtin:") + kStartupSampleId;
-    return sample;
+    return readSampleData (*reader, static_cast<int> (reader->lengthInSamples), "Sun Loops intro", std::string ("builtin:") + kStartupSampleId);
 }
 } // namespace sls

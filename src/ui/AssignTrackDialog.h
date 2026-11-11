@@ -32,7 +32,6 @@ public:
     static constexpr int kWidth = 380;
     static constexpr int kHeight = 440;
 
-    int getSelectedTrack() const noexcept { return selectedTrack; }
     int getNumRows() override { return static_cast<int> (rowText.size()); }
 
 private:

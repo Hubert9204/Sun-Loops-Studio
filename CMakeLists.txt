@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(SunLoopsStudio VERSION 0.50.0 LANGUAGES C CXX ASM)
+project(SunLoopsStudio VERSION 0.51.0 LANGUAGES C CXX ASM)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -253,7 +253,8 @@ set(SUNBURST_SOURCES
     src/sunburst/Voice.cpp
     src/sunburst/Fx.cpp
     src/sunburst/Presets.cpp
-    src/sunburst/SunBurstProcessor.cpp)
+    src/sunburst/SunBurstProcessor.cpp
+    src/synthkit/SynthProcessor.cpp)
 
 option(SLS_BUILD_SUNBURST "Build the SunBurst synthesizer plugin (VST3 and Standalone)" ON)
 if(SLS_BUILD_SUNBURST)
@@ -268,7 +269,7 @@ if(SLS_BUILD_SUNBURST)
         FORMATS VST3 Standalone
         VST3_CATEGORIES Instrument Synth
         COPY_PLUGIN_AFTER_BUILD FALSE)
-    target_sources(SunBurst PRIVATE ${SUNBURST_SOURCES} plugins/common/HardwareUi.cpp plugins/sunburst/SunBurstEditor.cpp plugins/sunburst/PluginMain.cpp)
+    target_sources(SunBurst PRIVATE ${SUNBURST_SOURCES} plugins/common/HardwareUi.cpp plugins/common/SynthUi.cpp plugins/sunburst/SunBurstEditor.cpp plugins/sunburst/PluginMain.cpp)
     target_include_directories(SunBurst PRIVATE src plugins)
     target_compile_definitions(SunBurst PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
     target_link_libraries(SunBurst PRIVATE
@@ -304,9 +305,9 @@ if(SLS_BUILD_HEXFORGE)
         FORMATS VST3 Standalone
         VST3_CATEGORIES Instrument Synth
         COPY_PLUGIN_AFTER_BUILD FALSE)
-    # It shares SunBurst's band-limited tables, building blocks and effects.
-    target_sources(HexForge PRIVATE ${HEXFORGE_SOURCES} src/sunburst/Wavetables.cpp src/sunburst/Fx.cpp
-                   plugins/common/HardwareUi.cpp plugins/hexforge/HexEditor.cpp plugins/hexforge/PluginMain.cpp)
+    # It shares SunBurst's band-limited tables, building blocks and effects, and the synthkit plugin base (0.51.0).
+    target_sources(HexForge PRIVATE ${HEXFORGE_SOURCES} src/sunburst/Wavetables.cpp src/sunburst/Fx.cpp src/synthkit/SynthProcessor.cpp
+                   plugins/common/HardwareUi.cpp plugins/common/SynthUi.cpp plugins/hexforge/HexEditor.cpp plugins/hexforge/PluginMain.cpp)
     target_include_directories(HexForge PRIVATE src plugins)
     target_compile_definitions(HexForge PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
     target_link_libraries(HexForge PRIVATE

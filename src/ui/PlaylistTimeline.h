@@ -108,7 +108,6 @@ public:
     // Remember the state now, as one undo step: the automation editor calls it before it changes points.
     void pushUndoPoint();
     int getSelectedAutomation() const noexcept { return selection.kind == Kind::Automation ? selection.index : -1; }
-    void selectAutomation (int index);
 
     // The selected track (its name in white; pasting goes there), chosen by clicking its name.
     void setSelectedTrack (int track);
@@ -224,8 +223,6 @@ private:
     int yToLane (int y) const noexcept { return std::clamp ((y - lanesTop()) / kLaneHeight, 0, kAutomationLanes - 1); }
     juce::Rectangle<int> automationClipRect (const AutomationClip& c) const noexcept;
     void paintAutomationClip (juce::Graphics& g, const AutomationClip& c, bool selected);
-    int unitToX (int unit) const noexcept;
-    int xToUnit (int x) const noexcept;       // clamped to the timeline
     int floorToGrid (int tick) const noexcept; // the start of the grid square that holds `tick` (0.42.0)
     int yToTrack (int y) const noexcept;      // clamped to the tracks
     juce::Rectangle<int> clipRect (const Clip& c) const noexcept;
@@ -246,6 +243,9 @@ private:
     void restore (const Snapshot& s);
     void beginEdit();                  // call before a change: remembers the state for undo (once per gesture)
     void commitPendingUndo();
+    // A dragged clip moved to a new place: remembers the undo step, stores it and tells the program.
+    template <class Clip>
+    void storeDragged (Clip& stored, const Clip& clip, const juce::MouseEvent& e);
     bool eraseAt (int track, int tick);
     bool splitAt (int track, int tick, bool noSnap);
     void showClipMenu (const juce::MouseEvent& e);
@@ -274,6 +274,7 @@ private:
     int playheadTick = -1;
 
     double unitWidth = 90.0;
+    std::vector<std::pair<int, int>> pitchRanges; // paint(): each pattern's lowest and highest note (kept to reuse its memory)
     double scrollX = 0.0;
     juce::ScrollBar scrollBar { false };
     int scrollY = 0; // the tracks, in pixels (0.44.0)

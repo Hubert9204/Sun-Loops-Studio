@@ -259,70 +259,6 @@ private:
     std::unique_ptr<juce::FileChooser> chooser;
 };
 
-class ModRow : public juce::Component
-{
-public:
-    ModRow (juce::AudioProcessorValueTreeState& s, int slot)
-    {
-        number.setText (juce::String (slot + 1), juce::dontSendNotification);
-        number.setColour (juce::Label::textColourId, th().accent);
-        number.setJustificationType (juce::Justification::centred);
-        source.addItemList (sourceNames(), 1);
-        dest.addItemList (destNames(), 1);
-        amount.setSliderStyle (juce::Slider::LinearHorizontal);
-        amount.setTextBoxStyle (juce::Slider::TextBoxRight, false, 48, 20);
-        amount.getProperties().set ("bipolar", true);
-        amount.setDoubleClickReturnValue (true, 0.0);
-        for (auto* c : std::initializer_list<juce::Component*> { &number, &source, &dest, &amount })
-            addAndMakeVisible (c);
-        sa = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (s, slotId (slot, "src"), source);
-        da = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (s, slotId (slot, "dst"), dest);
-        aa = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (s, slotId (slot, "amt"), amount);
-    }
-    void resized() override
-    {
-        auto r = getLocalBounds().reduced (4, 0);
-        const auto c = [&r] (int w) { return r.removeFromLeft (w).withSizeKeepingCentre (w, 26); };
-        number.setBounds (c (22));
-        source.setBounds (c (120));
-        r.removeFromLeft (6);
-        dest.setBounds (c (130));
-        r.removeFromLeft (6);
-        amount.setBounds (r.withSizeKeepingCentre (r.getWidth(), 28));
-    }
-
-private:
-    juce::Label number;
-    juce::ComboBox source, dest;
-    juce::Slider amount;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> sa, da;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> aa;
-};
-
-class Meter : public juce::Component
-{
-public:
-    void setLevel (float p)
-    {
-        level = std::max (p, level * 0.85f);
-        repaint();
-    }
-    void paint (juce::Graphics& g) override
-    {
-        auto r = getLocalBounds().toFloat();
-        darkBox (g, r);
-        const float fill = juce::jlimit (0.0f, 1.0f, (juce::Decibels::gainToDecibels (level, -60.0f) + 60.0f) / 60.0f);
-        g.setGradientFill (juce::ColourGradient (th().accent2, r.getX(), 0, th().accent, r.getRight(), 0, false));
-        g.fillRoundedRectangle (r.reduced (2.0f).withWidth ((r.getWidth() - 4.0f) * fill), 2.0f);
-        g.setColour (th().dim);
-        g.setFont (juce::FontOptions (10.0f));
-        g.drawText ("OUT", r.reduced (4.0f, 0.0f), juce::Justification::centredRight);
-    }
-
-private:
-    float level = 0.0f;
-};
-
 class Logo : public juce::Component
 {
 public:
@@ -358,7 +294,8 @@ public:
 } // namespace
 
 HexEditor::HexEditor (HexProcessor& p)
-    : juce::AudioProcessorEditor (p), processor (p), look (hexTheme()), keyboard (p.keyboardState, juce::MidiKeyboardComponent::horizontalKeyboard)
+    : juce::AudioProcessorEditor (p), processor (p), look (hexTheme()), keyboard (p.keyboardState, juce::MidiKeyboardComponent::horizontalKeyboard),
+      presetBar (p, presetCategories(), look)
 {
     setLookAndFeel (&look);
     auto& s = processor.state;
@@ -389,16 +326,8 @@ HexEditor::HexEditor (HexProcessor& p)
     auto* logo = own (std::make_unique<Logo>());
     content.addAndMakeVisible (logo);
     logo->setBounds (12, 6, 250, 52);
-    for (auto* b : { &prevButton, &presetButton, &nextButton, &saveButton })
-        content.addAndMakeVisible (b);
-    prevButton.onClick = [this] { stepPreset (-1); };
-    nextButton.onClick = [this] { stepPreset (1); };
-    presetButton.onClick = [this] { showPresetMenu(); };
-    saveButton.onClick = [this] { savePresetDialog(); };
-    prevButton.setBounds (280, 16, 30, 32);
-    presetButton.setBounds (314, 16, 330, 32);
-    nextButton.setBounds (648, 16, 30, 32);
-    saveButton.setBounds (684, 16, 60, 32);
+    content.addAndMakeVisible (presetBar);
+    presetBar.setBounds (280, 16, 464, 32);
     for (int m = 0; m < kNumMacros; ++m)
     {
         auto* k = own (knob (macroId (m), "MACRO " + juce::String (m + 1)));
@@ -408,9 +337,8 @@ HexEditor::HexEditor (HexProcessor& p)
     auto* masterKnob = own (knob ("master", "MASTER"));
     content.addAndMakeVisible (masterKnob);
     masterKnob->setBounds (1040, 2, 60, 60);
-    meter = own (std::make_unique<Meter>());
     content.addAndMakeVisible (meter);
-    meter->setBounds (1110, 24, 118, 18);
+    meter.setBounds (1110, 24, 118, 18);
 
     const juce::StringArray pageNames { "OPERATORS", "FILTER & AMP", "SPECTRAL & MOD", "EFFECTS" };
     for (int i = 0; i < pageNames.size(); ++i)
@@ -517,7 +445,8 @@ HexEditor::HexEditor (HexProcessor& p)
         auto* pnl = panel (spec, "Modulation", 1, { 708, 0, 512, 612 });
         for (int slot = 0; slot < kMatrixSlots; ++slot)
         {
-            auto* row = own (std::make_unique<ModRow> (s, slot));
+            auto* row = own (std::make_unique<hwui::MatrixRow> (s, slot, slotId (slot, "src"), slotId (slot, "dst"), slotId (slot, "amt"), sourceNames(), destNames(),
+                                                         hwui::MatrixRow::Style { 22, 120, 130, 6, 48, false, false }));
             pnl->addAndMakeVisible (row);
             row->setBounds (8, 36 + slot * 52, 496, 46);
         }
@@ -583,7 +512,6 @@ HexEditor::HexEditor (HexProcessor& p)
             pnl->resized();
 
     showPage (0);
-    refreshPresetLabel();
     content.setSize (kWidth, kHeight);
     setResizable (true, true);
     getConstrainer()->setFixedAspectRatio (static_cast<double> (kWidth) / kHeight);
@@ -624,98 +552,11 @@ void HexEditor::showPage (int index)
 
 void HexEditor::timerCallback()
 {
-    static_cast<Meter*> (meter)->setLevel (processor.consumePeak());
-    if (processor.presetGeneration() != seenGeneration)
-    {
-        refreshPresetLabel();
-        if (spectralEditor != nullptr)
-            spectralEditor->repaint();
-    }
+    meter.setLevel (processor.consumePeak());
+    if (presetBar.poll() && spectralEditor != nullptr)
+        spectralEditor->repaint();
     if (page == 0)
         pages[0].repaint();
 }
 
-void HexEditor::refreshPresetLabel()
-{
-    seenGeneration = processor.presetGeneration();
-    presetButton.setButtonText (processor.getPresetCategory().toUpperCase() + "   " + processor.getPresetName());
-}
-
-void HexEditor::showPresetMenu()
-{
-    const auto list = processor.presets();
-    juce::PopupMenu menu;
-    juce::StringArray categories = presetCategories();
-    for (const auto& p : list)
-        categories.addIfNotAlreadyThere (p.category);
-    for (const auto& category : categories)
-    {
-        juce::PopupMenu sub;
-        for (size_t i = 0; i < list.size(); ++i)
-            if (list[i].category == category)
-                sub.addItem (static_cast<int> (i) + 1, list[i].name + (list[i].file != juce::File() ? "  (user)" : ""), true,
-                             list[i].name == processor.getPresetName() && list[i].category == processor.getPresetCategory());
-        if (sub.getNumItems() > 0)
-            menu.addSubMenu (category, sub);
-    }
-    menu.addSeparator();
-    menu.addItem (-1, "Save preset...");
-    menu.addItem (-2, "Init patch");
-    menu.addItem (-3, "Open the presets folder");
-    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&presetButton),
-                        [safe = juce::Component::SafePointer<HexEditor> (this), list] (int result)
-                        {
-                            if (safe == nullptr || result == 0)
-                                return;
-                            if (result > 0 && result <= static_cast<int> (list.size()))
-                                safe->processor.loadPreset (list[static_cast<size_t> (result - 1)]);
-                            else if (result == -1)
-                                safe->savePresetDialog();
-                            else if (result == -2)
-                                safe->processor.initPatch();
-                            else if (result == -3)
-                            {
-                                HexProcessor::userPresetFolder().createDirectory();
-                                HexProcessor::userPresetFolder().startAsProcess();
-                            }
-                        });
-}
-
-void HexEditor::stepPreset (int delta)
-{
-    const auto list = processor.presets();
-    if (list.empty())
-        return;
-    int current = -1;
-    for (size_t i = 0; i < list.size(); ++i)
-        if (list[i].name == processor.getPresetName() && list[i].category == processor.getPresetCategory())
-            current = static_cast<int> (i);
-    const int count = static_cast<int> (list.size());
-    const int next = ((current < 0 ? (delta > 0 ? -1 : 0) : current) + delta + count) % count;
-    processor.loadPreset (list[static_cast<size_t> (next)]);
-}
-
-void HexEditor::savePresetDialog()
-{
-    saveWindow = std::make_unique<juce::AlertWindow> ("Save preset", "A name and a category for this sound.", juce::MessageBoxIconType::NoIcon, this);
-    saveWindow->setLookAndFeel (&look);
-    saveWindow->addTextEditor ("name", processor.getPresetName() == "Init" ? juce::String ("My sound") : processor.getPresetName(), "Name");
-    juce::StringArray categories = presetCategories();
-    categories.add ("User");
-    saveWindow->addComboBox ("category", categories, "Category");
-    if (auto* box = saveWindow->getComboBoxComponent ("category"))
-        box->setSelectedItemIndex (std::max (0, categories.indexOf (processor.getPresetCategory())), juce::dontSendNotification);
-    saveWindow->addButton ("Save", 1, juce::KeyPress (juce::KeyPress::returnKey));
-    saveWindow->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
-    saveWindow->enterModalState (true, juce::ModalCallbackFunction::create ([safe = juce::Component::SafePointer<HexEditor> (this)] (int result)
-    {
-        if (safe == nullptr || safe->saveWindow == nullptr)
-            return;
-        if (result == 1
-            && safe->processor.savePreset (safe->saveWindow->getTextEditorContents ("name"), safe->saveWindow->getComboBoxComponent ("category")->getText())
-                   == juce::File())
-            juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Save preset", "The preset could not be saved.");
-        safe->saveWindow.reset();
-    }), false);
-}
 } // namespace hexforge

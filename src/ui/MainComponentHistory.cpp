@@ -7,7 +7,8 @@ namespace sls
 {
 // Every edit reaches publishProject(), which calls recordHistory(). The state before an edit is kept when the edit
 // really changed something (compared through the project file text, which holds every setting but no audio). Edits made
-// while one mouse button stays down (a knob turned, a note dragged, steps painted) count as one step.
+// while one mouse button stays down (a knob turned, a note dragged, steps painted) count as one step, and the project is
+// only compared once the button is let go (0.51.0): a drag no longer writes the whole project out at every move.
 
 MainComponent::EditState MainComponent::captureEditState()
 {
@@ -29,6 +30,23 @@ void MainComponent::recordHistory()
 {
     if (restoringHistory)
         return;
+    if (historyReady && ! ignoreDirty && juce::ModifierKeys::currentModifiers.isAnyMouseButtonDown())
+    {
+        historyPending = true; // timerCallback() records it when the button is let go
+        return;
+    }
+    commitHistory (! ignoreDirty || historyPending);
+}
+
+void MainComponent::flushHistory()
+{
+    if (historyPending && ! juce::ModifierKeys::currentModifiers.isAnyMouseButtonDown())
+        commitHistory (true);
+}
+
+void MainComponent::commitHistory (bool undoable)
+{
+    historyPending = false;
     auto now = captureEditState();
     if (! historyReady)
     {
@@ -39,20 +57,12 @@ void MainComponent::recordHistory()
     if (now.text == historyStable.text)
         return; // nothing that undo could give back (a refresh, a view change already recorded)
 
-    if (! ignoreDirty)
+    if (undoable)
     {
-        const bool mouseDown = juce::ModifierKeys::currentModifiers.isAnyMouseButtonDown();
-        const auto ms = juce::Time::getMillisecondCounter();
-        const bool sameGesture = mouseDown && lastEditMouseDown && ms - lastEditMs < 5000;
-        if (! sameGesture)
-        {
-            undoHistory.push_back (std::move (historyStable));
-            if (undoHistory.size() > kMaxHistory)
-                undoHistory.erase (undoHistory.begin());
-            redoHistory.clear();
-        }
-        lastEditMs = ms;
-        lastEditMouseDown = mouseDown;
+        undoHistory.push_back (std::move (historyStable));
+        if (undoHistory.size() > kMaxHistory)
+            undoHistory.erase (undoHistory.begin());
+        redoHistory.clear();
     }
     historyStable = std::move (now);
 }
@@ -62,6 +72,7 @@ void MainComponent::clearHistory()
     undoHistory.clear();
     redoHistory.clear();
     historyReady = false;
+    historyPending = false;
 }
 
 void MainComponent::applyEditState (const EditState& s)
@@ -99,7 +110,6 @@ void MainComponent::applyEditState (const EditState& s)
     playlistView.setSelectedPattern (currentPattern);
     playlistView.clearHistory(); // its own steps would no longer match
     playlistView.refreshTimeline();
-    resetNoteHistory();
 
     if (std::abs (bpmSlider.getValue() - s.bpm) > 1.0e-9)
     {
@@ -137,12 +147,13 @@ void MainComponent::applyEditState (const EditState& s)
 
 void MainComponent::undoEdit()
 {
+    if (historyPending)
+        commitHistory (true); // an edit still waiting for the mouse button comes first
     if (undoHistory.empty())
     {
         statusLabel.setText ("Nothing to undo", juce::dontSendNotification);
         return;
     }
-    recordHistory(); // an edit that has not been recorded yet (none should be) comes first
     redoHistory.push_back (std::move (historyStable));
     historyStable = std::move (undoHistory.back());
     undoHistory.pop_back();
@@ -152,6 +163,8 @@ void MainComponent::undoEdit()
 
 void MainComponent::redoEdit()
 {
+    if (historyPending)
+        commitHistory (true); // a new edit: it clears the redo steps
     if (redoHistory.empty())
     {
         statusLabel.setText ("Nothing to redo", juce::dontSendNotification);
