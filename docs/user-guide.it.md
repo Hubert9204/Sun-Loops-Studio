@@ -114,7 +114,7 @@ recente (confronto Semantic Versioning: 0.43.0 è più recente di 0.42.0, 1.0.0 
 delle note: **Download** apre l'AppImage (o la pagina della release), **Later** richiede al prossimo avvio, **Skip this version** non
 chiede più di quella. *Check for updates at start-up* nello stesso menu spegne il controllo automatico; *Check for updates now* chiede
 subito e dice anche quando sei aggiornato. Il controllo non invia dati personali (solo nome e versione del programma, come
-User-Agent richiesto da GitHub).
+User-Agent richiesto da GitHub). Le release sono pubblicate dalla 0.51.0 in poi, quindi il controllo trova ogni versione successiva.
 
 ## Pannelli
 

@@ -109,7 +109,7 @@ Semantic Versioning: 0.43.0 is newer than 0.42.0, 1.0.0 is newer than 1.0.0-rc.1
 **Download** opens the AppImage (or the release page), **Later** asks again at the next start, **Skip this version** stops asking
 about that one. *Check for updates at start-up* in the same menu turns the automatic check off; *Check for updates now* asks at
 once and also tells you when you are up to date. The check sends no personal data (only the program name and version, as the
-User-Agent GitHub requires).
+User-Agent GitHub requires). Releases are published from 0.51.0 on, so the check finds every version after that.
 
 ## Panels
 

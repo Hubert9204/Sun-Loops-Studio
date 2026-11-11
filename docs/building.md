@@ -129,6 +129,15 @@ JUCE has no native PipeWire backend: on Linux it uses ALSA and JACK, and PipeWir
 `pipewire-alsa` and `pipewire-jack`, which Nobara installs by default. JUCE draws through X11; on a Wayland session
 it runs through XWayland.
 
+## Releases (0.51.0)
+
+Pushing a version tag publishes a release: `git tag v0.51.0 && git push origin v0.51.0`. The workflow
+`.github/workflows/release.yml` checks that the tag matches the version in `CMakeLists.txt`, builds the AppImage on Ubuntu 24.04
+with `scripts/build_appimage.sh`, and attaches it and `SHA256SUMS.txt` to a GitHub release whose text is that version's
+CHANGELOG section (`scripts/release_notes.py 0.51.0` prints it). From then on every copy of the program from 0.43.0 on finds the
+release through its update check and offers the AppImage. *Run workflow* on the Release workflow (with an existing tag)
+publishes a tag again, replacing its files.
+
 ## Crash reports and the update check (0.43.0)
 
 - `-DSLS_GITHUB_REPO=owner/repo` (default `Hubert9204/Sun-Loops-Studio`) is where crash reports go and updates come from.

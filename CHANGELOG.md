@@ -20,6 +20,11 @@ program, SunBurst and HexForge work as before.
   lines wrap without a division per sample.
 - The Playlist works out the pitch range of a pattern's notes (for the clip previews) only for the clips in sight.
 
+### Added
+- **Releases**: pushing a version tag (`v0.51.0`) builds the AppImage on GitHub and publishes it as a release with its checksum and
+  this changelog's section (`.github/workflows/release.yml`, `scripts/release_notes.py`). The program's update check (since
+  0.43.0) finds it, so from now on new versions can be downloaded from inside the program (*Check for updates now*).
+
 ### Removed
 - The old note-only undo, which no command used any more but which still copied every note of every channel at each note edit
   and kept up to 200 copies in memory.
