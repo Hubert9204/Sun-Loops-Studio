@@ -36,7 +36,7 @@ Sun Loops Studio is inspired by the workflow of loop-based DAWs such as FL Studi
 that uses no code, names, graphics or assets from other products, and it is not affiliated with or endorsed by
 their makers.
 
-**Status: alpha (0.52.0).** It builds, more than 1,600 automated checks pass and every feature has been exercised in a virtual
+**Status: alpha (0.53.0).** It builds, more than 1,600 automated checks pass and every feature has been exercised in a virtual
 display. The AppImage runs on Nobara; playback was first confirmed on a real Nobara machine with version 0.3. Most of what came
 later (recording, MIDI hardware, plugins, the synthesizers' sound) was tested headless and in a virtual display with a silent audio
 device, and is now being tried on real hardware. **Plugins (VST3, LV2, LADSPA)** work as instruments and as mixer effects since 0.17.0;
@@ -45,7 +45,7 @@ plugins. See [docs/roadmap.md](docs/roadmap.md) for exactly what is and is not v
 
 ## Features
 
-- **Demo song** (0.52.0) - the program opens with "Sunrise Drive", 44 bars of synthwave that use SunBurst and HexForge, the
+- **Demo song** (0.52.0) - on its first start the program opens with "Sunrise Drive", 44 bars of synthwave that use SunBurst and HexForge, the
   sampled piano, bass and drums, the four synth engines, audio clips, insert effects, aux buses, VCA groups, a sidechain, automation
   and tempo changes. Press Space; *File > Open the demo song* brings it back. What plays where: [the user guide](docs/user-guide.md#projects).
 - **Floating panels** - Channel Rack, Playlist, Piano Roll and Mixer. Drag by the title bar, resize from the

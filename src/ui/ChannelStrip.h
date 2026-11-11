@@ -32,7 +32,7 @@ public:
     int activeSteps() const noexcept { return steps::activeSteps (channel.notes, channel.steps, loopLengthTicks); }
 
     std::function<void()> onStepsEdited;      // a step was written or erased, or the active part was resized
-    std::function<void()> onOpenEditor;       // the preview was clicked: open the piano roll (the drum machine for drums)
+    std::function<void()> onOpenEditor;       // the preview was clicked: open the piano roll
     std::function<void()> onContextMenu;      // right click on the preview
 
     void paint (juce::Graphics&) override;

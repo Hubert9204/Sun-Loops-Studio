@@ -21,7 +21,8 @@ La riga di stato mostra il dispositivo audio (frequenza, buffer, latenza dichiar
 
 ## Progetti
 
-**Il brano dimostrativo (0.52.0).** Il programma si apre con "Sunrise Drive", 44 battute di synthwave in La minore a 110 BPM, in
+**Il brano dimostrativo (0.52.0).** Al primo avvio il programma si apre con "Sunrise Drive" (dalla 0.53.0 solo allora; gli avvii
+successivi partono da un progetto nuovo e vuoto), 44 battute di synthwave in La minore a 110 BPM, in
 modalità Song: premi **Spazio** per ascoltarlo. È fatto per mostrare il programma al lavoro: apri i pannelli mentre suona.
 
 | Battute | Sezione | Cosa suona |
@@ -275,8 +276,8 @@ Una riga per canale: un display **Track N** e il nome, **M** (mute), **S** (solo
   - Appena il canale ha una nota che non è un semplice step - un'altra altezza, una nota più lunga, una nota fuori
     dalla griglia dei sedicesimi, scritta nel Piano Roll, nella drum machine, registrata o generata - la riga mostra
     invece l'**anteprima del Piano Roll**. Il **clic
-    sinistro** sull'anteprima apre il Piano Roll (la drum machine per un canale drum) o lo porta in primo piano; il
-    clic destro apre il menu del canale.
+    sinistro** sull'anteprima apre il Piano Roll o lo porta in primo piano, dalla 0.53.0 anche per i canali drum (la drum machine
+    si apre con il doppio clic sul canale o dal suo menu); il clic destro apre il menu del canale.
   - Se cancelli tutte le note nel Piano Roll, la riga torna ai quadratini.
   - I quadratini vengono disegnati ogni volta dalle note, quindi mostrano sempre ciò che suona.
   - I progetti di prima della 0.31.0 si aprono con la sequenza di ogni canale lunga quanto il pattern, quindi suonano

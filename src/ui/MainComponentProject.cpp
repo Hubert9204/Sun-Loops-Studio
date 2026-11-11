@@ -253,6 +253,11 @@ void MainComponent::loadDemoSong()
         spdlog::warn ("Demo song: {}", p);
     juce::StringArray loadProblems;
     applyDocument (std::move (demo.document), {}, loadProblems);
+    // Choosing the presets told the project that the plugins changed: the demo is still untouched (no "*" in the title).
+    for (const auto& p : pluginHost->livePlugins())
+        p->takeChanged();
+    projectDirty = false;
+    updateWindowTitle();
     for (const auto& p : loadProblems)
         spdlog::warn ("Demo song: {}", p.toStdString());
     statusLabel.setText (juce::String ("Demo song \"") + kDemoSongName + "\": press Space to play it", juce::dontSendNotification);

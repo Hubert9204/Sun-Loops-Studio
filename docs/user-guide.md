@@ -21,7 +21,8 @@ The status line shows the audio device (sample rate, buffer size, reported laten
 
 ## Projects
 
-**The demo song (0.52.0).** The program opens with "Sunrise Drive", 44 bars of synthwave in A minor at 110 BPM, in Song mode: press
+**The demo song (0.52.0).** On its first start the program opens with "Sunrise Drive" (since 0.53.0 only then; later starts begin
+with a new, empty project), 44 bars of synthwave in A minor at 110 BPM, in Song mode: press
 **Space** to hear it. It is made to show the program at work - open the panels while it plays:
 
 | Bars | Section | What plays |
@@ -261,7 +262,8 @@ One row per channel: a **Track N** display and the name, **M** (mute), **S** (so
   - As soon as the channel has a note that is not a plain step - another pitch, a longer note, a note off the 16th
     grid, written in the Piano Roll, the drum machine, recorded or generated - the row shows the **preview of the
     Piano Roll** instead. **Left click** on the preview opens the Piano
-    Roll (the drum machine for a drum channel), or brings it forward; right click opens the channel's menu.
+    Roll, or brings it forward - for drum channels too since 0.53.0 (the drum machine opens with a double click on the channel or from its
+    menu); right click opens the channel's menu.
   - Delete every note in the Piano Roll and the row goes back to squares.
   - Squares are drawn from the notes every time, so they always show what plays.
   - Projects from before 0.31.0 open with every channel's sequence as long as the pattern, so they play exactly as before.

@@ -236,11 +236,11 @@ ChannelStrip::ChannelStrip (Channel& channelToControl, int channelIndex)
     loadButton.onClick = [this] { if (onLoadSample) onLoadSample (index); };
 
     grid.onStepsEdited = [this] { if (onChanged) onChanged (index); };
+    // A click on the preview opens the piano roll for every instrument, drums included (0.53.0; before, drums opened the drum
+    // machine, which a double click on the channel and its menu still do).
     grid.onOpenEditor = [this]
     {
-        if (channel.instrument == Instrument::Drums && onOpenDrumMachine)
-            onOpenDrumMachine (index);
-        else if (onOpenPianoRoll)
+        if (onOpenPianoRoll)
             onOpenPianoRoll (index);
     };
     grid.onContextMenu = [this] { showContextMenu(); };

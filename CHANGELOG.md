@@ -2,6 +2,18 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.53.0 - 2026-11-11
+
+### Changed
+- The demo song opens on the first start only (the setting `demo.shown`); later starts begin with a new, empty project.
+  *File > Open the demo song* still opens it at any time.
+- A click on the preview of the Piano Roll in a Channel Rack row opens the Piano Roll for drum channels too (before, it opened the
+  drum machine); the drum machine opens with a double click on the channel or from its menu.
+
+### Fixed
+- The demo song opened as changed ("*" in the title, and a question about saving when closing): choosing the plugins' presets
+  counted as an edit.
+
 ## 0.52.0 - 2026-11-11
 
 ### Added

@@ -38,7 +38,6 @@ bool JucePlugin::selectProgram (const std::string& programName)
         if (instance->getProgramName (i).toStdString() == programName)
         {
             instance->setCurrentProgram (i);
-            changed.store (true, std::memory_order_release);
             return true;
         }
     return false;

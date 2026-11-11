@@ -28,6 +28,7 @@ namespace sls
 namespace
 {
 constexpr const char* kAudioStateKey = "audio.device"; // the audio device and buffer size, as JUCE saves them
+constexpr const char* kDemoShownKey = "demo.shown";    // the demo song was opened at a start (0.53.0: only the first one)
 }
 
 // A sampler channel's sample: any format the playlist can import, at most 30 seconds of it.
@@ -453,7 +454,22 @@ MainComponent::MainComponent()
     engine.setMidiTargetChannel (selected);
     engine.setStartupSound (makeStartupSample());
     initPlugins(); // before the device starts: it prepares the plugins for its rate
-    loadDemoSong(); // (a project recovered after a crash replaces it in startSession)
+    // The demo song opens on the first start only (0.53.0); afterwards the program starts with a new, empty project. A project
+    // recovered after a crash replaces either in startSession().
+    if (settings == nullptr || ! settings->getBoolValue (kDemoShownKey, false))
+    {
+        loadDemoSong();
+        if (settings != nullptr)
+        {
+            settings->setValue (kDemoShownKey, true);
+            settings->saveIfNeeded();
+        }
+    }
+    else
+    {
+        juce::StringArray problems;
+        applyDocument (ProjectDocument::blank(), {}, problems);
+    }
     const auto error = engine.initialise (savedAudio.get());
     if (error.isEmpty() && (settings == nullptr || settings->getBoolValue ("startup.sound", true)))
         engine.playStartupSound();
