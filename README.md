@@ -32,14 +32,14 @@ On Fedora / Nobara without FUSE 2, install it once (`sudo dnf install fuse-libs`
 does it at once; the automatic check can be switched off) and its **Download** button fetches the new AppImage. Releases are
 published since 0.51.0; to build from source see [Quick start](#quick-start-nobara--fedora).
 
-**Community:** join the [Sun Loops Discord](https://discord.gg/a5RYYxWSN) to ask questions, report problems and share your music
+**Community:** join the [Sun Loops Discord](https://discord.gg/VwzdD6tRNB) to ask questions, report problems and share your music
 (also from the program: *Help > Join the Sun Loops Discord*).
 
 Sun Loops Studio is inspired by the workflow of loop-based DAWs such as FL Studio. It is an independent project
 that uses no code, names, graphics or assets from other products, and it is not affiliated with or endorsed by
 their makers.
 
-**Status: alpha (0.55.0).** It builds, more than 1,600 automated checks pass and every feature has been exercised in a virtual
+**Status: alpha (0.55.1).** It builds, more than 1,600 automated checks pass and every feature has been exercised in a virtual
 display. The AppImage runs on Nobara; playback was first confirmed on a real Nobara machine with version 0.3. Most of what came
 later (recording, MIDI hardware, plugins, the synthesizers' sound) was tested headless and in a virtual display with a silent audio
 device, and is now being tried on real hardware. **Plugins (VST3, LV2, LADSPA)** work as instruments and as mixer effects since 0.17.0;

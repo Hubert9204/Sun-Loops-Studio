@@ -1,6 +1,6 @@
 # Status and roadmap
 
-Version 0.55.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
+Version 0.55.1 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
 what is missing. If something here disagrees with the program, the program is right: please fix the page.
 
 ## What has been verified, and how

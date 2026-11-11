@@ -29,7 +29,7 @@ namespace
 constexpr const char* kTokenKey = "crashReport.githubToken";
 constexpr const char* kCheckUpdatesKey = "updates.checkAutomatically";
 constexpr const char* kSkippedVersionKey = "updates.skippedVersion";
-constexpr const char* kDiscordInvite = "https://discord.gg/a5RYYxWSN"; // the Sun Loops community (0.55.0)
+constexpr const char* kDiscordInvite = "https://discord.gg/VwzdD6tRNB"; // the Sun Loops community (permanent invite, 0.55.1)
 
 github::Repo repository()
 {

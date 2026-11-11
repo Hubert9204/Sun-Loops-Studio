@@ -2,6 +2,12 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.55.1 - 2026-11-11
+
+### Changed
+- The Discord link (Help menu, About, Helios and the READMEs) points to the server's permanent invite,
+  https://discord.gg/VwzdD6tRNB; the old one would have expired.
+
 ## 0.55.0 - 2026-11-11
 
 ### Added
