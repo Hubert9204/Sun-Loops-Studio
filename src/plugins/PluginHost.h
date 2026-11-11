@@ -45,6 +45,7 @@ public:
     std::string parameterName (int index) const override;
     std::string parameterText (int index, float value) const override;
     int lastTouchedParameter() const noexcept override { return lastTouched.load (std::memory_order_relaxed); }
+    bool selectProgram (const std::string& programName) override;
 
     // Message thread, never while the audio thread may call process() (before the plugin is published, while the device is stopped, or
     // while the engine is suspended).

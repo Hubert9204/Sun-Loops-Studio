@@ -132,7 +132,8 @@ it runs through XWayland.
 ## Releases (0.51.0)
 
 On GitHub, *Actions > Release > Run workflow* (branch `main`, tag left empty) releases the version written in `CMakeLists.txt`:
-the workflow `.github/workflows/release.yml` builds the AppImage on Ubuntu 24.04 with `scripts/build_appimage.sh`, creates the
+the workflow `.github/workflows/release.yml` builds the AppImage in a Fedora 41 container (glibc 2.40: it runs on Fedora / Nobara 41
+and newer, Ubuntu 24.10 and newer) with `scripts/build_appimage.sh`, creates the
 tag `v<version>` on that commit and attaches the AppImage and `SHA256SUMS.txt` to a GitHub release whose text is that version's
 CHANGELOG section (`scripts/release_notes.py 0.51.0` prints it). Pushing a tag (`git push origin v0.51.0`) does the same, after
 checking that the tag matches `CMakeLists.txt`; *Run workflow* with an existing tag publishes it again, replacing its files.

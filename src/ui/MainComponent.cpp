@@ -17,6 +17,7 @@
 
 #include "audio/BuiltinSamples.h"
 #include "audio/SoundLibrary.h"
+#include "library/DemoSong.h"
 #include "library/DrumKitFile.h"
 #include "audio/ClipEdit.h"
 #include "audio/MidiImport.h"
@@ -28,136 +29,6 @@ namespace
 {
 constexpr const char* kAudioStateKey = "audio.device"; // the audio device and buffer size, as JUCE saves them
 }
-
-namespace
-{
-constexpr double kDemoBpm = 100.0;
-
-Channel makeSynth (const char* name, float volume)
-{
-    Channel c;
-    c.name = name;
-    c.instrument = Instrument::Synth;
-    c.volume = volume;
-    return c;
-}
-
-void addNote (Channel& c, int pitch, int start, int length, float velocity)
-{
-    c.notes.push_back ({ pitch, start, length, velocity });
-}
-
-const SynthPatch* factoryPatch (const char* name)
-{
-    for (const auto& p : synthFactoryPatches())
-        if (p.name == name)
-            return &p.patch;
-    return nullptr;
-}
-
-// The demo song (0.22.0): a two-bar groove in A minor at 100 BPM with the built-in sounds: a drum machine with the "Electronic Punch"
-// kit, the grand piano, the electric bass and a plucked synth. If the sound library is not built in, synths stand in for the piano
-// and the bass.
-std::vector<Channel> demoChannels()
-{
-    constexpr int bar = 4 * kTicksPerBeat;
-    constexpr int eighth = kTicksPerBeat / 2;
-    constexpr int sixteenth = kTicksPerBeat / 4;
-
-    // Drums, in the General MIDI order of the kit (key 36 = pad 1).
-    Channel drums;
-    drums.name = "Drums";
-    drums.instrument = Instrument::Drums;
-    drums.volume = 0.85f;
-    {
-        juce::StringArray problems;
-        drums.kit = std::make_shared<const DrumKit> (loadKit (builtinKitSpec ("gen:punch"), problems));
-    }
-    constexpr int kick = 36, rim = 37, snare = 38, clap = 39, closedHat = 42, openHat = 46;
-    for (int b = 0; b < kLoopBars; ++b)
-    {
-        const int at = b * bar;
-        for (int beat = 0; beat < 4; ++beat)
-            addNote (drums, kick, at + beat * kTicksPerBeat, sixteenth, beat == 0 ? 1.0f : 0.9f);
-        addNote (drums, clap, at + kTicksPerBeat, sixteenth, 0.9f);
-        addNote (drums, clap, at + 3 * kTicksPerBeat, sixteenth, 0.95f);
-        for (int e = 0; e < 8; ++e)
-        {
-            if (b == kLoopBars - 1 && e == 7)
-                addNote (drums, openHat, at + e * eighth, eighth, 0.8f);
-            else
-                addNote (drums, closedHat, at + e * eighth, sixteenth, e % 2 == 1 ? 0.85f : 0.45f);
-        }
-        addNote (drums, rim, at + 3 * kTicksPerBeat + 3 * sixteenth, sixteenth, 0.5f);
-        addNote (drums, snare, at + 2 * kTicksPerBeat + 3 * sixteenth, sixteenth, 0.3f); // a ghost note
-    }
-
-    // Piano chords: Am9 (bar 1) and Fmaj7 (bar 2) with a G6 pick-up, a short-long syncopated rhythm.
-    Channel piano;
-    piano.name = "Piano";
-    piano.volume = 0.75f;
-    std::string error;
-    if (auto program = makeLibraryProgram ("grand-piano", &piano.sampler, error))
-    {
-        piano.instrument = Instrument::Sampler;
-        piano.program = std::move (program);
-    }
-    else
-    {
-        piano.instrument = Instrument::Synth;
-        if (const auto* patch = factoryPatch ("Soft Pad"))
-            piano.synth = *patch;
-    }
-    const std::vector<std::vector<int>> chords { { 57, 60, 64, 67, 71 }, { 53, 57, 60, 64, 69 } };
-    for (int b = 0; b < kLoopBars; ++b)
-    {
-        const auto& chord = chords[static_cast<size_t> (b % 2)];
-        const int at = b * bar;
-        for (const int pitch : chord)
-        {
-            addNote (piano, pitch, at, 3 * eighth - 20, 0.72f);
-            addNote (piano, pitch, at + 3 * eighth, eighth - 20, 0.55f);
-            if (b < kLoopBars - 1)
-                addNote (piano, pitch, at + 5 * eighth, 3 * eighth - 20, 0.62f);
-        }
-    }
-    for (const int pitch : { 55, 59, 62, 64 })
-        addNote (piano, pitch, (kLoopBars - 1) * bar + 5 * eighth, 3 * eighth - 20, 0.6f);
-
-    // Bass (written at its real pitch: A1 = 33).
-    Channel bass;
-    bass.name = "Bass";
-    bass.volume = 0.85f;
-    if (auto program = makeLibraryProgram ("electric-bass", &bass.sampler, error))
-    {
-        bass.instrument = Instrument::Sampler;
-        bass.program = std::move (program);
-    }
-    else
-    {
-        bass.instrument = Instrument::Synth;
-        if (const auto* patch = factoryPatch ("Square Bass"))
-            bass.synth = *patch;
-    }
-    const int bassLine[][4] = { { 33, 0, 420, 100 },        { 33, 720, 200, 75 },           { 40, 960, 200, 85 },  { 33, 1200, 420, 90 },
-                                { 31, 1680, 200, 80 },      { 29, 1920, 420, 100 },         { 29, 2640, 200, 75 }, { 36, 2880, 200, 85 },
-                                { 29, 3120, 420, 90 },      { 31, 3600, 260, 85 } };
-    for (const auto& n : bassLine)
-        addNote (bass, n[0], n[1], n[2], static_cast<float> (n[3]) / 100.0f);
-
-    // A plucked synth answering the piano.
-    auto pluck = makeSynth ("Pluck", 0.45f);
-    if (const auto* patch = factoryPatch ("Pluck"))
-        pluck.synth = *patch;
-    const int line[][2] = { { 76, 3 }, { 74, 4 }, { 72, 5 }, { 71, 6 }, { 72, 7 }, { 69, 11 }, { 72, 13 }, { 76, 14 },
-                            { 77, 19 }, { 76, 20 }, { 72, 21 }, { 69, 22 }, { 72, 23 }, { 74, 27 }, { 71, 29 }, { 67, 30 } };
-    for (const auto& n : line)
-        addNote (pluck, n[0], n[1] * eighth, eighth - 30, 0.75f);
-
-    return { drums, piano, bass, pluck };
-}
-
-} // namespace
 
 // A sampler channel's sample: any format the playlist can import, at most 30 seconds of it.
 std::shared_ptr<const SampleData> decodeSample (juce::AudioFormatManager&, const juce::File& file, juce::String& error)
@@ -198,48 +69,16 @@ MainComponent::MainComponent()
 
     // The strips and the mixer hold references into this vector, so it must never reallocate:
     // reserve the maximum up front and never grow past it.
-    channels = demoChannels();
+    // A blank project to build the window around; the demo song (0.52.0) replaces it once the plugins are known (loadDemoSong).
+    auto blank = ProjectDocument::blank();
+    channels = blank.channels;
     channels.reserve (static_cast<size_t> (kMaxChannels));
     tracks.reserve (static_cast<size_t> (kMaxTracks)); // grows in place: the mixer strips refer to the tracks
     for (size_t i = 0; i < channels.size(); ++i)
-        channels[i].mixerTrack = static_cast<int> (i); // every channel on its own mixer track to start with
+        channels[i].mixerTrack = static_cast<int> (i);
 
     library.ensureExists(); // ~/Music/Sun Loops Studio/{Samples,Drum Kits,Presets}: where the browser looks
-
-    // Demo song (0.42.0: patterns of one bar of 4/4): the two-bar groove is "Pattern 1" (its first bar, Am9) and "Pattern 2" (its
-    // second, Fmaj7 and the pick-up); "Drums" is the drums and the bass of the first bar. The playlist is two bars of Drums, the
-    // groove three times, two bars of Drums.
-    constexpr int bar = 4 * kTicksPerBeat;
-    arrangement.patternTicks = bar;
-    arrangement.patterns.resize (3);
-    arrangement.patterns[0].name = "Pattern 1";
-    arrangement.patterns[1].name = "Pattern 2";
-    arrangement.patterns[2].name = "Drums";
-    arrangement.ensureChannelCount (channels.size());
-    for (size_t c = 0; c < channels.size(); ++c)
-    {
-        for (const auto& n : channels[c].notes)
-        {
-            auto note = n;
-            const int which = n.startTick < bar ? 0 : 1;
-            note.startTick -= which * bar;
-            note.lengthTicks = std::min (note.lengthTicks, bar - note.startTick);
-            arrangement.patterns[static_cast<size_t> (which)].notes[c].push_back (note);
-            if (which == 0 && (channels[c].instrument == Instrument::Drums || channels[c].name == "Bass"))
-                arrangement.patterns[2].notes[c].push_back (note);
-        }
-        channels[c].notes = arrangement.patterns[0].notes[c]; // the channels show the current pattern
-    }
-    // 0.44.0: four free tracks, then each pattern on its own track.
-    arrangement.resetTracks();
-    const int t0 = arrangement.dedicatedTrack (0), t1 = arrangement.dedicatedTrack (1), t2 = arrangement.dedicatedTrack (2);
-    arrangement.clips = { { 2, t2, 0, 2 * bar, 0 } };
-    for (int g = 0; g < 3; ++g)
-    {
-        arrangement.clips.push_back ({ 0, t0, (2 + 2 * g) * bar, bar, 0 });
-        arrangement.clips.push_back ({ 1, t1, (3 + 2 * g) * bar, bar, 0 });
-    }
-    arrangement.clips.push_back ({ 2, t2, 8 * bar, 2 * bar, 0 });
+    arrangement = blank.arrangement;
 
     for (size_t i = 0; i < channels.size(); ++i)
         createStrip (i);
@@ -383,8 +222,8 @@ MainComponent::MainComponent()
     noteRecordButton.onRightClick = [this] { openNoteRecordMenu(); };
 
     bpmSlider.setRange (40.0, 240.0, 1.0);
-    bpmSlider.setValue (kDemoBpm, juce::dontSendNotification);
-    engine.setBpm (kDemoBpm);
+    bpmSlider.setValue (kDemoSongBpm, juce::dontSendNotification);
+    engine.setBpm (kDemoSongBpm);
     bpmSlider.onValueChange = [this] { engine.setBpm (bpmSlider.getValue()); playlistView.setBpm (bpmSlider.getValue()); markDirty(); recordHistory(); };
     meterButton.onClick = [this] { showTempoMenu(); };
     meterButton.setMouseClickGrabsKeyboardFocus (false);
@@ -577,7 +416,7 @@ MainComponent::MainComponent()
     selectChannel (0);
     restoreLayout();
     publishProject(); // before the device starts, so the first callback already has the project
-    projectDirty = false; // the demo song counts as untitled and unchanged
+    projectDirty = false;
     updateWindowTitle();
 
     std::unique_ptr<juce::XmlElement> savedAudio;
@@ -614,6 +453,7 @@ MainComponent::MainComponent()
     engine.setMidiTargetChannel (selected);
     engine.setStartupSound (makeStartupSample());
     initPlugins(); // before the device starts: it prepares the plugins for its rate
+    loadDemoSong(); // (a project recovered after a crash replaces it in startSession)
     const auto error = engine.initialise (savedAudio.get());
     if (error.isEmpty() && (settings == nullptr || settings->getBoolValue ("startup.sound", true)))
         engine.playStartupSound();

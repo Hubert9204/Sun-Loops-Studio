@@ -40,6 +40,8 @@ public:
     virtual std::string parameterName (int /*index*/) const { return {}; }
     virtual std::string parameterText (int /*index*/, float /*value*/) const { return {}; } // the value as the plugin writes it
     virtual int lastTouchedParameter() const noexcept { return -1; } // the one last moved in the plugin's own window, or -1
+    // Message thread (0.52.0): switches to the plugin's program (factory preset) of that name; false when it has none by that name.
+    virtual bool selectProgram (const std::string& /*name*/) { return false; }
     virtual bool isLoaded() const noexcept = 0; // false: the plugin could not be found when the project was opened (it keeps its settings)
     virtual const std::string& displayName() const noexcept = 0;
 };

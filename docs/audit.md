@@ -27,6 +27,12 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.52.0
+The demo song is built by code (`DemoSong.cpp`) rather than stored as a file, so it follows changes to the project format and to the
+effects' parameters; the test renders it and checks levels, so a change that breaks a part of it (a preset renamed, an effect
+parameter moved) is noticed. Plugin presets are chosen by name through the plugin's programs, and plugin automation finds its
+parameter by name; both are reported in the session log when they cannot be found, and the channel falls back to a built-in synth.
+
 ## After 0.51.0 (review for duplicated, obsolete, redundant and slow code)
 Method: a script that finds windows of 10 or more identical statements (spaces and comments ignored) across `src` and
 `plugins` (about 53 000 lines); a script that lists names declared in a header and used at most twice; reading of the hot paths

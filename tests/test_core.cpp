@@ -63,6 +63,7 @@
 #include "library/ChannelPreset.h"
 #include "library/Library.h"
 #include "library/ProjectFile.h"
+#include "library/DemoSong.h"
 #include "library/FlpProject.h"
 #include "plugins/PluginScanner.h"
 #include "ui/PanelLayout.h"
@@ -11215,6 +11216,200 @@ void testPluginHosting()
 
 // tests/test_support.cpp (0.43.0)
 void supportCheck (bool ok, const char* name) { check (ok, name); }
+// The demo song (0.52.0): a valid project that uses the program's features, SunBurst and HexForge with their presets, and that
+// renders loud enough without clipping.
+void testDemoSong()
+{
+    std::cout << "The demo song (0.52.0)\n";
+    auto demo = sls::makeDemoSong();
+    auto& d = demo.document;
+    const auto& a = d.arrangement;
+    check (d.channels.size() == 11 && a.patterns.size() == 12 && a.clips.size() >= 30 && a.audioClips.size() == 3,
+           "it has 11 channels, 12 patterns, the playlist and three audio clips");
+    bool placed = true;
+    for (const auto& c : a.clips)
+        placed = placed && c.track >= 0 && c.track < a.trackCount() && c.endTick() <= a.timelineTicks();
+    for (const auto& c : a.audioClips)
+        placed = placed && a.canPlaceAudio (c);
+    for (size_t i = 0; i < a.automationClips.size(); ++i)
+        placed = placed && a.canPlaceAutomation (a.automationClips[i], static_cast<int> (i));
+    check (placed, "every pattern, audio and automation clip fits where it is");
+    int notes = 0, emptyPatterns = 0;
+    for (const auto& p : a.patterns)
+    {
+        int here = 0;
+        for (const auto& n : p.notes)
+            for (const auto& note : n)
+                here += note.startTick >= 0 && note.startTick + note.lengthTicks <= a.patternTicks ? 1 : 0;
+        notes += here;
+        emptyPatterns += here == 0 ? 1 : 0;
+        if (here == 0)
+            std::cout << "    pattern " << p.name << " has no notes\n";
+    }
+    check (emptyPatterns == 0 && notes > 400, "every pattern has notes, all inside the pattern");
+    std::set<int> kinds, effects;
+    for (const auto& c : a.automationClips)
+        kinds.insert (static_cast<int> (c.target.kind));
+    for (const auto& t : d.tracks)
+        for (const auto& slot : t.slots)
+            effects.insert (static_cast<int> (slot.type));
+    for (const auto& slot : d.masterSlots)
+        effects.insert (static_cast<int> (slot.type));
+    for (const auto& bus : d.console.aux)
+        for (const auto& slot : bus.slots)
+            effects.insert (static_cast<int> (slot.type));
+    check (kinds.size() >= 7 && effects.size() >= 13 && ! a.tempoMarkers.empty() && d.songMode,
+           "it automates seven kinds of parameter, uses twelve effects and changes tempo, in Song mode");
+    {
+        const auto parsed = sls::ProjectDocument::fromJson (d.toJson());
+        check (parsed.document.has_value() && parsed.warnings.empty() && parsed.document->arrangement.automationClips.size() == a.automationClips.size(),
+               "it goes through the project file unchanged, without warnings");
+    }
+
+    // Without the plugins, the plugin channels play built-in synths and their automation goes.
+    {
+        auto bare = sls::makeDemoSong();
+        const auto problems = sls::attachDemoPlugins (bare, [] (const std::string&) { return std::shared_ptr<sls::HostedPlugin>(); });
+        bool synths = true;
+        for (const auto& c : bare.document.channels)
+            synths = synths && c.instrument != sls::Instrument::Plugin;
+        check (synths && problems.size() == 4 && bare.document.arrangement.automationClips.size() == a.automationClips.size() - 4,
+               "without SunBurst and HexForge it falls back to built-in synths");
+    }
+
+    sls::PluginHost host;
+    if (sls::PluginHost::bundledPaths().getNumPaths() == 0)
+    {
+        std::cout << "  (SunBurst and HexForge were not built: the rest is skipped)\n";
+        return;
+    }
+    host.addBundledPlugins();
+    const auto problems = sls::attachDemoPlugins (demo, [&host] (const std::string& name) -> std::shared_ptr<sls::HostedPlugin>
+    {
+        const auto* found = findPlugin (host, juce::String (name), "VST3");
+        juce::String error;
+        return found != nullptr ? host.create (*found, kSr, sls::Player::kChunk, error) : nullptr;
+    });
+    for (const auto& p : problems)
+        std::cout << "    " << p << "\n";
+    check (problems.empty(), "SunBurst and HexForge are loaded with their presets and their automated parameters are found");
+    {
+        // The preset's name is in the plugin's own state, which the VST3 host keeps inside its "IComponent" (base64).
+        bool presets = true;
+        for (const auto& use : demo.pluginChannels)
+        {
+            const auto* plugin = dynamic_cast<const sls::JucePlugin*> (d.channels[static_cast<size_t> (use.channel)].plugin.get());
+            const auto state = plugin != nullptr ? plugin->getState() : juce::MemoryBlock();
+            juce::MemoryBlock component;
+            if (auto xml = juce::AudioProcessor::getXmlFromBinary (state.getData(), static_cast<int> (state.getSize())))
+                if (auto* child = xml->getChildByName ("IComponent"))
+                    component.fromBase64Encoding (child->getAllSubText());
+            const auto* bytes = static_cast<const char*> (component.getData());
+            const bool has = component.getSize() > 0
+                             && std::search (bytes, bytes + component.getSize(), use.preset.begin(), use.preset.end()) != bytes + component.getSize();
+            if (! has)
+                std::cout << "    " << use.plugin << " state lacks " << use.preset << " (" << component.getSize() << " bytes)\n";
+            presets = presets && has;
+        }
+        check (presets, "each plugin is set to its preset (it is in the plugin's saved state)");
+        bool cutoff = true;
+        for (const auto& c : d.arrangement.automationClips)
+            if (c.target.kind == sls::AutomationKind::ChannelPlugin)
+                cutoff = cutoff && d.channels[static_cast<size_t> (c.target.index)].plugin->parameterName (c.target.param) == "Cutoff";
+        check (cutoff, "the plugin automation moves the plugins' filter cutoff");
+    }
+
+    // Everything loaded as the program does it, then the whole song rendered.
+    juce::StringArray loadProblems;
+    for (size_t i = 0; i < d.channels.size(); ++i)
+    {
+        auto& c = d.channels[i];
+        if (c.instrument == sls::Instrument::Drums)
+            c.kit = std::make_shared<const sls::DrumKit> (sls::loadKit (d.kitSpecs[i], loadProblems));
+        if (c.instrument == sls::Instrument::Sampler)
+        {
+            juce::String error;
+            c.program = sls::loadProgram (d.programSpecs[i], [] (const juce::File&, juce::String&) { return std::shared_ptr<const sls::SampleData>(); }, error);
+            if (c.program == nullptr)
+                loadProblems.add (error);
+        }
+    }
+    sls::loadAudioForClips (d.arrangement, loadProblems);
+    check (loadProblems.isEmpty(), "its kit, sampled instruments and audio clips all load");
+    for (const auto& p : loadProblems)
+        std::cout << "    " << p << "\n";
+    d.arrangement.ensureChannelCount (d.channels.size());
+    const auto song = sls::compileSong (d.channels, d.arrangement, d.tracks, d.masterSlots, d.console);
+    sls::RenderOptions options;
+    options.sampleRate = kSr;
+    options.bpm = d.bpm;
+    options.tailSeconds = 3.0;
+    const auto out = sls::renderToBuffer (song, options);
+    float peak = 0.0f;
+    bool finite = true;
+    for (int ch = 0; ch < out.getNumChannels(); ++ch)
+        for (int i = 0; i < out.getNumSamples(); ++i)
+        {
+            const float v = out.getSample (ch, i);
+            finite = finite && std::isfinite (v);
+            peak = std::max (peak, std::abs (v));
+        }
+    // Loudness of each section (bars at 110 BPM).
+    const auto rmsOf = [&out] (double fromBar, double toBar)
+    {
+        const double barSeconds = 4.0 * 60.0 / sls::kDemoSongBpm;
+        const int from = static_cast<int> (fromBar * barSeconds * kSr), to = std::min (out.getNumSamples(), static_cast<int> (toBar * barSeconds * kSr));
+        double sum = 0.0;
+        for (int i = from; i < to; ++i)
+            sum += 0.5 * (out.getSample (0, i) * out.getSample (0, i) + out.getSample (1, i) * out.getSample (1, i));
+        return to > from ? std::sqrt (sum / (to - from)) : 0.0;
+    };
+    const double intro = rmsOf (0.5, 4), verse = rmsOf (4, 12), chorus = rmsOf (16, 24), breakdown = rmsOf (24, 28), last = rmsOf (32, 40);
+    std::cout << "    length " << out.getNumSamples() / kSr << " s, peak " << juce::Decibels::gainToDecibels (peak) << " dBFS, RMS dBFS intro "
+              << juce::Decibels::gainToDecibels (intro) << ", verse " << juce::Decibels::gainToDecibels (verse) << ", chorus "
+              << juce::Decibels::gainToDecibels (chorus) << ", breakdown " << juce::Decibels::gainToDecibels (breakdown) << ", last chorus "
+              << juce::Decibels::gainToDecibels (last) << "\n";
+    check (finite && peak < 1.0f && peak > 0.5f, "the song renders without clipping and fills the range (the maximizer's ceiling)");
+    check (out.getNumSamples() / kSr > 90.0 && intro > 0.01 && verse > intro && chorus > verse * 0.9 && last >= chorus * 0.9 && breakdown < chorus,
+           "it is about a minute and a half long and builds from the intro to the choruses, with a quieter breakdown");
+    // SLS_DEMO_STEMS=1: the level of every channel alone in the verse, the chorus and the breakdown (to balance the mix).
+    if (juce::SystemStats::getEnvironmentVariable ("SLS_DEMO_STEMS", {}).isNotEmpty())
+    {
+        auto quiet = d.arrangement;
+        quiet.audioClips.clear();
+        for (size_t solo = 0; solo < d.channels.size(); ++solo)
+        {
+            auto channels = d.channels;
+            for (size_t i = 0; i < channels.size(); ++i)
+                channels[i].mute = i != solo;
+            const auto stem = sls::renderToBuffer (sls::compileSong (channels, quiet, d.tracks, d.masterSlots, d.console), options);
+            const auto stemRms = [&stem] (double fromBar, double toBar)
+            {
+                const double barSeconds = 4.0 * 60.0 / sls::kDemoSongBpm;
+                const int from = static_cast<int> (fromBar * barSeconds * kSr), to = std::min (stem.getNumSamples(), static_cast<int> (toBar * barSeconds * kSr));
+                double sum = 0.0;
+                for (int i = from; i < to; ++i)
+                    sum += 0.5 * (stem.getSample (0, i) * stem.getSample (0, i) + stem.getSample (1, i) * stem.getSample (1, i));
+                return juce::Decibels::gainToDecibels (to > from ? std::sqrt (sum / (to - from)) : 0.0, -120.0);
+            };
+            std::cout << "    stem " << d.channels[solo].name << ": intro " << stemRms (0, 4) << ", verse " << stemRms (4, 12) << ", chorus "
+                      << stemRms (16, 24) << ", breakdown " << stemRms (24, 28) << ", last " << stemRms (32, 40) << ", outro " << stemRms (40, 44) << "\n";
+        }
+    }
+    if (const auto path = juce::SystemStats::getEnvironmentVariable ("SLS_DEMO_WAV", {}); path.isNotEmpty())
+    {
+        juce::File file (path);
+        file.deleteFile();
+        std::unique_ptr<juce::FileOutputStream> stream (file.createOutputStream());
+        if (stream != nullptr)
+            if (std::unique_ptr<juce::AudioFormatWriter> writer (juce::WavAudioFormat().createWriterFor (stream.get(), kSr, 2, 24, {}, 0)); writer != nullptr)
+            {
+                stream.release();
+                writer->writeFromAudioSampleBuffer (out, 0, out.getNumSamples());
+            }
+    }
+}
+
 void testSemVerAndUpdates();
 void testSunBurst();
 void testHexForge();
@@ -11286,6 +11481,7 @@ int main()
     testRecording047();
     testSunBurst();
     testSunBurstInHost();
+    testDemoSong();
     testHexForge();
     testSemVerAndUpdates();
     testCrashReports();

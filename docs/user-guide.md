@@ -21,6 +21,25 @@ The status line shows the audio device (sample rate, buffer size, reported laten
 
 ## Projects
 
+**The demo song (0.52.0).** The program opens with "Sunrise Drive", 44 bars of synthwave in A minor at 110 BPM, in Song mode: press
+**Space** to hear it. It is made to show the program at work - open the panels while it plays:
+
+| Bars | Section | What plays |
+| --- | --- | --- |
+| 1-4 | Intro | the start-up sound as an audio clip, grand piano, SunBurst's "Warm Pad" with its filter opening (automation) |
+| 5-12 | Verse | the drum machine (Electronic Punch), the sampled electric bass, piano, a marimba (physical model) moving left and right (pan automation), FM bells |
+| 13-16 | Build | a snare roll, a reversed cymbal (audio clip, reverse, fade-in) and a tape stop on the drums (Time Shaper automation) |
+| 17-24 | Chorus | SunBurst "Sun Lead", HexForge "Chrome Bass" with a wobbling filter (plugin automation), the pad pumping with the drums (sidechain) |
+| 25-28 | Breakdown | an additive choir and subtractive strings, the master low-pass sweeping open (master effect automation), the piano's reverb send growing |
+| 29-32 | Build | the second riser, the same cymbal time-stretched a minor third lower |
+| 33-40 | Last chorus | everything, plus HexForge "Neon Pluck" arpeggios and the delay bus coming up (aux automation) |
+| 41-44 | Outro | the synths' VCA group fading out, the tempo slowing from 110 to 80 BPM (tempo markers) |
+
+Every channel has its own mixer track with insert effects (EQ, compressor, transient, chorus, phaser, delay, overdrive, filter,
+stereo imager, Time Shaper), aux A is a hall reverb and aux B a ping-pong delay, the master has a filter, an EQ and the maximizer, and
+two VCA groups hold the synths and the drums and bass. Without SunBurst and HexForge (a build without them) their four channels play
+built-in synths. *File > Open the demo song* brings it back at any time; it is not saved anywhere until you save it.
+
 Everything in the song is saved in one `.slp` file: channels (instrument, sample, volume, pan, pitch, swing,
 mixer track), all patterns and their notes, the playlist, the mixer (faders, balance, mute/solo, effect chains and
 their settings), the audio clips of the playlist (as paths of their files), BPM, master volume and whether Song mode is on. The window title shows the project name, with a
@@ -616,9 +635,8 @@ Channel Rack and the Piano Roll show and edit that pattern. The **+** button nex
 Channel Rack change it by **one quarter** at a time (4 to 64 quarters). The length applies to every pattern; the step
 sequencer, the piano roll and the drum machine follow. Pattern clips stay where they are (0.42.0): a clip that was a whole number of
 patterns long keeps that number of repeats, any other keeps its length. Notes past the end of a shorter pattern are kept but not played, and come back if you make the patterns longer again. The change
-is refused if the playlist would no longer fit in the timeline. New patterns get the next name automatically (Pattern 3, Pattern 4, ...). The demo project starts
-with "Pattern 1" and "Pattern 2" (the two bars of the full groove: drums, grand piano, electric bass and a plucked synth, 100 BPM) and
-"Drums" (the drums and the bass of the first bar), played with the built-in sounds.
+is refused if the playlist would no longer fit in the timeline. New patterns get the next name automatically (Pattern 3, Pattern 4, ...). The demo song (0.52.0)
+has 12 patterns of four bars (Piano, Beat, Build, Bass, Marimba, Lead, Pad, Growl, Bells, Choir, Arp, Outro), each on its own track.
 
 **Loop Starter (0.30.0).** *Loop Starter...* in the **+** menu makes a starting loop for a track. Choose the **genre** (house, techno,
 hip-hop, trap, drum & bass, pop, lo-fi, reggaeton, rock or synthwave, each with its tempo), the **key**, the **mode** (minor, major or

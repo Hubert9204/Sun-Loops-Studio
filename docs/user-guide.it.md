@@ -21,6 +21,25 @@ La riga di stato mostra il dispositivo audio (frequenza, buffer, latenza dichiar
 
 ## Progetti
 
+**Il brano dimostrativo (0.52.0).** Il programma si apre con "Sunrise Drive", 44 battute di synthwave in La minore a 110 BPM, in
+modalità Song: premi **Spazio** per ascoltarlo. È fatto per mostrare il programma al lavoro: apri i pannelli mentre suona.
+
+| Battute | Sezione | Cosa suona |
+| --- | --- | --- |
+| 1-4 | Intro | il suono di avvio come clip audio, pianoforte a coda, "Warm Pad" di SunBurst con il filtro che si apre (automazione) |
+| 5-12 | Strofa | la drum machine (Electronic Punch), il basso elettrico campionato, il piano, una marimba (modello fisico) che si sposta a destra e a sinistra (automazione del pan), campane FM |
+| 13-16 | Crescendo | un rullo di rullante, un piatto al contrario (clip audio, reverse, fade-in) e un tape stop sulla batteria (automazione del Time Shaper) |
+| 17-24 | Ritornello | "Sun Lead" di SunBurst, "Chrome Bass" di HexForge con il filtro che oscilla (automazione del plugin), il pad che pompa con la batteria (sidechain) |
+| 25-28 | Pausa | un coro additivo e archi sottrattivi, il passa-basso del master che si apre (automazione di un effetto del master), la mandata al riverbero del piano che cresce |
+| 29-32 | Crescendo | il secondo riser, lo stesso piatto abbassato di una terza minore con il time-stretch |
+| 33-40 | Ultimo ritornello | tutto, più gli arpeggi di "Neon Pluck" di HexForge e il bus del delay che sale (automazione dell'aux) |
+| 41-44 | Finale | il gruppo VCA dei synth che sfuma, il tempo che rallenta da 110 a 80 BPM (marcatori di tempo) |
+
+Ogni canale ha la sua traccia del mixer con effetti in insert (EQ, compressore, transient, chorus, phaser, delay, overdrive, filtro,
+stereo imager, Time Shaper); l'aux A è un riverbero hall e l'aux B un delay ping-pong; il master ha un filtro, un EQ e il maximizer;
+due gruppi VCA raccolgono i synth e batteria e basso. Senza SunBurst e HexForge (una build senza di loro) i loro quattro canali suonano
+synth incorporati. *File > Open the demo song* lo riapre in qualsiasi momento; non viene salvato da nessuna parte finché non lo salvi tu.
+
 Tutto il brano è salvato in un unico file `.slp`: canali (strumento, sample, volume, pan, pitch, swing, traccia
 del mixer), tutti i pattern con le loro note, la playlist, il mixer (fader, bilanciamento, mute/solo, catene di
 effetti e loro impostazioni), le clip audio della playlist (come percorsi dei loro file), BPM, volume master e se la modalità Song è attiva. Il titolo della finestra mostra il
@@ -637,9 +656,9 @@ Channel Rack e il Piano Roll mostrano e modificano quello. Il pulsante **+** acc
 Rack la cambiano di **un quarto** alla volta (da 4 a 64 quarti). La lunghezza vale per tutti i pattern; step
 sequencer, piano roll e drum machine si adeguano. Le clip dei pattern restano dove sono (0.42.0): una clip lunga un numero intero di
 pattern mantiene quel numero di ripetizioni, le altre mantengono la loro lunghezza. Le note oltre la fine di un pattern più corto restano conservate ma non suonano, e tornano se allunghi di nuovo i pattern. Il
-cambio viene rifiutato se la playlist non entrerebbe più nella linea del tempo. I nuovi pattern prendono da soli il nome successivo (Pattern 3, Pattern 4, ...). Il progetto dimostrativo parte con "Pattern 1" e "Pattern 2" (le due battute del
-groove completo: batteria, pianoforte a coda, basso elettrico e un synth pizzicato, 100 BPM) e "Drums" (batteria e basso della prima battuta),
-suonati con i suoni incorporati.
+cambio viene rifiutato se la playlist non entrerebbe più nella linea del tempo. I nuovi pattern prendono da soli il nome successivo (Pattern 3, Pattern 4, ...). Il brano dimostrativo
+(0.52.0) ha 12 pattern di quattro battute (Piano, Beat, Build, Bass, Marimba, Lead, Pad, Growl, Bells, Choir, Arp, Outro), ognuno sulla
+sua traccia.
 
 **Loop Starter (0.30.0).** *Loop Starter...* nel menu del **+** crea un loop di partenza per un brano. Scegli il **genere** (house,
 techno, hip-hop, trap, drum & bass, pop, lo-fi, reggaeton, rock o synthwave, ognuno con il suo tempo), la **tonalità**, il **modo**

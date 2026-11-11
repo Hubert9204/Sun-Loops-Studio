@@ -2,6 +2,26 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.52.0 - 2026-11-11
+
+### Added
+- **Demo song "Sunrise Drive"**, opened at start-up instead of the old two-bar groove (`src/library/DemoSong.cpp`): 44 bars of synthwave
+  in A minor at 110 BPM in Song mode, made to show the program at work. 11 channels (drum machine, sampled electric bass and grand
+  piano, a physical-model marimba, FM bells, an additive choir, subtractive strings, SunBurst "Sun Lead" and "Warm Pad", HexForge
+  "Chrome Bass" and "Neon Pluck"), 12 patterns, three audio clips (the start-up sound, a reversed cymbal and the same one
+  time-stretched a minor third lower), insert effects on every track (12 of the 14 built-in effects), a reverb and a delay on the aux
+  buses, two VCA groups, a sidechain from the drums, 13 automation clips of seven kinds (plugin filter cutoffs, a pan, a master
+  effect, a send, a Time Shaper tape stop, an aux bus, a VCA) and a ritardando in tempo markers. *File > Open the demo song* opens it
+  again. When SunBurst or HexForge cannot be loaded, their channels play built-in synths.
+- Hosted plugins can be switched to a factory preset by name (`HostedPlugin::selectProgram`, through the plugin's programs).
+- A test builds the demo, loads SunBurst and HexForge with their presets, renders the whole song and checks that it does not clip
+  and that it builds from the intro to the choruses (`SLS_DEMO_WAV=file` writes the render, `SLS_DEMO_STEMS=1` prints each channel's
+  level per section).
+
+### Changed
+- The Release workflow builds in the same Fedora 41 container as the tests: on GitHub's Ubuntu machines apt could not reach the Ubuntu
+  archive. The AppImage it publishes needs glibc 2.40 (Fedora / Nobara 41 and newer).
+
 ## 0.51.0 - 2026-11-11
 
 A clean-up release from a review of the whole code for duplicated, obsolete, redundant and slow code. Nothing new to see; the

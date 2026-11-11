@@ -34,7 +34,7 @@ sono pubblicate dalla 0.51.0; per compilare dal sorgente vedi [Avvio rapido](#av
 Sun Loops Studio si ispira al modo di lavorare dei DAW a loop come FL Studio. È un progetto indipendente: non usa
 codice, nomi, grafica o risorse di altri prodotti e non è affiliato né approvato dai loro produttori.
 
-**Stato: alpha (0.51.0).** Compila, più di 1.600 controlli automatici passano e ogni funzione è stata provata in un display
+**Stato: alpha (0.52.0).** Compila, più di 1.600 controlli automatici passano e ogni funzione è stata provata in un display
 virtuale. L'AppImage gira su Nobara; la riproduzione è stata confermata la prima volta su un vero PC Nobara con la versione 0.3. Gran
 parte di quello che è arrivato dopo (registrazione, hardware MIDI, plugin, il suono dei sintetizzatori) è stato provato con test
 automatici e in un display virtuale con un dispositivo audio muto, e ora lo si sta provando su hardware vero. **I plugin (VST3, LV2,
@@ -44,6 +44,9 @@ con precisione cosa è verificato, cosa no e cosa manca.
 
 ## Funzioni
 
+- **Brano dimostrativo** (0.52.0) - il programma si apre con "Sunrise Drive", 44 battute di synthwave che usano SunBurst e HexForge,
+  piano, basso e batteria campionati, i quattro motori di sintesi, clip audio, effetti in insert, bus aux, gruppi VCA, un sidechain,
+  automazioni e cambi di tempo. Premi Spazio; *File > Open the demo song* lo riapre. Cosa suona e dove: [la guida](docs/user-guide.it.md#progetti).
 - **Pannelli mobili** - Channel Rack, Playlist, Piano Roll e Mixer. Si trascinano dalla barra del titolo, si
   ridimensionano dai bordi, si chiudono con la ×, il doppio clic sul titolo li massimizza. I pannelli si
   sovrappongono; un clic su uno lo porta davanti. `F5` / `F6` / `F7` / `F9` aprono, portano davanti o chiudono
@@ -85,7 +88,7 @@ con precisione cosa è verificato, cosa no e cosa manca.
   campionato (Growlybass, 4 livelli di velocity, più una versione staccato), due **kit di batteria acustica** campionati (dalle
   registrazioni DrumGizmo: Acoustic Studio e Acoustic Rock, 16 pezzi con fino a 4 livelli di velocity), tre **kit elettronici** e un
   kit di **percussioni a mano** generati dal codice del programma, tutti con livelli di velocity e nell'ordine General MIDI. Presets >
-  Factory > Keys / Bass; i kit sono in Drum Kits nel browser e nel menu *Load kit...* della drum machine. Il progetto dimostrativo li
+  Factory > Keys / Bass; i kit sono in Drum Kits nel browser e nel menu *Load kit...* della drum machine. Il brano dimostrativo li
   usa; all'apertura suona un suono di avvio (si disattiva nel menu File). Licenze: [resources/sounds/README.md](resources/sounds/README.md).
 - **Importazione MIDI, legato e slide, annulla per le note** - un file MIDI standard (menu File, o trascinato sulla Playlist) diventa
   nuovi canali e pattern; le note si possono unire con **legato** o con uno **slide** di altezza (Maiusc+clic nel Piano Roll); **Ctrl+Z / Ctrl+Y**
@@ -190,7 +193,7 @@ applicazioni: `cmake --install build --prefix ~/.local`. Per creare un'unica **A
 ./build/SunLoopsStudioTests_artefacts/Release/SunLoopsStudioTests
 ```
 
-Non servono dispositivo audio né display; 1681 controlli alla 0.51.0. Coprono, tra l'altro, intonazione del synth e tempi esatti al
+Non servono dispositivo audio né display; 1693 controlli alla 0.52.0. Coprono, tra l'altro, intonazione del synth e tempi esatti al
 campione, ogni strumento ed effetto, che `Player::render` non allochi mai memoria (effetti compresi), uno stress test concorrente del
 passaggio dati interfaccia→audio, il file di progetto (andata e ritorno, file danneggiati o ostili, sample mancanti, scrittura atomica),
 l'importazione da FL Studio e MIDI, l'esportazione in ogni formato, la registrazione, l'automazione, i cambi di tempo, l'host dei plugin,

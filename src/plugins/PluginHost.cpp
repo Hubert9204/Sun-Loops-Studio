@@ -30,6 +30,20 @@ JucePlugin::JucePlugin (std::unique_ptr<juce::AudioPluginInstance> instanceToUse
     }
 }
 
+bool JucePlugin::selectProgram (const std::string& programName)
+{
+    if (instance == nullptr)
+        return false;
+    for (int i = 0; i < instance->getNumPrograms(); ++i)
+        if (instance->getProgramName (i).toStdString() == programName)
+        {
+            instance->setCurrentProgram (i);
+            changed.store (true, std::memory_order_release);
+            return true;
+        }
+    return false;
+}
+
 void JucePlugin::setParameter (int index, float value) noexcept
 {
     if (index < 0 || index >= static_cast<int> (parameters.size()) || ! std::isfinite (value))

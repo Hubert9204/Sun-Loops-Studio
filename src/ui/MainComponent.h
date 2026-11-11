@@ -209,6 +209,7 @@ private:
     void openFlpProject();   // File > Open an FL Studio project (0.34.0)
     void exportFlpProject(); // File > Export as FL Studio project
     void applyDocument (ProjectDocument document, const juce::File& file, juce::StringArray& problems);
+    void loadDemoSong(); // 0.52.0: "Sunrise Drive" with SunBurst and HexForge (MainComponentProject.cpp)
     bool saveProjectTo (const juce::File& file);
     void showFileMenu();
     void markDirty();

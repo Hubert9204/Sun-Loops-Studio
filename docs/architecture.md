@@ -548,6 +548,15 @@ and ranks with BM25 (k1 1.4, b 0.75) plus a title bonus, a bonus for sections ho
 question's language. The index is built the first time Helios opens. Commands are `HeliosCommand`s (name, keywords, a function)
 made by `MainComponent::heliosCommands`, matched by the share of the question's words they contain.
 
+### The demo song (0.52.0)
+
+`makeDemoSong()` (`src/library/DemoSong.cpp`, no plugin code) returns a `ProjectDocument` plus the plugin channels it wants (plugin,
+preset, built-in fallback patch) and the automation clips whose plugin parameter is to be found by name. `attachDemoPlugins()` takes a
+function that creates a plugin by name, selects the preset with `HostedPlugin::selectProgram` (JUCE programs; the program's own plugins
+expose their factory presets as programs) and resolves the parameters; `MainComponent::loadDemoSong()` passes it the bundled VST3s and
+then calls `applyDocument()`, the same path as opening a file, so kits, sampled programs and audio clips (`builtin:` sources) load
+as they do for a project. It runs after `initPlugins()` at start-up, before `startSession()` (a recovered project replaces it).
+
 ### Shared code after the 0.51.0 review
 
 - `src/synthkit/`: what SunBurst and HexForge share. `SynthProcessor` (a `juce::AudioProcessor` with the parameter tree, the

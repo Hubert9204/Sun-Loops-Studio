@@ -1,7 +1,7 @@
 # Publishes a release - when a version tag (v0.51.0) is pushed, or with "Run workflow" on GitHub (Actions > Release), which
-# releases the version written in CMakeLists.txt of the chosen branch and creates its tag. It builds the AppImage on
-# Ubuntu 24.04 (glibc 2.39, the same base as the AppImages tested so far on Nobara) and attaches it, with its checksum and
-# the CHANGELOG section, to a GitHub release. The program's update check reads /releases/latest and offers that AppImage (0.51.0).
+# releases the version written in CMakeLists.txt of the chosen branch and creates its tag. It builds the AppImage on Fedora 41
+# (glibc 2.40) and attaches it, with its checksum and the CHANGELOG section, to a GitHub release. The program's update check
+# reads /releases/latest and offers that AppImage (0.51.0).
 name: Release
 
 on:
@@ -19,20 +19,20 @@ permissions:
 
 jobs:
   appimage:
-    # Directly on GitHub's Ubuntu 24.04 machine (not in a container, whose name lookups failed on the first run), pinned so
-    # that "ubuntu-latest" moving to 26.04 does not raise the glibc the AppImage needs.
-    runs-on: ubuntu-24.04
+    # In the same Fedora container as the "Build and test" workflow: GitHub's Ubuntu machines could not reach the Ubuntu
+    # archive (name lookups failed on two runs). The AppImage needs glibc 2.40 (Fedora 41 / Nobara 41 and newer).
+    runs-on: ubuntu-latest
+    container: fedora:41
     env:
       TAG: ${{ github.event_name == 'push' && github.ref_name || github.event.inputs.tag }}
       APPIMAGE_EXTRACT_AND_RUN: 1 # linuxdeploy and appimagetool run without FUSE
     steps:
-      - name: Install the build dependencies
+      - name: Install the build dependencies (the list of scripts/setup_nobara.sh, plus the release tools)
         run: |
-          sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential cmake ninja-build \
-            git curl ca-certificates file python3 desktop-file-utils libasound2-dev libjack-jackd2-dev libfreetype-dev \
-            libfontconfig1-dev libx11-dev libxext-dev libxinerama-dev libxrandr-dev libxcursor-dev libxrender-dev \
-            libxcomposite-dev libgl1-mesa-dev libcurl4-openssl-dev ladspa-sdk
+          dnf install -y gcc-c++ cmake ninja-build git pkgconf-pkg-config alsa-lib-devel \
+            pipewire-jack-audio-connection-kit-devel freetype-devel fontconfig-devel libX11-devel libXext-devel \
+            libXinerama-devel libXrandr-devel libXcursor-devel libXrender-devel libXcomposite-devel mesa-libGL-devel \
+            libcurl-devel ladspa-devel desktop-file-utils python3 gh curl file findutils
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.TAG || github.ref }}
@@ -43,6 +43,7 @@ jobs:
           [ "v$version" = "$TAG" ] || { echo "tag $TAG does not match version $version" >&2; exit 1; }
           echo "VERSION=$version" >> "$GITHUB_ENV"
           echo "TAG=$TAG" >> "$GITHUB_ENV"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           echo "COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - name: Build the AppImage
         run: scripts/build_appimage.sh

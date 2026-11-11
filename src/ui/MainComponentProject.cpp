@@ -1,6 +1,9 @@
 // Part of MainComponent: project files, recent projects, the File menu.
 #include "ui/MainComponent.h"
 
+#include <spdlog/spdlog.h>
+
+#include "library/DemoSong.h"
 #include "library/FlpProject.h"
 
 #include "ui/AssignTrackDialog.h"
@@ -230,6 +233,31 @@ void MainComponent::applyDocument (ProjectDocument doc, const juce::File& file, 
     updateWindowTitle();
 }
 
+// The demo song (0.52.0): built by DemoSong.cpp, with the program's own plugins created here and set to their presets.
+void MainComponent::loadDemoSong()
+{
+    auto demo = makeDemoSong();
+    const auto problems = attachDemoPlugins (demo, [this] (const std::string& name) -> std::shared_ptr<HostedPlugin>
+    {
+        for (const auto& p : foundPlugins)
+            if (p.isInstrument && p.format == "VST3" && p.name.toStdString() == name)
+            {
+                juce::String error;
+                if (auto plugin = createPlugin (p.identifier, error))
+                    return plugin;
+                spdlog::warn ("Demo song: {} not loaded: {}", name, error.toStdString());
+            }
+        return nullptr;
+    });
+    for (const auto& p : problems)
+        spdlog::warn ("Demo song: {}", p);
+    juce::StringArray loadProblems;
+    applyDocument (std::move (demo.document), {}, loadProblems);
+    for (const auto& p : loadProblems)
+        spdlog::warn ("Demo song: {}", p.toStdString());
+    statusLabel.setText (juce::String ("Demo song \"") + kDemoSongName + "\": press Space to play it", juce::dontSendNotification);
+}
+
 bool MainComponent::saveProjectTo (const juce::File& file)
 {
     // The previous version stays next to it as "<name>.slp.bak" (one generation).
@@ -402,6 +430,7 @@ void MainComponent::showFileMenu()
 
     menu.addItem (item (1, "New project", "Ctrl+N"));
     menu.addItem (item (2, "Open...", "Ctrl+O"));
+    menu.addItem (item (14, juce::String ("Open the demo song (") + kDemoSongName + ")", ""));
 
     juce::PopupMenu recent;
     auto recentList = recentProjects();
@@ -472,6 +501,13 @@ void MainComponent::showFileMenu()
                                 case 11: safe->exportProjectFolder(); break;
                                 case 12: safe->openFlpProject(); break;
                                 case 13: safe->exportFlpProject(); break;
+                                case 14:
+                                    safe->confirmDiscardChanges ([safe]
+                                    {
+                                        if (safe != nullptr)
+                                            safe->loadDemoSong();
+                                    });
+                                    break;
                                 case 10: safe->redoEdit(); break;
                                 case 30: safe->checkForUpdates (true); break;
                                 case 31: safe->setCheckForUpdatesAutomatically (! safe->checksForUpdatesAutomatically()); break;

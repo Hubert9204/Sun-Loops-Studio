@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(SunLoopsStudio VERSION 0.51.0 LANGUAGES C CXX ASM)
+project(SunLoopsStudio VERSION 0.52.0 LANGUAGES C CXX ASM)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -104,6 +104,7 @@ set(SLS_CORE_SOURCES
     src/library/SoundFont.cpp
     src/library/Library.cpp
     src/library/ProjectFile.cpp
+    src/library/DemoSong.cpp
     src/library/FlpFile.cpp
     src/library/FlpProject.cpp
     src/library/HelpIndex.cpp
