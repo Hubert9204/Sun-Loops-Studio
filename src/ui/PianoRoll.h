@@ -67,6 +67,10 @@ public:
     void setChordStamp (int chord, int inversion); // chord < 0: a click makes one note
     void setVelocityLaneVisible (bool visible);
     bool isVelocityLaneVisible() const noexcept { return velocityLane; }
+    // The velocity lane's height (0.54.0): dragged by its top edge, double-click there for the default.
+    void setVelocityLaneHeight (int height);
+    int getVelocityLaneHeight() const noexcept { return velocityHeight; }
+    std::function<void (int)> onVelocityLaneHeightChanged; // after a drag (the program remembers it)
 
     // --- editing (0.23.0) ---
     // Runs a tool on the notes and the selection (see MusicTheory.h), then repaints and reports the change. `what` goes to the status.
@@ -100,7 +104,7 @@ public:
 
 private:
     // PendingEmpty (0.44.0): the button went down on empty grid; a drag turns it into Select, a release creates the note there.
-    enum class Drag { None, Move, Resize, ResizeStart, Seek, LoopCreate, LoopMove, LoopResize, Select, Velocity, PendingEmpty };
+    enum class Drag { None, Move, Resize, ResizeStart, Seek, LoopCreate, LoopMove, LoopResize, Select, Velocity, PendingEmpty, LaneHeight };
     void createNotesAt (juce::Point<float> pos, bool noSnap);
     juce::Point<float> pendingPosition;
     bool pendingNoSnap = false;
@@ -121,7 +125,11 @@ private:
     static constexpr int kKeyboardWidth = 64;
     static constexpr int kRulerHeight = 22;
     static constexpr int kRowHeight = 16;
-    static constexpr int kVelocityHeight = 70;
+    static constexpr int kVelocityHeight = 70;    // the velocity lane's height to start with (0.54.0: the user drags its top edge)
+    static constexpr int kMinVelocityHeight = 36;
+    static constexpr int kMinGridHeight = 64;      // the lane never grows over the notes beyond this
+    int laneHeight() const noexcept;               // the lane's height as drawn (fits the panel)
+    bool onLaneSplitter (juce::Point<int> p) const noexcept;
     static constexpr int kGridTicks = kTicksPerBeat / 4; // 16th notes: the loop region's step
 
     juce::Rectangle<int> gridArea() const;
@@ -166,6 +174,8 @@ private:
     bool scaleSnap = false;
     int chordStamp = -1, chordInversion = 0;
     bool velocityLane = true;
+    int velocityHeight = kVelocityHeight;
+    int laneGrab = 0; // while the splitter is dragged: the mouse's distance from the lane's top edge
 
     int playheadTick = -1;
     int startTick = 0;

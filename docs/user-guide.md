@@ -598,7 +598,9 @@ It is closed at start and opens from a channel, as above.
 - **Chord**: with a chord chosen (major, minor, sevenths, ninths, sus, 6, power ...) and its inversion, one click places the whole
   chord, its root on the clicked key; drag to set the length of all its notes.
 - **Velocity**: shows the **velocity lane** under the notes: a stalk per note. Drag across it to draw the velocities (only of the
-  selected notes, when some are selected).
+  selected notes, when some are selected). Its top edge (with five small dots in the middle) can be dragged up or down to make the
+  lane taller or shorter - the pointer becomes an up-down arrow over it; a double click there puts the starting height back. The
+  height is remembered (0.54.0).
 - **Tools** works on the selected notes (or all when none is selected): Quantize (starts; starts and ends; half way), Humanize (light /
   medium / strong), Legato, Staccato, Strum chords (up / down, fast / slow), Arpeggiate chords (up, down, up and down, random; 8ths
   or 16ths), Chop (8ths, 16ths, 32nds), Flip, Transpose an octave, Snap to the scale, Velocity (crescendo, decrescendo, random, fixed).

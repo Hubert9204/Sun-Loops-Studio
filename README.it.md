@@ -34,7 +34,7 @@ sono pubblicate dalla 0.51.0; per compilare dal sorgente vedi [Avvio rapido](#av
 Sun Loops Studio si ispira al modo di lavorare dei DAW a loop come FL Studio. È un progetto indipendente: non usa
 codice, nomi, grafica o risorse di altri prodotti e non è affiliato né approvato dai loro produttori.
 
-**Stato: alpha (0.53.0).** Compila, più di 1.600 controlli automatici passano e ogni funzione è stata provata in un display
+**Stato: alpha (0.54.0).** Compila, più di 1.600 controlli automatici passano e ogni funzione è stata provata in un display
 virtuale. L'AppImage gira su Nobara; la riproduzione è stata confermata la prima volta su un vero PC Nobara con la versione 0.3. Gran
 parte di quello che è arrivato dopo (registrazione, hardware MIDI, plugin, il suono dei sintetizzatori) è stato provato con test
 automatici e in un display virtuale con un dispositivo audio muto, e ora lo si sta provando su hardware vero. **I plugin (VST3, LV2,

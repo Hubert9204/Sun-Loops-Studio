@@ -253,6 +253,16 @@ MainComponent::MainComponent()
     pianoRoll.setLoopLengthTicks (arrangement.patternTicks);
     pianoRoll.onSeek = [this] (int tick) { seekPattern (tick); };
     pianoRoll.onStatus = [this] (const juce::String& text) { statusLabel.setText (text, juce::dontSendNotification); };
+    if (settings != nullptr) // the velocity lane's height, as the user left it (0.54.0)
+        pianoRoll.setVelocityLaneHeight (settings->getIntValue ("pianoroll.velocityHeight", 70));
+    pianoRoll.onVelocityLaneHeightChanged = [this] (int height)
+    {
+        if (settings != nullptr)
+        {
+            settings->setValue ("pianoroll.velocityHeight", height);
+            settings->saveIfNeeded();
+        }
+    };
     pianoRoll.onLoopChanged = [this] (int start, int end)
     {
         commitCurrentPattern();

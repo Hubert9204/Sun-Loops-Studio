@@ -239,7 +239,9 @@ void PianoRoll::mouseMove (const juce::MouseEvent& e)
         followLoopMode (e.x);
         return;
     }
-    if (rulerArea().contains (e.getPosition()))
+    if (onLaneSplitter (e.getPosition()))
+        setMouseCursor (juce::MouseCursor::UpDownResizeCursor); // the velocity lane's top edge (0.54.0)
+    else if (rulerArea().contains (e.getPosition()))
         setMouseCursor (loopEdgeAt (e.x) != 0 ? juce::MouseCursor::LeftRightResizeCursor : juce::MouseCursor::NormalCursor);
     else if (gridArea().contains (e.getPosition()))
     {
@@ -254,14 +256,39 @@ void PianoRoll::mouseMove (const juce::MouseEvent& e)
 
 juce::Rectangle<int> PianoRoll::gridArea() const
 {
-    return getLocalBounds().withTrimmedLeft (kKeyboardWidth).withTrimmedTop (kRulerHeight).withTrimmedBottom (velocityLane ? kVelocityHeight : 0);
+    return getLocalBounds().withTrimmedLeft (kKeyboardWidth).withTrimmedTop (kRulerHeight).withTrimmedBottom (velocityLane ? laneHeight() : 0);
+}
+
+int PianoRoll::laneHeight() const noexcept
+{
+    const int most = std::max (kMinVelocityHeight, getHeight() - kRulerHeight - kMinGridHeight);
+    return std::clamp (velocityHeight, kMinVelocityHeight, most);
+}
+
+// The line between the notes and the velocity lane, a few pixels either side, across the whole width (keyboard included).
+bool PianoRoll::onLaneSplitter (juce::Point<int> p) const noexcept
+{
+    if (! velocityLane)
+        return false;
+    const int top = getHeight() - laneHeight();
+    return p.y >= top - 4 && p.y <= top + 4 && p.x >= 0 && p.x < getWidth();
+}
+
+void PianoRoll::setVelocityLaneHeight (int height)
+{
+    height = std::max (kMinVelocityHeight, height);
+    if (height == velocityHeight)
+        return;
+    velocityHeight = height;
+    clampScroll();
+    repaint();
 }
 
 juce::Rectangle<int> PianoRoll::velocityArea() const
 {
     if (! velocityLane)
         return {};
-    return getLocalBounds().withTrimmedLeft (kKeyboardWidth).removeFromBottom (kVelocityHeight);
+    return getLocalBounds().withTrimmedLeft (kKeyboardWidth).removeFromBottom (laneHeight());
 }
 
 float PianoRoll::tickToX (double tick) const noexcept
@@ -524,6 +551,10 @@ void PianoRoll::paint (juce::Graphics& g)
         g.fillRect (lane);
         g.setColour (juce::Colour (0xff15171b));
         g.fillRect (lane.getX(), lane.getY(), lane.getWidth(), 2);
+        // A grip in the middle of the top edge: it can be dragged (0.54.0).
+        g.setColour (juce::Colours::white.withAlpha (dragMode == Drag::LaneHeight ? 0.6f : 0.25f));
+        for (int i = -2; i <= 2; ++i)
+            g.fillEllipse (static_cast<float> (lane.getCentreX() + i * 7) - 1.5f, static_cast<float> (lane.getY()) + 3.0f, 3.0f, 3.0f);
         g.setColour (kLineSub);
         for (const float level : { 0.25f, 0.5f, 0.75f })
             g.drawHorizontalLine (lane.getBottom() - 4 - static_cast<int> (level * static_cast<float> (lane.getHeight() - 8)),
@@ -617,7 +648,7 @@ void PianoRoll::paint (juce::Graphics& g)
     g.fillRect (0, 0, kKeyboardWidth, kRulerHeight);
     if (velocityLane)
     {
-        const auto corner = juce::Rectangle<int> (0, getHeight() - kVelocityHeight, kKeyboardWidth, kVelocityHeight);
+        const auto corner = juce::Rectangle<int> (0, getHeight() - laneHeight(), kKeyboardWidth, laneHeight());
         g.fillRect (corner);
         g.setColour (juce::Colours::white.withAlpha (0.55f));
         g.setFont (11.0f);
@@ -639,6 +670,20 @@ void PianoRoll::mouseDown (const juce::MouseEvent& e)
             setMouseCursor (juce::MouseCursor::NormalCursor);
             announceLoop();
         }
+        return;
+    }
+
+    if (! right && onLaneSplitter (e.getPosition()))
+    {
+        if (e.getNumberOfClicks() >= 2)
+        {
+            setVelocityLaneHeight (kVelocityHeight); // a double click puts the default back
+            if (onVelocityLaneHeightChanged)
+                onVelocityLaneHeightChanged (velocityHeight);
+            return;
+        }
+        dragMode = Drag::LaneHeight;
+        laneGrab = e.y - (getHeight() - laneHeight());
         return;
     }
 
@@ -827,6 +872,12 @@ void PianoRoll::createNotesAt (juce::Point<float> pos, bool noSnap)
 
 void PianoRoll::mouseDrag (const juce::MouseEvent& e)
 {
+    if (dragMode == Drag::LaneHeight)
+    {
+        const int most = std::max (kMinVelocityHeight, getHeight() - kRulerHeight - kMinGridHeight);
+        setVelocityLaneHeight (std::clamp (getHeight() - (e.y - laneGrab), kMinVelocityHeight, most));
+        return;
+    }
     if (dragMode == Drag::PendingEmpty)
     {
         if (e.getDistanceFromDragStart() < 4)
@@ -981,6 +1032,13 @@ void PianoRoll::mouseDrag (const juce::MouseEvent& e)
 
 void PianoRoll::mouseUp (const juce::MouseEvent& e)
 {
+    if (dragMode == Drag::LaneHeight)
+    {
+        dragMode = Drag::None;
+        if (onVelocityLaneHeightChanged)
+            onVelocityLaneHeightChanged (velocityHeight);
+        return;
+    }
     if (dragMode == Drag::Seek)
     {
         dragMode = Drag::None;

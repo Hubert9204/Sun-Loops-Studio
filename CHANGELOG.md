@@ -2,6 +2,13 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.54.0 - 2026-11-11
+
+### Added
+- **Piano Roll: the velocity lane can be resized.** Its top edge is a splitter: the pointer becomes an up-down arrow over it, dragging
+  makes the lane taller or shorter (from 36 px up to leaving 64 px for the notes), a double click puts the starting 70 px back. A grip
+  of five dots marks it. The height is remembered between sessions (setting `pianoroll.velocityHeight`).
+
 ## 0.53.0 - 2026-11-11
 
 ### Changed

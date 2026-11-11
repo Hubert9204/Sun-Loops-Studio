@@ -616,7 +616,9 @@ chiuso all'avvio e si apre da un canale, come sopra.
 - **Chord**: scelto un accordo (maggiore, minore, settime, none, sus, sesta, power...) e il suo rivolto, un clic posa l'accordo intero
   con la fondamentale sul tasto cliccato; trascina per la lunghezza di tutte le sue note.
 - **Velocity**: mostra la **corsia della velocity** sotto le note, una barretta per nota. Trascina su di essa per disegnare le velocity
-  (solo delle note selezionate, se ce ne sono).
+  (solo delle note selezionate, se ce ne sono). Il suo bordo superiore (con cinque puntini al centro) si trascina in su o in giù per
+  renderla più alta o più bassa: sopra il bordo il puntatore diventa una freccia su-giù; un doppio clic lì rimette l'altezza
+  iniziale. L'altezza viene ricordata (0.54.0).
 - **Tools** agisce sulle note selezionate (o su tutte se nessuna è selezionata): Quantize (inizi; inizi e fini; a metà), Humanize
   (leggero / medio / forte), Legato, Staccato, Strum degli accordi (su / giù, veloce / lento), Arpeggio degli accordi (su, giù, su e
   giù, casuale; ottavi o sedicesimi), Chop (ottavi, sedicesimi, trentaduesimi), Flip, trasposizione di un'ottava, Snap alla scala,
