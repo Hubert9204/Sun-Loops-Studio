@@ -380,6 +380,8 @@ MainComponent::MainComponent()
     pianoToggle.onClick = [this] { togglePanel (pianoPanel); };
     mixerToggle.onClick = [this] { togglePanel (mixerPanelWindow); };
     metersButton.onClick = [this] { toggleMeters(); };
+    helpButton.onClick = [this] { showHelpMenu(); };
+    helpButton.setTooltip ("Help: Helios, the user guide, the Discord community, the GitHub page, updates, crash reports, About");
     heliosButton.onClick = [this] { openHelios(); };
     heliosButton.setTooltip ("Helios (F1): ask how to do something; searches the manual on this computer (no AI, no internet)");
     heliosButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff5a3d1e));
@@ -403,7 +405,7 @@ MainComponent::MainComponent()
 
     // Space and F5/F6/F7/F9 are handled by this component, so these controls must not steal keyboard focus.
     for (juce::Button* b : std::initializer_list<juce::Button*> { &fileButton, &playButton, &clearButton, &modeButton, &patternAddButton, &deviceButton, &metronomeButton, &recordButton, &recordMenuButton, &noteRecordButton,
-                     &browserToggle, &browserTab, &rackToggle, &playlistToggle, &pianoToggle, &mixerToggle, &resetButton, &metersButton, &typingButton, &heliosButton })
+                     &browserToggle, &browserTab, &rackToggle, &playlistToggle, &pianoToggle, &mixerToggle, &resetButton, &metersButton, &typingButton, &heliosButton, &helpButton })
         b->setMouseClickGrabsKeyboardFocus (false);
     patternBox.setMouseClickGrabsKeyboardFocus (false);
     patternBox.setWantsKeyboardFocus (false);
@@ -411,7 +413,7 @@ MainComponent::MainComponent()
     for (auto* c : std::initializer_list<juce::Component*> { &fileButton, &playButton, &modeButton, &patternBox, &patternAddButton,
                                                               &clearButton, &deviceButton, &metronomeButton, &recordButton, &recordMenuButton, &noteRecordButton,
                                                               &browserToggle, &rackToggle, &playlistToggle, &pianoToggle,
-                                                              &mixerToggle, &resetButton, &metersButton, &typingButton, &heliosButton, &bpmSlider, &volumeSlider, &meterButton,
+                                                              &mixerToggle, &resetButton, &metersButton, &typingButton, &heliosButton, &helpButton, &bpmSlider, &volumeSlider, &meterButton,
                                                               &bpmLabel, &volumeLabel, &deviceLabel, &statusLabel, &meter,
                                                               &browser, &browserTab, &workspace })
         addAndMakeVisible (c);
@@ -493,7 +495,7 @@ MainComponent::MainComponent()
     lastAutosaveMs = juce::Time::getMillisecondCounter();
     startSession();
     startTimerHz (30);
-    // The update check (0.43.0): a few seconds after the start, in the background, unless switched off in the File menu.
+    // The update check (0.43.0): a few seconds after the start, in the background, unless switched off in the Help menu.
     juce::Timer::callAfterDelay (4000, [safe = juce::Component::SafePointer<MainComponent> (this)]
     {
         if (safe != nullptr && safe->checksForUpdatesAutomatically())
@@ -599,6 +601,8 @@ void MainComponent::resized()
     typingButton.setBounds (views.removeFromLeft (96));
     views.removeFromLeft (4);
     heliosButton.setBounds (views.removeFromLeft (72));
+    views.removeFromLeft (4);
+    helpButton.setBounds (views.removeFromLeft (60));
 
     area.removeFromTop (6);
     auto info = area.removeFromTop (20);

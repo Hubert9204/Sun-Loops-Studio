@@ -15,7 +15,14 @@ Barra, prima riga: **File** (progetti, vedi sotto), **Play / Stop**, pulsante **
 
 Barra, seconda riga: i pulsanti che mostrano o nascondono il browser (**Browser F8**) e i pannelli (**Rack F6**,
 **Playlist F5**, **Piano F7**, **Mixer F9**), **Reset** (disposizione predefinita dei pannelli) e **Clear notes** (svuota il canale selezionato nel
-pattern corrente).
+pattern corrente), poi **Meters**, **Typing keys**, **Helios** e **Help**.
+
+**Help** (0.55.0): *Helios*, la *User guide* su GitHub (in italiano su un sistema in italiano), **Join the Sun Loops Discord** (la
+community: domande, problemi, musica), *Sun Loops Studio on GitHub*, *Report a problem or suggest an idea* (una nuova issue su GitHub),
+il controllo degli aggiornamenti (*Check for updates now*, *Check for updates at start-up*), le impostazioni dei report di crash
+(*GitHub token for crash reports...*, *Show the session log folder*) e **About Sun Loops Studio** (versione, autore - sviluppato da
+Hubert9204 con l'ausilio dell'IA -, licenza, crediti, con i pulsanti per la pagina GitHub e Discord). Fino alla 0.54.0 le voci di
+aggiornamento e report erano in *File > Updates and crash reports*.
 
 La riga di stato mostra il dispositivo audio (frequenza, buffer, latenza dichiarata) e l'ultimo messaggio.
 
@@ -99,7 +106,7 @@ riportati nei limiti e le note o clip che non si possono collocare vengono scart
 **Log di sessione.** Ogni sessione scrive un log in `~/.local/state/SunLoopsStudio/logs/session.log` (o `$XDG_STATE_HOME/SunLoopsStudio`):
 la versione e il sistema all'avvio, il dispositivo audio, ogni messaggio della riga di stato, i problemi e il controllo degli
 aggiornamenti. Quando il file arriva a **5 MB** diventa `session.1.log` (poi `session.2.log`, `session.3.log`; i più vecchi vengono
-eliminati). *File > Updates and crash reports > Show the session log folder* apre la cartella.
+eliminati). *Help > Show the session log folder* apre la cartella.
 
 **Quando il programma va in crash.** Se Sun Loops Studio viene chiuso da un crash (SIGSEGV, SIGABRT, SIGFPE, SIGILL o SIGBUS, o un
 errore non gestito), prima di chiudersi scrive cosa è successo in `crash_last_session.log` nella stessa cartella: il segnale, lo stack
@@ -123,7 +130,7 @@ il kernel e il processore, driver audio, nome del dispositivo, frequenza di camp
 righe del log di sessione prima del crash. La tua cartella home viene sostituita da `~` e il tuo nome utente da `<user>`. Non vengono
 inviati progetti, suoni o file, e non viene inviato nulla senza il tuo clic.
 
-**Il token GitHub.** Creare una issue con l'API di GitHub richiede un token. *File > Updates and crash reports > GitHub token for crash
+**Il token GitHub.** Creare una issue con l'API di GitHub richiede un token. *Help > GitHub token for crash
 reports...* ne accetta uno (un token fine-grained con *Issues: Read and write* solo sul repository); viene conservato nel file delle
 impostazioni, leggibile solo da te. Senza token, **Invia Report** apre nel browser la pagina *new issue* di GitHub con il report già
 compilato (serve un account GitHub): premi lì *Submit new issue*, poi nel programma *L'ho inviato: elimina il file*.
@@ -132,7 +139,7 @@ compilato (serve un account GitHub): premi lì *Submit new issue*, poi nel progr
 (`releases/latest`, al massimo 5 secondi; senza rete o senza risposta semplicemente non succede nulla). Se esiste una versione più
 recente (confronto Semantic Versioning: 0.43.0 è più recente di 0.42.0, 1.0.0 di 1.0.0-rc.1), una finestra la mostra con l'inizio
 delle note: **Download** apre l'AppImage (o la pagina della release), **Later** richiede al prossimo avvio, **Skip this version** non
-chiede più di quella. *Check for updates at start-up* nello stesso menu spegne il controllo automatico; *Check for updates now* chiede
+chiede più di quella. *Check for updates at start-up* nel menu **Help** spegne il controllo automatico; *Check for updates now* chiede
 subito e dice anche quando sei aggiornato. Il controllo non invia dati personali (solo nome e versione del programma, come
 User-Agent richiesto da GitHub). Le release sono pubblicate dalla 0.51.0 in poi, quindi il controllo trova ogni versione successiva.
 

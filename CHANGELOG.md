@@ -2,6 +2,18 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.55.0 - 2026-11-11
+
+### Added
+- **Help** button (second row of the toolbar, after Helios): Helios, the user guide on GitHub (Italian on an Italian system),
+  **Join the Sun Loops Discord**, the GitHub page, *Report a problem or suggest an idea* (a new GitHub issue), the update check, the
+  crash-report settings and **About Sun Loops Studio** (version; developed by Hubert9204 with the help of AI; the GitHub page; license
+  and credits; buttons for GitHub and Discord). Helios knows "Join the Sun Loops Discord" and "About Sun Loops Studio".
+- The README links the Discord server.
+
+### Changed
+- The update and crash-report items moved from *File > Updates and crash reports* to the Help menu.
+
 ## 0.54.0 - 2026-11-11
 
 ### Added

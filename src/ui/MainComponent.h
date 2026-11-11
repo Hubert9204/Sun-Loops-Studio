@@ -148,6 +148,9 @@ private:
     std::string githubToken() const;
     void askForGitHubToken();
     void showLogFolder();
+    void showHelpMenu();  // 0.55.0: the Help button (Helios, the guide, Discord, GitHub, updates, crash reports, About)
+    void showAbout();
+    static void openDiscord(); // the Sun Loops community, in the browser
     void noteAudioDevice();
     void logStatusChanges();
     void exportProjectFolder();
@@ -444,6 +447,7 @@ private:
     juce::TextButton resetButton { "Reset" };
     juce::TextButton metersButton { "Meters" };
     juce::TextButton heliosButton { "Helios" };
+    juce::TextButton helpButton { "Help" };
     // The computer keyboard as a MIDI keyboard (0.32.0, see TypingKeyboard.h): notes go to the selected channel like a MIDI
     // keyboard's (so Rec notes and the score log take them too).
     juce::TextButton typingButton { "Typing keys" };

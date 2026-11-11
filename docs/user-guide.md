@@ -15,7 +15,15 @@ Toolbar, first row: **File** (projects, see below), **Play / Stop**, **Pattern /
 
 Toolbar, second row: buttons that show or hide the browser (**Browser F8**) and the panels (**Rack F6**,
 **Playlist F5**, **Piano F7**, **Mixer F9**),
-**Reset** (default panel layout) and **Clear notes** (empties the selected channel in the current pattern).
+**Reset** (default panel layout) and **Clear notes** (empties the selected channel in the current pattern), then **Meters**,
+**Typing keys**, **Helios** and **Help**.
+
+**Help** (0.55.0): *Helios*, the *User guide* on GitHub (in Italian on an Italian system), **Join the Sun Loops Discord** (the
+community: questions, problems, music), *Sun Loops Studio on GitHub*, *Report a problem or suggest an idea* (a new GitHub issue),
+the update check (*Check for updates now*, *Check for updates at start-up*), the crash-report settings (*GitHub token for crash
+reports...*, *Show the session log folder*) and **About Sun Loops Studio** (version, author - developed by Hubert9204 with the help of
+AI -, license, credits, with buttons for the GitHub page and Discord). Until 0.54.0 the update and crash-report items were under
+*File > Updates and crash reports*.
 
 The status line shows the audio device (sample rate, buffer size, reported latency) and the last message.
 
@@ -96,8 +104,7 @@ or clips that cannot be placed are dropped, with a message saying so.
 
 **Session log.** Every session writes a log to `~/.local/state/SunLoopsStudio/logs/session.log` (or `$XDG_STATE_HOME/SunLoopsStudio`):
 the version and system at the start, the audio device, every message of the status line, problems and the update check. When the file
-reaches **5 MB** it becomes `session.1.log` (then `session.2.log`, `session.3.log`; older ones are deleted). *File > Updates and crash
-reports > Show the session log folder* opens the folder.
+reaches **5 MB** it becomes `session.1.log` (then `session.2.log`, `session.3.log`; older ones are deleted). *Help > Show the session log folder* opens the folder.
 
 **When the program crashes.** If Sun Loops Studio is ended by a crash (SIGSEGV, SIGABRT, SIGFPE, SIGILL or SIGBUS, or an uncaught
 error), it writes what happened to `crash_last_session.log` in the same folder before closing: the signal, the stack trace (the
@@ -118,7 +125,7 @@ kernel and processor, the audio driver, device name, sample rate and buffer size
 the crash. Your home folder is replaced by `~` and your user name by `<user>`. No project, no sound and no file is sent, and nothing is
 sent without your click.
 
-**The GitHub token.** Creating an issue through GitHub's API needs a token. *File > Updates and crash reports > GitHub token for crash
+**The GitHub token.** Creating an issue through GitHub's API needs a token. *Help > GitHub token for crash
 reports...* takes one (a fine-grained token with *Issues: Read and write* on the repository only); it is kept in the settings file,
 readable only by you. Without a token, **Send report** opens GitHub's *new issue* page in your browser with the report filled in
 (you need a GitHub account): press *Submit new issue* there, then *I sent it: delete the file* in the program.
@@ -127,7 +134,7 @@ readable only by you. Without a token, **Send report** opens GitHub's *new issue
 (`releases/latest`, 5 seconds at most; no network or no answer is simply ignored). When a newer version exists (compared by
 Semantic Versioning: 0.43.0 is newer than 0.42.0, 1.0.0 is newer than 1.0.0-rc.1), a window shows it with the start of its notes:
 **Download** opens the AppImage (or the release page), **Later** asks again at the next start, **Skip this version** stops asking
-about that one. *Check for updates at start-up* in the same menu turns the automatic check off; *Check for updates now* asks at
+about that one. *Check for updates at start-up* in the **Help** menu turns the automatic check off; *Check for updates now* asks at
 once and also tells you when you are up to date. The check sends no personal data (only the program name and version, as the
 User-Agent GitHub requires). Releases are published from 0.51.0 on, so the check finds every version after that.
 

@@ -29,6 +29,7 @@ namespace
 constexpr const char* kTokenKey = "crashReport.githubToken";
 constexpr const char* kCheckUpdatesKey = "updates.checkAutomatically";
 constexpr const char* kSkippedVersionKey = "updates.skippedVersion";
+constexpr const char* kDiscordInvite = "https://discord.gg/a5RYYxWSN"; // the Sun Loops community (0.55.0)
 
 github::Repo repository()
 {
@@ -237,4 +238,77 @@ void MainComponent::logStatusChanges()
     if (text.isNotEmpty())
         spdlog::info ("Status: {}", text.toStdString());
 }
+// The Help button (0.55.0): what used to be under File > Updates and crash reports, with the community and the About window.
+void MainComponent::showHelpMenu()
+{
+    juce::PopupMenu menu;
+    menu.addItem (1, "Helios: ask how to do something  (F1)");
+    menu.addItem (2, "User guide (on GitHub)");
+    menu.addSeparator();
+    menu.addItem (3, "Join the Sun Loops Discord");
+    menu.addItem (4, "Sun Loops Studio on GitHub");
+    menu.addItem (5, "Report a problem or suggest an idea (GitHub)");
+    menu.addSeparator();
+    menu.addItem (10, "Check for updates now");
+    menu.addItem (11, "Check for updates at start-up", true, checksForUpdatesAutomatically());
+    menu.addSeparator();
+    menu.addItem (12, githubToken().empty() ? "GitHub token for crash reports... (none: reports open in the browser)"
+                                            : "GitHub token for crash reports... (set)");
+    menu.addItem (13, "Show the session log folder");
+    menu.addSeparator();
+    menu.addItem (20, "About Sun Loops Studio");
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&helpButton),
+                        [safe = juce::Component::SafePointer<MainComponent> (this)] (int result)
+                        {
+                            if (safe == nullptr)
+                                return;
+                            const juce::String github = "https://github.com/" + juce::String (repository().path());
+                            switch (result)
+                            {
+                                case 1: safe->openHelios(); break;
+                                case 2: juce::URL (github + "/blob/main/docs/" + (systemIsItalian() ? "user-guide.it.md" : "user-guide.md")).launchInDefaultBrowser(); break;
+                                case 3: openDiscord(); break;
+                                case 4: juce::URL (github).launchInDefaultBrowser(); break;
+                                case 5: juce::URL (github + "/issues/new").launchInDefaultBrowser(); break;
+                                case 10: safe->checkForUpdates (true); break;
+                                case 11: safe->setCheckForUpdatesAutomatically (! safe->checksForUpdatesAutomatically()); break;
+                                case 12: safe->askForGitHubToken(); break;
+                                case 13: safe->showLogFolder(); break;
+                                case 20: safe->showAbout(); break;
+                                default: break;
+                            }
+                        });
+}
+
+void MainComponent::openDiscord()
+{
+    juce::URL (kDiscordInvite).launchInDefaultBrowser();
+}
+
+void MainComponent::showAbout()
+{
+    const juce::String github = "https://github.com/" + juce::String (repository().path());
+    auto* window = new juce::AlertWindow ("Sun Loops Studio " + juce::String (JUCE_APPLICATION_VERSION_STRING),
+                                          "Loop-based music production for Linux.\n\n"
+                                          "Developed by Hubert9204 with the help of AI.\n"
+                                          + github + "\n\n"
+                                          "Free software under the GNU Affero General Public License, version 3. Built with JUCE 8. "
+                                          "SunBurst and HexForge are the program's own synthesizers. The built-in recordings keep "
+                                          "their licenses: Salamander Grand Piano (CC BY 3.0), Growlybass (CC0), DrumGizmo kits "
+                                          "(CC BY 4.0).\n\n"
+                                          "Join the community on Discord to ask questions, report problems and share your music.",
+                                          juce::MessageBoxIconType::NoIcon, this);
+    window->addButton ("GitHub page", 1);
+    window->addButton ("Join Discord", 2);
+    window->addButton ("Close", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+    window->enterModalState (true, juce::ModalCallbackFunction::create ([github] (int choice)
+    {
+        if (choice == 1)
+            juce::URL (github).launchInDefaultBrowser();
+        else if (choice == 2)
+            openDiscord();
+    }),
+                             true);
+}
+
 } // namespace sls

@@ -478,16 +478,6 @@ void MainComponent::showFileMenu()
         menu.addItem (startup);
     }
 
-    // Updates, crash reports and the log (0.43.0).
-    juce::PopupMenu support;
-    support.addItem (30, "Check for updates now");
-    support.addItem (31, "Check for updates at start-up", true, checksForUpdatesAutomatically());
-    support.addSeparator();
-    support.addItem (32, githubToken().empty() ? "GitHub token for crash reports... (none: reports open in the browser)"
-                                               : "GitHub token for crash reports... (set)");
-    support.addItem (33, "Show the session log folder");
-    menu.addSubMenu ("Updates and crash reports", support);
-
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&fileButton),
                         [safe = juce::Component::SafePointer<MainComponent> (this), recentList] (int result)
                         {
@@ -514,10 +504,6 @@ void MainComponent::showFileMenu()
                                     });
                                     break;
                                 case 10: safe->redoEdit(); break;
-                                case 30: safe->checkForUpdates (true); break;
-                                case 31: safe->setCheckForUpdatesAutomatically (! safe->checksForUpdatesAutomatically()); break;
-                                case 32: safe->askForGitHubToken(); break;
-                                case 33: safe->showLogFolder(); break;
                                 case 7:
                                     if (safe->settings != nullptr)
                                     {

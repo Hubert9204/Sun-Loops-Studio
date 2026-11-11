@@ -52,6 +52,8 @@ std::vector<HeliosCommand> MainComponent::heliosCommands()
         { "Check for updates", "update updates new version release aggiornamento aggiornamenti nuova versione", run ([] (MainComponent& m) { m.checkForUpdates (true); }) },
         { "Show the session log folder", "log logs crash report folder registro cartella arresto anomalo", run ([] (MainComponent& m) { m.showLogFolder(); }) },
         { "GitHub token for crash reports", "github token crash report bug segnalazione arresto anomalo", run ([] (MainComponent& m) { m.askForGitHubToken(); }) },
+        { "Join the Sun Loops Discord", "discord community chat server comunità canale", run ([] (MainComponent&) { MainComponent::openDiscord(); }) },
+        { "About Sun Loops Studio", "about version credits author github informazioni versione autore", run ([] (MainComponent& m) { m.showAbout(); }) },
         { "Restore the panel layout", "reset layout panels windows ripristina pannelli finestre", run ([] (MainComponent& m) { m.resetLayout(); }) },
     };
 }
