@@ -2,6 +2,8 @@
 // src/plugins/PluginHost.cpp.
 #include "ui/MainComponent.h"
 
+#include <spdlog/spdlog.h>
+
 namespace sls
 {
 namespace
@@ -20,8 +22,24 @@ juce::File MainComponent::pluginSettingsFile (const juce::String& name) const
 void MainComponent::initPlugins()
 {
     pluginHost->loadKnownList (pluginSettingsFile ("plugins.xml"));
-    if (pluginHost->addBundledPlugins() > 0) // SunBurst, the synthesizer that comes with the program (0.48.0)
-        pluginHost->saveKnownList (pluginSettingsFile ("plugins.xml"));
+    // SunBurst, the synthesizer that comes with the program (0.48.0). Logged, so a missing one can be told apart from one that failed.
+    const auto bundled = PluginHost::bundledPaths();
+    if (bundled.getNumPaths() == 0)
+        spdlog::warn ("Bundled plugins: no SunBurst.vst3 next to {}",
+                      juce::File::getSpecialLocation (juce::File::currentExecutableFile).getFullPathName().toStdString());
+    else
+    {
+        const int added = pluginHost->addBundledPlugins();
+        bool listed = false;
+        for (const auto& t : pluginHost->known().getTypes())
+            listed = listed || (t.name == "SunBurst" && t.pluginFormatName == "VST3");
+        if (listed)
+            spdlog::info ("Bundled plugins: SunBurst ready from {}", bundled.toString().toStdString());
+        else
+            spdlog::error ("Bundled plugins: SunBurst.vst3 is in {} but could not be loaded", bundled.toString().toStdString());
+        if (added > 0)
+            pluginHost->saveKnownList (pluginSettingsFile ("plugins.xml"));
+    }
     refreshFoundPlugins();
     if (! foundPlugins.empty())
     {

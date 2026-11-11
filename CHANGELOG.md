@@ -2,6 +2,14 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.48.1 - 2026-11-11
+
+### Fixed
+- SunBurst is looked for in more places next to the program: the AppImage's own folder (`$APPDIR`) and the real program file
+  behind any symbolic link, besides the folder JUCE reports.
+- The session log says whether SunBurst was found and loaded, or where it was looked for.
+- The window title shows the version ("Untitled - Sun Loops Studio 0.48.1"), so it is clear which AppImage is running.
+
 ## 0.48.0 - 2026-11-11
 
 ### Added

@@ -19,6 +19,10 @@
 #include "audio/MidiImport.h"
 #include "audio/OfflineRenderer.h"
 
+#ifndef JUCE_APPLICATION_VERSION_STRING
+ #define JUCE_APPLICATION_VERSION_STRING "0.0.0"
+#endif
+
 namespace sls
 {
 // ------------------------------------------------------------------------- Project files
@@ -45,7 +49,7 @@ void MainComponent::markDirty()
 void MainComponent::updateWindowTitle()
 {
     if (auto* top = getTopLevelComponent(); top != nullptr && top != this)
-        top->setName (projectName() + (projectDirty ? " *" : "") + " - Sun Loops Studio");
+        top->setName (projectName() + (projectDirty ? " *" : "") + " - Sun Loops Studio " JUCE_APPLICATION_VERSION_STRING);
 }
 
 juce::StringArray MainComponent::recentProjects() const

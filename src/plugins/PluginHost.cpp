@@ -221,14 +221,22 @@ int PluginHost::scan (const std::function<juce::FileSearchPath (const juce::Stri
 juce::FileSearchPath PluginHost::bundledPaths()
 {
     juce::FileSearchPath paths;
-    const auto exe = juce::File::getSpecialLocation (juce::File::currentExecutableFile);
-    const auto prefix = exe.getParentDirectory().getParentDirectory();
-    for (const auto& dir : { prefix.getChildFile ("lib/vst3"), prefix.getChildFile ("lib64/vst3"),
-                             // a development build: build/SunLoopsStudio_artefacts/Release/Sun Loops Studio -> build/SunBurst_artefacts/Release/VST3
-                             prefix.getParentDirectory().getChildFile ("SunBurst_artefacts/Release/VST3"),
-                             prefix.getParentDirectory().getChildFile ("SunBurst_artefacts/Debug/VST3") })
-        if (dir.getChildFile ("SunBurst.vst3").isDirectory())
-            paths.addIfNotAlreadyThere (dir);
+    juce::Array<juce::File> prefixes;
+    // Inside an AppImage its runtime names the mounted folder; otherwise the folder above the program's own (bin/..), found both
+    // as JUCE sees it and through /proc/self/exe (the real file, whatever symbolic link started it).
+    if (const auto appDir = juce::SystemStats::getEnvironmentVariable ("APPDIR", {}); appDir.isNotEmpty())
+        prefixes.add (juce::File (appDir).getChildFile ("usr"));
+    prefixes.add (juce::File::getSpecialLocation (juce::File::currentExecutableFile).getParentDirectory().getParentDirectory());
+    const auto self = juce::File ("/proc/self/exe");
+    if (self.isSymbolicLink())
+        prefixes.add (self.getLinkedTarget().getParentDirectory().getParentDirectory());
+    for (const auto& prefix : prefixes)
+        for (const auto& dir : { prefix.getChildFile ("lib/vst3"), prefix.getChildFile ("lib64/vst3"),
+                                 // a development build: build/SunLoopsStudio_artefacts/Release/Sun Loops Studio -> build/SunBurst_artefacts/Release/VST3
+                                 prefix.getParentDirectory().getChildFile ("SunBurst_artefacts/Release/VST3"),
+                                 prefix.getParentDirectory().getChildFile ("SunBurst_artefacts/Debug/VST3") })
+            if (dir.getChildFile ("SunBurst.vst3").isDirectory())
+                paths.addIfNotAlreadyThere (dir);
     return paths;
 }
 
