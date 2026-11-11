@@ -9,18 +9,38 @@ strumento sta in un pannello mobile che puoi spostare, ridimensionare, sovrappor
 
 ![Sun Loops Studio: browser, channel rack e playlist](docs/images/overview.png)
 
-![Il mixer espanso con una catena di effetti](docs/images/mixer.png)
+| | |
+| --- | --- |
+| ![Il Piano Roll con una progressione di accordi in La minore](docs/images/pianoroll.png) | ![Il mixer con una catena di effetti su una traccia](docs/images/mixer.png) |
+| **Piano Roll** - scale, accordi, corsia della velocity, strumenti di modifica e generatori | **Mixer** - fino a 500 tracce, 10 slot di effetti ciascuna, mandate, bus aux, gruppi VCA |
+| ![SunBurst, il sintetizzatore wavetable](docs/images/sunburst.png) | ![HexForge, il sintetizzatore FM](docs/images/hexforge.png) |
+| **SunBurst** - sintetizzatore wavetable, 101 preset (VST3 e Standalone) | **HexForge** - sintetizzatore ibrido FM + sottrattivo, 40 preset (VST3 e Standalone) |
+
+## Download
+
+Scarica l'ultima **AppImage** dalla [pagina delle release](https://github.com/Hubert9204/Sun-Loops-Studio/releases/latest)
+(`Sun-Loops-Studio-<versione>-x86_64.AppImage`, un solo file con il programma, i suoi suoni e i sintetizzatori SunBurst e HexForge):
+
+```bash
+chmod +x Sun-Loops-Studio-*-x86_64.AppImage
+./Sun-Loops-Studio-*-x86_64.AppImage
+```
+
+Su Fedora / Nobara senza FUSE 2, installalo una volta (`sudo dnf install fuse-libs`) oppure avvia l'AppImage con
+`--appimage-extract-and-run`. Qualche secondo dopo l'avvio il programma controlla se c'è una release più recente (*File > Updates and crash reports > Check for
+updates now* lo fa subito; il controllo automatico si può spegnere) e il pulsante **Download** scarica la nuova AppImage. Le release
+sono pubblicate dalla 0.51.0; per compilare dal sorgente vedi [Avvio rapido](#avvio-rapido-nobara--fedora).
 
 Sun Loops Studio si ispira al modo di lavorare dei DAW a loop come FL Studio. È un progetto indipendente: non usa
 codice, nomi, grafica o risorse di altri prodotti e non è affiliato né approvato dai loro produttori.
 
-**Stato: alpha (0.51.0).** Compila, i test automatici passano e l'interfaccia è stata provata in un display virtuale.
-La riproduzione è stata confermata su un vero PC Nobara per la versione 0.3; tutto ciò che è stato aggiunto dopo
-(pannelli, pattern, playlist, browser, pitch/swing, mixer espanso ed effetti, salvataggio dei progetti, AppImage, clip audio, trascinamento
-dei file, registrazione, MIDI, metronomo e formati di esportazione) è stato provato con test automatici e in un display virtuale con un
-dispositivo audio muto, non ancora con audio reale, microfoni o hardware MIDI. **Dalla 0.17.0 si possono usare i plugin (VST3, LV2,
-LADSPA)** come strumenti e come effetti del mixer; sono stati provati con piccoli plugin di prova e con gli esempi LADSPA, non ancora con
-plugin commerciali. Vedi [docs/roadmap.md](docs/roadmap.md) per sapere con precisione cosa è verificato, cosa no e cosa manca.
+**Stato: alpha (0.51.0).** Compila, più di 1.600 controlli automatici passano e ogni funzione è stata provata in un display
+virtuale. L'AppImage gira su Nobara; la riproduzione è stata confermata la prima volta su un vero PC Nobara con la versione 0.3. Gran
+parte di quello che è arrivato dopo (registrazione, hardware MIDI, plugin, il suono dei sintetizzatori) è stato provato con test
+automatici e in un display virtuale con un dispositivo audio muto, e ora lo si sta provando su hardware vero. **I plugin (VST3, LV2,
+LADSPA)** funzionano come strumenti e come effetti del mixer dalla 0.17.0; sono stati provati con piccoli plugin di prova, con gli esempi
+LADSPA e con SunBurst e HexForge del programma, non ancora con plugin commerciali. Vedi [docs/roadmap.md](docs/roadmap.md) per sapere
+con precisione cosa è verificato, cosa no e cosa manca.
 
 ## Funzioni
 
@@ -170,13 +190,12 @@ applicazioni: `cmake --install build --prefix ~/.local`. Per creare un'unica **A
 ./build/SunLoopsStudioTests_artefacts/Release/SunLoopsStudioTests
 ```
 
-Non servono dispositivo audio né display. Controllano, tra l'altro, intonazione del synth e tempi esatti al
-campione, loop, polifonia, tracce del mixer, pitch e swing, i quattro effetti, sampler, che `Player::render` non
-allochi mai memoria (effetti compresi), uno stress test concorrente del passaggio dati interfaccia→audio, andata e
-ritorno WAV, lo scanner dei plugin, l'albero e la scansione del browser, i preset dei canali, le regole dei pannelli, la
-playlist, le note dal vivo e il file di progetto (andata e ritorno, file danneggiati o ostili, sample mancanti,
-scrittura atomica), l'esportazione in ogni formato, l'importazione di audio e video, le clip audio, il registratore,
-la gestione delle note MIDI e il metronomo.
+Non servono dispositivo audio né display; 1681 controlli alla 0.51.0. Coprono, tra l'altro, intonazione del synth e tempi esatti al
+campione, ogni strumento ed effetto, che `Player::render` non allochi mai memoria (effetti compresi), uno stress test concorrente del
+passaggio dati interfaccia→audio, il file di progetto (andata e ritorno, file danneggiati o ostili, sample mancanti, scrittura atomica),
+l'importazione da FL Studio e MIDI, l'esportazione in ogni formato, la registrazione, l'automazione, i cambi di tempo, l'host dei plugin,
+SunBurst e HexForge (preset, voci, filtri, effetti, stato salvato) e il controllo degli aggiornamenti. GitHub Actions compila il programma
+su Fedora e li esegue a ogni push.
 
 ## Licenza
 

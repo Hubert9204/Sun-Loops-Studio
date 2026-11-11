@@ -10,19 +10,38 @@ holds your sounds; every other tool lives in a floating panel that you can move,
 
 ![Sun Loops Studio: browser, channel rack and playlist](docs/images/overview.png)
 
-![The expanded mixer with an effects chain](docs/images/mixer.png)
+| | |
+| --- | --- |
+| ![The Piano Roll with a chord progression in A minor](docs/images/pianoroll.png) | ![The mixer with an effect chain on a track](docs/images/mixer.png) |
+| **Piano Roll** - scales, chords, velocity lane, editing tools and generators | **Mixer** - up to 500 tracks, 10 effect slots each, sends, aux buses, VCA groups |
+| ![SunBurst, the wavetable synthesizer](docs/images/sunburst.png) | ![HexForge, the FM synthesizer](docs/images/hexforge.png) |
+| **SunBurst** - wavetable synthesizer, 101 presets (VST3 and Standalone) | **HexForge** - hybrid FM + subtractive synthesizer, 40 presets (VST3 and Standalone) |
+
+## Download
+
+Get the latest **AppImage** from the [Releases page](https://github.com/Hubert9204/Sun-Loops-Studio/releases/latest)
+(`Sun-Loops-Studio-<version>-x86_64.AppImage`, one file with the program, its sounds and the SunBurst and HexForge synthesizers):
+
+```bash
+chmod +x Sun-Loops-Studio-*-x86_64.AppImage
+./Sun-Loops-Studio-*-x86_64.AppImage
+```
+
+On Fedora / Nobara without FUSE 2, install it once (`sudo dnf install fuse-libs`) or start the AppImage with
+`--appimage-extract-and-run`. The program checks for a newer release a few seconds after it starts (*File > Updates and crash reports > Check for updates now*
+does it at once; the automatic check can be switched off) and its **Download** button fetches the new AppImage. Releases are
+published since 0.51.0; to build from source see [Quick start](#quick-start-nobara--fedora).
 
 Sun Loops Studio is inspired by the workflow of loop-based DAWs such as FL Studio. It is an independent project
 that uses no code, names, graphics or assets from other products, and it is not affiliated with or endorsed by
 their makers.
 
-**Status: alpha (0.51.0).** It builds, the automated tests pass and the interface has been exercised in a virtual
-display. Playback was confirmed on a real Nobara machine for version 0.3; everything added since (panels, patterns,
-playlist, browser, pitch/swing, the expanded mixer and its effects, saving projects, the AppImage, audio clips, drag and
-drop, recording, MIDI, the metronome and the export formats) was tested headless and in a virtual display with a silent
-audio device, not yet with real audio, microphones or MIDI hardware. **Plugins (VST3, LV2, LADSPA) can be used since 0.17.0** as
-instruments and as mixer effects; they were tried with small test plugins and the LADSPA examples, not yet with commercial plugins.
-See [docs/roadmap.md](docs/roadmap.md) for exactly what is and is not verified and what is missing.
+**Status: alpha (0.51.0).** It builds, more than 1,600 automated checks pass and every feature has been exercised in a virtual
+display. The AppImage runs on Nobara; playback was first confirmed on a real Nobara machine with version 0.3. Most of what came
+later (recording, MIDI hardware, plugins, the synthesizers' sound) was tested headless and in a virtual display with a silent audio
+device, and is now being tried on real hardware. **Plugins (VST3, LV2, LADSPA)** work as instruments and as mixer effects since 0.17.0;
+they were tried with small test plugins, the LADSPA examples and the program's own SunBurst and HexForge, not yet with commercial
+plugins. See [docs/roadmap.md](docs/roadmap.md) for exactly what is and is not verified and what is missing.
 
 ## Features
 
@@ -169,12 +188,11 @@ Press **Space** to play, **F5 / F6 / F7 / F9** to show panels and **F8** for the
 ./build/SunLoopsStudioTests_artefacts/Release/SunLoopsStudioTests
 ```
 
-Headless (no audio device or display needed). They check, among other things, synth pitch and sample-exact timing,
-looping, polyphony, mixer tracks, pitch and swing, the four effects, sampler, that `Player::render` never allocates
-(effects included), a concurrent stress test of the UI-to-audio hand-over, WAV round trip, the plugin scanner, the
-browser tree and file scan, channel presets, panel layout rules, the playlist, live notes and the project file
-(save/load round trip, damaged and hostile files, missing samples, atomic writing), export to every format,
-importing audio and video, audio clips, the recorder, MIDI note handling and the metronome.
+Headless (no audio device or display needed), 1681 checks at 0.51.0. They cover, among other things, synth pitch and
+sample-exact timing, every instrument and effect, that `Player::render` never allocates (effects included), a concurrent stress test of
+the UI-to-audio hand-over, the project file (round trip, damaged and hostile files, missing samples, atomic writing), FL Studio and MIDI
+import, export to every format, recording, automation, tempo changes, the plugin host, SunBurst and HexForge (presets, voices,
+filters, effects, saved state) and the update check. GitHub Actions builds the program on Fedora and runs them on every push.
 
 ## License
 
