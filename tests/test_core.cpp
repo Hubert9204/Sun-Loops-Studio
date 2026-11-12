@@ -808,6 +808,35 @@ void testArrangement()
     a.clips = { uc (a, 0, 0, 0, 1), uc (a, 2, 1, 0, 1) };
     check (sls::compileSong (channels, a).channels[0].notes.size() == 2, "clips on different tracks are mixed");
 
+    // muted clips, muted and soloed tracks (0.60.0: the Playlist's Mute tool and the track headers' M / S)
+    a.clips = { uc (a, 0, 0, 0, 1), uc (a, 2, 1, 0, 1) };
+    a.clips[0].muted = true;
+    check (sls::compileSong (channels, a).channels[0].notes.size() == 1 && sls::compileSong (channels, a).channels[0].notes[0].pitch == 60,
+           "a muted clip does not play");
+    a.clips[0].muted = false;
+    a.playlistTracks[1].mute = true;
+    check (sls::compileSong (channels, a).channels[0].notes.size() == 1 && sls::compileSong (channels, a).channels[0].notes[0].pitch == 69,
+           "a muted track's clips do not play");
+    a.playlistTracks[1].mute = false;
+    a.playlistTracks[1].solo = true;
+    check (a.anyTrackSoloed() && ! a.trackPlays (0) && a.trackPlays (1), "a solo silences the other tracks");
+    check (sls::compileSong (channels, a).channels[0].notes.size() == 1 && sls::compileSong (channels, a).channels[0].notes[0].pitch == 60,
+           "only the soloed track plays");
+    a.playlistTracks[1].solo = false;
+    check (sls::compileSong (channels, a).channels[0].notes.size() == 2, "without a solo every track plays again");
+    {
+        sls::ProjectDocument doc = sls::ProjectDocument::blank();
+        doc.arrangement = a;
+        doc.arrangement.clips[1].muted = true;
+        doc.arrangement.playlistTracks[0].mute = true;
+        doc.arrangement.playlistTracks[1].solo = true;
+        const auto parsed = sls::ProjectDocument::fromJson (doc.toJson());
+        check (parsed.document.has_value() && parsed.document->arrangement.clips.size() == 2 && ! parsed.document->arrangement.clips[0].muted
+                   && parsed.document->arrangement.clips[1].muted && parsed.document->arrangement.playlistTracks[0].mute
+                   && parsed.document->arrangement.playlistTracks[1].solo && ! parsed.document->arrangement.playlistTracks[0].solo,
+               "clip mutes and track mute / solo survive a save and a load");
+    }
+
     // empty playlist
     a.clips.clear();
     const auto empty = sls::compileSong (channels, a);

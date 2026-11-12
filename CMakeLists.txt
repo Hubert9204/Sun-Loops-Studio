@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(SunLoopsStudio VERSION 0.59.0 LANGUAGES C CXX ASM)
+project(SunLoopsStudio VERSION 0.60.0 LANGUAGES C CXX ASM)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -168,6 +168,8 @@ target_sources(SunLoopsStudio PRIVATE
     src/ui/MixerPanel.cpp
     src/ui/PlaylistTimeline.cpp
     src/ui/PlaylistView.cpp
+    src/ui/PluginPicker.cpp
+    src/ui/MainComponentToolbar.cpp
     src/ui/MainComponent.cpp
     src/ui/MainComponentNotes.cpp
     src/ui/MainComponentPatterns.cpp

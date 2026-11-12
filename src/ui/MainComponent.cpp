@@ -85,47 +85,8 @@ MainComponent::MainComponent()
         createStrip (i);
 
     refreshRackStrips();
-    rackView.onAddChannel = [this]
-    {
-        juce::PopupMenu menu;
-        menu.addItem (1, "Synth channel");
-        menu.addItem (2, "Sampler channel (load a sample)");
-        menu.addItem (3, "Drum machine (16 pads)");
-        menu.addItem (4, "Slicer (slice a loop)...");
-        juce::String sunburst, hexforge; // the synthesizer plugins that come with the program (0.48.0, 0.50.0)
-        for (const auto& p : foundPlugins)
-            if (p.isInstrument && p.format == "VST3")
-            {
-                if (p.name == "SunBurst")
-                    sunburst = p.identifier;
-                else if (p.name == "HexForge")
-                    hexforge = p.identifier;
-            }
-        if (sunburst.isNotEmpty())
-            menu.addItem (5, "SunBurst synthesizer");
-        if (hexforge.isNotEmpty())
-            menu.addItem (6, "HexForge FM synthesizer");
-
-        menu.showMenuAsync (juce::PopupMenu::Options(),
-                            [safe = juce::Component::SafePointer<MainComponent> (this), sunburst, hexforge] (int result)
-                            {
-                                if (safe == nullptr || result == 0)
-                                    return;
-                                if (result == 5 || result == 6)
-                                {
-                                    safe->setPluginInstrument (-1, result == 5 ? sunburst : hexforge);
-                                    return;
-                                }
-                                if (result == 4)
-                                {
-                                    safe->chooseLoopForSlicer();
-                                    return;
-                                }
-                                const int index = safe->addChannel (result == 1 ? Instrument::Synth : result == 2 ? Instrument::Sampler : Instrument::Drums);
-                                if (index >= 0 && result == 3)
-                                    safe->openDrumMachine (index);
-                            });
-    };
+    rackView.onAddChannel = [this] { showAddMenu (rackView); };
+    rackBody.onOptionsMenu = [this] (juce::Component& target) { showRackOptionsMenu (target); }; // 0.60.0
 
     rackView.onItemDroppedOnEmptyArea = [this] (const drag::Item& item) { applyBrowserItem (-1, item); };
 
@@ -159,9 +120,67 @@ MainComponent::MainComponent()
 
     fileButton.setTooltip ("New, open and save projects (Ctrl+N, Ctrl+O, Ctrl+S, Ctrl+Shift+S)");
     fileButton.onClick = [this] { showFileMenu(); };
+    // The menu bar (0.60.0), laid out as FL Studio's.
+    editButton.setTooltip ("Undo, redo, clear the selected channel's notes");
+    editButton.onClick = [this] { showEditMenu(); };
+    addButton.setTooltip ("Add a channel: an instrument or a plugin");
+    addButton.onClick = [this] { showAddMenu (addButton); };
+    patternsButton.setTooltip ("New, clone, rename, delete patterns, their length, the Loop Starter");
+    patternsButton.onClick = [this] { showPatternsMenu(); };
+    viewButton.setTooltip ("Open or close the windows, the browser and the meters; reset the layout");
+    viewButton.onClick = [this] { showViewMenu(); };
+    optionsButton.setTooltip ("Audio and MIDI settings, metronome, recording, typing keyboard, start-up options");
+    optionsButton.onClick = [this] { showOptionsMenu(); };
+    toolsButton.setTooltip ("Helios, Loop Starter, Slicer, imports, exports, FL Studio projects");
+    toolsButton.onClick = [this] { showToolsMenu(); };
+    hintLabel.setFont (juce::FontOptions (12.0f));
+    hintLabel.setColour (juce::Label::textColourId, juce::Colour (0xffb9bfc9));
+    hintLabel.setJustificationType (juce::Justification::centredLeft);
+    hintLabel.setMinimumHorizontalScale (0.75f);
+    hintLabel.setInterceptsMouseClicks (false, false);
 
     playButton.setClickingTogglesState (true);
+    playButton.setTooltip ("Play (Space)");
+    playButton.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff3f9f5f));
     playButton.onClick = [this] { setPlaying (playButton.getToggleState()); };
+    stopButton.setTooltip ("Stop (Space while playing): the position goes back to where Play started");
+    stopButton.onClick = [this] { setPlaying (false); };
+    patternPrevButton.setTooltip ("Previous pattern");
+    patternPrevButton.onClick = [this] { if (currentPattern > 0) selectPattern (currentPattern - 1); };
+    patternNextButton.setTooltip ("Next pattern");
+    patternNextButton.onClick = [this] { if (currentPattern + 1 < static_cast<int> (arrangement.patterns.size())) selectPattern (currentPattern + 1); };
+    timePanel.setTooltip ("Song position: bar.beat.tick and minutes:seconds");
+    // The global snap (0.60.0): the Piano roll and the Playlist follow it where their own snap says "Main", as in FL Studio.
+    snapLabel.setFont (juce::FontOptions (12.0f));
+    snapLabel.setJustificationType (juce::Justification::centredRight);
+    {
+        const char* names[] = { "Bar", "1/2", "Beat (1/4)", "1/8", "1/16", "1/32", "1/64", "Off" };
+        for (int i = 0; i < 8; ++i)
+            snapBox.addItem (names[i], i + 1);
+    }
+    snapBox.setSelectedId (settings != nullptr ? std::clamp (settings->getIntValue ("snap.main", 5), 1, 8) : 5, juce::dontSendNotification);
+    snapBox.setTooltip ("Global snap: the grid the Piano roll and the Playlist use while their own snap says \"Main\"");
+    snapBox.setWantsKeyboardFocus (false);
+    snapBox.onChange = [this] { applyMainSnap(); };
+    cpuLabel.setFont (juce::FontOptions (11.0f));
+    cpuLabel.setJustificationType (juce::Justification::centred);
+    cpuLabel.setColour (juce::Label::textColourId, juce::Colour (0xffb9bfc9));
+    cpuLabel.setTooltip ("CPU: how much of each audio buffer's time the audio takes. Near 100 % the sound crackles: use a larger buffer.");
+    cpuLabel.setText ("CPU 0 %", juce::dontSendNotification);
+
+    // The Plugin picker (0.60.0): instruments and effects in one window, like FL Studio's.
+    pluginPicker.onInstrumentChosen = [this] (const PluginPicker::Entry& e) { applyBrowserItem (-1, e.item); };
+    pluginPicker.onEffectChosen = [this] (const PluginPicker::Entry& e)
+    {
+        if (e.pluginId.isNotEmpty())
+            addPluginEffectForChannel (selected, e.pluginId);
+        else
+            addBuiltinEffect (e.effect);
+    };
+    pluginPicker.onRescan = [this] { startPluginScan(); };
+    pluginPickerToggle.setTooltip ("The Plugin picker: every instrument and effect, to add with a double-click or a drag");
+    pluginPickerToggle.onClick = [this] { togglePanel (pluginPanel); };
+    pianoToolbar.onChannelChosen = [this] (int channel) { if (channel != selected) openPianoRoll (channel); };
 
     modeButton.setClickingTogglesState (true);
     modeButton.setTooltip ("Pattern: loop the selected pattern. Song: play the playlist.");
@@ -358,6 +377,8 @@ MainComponent::MainComponent()
     mixerPanelWindow.setMinimumSize (720, 440);
     playlistPanel.setContent (&playlistView);
     playlistPanel.setMinimumSize (520, 340);
+    pluginPanel.setContent (&pluginPicker);
+    pluginPanel.setMinimumSize (480, 320);
 
     for (auto* panel : allPanels())
     {
@@ -404,7 +425,7 @@ MainComponent::MainComponent()
     resetButton.onClick = [this] { resetLayout(); };
     resetButton.setTooltip ("Restore the default panel layout");
 
-    for (auto* t : { &rackToggle, &playlistToggle, &pianoToggle, &mixerToggle })
+    for (auto* t : { &rackToggle, &playlistToggle, &pianoToggle, &mixerToggle, &pluginPickerToggle })
         t->setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xffe8943a));
 
     deviceLabel.setJustificationType (juce::Justification::centredLeft);
@@ -413,19 +434,23 @@ MainComponent::MainComponent()
     statusLabel.setFont (juce::FontOptions (12.0f));
 
     // Space and F5/F6/F7/F9 are handled by this component, so these controls must not steal keyboard focus.
-    for (juce::Button* b : std::initializer_list<juce::Button*> { &fileButton, &playButton, &clearButton, &modeButton, &patternAddButton, &deviceButton, &metronomeButton, &recordButton, &recordMenuButton, &noteRecordButton,
-                     &browserToggle, &browserTab, &rackToggle, &playlistToggle, &pianoToggle, &mixerToggle, &resetButton, &metersButton, &typingButton, &heliosButton, &helpButton })
+    for (juce::Button* b : std::initializer_list<juce::Button*> { &fileButton, &editButton, &addButton, &patternsButton, &viewButton, &optionsButton, &toolsButton,
+                     &playButton, &stopButton, &clearButton, &modeButton, &patternPrevButton, &patternNextButton, &patternAddButton, &deviceButton, &metronomeButton, &recordButton, &recordMenuButton, &noteRecordButton,
+                     &browserToggle, &browserTab, &rackToggle, &playlistToggle, &pianoToggle, &mixerToggle, &pluginPickerToggle, &resetButton, &metersButton, &typingButton, &heliosButton, &helpButton })
         b->setMouseClickGrabsKeyboardFocus (false);
     patternBox.setMouseClickGrabsKeyboardFocus (false);
     patternBox.setWantsKeyboardFocus (false);
 
-    for (auto* c : std::initializer_list<juce::Component*> { &fileButton, &playButton, &modeButton, &patternBox, &patternAddButton,
-                                                              &clearButton, &deviceButton, &metronomeButton, &recordButton, &recordMenuButton, &noteRecordButton,
+    for (auto* c : std::initializer_list<juce::Component*> { &fileButton, &editButton, &addButton, &patternsButton, &viewButton, &optionsButton, &toolsButton, &helpButton, &hintLabel,
+                                                              &playButton, &stopButton, &modeButton, &patternPrevButton, &patternBox, &patternNextButton, &patternAddButton,
+                                                              &deviceButton, &metronomeButton, &recordButton, &recordMenuButton, &noteRecordButton,
                                                               &browserToggle, &rackToggle, &playlistToggle, &pianoToggle,
-                                                              &mixerToggle, &resetButton, &metersButton, &typingButton, &heliosButton, &helpButton, &bpmSlider, &volumeSlider, &meterButton,
-                                                              &bpmLabel, &volumeLabel, &deviceLabel, &statusLabel, &meter,
+                                                              &mixerToggle, &pluginPickerToggle, &resetButton, &metersButton, &typingButton, &heliosButton, &bpmSlider, &volumeSlider, &meterButton,
+                                                              &bpmLabel, &volumeLabel, &deviceLabel, &statusLabel, &meter, &timePanel, &snapLabel, &snapBox, &cpuLabel,
                                                               &browser, &browserTab, &workspace })
         addAndMakeVisible (c);
+    applyMainSnap();
+    refreshPluginPicker();
 
     setWantsKeyboardFocus (true);
     browserOpen = settings == nullptr || settings->getBoolValue ("browser.open", true);
@@ -555,63 +580,89 @@ void MainComponent::paint (juce::Graphics& g)
     g.fillAll (juce::Colour (0xff2a2d34));
 }
 
+// The toolbar (0.60.0), laid out as FL Studio's: the menu bar with the hint bar; the transport, pattern, tempo, time, global
+// snap, master and CPU panels; the shortcut panel (the windows, in FL Studio's order) with the recording panel's switches; then
+// the status line, the browser and the workspace.
 void MainComponent::resized()
 {
     auto area = getLocalBounds().reduced (12);
+    const auto gap = [] (juce::Rectangle<int>& r, int w) { r.removeFromLeft (w); };
 
-    auto top = area.removeFromTop (30);
-    fileButton.setBounds (top.removeFromLeft (56));
-    top.removeFromLeft (8);
-    playButton.setBounds (top.removeFromLeft (70));
-    top.removeFromLeft (8);
-    modeButton.setBounds (top.removeFromLeft (76));
-    top.removeFromLeft (12);
-    patternBox.setBounds (top.removeFromLeft (140));
-    top.removeFromLeft (4);
-    patternAddButton.setBounds (top.removeFromLeft (30));
-    top.removeFromLeft (16);
-    bpmLabel.setBounds (top.removeFromLeft (34));
-    bpmSlider.setBounds (top.removeFromLeft (112));
-    top.removeFromLeft (4);
-    meterButton.setBounds (top.removeFromLeft (46));
-    top.removeFromLeft (12);
-    volumeLabel.setBounds (top.removeFromLeft (50));
-    volumeSlider.setBounds (top.removeFromLeft (120));
-    top.removeFromLeft (16);
-    metronomeButton.setBounds (top.removeFromLeft (96));
-    top.removeFromLeft (8);
-    recordButton.setBounds (top.removeFromLeft (76));
-    recordMenuButton.setBounds (top.removeFromLeft (26));
-    top.removeFromLeft (8);
-    noteRecordButton.setBounds (top.removeFromLeft (84));
-
-    meter.setBounds (top.removeFromRight (14));
-    top.removeFromRight (10);
-    deviceButton.setBounds (top.removeFromRight (80));
+    // --- the menu bar and the hint bar
+    auto menus = area.removeFromTop (26);
+    const struct { juce::TextButton* b; int w; } menuButtons[] = { { &fileButton, 48 }, { &editButton, 48 }, { &addButton, 46 }, { &patternsButton, 80 },
+                                                                  { &viewButton, 52 }, { &optionsButton, 70 }, { &toolsButton, 58 }, { &helpButton, 50 } };
+    for (const auto& m : menuButtons)
+    {
+        m.b->setBounds (menus.removeFromLeft (m.w));
+        gap (menus, 2);
+    }
+    gap (menus, 12);
+    hintLabel.setBounds (menus);
 
     area.removeFromTop (6);
-    auto views = area.removeFromTop (30);
-    browserToggle.setBounds (views.removeFromLeft (96));
-    views.removeFromLeft (4);
-    rackToggle.setBounds (views.removeFromLeft (84));
-    views.removeFromLeft (4);
-    playlistToggle.setBounds (views.removeFromLeft (96));
-    views.removeFromLeft (4);
-    pianoToggle.setBounds (views.removeFromLeft (84));
-    views.removeFromLeft (4);
-    mixerToggle.setBounds (views.removeFromLeft (84));
-    views.removeFromLeft (12);
-    resetButton.setBounds (views.removeFromLeft (60));
-    views.removeFromLeft (16);
-    clearButton.setBounds (views.removeFromLeft (90));
-    views.removeFromLeft (4);
-    metersButton.setBounds (views.removeFromLeft (80));
-    views.removeFromLeft (4);
-    typingButton.setBounds (views.removeFromLeft (96));
-    views.removeFromLeft (4);
-    heliosButton.setBounds (views.removeFromLeft (72));
-    views.removeFromLeft (4);
-    helpButton.setBounds (views.removeFromLeft (60));
+
+    // --- the transport, pattern, tempo, time, snap, master and CPU panels
+    auto top = area.removeFromTop (30);
+    playButton.setBounds (top.removeFromLeft (52));
+    gap (top, 3);
+    stopButton.setBounds (top.removeFromLeft (52));
+    gap (top, 3);
+    recordButton.setBounds (top.removeFromLeft (62));
+    recordMenuButton.setBounds (top.removeFromLeft (22));
+    gap (top, 3);
+    noteRecordButton.setBounds (top.removeFromLeft (72));
+    gap (top, 3);
+    modeButton.setBounds (top.removeFromLeft (70));
+    gap (top, 12);
+    patternPrevButton.setBounds (top.removeFromLeft (22));
+    gap (top, 2);
+    patternBox.setBounds (top.removeFromLeft (126));
+    gap (top, 2);
+    patternNextButton.setBounds (top.removeFromLeft (22));
+    gap (top, 2);
+    patternAddButton.setBounds (top.removeFromLeft (26));
+    gap (top, 12);
+    bpmLabel.setBounds (top.removeFromLeft (38));
+    bpmSlider.setBounds (top.removeFromLeft (96));
+    gap (top, 3);
+    meterButton.setBounds (top.removeFromLeft (40));
+    gap (top, 10);
+    timePanel.setBounds (top.removeFromLeft (122));
+    gap (top, 10);
+    snapLabel.setBounds (top.removeFromLeft (36));
+    gap (top, 3);
+    snapBox.setBounds (top.removeFromLeft (84));
+    gap (top, 10);
+    volumeLabel.setBounds (top.removeFromLeft (48));
+    volumeSlider.setBounds (top.removeFromLeft (96));
+    gap (top, 3);
+    meter.setBounds (top.removeFromLeft (14));
+    gap (top, 10);
+    cpuLabel.setBounds (top.removeFromLeft (64));
+
+    area.removeFromTop (6);
+
+    // --- the shortcut panel (the windows, in FL Studio's order) and the recording panel's switches
+    auto views = area.removeFromTop (28);
+    deviceButton.setBounds (views.removeFromRight (70));
+    views.removeFromRight (4);
+    heliosButton.setBounds (views.removeFromRight (64));
+    views.removeFromRight (4);
+    metersButton.setBounds (views.removeFromRight (64));
+    views.removeFromRight (4);
+    typingButton.setBounds (views.removeFromRight (90));
+    views.removeFromRight (4);
+    metronomeButton.setBounds (views.removeFromRight (90));
+    const struct { juce::TextButton* b; int w; } shortcuts[] = { { &playlistToggle, 96 }, { &pianoToggle, 104 }, { &rackToggle, 120 },
+                                                                { &mixerToggle, 82 }, { &browserToggle, 94 }, { &pluginPickerToggle, 100 } };
+    for (const auto& sc : shortcuts)
+    {
+        sc.b->setBounds (views.removeFromLeft (sc.w));
+        gap (views, 4);
+    }
+    gap (views, 8);
+    resetButton.setBounds (views.removeFromLeft (56));
 
     area.removeFromTop (6);
     auto info = area.removeFromTop (20);
@@ -749,6 +800,7 @@ void MainComponent::timerCallback()
     flushHistory();
     autosaveIfNeeded();
     logStatusChanges();
+    updateToolbarReadouts(); // 0.60.0: the time and CPU panels, the hint bar
     if (! typingHeld.empty())
         releaseTypingKeys (! juce::Process::isForegroundProcess()); // keys let go while another window had the keyboard
 
@@ -835,7 +887,7 @@ void MainComponent::timerCallback()
 namespace
 {
 // "panel2": the layout changed with the browser and the expanded mixer, so layouts stored by older versions are ignored.
-constexpr const char* kPanelKeys[] = { "panel2.rack", "panel2.piano", "panel2.mixer", "panel2.playlist" };
+constexpr const char* kPanelKeys[] = { "panel2.rack", "panel2.piano", "panel2.mixer", "panel2.playlist", "panel2.plugins" }; // 0.60.0: the picker
 
 constexpr int kRackHeight = 280;
 
@@ -851,14 +903,15 @@ PanelLayout defaultLayoutFor (int panelIndex, int workW, int workH)
         case 0:  return { 8, 8, fullW, kRackHeight, true };
         case 1:  return { 8, lowerY, fullW, lowerH, false };
         case 2:  return { 8, 8, fullW, std::max (440, workH - 16), false };
+        case 4:  return { std::max (8, (workW - 760) / 2), std::max (8, (workH - 480) / 2), std::min (760, fullW), std::min (480, std::max (320, workH - 16)), false }; // the Plugin picker (0.60.0)
         default: return { 8, lowerY, fullW, lowerH, true };
     }
 }
 } // namespace
 
-std::array<PanelWindow*, 4> MainComponent::allPanels()
+std::array<PanelWindow*, 5> MainComponent::allPanels()
 {
-    return { &rackPanel, &pianoPanel, &mixerPanelWindow, &playlistPanel }; // same order as kPanelKeys
+    return { &rackPanel, &pianoPanel, &mixerPanelWindow, &playlistPanel, &pluginPanel }; // same order as kPanelKeys
 }
 
 void MainComponent::togglePanel (PanelWindow& panel)
@@ -887,6 +940,7 @@ void MainComponent::updateToggleButtons()
     playlistToggle.setToggleState (playlistPanel.isOpen(), juce::dontSendNotification);
     pianoToggle.setToggleState (pianoPanel.isOpen(), juce::dontSendNotification);
     mixerToggle.setToggleState (mixerPanelWindow.isOpen(), juce::dontSendNotification);
+    pluginPickerToggle.setToggleState (pluginPanel.isOpen(), juce::dontSendNotification);
 }
 
 void MainComponent::restoreLayout()
@@ -1105,6 +1159,7 @@ void MainComponent::publishProject()
     engine.publishProject (std::move (project));
     recordHistory();
     closeUnusedPluginWindows();
+    refreshChannelNames(); // 0.60.0: the piano roll's target-channel box and its ghost notes
 }
 
 void MainComponent::selectChannel (int index)
@@ -1120,6 +1175,7 @@ void MainComponent::selectChannel (int index)
     pianoRoll.scrollToNotes();
     pianoPanel.setTitle ("Piano Roll - " + name);
     statusLabel.setText ("Piano roll: " + name, juce::dontSendNotification);
+    refreshChannelNames();
 }
 
 void MainComponent::setPlaying (bool shouldPlay)
@@ -1133,8 +1189,7 @@ void MainComponent::setPlaying (bool shouldPlay)
                                  + juce::String (arrangement.patterns[static_cast<size_t> (currentPattern)].name) + ": play your keyboard",
                              juce::dontSendNotification);
     engine.setPlaying (shouldPlay);
-    playButton.setToggleState (shouldPlay, juce::dontSendNotification);
-    playButton.setButtonText (shouldPlay ? "Stop" : "Play");
+    playButton.setToggleState (shouldPlay, juce::dontSendNotification); // 0.60.0: Play stays Play (lit while playing); Stop is its own button
 }
 
 void MainComponent::openAudioSettings()

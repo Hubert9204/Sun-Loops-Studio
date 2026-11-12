@@ -2,6 +2,48 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.60.0 - 2026-11-12
+
+Aligned with FL Studio's manual (Image-Line's online manual: Basics > Workflow, Toolbar panels, Channel Rack, Piano Roll,
+Playlist, Mixer, Plugin picker): the windows are laid out as there and the tools and connections that were missing are in.
+
+### Added
+- **Menu bar** as FL Studio's: **FILE, EDIT, ADD, PATTERNS, VIEW, OPTIONS, TOOLS, HELP**, with the **hint bar** next to it (what
+  the control under the mouse does). *EDIT* has undo / redo and the selected channel's clear, rename, clone, delete; *ADD* a
+  channel of each instrument and every plugin instrument found; *PATTERNS* new, clone, rename, delete, length, previous / next
+  and the Loop Starter; *VIEW* the windows, the browser, the meters and the layout reset; *OPTIONS* the audio, metronome,
+  recording, typing-keyboard and start-up settings; *TOOLS* Helios, the Loop Starter, the Slicer, the imports, the FL Studio
+  project exchange and the plugin scan.
+- **Toolbar panels** as FL Studio's: the transport with **Play** and **Stop** as two buttons (Play lit while playing), the
+  pattern panel with **previous / next** arrows, the **time panel** (bar.beat.tick and minutes:seconds, following the playhead),
+  the **global snap** panel and the **CPU** panel; the **shortcut panel** in FL Studio's order (*Playlist F5, Piano roll F7,
+  Channel rack F6, Mixer F9, Browser F8, Plugin picker*).
+- **Plugin picker** window: every instrument and effect - the built-in ones and the plugins found - in two lists with a search
+  box. Double-click (or *Add channel*) an instrument for a new channel, or drag it onto the Channel Rack or the Playlist;
+  double-click an effect to put it in the first free slot of the selected channel's mixer track. *Scan plugins again* looks for
+  plugins.
+- **Playlist: Mute tool** (key 7): click a clip to mute or unmute it; it stays on the playlist, greyed with an *M*, and does not
+  play. Drag across several to give them all the state of the first one. *Mute clip* is in the clip's menu too. Muted clips are
+  saved with the project.
+- **Playlist: Slip tool** (key 8): drag a clip sideways to move what plays inside it while the clip stays where it is: a pattern
+  clip starts further into (or earlier in) its pattern, an audio clip plays from another point of its file.
+- **Playlist: M / S on every track header**, as in FL Studio: a muted track's clips do not play; while any track is soloed only
+  the soloed tracks play. The track menu has *Mute* and *Solo* too, and both are saved with the project.
+- **Piano Roll: target channel** box at the left of its toolbar, as FL Studio's title bar: choose another channel to edit its
+  notes. **Ghost notes** (the *Ghost* switch): the other channels' notes of the pattern, faint behind the channel's own.
+- **Channel Rack: channel options menu** (the **≡** button at the left of the pattern-length bar): rename, clone, delete, move
+  up / down, assign a free mixer track, open the piano roll, add a channel.
+- **Global snap** ("Main"): the Piano Roll's and the Playlist's snap boxes have a *Main* entry that follows the toolbar's snap
+  panel, as in FL Studio. Their own entries override it as before.
+
+### Changed
+- **Channel Rack rows** follow FL Studio's order from left to right: mute and solo, pan, volume, the mixer track, the channel's
+  **name button** (lit for the selected channel), then pitch, swing, the meter, *Load* and the steps.
+- **Playlist tools** in FL Studio's order and with its names: *Draw, Delete* (was Erase), *Mute, Slip, Slice* (was Split), *Cut,
+  Select, Zoom*. The keys are unchanged (1 Draw, 2 Slice, 3 Cut, 4 Delete, 5 Zoom, 6 Select) plus 7 Mute and 8 Slip.
+- *Clear notes* moved from the toolbar into the EDIT menu; *Audio...*, *Metronome*, *Typing keys*, *Meters* and *Helios* sit at
+  the right of the shortcut row.
+
 ## 0.59.0 - 2026-11-12
 
 ### Changed

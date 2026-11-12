@@ -140,8 +140,15 @@ public:
         longerButton.setTooltip ("One quarter note longer");
         shorterButton.onClick = [this] { if (onPatternBeats) onPatternBeats (beats - 1); };
         longerButton.onClick = [this] { if (onPatternBeats) onPatternBeats (beats + 1); };
+        // 0.60.0: the channel options menu at the left of the bar, as in FL Studio's Channel Rack (add, clone, rename, move, delete...).
+        optionsButton.setMouseClickGrabsKeyboardFocus (false);
+        optionsButton.setTooltip ("Channel options: add, clone, rename, move or delete channels, assign mixer tracks");
+        optionsButton.onClick = [this] { if (onOptionsMenu) onOptionsMenu (optionsButton); };
+        addAndMakeVisible (optionsButton);
         setPatternBeats (4);
     }
+
+    std::function<void (juce::Component&)> onOptionsMenu; // 0.60.0: show the channel options menu under this button
 
     // `minBeats` and `meter` (0.46.0): the shortest pattern, and the time signature the bars are counted in.
     void setPatternBeats (int newBeats, int minBeats = kMinPatternBeats, TimeSignature meter = {})
@@ -169,6 +176,8 @@ public:
     {
         auto area = getLocalBounds();
         auto bar = area.removeFromTop (kBarHeight).reduced (6, 3);
+        optionsButton.setBounds (bar.removeFromLeft (30));
+        bar.removeFromLeft (8);
         longerButton.setBounds (bar.removeFromRight (28));
         bar.removeFromRight (4);
         shorterButton.setBounds (bar.removeFromRight (28));
@@ -184,5 +193,6 @@ private:
     int beats = 4;
     juce::Label lengthLabel;
     juce::TextButton shorterButton { "-" }, longerButton { "+" };
+    juce::TextButton optionsButton { juce::String::fromUTF8 ("\xe2\x89\xa1") }; // "≡" (0.60.0)
 };
 } // namespace sls

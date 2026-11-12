@@ -10,7 +10,9 @@
 
 namespace sls
 {
-enum class PlaylistTool { Draw, Split, Cut, Erase, Zoom, Select }; // 0.59.0: Draw was called Select; Select is the rectangle
+// 0.59.0: Draw was called Select; Select is the rectangle. 0.60.0: Mute and Slip, as in FL Studio's Playlist (the toolbar shows the
+// tools in FL Studio's order and with its names: Draw, Delete (Erase), Mute, Slip, Slice (Split), Cut, Select, Zoom).
+enum class PlaylistTool { Draw, Split, Cut, Erase, Zoom, Select, Mute, Slip };
 
 // The timeline of the Playlist panel: the ruler, the tracks and their clips (the toolbar around it is PlaylistView).
 //
@@ -27,7 +29,11 @@ enum class PlaylistTool { Draw, Split, Cut, Erase, Zoom, Select }; // 0.59.0: Dr
 // passes over - pattern, audio and automation clips - as one undo step.
 //   Split  : click a clip to cut it in two at that point (snapped to the grid).
 //   Cut    : drag across a clip to remove that stretch of it (audio: the sound after the gap stays where it is).
-//   Erase  : click a clip to delete it; drag across several to delete them all.
+//   Erase  : click a clip to delete it; drag across several to delete them all. (Shown as "Delete", as in FL Studio.)
+//   Mute   : (7, 0.60.0) click a clip to mute or unmute it (it stays on the playlist, greyed, and does not play); drag across
+//            several to give them all the state of the first one. Tracks have their own M / S switches in their headers.
+//   Slip   : (8, 0.60.0) drag a clip sideways to move what plays inside it while the clip itself stays where it is: a pattern
+//            clip starts further into (or earlier in) its pattern, an audio clip plays from another point of its file.
 //   Zoom   : click zooms in, right click or Shift+click zooms out, drag a stretch to zoom to it.
 // Always: Ctrl+wheel zooms around the mouse, the wheel scrolls in time, Alt while dragging switches the grid off.
 // Delete removes the selected clip; Ctrl+C / Ctrl+X / Ctrl+V / Ctrl+D copy, cut, paste and duplicate it; Ctrl+Z / Ctrl+Y undo and redo.
@@ -166,7 +172,8 @@ public:
 private:
     enum class Drag { None, MovePattern, ResizePattern, MoveAudio, ResizeAudio, TrimAudio, CutRange, EraseSweep, ZoomRange, MoveAutomation, ResizeAutomation,
                       Seek, LoopCreate, LoopPress, LoopMove, LoopResizeStart, LoopResizeEnd,
-                      MoveGroup, RubberBand, RightPress, RightErase }; // 0.57.0: the selection rectangle, the right-button eraser
+                      MoveGroup, RubberBand, RightPress, RightErase, // 0.57.0: the selection rectangle, the right-button eraser
+                      MuteSweep, Slip };                             // 0.60.0
     // After "Move" or "Resize" in the loop region's menu the region follows the mouse until a click (right click / Escape: back as it was).
     enum class LoopMode { None, Move, Resize };
     enum class Kind { None, Pattern, Audio, Automation };
@@ -224,7 +231,12 @@ private:
     void endLoopMode (bool keep);
     void paintGrid (juce::Graphics& g);
 
-    static constexpr int kNameWidth = 96; // 0.44.0: wider, for the patterns' names on their own tracks
+    static constexpr int kNameWidth = 124; // 0.44.0: wider, for the patterns' names on their own tracks; 0.60.0: room for M / S
+    static constexpr int kHeaderSwitch = 14; // the M and S switches of a track header (0.60.0), and the record dot after them
+    juce::Rectangle<int> muteSwitchRect (int track) const noexcept;
+    juce::Rectangle<int> soloSwitchRect (int track) const noexcept;
+    void toggleTrackMute (int track);
+    void toggleTrackSolo (int track);
     static constexpr int kRulerHeight = 38;
     static constexpr int kScrollBarHeight = 14;
     static constexpr int kEdgeGrab = 7;
@@ -274,6 +286,9 @@ private:
     bool eraseAt (int track, int tick);
     bool eraseUnder (int x, int y);                     // every clip (also automation) under a point of the view
     bool eraseAlong (int x0, int y0, int x1, int y1);   // ... and along a line, so a fast stroke misses nothing
+    bool muteUnder (int x, int y, bool muted);          // 0.60.0: every pattern and audio clip under a point gets this state
+    bool muteAlong (int x0, int y0, int x1, int y1, bool muted);
+    void applySlip (int deltaTicks);                    // 0.60.0: the clip being slipped, from its state when the drag began
     bool isSelected (Kind kind, int index) const noexcept;
     void selectGroup (Group g);
     void selectAll();
@@ -352,6 +367,12 @@ private:
     bool bandActive = false, bandAdds = false;
     Group bandBase;              // the selection before a Shift+rectangle (it adds to it)
     int rightPressX = 0, rightPressY = 0, eraseLastX = 0, eraseLastY = 0;
+    // The Mute and Slip tools (0.60.0).
+    bool muteSweepState = false;    // what the clips the sweep passes over become
+    Kind slipKind = Kind::None;     // the clip being slipped
+    int slipStartTick = 0;          // where the mouse went down
+    int slipOriginalOffsetTicks = 0;
+    double slipOriginalOffsetSeconds = 0.0;
     void toggleInGroup (Kind kind, int index); // Shift+click on a clip
     void selectToolPress (Kind kind, int index, int tick, const juce::MouseEvent& e);
 

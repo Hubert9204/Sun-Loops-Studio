@@ -12,7 +12,8 @@ namespace sls
 {
 // The Playlist panel body: a toolbar above the timeline, a readout below it.
 //   First row  : the pattern to place (with New / Rename / Delete) and Undo / Redo
-//   Second row : the tools (Select, Split, Cut, Erase, Zoom), the grid that audio snaps to, and the zoom buttons
+//   Second row : the tools in FL Studio's order (0.60.0: Draw, Delete, Mute, Slip, Slice, Cut, Select, Zoom), the snap ("Main"
+//                follows the toolbar's global snap, as in FL Studio), and the zoom buttons
 //   Readout    : the position under the mouse (bars.beats.ticks and minutes:seconds.milliseconds) and the exact start,
 //                length and end of the selected clip
 // Everything about the clips is in PlaylistTimeline.
@@ -38,6 +39,9 @@ public:
     // The time signature or the tempo changes were changed (0.46.0): the grid's "Bar" and the ruler follow.
     void meterChanged() { applySnap(); timeline.repaint(); }
     void applySnap();
+    // 0.60.0: the global snap of the toolbar (the code of PlaylistView's own list: 0 = bar, -1 = half a bar, else ticks); the
+    // playlist follows it while its snap box says "Main".
+    void setMainSnap (int code);
     void addTrack() { timeline.addTrack(); }
     void showTrack (int track) { timeline.showTrack (track); }
 
@@ -102,10 +106,13 @@ private:
     juce::TextButton redoButton { "Redo" };
     juce::TextButton drawTool { "Draw" };     // 0.59.0: was "Select"
     juce::TextButton selectTool { "Select" }; // 0.59.0: the selection rectangle
-    juce::TextButton splitTool { "Split" };
+    juce::TextButton splitTool { "Slice" };   // 0.60.0: FL Studio's name (the tool is PlaylistTool::Split)
     juce::TextButton cutTool { "Cut" };
-    juce::TextButton eraseTool { "Erase" };
+    juce::TextButton eraseTool { "Delete" };  // 0.60.0: FL Studio's name (the tool is PlaylistTool::Erase)
+    juce::TextButton muteTool { "Mute" };     // 0.60.0
+    juce::TextButton slipTool { "Slip" };     // 0.60.0
     juce::TextButton zoomTool { "Zoom" };
+    int mainSnapCode = kTicksPerBeat;         // 0.60.0: the toolbar's global snap
     juce::Label snapLabel { {}, "Grid" };
     juce::ComboBox snapBox;
     juce::TextButton zoomOutButton { "-" };

@@ -350,6 +350,8 @@ void PlaylistTimeline::setTool (PlaylistTool newTool)
         case PlaylistTool::Erase:  setMouseCursor (juce::MouseCursor::PointingHandCursor); break;
         case PlaylistTool::Zoom:   setMouseCursor (juce::MouseCursor::CrosshairCursor); break;
         case PlaylistTool::Select: setMouseCursor (juce::MouseCursor::CrosshairCursor); break;
+        case PlaylistTool::Mute:   setMouseCursor (juce::MouseCursor::PointingHandCursor); break;
+        case PlaylistTool::Slip:   setMouseCursor (juce::MouseCursor::LeftRightResizeCursor); break;
     }
     repaint();
 }
@@ -563,6 +565,19 @@ void PlaylistTimeline::paintAudioClip (juce::Graphics& g, const AudioClip& clip,
         tags.add ("pan " + juce::String (clip.pan < 0.0f ? "L" : "R") + juce::String (juce::roundToInt (std::abs (clip.pan) * 100.0f)));
     g.drawText (juce::String (clip.name) + (tags.isEmpty() ? juce::String() : "  [" + tags.joinIntoString (", ") + "]") + (missing ? "  (file not found)" : ""),
                 r.reduced (5, 0).withHeight (14).translated (0, 1), juce::Justification::centredLeft, true);
+
+    if (clip.muted || ! arrangement.trackPlays (clip.track)) // 0.60.0: greyed, as a muted pattern clip
+    {
+        g.setColour (kTrackA.withAlpha (0.62f));
+        g.fillRoundedRectangle (r.toFloat(), 3.0f);
+        g.setColour (kText.withAlpha (0.55f));
+        g.drawRoundedRectangle (r.toFloat().reduced (0.5f), 3.0f, 1.0f);
+        if (clip.muted && r.getWidth() > 18 && r.getHeight() > 12)
+        {
+            g.setFont (juce::FontOptions (9.0f, juce::Font::bold));
+            g.drawText ("M", r.withTrimmedLeft (r.getWidth() - 16).withHeight (12), juce::Justification::centred);
+        }
+    }
 
     if (selected)
     {
@@ -1007,6 +1022,19 @@ void PlaylistTimeline::paint (juce::Graphics& g)
                 g.drawText (name, title.reduced (5, 0), juce::Justification::centredLeft, true);
             }
 
+            if (clip.muted || ! arrangement.trackPlays (clip.track)) // 0.60.0: a muted clip (or one on a silent track) is greyed
+            {
+                g.setColour (kTrackA.withAlpha (0.62f));
+                g.fillRoundedRectangle (r.toFloat(), 3.0f);
+                g.setColour (kText.withAlpha (0.55f));
+                g.drawRoundedRectangle (r.toFloat().reduced (0.5f), 3.0f, 1.0f);
+                if (clip.muted && r.getWidth() > 18 && r.getHeight() > 12)
+                {
+                    g.setFont (juce::FontOptions (9.0f, juce::Font::bold));
+                    g.drawText ("M", r.withTrimmedLeft (r.getWidth() - 16).withHeight (12), juce::Justification::centred);
+                }
+            }
+
             if (isSelected (Kind::Pattern, i))
             {
                 g.setColour (kSelect);
@@ -1093,6 +1121,21 @@ void PlaylistTimeline::paint (juce::Graphics& g)
         if (trackTop (t) + th < kRulerHeight || trackTop (t) > kRulerHeight + tracksViewHeight())
             continue;
         {
+            // 0.60.0: the mute and solo switches of the track, as in FL Studio's track headers (lit when on).
+            const auto& own = arrangement.playlistTracks[static_cast<size_t> (t)];
+            g.setFont (juce::FontOptions (9.0f, juce::Font::bold));
+            for (const bool solo : { false, true })
+            {
+                const auto box = (solo ? soloSwitchRect (t) : muteSwitchRect (t)).toFloat();
+                const bool on = solo ? own.solo : own.mute;
+                g.setColour (on ? (solo ? juce::Colour (0xffe0b030) : juce::Colour (0xffd9534f)) : kText.withAlpha (0.12f));
+                g.fillRoundedRectangle (box, 2.0f);
+                g.setColour (on ? juce::Colours::black.withAlpha (0.85f) : kText.withAlpha (0.55f));
+                g.drawText (solo ? "S" : "M", box, juce::Justification::centred);
+            }
+            g.setFont (juce::FontOptions (12.0f));
+        }
+        {
             // the tracks Record writes to: a red dot; the others a faint ring, to show where to click
             const juce::Rectangle<float> dot (static_cast<float> (kNameWidth - 14), static_cast<float> (trackTop (t)) + 0.5f * static_cast<float> (th) - 4.0f, 8.0f, 8.0f);
             if (recordArms[static_cast<size_t> (t)])
@@ -1117,8 +1160,8 @@ void PlaylistTimeline::paint (juce::Graphics& g)
             g.setColour (colourForPattern (own.pattern).withAlpha (0.8f)); // a track dedicated to a pattern: its colour (0.44.0)
             g.fillRect (0, trackTop (t) + 1, 4, th - 2);
         }
-        g.setColour (t == armedTrack ? juce::Colours::white : kText);
-        g.drawText (trackName (t), 8, trackTop (t), kNameWidth - 22, th, juce::Justification::centredLeft, true);
+        g.setColour (! arrangement.trackPlays (t) ? kText.withAlpha (0.45f) : t == armedTrack ? juce::Colours::white : kText);
+        g.drawText (trackName (t), 8, trackTop (t), kNameWidth - 22 - 2 * (kHeaderSwitch + 2), th, juce::Justification::centredLeft, true);
         g.setColour (kText.withAlpha (0.08f));
         g.drawHorizontalLine (trackTop (t) + th - 1, 0.0f, static_cast<float> (kNameWidth));
     }
@@ -1230,6 +1273,12 @@ void PlaylistTimeline::showTrackMenu (int track)
         menu.addItem (2, "Default name and colour", ! t.name.empty() || t.colour != 0);
     }
     menu.addSeparator();
+    {
+        const auto& t = arrangement.playlistTracks[static_cast<size_t> (track)]; // 0.60.0: as the M / S switches of the header
+        menu.addItem (7, "Mute", true, t.mute);
+        menu.addItem (8, "Solo", true, t.solo);
+    }
+    menu.addSeparator();
     menu.addItem (3, "Record on this track", onTrackArmToggled != nullptr, recordArms[static_cast<size_t> (track)]);
     menu.addItem (4, "Recording input...", onTrackInputMenu != nullptr);
     menu.addSeparator();
@@ -1250,6 +1299,10 @@ void PlaylistTimeline::showTrackMenu (int track)
                                 safe->addTrack();
                             else if (choice == 6)
                                 safe->removeTrack (track);
+                            else if (choice == 7)
+                                safe->toggleTrackMute (track);
+                            else if (choice == 8)
+                                safe->toggleTrackSolo (track);
                             else if (choice == 2)
                             {
                                 safe->beginEdit();
@@ -1815,6 +1868,115 @@ bool PlaylistTimeline::eraseAlong (int x0, int y0, int x1, int y1)
     return any;
 }
 
+// The Mute tool (0.60.0): every pattern and audio clip under a point of the view gets `muted`; true when one changed.
+bool PlaylistTimeline::muteUnder (int x, int y, bool muted)
+{
+    if (x < kNameWidth || ! inTracks (y))
+        return false;
+    const int track = yToTrack (y), tick = xToTick (x);
+    bool any = false;
+    for (auto& c : arrangement.clips)
+        if (c.track == track && tick >= c.startTick && tick < c.endTick() && c.muted != muted)
+        {
+            commitPendingUndo();
+            c.muted = muted;
+            any = true;
+        }
+    for (auto& a : arrangement.audioClips)
+        if (a.track == track && tick >= a.startTick && tick < a.endTick() && a.muted != muted)
+        {
+            commitPendingUndo();
+            a.muted = muted;
+            any = true;
+        }
+    return any;
+}
+
+bool PlaylistTimeline::muteAlong (int x0, int y0, int x1, int y1, bool muted)
+{
+    const int steps = std::max (1, static_cast<int> (std::ceil (std::hypot (x1 - x0, y1 - y0) / 3.0)));
+    bool any = false;
+    for (int s = 0; s <= steps; ++s)
+    {
+        const double t = static_cast<double> (s) / steps;
+        any = muteUnder (juce::roundToInt (x0 + (x1 - x0) * t), juce::roundToInt (y0 + (y1 - y0) * t), muted) || any;
+    }
+    return any;
+}
+
+// The Slip tool (0.60.0): the clip stays where it is; what plays inside it moves by `deltaTicks` (dragged right: the content
+// starts later, so the clip plays from earlier in its pattern or file).
+void PlaylistTimeline::applySlip (int deltaTicks)
+{
+    if (dragClip < 0)
+        return;
+    if (slipKind == Kind::Pattern && dragClip < static_cast<int> (arrangement.clips.size()))
+    {
+        auto& c = arrangement.clips[static_cast<size_t> (dragClip)];
+        const int length = arrangement.patternLength (c.pattern);
+        const int wanted = (((slipOriginalOffsetTicks - deltaTicks) % length) + length) % length;
+        if (wanted != c.offsetTicks)
+        {
+            c.offsetTicks = wanted;
+            dragChanged = true;
+            repaint();
+            updateReadout (lastMouseX, lastMouseY);
+        }
+    }
+    else if (slipKind == Kind::Audio && dragClip < static_cast<int> (arrangement.audioClips.size()))
+    {
+        auto& a = arrangement.audioClips[static_cast<size_t> (dragClip)];
+        if (a.data == nullptr || a.data->sampleRate <= 0.0 || bpm <= 0.0)
+            return;
+        const double fileSeconds = a.data->numFrames() / a.data->sampleRate;
+        const double clipSeconds = a.lengthTicks * 60.0 / (bpm * kTicksPerBeat);
+        const double deltaSeconds = deltaTicks * 60.0 / (bpm * kTicksPerBeat);
+        const double wanted = std::clamp (slipOriginalOffsetSeconds - deltaSeconds, 0.0, std::max (0.0, fileSeconds - clipSeconds));
+        if (std::abs (wanted - a.offsetSeconds) > 1.0e-9)
+        {
+            a.offsetSeconds = wanted;
+            dragChanged = true;
+            repaint();
+            updateReadout (lastMouseX, lastMouseY);
+        }
+    }
+}
+
+// The M / S switches of a track header (0.60.0), left of the record dot.
+juce::Rectangle<int> PlaylistTimeline::muteSwitchRect (int track) const noexcept
+{
+    const int th = trackHeight();
+    return { kNameWidth - 20 - 2 * (kHeaderSwitch + 2), trackTop (track) + (th - kHeaderSwitch) / 2, kHeaderSwitch, kHeaderSwitch };
+}
+
+juce::Rectangle<int> PlaylistTimeline::soloSwitchRect (int track) const noexcept
+{
+    const int th = trackHeight();
+    return { kNameWidth - 20 - (kHeaderSwitch + 2), trackTop (track) + (th - kHeaderSwitch) / 2, kHeaderSwitch, kHeaderSwitch };
+}
+
+void PlaylistTimeline::toggleTrackMute (int track)
+{
+    if (track < 0 || track >= arrangement.trackCount())
+        return;
+    beginEdit();
+    auto& t = arrangement.playlistTracks[static_cast<size_t> (track)];
+    t.mute = ! t.mute;
+    commitPendingUndo();
+    notifyChanged();
+}
+
+void PlaylistTimeline::toggleTrackSolo (int track)
+{
+    if (track < 0 || track >= arrangement.trackCount())
+        return;
+    beginEdit();
+    auto& t = arrangement.playlistTracks[static_cast<size_t> (track)];
+    t.solo = ! t.solo;
+    commitPendingUndo();
+    notifyChanged();
+}
+
 int PlaylistTimeline::addAutomationClip (AutomationClip clip, int startTick)
 {
     if (arrangement.automationClips.size() >= static_cast<size_t> (kMaxAutomationClips))
@@ -2264,10 +2426,14 @@ void PlaylistTimeline::showClipMenu (int x, int y)
     else
         menu.addItem (5, "Open this pattern");
     menu.addSeparator();
+    {
+        const bool muted = audio >= 0 ? arrangement.audioClips[static_cast<size_t> (audio)].muted : arrangement.clips[static_cast<size_t> (pattern)].muted;
+        menu.addItem (12, "Mute clip", true, muted); // 0.60.0: as the Mute tool
+    }
     menu.addItem (6, "Delete (Delete)");
 
     menu.showMenuAsync (juce::PopupMenu::Options(),
-                        [safe = juce::Component::SafePointer<PlaylistTimeline> (this), track, tick, audio] (int result)
+                        [safe = juce::Component::SafePointer<PlaylistTimeline> (this), track, tick, audio, pattern] (int result)
                         {
                             if (safe == nullptr || result == 0)
                                 return;
@@ -2288,6 +2454,24 @@ void PlaylistTimeline::showClipMenu (int x, int y)
                                         safe->onPatternPicked (safe->arrangement.clips[static_cast<size_t> (safe->selection.index)].pattern);
                                     break;
                                 case 6: safe->deleteSelected(); break;
+                                case 12:
+                                    if (audio >= 0 && audio < static_cast<int> (safe->arrangement.audioClips.size()))
+                                    {
+                                        safe->beginEdit();
+                                        auto& c = safe->arrangement.audioClips[static_cast<size_t> (audio)];
+                                        c.muted = ! c.muted;
+                                        safe->commitPendingUndo();
+                                        safe->notifyChanged();
+                                    }
+                                    else if (pattern >= 0 && pattern < static_cast<int> (safe->arrangement.clips.size()))
+                                    {
+                                        safe->beginEdit();
+                                        auto& c = safe->arrangement.clips[static_cast<size_t> (pattern)];
+                                        c.muted = ! c.muted;
+                                        safe->commitPendingUndo();
+                                        safe->notifyChanged();
+                                    }
+                                    break;
                                 default:
                                     if (result >= 100 && result < 200 && audio >= 0 && audio < static_cast<int> (safe->arrangement.audioClips.size())
                                         && chooseTake (safe->arrangement.audioClips[static_cast<size_t> (audio)], result - 100))
@@ -2356,6 +2540,8 @@ bool PlaylistTimeline::handleKey (const juce::KeyPress& key)
         case '4': changeTool (PlaylistTool::Erase); return true;
         case '5': changeTool (PlaylistTool::Zoom); return true;
         case '6': changeTool (PlaylistTool::Select); return true;
+        case '7': changeTool (PlaylistTool::Mute); return true;   // 0.60.0
+        case '8': changeTool (PlaylistTool::Slip); return true;
         case '+': case '=': zoomBy (1.5, lastMouseX); return true;
         case '-': zoomBy (1.0 / 1.5, lastMouseX); return true;
         case 's': case 'S':
@@ -2497,6 +2683,16 @@ void PlaylistTimeline::mouseDown (const juce::MouseEvent& e)
     if (e.x < kNameWidth && inTracks (e.y))
     {
         const int track = yToTrack (e.y);
+        if (track >= 0 && track < arrangement.trackCount() && muteSwitchRect (track).expanded (1).contains (e.getPosition()))
+        {
+            toggleTrackMute (track); // 0.60.0
+            return;
+        }
+        if (track >= 0 && track < arrangement.trackCount() && soloSwitchRect (track).expanded (1).contains (e.getPosition()))
+        {
+            toggleTrackSolo (track);
+            return;
+        }
         if (track >= 0 && track < arrangement.trackCount() && (e.x >= kNameWidth - 20 || e.mods.isCommandDown()))
         {
             if (onTrackArmToggled)
@@ -2624,6 +2820,38 @@ void PlaylistTimeline::mouseDown (const juce::MouseEvent& e)
         eraseLastY = e.y;
         if (eraseUnder (e.x, e.y))
             notifyChanged();
+        return;
+    }
+
+    if (tool == PlaylistTool::Mute) // 0.60.0: the clip under the mouse flips; a sweep gives the others its new state
+    {
+        if (audioHit < 0 && hit < 0)
+            return;
+        muteSweepState = audioHit >= 0 ? ! arrangement.audioClips[static_cast<size_t> (audioHit)].muted
+                                       : ! arrangement.clips[static_cast<size_t> (hit)].muted;
+        beginEdit();
+        drag = Drag::MuteSweep;
+        eraseLastX = e.x;
+        eraseLastY = e.y;
+        if (muteUnder (e.x, e.y, muteSweepState))
+            notifyChanged();
+        return;
+    }
+
+    if (tool == PlaylistTool::Slip) // 0.60.0
+    {
+        if (audioHit < 0 && hit < 0)
+            return;
+        slipKind = audioHit >= 0 ? Kind::Audio : Kind::Pattern;
+        dragClip = audioHit >= 0 ? audioHit : hit;
+        slipStartTick = tick;
+        if (slipKind == Kind::Audio)
+            slipOriginalOffsetSeconds = arrangement.audioClips[static_cast<size_t> (dragClip)].offsetSeconds;
+        else
+            slipOriginalOffsetTicks = arrangement.clips[static_cast<size_t> (dragClip)].offsetTicks;
+        select (slipKind, dragClip);
+        beginEdit();
+        drag = Drag::Slip;
         return;
     }
 
@@ -2852,6 +3080,20 @@ void PlaylistTimeline::mouseDrag (const juce::MouseEvent& e)
         eraseLastY = e.y;
         return;
     }
+    if (drag == Drag::MuteSweep) // 0.60.0
+    {
+        if (muteAlong (eraseLastX, eraseLastY, e.x, e.y, muteSweepState))
+            notifyChanged();
+        eraseLastX = e.x;
+        eraseLastY = e.y;
+        return;
+    }
+    if (drag == Drag::Slip) // 0.60.0
+    {
+        const int delta = snapTick (xToTick (e.x), noSnap) - snapTick (slipStartTick, noSnap);
+        applySlip (delta);
+        return;
+    }
     if (drag == Drag::RubberBand)
     {
         bandEndX = e.x;
@@ -3014,6 +3256,16 @@ void PlaylistTimeline::mouseUp (const juce::MouseEvent& e)
     {
         drag = Drag::None;
         showLoopMenu();
+        return;
+    }
+    if (drag == Drag::Slip) // 0.60.0: one undo step when the content moved
+    {
+        if (dragChanged)
+            commitPendingUndo();
+        drag = Drag::None;
+        dragClip = -1;
+        pendingUndoValid = false;
+        notifyChanged();
         return;
     }
     if (drag == Drag::ZoomRange)

@@ -61,6 +61,12 @@ void PianoRoll::setNotes (std::vector<Note> newNotes)
     repaint();
 }
 
+void PianoRoll::setGhostNotes (std::vector<Note> ghosts)
+{
+    ghostNotes = std::move (ghosts);
+    repaint();
+}
+
 void PianoRoll::scrollToNotes()
 {
     if (notes.empty() || getHeight() <= 0)
@@ -539,6 +545,16 @@ void PianoRoll::paint (juce::Graphics& g)
         {
             g.setColour (kLoop.withAlpha (0.10f));
             g.fillRect (tickToX (loopStart), static_cast<float> (grid.getY()), tickToX (loopEnd) - tickToX (loopStart), static_cast<float> (grid.getHeight()));
+        }
+
+        // Ghost notes (0.60.0): the other channels' notes, faint outlines behind the channel's own.
+        for (const auto& ghost : ghostNotes)
+        {
+            const auto r = noteRect (ghost);
+            g.setColour (juce::Colours::white.withAlpha (0.10f));
+            g.fillRoundedRectangle (r, 2.0f);
+            g.setColour (juce::Colours::white.withAlpha (0.28f));
+            g.drawRoundedRectangle (r, 2.0f, 1.0f);
         }
 
         // Notes.

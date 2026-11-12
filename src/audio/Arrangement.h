@@ -65,6 +65,7 @@ struct Clip
     int startTick = 0;
     int lengthTicks = 4 * kTicksPerBeat;
     int offsetTicks = 0;
+    bool muted = false; // 0.60.0: the Playlist's Mute tool (as in FL Studio): the clip stays but does not play
 
     int endTick() const noexcept { return startTick + lengthTicks; }
 };
@@ -94,6 +95,7 @@ struct AudioClip
     // takeFirstSeconds + k * takeSeconds. takeSeconds 0: not a loop recording.
     double takeFirstSeconds = 0.0;
     double takeSeconds = 0.0;
+    bool muted = false; // 0.60.0: the Playlist's Mute tool
 
     int endTick() const noexcept { return startTick + lengthTicks; }
 
@@ -168,6 +170,10 @@ struct PlaylistTrack
     std::string name;
     std::uint32_t colour = 0; // 0xAARRGGBB
     int pattern = -1;
+    // 0.60.0: the track header's mute and solo switches (as in FL Studio's Playlist). A muted track's clips do not play;
+    // while any track is soloed, only the soloed tracks play (see Arrangement::trackPlays).
+    bool mute = false;
+    bool solo = false;
     bool operator== (const PlaylistTrack&) const = default;
 };
 
@@ -190,6 +196,20 @@ struct Arrangement
     std::vector<PlaylistTrack> playlistTracks = std::vector<PlaylistTrack> (kDefaultGenericTracks);
 
     int trackCount() const noexcept { return static_cast<int> (playlistTracks.size()); }
+
+    // 0.60.0: is any playlist track soloed?
+    bool anyTrackSoloed() const noexcept
+    {
+        return std::any_of (playlistTracks.begin(), playlistTracks.end(), [] (const PlaylistTrack& t) { return t.solo; });
+    }
+    // 0.60.0: do the clips on track `t` play? Not when the track is muted, and not when other tracks are soloed and this one is not.
+    bool trackPlays (int t) const noexcept
+    {
+        if (t < 0 || t >= trackCount())
+            return false;
+        const auto& track = playlistTracks[static_cast<size_t> (t)];
+        return ! track.mute && (track.solo || ! anyTrackSoloed());
+    }
 
     // The length of pattern `p` (0.56.0); 4 quarters for an index that is not a pattern.
     int patternLength (int p) const noexcept
@@ -627,6 +647,8 @@ inline Project compileSong (const std::vector<Channel>& channelSettings, const A
     {
         if (clip.pattern < 0 || clip.pattern >= static_cast<int> (arrangement.patterns.size()) || clip.lengthTicks <= 0)
             continue;
+        if (clip.muted || ! arrangement.trackPlays (clip.track)) // 0.60.0: muted clips and tracks, and tracks left out by a solo
+            continue;
 
         const auto& source = arrangement.patterns[static_cast<size_t> (clip.pattern)];
         const int patternTicks = source.length(); // each clip repeats its own pattern's length (0.56.0)
@@ -650,6 +672,8 @@ inline Project compileSong (const std::vector<Channel>& channelSettings, const A
     std::vector<AudioEvent> events;
     for (const auto& a : arrangement.audioClips)
     {
+        if (a.muted || ! arrangement.trackPlays (a.track)) // 0.60.0
+            continue;
         AudioEvent e;
         e.data = a.data;
         e.startTick = a.startTick;

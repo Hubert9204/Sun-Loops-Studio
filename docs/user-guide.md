@@ -6,17 +6,27 @@ This guide describes what Sun Loops Studio 0.6 does today. Limits and missing fe
 
 ## The window
 
-A **toolbar** on two rows, a status line, and below it the **browser** (left sidebar) and the **workspace** where
-the panels float.
+Laid out as FL Studio's (0.60.0): a **menu bar** with the **hint bar**, a row of **toolbar panels**, the **shortcut panel** that
+opens the windows, a status line, and below them the **browser** (left sidebar) and the **workspace** where the panels float.
 
-Toolbar, first row: **File** (projects, see below), **Play / Stop**, **Pattern / Song** switch, the **pattern box** with **+**, **BPM** (40-240),
-**Master** volume with its meter, the **Metronome** button, **Record** (with an options arrow) and **Audio...**
-(device settings). Exporting is in the **File** menu.
+**Menu bar**: **FILE** (projects, see below), **EDIT** (undo, redo, and the selected channel's *clear notes*, *rename*, *clone*,
+*delete*), **ADD** (a channel: *Synth*, *Sampler*, *Drum machine*, *Slicer*, SunBurst, HexForge, the plugin instruments found,
+and *More plugins...* which opens the Plugin picker), **PATTERNS** (new, clone, *Loop Starter*, rename, delete, *Pattern length*,
+previous / next), **VIEW** (the windows, the browser, the meters, *Reset the layout*), **OPTIONS** (audio settings, metronome,
+recording and note-recording options, *Typing keyboard to piano*, the start-up sound), **TOOLS** (Helios, Loop Starter, Slicer,
+the imports, the FL Studio project exchange, *Export project with samples*, *Scan for plugins*) and **HELP**. The **hint bar**
+next to the menus says what the control under the mouse does.
 
-Toolbar, second row: buttons that show or hide the browser (**Browser F8**) and the panels (**Rack F6**,
-**Playlist F5**, **Piano F7**, **Mixer F9**),
-**Reset** (default panel layout) and **Clear notes** (empties the selected channel in the current pattern), then **Meters**,
-**Typing keys**, **Helios** and **Help**.
+**Toolbar panels**, left to right: the **transport** (**Play**, lit while playing, **Stop**, **Record** with its options arrow,
+**Rec notes**, the **Pattern / Song** switch), the **pattern panel** (**◂ ▸** previous / next, the pattern box, **+**), **BPM**
+(40-240, click the dot for tap tempo and markers) and the **time signature**, the **time panel** (the song position as
+*bar.beat.tick* and *minutes:seconds*, following the playhead), the **global snap** (*Bar* ... *1/64*, *Off*: the grid the Piano
+Roll and the Playlist use while their own snap box says *Main*), **Master** volume with its meter and the **CPU** panel (how much
+of each audio buffer's time the audio takes; near 100 % use a larger buffer).
+
+**Shortcut panel**, in FL Studio's order: **Playlist F5**, **Piano roll F7**, **Channel rack F6**, **Mixer F9**, **Browser F8**,
+**Plugin picker**, then **Reset** (default panel layout); at the right **Metronome**, **Typing keys**, **Meters**, **Helios** and
+**Audio...** (device settings). Exporting is in the **FILE** menu.
 
 **Help** (0.55.0): *Helios*, the *User guide* on GitHub (in Italian on an Italian system), **Join the Sun Loops Discord** (the
 community: questions, problems, music), *Sun Loops Studio on GitHub*, *Report a problem or suggest an idea* (a new GitHub issue),
@@ -245,8 +255,11 @@ not implemented yet (copy them into the Samples folder and press Refresh).
 
 ## Channel Rack
 
-One row per channel: a **Track N** display and the name, **M** (mute), **S** (solo), volume, pan, the **Pitch** and
-**Swing** knobs, a level meter and, on the right, the step area.
+One row per channel, in FL Studio's order since 0.60.0: **M** (mute), **S** (solo), pan, volume, the **Track N** display, the
+channel's **name button** (lit for the selected channel: click to select, double-click to open its window, right-click for
+the menu), the **Pitch** and **Swing** knobs, a level meter, *Load* on a sampler and, on the right, the step area. The bar
+above the rows has the **≡** channel options menu (0.60.0: rename, clone, delete, move up / down, assign a free mixer track,
+open the piano roll, add a channel) and the current pattern's length with **-** / **+**.
 
 - **Volume** goes from 0 to 1.5 (default 0.8) and **pan** from left to right; double-click a slider to reset it.
 - **Pitch** tunes every note of the channel from -12 to +12 semitones in steps of 0.1 (on a sampler channel it
@@ -473,6 +486,12 @@ Projects that contain a drum machine cannot be opened by versions older than 0.1
 
 Sun Loops Studio hosts third-party **VST3**, **LV2** and **LADSPA** plugins, as instruments and as effects.
 
+The **Plugin picker** (0.60.0, as FL Studio's; the *Plugin picker* button of the shortcut panel, *VIEW > Plugin picker* or
+*ADD > More plugins...*) lists every instrument and every effect - the built-in ones and the plugins found - in two lists with
+a search box. Double-click an instrument (or *Add channel*) for a new channel, or drag it onto the Channel Rack or the Playlist;
+double-click an effect (or *Add to the selected track*) to put it in the first free slot of the selected channel's mixer track.
+*Scan plugins again* runs the scan described below.
+
 1. In the browser, open **Plugin** and click **Scan for plugins (VST3, LV2, LADSPA)...**. The scan runs in the background
    (the status line shows the file being read) and looks in the usual folders, `lib64` ones included (where Fedora and
    Nobara install them): VST3 in `~/.vst3`, `/usr/lib/vst3`, `/usr/lib64/vst3` and the same under `/usr/local`; LV2 in `~/.lv2`,
@@ -576,7 +595,10 @@ Your presets go to `~/.config/HexForge/Presets`.
 ## Piano Roll
 
 Edits the notes of the selected channel in the current pattern. The title shows the channel ("Piano Roll - Lead").
-It is closed at start and opens from a channel, as above.
+It is closed at start and opens from a channel, as above. The **target channel** box at the left of its toolbar (0.60.0, as
+FL Studio's title bar) switches to another channel's notes; the **Ghost** switch shows the other channels' notes of the
+pattern, faint behind the channel's own (they cannot be edited there). The **Snap** box's *Main* entry follows the toolbar's
+global snap (0.60.0).
 
 | Action | How |
 | --- | --- |
@@ -777,19 +799,27 @@ numbers. The orange vertical line marks the end of the song: in Song mode playba
 
 ### Tools, grid, zoom and undo
 
-The toolbar under the pattern box has six tools (keys **1** - **6** while the mouse is over the timeline):
+The toolbar under the pattern box has eight tools, in FL Studio's order and with its names since 0.60.0 (keys **1** - **8** while
+the mouse is over the timeline):
 
 | Tool | What it does |
 | --- | --- |
 | **Draw** (1) | The normal tool (called *Select* before 0.59.0), described above and below: click empty space to place a clip (drag to lengthen it), click a clip to select it, drag to move it, drag its **left or right edge** to trim or lengthen it (an audio clip keeps its sound in place: only more or less of it is heard), right-click for a menu (*Split here, Duplicate, Copy, Delete*, plus *Position, gain, pan and fades...*, *Reverse* and *Stretch and pitch...* on an audio clip or *Open this pattern* on a pattern clip), double-click a pattern clip to open that pattern. |
-| **Split** (2) | Click a clip to cut it in two at that point (snapped to the grid). Key **S** splits the selected clip at the mouse. |
+| **Delete** (4) | (called *Erase* before 0.60.0) Click a clip to delete it, or drag across several (automation clips too, since 0.57.0). With the other tools the right button does the same. |
+| **Mute** (7) | (0.60.0) Click a clip to mute or unmute it: it stays on the playlist, greyed with an *M*, and does not play. Drag across several to give them all the state of the first one. *Mute clip* is in the clip's right-click menu too. |
+| **Slip** (8) | (0.60.0) Drag a clip sideways to move what plays inside it while the clip stays where it is: a pattern clip starts further into (or earlier in) its pattern, an audio clip plays from another point of its file. |
+| **Slice** (2) | (called *Split* before 0.60.0) Click a clip to cut it in two at that point (snapped to the grid). Key **S** splits the selected clip at the mouse. |
 | **Cut** (3) | Drag across a clip to remove that stretch of it: the sound after the gap stays where it was. |
-| **Erase** (4) | Click a clip to delete it, or drag across several (automation clips too, since 0.57.0). With the other tools the right button does the same. |
-| **Zoom** (5) | Click zooms in, right-click or Shift+click zooms out, drag a stretch to zoom to it. |
 | **Select** (6) | (0.59.0) Drag from an empty place: a rectangle selects every clip it touches (pattern, audio, automation). Shift adds to the selection, Shift+click adds or removes one clip, a click on empty space selects nothing. Drag a clip to move it, or all the selected ones; Delete, Ctrl+C / Ctrl+X / Ctrl+V and Ctrl+D act on the whole selection. It places no clips and resizes none. |
+| **Zoom** (5) | Click zooms in, right-click or Shift+click zooms out, drag a stretch to zoom to it. |
 
-**Grid** (the box next to the tools) is what audio clips snap to when moved, trimmed, split or cut: a bar, half a bar (1/2,
-0.32.0), a beat and so on down to a single tick (1 beat = 480 ticks); hold **Alt** while dragging to ignore it. Since 0.42.0
+Every track header has **M** and **S** switches (0.60.0), as in FL Studio: a muted track's clips do not play; while any track is
+soloed only the soloed tracks play. The track's right-click menu has *Mute* and *Solo* too. Muted clips and tracks are saved with
+the project.
+
+**Grid** (the box next to the tools) is what clips snap to when moved, trimmed, sliced or cut: **Main** (0.60.0: the toolbar's
+global snap), a bar, half a bar (1/2, 0.32.0), a beat and so on down to a single tick (1 beat = 480 ticks); hold **Alt** while
+dragging to ignore it. Since 0.42.0
 pattern clips snap to the same grid (before, they sat on whole patterns).
 **-**, **+** and **Fit** zoom out, in and to the whole song; the **mouse wheel** zooms in and out around the mouse, and
 Shift+wheel and the scroll bar move in time. The ruler shows **minutes:seconds.milliseconds** and the bar numbers (only as many as fit at the

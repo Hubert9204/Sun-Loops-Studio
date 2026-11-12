@@ -35,14 +35,17 @@ PlaylistView::PlaylistView (Arrangement& arrangementToEdit) : timeline (arrangem
     redoButton.setTooltip ("Redo (Ctrl+Y)");
     redoButton.onClick = [this] { timeline.redo(); updateUndoButtons(); };
 
+    // The tools in FL Studio's order and with its names (0.60.0); the keys 1..8 still choose them.
     const struct { juce::TextButton* button; PlaylistTool tool; const char* tip; } tools[] = {
         { &drawTool,   PlaylistTool::Draw,   "Draw: click empty space to place a pattern (drag to lengthen it); drag a clip to move it, an edge to trim it (1)" },
-        { &splitTool,  PlaylistTool::Split,  "Split: click a clip to cut it in two at that point (2). The grid decides where." },
+        { &eraseTool,  PlaylistTool::Erase,  "Delete: click a clip to delete it, or drag across several (4)" },
+        { &muteTool,   PlaylistTool::Mute,   "Mute: click a clip to mute or unmute it (it stays, greyed, and does not play); drag across several (7)" },
+        { &slipTool,   PlaylistTool::Slip,   "Slip: drag a clip sideways to move what plays inside it, while the clip stays where it is (8)" },
+        { &splitTool,  PlaylistTool::Split,  "Slice: click a clip to cut it in two at that point (2). The grid decides where." },
         { &cutTool,    PlaylistTool::Cut,    "Cut: drag across a clip to remove that stretch of it (3)" },
-        { &eraseTool,  PlaylistTool::Erase,  "Erase: click a clip to delete it, or drag across several (4)" },
-        { &zoomTool,   PlaylistTool::Zoom,   "Zoom: click to zoom in, right click to zoom out, drag to zoom to a stretch (5)" },
         { &selectTool, PlaylistTool::Select, "Select: drag from empty space to select every clip in the rectangle (Shift adds), then drag them, "
-                                             "Delete, Ctrl+C, Ctrl+D (6)" } };
+                                             "Delete, Ctrl+C, Ctrl+D (6)" },
+        { &zoomTool,   PlaylistTool::Zoom,   "Zoom: click to zoom in, right click to zoom out, drag to zoom to a stretch (5)" } };
     for (const auto& t : tools)
     {
         auto* button = t.button;
@@ -58,8 +61,9 @@ PlaylistView::PlaylistView (Arrangement& arrangementToEdit) : timeline (arrangem
     drawTool.setToggleState (true, juce::dontSendNotification);
 
     struct SnapOption { const char* label; int ticks; };
-    // "Bar" and "1/2" follow the time signature (0.46.0): 0 and -1 stand for them.
-    static constexpr SnapOption options[] = { { "Bar", 0 }, { "1/2", -1 }, { "Beat (1/4)", kTicksPerBeat }, { "1/8", kTicksPerBeat / 2 },
+    // "Bar" and "1/2" follow the time signature (0.46.0): 0 and -1 stand for them. "Main" (0.60.0, -2) follows the toolbar's global
+    // snap, as in FL Studio.
+    static constexpr SnapOption options[] = { { "Main", -2 }, { "Bar", 0 }, { "1/2", -1 }, { "Beat (1/4)", kTicksPerBeat }, { "1/8", kTicksPerBeat / 2 },
                                               { "1/16", kTicksPerBeat / 4 }, { "1/32", kTicksPerBeat / 8 }, { "1/64", kTicksPerBeat / 16 },
                                               { "Off (1 tick)", 1 } };
     for (const auto& o : options)
@@ -67,8 +71,9 @@ PlaylistView::PlaylistView (Arrangement& arrangementToEdit) : timeline (arrangem
         snapValues.push_back (o.ticks);
         snapBox.addItem (o.label, static_cast<int> (snapValues.size()));
     }
-    snapBox.setSelectedId (3, juce::dontSendNotification); // Beat
-    snapBox.setTooltip ("The grid that audio clips snap to when moved, trimmed, split or cut. Hold Alt while dragging to ignore it.");
+    snapBox.setSelectedId (4, juce::dontSendNotification); // Beat
+    snapBox.setTooltip ("The grid that clips snap to when moved, trimmed, sliced or cut. \"Main\" follows the toolbar's global snap. "
+                        "Hold Alt while dragging to ignore it.");
     snapBox.setWantsKeyboardFocus (false);
     snapBox.onChange = [this]
     {
@@ -119,7 +124,8 @@ PlaylistView::PlaylistView (Arrangement& arrangementToEdit) : timeline (arrangem
         addAndMakeVisible (c);
 
     for (juce::Button* b : std::initializer_list<juce::Button*> { &newButton, &renameButton, &deleteButton, &undoButton, &redoButton, &drawTool,
-                                                                   &splitTool, &cutTool, &eraseTool, &zoomTool, &selectTool, &zoomOutButton, &zoomInButton, &zoomFitButton })
+                                                                   &splitTool, &cutTool, &eraseTool, &muteTool, &slipTool, &zoomTool, &selectTool,
+                                                                   &zoomOutButton, &zoomInButton, &zoomFitButton })
         b->setMouseClickGrabsKeyboardFocus (false); // Space must keep playing after a click here
 
     updateUndoButtons();
@@ -154,6 +160,8 @@ void PlaylistView::syncToolButtons()
     splitTool.setToggleState (timeline.getTool() == PlaylistTool::Split, juce::dontSendNotification);
     cutTool.setToggleState (timeline.getTool() == PlaylistTool::Cut, juce::dontSendNotification);
     eraseTool.setToggleState (timeline.getTool() == PlaylistTool::Erase, juce::dontSendNotification);
+    muteTool.setToggleState (timeline.getTool() == PlaylistTool::Mute, juce::dontSendNotification);
+    slipTool.setToggleState (timeline.getTool() == PlaylistTool::Slip, juce::dontSendNotification);
     zoomTool.setToggleState (timeline.getTool() == PlaylistTool::Zoom, juce::dontSendNotification);
 }
 
@@ -181,9 +189,9 @@ void PlaylistView::resized()
     redoButton.setBounds (row1.removeFromLeft (52));
 
     auto row2 = area.removeFromTop (kToolbarRowHeight + 4).reduced (4, 2);
-    for (auto* b : { &drawTool, &splitTool, &cutTool, &eraseTool, &zoomTool, &selectTool })
+    for (auto* b : { &drawTool, &eraseTool, &muteTool, &slipTool, &splitTool, &cutTool, &selectTool, &zoomTool }) // FL Studio's order (0.60.0)
     {
-        b->setBounds (row2.removeFromLeft (58));
+        b->setBounds (row2.removeFromLeft (54));
         row2.removeFromLeft (2);
     }
     row2.removeFromLeft (14);
@@ -207,7 +215,13 @@ void PlaylistView::applySnap()
     const int index = snapBox.getSelectedId() - 1;
     if (index < 0 || index >= static_cast<int> (snapValues.size()))
         return;
-    const int v = snapValues[static_cast<size_t> (index)];
-    timeline.setSnapTicks (v == 0 ? interfaceMeter().barTicks() : v == -1 ? interfaceMeter().barTicks() / 2 : v);
+    const int v = snapValues[static_cast<size_t> (index)] == -2 ? mainSnapCode : snapValues[static_cast<size_t> (index)]; // "Main" (0.60.0)
+    timeline.setSnapTicks (v == 0 ? interfaceMeter().barTicks() : v == -1 ? interfaceMeter().barTicks() / 2 : std::max (1, v));
+}
+
+void PlaylistView::setMainSnap (int code)
+{
+    mainSnapCode = code;
+    applySnap();
 }
 } // namespace sls

@@ -174,7 +174,8 @@ ChannelStrip::ChannelStrip (Channel& channelToControl, int channelIndex)
       grid (channelToControl)
 {
     nameLabel.setFont (juce::FontOptions (13.0f));
-    nameLabel.setJustificationType (juce::Justification::centredLeft);
+    nameLabel.setJustificationType (juce::Justification::centred); // 0.60.0: on its button, as in FL Studio
+    nameLabel.setMinimumHorizontalScale (0.7f);
     nameLabel.setInterceptsMouseClicks (false, false);
 
     muteButton.setClickingTogglesState (true);
@@ -295,22 +296,33 @@ void ChannelStrip::paint (juce::Graphics& g)
         g.setColour (kPreview);
         g.fillRoundedRectangle (1.0f, 4.0f, 3.0f, static_cast<float> (getHeight()) - 8.0f, 1.5f);
     }
+
+    // 0.60.0: the name sits on a button, like FL Studio's channel button (click: select; double click: the channel's window;
+    // right click: the menu). The selected channel's button is lit.
+    const auto button = nameLabel.getBounds().toFloat().reduced (0.0f, 3.0f);
+    g.setColour (selected ? kPreview.withAlpha (0.28f) : juce::Colour (0xff23272e));
+    g.fillRoundedRectangle (button, 3.0f);
+    g.setColour (selected ? kPreview.withAlpha (0.9f) : juce::Colours::white.withAlpha (0.12f));
+    g.drawRoundedRectangle (button, 3.0f, 1.0f);
 }
 
+// 0.60.0: the row follows FL Studio's Channel Rack from left to right - mute (and solo), pan, volume, the mixer track, the
+// channel's name button, then the steps - with the program's own pitch and swing, the meter and Load between the name and the steps.
 void ChannelStrip::resized()
 {
     auto area = getLocalBounds().reduced (8, 6);
 
-    nameLabel.setBounds (area.removeFromLeft (80));
-    area.removeFromLeft (2);
-    trackSelector.setBounds (area.removeFromLeft (62).withSizeKeepingCentre (62, 22));
-    area.removeFromLeft (6);
     muteButton.setBounds (area.removeFromLeft (26).withSizeKeepingCentre (26, 24));
-    area.removeFromLeft (4);
+    area.removeFromLeft (3);
     soloButton.setBounds (area.removeFromLeft (26).withSizeKeepingCentre (26, 24));
     area.removeFromLeft (8);
-    volumeSlider.setBounds (area.removeFromLeft (72));
     panSlider.setBounds (area.removeFromLeft (54));
+    area.removeFromLeft (2);
+    volumeSlider.setBounds (area.removeFromLeft (72));
+    area.removeFromLeft (8);
+    trackSelector.setBounds (area.removeFromLeft (62).withSizeKeepingCentre (62, 22));
+    area.removeFromLeft (6);
+    nameLabel.setBounds (area.removeFromLeft (96));
     area.removeFromLeft (6);
     pitchKnob.setBounds (area.removeFromLeft (38));
     area.removeFromLeft (2);

@@ -41,6 +41,7 @@
 #include "ui/PluginWindow.h"
 #include "plugins/PluginHost.h"
 #include "ui/PlaylistView.h"
+#include "ui/PluginPicker.h"
 #include "ui/RackView.h"
 
 namespace sls
@@ -320,7 +321,24 @@ private:
     void openAutomationEditor (int clipIndex);
     void closeAutomationEditor();
     void toggleMeters();
-    std::array<PanelWindow*, 4> allPanels();
+    std::array<PanelWindow*, 5> allPanels();
+
+    // The toolbar laid out as FL Studio's (0.60.0, MainComponentToolbar.cpp): the menu bar (FILE, EDIT, ADD, PATTERNS, VIEW,
+    // OPTIONS, TOOLS, HELP) with the hint bar; the transport, pattern, tempo, time, global snap, master and CPU panels; the
+    // shortcut panel that opens the windows (Playlist, Piano roll, Channel rack, Mixer, Browser, Plugin picker).
+    void showEditMenu();
+    void showAddMenu (juce::Component& target);     // also the rack's "+ Add channel" and the Plugin picker's instruments
+    void showPatternsMenu();
+    void showViewMenu();
+    void showOptionsMenu();
+    void showToolsMenu();
+    void showRackOptionsMenu (juce::Component& target); // the Channel Rack's "≡" (channel options)
+    void refreshPluginPicker();                      // the lists of the Plugin picker from the built-in instruments, effects and the scan
+    void addBuiltinEffect (EffectType type);         // into the first free slot of the selected channel's mixer track
+    void applyMainSnap();                            // the global snap panel: the editors follow it where their snap says "Main"
+    void updateToolbarReadouts();                    // the time panel, the CPU panel and the hint bar (from the timer)
+    void refreshChannelNames();                      // the piano roll's target-channel box and ghost notes (after any edit)
+    juce::String hintUnderMouse() const;
 
     // Panels
     void togglePanel (PanelWindow& panel);
@@ -393,6 +411,7 @@ private:
     int liveChannel = 0; // the channel that is sounding a note played by hand
     MixerPanel mixerPanel;
     PlaylistView playlistView { arrangement };
+    PluginPicker pluginPicker; // 0.60.0
 
     FileBrowser browser;
     LibraryPaths library = LibraryPaths::defaults();
@@ -407,6 +426,7 @@ private:
     PanelWindow pianoPanel { "Piano Roll" };
     PanelWindow mixerPanelWindow { "Mixer" };
     PanelWindow playlistPanel { "Playlist" };
+    PanelWindow pluginPanel { "Plugin picker" }; // 0.60.0
     Workspace workspace;
 
     std::unique_ptr<juce::PropertiesFile> settings;
@@ -433,22 +453,53 @@ private:
     float metronomeVolume = 0.5f;
     bool restoringLayout = false;
 
-    juce::TextButton fileButton { "File" };
+    // The menu bar (0.60.0: FL Studio's menus; File and Help existed before).
+    juce::TextButton fileButton { "FILE" };
+    juce::TextButton editButton { "EDIT" };
+    juce::TextButton addButton { "ADD" };
+    juce::TextButton patternsButton { "PATTERNS" };
+    juce::TextButton viewButton { "VIEW" };
+    juce::TextButton optionsButton { "OPTIONS" };
+    juce::TextButton toolsButton { "TOOLS" };
+    juce::TextButton helpButton { "HELP" };
+    juce::Label hintLabel; // the hint bar: what the control under the mouse does
+    // The transport panel.
     juce::TextButton playButton { "Play" };
-    juce::TextButton clearButton { "Clear notes" };
+    juce::TextButton stopButton { "Stop" }; // 0.60.0: its own button, as in FL Studio (Play was Play / Stop before)
+    juce::TextButton clearButton { "Clear notes" }; // in the EDIT menu since 0.60.0
     juce::TextButton modeButton { "Pattern" };
+    // The pattern panel: the previous / next arrows (0.60.0), the selector and +.
+    juce::TextButton patternPrevButton { juce::String::fromUTF8 ("\xe2\x97\x82") };
+    juce::TextButton patternNextButton { juce::String::fromUTF8 ("\xe2\x96\xb8") };
     juce::ComboBox patternBox;
     juce::TextButton patternAddButton { "+" };
-    juce::TextButton browserToggle { "Browser F8" };
+    // The time panel (0.60.0): the song position as bar.beat.tick and minutes:seconds.
+    class TimePanel : public juce::Component, public juce::SettableTooltipClient
+    {
+    public:
+        void set (const juce::String& bars, const juce::String& clock);
+        void paint (juce::Graphics&) override;
+
+    private:
+        juce::String barsText { "1.1.000" }, clockText { "0:00.000" };
+    } timePanel;
+    // The global snap panel (0.60.0).
+    juce::Label snapLabel { {}, "Snap" };
+    juce::ComboBox snapBox;
+    // The CPU panel (0.60.0).
+    juce::Label cpuLabel;
+    int cpuTicks = 0;
+    // The shortcut panel, in FL Studio's order (0.60.0).
+    juce::TextButton playlistToggle { "Playlist  F5" };
+    juce::TextButton pianoToggle { "Piano roll  F7" };
+    juce::TextButton rackToggle { "Channel rack  F6" };
+    juce::TextButton mixerToggle { "Mixer  F9" };
+    juce::TextButton browserToggle { "Browser  F8" };
+    juce::TextButton pluginPickerToggle { "Plugin picker" };
     juce::TextButton browserTab { juce::String::fromUTF8 ("\xe2\x96\xb6") };
-    juce::TextButton rackToggle { "Rack F6" };
-    juce::TextButton playlistToggle { "Playlist F5" };
-    juce::TextButton pianoToggle { "Piano F7" };
-    juce::TextButton mixerToggle { "Mixer F9" };
     juce::TextButton resetButton { "Reset" };
     juce::TextButton metersButton { "Meters" };
     juce::TextButton heliosButton { "Helios" };
-    juce::TextButton helpButton { "Help" };
     // The computer keyboard as a MIDI keyboard (0.32.0, see TypingKeyboard.h): notes go to the selected channel like a MIDI
     // keyboard's (so Rec notes and the score log take them too).
     juce::TextButton typingButton { "Typing keys" };

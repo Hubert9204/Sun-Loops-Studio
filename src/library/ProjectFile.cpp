@@ -358,6 +358,8 @@ juce::String ProjectDocument::toJson() const
         o->setProperty ("lengthTicks", c.lengthTicks);
         if (c.offsetTicks != 0)
             o->setProperty ("offsetTicks", c.offsetTicks);
+        if (c.muted)
+            o->setProperty ("muted", true); // 0.60.0
         clipList.add (juce::var (o));
     }
     root->setProperty ("clips", clipList);
@@ -378,6 +380,10 @@ juce::String ProjectDocument::toJson() const
             o->setProperty ("colour", juce::String::toHexString (static_cast<juce::int64> (pt.colour)).paddedLeft ('0', 8));
         if (pt.pattern >= 0)
             o->setProperty ("pattern", pt.pattern);
+        if (pt.mute)
+            o->setProperty ("mute", true); // 0.60.0
+        if (pt.solo)
+            o->setProperty ("solo", true);
         playlistTrackList.add (juce::var (o));
     }
     if (! playlistTrackList.isEmpty())
@@ -408,6 +414,8 @@ juce::String ProjectDocument::toJson() const
             o->setProperty ("takeFirstSeconds", a.takeFirstSeconds);
             o->setProperty ("takeSeconds", a.takeSeconds);
         }
+        if (a.muted)
+            o->setProperty ("muted", true); // 0.60.0
         if (! a.stretch.isNeutral())
         {
             // Only the settings: the audio is stretched again when the project is opened.
@@ -748,6 +756,8 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
                 const auto hex = o->getProperty ("colour").toString().trim();
                 if (hex.length() == 8 && hex.containsOnly ("0123456789abcdefABCDEF"))
                     pt.colour = static_cast<std::uint32_t> (hex.getHexValue64()) | 0xff000000u;
+                pt.mute = readBool (o->getProperty ("mute"), false); // 0.60.0
+                pt.solo = readBool (o->getProperty ("solo"), false);
             }
 
     // --- clips (each must fit, in order; the rest are dropped; since 0.33.0 they may overlap)
@@ -773,6 +783,7 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
                     clip.startTick = readInt (o->getProperty ("start"), -1, -1, 100000) * sharedTicks;
                     clip.lengthTicks = readInt (o->getProperty ("length"), 0, 0, 100000) * sharedTicks;
                 }
+                clip.muted = readBool (o->getProperty ("muted"), false); // 0.60.0
             }
             if (o != nullptr && d.arrangement.canPlace (clip))
                 d.arrangement.clips.push_back (clip);
@@ -805,6 +816,7 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
                 clip.fadeOutSeconds = readNumber (o->getProperty ("fadeOut"), 0.0, 0.0, 3600.0);
                 clip.takeFirstSeconds = readNumber (o->getProperty ("takeFirstSeconds"), 0.0, 0.0, 1.0e6); // 0.47.0
                 clip.takeSeconds = readNumber (o->getProperty ("takeSeconds"), 0.0, 0.0, 1.0e6);
+                clip.muted = readBool (o->getProperty ("muted"), false); // 0.60.0
                 if (auto* st = o->getProperty ("stretch").getDynamicObject())
                 {
                     clip.stretch.lengthRatio = readNumber (st->getProperty ("lengthRatio"), 1.0, kMinStretchRatio, kMaxStretchRatio);

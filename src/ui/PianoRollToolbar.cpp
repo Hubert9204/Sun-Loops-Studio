@@ -12,12 +12,14 @@ struct SnapChoice
     int ticks;
 };
 // Note values (0.32.0: 1/2 and 1/64 added): 1/4 is a beat.
-constexpr SnapChoice kSnaps[] = { { "Bar", 0 }, // 0 = a bar of the time signature (0.46.0)
+constexpr int kMainSnap = -2; // "Main" (0.60.0): the toolbar's global snap, as in FL Studio
+constexpr SnapChoice kSnaps[] = { { "Main", kMainSnap },
+                                  { "Bar", 0 }, // 0 = a bar of the time signature (0.46.0)
                                            { "1/2", 2 * kTicksPerBeat },       { "1/4 (beat)", kTicksPerBeat },
                                   { "1/8", kTicksPerBeat / 2 },         { "1/16", kTicksPerBeat / 4 },      { "1/32", kTicksPerBeat / 8 },
                                   { "1/64", kTicksPerBeat / 16 },       { "1/8 triplet", kTicksPerBeat / 3 }, { "1/16 triplet", kTicksPerBeat / 6 },
                                   { "None", 1 } };
-constexpr int kDefaultSnap = 4; // 1/16
+constexpr int kDefaultSnap = 5; // 1/16
 
 std::uint32_t freshSeed()
 {
@@ -39,8 +41,20 @@ PianoRollToolbar::PianoRollToolbar (PianoRoll& rollToEdit) : roll (rollToEdit)
     for (size_t i = 0; i < std::size (kSnaps); ++i)
         snapBox.addItem (kSnaps[i].name, static_cast<int> (i) + 1);
     snapBox.setSelectedId (kDefaultSnap + 1, juce::dontSendNotification);
-    snapBox.setTooltip ("Where notes snap when they are drawn, moved and resized (hold Alt while dragging for no snap)");
-    snapBox.onChange = [this] { roll.setGridTicks (kSnaps[static_cast<size_t> (std::max (0, snapBox.getSelectedId() - 1))].ticks); };
+    snapBox.setTooltip ("Where notes snap when they are drawn, moved and resized (hold Alt while dragging for no snap). "
+                        "\"Main\" follows the toolbar's global snap.");
+    snapBox.onChange = [this] { applySnap(); };
+
+    // 0.60.0: the target channel and the ghost notes, as in FL Studio.
+    channelBox.setTooltip ("The channel this piano roll edits (FL Studio's target channel)");
+    channelBox.setWantsKeyboardFocus (false);
+    channelBox.onChange = [this]
+    {
+        if (channelBox.getSelectedId() > 0 && onChannelChosen)
+            onChannelChosen (channelBox.getSelectedId() - 1);
+    };
+    ghostToggle.setTooltip ("Ghost notes: show the other channels' notes of this pattern, faintly, behind this channel's");
+    ghostToggle.onClick = [this] { refreshGhostNotes(); };
 
     for (int pc = 0; pc < 12; ++pc)
         rootBox.addItem (theory::pitchClassName (pc), pc + 1);
@@ -81,9 +95,42 @@ PianoRollToolbar::PianoRollToolbar (PianoRoll& rollToEdit) : roll (rollToEdit)
     generateButton.setTooltip ("Write a chord progression or a bassline into this channel's pattern (Ctrl+Z undoes it)");
     generateButton.onClick = [this] { showGenerateMenu(); };
 
-    for (juce::Component* c : std::initializer_list<juce::Component*> { &snapBox, &rootBox, &scaleBox, &scaleSnapToggle, &chordBox, &inversionBox,
-                                                                       &velocityToggle, &toolsButton, &generateButton })
+    for (juce::Component* c : std::initializer_list<juce::Component*> { &channelBox, &snapBox, &rootBox, &scaleBox, &scaleSnapToggle, &chordBox, &inversionBox,
+                                                                       &velocityToggle, &ghostToggle, &toolsButton, &generateButton })
         addAndMakeVisible (c);
+}
+
+void PianoRollToolbar::setChannels (const std::vector<juce::String>& names, int selectedIndex)
+{
+    channelBox.clear (juce::dontSendNotification);
+    for (size_t i = 0; i < names.size(); ++i)
+        channelBox.addItem (names[i].isEmpty() ? "Channel " + juce::String (i + 1) : names[i], static_cast<int> (i) + 1);
+    channelBox.setSelectedId (selectedIndex + 1, juce::dontSendNotification);
+}
+
+void PianoRollToolbar::refreshGhostNotes()
+{
+    if (! ghostToggle.getToggleState() || ! getOtherChannels)
+    {
+        roll.setGhostNotes ({});
+        return;
+    }
+    std::vector<Note> ghosts;
+    for (const auto& other : getOtherChannels())
+        ghosts.insert (ghosts.end(), other.notes.begin(), other.notes.end());
+    roll.setGhostNotes (std::move (ghosts));
+}
+
+void PianoRollToolbar::applySnap()
+{
+    const int ticks = kSnaps[static_cast<size_t> (std::max (0, snapBox.getSelectedId() - 1))].ticks;
+    roll.setGridTicks (ticks == kMainSnap ? mainSnapTicks : ticks);
+}
+
+void PianoRollToolbar::setMainSnapTicks (int ticks)
+{
+    mainSnapTicks = ticks;
+    applySnap();
 }
 
 theory::Scale PianoRollToolbar::currentScale() const
@@ -118,8 +165,10 @@ void PianoRollToolbar::resized()
     r.removeFromRight (4);
     toolsButton.setBounds (r.removeFromRight (60));
     r.removeFromRight (8);
+    place (channelBox, 130); // the target channel first, as FL Studio's title bar (0.60.0)
     place (snapLabel, 36);
     place (snapBox, 96);
+    place (ghostToggle, 64); // before the scale and chord settings, so it stays in view in a narrow panel (0.60.0)
     place (scaleLabel, 40);
     place (rootBox, 52);
     place (scaleBox, 136);

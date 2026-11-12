@@ -48,6 +48,9 @@ public:
 
     void setNotes (std::vector<Note> newNotes); // clears the selection
     const std::vector<Note>& getNotes() const noexcept { return notes; }
+    // 0.60.0: ghost notes, as in FL Studio: the other channels' notes of the pattern, drawn faintly behind the channel's own
+    // (they cannot be edited here). An empty list hides them.
+    void setGhostNotes (std::vector<Note> ghosts);
 
     // Scroll vertically so the current notes are centred (a channel just opened may sit far from middle C).
     void scrollToNotes();
@@ -172,6 +175,7 @@ private:
     juce::String describe (const Note& n) const;
 
     std::vector<Note> notes;
+    std::vector<Note> ghostNotes; // 0.60.0
     std::vector<bool> selected; // one per note
     int loopLengthTicks = 16 * kTicksPerBeat;
     bool growable = false;

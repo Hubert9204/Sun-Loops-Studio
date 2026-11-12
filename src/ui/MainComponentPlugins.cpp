@@ -72,6 +72,7 @@ void MainComponent::refreshFoundPlugins()
     }
     std::sort (foundPlugins.begin(), foundPlugins.end(),
                [] (const PluginInfo& a, const PluginInfo& b) { return a.name.compareIgnoreCase (b.name) < 0; });
+    refreshPluginPicker(); // 0.60.0: the Plugin picker shows the same list
 }
 
 bool MainComponent::findPluginDescription (const juce::String& identifier, juce::PluginDescription& out) const
