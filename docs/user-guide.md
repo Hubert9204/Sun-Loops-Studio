@@ -764,10 +764,11 @@ numbers. The orange vertical line marks the end of the song: in Song mode playba
 
 | Action | How |
 | --- | --- |
-| Place a clip (Select tool) | Click anywhere on a track. The clip starts on the **grid square** you clicked (the Grid box: a bar, a beat, a 16th...; with **Alt**, exactly where you clicked), holds the pattern selected in the pattern box and is one pattern long. Drag right straight away to make it longer. |
+| Place a clip (Select tool) | Click anywhere on a track. The clip starts on the **grid square** you clicked (the Grid box: a bar, a beat, a 16th...; with **Alt**, exactly where you clicked), holds the pattern of the track (on a pattern's own track) or the one selected in the pattern box, and is as long as that pattern. Drag its right edge to make it longer. (Before 0.57.0 dragging right after the click lengthened it: a drag from empty space now selects.) |
+| Select several clips | **Drag from an empty place** (Select tool, 0.57.0): a selection rectangle appears, and every clip it touches - pattern, audio and automation clips - is selected (white outline; the readout under the timeline counts them). **Shift** + rectangle adds to the selection, **Shift + click** adds or removes one clip, **Ctrl+A** selects everything, **Escape** nothing. **Drag one of the selected clips** to move them all (in time and across tracks; automation clips keep their lanes); **Delete** removes them, **Ctrl+C** / **Ctrl+X** copy or cut them, **Ctrl+V** pastes them where the mouse is (the earliest clip at the mouse, the top one on its track), **Ctrl+D** duplicates them right after the selection. A click on one of them selects it alone. |
 | Move a clip | Drag it: it moves by **grid squares** (0.42.0), not by whole patterns, so clips can start out of step with each other (a beat or a 16th later); hold **Alt** for no snap at all (micro-timing). It can change track. |
 | Repeat / shorten | Drag the right edge of the clip, by grid squares (Alt: freely): the pattern repeats as long as the clip lasts; a length that is not a whole number of patterns stops in the middle of the last repeat (thin marks show where each repeat starts). |
-| Delete | Right-click the clip > Delete, or select it and press Delete (or use the Erase tool). |
+| Delete | Right-click the clip > Delete, or select it and press Delete (or use the Erase tool). **Right-button eraser** (0.57.0, any tool but Zoom): hold the right button and drag over the clips - every clip the mouse passes over is deleted at once, pattern, audio and automation clips, layered ones too. The whole stroke is one undo step (Ctrl+Z brings them all back). A right click without moving still opens the clip's menu. |
 | Select its pattern | Double-click the clip. |
 | Zoom in / out | Mouse wheel (up: in, down: out), around the mouse, anywhere on the playlist. |
 | Scroll time | Shift + wheel, a sideways wheel or touchpad swipe, or the scroll bar. |
@@ -781,7 +782,7 @@ The toolbar under the pattern box has five tools (keys **1** - **5** while the m
 | **Select** (1) | The normal tool described above and below: click a clip to select it, drag to move it, drag its **left or right edge** to trim or lengthen it (an audio clip keeps its sound in place: only more or less of it is heard), right-click for a menu (*Split here, Duplicate, Copy, Delete*, plus *Position, gain, pan and fades...*, *Reverse* and *Stretch and pitch...* on an audio clip or *Open this pattern* on a pattern clip), double-click a pattern clip to open that pattern. |
 | **Split** (2) | Click a clip to cut it in two at that point (snapped to the grid). Key **S** splits the selected clip at the mouse. |
 | **Cut** (3) | Drag across a clip to remove that stretch of it: the sound after the gap stays where it was. |
-| **Erase** (4) | Click a clip to delete it, or drag across several. |
+| **Erase** (4) | Click a clip to delete it, or drag across several (automation clips too, since 0.57.0). With the other tools the right button does the same. |
 | **Zoom** (5) | Click zooms in, right-click or Shift+click zooms out, drag a stretch to zoom to it. |
 
 **Grid** (the box next to the tools) is what audio clips snap to when moved, trimmed, split or cut: a bar, half a bar (1/2,

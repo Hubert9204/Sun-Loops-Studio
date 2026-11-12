@@ -1,5 +1,7 @@
 #include "ui/PlaylistTimeline.h"
 
+#include <limits>
+
 #include "audio/TempoMap.h"
 
 #include "audio/MidiImport.h"
@@ -1004,7 +1006,7 @@ void PlaylistTimeline::paint (juce::Graphics& g)
                 g.drawText (name, title.reduced (5, 0), juce::Justification::centredLeft, true);
             }
 
-            if (selection.kind == Kind::Pattern && selection.index == i)
+            if (isSelected (Kind::Pattern, i))
             {
                 g.setColour (kSelect);
                 g.drawRoundedRectangle (r.toFloat().reduced (0.5f), 3.0f, 1.5f);
@@ -1013,7 +1015,7 @@ void PlaylistTimeline::paint (juce::Graphics& g)
 
         pruneWaveformCache();
         for (int i = 0; i < static_cast<int> (arrangement.audioClips.size()); ++i)
-            paintAudioClip (g, arrangement.audioClips[static_cast<size_t> (i)], selection.kind == Kind::Audio && selection.index == i);
+            paintAudioClip (g, arrangement.audioClips[static_cast<size_t> (i)], isSelected (Kind::Audio, i));
 
         // Drop preview (files or sounds dragged over the timeline).
         if (dropTrack >= 0)
@@ -1057,7 +1059,19 @@ void PlaylistTimeline::paint (juce::Graphics& g)
         g.restoreState(); // back to the whole timeline: the automation lanes and the playhead
 
         for (int i = 0; i < static_cast<int> (arrangement.automationClips.size()); ++i)
-            paintAutomationClip (g, arrangement.automationClips[static_cast<size_t> (i)], selection.kind == Kind::Automation && selection.index == i);
+            paintAutomationClip (g, arrangement.automationClips[static_cast<size_t> (i)], isSelected (Kind::Automation, i));
+
+        // The selection rectangle (0.57.0), over the tracks and the automation lanes.
+        if (drag == Drag::RubberBand && bandActive)
+        {
+            juce::Graphics::ScopedSaveState band (g);
+            g.reduceClipRegion (kNameWidth, kRulerHeight, getWidth() - kNameWidth, lanesBottom() - kRulerHeight);
+            const auto r = bandRect();
+            g.setColour (kSelect.withAlpha (0.14f));
+            g.fillRect (r);
+            g.setColour (kSelect.withAlpha (0.9f));
+            g.drawRect (r, 1);
+        }
 
         if (playheadTick >= 0)
         {
@@ -1365,8 +1379,281 @@ void PlaylistTimeline::notifyChanged()
 void PlaylistTimeline::select (Kind kind, int index)
 {
     selection = { kind, kind == Kind::None ? -1 : index };
+    group.clear();
+    if (kind == Kind::Pattern)
+        group.patterns.push_back (index);
+    else if (kind == Kind::Audio)
+        group.audio.push_back (index);
+    else if (kind == Kind::Automation)
+        group.automation.push_back (index);
     repaint();
     updateReadout (lastMouseX, lastMouseY);
+}
+
+bool PlaylistTimeline::isSelected (Kind kind, int index) const noexcept
+{
+    const auto& list = kind == Kind::Pattern ? group.patterns : kind == Kind::Audio ? group.audio : group.automation;
+    return kind != Kind::None && std::find (list.begin(), list.end(), index) != list.end();
+}
+
+// Several clips at once (0.57.0): indices outside the arrangement are dropped; the first clip becomes the single selection
+// (what the readout describes when there is only one).
+void PlaylistTimeline::selectGroup (Group g)
+{
+    const auto tidy = [] (std::vector<int>& list, size_t count)
+    {
+        list.erase (std::remove_if (list.begin(), list.end(), [count] (int i) { return i < 0 || static_cast<size_t> (i) >= count; }), list.end());
+        std::sort (list.begin(), list.end());
+        list.erase (std::unique (list.begin(), list.end()), list.end());
+    };
+    tidy (g.patterns, arrangement.clips.size());
+    tidy (g.audio, arrangement.audioClips.size());
+    tidy (g.automation, arrangement.automationClips.size());
+    if (! g.patterns.empty())
+        selection = { Kind::Pattern, g.patterns.front() };
+    else if (! g.audio.empty())
+        selection = { Kind::Audio, g.audio.front() };
+    else if (! g.automation.empty())
+        selection = { Kind::Automation, g.automation.front() };
+    else
+        selection = {};
+    group = std::move (g);
+    repaint();
+    updateReadout (lastMouseX, lastMouseY);
+}
+
+void PlaylistTimeline::selectAll()
+{
+    Group g;
+    for (int i = 0; i < static_cast<int> (arrangement.clips.size()); ++i)
+        g.patterns.push_back (i);
+    for (int i = 0; i < static_cast<int> (arrangement.audioClips.size()); ++i)
+        g.audio.push_back (i);
+    for (int i = 0; i < static_cast<int> (arrangement.automationClips.size()); ++i)
+        g.automation.push_back (i);
+    selectGroup (std::move (g));
+}
+
+juce::Rectangle<int> PlaylistTimeline::bandRect() const noexcept
+{
+    return juce::Rectangle<int>::leftTopRightBottom (std::min (bandStartX, bandEndX), std::min (bandStartY, bandEndY),
+                                                     std::max (bandStartX, bandEndX) + 1, std::max (bandStartY, bandEndY) + 1);
+}
+
+// The clips a rectangle in view coordinates touches: pattern and audio clips where it covers the visible tracks, automation clips
+// where it covers the lanes (a clip on a track scrolled out of sight is not picked up).
+PlaylistTimeline::Group PlaylistTimeline::groupInRect (juce::Rectangle<int> r) const
+{
+    Group g;
+    const auto tracksArea = r.getIntersection ({ kNameWidth, kRulerHeight, std::max (0, getWidth() - kNameWidth), tracksViewHeight() });
+    const auto lanesArea = r.getIntersection ({ kNameWidth, lanesTop(), std::max (0, getWidth() - kNameWidth), kAutomationLanes * kLaneHeight });
+    if (! tracksArea.isEmpty())
+    {
+        for (int i = 0; i < static_cast<int> (arrangement.clips.size()); ++i)
+            if (clipRect (arrangement.clips[static_cast<size_t> (i)]).intersects (tracksArea))
+                g.patterns.push_back (i);
+        for (int i = 0; i < static_cast<int> (arrangement.audioClips.size()); ++i)
+            if (audioClipRect (arrangement.audioClips[static_cast<size_t> (i)]).intersects (tracksArea))
+                g.audio.push_back (i);
+    }
+    if (! lanesArea.isEmpty())
+        for (int i = 0; i < static_cast<int> (arrangement.automationClips.size()); ++i)
+            if (automationClipRect (arrangement.automationClips[static_cast<size_t> (i)]).intersects (lanesArea))
+                g.automation.push_back (i);
+    return g;
+}
+
+PlaylistTimeline::ClipSet PlaylistTimeline::groupClips() const
+{
+    ClipSet set;
+    for (const int i : group.patterns)
+        if (i >= 0 && i < static_cast<int> (arrangement.clips.size()))
+            set.patterns.push_back (arrangement.clips[static_cast<size_t> (i)]);
+    for (const int i : group.audio)
+        if (i >= 0 && i < static_cast<int> (arrangement.audioClips.size()))
+            set.audio.push_back (arrangement.audioClips[static_cast<size_t> (i)]);
+    for (const int i : group.automation)
+        if (i >= 0 && i < static_cast<int> (arrangement.automationClips.size()))
+            set.automation.push_back (arrangement.automationClips[static_cast<size_t> (i)]);
+    return set;
+}
+
+namespace
+{
+// The extent of a set of clips: earliest start, latest end, and the first and last track (-1 when only automation).
+struct Extent
+{
+    int start = std::numeric_limits<int>::max(), end = 0, firstTrack = std::numeric_limits<int>::max(), lastTrack = -1;
+};
+template <class Set>
+Extent extentOf (const Set& set)
+{
+    Extent x;
+    const auto take = [&x] (const auto& c)
+    {
+        x.start = std::min (x.start, c.startTick);
+        x.end = std::max (x.end, c.endTick());
+    };
+    const auto takeTrack = [&x, &take] (const auto& c)
+    {
+        take (c);
+        x.firstTrack = std::min (x.firstTrack, c.track);
+        x.lastTrack = std::max (x.lastTrack, c.track);
+    };
+    for (const auto& c : set.patterns)
+        takeTrack (c);
+    for (const auto& c : set.audio)
+        takeTrack (c);
+    for (const auto& c : set.automation)
+        take (c);
+    if (x.start == std::numeric_limits<int>::max())
+        x.start = 0;
+    return x;
+}
+} // namespace
+
+// Adds copies of `set` moved by `deltaTicks` and `deltaTracks` (kept inside the timeline and the tracks); automation clips keep their
+// lanes. Clips that do not fit (a full lane, the clip limits) are left out. The new clips become the selection.
+bool PlaylistTimeline::pasteSet (const ClipSet& set, int deltaTicks, int deltaTracks)
+{
+    if (set.empty())
+        return false;
+    const auto x = extentOf (set);
+    deltaTicks = std::clamp (deltaTicks, -x.start, std::max (-x.start, arrangement.timelineTicks() - x.end));
+    deltaTracks = x.lastTrack < 0 ? 0 : std::clamp (deltaTracks, -x.firstTrack, std::max (-x.firstTrack, trackCount() - 1 - x.lastTrack));
+
+    beginEdit();
+    Group added;
+    for (auto c : set.patterns)
+    {
+        c.startTick += deltaTicks;
+        c.track += deltaTracks;
+        if (arrangement.canPlace (c))
+        {
+            arrangement.clips.push_back (c);
+            added.patterns.push_back (static_cast<int> (arrangement.clips.size()) - 1);
+        }
+    }
+    for (auto c : set.audio)
+    {
+        c.startTick += deltaTicks;
+        c.track += deltaTracks;
+        if (arrangement.audioClips.size() < static_cast<size_t> (kMaxAudioClips) && arrangement.canPlaceAudio (c))
+        {
+            arrangement.audioClips.push_back (c);
+            added.audio.push_back (static_cast<int> (arrangement.audioClips.size()) - 1);
+        }
+    }
+    for (auto c : set.automation)
+    {
+        c.startTick += deltaTicks;
+        if (arrangement.automationClips.size() < static_cast<size_t> (kMaxAutomationClips) && arrangement.canPlaceAutomation (c))
+        {
+            arrangement.automationClips.push_back (c);
+            added.automation.push_back (static_cast<int> (arrangement.automationClips.size()) - 1);
+        }
+    }
+    if (added.empty())
+    {
+        pendingUndoValid = false;
+        return false;
+    }
+    commitPendingUndo();
+    selectGroup (std::move (added));
+    notifyChanged();
+    return true;
+}
+
+// A drag on one of several selected clips moves them all (0.57.0): in time by the grabbed clip's snapped move, across tracks by
+// the tracks the mouse crossed (automation clips keep their lanes). A move that would put an automation clip over another is skipped.
+void PlaylistTimeline::startGroupMove (Kind kind, int index, int tick)
+{
+    groupOriginal = groupClips();
+    groupMoving = group;
+    groupGrabKind = kind;
+    groupGrabIndex = index;
+    if (kind == Kind::Pattern)
+    {
+        const auto& c = arrangement.clips[static_cast<size_t> (index)];
+        groupGrabStart = c.startTick;
+        groupGrabTrack = c.track;
+    }
+    else if (kind == Kind::Audio)
+    {
+        const auto& c = arrangement.audioClips[static_cast<size_t> (index)];
+        groupGrabStart = c.startTick;
+        groupGrabTrack = c.track;
+    }
+    else
+    {
+        groupGrabStart = arrangement.automationClips[static_cast<size_t> (index)].startTick;
+        groupGrabTrack = -1;
+    }
+    grabOffsetTicks = tick - groupGrabStart;
+    drag = Drag::MoveGroup;
+    beginEdit();
+}
+
+void PlaylistTimeline::moveGroup (const juce::MouseEvent& e)
+{
+    if (groupMoving.patterns.size() != groupOriginal.patterns.size() || groupMoving.audio.size() != groupOriginal.audio.size()
+        || groupMoving.automation.size() != groupOriginal.automation.size())
+        return;
+    const auto x = extentOf (groupOriginal);
+    int deltaTicks = snapTick (xToTick (e.x) - grabOffsetTicks, e.mods.isAltDown()) - groupGrabStart;
+    deltaTicks = std::clamp (deltaTicks, -x.start, std::max (-x.start, arrangement.timelineTicks() - x.end));
+    int deltaTracks = groupGrabTrack >= 0 && x.lastTrack >= 0 && inTracks (e.y) ? yToTrack (e.y) - groupGrabTrack : 0;
+    if (x.lastTrack >= 0)
+        deltaTracks = std::clamp (deltaTracks, -x.firstTrack, std::max (-x.firstTrack, trackCount() - 1 - x.lastTrack));
+
+    // Where the automation clips would go: clear of every automation clip that is not moving.
+    std::vector<AutomationClip> movedAutomation;
+    for (auto c : groupOriginal.automation)
+    {
+        c.startTick += deltaTicks;
+        for (int i = 0; i < static_cast<int> (arrangement.automationClips.size()); ++i)
+        {
+            const auto& o = arrangement.automationClips[static_cast<size_t> (i)];
+            if (std::find (groupMoving.automation.begin(), groupMoving.automation.end(), i) == groupMoving.automation.end()
+                && o.lane == c.lane && c.startTick < o.endTick() && o.startTick < c.endTick())
+                return;
+        }
+        movedAutomation.push_back (c);
+    }
+
+    bool changed = false;
+    for (size_t k = 0; k < groupMoving.patterns.size(); ++k)
+    {
+        auto c = groupOriginal.patterns[k];
+        c.startTick += deltaTicks;
+        c.track += deltaTracks;
+        auto& stored = arrangement.clips[static_cast<size_t> (groupMoving.patterns[k])];
+        changed = changed || c.startTick != stored.startTick || c.track != stored.track;
+        stored = c;
+    }
+    for (size_t k = 0; k < groupMoving.audio.size(); ++k)
+    {
+        auto c = groupOriginal.audio[k];
+        c.startTick += deltaTicks;
+        c.track += deltaTracks;
+        auto& stored = arrangement.audioClips[static_cast<size_t> (groupMoving.audio[k])];
+        changed = changed || c.startTick != stored.startTick || c.track != stored.track;
+        stored = c;
+    }
+    for (size_t k = 0; k < groupMoving.automation.size(); ++k)
+    {
+        auto& stored = arrangement.automationClips[static_cast<size_t> (groupMoving.automation[k])];
+        changed = changed || movedAutomation[k].startTick != stored.startTick;
+        stored = movedAutomation[k];
+    }
+    if (! changed)
+        return;
+    commitPendingUndo();
+    dragChanged = true;
+    repaint();
+    updateReadout (e.x, e.y);
+    if (onChanged)
+        onChanged();
 }
 
 void PlaylistTimeline::clearSelection()
@@ -1378,6 +1665,18 @@ void PlaylistTimeline::clearSelection()
 
 juce::String PlaylistTimeline::describeSelection() const
 {
+    if (group.size() > 1)
+    {
+        juce::StringArray parts;
+        if (! group.patterns.empty())
+            parts.add (juce::String (static_cast<int> (group.patterns.size())) + (group.patterns.size() == 1 ? " pattern clip" : " pattern clips"));
+        if (! group.audio.empty())
+            parts.add (juce::String (static_cast<int> (group.audio.size())) + (group.audio.size() == 1 ? " audio clip" : " audio clips"));
+        if (! group.automation.empty())
+            parts.add (juce::String (static_cast<int> (group.automation.size())) + (group.automation.size() == 1 ? " automation clip" : " automation clips"));
+        return juce::String (group.size()) + " clips selected (" + parts.joinIntoString (", ")
+             + ")   drag one to move them all, Delete removes them, Ctrl+C / Ctrl+X / Ctrl+D";
+    }
     if (selection.kind == Kind::Audio && selection.index >= 0 && selection.index < static_cast<int> (arrangement.audioClips.size()))
     {
         const auto& c = arrangement.audioClips[static_cast<size_t> (selection.index)];
@@ -1476,6 +1775,45 @@ bool PlaylistTimeline::eraseAt (int track, int tick)
     return false;
 }
 
+// Every clip under the point (x, y) of the view, layered ones too: pattern and audio clips on the tracks, automation clips on the
+// lanes (0.57.0).
+bool PlaylistTimeline::eraseUnder (int x, int y)
+{
+    if (x < kNameWidth)
+        return false;
+    bool any = false;
+    if (inTracks (y))
+    {
+        const int track = yToTrack (y), tick = xToTick (x);
+        while (eraseAt (track, tick))
+            any = true;
+    }
+    else if (inLanes (y))
+    {
+        const int lane = yToLane (y), tick = xToTick (x);
+        for (int hit = arrangement.automationClipAt (lane, tick); hit >= 0; hit = arrangement.automationClipAt (lane, tick))
+        {
+            commitPendingUndo();
+            arrangement.automationClips.erase (arrangement.automationClips.begin() + hit);
+            clearSelection();
+            any = true;
+        }
+    }
+    return any;
+}
+
+bool PlaylistTimeline::eraseAlong (int x0, int y0, int x1, int y1)
+{
+    const int steps = std::max (1, static_cast<int> (std::ceil (std::hypot (x1 - x0, y1 - y0) / 3.0)));
+    bool any = false;
+    for (int s = 0; s <= steps; ++s)
+    {
+        const double t = static_cast<double> (s) / steps;
+        any = eraseUnder (juce::roundToInt (x0 + (x1 - x0) * t), juce::roundToInt (y0 + (y1 - y0) * t)) || any;
+    }
+    return any;
+}
+
 int PlaylistTimeline::addAutomationClip (AutomationClip clip, int startTick)
 {
     if (arrangement.automationClips.size() >= static_cast<size_t> (kMaxAutomationClips))
@@ -1567,6 +1905,27 @@ bool PlaylistTimeline::splitAt (int track, int tick, bool noSnap)
 
 void PlaylistTimeline::deleteSelected()
 {
+    if (group.size() > 1)
+    {
+        // Every selected clip, as one undo step (0.57.0); from the last index down, so the others keep theirs.
+        auto g = group;
+        const auto eraseAll = [] (auto& clips, std::vector<int> list)
+        {
+            std::sort (list.begin(), list.end(), std::greater<>());
+            list.erase (std::unique (list.begin(), list.end()), list.end());
+            for (const int i : list)
+                if (i >= 0 && i < static_cast<int> (clips.size()))
+                    clips.erase (clips.begin() + i);
+        };
+        beginEdit();
+        commitPendingUndo();
+        eraseAll (arrangement.clips, g.patterns);
+        eraseAll (arrangement.audioClips, g.audio);
+        eraseAll (arrangement.automationClips, g.automation);
+        clearSelection();
+        notifyChanged();
+        return;
+    }
     if (selection.kind == Kind::Audio && selection.index >= 0 && selection.index < static_cast<int> (arrangement.audioClips.size()))
     {
         beginEdit();
@@ -1594,6 +1953,14 @@ void PlaylistTimeline::deleteSelected()
 
 void PlaylistTimeline::copySelected()
 {
+    if (group.size() > 1)
+    {
+        clipboard.kind = Kind::None;
+        clipboard.group = groupClips();
+        return;
+    }
+    if (selection.kind == Kind::Audio || selection.kind == Kind::Pattern)
+        clipboard.group = {};
     if (selection.kind == Kind::Audio && selection.index >= 0 && selection.index < static_cast<int> (arrangement.audioClips.size()))
     {
         clipboard.kind = Kind::Audio;
@@ -1608,6 +1975,14 @@ void PlaylistTimeline::copySelected()
 
 void PlaylistTimeline::pasteAt (int track, int tick)
 {
+    if (clipboard.kind == Kind::None && ! clipboard.group.empty())
+    {
+        // Several clips: the earliest one goes to the mouse, the topmost track to the track under it; the rest keep their places
+        // around them (0.57.0).
+        const auto x = extentOf (clipboard.group);
+        pasteSet (clipboard.group, snapTick (tick, false) - x.start, x.lastTrack >= 0 ? track - x.firstTrack : 0);
+        return;
+    }
     if (clipboard.kind == Kind::Audio)
     {
         AudioClip c = clipboard.audio;
@@ -1645,6 +2020,13 @@ void PlaylistTimeline::pasteAt (int track, int tick)
 
 void PlaylistTimeline::duplicateSelected()
 {
+    if (group.size() > 1)
+    {
+        const auto set = groupClips(); // right after the selection, on the same tracks and lanes (0.57.0)
+        const auto x = extentOf (set);
+        pasteSet (set, x.end - x.start, 0);
+        return;
+    }
     if (selection.kind == Kind::Automation && selection.index >= 0 && selection.index < static_cast<int> (arrangement.automationClips.size()))
     {
         const auto original = arrangement.automationClips[static_cast<size_t> (selection.index)];
@@ -1844,10 +2226,10 @@ juce::String PlaylistTimeline::replaceAudioClip (int index, const std::shared_pt
     return {};
 }
 
-void PlaylistTimeline::showClipMenu (const juce::MouseEvent& e)
+void PlaylistTimeline::showClipMenu (int x, int y)
 {
-    const int track = yToTrack (e.y);
-    const int tick = xToTick (e.x);
+    const int track = yToTrack (y);
+    const int tick = xToTick (x);
     const int audio = arrangement.audioClipAt (track, tick);
     const int pattern = audio >= 0 ? -1 : arrangement.clipAt (track, tick);
     if (audio < 0 && pattern < 0)
@@ -1936,10 +2318,17 @@ bool PlaylistTimeline::handleKey (const juce::KeyPress& key)
         if (letter == 'Z') { if (mods.isShiftDown()) redo(); else undo(); return true; }
         if (letter == 'Y') { redo(); return true; }
         if (letter == 'C') { copySelected(); return selection.kind != Kind::None; }
+        if (letter == 'A') { selectAll(); return true; } // 0.57.0
         if (letter == 'X') { copySelected(); deleteSelected(); return true; }
         if (letter == 'V') { pasteAt (track, hoverTrack >= 0 ? hoverTick : 0); return true; }
         if (letter == 'D') { duplicateSelected(); return true; }
         return false;
+    }
+
+    if (code == juce::KeyPress::escapeKey && ! group.empty())
+    {
+        clearSelection();
+        return true;
     }
 
     if (code == juce::KeyPress::deleteKey || code == juce::KeyPress::backspaceKey)
@@ -2134,23 +2523,38 @@ void PlaylistTimeline::mouseDown (const juce::MouseEvent& e)
             }
             return;
         }
-        if (hitClip < 0)
-        {
-            clearSelection();
-            return;
-        }
         if (e.mods.isPopupMenu())
         {
-            showAutomationMenu (hitClip);
+            // A right click shows the clip's menu when the button comes up; a right drag erases (0.57.0).
+            drag = Drag::RightPress;
+            rightPressX = e.x;
+            rightPressY = e.y;
             return;
         }
         if (tool == PlaylistTool::Erase)
         {
             beginEdit();
-            commitPendingUndo();
-            arrangement.automationClips.erase (arrangement.automationClips.begin() + hitClip);
-            clearSelection();
-            notifyChanged();
+            drag = Drag::EraseSweep;
+            eraseLastX = e.x;
+            eraseLastY = e.y;
+            if (eraseUnder (e.x, e.y))
+                notifyChanged();
+            return;
+        }
+        if (hitClip < 0)
+        {
+            if (tool == PlaylistTool::Select)
+            {
+                drag = Drag::RubberBand; // a drag selects with a rectangle; a click clears the selection
+                bandStartX = bandEndX = e.x;
+                bandStartY = bandEndY = e.y;
+                bandActive = false;
+                bandAdds = e.mods.isShiftDown();
+                bandBase = bandAdds ? group : Group {};
+                bandPlacesClip = false;
+            }
+            else
+                clearSelection();
             return;
         }
         if (tool != PlaylistTool::Select)
@@ -2158,12 +2562,23 @@ void PlaylistTimeline::mouseDown (const juce::MouseEvent& e)
             select (Kind::Automation, hitClip);
             return;
         }
+        if (e.mods.isShiftDown())
+        {
+            toggleInGroup (Kind::Automation, hitClip);
+            return;
+        }
+        const bool atEdge = e.x >= automationClipRect (arrangement.automationClips[static_cast<size_t> (hitClip)]).getRight() - kEdgeGrab;
+        if (group.size() > 1 && isSelected (Kind::Automation, hitClip) && ! atEdge)
+        {
+            startGroupMove (Kind::Automation, hitClip, tick);
+            return;
+        }
 
         select (Kind::Automation, hitClip);
         dragClip = hitClip;
         dragAutomationOriginal = arrangement.automationClips[static_cast<size_t> (hitClip)];
         beginEdit();
-        if (e.x >= automationClipRect (dragAutomationOriginal).getRight() - kEdgeGrab)
+        if (atEdge)
             drag = Drag::ResizeAutomation;
         else
         {
@@ -2203,7 +2618,10 @@ void PlaylistTimeline::mouseDown (const juce::MouseEvent& e)
 
     if (e.mods.isPopupMenu())
     {
-        showClipMenu (e);
+        // A right click shows the clip's menu when the button comes up; a right drag erases every clip it passes (0.57.0).
+        drag = Drag::RightPress;
+        rightPressX = e.x;
+        rightPressY = e.y;
         return;
     }
 
@@ -2211,7 +2629,9 @@ void PlaylistTimeline::mouseDown (const juce::MouseEvent& e)
     {
         beginEdit();
         drag = Drag::EraseSweep;
-        if (eraseAt (track, tick))
+        eraseLastX = e.x;
+        eraseLastY = e.y;
+        if (eraseUnder (e.x, e.y))
             notifyChanged();
         return;
     }
@@ -2245,16 +2665,28 @@ void PlaylistTimeline::mouseDown (const juce::MouseEvent& e)
     }
 
     // Select tool.
+    if (e.mods.isShiftDown() && (audioHit >= 0 || hit >= 0))
+    {
+        toggleInGroup (audioHit >= 0 ? Kind::Audio : Kind::Pattern, audioHit >= 0 ? audioHit : hit);
+        return;
+    }
     if (audioHit >= 0)
     {
-        dragClip = audioHit;
-        select (Kind::Audio, audioHit);
         const auto& clip = arrangement.audioClips[static_cast<size_t> (audioHit)];
         const auto r = audioClipRect (clip);
+        const bool leftEdge = r.getWidth() >= 3 * kEdgeGrab && e.x <= r.getX() + kEdgeGrab;
+        const bool rightEdge = e.x >= r.getRight() - kEdgeGrab;
+        if (group.size() > 1 && isSelected (Kind::Audio, audioHit) && ! leftEdge && ! rightEdge)
+        {
+            startGroupMove (Kind::Audio, audioHit, tick);
+            return;
+        }
+        dragClip = audioHit;
+        select (Kind::Audio, audioHit);
         beginEdit();
-        if (r.getWidth() >= 3 * kEdgeGrab && e.x <= r.getX() + kEdgeGrab)
+        if (leftEdge)
             drag = Drag::TrimAudio;
-        else if (e.x >= r.getRight() - kEdgeGrab)
+        else if (rightEdge)
             drag = Drag::ResizeAudio;
         else
         {
@@ -2266,40 +2698,67 @@ void PlaylistTimeline::mouseDown (const juce::MouseEvent& e)
 
     if (hit < 0)
     {
-        // A new clip: one pattern long, on the grid square clicked (anywhere with Alt) - not on whole pattern lengths (0.42.0).
-        // On a track dedicated to a pattern that pattern goes there (0.44.0); on a free track, the one selected in the pattern box.
-        const int ownPattern = track >= 0 && track < arrangement.trackCount() ? arrangement.playlistTracks[static_cast<size_t> (track)].pattern : -1;
-        const int placed = ownPattern >= 0 && ownPattern < static_cast<int> (arrangement.patterns.size()) ? ownPattern : selectedPattern;
-        const int length = arrangement.patternLength (placed); // that pattern's own length (0.56.0)
-        const int at = std::clamp (noSnap ? tick : floorToGrid (tick), 0, std::max (0, arrangement.timelineTicks() - length));
-        const Clip c { placed, track, at, length, 0 };
-        if (arrangement.canPlace (c))
-        {
-            beginEdit();
-            commitPendingUndo();
-            arrangement.clips.push_back (c);
-            // Dragging right after placing resizes the new clip.
-            dragClip = static_cast<int> (arrangement.clips.size()) - 1;
-            drag = Drag::ResizePattern; // the resize that follows belongs to the same undo step as the placement
-            select (Kind::Pattern, dragClip);
-            notifyChanged();
-        }
-        else
-            clearSelection();
+        // Empty space (0.57.0): a drag draws the selection rectangle; a click (the button comes up where it went down) puts a clip there.
+        drag = Drag::RubberBand;
+        bandStartX = bandEndX = e.x;
+        bandStartY = bandEndY = e.y;
+        bandActive = false;
+        bandAdds = e.mods.isShiftDown();
+        bandBase = bandAdds ? group : Group {};
+        bandPlacesClip = true;
+        bandNoSnap = noSnap;
         return;
     }
 
+    const auto r = clipRect (arrangement.clips[static_cast<size_t> (hit)]);
+    const bool rightEdge = e.x >= r.getRight() - kEdgeGrab;
+    if (group.size() > 1 && isSelected (Kind::Pattern, hit) && ! rightEdge)
+    {
+        startGroupMove (Kind::Pattern, hit, tick);
+        return;
+    }
     dragClip = hit;
     select (Kind::Pattern, hit);
     beginEdit();
-    const auto r = clipRect (arrangement.clips[static_cast<size_t> (hit)]);
-    if (e.x >= r.getRight() - kEdgeGrab)
+    if (rightEdge)
         drag = Drag::ResizePattern;
     else
     {
         drag = Drag::MovePattern;
         grabOffsetTicks = tick - arrangement.clips[static_cast<size_t> (hit)].startTick;
     }
+}
+
+// A new clip: one pattern long, on the grid square clicked (anywhere with Alt) - not on whole pattern lengths (0.42.0).
+// On a track dedicated to a pattern that pattern goes there (0.44.0); on a free track, the one selected in the pattern box.
+void PlaylistTimeline::placeClipAt (int track, int tick, bool noSnap)
+{
+    const int ownPattern = track >= 0 && track < arrangement.trackCount() ? arrangement.playlistTracks[static_cast<size_t> (track)].pattern : -1;
+    const int placed = ownPattern >= 0 && ownPattern < static_cast<int> (arrangement.patterns.size()) ? ownPattern : selectedPattern;
+    const int length = arrangement.patternLength (placed); // that pattern's own length (0.56.0)
+    const int at = std::clamp (noSnap ? tick : floorToGrid (tick), 0, std::max (0, arrangement.timelineTicks() - length));
+    const Clip c { placed, track, at, length, 0 };
+    if (! arrangement.canPlace (c))
+    {
+        clearSelection();
+        return;
+    }
+    beginEdit();
+    commitPendingUndo();
+    arrangement.clips.push_back (c);
+    select (Kind::Pattern, static_cast<int> (arrangement.clips.size()) - 1);
+    notifyChanged();
+}
+
+void PlaylistTimeline::toggleInGroup (Kind kind, int index)
+{
+    auto g = group;
+    auto& list = kind == Kind::Pattern ? g.patterns : kind == Kind::Audio ? g.audio : g.automation;
+    if (const auto it = std::find (list.begin(), list.end(), index); it != list.end())
+        list.erase (it);
+    else
+        list.push_back (index);
+    selectGroup (std::move (g));
 }
 
 template <class Clip>
@@ -2359,16 +2818,53 @@ void PlaylistTimeline::mouseDrag (const juce::MouseEvent& e)
         return;
     }
 
+    // The right-button eraser (0.57.0): past a few pixels a right press becomes a stroke that deletes every clip it crosses.
+    if (drag == Drag::RightPress && std::hypot (e.x - rightPressX, e.y - rightPressY) > 4.0)
+    {
+        drag = Drag::RightErase;
+        beginEdit(); // the whole stroke is one undo step
+        eraseLastX = rightPressX;
+        eraseLastY = rightPressY;
+        setMouseCursor (juce::MouseCursor::CrosshairCursor);
+    }
+    if (drag == Drag::RightErase || drag == Drag::EraseSweep)
+    {
+        if (eraseAlong (eraseLastX, eraseLastY, e.x, e.y))
+            notifyChanged();
+        eraseLastX = e.x;
+        eraseLastY = e.y;
+        return;
+    }
+    if (drag == Drag::RubberBand)
+    {
+        bandEndX = e.x;
+        bandEndY = e.y;
+        bandActive = bandActive || std::hypot (e.x - bandStartX, e.y - bandStartY) > 4.0;
+        if (bandActive)
+        {
+            // The clips under the rectangle are selected while it is drawn (with Shift, on top of what was selected before).
+            auto g = groupInRect (bandRect());
+            for (const int i : bandBase.patterns)
+                g.patterns.push_back (i);
+            for (const int i : bandBase.audio)
+                g.audio.push_back (i);
+            for (const int i : bandBase.automation)
+                g.automation.push_back (i);
+            selectGroup (std::move (g));
+        }
+        repaint();
+        return;
+    }
+    if (drag == Drag::MoveGroup)
+    {
+        moveGroup (e);
+        return;
+    }
+
     if (drag == Drag::ZoomRange)
     {
         dragEndX = e.x;
         repaint();
-        return;
-    }
-    if (drag == Drag::EraseSweep)
-    {
-        if (e.x >= kNameWidth && e.y >= kRulerHeight && eraseAt (yToTrack (e.y), xToTick (e.x)))
-            notifyChanged();
         return;
     }
     if (drag == Drag::CutRange)
@@ -2462,6 +2958,46 @@ void PlaylistTimeline::mouseDrag (const juce::MouseEvent& e)
 
 void PlaylistTimeline::mouseUp (const juce::MouseEvent& e)
 {
+    if (drag == Drag::RightPress)
+    {
+        drag = Drag::None;
+        if (inLanes (rightPressY))
+        {
+            if (const int hit = arrangement.automationClipAt (yToLane (rightPressY), xToTick (rightPressX)); hit >= 0)
+                showAutomationMenu (hit);
+        }
+        else if (inTracks (rightPressY))
+            showClipMenu (rightPressX, rightPressY);
+        return;
+    }
+    if (drag == Drag::RightErase)
+        setMouseCursor (juce::MouseCursor::NormalCursor);
+    if (drag == Drag::RubberBand)
+    {
+        drag = Drag::None;
+        if (bandActive)
+        {
+            bandActive = false;
+            repaint();
+        }
+        else if (! bandAdds)
+        {
+            if (bandPlacesClip && inTracks (bandStartY))
+                placeClipAt (yToTrack (bandStartY), xToTick (bandStartX), bandNoSnap);
+            else
+                clearSelection();
+        }
+        pendingUndoValid = false;
+        return;
+    }
+    if (drag == Drag::MoveGroup && ! dragChanged)
+    {
+        // A click on one of the selected clips: that clip alone.
+        drag = Drag::None;
+        pendingUndoValid = false;
+        select (groupGrabKind, groupGrabIndex);
+        return;
+    }
     if (drag == Drag::LoopPress)
     {
         drag = Drag::None;

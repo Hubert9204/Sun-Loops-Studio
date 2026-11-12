@@ -27,6 +27,12 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.57.0
+The Playlist's selection became a set (`PlaylistTimeline::Group`, indices of pattern, audio and automation clips) beside the single
+selection the menus and the readout use; every edit that removes clips clears it, so stale indices are not kept, and the group
+operations check every index before use. The erasers sample their stroke every 3 pixels (`eraseAlong`), so a fast stroke does not
+skip a short clip. The Playlist view still has no automated test of its mouse handling: it was checked by hand in a virtual display.
+
 ## After 0.56.0
 The shared `Arrangement::patternTicks` was removed rather than kept beside the new `Pattern::lengthTicks`, so the compiler found
 every place that read it (about 150 in the program and the tests) and none can go on using a stale shared length. The editors read

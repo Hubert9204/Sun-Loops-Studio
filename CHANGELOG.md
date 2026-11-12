@@ -2,6 +2,27 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.57.0 - 2026-11-12
+
+### Added
+- **Playlist: right-button eraser.** Hold the right mouse button and drag over the clips: every clip the mouse passes over -
+  pattern, audio and automation clips, layered ones too - is deleted at once. The stroke is one undo step. A right click without
+  moving still opens the clip's menu (now when the button comes up). Works with every tool but Zoom.
+- **Playlist: selection rectangle.** With the Select tool, drag from an empty place: a rectangle appears and every clip it touches
+  (pattern, audio, automation) is selected. Shift adds to the selection, Shift+click adds or removes one clip, Ctrl+A selects
+  everything, Escape nothing. Dragging one selected clip moves them all (in time and across tracks); Delete, Ctrl+C / Ctrl+X /
+  Ctrl+V and Ctrl+D work on the whole selection.
+
+### Changed
+- A click on an empty place of a track places a clip when the button comes up; dragging right after the click no longer lengthens
+  it (a drag from an empty place selects): lengthen it by its right edge.
+- The Erase tool also deletes automation clips while dragging, and no longer skips a short clip on a fast stroke.
+
+### Fixed
+- Tests: the recording test that stops while audio arrives fed the recorder without pause and wrote files of hundreds of MB;
+  on a nearly full disk the file came out short and the test failed now and then. Its audio thread now runs at about a sound
+  card's pace.
+
 ## 0.56.0 - 2026-11-12
 
 ### Changed

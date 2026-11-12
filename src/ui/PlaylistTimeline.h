@@ -17,7 +17,11 @@ enum class PlaylistTool { Select, Split, Cut, Erase, Zoom };
 // Tools (chosen in the toolbar, or with the keys 1..5 while the mouse is over the timeline):
 //   Select : click a clip to select it; drag it to move it (to another track too); drag its left or right edge to trim
 //            or lengthen it (audio keeps its place: only more or less of the sound is heard); click empty space to put a
-//            clip of the selected pattern there. Right click: a menu for the clip under the mouse.
+//            clip of the selected pattern there. Drag from empty space (0.57.0): a rectangle selects every clip it touches
+//            (Shift adds to the selection; Shift+click adds or removes one clip); dragging one of the selected clips moves
+//            them all; Delete, Ctrl+C / Ctrl+X / Ctrl+D act on all of them; Ctrl+A selects everything, Escape nothing.
+// Any tool but Zoom: right click opens the menu of the clip under the mouse; right drag (0.57.0) erases every clip the mouse
+// passes over - pattern, audio and automation clips - as one undo step.
 //   Split  : click a clip to cut it in two at that point (snapped to the grid).
 //   Cut    : drag across a clip to remove that stretch of it (audio: the sound after the gap stays where it is).
 //   Erase  : click a clip to delete it; drag across several to delete them all.
@@ -158,7 +162,8 @@ public:
 
 private:
     enum class Drag { None, MovePattern, ResizePattern, MoveAudio, ResizeAudio, TrimAudio, CutRange, EraseSweep, ZoomRange, MoveAutomation, ResizeAutomation,
-                      Seek, LoopCreate, LoopPress, LoopMove, LoopResizeStart, LoopResizeEnd };
+                      Seek, LoopCreate, LoopPress, LoopMove, LoopResizeStart, LoopResizeEnd,
+                      MoveGroup, RubberBand, RightPress, RightErase }; // 0.57.0: the selection rectangle, the right-button eraser
     // After "Move" or "Resize" in the loop region's menu the region follows the mouse until a click (right click / Escape: back as it was).
     enum class LoopMode { None, Move, Resize };
     enum class Kind { None, Pattern, Audio, Automation };
@@ -167,6 +172,23 @@ private:
     {
         Kind kind = Kind::None;
         int index = -1;
+    };
+
+    // The clips selected together (0.57.0), by index; the single selection above is always one of them.
+    struct Group
+    {
+        std::vector<int> patterns, audio, automation;
+        int size() const noexcept { return static_cast<int> (patterns.size() + audio.size() + automation.size()); }
+        bool empty() const noexcept { return size() == 0; }
+        void clear() noexcept { patterns.clear(); audio.clear(); automation.clear(); }
+    };
+    // Copies of clips: a copied or duplicated group, or a group as it was when a move began.
+    struct ClipSet
+    {
+        std::vector<Clip> patterns;
+        std::vector<AudioClip> audio;
+        std::vector<AutomationClip> automation;
+        bool empty() const noexcept { return patterns.empty() && audio.empty() && automation.empty(); }
     };
 
     struct Snapshot
@@ -247,8 +269,20 @@ private:
     template <class Clip>
     void storeDragged (Clip& stored, const Clip& clip, const juce::MouseEvent& e);
     bool eraseAt (int track, int tick);
+    bool eraseUnder (int x, int y);                     // every clip (also automation) under a point of the view
+    bool eraseAlong (int x0, int y0, int x1, int y1);   // ... and along a line, so a fast stroke misses nothing
+    bool isSelected (Kind kind, int index) const noexcept;
+    void selectGroup (Group g);
+    void selectAll();
+    Group groupInRect (juce::Rectangle<int> r) const;   // the clips a selection rectangle (view coordinates) touches
+    ClipSet groupClips() const;                         // copies of the selected group's clips
+    bool pasteSet (const ClipSet& set, int deltaTicks, int deltaTracks); // adds the clips moved by these amounts, as one undo step
+    void startGroupMove (Kind kind, int index, int tick);
+    void moveGroup (const juce::MouseEvent& e);
+    void placeClipAt (int track, int tick, bool noSnap); // a click on empty space: a clip of the track's (or the selected) pattern
+    juce::Rectangle<int> bandRect() const noexcept;
     bool splitAt (int track, int tick, bool noSnap);
-    void showClipMenu (const juce::MouseEvent& e);
+    void showClipMenu (int x, int y);
     void showTrackMenu (int track);   // right click on a track's name (0.33.0): rename, colour
     void renameTrack (int track);
     void setTrackColour (int track, std::uint32_t colour);
@@ -296,13 +330,26 @@ private:
     AutomationClip dragAutomationOriginal; // the clip as it was when a move or resize began
     std::vector<Snapshot> undoStack, redoStack;
     Selection selection;
+    Group group;
 
     struct Clipboard
     {
-        Kind kind = Kind::None;
+        Kind kind = Kind::None; // None with `group` filled: several clips were copied (0.57.0)
         Clip pattern;
         AudioClip audio;
+        ClipSet group;
     } clipboard;
+
+    // The group move, the selection rectangle and the right-button eraser (0.57.0).
+    ClipSet groupOriginal;       // the selected clips as they were when the move began
+    Group groupMoving;           // their indices
+    Kind groupGrabKind = Kind::None;
+    int groupGrabIndex = -1, groupGrabStart = 0, groupGrabTrack = -1;
+    int bandStartX = 0, bandStartY = 0, bandEndX = 0, bandEndY = 0;
+    bool bandActive = false, bandAdds = false, bandPlacesClip = false, bandNoSnap = false;
+    Group bandBase;              // the selection before a Shift+rectangle (it adds to it)
+    int rightPressX = 0, rightPressY = 0, eraseLastX = 0, eraseLastY = 0;
+    void toggleInGroup (Kind kind, int index); // Shift+click on a clip
 
     int armedTrack = 0;                          // the selected track (named so before 0.36.0, when it was also the one recorded)
     std::array<bool, kMaxPlaylistTracks> recordArms {}; // the tracks Record writes to

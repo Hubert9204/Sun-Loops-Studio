@@ -6196,8 +6196,13 @@ void testInputRecorder()
         {
             std::vector<float> a (kBlock, 0.3f), b (kBlock, 0.2f);
             const float* in[2] = { a.data(), b.data() };
+            // At about the pace of a sound card (a block, then a short rest): unpaced, the loop wrote hundreds of MB in 150 ms and
+            // a nearly full disk cut the file short (0.57.0).
             while (! stopFlag.load())
+            {
                 rec.process (in, 2, kBlock);
+                std::this_thread::sleep_for (std::chrono::microseconds (500));
+            }
         });
         std::this_thread::sleep_for (std::chrono::milliseconds (150));
         const auto take = rec.stop();
