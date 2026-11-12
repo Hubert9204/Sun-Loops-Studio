@@ -277,7 +277,8 @@ Una riga per canale: un display **Track N** e il nome, **M** (mute), **S** (solo
     step**, tutti utilizzabili; niente step grigi, niente che si ripete o si allunga da solo.
   - La barra in cima al Channel Rack indica la lunghezza (*Pattern: 4 quarters (1 bar) - 16 steps*) e ha due pulsanti:
     **+** aggiunge **un quarto** (4 step in più) e **-** ne toglie uno. Il minimo è 4 quarti (il pulsante - è allora
-    disattivato), il massimo 64 (16 battute). La lunghezza è la stessa per tutti i pattern; gli step oltre una fine più
+    disattivato), il massimo 64 (16 battute). **Ogni pattern ha la sua lunghezza** (0.56.0): + e - cambiano solo il
+    pattern corrente, gli altri mantengono la loro, e un pattern nuovo parte da 4 quarti. Gli step oltre una fine più
     corta restano conservati ma non suonano, e tornano con +. Le clip della Playlist restano dove sono (vedi *Pattern*).
     Ctrl+Z annulla.
   - Appena il canale ha una nota che non è un semplice step - un'altra altezza, una nota più lunga, una nota fuori
@@ -662,11 +663,16 @@ fine del pattern, quale viene prima. Quando apri un canale la vista scorre fino 
 
 Un **pattern** contiene le note di tutti i canali. Il menu dei pattern nella barra sceglie il pattern corrente: il
 Channel Rack e il Piano Roll mostrano e modificano quello. Il pulsante **+** accanto offre **New empty pattern**,
-**Clone current pattern** e **Pattern length (all patterns)**: 1 (predefinito), 2, 4 o 8 battute; i pulsanti **-** e **+** del Channel
-Rack la cambiano di **un quarto** alla volta (da 4 a 64 quarti). La lunghezza vale per tutti i pattern; step
-sequencer, piano roll e drum machine si adeguano. Le clip dei pattern restano dove sono (0.42.0): una clip lunga un numero intero di
-pattern mantiene quel numero di ripetizioni, le altre mantengono la loro lunghezza. Le note oltre la fine di un pattern più corto restano conservate ma non suonano, e tornano se allunghi di nuovo i pattern. Il
-cambio viene rifiutato se la playlist non entrerebbe più nella linea del tempo. I nuovi pattern prendono da soli il nome successivo (Pattern 3, Pattern 4, ...). Il brano dimostrativo
+**Clone current pattern** e **Length of this pattern**: 1, 2, 4 o 8 battute; i pulsanti **-** e **+** del Channel
+Rack la cambiano di **un quarto** alla volta (da 4 a 64 quarti). **Ogni pattern ha la sua lunghezza** (0.56.0; prima una sola
+lunghezza valeva per tutti): il cambio riguarda solo il pattern corrente, e passando a un altro pattern si vede la sua lunghezza; step
+sequencer, piano roll e drum machine si adeguano. **New empty pattern** parte sempre da **4 quarti (una battuta in 4/4)**, qualunque
+sia la lunghezza degli altri; un clone mantiene la lunghezza del pattern che copia. Le clip di quel pattern restano dove sono (0.42.0):
+una clip lunga un numero intero di pattern mantiene quel numero di ripetizioni, le altre mantengono la loro lunghezza; le clip degli
+altri pattern non cambiano. Nella playlist ogni clip ripete il proprio pattern, e una clip nuova è lunga quanto il suo pattern. Le note
+oltre la fine di un pattern più corto restano conservate ma non suonano, e tornano se lo allunghi di nuovo. Il cambio viene rifiutato
+se la playlist non entrerebbe più nella linea del tempo. I progetti salvati prima della 0.56.0 si aprono con tutti i pattern alla
+lunghezza unica che avevano. I nuovi pattern prendono da soli il nome successivo (Pattern 3, Pattern 4, ...). Il brano dimostrativo
 (0.52.0) ha 12 pattern di quattro battute (Piano, Beat, Build, Bass, Marimba, Lead, Pad, Growl, Bells, Choir, Arp, Outro), ognuno sulla
 sua traccia.
 
@@ -733,7 +739,7 @@ file **.flp** di FL Studio, con codice scritto per questo programma (non si usa 
 ## Importare un file MIDI
 
 *File > Import a MIDI file into patterns...* (oppure trascina un file `.mid` / `.midi` sulla Playlist) trasforma un file MIDI standard in **nuovi
-canali synth** (uno per ogni traccia e canale MIDI con note, col nome della traccia) e **nuovi pattern** lunghi quanto la lunghezza dei pattern del progetto, messi uno dopo l'altro
+canali synth** (uno per ogni traccia e canale MIDI con note, col nome della traccia) e **nuovi pattern** lunghi quanto il pattern corrente, messi uno dopo l'altro
 dopo le clip esistenti, ognuno sulla propria traccia della playlist (0.44.0; prima tutti sulla traccia 1). Le note lunghe che superano la fine di un pattern vengono tagliate lì e suonano di nuovo
 all'inizio del pattern successivo. Il primo tempo del file imposta il BPM. La riga di stato dice cosa è stato fatto e cosa è stato lasciato fuori.
 
@@ -764,7 +770,7 @@ colpo d'occhio; sulle tracce alte il nome sta in una barra sopra le note, su que
   tracce**, o **Alt + rotella** ovunque.
 - I progetti salvati prima della 0.44.0 si aprono con le loro 8 tracce com'erano.
 
-La linea del tempo è lunga almeno 32 pattern e almeno 64 battute. Il righello mostra i
+La linea del tempo è lunga almeno 32 volte il pattern più lungo e almeno 64 battute. Lo zoom conta in battute di 4/4. Il righello mostra i
 numeri di battuta. La linea verticale arancione segna la fine del brano: in modalità Song la riproduzione ricomincia da lì (o dalla zona di
 loop, sotto).
 
@@ -1345,7 +1351,7 @@ occupato più tardi, un brano più pesante o un mixer pieno di effetti possono r
   tempo di almeno 32 pattern e 64 battute, 4 corsie di automazione, 64 clip di automazione di al massimo 256 punti, 32 voci simultanee.
 - Gli effetti usano circa 15 MB di memoria a 48 kHz all'inizio, più circa 0,8 MB per ogni riverbero, delay, chorus e Pitch Corrector oltre
   il sedicesimo (di più a frequenze di campionamento maggiori). La memoria preparata resta finché il dispositivo audio non riparte.
-- I pattern durano da 4 a 64 quarti (uguale per tutti; 2 o 3 con un metro corto); un solo metro per tutto il brano; fino a 256 cambi di tempo, a gradino, suonati solo in modalità Song; le clip audio non li seguono.
+- I pattern durano da 4 a 64 quarti (ognuno la sua; 2 o 3 con un metro corto); un solo metro per tutto il brano; fino a 256 cambi di tempo, a gradino, suonati solo in modalità Song; le clip audio non li seguono.
 - I sample sono mono o stereo, al massimo 30 secondi. Il sampler ha un inviluppo e un filtro per canale (niente inviluppo del filtro, LFO o
   modulazione); al massimo quattro zone suonano per nota. Clip audio: fino a 5 minuti per file, 64 clip.
 - Il synth: un LFO e un filtro per canale, due oscillatori, niente unisono, ancora niente motore additivo, la velocity non modula gli

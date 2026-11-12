@@ -128,7 +128,7 @@ void MainComponent::openLoopStarter()
                                            q.variation = typed.containsOnly ("0123456789") && typed.isNotEmpty()
                                                              ? static_cast<std::uint32_t> (typed.getLargeIntValue() & 0xffffffff)
                                                              : static_cast<std::uint32_t> (typed.hashCode());
-                                           q.patternTicks = safe->arrangement.patternTicks;
+                                           q.patternTicks = safe->currentPatternTicks(); // whole bars of it
                                            const bool setTempo = window->getComboBoxComponent ("tempo")->getSelectedItemIndex() == 0;
 
                                            safe->loopStarterGenre = genre;
@@ -203,6 +203,7 @@ void MainComponent::applyLoop (const loopstarter::Loop& loop, std::uint32_t vari
     // A new pattern with the loop's notes on those channels.
     Pattern pattern;
     pattern.name = (tag + " " + juce::String (variation)).toStdString();
+    pattern.lengthTicks = std::clamp (loop.patternTicks, arrangement.minPatternBeats() * kTicksPerBeat, kMaxPatternBeats * kTicksPerBeat);
     pattern.notes.resize (channels.size());
     for (size_t p = 0; p < loop.parts.size(); ++p)
         pattern.notes[static_cast<size_t> (target[p])] = loop.parts[p].notes;

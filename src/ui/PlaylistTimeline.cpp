@@ -95,7 +95,7 @@ void PlaylistTimeline::setPlayheadTick (int tick)
 
 double PlaylistTimeline::getPixelsPerTick() const noexcept
 {
-    return arrangement.patternTicks > 0 ? unitWidth / arrangement.patternTicks : 1.0;
+    return unitWidth / kPlaylistUnitTicks;
 }
 
 namespace
@@ -260,7 +260,7 @@ juce::Rectangle<int> PlaylistTimeline::audioClipRect (const AudioClip& c) const 
 
 double PlaylistTimeline::totalWidth() const noexcept
 {
-    return (arrangement.timelineTicks() / static_cast<double> (std::max (1, arrangement.patternTicks))) * unitWidth;
+    return (arrangement.timelineTicks() / static_cast<double> (kPlaylistUnitTicks)) * unitWidth;
 }
 
 void PlaylistTimeline::clampScroll()
@@ -293,8 +293,8 @@ void PlaylistTimeline::scrollBarMoved (juce::ScrollBar* bar, double newRangeStar
 void PlaylistTimeline::setUnitWidth (double newUnitWidth, int anchorX)
 {
     const double visible = std::max (1, getWidth() - kNameWidth);
-    const double minWidth = std::max (6.0, visible / (arrangement.timelineTicks() / static_cast<double> (std::max (1, arrangement.patternTicks)))); // the whole timeline fits
-    const double maxWidth = arrangement.patternTicks * 1.6;          // 1 tick = 1.6 pixels
+    const double minWidth = std::max (6.0, visible / (arrangement.timelineTicks() / static_cast<double> (kPlaylistUnitTicks))); // the whole timeline fits
+    const double maxWidth = kPlaylistUnitTicks * 1.6;          // 1 tick = 1.6 pixels
     newUnitWidth = std::clamp (newUnitWidth, minWidth, maxWidth);
 
     if (anchorX < kNameWidth)
@@ -318,7 +318,7 @@ void PlaylistTimeline::zoomBy (double factor, int anchorX)
 void PlaylistTimeline::zoomToFit()
 {
     const double visible = std::max (1, getWidth() - kNameWidth);
-    const double units = std::max (1.0, arrangement.songLengthTicks() / static_cast<double> (std::max (1, arrangement.patternTicks)));
+    const double units = std::max (1.0, arrangement.songLengthTicks() / static_cast<double> (kPlaylistUnitTicks));
     setUnitWidth (visible / units, kNameWidth);
     scrollX = 0.0;
     updateScrollBar();
@@ -330,7 +330,7 @@ void PlaylistTimeline::zoomToTicks (int fromTick, int toTick)
     if (toTick - fromTick < 4)
         return;
     const double visible = std::max (1, getWidth() - kNameWidth);
-    setUnitWidth (visible / (toTick - fromTick) * arrangement.patternTicks, kNameWidth);
+    setUnitWidth (visible / (toTick - fromTick) * kPlaylistUnitTicks, kNameWidth);
     scrollX = fromTick * getPixelsPerTick();
     clampScroll();
     updateScrollBar();
@@ -605,7 +605,7 @@ void PlaylistTimeline::paintGrid (juce::Graphics& g)
     lines (240, kGridBeat);
     lines (interfaceMeter().beatTicks(), kGridBeat.brighter (0.1f));
     lines (interfaceMeter().barTicks(), kGridBar);
-    lines (arrangement.patternTicks, kGridUnit);
+    lines (4 * interfaceMeter().barTicks(), kGridUnit); // every 4 bars (before 0.56.0: every pattern length, when all were one)
 }
 
 void PlaylistTimeline::paintRuler (juce::Graphics& g)
@@ -945,7 +945,7 @@ void PlaylistTimeline::paint (juce::Graphics& g)
                 {
                     juce::Graphics::ScopedSaveState inside (g);
                     g.reduceClipRegion (notesArea);
-                    const int length = std::max (1, arrangement.patternTicks);
+                    const int length = pattern.length();
                     const int offset = ((clip.offsetTicks % length) + length) % length;
                     const int rows = std::max (high - low + 1, 6); // a few notes do not fill the height with fat bars
                     const float rowHeight = static_cast<float> (notesArea.getHeight()) / static_cast<float> (rows);
@@ -981,7 +981,7 @@ void PlaylistTimeline::paint (juce::Graphics& g)
             // A mark where each repeat of the pattern begins.
             g.setColour (colour.withAlpha (0.6f));
             {
-                const int length = std::max (1, arrangement.patternTicks);
+                const int length = arrangement.patternLength (clip.pattern);
                 const int offset = ((clip.offsetTicks % length) + length) % length;
                 for (int t = clip.startTick + (offset == 0 ? length : length - offset); t < clip.endTick(); t += length)
                     g.drawVerticalLine (tickToX (t), static_cast<float> (r.getY() + titleHeight), static_cast<float> (r.getBottom() - 2));
@@ -1059,7 +1059,7 @@ void PlaylistTimeline::paint (juce::Graphics& g)
         for (int i = 0; i < static_cast<int> (arrangement.automationClips.size()); ++i)
             paintAutomationClip (g, arrangement.automationClips[static_cast<size_t> (i)], selection.kind == Kind::Automation && selection.index == i);
 
-        if (playheadTick >= 0 && arrangement.patternTicks > 0)
+        if (playheadTick >= 0)
         {
             g.setColour (kPlayhead);
             g.drawVerticalLine (tickToX (playheadTick), 0.0f, static_cast<float> (getHeight()));
@@ -1405,7 +1405,7 @@ juce::String PlaylistTimeline::describeSelection() const
         const auto& c = arrangement.clips[static_cast<size_t> (selection.index)];
         const int start = c.startTick;
         const int length = c.lengthTicks;
-        const double repeats = length / static_cast<double> (std::max (1, arrangement.patternTicks));
+        const double repeats = length / static_cast<double> (arrangement.patternLength (c.pattern));
         const juce::String name = c.pattern >= 0 && c.pattern < static_cast<int> (arrangement.patterns.size())
                                       ? juce::String (arrangement.patterns[static_cast<size_t> (c.pattern)].name) : juce::String ("?");
         return name + "   start " + jstr (formatBarsBeatsTicks (start)) + " (" + jstr (formatSeconds (ticksToSeconds (start, bpm)))
@@ -2267,11 +2267,12 @@ void PlaylistTimeline::mouseDown (const juce::MouseEvent& e)
     if (hit < 0)
     {
         // A new clip: one pattern long, on the grid square clicked (anywhere with Alt) - not on whole pattern lengths (0.42.0).
-        const int at = std::clamp (noSnap ? tick : floorToGrid (tick), 0, std::max (0, arrangement.timelineTicks() - arrangement.patternTicks));
         // On a track dedicated to a pattern that pattern goes there (0.44.0); on a free track, the one selected in the pattern box.
         const int ownPattern = track >= 0 && track < arrangement.trackCount() ? arrangement.playlistTracks[static_cast<size_t> (track)].pattern : -1;
-        const Clip c { ownPattern >= 0 && ownPattern < static_cast<int> (arrangement.patterns.size()) ? ownPattern : selectedPattern, track, at,
-                       arrangement.patternTicks, 0 };
+        const int placed = ownPattern >= 0 && ownPattern < static_cast<int> (arrangement.patterns.size()) ? ownPattern : selectedPattern;
+        const int length = arrangement.patternLength (placed); // that pattern's own length (0.56.0)
+        const int at = std::clamp (noSnap ? tick : floorToGrid (tick), 0, std::max (0, arrangement.timelineTicks() - length));
+        const Clip c { placed, track, at, length, 0 };
         if (arrangement.canPlace (c))
         {
             beginEdit();

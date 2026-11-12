@@ -250,7 +250,7 @@ MainComponent::MainComponent()
     };
     pianoRoll.onNoteStopped = [this] (int pitch) { engine.liveNoteOff (liveChannel, pitch); };
 
-    pianoRoll.setLoopLengthTicks (arrangement.patternTicks);
+    pianoRoll.setLoopLengthTicks (currentPatternTicks());
     pianoRoll.onSeek = [this] (int tick) { seekPattern (tick); };
     pianoRoll.onStatus = [this] (const juce::String& text) { statusLabel.setText (text, juce::dontSendNotification); };
     if (settings != nullptr) // the velocity lane's height, as the user left it (0.54.0)
@@ -271,7 +271,7 @@ MainComponent::MainComponent()
         auto& pattern = arrangement.patterns[static_cast<size_t> (currentPattern)];
         pattern.loopStartTick = start;
         pattern.loopEndTick = end;
-        if (pattern.hasLoop (arrangement.patternTicks))
+        if (pattern.hasLoop())
         {
             statusLabel.setText ("Piano roll loop region: 16ths " + juce::String (start / (kTicksPerBeat / 4) + 1) + " to "
                                      + juce::String (end / (kTicksPerBeat / 4)) + " (Pattern mode repeats it)",
@@ -341,7 +341,7 @@ MainComponent::MainComponent()
     // Panels
     rackPanel.setContent (&rackBody);
     rackBody.onPatternBeats = [this] (int beats) { setPatternBeats (beats); };
-    rackBody.setPatternBeats (arrangement.patternTicks / kTicksPerBeat, arrangement.minPatternBeats(), arrangement.meter);
+    rackBody.setPatternBeats (currentPatternTicks() / kTicksPerBeat, arrangement.minPatternBeats(), arrangement.meter);
     rackPanel.setMinimumSize (420, 130);
     pianoPanel.setContent (&pianoEditor);
     pianoPanel.setMinimumSize (420, 260);
@@ -930,7 +930,7 @@ void MainComponent::createStrip (size_t channelIndex)
 {
     auto strip = std::make_unique<ChannelStrip> (channels[channelIndex], static_cast<int> (channelIndex));
     strip->setTrackCount (static_cast<int> (tracks.size()));
-    strip->setLoopLengthTicks (arrangement.patternTicks);
+    strip->setLoopLengthTicks (currentPatternTicks());
     strip->onSelect = [this] (int idx) { selectChannel (idx); };
     strip->onChanged = [this] (int idx)
     {
@@ -1070,7 +1070,7 @@ void MainComponent::publishProject()
     {
         // The piano roll's loop region of this pattern (0.20.0); a pattern made shorter loses a region that no longer fits.
         auto& pattern = arrangement.patterns[static_cast<size_t> (currentPattern)];
-        if (! pattern.hasLoop (arrangement.patternTicks))
+        if (! pattern.hasLoop())
             pattern.loopStartTick = pattern.loopEndTick = -1;
         else
         {
@@ -1083,7 +1083,7 @@ void MainComponent::publishProject()
         const auto& pattern = arrangement.patterns[static_cast<size_t> (currentPattern)];
         pianoRoll.setLoopRegion (pattern.loopStartTick, pattern.loopEndTick);
     }
-    patternStartTick = std::clamp (patternStartTick, 0, std::max (0, arrangement.patternTicks - 1));
+    patternStartTick = std::clamp (patternStartTick, 0, std::max (0, currentPatternTicks() - 1));
     pianoRoll.setStartTick (patternStartTick);
     if (songMode && arrangement.hasLoop())
     {

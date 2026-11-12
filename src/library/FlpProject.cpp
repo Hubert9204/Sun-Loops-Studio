@@ -160,7 +160,7 @@ FlpImportResult projectFromFlp (const flp::Song& song, const juce::File& folder)
         }
     // (The shortest length that holds the notes is also the one that lets the playlist's clips sit where they were.)
     auto& arrangement = doc.arrangement;
-    arrangement.patternTicks = bars * bar;
+    const int patternTicks = bars * bar; // every imported pattern gets this length (each could have its own since 0.56.0)
     arrangement.patterns.clear();
 
     std::map<int, int> patternOf; // FL index -> ours
@@ -174,6 +174,7 @@ FlpImportResult projectFromFlp (const flp::Song& song, const juce::File& folder)
         }
         Pattern ours;
         ours.name = trimName (p.name.empty() ? "Pattern " + std::to_string (p.index) : p.name, kMaxNameLength);
+        ours.lengthTicks = patternTicks;
         ours.notes.resize (doc.channels.size());
         for (const auto& n : p.notes)
         {
@@ -185,18 +186,18 @@ FlpImportResult projectFromFlp (const flp::Song& song, const juce::File& folder)
             note.startTick = toOurTicks (n.position, ppq);
             note.lengthTicks = n.length > 0 ? std::max (1, toOurTicks (n.length, ppq)) : kSixteenthTicks; // 0: a step
             note.velocity = std::clamp (static_cast<float> (n.velocity) / 128.0f, 0.0f, 1.0f);
-            if (note.startTick >= arrangement.patternTicks)
+            if (note.startTick >= patternTicks)
             {
                 ++droppedNotes;
                 continue;
             }
-            note.lengthTicks = std::min (note.lengthTicks, arrangement.patternTicks - note.startTick);
+            note.lengthTicks = std::min (note.lengthTicks, patternTicks - note.startTick);
             ours.notes[static_cast<size_t> (it->second)].push_back (note);
         }
         for (auto& list : ours.notes)
             std::stable_sort (list.begin(), list.end(), [] (const Note& a, const Note& b) { return a.startTick != b.startTick ? a.startTick < b.startTick : a.pitch < b.pitch; });
         // Every channel plays as written (FL Studio does not repeat a short step sequence the way the rack here does).
-        ours.steps.assign (doc.channels.size(), steps::patternSteps (arrangement.patternTicks));
+        ours.steps.assign (doc.channels.size(), steps::patternSteps (patternTicks));
         patternOf[p.index] = static_cast<int> (arrangement.patterns.size());
         arrangement.patterns.push_back (std::move (ours));
     }
@@ -204,6 +205,7 @@ FlpImportResult projectFromFlp (const flp::Song& song, const juce::File& folder)
     {
         Pattern empty;
         empty.name = "Pattern 1";
+        empty.lengthTicks = patternTicks;
         empty.notes.resize (doc.channels.size());
         arrangement.patterns.push_back (std::move (empty));
     }
@@ -239,7 +241,7 @@ FlpImportResult projectFromFlp (const flp::Song& song, const juce::File& folder)
                 pt.colour = 0xff000000u | (t.rgb & 0xffffffu);
         }
 
-    const double unitInFlTicks = static_cast<double> (arrangement.patternTicks) * ppq / kTicksPerBeat;
+    const double unitInFlTicks = static_cast<double> (patternTicks) * ppq / kTicksPerBeat;
     int droppedItems = 0, droppedAudio = 0;
     for (const auto& item : song.items)
     {
@@ -363,9 +365,9 @@ FlpExportResult projectToFlp (const ProjectDocument& doc)
         flp::Pattern out;
         out.index = static_cast<int> (p) + 1;
         out.name = pattern.name;
-        out.length = arrangement.patternTicks * scale;
+        out.length = pattern.length() * scale;
         for (size_t c = 0; c < doc.channels.size() && c < pattern.notes.size(); ++c)
-            for (const auto& n : steps::playedNotes (pattern.notes[c], arrangement.patternTicks))
+            for (const auto& n : steps::playedNotes (pattern.notes[c], pattern.length()))
             {
                 flp::Note note;
                 note.position = n.startTick * scale;
@@ -385,7 +387,7 @@ FlpExportResult projectToFlp (const ProjectDocument& doc)
     int offsetClips = 0;
     for (const auto& clip : arrangement.clips)
     {
-        const int length = std::max (1, arrangement.patternTicks);
+        const int length = arrangement.patternLength (clip.pattern);
         const int offset = ((clip.offsetTicks % length) + length) % length;
         offsetClips += offset != 0 ? 1 : 0;
         for (int pass = -offset; pass < clip.lengthTicks; pass += length)

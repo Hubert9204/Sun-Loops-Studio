@@ -163,7 +163,7 @@ void MainComponent::writeSlicerScore (int channelIndex)
         return;
     const double rate = channel.program->zones.front().sample->sampleRate;
     const double loopBpm = channel.program->sliceBpm > 0.0 ? channel.program->sliceBpm : bpmSlider.getValue();
-    channel.notes = slicer::score (*channel.program, rate, loopBpm, arrangement.patternTicks);
+    channel.notes = slicer::score (*channel.program, rate, loopBpm, currentPatternTicks());
     channel.steps = 0;
     strips[static_cast<size_t> (channelIndex)]->refreshFromChannel();
     selectChannel (channelIndex);

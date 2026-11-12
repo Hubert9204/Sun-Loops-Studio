@@ -144,7 +144,7 @@ inline AudioClip trimmedAudioStart (const AudioClip& clip, int newStart, double 
 // music does not change (its `offsetTicks` says where in the pattern it starts).
 inline int patternOffsetAfter (const Arrangement& a, const Clip& c, int ticksIn)
 {
-    const int length = std::max (1, a.patternTicks);
+    const int length = a.patternLength (c.pattern);
     return ((c.offsetTicks + ticksIn) % length + length) % length;
 }
 

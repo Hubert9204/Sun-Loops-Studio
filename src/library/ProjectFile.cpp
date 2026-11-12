@@ -336,14 +336,17 @@ juce::String ProjectDocument::toJson() const
         o->setProperty ("notes", perChannel);
         // (0.31.0 to 0.41.0 wrote "steps", the step channels' active lengths that repeated; since 0.42.0 nothing repeats by
         // itself, and a file with "steps" is opened with the repeats written out as notes.)
-        if (p.hasLoop (arrangement.patternTicks))
+        if (p.hasLoop())
             o->setProperty ("loop", juce::Array<juce::var> { p.loopStartTick, p.loopEndTick }); // the piano roll's loop region (0.20.0)
+        o->setProperty ("beats", p.length() / kTicksPerBeat); // its own length in quarter notes (0.56.0)
         patternList.add (juce::var (o));
     }
     root->setProperty ("patterns", patternList);
-    root->setProperty ("patternBeats", arrangement.patternTicks / kTicksPerBeat); // 0.42.0: in quarter notes
-    if (arrangement.patternTicks % (4 * kTicksPerBeat) == 0)
-        root->setProperty ("patternBars", arrangement.patternTicks / (4 * kTicksPerBeat)); // what older versions read
+    // Before 0.56.0 all patterns had one length, written here: older versions read it (the longest, so no notes are cut).
+    const int shared = arrangement.longestPatternTicks();
+    root->setProperty ("patternBeats", shared / kTicksPerBeat); // 0.42.0: in quarter notes
+    if (shared % (4 * kTicksPerBeat) == 0)
+        root->setProperty ("patternBars", shared / (4 * kTicksPerBeat)); // what 0.15.0 - 0.41.0 read
 
     juce::Array<juce::var> clipList;
     for (const auto& c : arrangement.clips)
@@ -632,16 +635,18 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
             for (int s = 0; s < std::min (slots->size(), kSlotsPerTrack); ++s)
                 d.masterSlots[static_cast<size_t> (s)] = readSlot ((*slots)[s], d.pluginSpecs, PluginSpec::Place::Master, 0, s);
 
-    // --- pattern length (0.15.0 in bars, older files: two bars; 0.42.0 in quarter notes)
+    // --- the length all patterns had before 0.56.0 (0.15.0 in bars, older files: two bars; 0.42.0 in quarter notes); since 0.56.0
+    // each pattern has its own ("beats"), and this is only for a pattern without one
+    int sharedTicks = kDefaultPatternTicks;
     if (root->hasProperty ("patternBeats"))
-        d.arrangement.patternTicks = readInt (root->getProperty ("patternBeats"), kMinPatternBeats, 2, kMaxPatternBeats) * kTicksPerBeat;
+        sharedTicks = readInt (root->getProperty ("patternBeats"), kMinPatternBeats, 2, kMaxPatternBeats) * kTicksPerBeat;
     else
     {
         const int bars = readInt (root->getProperty ("patternBars"), 2, 1, 8);
         const bool offered = std::find (std::begin (kPatternBarChoices), std::end (kPatternBarChoices), bars) != std::end (kPatternBarChoices);
         if (! offered)
             r.warnings.push_back ("The pattern length " + std::to_string (bars) + " bars is not offered; two bars are used.");
-        d.arrangement.patternTicks = (offered ? bars : 2) * 4 * kTicksPerBeat;
+        sharedTicks = (offered ? bars : 2) * 4 * kTicksPerBeat;
     }
 
     // --- patterns
@@ -665,18 +670,21 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
 
         Pattern pattern;
         pattern.name = readName (o->getProperty ("name"), "Pattern " + std::to_string (p + 1));
+        pattern.lengthTicks = o->hasProperty ("beats") ? readInt (o->getProperty ("beats"), kMinPatternBeats, 2, kMaxPatternBeats) * kTicksPerBeat
+                                                       : sharedTicks;
+        const int patternTicks = pattern.length();
         pattern.notes.resize (numChannels);
         if (auto* loop = o->getProperty ("loop").getArray(); loop != nullptr && loop->size() == 2)
         {
             // Out-of-range values are dropped, not clamped: a region that does not fit is not this pattern's region.
             const auto tickOf = [] (const juce::var& x) { return x.isInt() || x.isInt64() || x.isDouble() ? static_cast<double> (x) : -1.0; };
             const double start = tickOf ((*loop)[0]), end = tickOf ((*loop)[1]);
-            if (start >= 0.0 && end <= d.arrangement.patternTicks)
+            if (start >= 0.0 && end <= patternTicks)
             {
                 pattern.loopStartTick = static_cast<int> (start);
                 pattern.loopEndTick = static_cast<int> (end);
             }
-            if (! pattern.hasLoop (d.arrangement.patternTicks))
+            if (! pattern.hasLoop())
                 pattern.loopStartTick = pattern.loopEndTick = -1;
         }
 
@@ -692,7 +700,7 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
                     for (const auto& nv : *notes)
                     {
                         Note n;
-                        if (readNote (nv, d.arrangement.patternTicks, n))
+                        if (readNote (nv, patternTicks, n))
                             pattern.notes[static_cast<size_t> (c)].push_back (n);
                         else
                             ++droppedNotes;
@@ -708,8 +716,8 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
             // it sounds the same now that the grid does not repeat by itself.
             for (int c = 0; c < static_cast<int> (numChannels) && c < static_cast<int> (d.channels.size()); ++c)
             {
-                const int set = c < stepList->size() ? readInt ((*stepList)[c], 0, 0, steps::patternSteps (d.arrangement.patternTicks)) : 0;
-                steps::bakeLegacyRepeats (pattern.notes[static_cast<size_t> (c)], set, d.arrangement.patternTicks,
+                const int set = c < stepList->size() ? readInt ((*stepList)[c], 0, 0, steps::patternSteps (patternTicks)) : 0;
+                steps::bakeLegacyRepeats (pattern.notes[static_cast<size_t> (c)], set, patternTicks,
                                           steps::stepPitch (d.channels[static_cast<size_t> (c)]));
             }
 
@@ -757,13 +765,13 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
                 {
                     clip.startTick = readInt (o->getProperty ("startTick"), -1, -1, 1 << 28);
                     clip.lengthTicks = readInt (o->getProperty ("lengthTicks"), 0, 0, 1 << 28);
-                    clip.offsetTicks = readInt (o->getProperty ("offsetTicks"), 0, 0, d.arrangement.patternTicks - 1);
+                    clip.offsetTicks = readInt (o->getProperty ("offsetTicks"), 0, 0, d.arrangement.patternLength (clip.pattern) - 1);
                 }
                 else
                 {
                     // Before 0.42.0: whole pattern lengths.
-                    clip.startTick = readInt (o->getProperty ("start"), -1, -1, 100000) * d.arrangement.patternTicks;
-                    clip.lengthTicks = readInt (o->getProperty ("length"), 0, 0, 100000) * d.arrangement.patternTicks;
+                    clip.startTick = readInt (o->getProperty ("start"), -1, -1, 100000) * sharedTicks;
+                    clip.lengthTicks = readInt (o->getProperty ("length"), 0, 0, 100000) * sharedTicks;
                 }
             }
             if (o != nullptr && d.arrangement.canPlace (clip))
@@ -870,7 +878,7 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
         if (meter.text() != meterText.trim().toStdString())
             r.warnings.push_back ("The time signature " + meterText.toStdString() + " is not one this program has; 4/4 is used.");
         d.arrangement.meter = meter;
-        d.arrangement.patternTicks = std::max (d.arrangement.patternTicks, d.arrangement.minPatternBeats() * kTicksPerBeat);
+        d.arrangement.lengthenPatternsTo (d.arrangement.minPatternBeats() * kTicksPerBeat);
     }
     if (auto* tempos = root->getProperty ("tempoChanges").getArray())
     {

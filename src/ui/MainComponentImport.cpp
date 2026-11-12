@@ -61,13 +61,13 @@ void MainComponent::importMidiFile (const juce::File& file)
         return fail (juce::String (parsed.error));
 
     const int startTick = arrangement.songLengthTicks();
-    const int room = std::min (kMaxPatterns - static_cast<int> (arrangement.patterns.size()),
-                               (arrangement.timelineTicks() - startTick) / std::max (1, arrangement.patternTicks));
+    const int unit = currentPatternTicks(); // the file is cut into patterns as long as the current one (0.56.0)
+    const int room = std::min (kMaxPatterns - static_cast<int> (arrangement.patterns.size()), (arrangement.timelineTicks() - startTick) / unit);
     if (room <= 0)
         return fail ("there is no room left for new patterns on the playlist");
 
     const int freeChannels = kMaxChannels - static_cast<int> (channels.size());
-    const auto plan = planMidiImport (parsed, freeChannels, arrangement.patternTicks, room);
+    const auto plan = planMidiImport (parsed, freeChannels, unit, room);
     if (plan.channelNames.empty() || plan.patternCount() == 0)
         return fail (plan.skippedPercussion > 0 && freeChannels > 0 ? "it only holds drums (General MIDI percussion is not imported)"
                                                                    : "there is no free channel: remove a channel first");
@@ -98,13 +98,14 @@ void MainComponent::importMidiFile (const juce::File& file)
     {
         Pattern pattern;
         pattern.name = plan.patternCount() == 1 ? stem : stem + " " + std::to_string (p + 1);
+        pattern.lengthTicks = unit;
         pattern.notes.resize (channels.size());
         for (size_t k = 0; k < newChannels.size() && k < plan.patternNotes[static_cast<size_t> (p)].size(); ++k)
             pattern.notes[static_cast<size_t> (newChannels[k])] = plan.patternNotes[static_cast<size_t> (p)][k];
         arrangement.patterns.push_back (std::move (pattern));
         // Each new pattern gets its own playlist track (0.44.0), and its clip goes there.
         const int own = arrangement.addPatternTrack (firstPattern + p);
-        arrangement.clips.push_back ({ firstPattern + p, own >= 0 ? own : 0, startTick + p * arrangement.patternTicks, arrangement.patternTicks, 0 });
+        arrangement.clips.push_back ({ firstPattern + p, own >= 0 ? own : 0, startTick + p * unit, unit, 0 });
     }
 
     juce::String message = "Imported " + file.getFileName() + ": " + juce::String (static_cast<int> (newChannels.size()))

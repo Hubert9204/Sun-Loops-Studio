@@ -264,7 +264,8 @@ One row per channel: a **Track N** display and the name, **M** (mute), **S** (so
     all of them usable; nothing is greyed out and nothing repeats or grows by itself.
   - The bar at the top of the Channel Rack reads the length (*Pattern: 4 quarters (1 bar) - 16 steps*) and has two
     buttons: **+** adds **one quarter** (4 more steps) and **-** takes one away. The shortest is 4 quarters (the - button
-    is then disabled), the longest 64 (16 bars). The length is the same for every pattern; steps past a shorter end are
+    is then disabled), the longest 64 (16 bars). **Each pattern has its own length** (0.56.0): + and - change only the
+    current pattern, the others keep theirs, and a new pattern starts at 4 quarters. Steps past a shorter end are
     kept but not played, and come back with +. Playlist clips stay where they are (see *Patterns*). Ctrl+Z undoes it.
   - As soon as the channel has a note that is not a plain step - another pitch, a longer note, a note off the 16th
     grid, written in the Piano Roll, the drum machine, recorded or generated - the row shows the **preview of the
@@ -642,11 +643,16 @@ whichever comes first. When you open a channel the view scrolls to its notes.
 
 A **pattern** holds the notes of every channel. The pattern box in the toolbar selects the current pattern: the
 Channel Rack and the Piano Roll show and edit that pattern. The **+** button next to it offers **New empty pattern**,
-**Clone current pattern** and **Pattern length (all patterns)**: 1 (the default), 2, 4 or 8 bars; the **-** and **+** buttons of the
-Channel Rack change it by **one quarter** at a time (4 to 64 quarters). The length applies to every pattern; the step
-sequencer, the piano roll and the drum machine follow. Pattern clips stay where they are (0.42.0): a clip that was a whole number of
-patterns long keeps that number of repeats, any other keeps its length. Notes past the end of a shorter pattern are kept but not played, and come back if you make the patterns longer again. The change
-is refused if the playlist would no longer fit in the timeline. New patterns get the next name automatically (Pattern 3, Pattern 4, ...). The demo song (0.52.0)
+**Clone current pattern** and **Length of this pattern**: 1, 2, 4 or 8 bars; the **-** and **+** buttons of the
+Channel Rack change it by **one quarter** at a time (4 to 64 quarters). **Every pattern has its own length** (0.56.0; before, one
+length was shared by all): the change applies to the current pattern only, and switching pattern shows that pattern's length; the
+step sequencer, the piano roll and the drum machine follow. **New empty pattern** always starts at **4 quarters (one bar of 4/4)**,
+whatever the other patterns are; a clone keeps the length of the pattern it copies. That pattern's clips stay where they are (0.42.0):
+a clip that was a whole number of patterns long keeps that number of repeats, any other keeps its length; the clips of the other
+patterns do not change. On the playlist each clip repeats its own pattern, and a new clip is as long as its pattern. Notes past the end
+of a shorter pattern are kept but not played, and come back if you make the pattern longer again. The change is refused if the playlist
+would no longer fit in the timeline. Projects saved before 0.56.0 open with every pattern at the one length they had. New patterns get
+the next name automatically (Pattern 3, Pattern 4, ...). The demo song (0.52.0)
 has 12 patterns of four bars (Piano, Beat, Build, Bass, Marimba, Lead, Pad, Growl, Bells, Choir, Arp, Outro), each on its own track.
 
 **Loop Starter (0.30.0).** *Loop Starter...* in the **+** menu makes a starting loop for a track. Choose the **genre** (house, techno,
@@ -709,7 +715,7 @@ Studio's **.flp** files, with code written for this program (no FL Studio code o
 ## Importing a MIDI file
 
 *File > Import a MIDI file into patterns...* (or drop a `.mid` / `.midi` file on the Playlist) turns a Standard MIDI File into **new synth
-channels** (one per track and MIDI channel that has notes, named after the track) and **new patterns** of the project's pattern length, placed one after the
+channels** (one per track and MIDI channel that has notes, named after the track) and **new patterns** as long as the current pattern, placed one after the
 other after the existing clips, each on its own playlist track (0.44.0; before, all on track 1). Long notes that cross the end of a pattern are cut there and sound again at the start of
 the next pattern. The first tempo of the file sets the BPM. The status line reports what was done and what was left out.
 
@@ -738,7 +744,7 @@ at a glance; on tall tracks the name sits in a title bar above the notes, on sho
   track names**, or **Alt + wheel** anywhere.
 - Projects saved before 0.44.0 open with their 8 tracks as they were.
 
-The timeline is at least 32 pattern lengths and at least 64 bars long. The ruler shows bar
+The timeline is at least 32 lengths of the longest pattern and at least 64 bars long. The zoom counts in bars of 4/4. The ruler shows bar
 numbers. The orange vertical line marks the end of the song: in Song mode playback loops there (or at the loop region, below).
 
 ### The ruler: song position and loop region
@@ -1312,7 +1318,7 @@ a heavier song or a plugin-heavy mixer can still need a bigger size.
   at least 32 patterns and 64 bars, 4 automation lanes, 64 automation clips of up to 256 points each, 32 simultaneous voices.
 - The effects use about 15 MB of memory at 48 kHz to start with, plus about 0.8 MB for every reverb, delay, chorus and Pitch Corrector beyond
   the sixteenth (more at higher sample rates). Memory made for them stays until the audio device restarts.
-- Patterns are 4 to 64 quarters long (the same for all patterns; 2 or 3 in a short time signature); one time signature for the whole song; up to 256 tempo changes, in steps, played in Song mode only; audio clips do not follow them.
+- Patterns are 4 to 64 quarters long (each its own; 2 or 3 in a short time signature); one time signature for the whole song; up to 256 tempo changes, in steps, played in Song mode only; audio clips do not follow them.
 - Samples are mono or stereo, at most 30 seconds. The sampler has one envelope and one filter per channel (no filter envelope, LFO or modulation);
   at most four zones sound per note. Audio clips: up to 5 minutes per file, 64 clips.
 - The synth: one LFO and one filter per channel, two oscillators, no unison, no additive engine yet, no modulation of the envelopes by

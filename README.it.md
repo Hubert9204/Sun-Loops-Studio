@@ -37,7 +37,7 @@ musica (anche dal programma: *Help > Join the Sun Loops Discord*).
 Sun Loops Studio si ispira al modo di lavorare dei DAW a loop come FL Studio. È un progetto indipendente: non usa
 codice, nomi, grafica o risorse di altri prodotti e non è affiliato né approvato dai loro produttori.
 
-**Stato: alpha (0.55.1).** Compila, più di 1.600 controlli automatici passano e ogni funzione è stata provata in un display
+**Stato: alpha (0.56.0).** Compila, più di 1.600 controlli automatici passano e ogni funzione è stata provata in un display
 virtuale. L'AppImage gira su Nobara; la riproduzione è stata confermata la prima volta su un vero PC Nobara con la versione 0.3. Gran
 parte di quello che è arrivato dopo (registrazione, hardware MIDI, plugin, il suono dei sintetizzatori) è stato provato con test
 automatici e in un display virtuale con un dispositivo audio muto, e ora lo si sta provando su hardware vero. **I plugin (VST3, LV2,
@@ -77,7 +77,7 @@ con precisione cosa è verificato, cosa no e cosa manca.
   reggaeton, rock, synthwave): batteria, basso, accordi e una melodia che stanno insieme, nella tonalità scelta, al tempo del genere, con
   i suoni incorporati, come nuovo pattern. Fatto con regole e caso (niente IA, niente in rete); ogni variante è diversa.
 - **Pattern e Playlist** - più pattern (nuovi, copiati, rinominati o eliminati con i pulsanti sopra la playlist) disposti come clip su tracce (0.44.0: 4 tracce libere più una per ogni pattern, aggiunta da sola a ogni nuovo pattern, e **-** / **+** per togliere o aggiungere tracce a mano, fino a 128; ognuna con nome e colore propri, e le clip possono stare una sopra l'altra: 0.33.0). Il pulsante *Pattern / Song*
-  sceglie se ripetere il pattern selezionato o suonare tutta la playlist; i pattern durano da 4 a 64 quarti, e le clip di pattern si spostano per quadrati della griglia (o liberamente con Alt), quindi possono partire sfasate tra loro (0.42.0). **Clic sul righello per spostare il
+  sceglie se ripetere il pattern selezionato o suonare tutta la playlist; i pattern durano da 4 a 64 quarti, ognuno con la sua lunghezza (0.56.0), e le clip di pattern si spostano per quadrati della griglia (o liberamente con Alt), quindi possono partire sfasate tra loro (0.42.0). **Clic sul righello per spostare il
   cursore, anche in riproduzione; trascinamento col destro per disegnare una zona di loop** (tasto destro sulla zona per spostarla, ridimensionarla o eliminarla).
 - **Audio nella Playlist** - trascina file audio (`.wav .aiff .flac .ogg .oga .mp3 .aac`) o video (ne viene presa la
   traccia audio) dal file manager sulla Playlist: diventano clip con la forma d'onda. Gli **strumenti Select, Split, Cut, Erase e Zoom**,
@@ -196,7 +196,7 @@ applicazioni: `cmake --install build --prefix ~/.local`. Per creare un'unica **A
 ./build/SunLoopsStudioTests_artefacts/Release/SunLoopsStudioTests
 ```
 
-Non servono dispositivo audio né display; 1693 controlli alla 0.52.0. Coprono, tra l'altro, intonazione del synth e tempi esatti al
+Non servono dispositivo audio né display; 1711 controlli alla 0.56.0. Coprono, tra l'altro, intonazione del synth e tempi esatti al
 campione, ogni strumento ed effetto, che `Player::render` non allochi mai memoria (effetti compresi), uno stress test concorrente del
 passaggio dati interfaccia→audio, il file di progetto (andata e ritorno, file danneggiati o ostili, sample mancanti, scrittura atomica),
 l'importazione da FL Studio e MIDI, l'esportazione in ogni formato, la registrazione, l'automazione, i cambi di tempo, l'host dei plugin,

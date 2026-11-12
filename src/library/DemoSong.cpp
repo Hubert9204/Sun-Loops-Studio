@@ -239,11 +239,13 @@ DemoSong makeDemoSong()
 
     // --- Patterns ---------------------------------------------------------------------------------------------------------------
     auto& a = d.arrangement;
-    a.patternTicks = PATTERN_BARS * BAR;
     a.patterns.resize (kPatterns);
     const char* patternNames[kPatterns] = { "Piano", "Beat", "Build", "Bass", "Marimba", "Lead", "Pad", "Growl", "Bells", "Choir", "Arp", "Outro" };
     for (int p = 0; p < kPatterns; ++p)
+    {
         a.patterns[static_cast<size_t> (p)].name = patternNames[p];
+        a.patterns[static_cast<size_t> (p)].lengthTicks = PATTERN_BARS * BAR;
+    }
     a.ensureChannelCount (kChannels);
     Writer w { d };
     writeDrums (w);

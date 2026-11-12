@@ -2,6 +2,21 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.56.0 - 2026-11-12
+
+### Changed
+- **Each pattern has its own length.** The Channel Rack's **-** / **+** (one quarter at a time) and the pattern menu's
+  *Length of this pattern* (before, *Pattern length (all patterns)*) change only the current pattern; the other patterns keep their
+  lengths, and switching pattern shows that pattern's length in the rack, the Piano Roll, the drum machine and the note recorder.
+- **New empty pattern** always starts at 4 quarters (one bar of 4/4), whatever the others are; *Clone current pattern* keeps the
+  length of the pattern it copies; the Loop Starter's pattern gets the loop's length, a MIDI import cuts the file into patterns as
+  long as the current one.
+- On the playlist each clip repeats its own pattern; a new clip is as long as its pattern; changing a pattern's length resizes only
+  that pattern's clips (a clip of whole repeats keeps its repeats). The timeline holds 32 lengths of the longest pattern; the zoom
+  counts in bars of 4/4, and a faint line marks every 4 bars.
+- Project files save the length of each pattern; files from earlier versions open with every pattern at the one length they had.
+  Earlier versions opening a new file use the longest pattern's length for all.
+
 ## 0.55.1 - 2026-11-11
 
 ### Changed

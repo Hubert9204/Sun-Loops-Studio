@@ -23,7 +23,7 @@ namespace sls
 
 void MainComponent::applyNoteRecording()
 {
-    noteRecorder.configure (arrangement.patternTicks, noteQuantize);
+    noteRecorder.configure (currentPatternTicks(), noteQuantize);
     noteRecordButton.setToggleState (noteRecordOn, juce::dontSendNotification);
     engine.setNoteRecording (noteRecordOn);
     if (settings != nullptr)
@@ -174,7 +174,7 @@ void MainComponent::dumpScoreLog (bool lastPhraseOnly)
         return;
     }
 
-    const int patternLength = arrangement.patternTicks;
+    const int patternLength = currentPatternTicks();
     int added = 0, tooLate = 0, noChannel = 0;
     std::array<bool, kMaxChannels> touched {};
     for (const auto& l : logged)

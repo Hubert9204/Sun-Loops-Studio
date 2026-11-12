@@ -265,9 +265,9 @@ juce::String MainComponent::slicesToSampler (const std::shared_ptr<const SampleD
         const int start = static_cast<int> (std::lround (secondsToTicks (frame / out->sampleRate, bpm)));
         const int ticks = std::max (1, static_cast<int> (std::lround (secondsToTicks (length / out->sampleRate, bpm))));
         frame += length;
-        if (start >= arrangement.patternTicks)
+        if (start >= currentPatternTicks())
             break;
-        channel.notes.push_back ({ program->zones[i].loKey, start, std::min (ticks, arrangement.patternTicks - start), 0.8f });
+        channel.notes.push_back ({ program->zones[i].loKey, start, std::min (ticks, currentPatternTicks() - start), 0.8f });
     }
     strips[static_cast<size_t> (index)]->refreshFromChannel();
     selectChannel (index);

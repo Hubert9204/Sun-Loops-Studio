@@ -29,9 +29,12 @@ constexpr int kLegacyPlaylistTracks = 8;
 constexpr int kPlaylistUnits = 32;     // the timeline holds at least this many pattern lengths (see Arrangement::timelineTicks)
 constexpr int kPatternBarChoices[] = { 1, 2, 4, 8 }; // the pattern lengths offered in the pattern menu, in bars of 4/4
 // The pattern length (0.42.0) is counted in quarter notes: 4 (one bar of 4/4, the default) at least, changed one quarter at a time
-// by the Channel Rack's + and - buttons.
+// by the Channel Rack's + and - buttons. Since 0.56.0 every pattern has its own length; a new pattern starts at 4 quarters.
 constexpr int kMinPatternBeats = 4;
 constexpr int kMaxPatternBeats = 64;
+constexpr int kDefaultPatternTicks = kMinPatternBeats * kTicksPerBeat;
+// The playlist's zoom unit (0.56.0): the width the zoom sets is that of 4 quarters (before, of the one pattern length).
+constexpr int kPlaylistUnitTicks = kDefaultPatternTicks;
 constexpr int kMaxPatterns = 64;
 
 struct Pattern
@@ -44,8 +47,11 @@ struct Pattern
     // The step sequencer's active length of each channel in this pattern (0.31.0), in steps; 0 or missing = not set (see
     // StepSequence.h). Projects saved before 0.31.0 load with every channel set to the whole pattern, so they play as before.
     std::vector<int> steps;
+    // This pattern's length in ticks (0.56.0: each pattern has its own; before, one length was shared by all of them).
+    int lengthTicks = kDefaultPatternTicks;
     int stepsOf (size_t channel) const noexcept { return channel < steps.size() ? steps[channel] : 0; }
-    bool hasLoop (int patternTicks) const noexcept { return loopStartTick >= 0 && loopEndTick > loopStartTick && loopEndTick <= patternTicks; }
+    int length() const noexcept { return std::max (1, lengthTicks); }
+    bool hasLoop() const noexcept { return loopStartTick >= 0 && loopEndTick > loopStartTick && loopEndTick <= length(); }
 };
 
 // A clip plays `pattern` on `track` from `startTick` for `lengthTicks`, repeating the pattern as often as the length asks
@@ -170,7 +176,6 @@ struct Arrangement
     std::vector<Pattern> patterns;
     std::vector<Clip> clips;
     std::vector<AudioClip> audioClips;
-    int patternTicks = kMinPatternBeats * kTicksPerBeat; // the patterns' length (0.42.0: one bar of 4/4 to start with)
     std::vector<AutomationClip> automationClips; // on the lanes under the tracks; they play in Song mode
     // The loop region drawn on the playlist's ruler (ticks; -1 / -1 when there is none). In Song mode the transport goes
     // back to its start when it reaches its end.
@@ -185,6 +190,19 @@ struct Arrangement
     std::vector<PlaylistTrack> playlistTracks = std::vector<PlaylistTrack> (kDefaultGenericTracks);
 
     int trackCount() const noexcept { return static_cast<int> (playlistTracks.size()); }
+
+    // The length of pattern `p` (0.56.0); 4 quarters for an index that is not a pattern.
+    int patternLength (int p) const noexcept
+    {
+        return p >= 0 && p < static_cast<int> (patterns.size()) ? patterns[static_cast<size_t> (p)].length() : kDefaultPatternTicks;
+    }
+    int longestPatternTicks() const noexcept
+    {
+        int longest = kDefaultPatternTicks;
+        for (const auto& p : patterns)
+            longest = std::max (longest, p.length());
+        return longest;
+    }
 
     // The track dedicated to `pattern`, or -1.
     int dedicatedTrack (int pattern) const noexcept
@@ -264,8 +282,8 @@ struct Arrangement
     }
     void clearLoop() noexcept { loopStartTick = loopEndTick = -1; }
 
-    // The timeline holds at least kPlaylistUnits pattern lengths and at least 64 bars.
-    int timelineTicks() const noexcept { return std::max (kPlaylistUnits * patternTicks, kPlaylistUnits * 8 * kTicksPerBeat); }
+    // The timeline holds at least kPlaylistUnits lengths of the longest pattern and at least 64 bars.
+    int timelineTicks() const noexcept { return std::max (kPlaylistUnits * longestPatternTicks(), kPlaylistUnits * 8 * kTicksPerBeat); }
 
     // Does an audio clip fit: inside the timeline, on an existing track? (Audio clips start on any tick: the playlist's snap
     // setting decides how coarse the positions you can drag them to are.) Since 0.33.0 clips may overlap on a track, pattern and
@@ -411,19 +429,34 @@ struct Arrangement
         return (end + bar - 1) / bar * bar;
     }
 
-    // The patterns get a new length (0.42.0): clips stay where they are; a clip that was a whole number of patterns long keeps that
-    // number of repeats, any other keeps its length; offsets stay inside the pattern.
-    void setPatternLengthKeepingClips (int newTicks)
+    // Pattern `p` gets a new length (0.42.0; only that pattern since 0.56.0): its clips stay where they are; a clip that was a
+    // whole number of patterns long keeps that number of repeats, any other keeps its length; offsets stay inside the pattern.
+    // The other patterns and their clips do not change. Returns false for a bad index.
+    bool setPatternLengthKeepingClips (int p, int newTicks)
     {
-        const int old = std::max (1, patternTicks);
+        if (p < 0 || p >= static_cast<int> (patterns.size()))
+            return false;
+        auto& pattern = patterns[static_cast<size_t> (p)];
+        const int old = pattern.length();
         newTicks = std::clamp (newTicks, minPatternBeats() * kTicksPerBeat, kMaxPatternBeats * kTicksPerBeat);
         for (auto& c : clips)
         {
+            if (c.pattern != p)
+                continue;
             if (c.lengthTicks % old == 0)
                 c.lengthTicks = c.lengthTicks / old * newTicks;
             c.offsetTicks = std::min (c.offsetTicks, newTicks - 1);
         }
-        patternTicks = newTicks;
+        pattern.lengthTicks = newTicks;
+        return true;
+    }
+
+    // Every pattern at least `minTicks` long (a shorter bar may allow shorter patterns, a longer one not).
+    void lengthenPatternsTo (int minTicks)
+    {
+        for (int p = 0; p < static_cast<int> (patterns.size()); ++p)
+            if (patterns[static_cast<size_t> (p)].length() < minTicks)
+                setPatternLengthKeepingClips (p, minTicks);
     }
 
     // Make every pattern hold one note list per channel (after channels were added).
@@ -499,6 +532,7 @@ inline Project compilePattern (const std::vector<Channel>& channelSettings, cons
     auto channels = channelSettings;
     const bool valid = patternIndex >= 0 && patternIndex < static_cast<int> (arrangement.patterns.size());
 
+    const int length = arrangement.patternLength (patternIndex);
     for (size_t c = 0; c < channels.size(); ++c)
     {
         channels[c].notes.clear();
@@ -506,10 +540,10 @@ inline Project compilePattern (const std::vector<Channel>& channelSettings, cons
         {
             const auto& notes = arrangement.patterns[static_cast<size_t> (patternIndex)].notes;
             if (c < notes.size())
-                channels[c].notes = steps::playedNotes (notes[c], arrangement.patternTicks);
+                channels[c].notes = steps::playedNotes (notes[c], length);
         }
     }
-    auto project = Project::make (std::move (channels), arrangement.patternTicks, std::move (tracks), masterSlots, {}, {}, std::move (console));
+    auto project = Project::make (std::move (channels), length, std::move (tracks), masterSlots, {}, {}, std::move (console));
     project.beatsPerBar = arrangement.meter.beats; // the metronome's accent (0.46.0)
     project.beatUnit = arrangement.meter.unit;
     return project;
@@ -561,7 +595,7 @@ inline void remapArrangementChannels (Arrangement& arrangement, const std::vecto
 }
 
 // The whole playlist laid out on one timeline: what "song mode" plays. Loops over the end of the last clip
-// (an empty playlist is a silent loop of one pattern length).
+// (an empty playlist is a silent loop of 4 quarters).
 inline Project compileSong (const std::vector<Channel>& channelSettings, const Arrangement& arrangement,
                             std::vector<MixerTrack> tracks = {},
                             std::array<EffectSlot, kSlotsPerTrack> masterSlots = {},
@@ -571,8 +605,7 @@ inline Project compileSong (const std::vector<Channel>& channelSettings, const A
     for (auto& c : channels)
         c.notes.clear();
 
-    const int songTicks = std::max (arrangement.patternTicks, arrangement.songLengthTicks());
-    const int patternTicks = std::max (1, arrangement.patternTicks);
+    const int songTicks = std::max (kDefaultPatternTicks, arrangement.songLengthTicks());
 
     for (const auto& clip : arrangement.clips)
     {
@@ -580,6 +613,7 @@ inline Project compileSong (const std::vector<Channel>& channelSettings, const A
             continue;
 
         const auto& source = arrangement.patterns[static_cast<size_t> (clip.pattern)];
+        const int patternTicks = source.length(); // each clip repeats its own pattern's length (0.56.0)
         // The pattern repeats from `offsetTicks` into it, for the clip's length: pass k starts at clip time k * pattern - offset.
         const int offset = ((clip.offsetTicks % patternTicks) + patternTicks) % patternTicks;
         for (size_t c = 0; c < channels.size() && c < source.notes.size(); ++c)

@@ -44,8 +44,8 @@ void MainComponent::selectPattern (int index)
     {
         channels[c].notes = pattern.notes[c];
         channels[c].steps = pattern.stepsOf (c);
-        strips[c]->refreshFromChannel();
     }
+    showPatternLength(); // each pattern has its own length (0.56.0): the rack, the rolls and the recorder follow it
 
     pianoRoll.setNotes (channels[static_cast<size_t> (selected)].notes);
     playlistView.setSelectedPattern (index);
@@ -62,12 +62,18 @@ void MainComponent::addPattern (bool cloneCurrent)
 
     commitCurrentPattern();
 
+    // A new pattern is 4 quarters long (0.56.0), whatever the others are; a clone keeps the length of the pattern it copies.
     Pattern pattern;
     pattern.name = arrangement.newPatternName();
+    pattern.lengthTicks = std::max (kDefaultPatternTicks, arrangement.minPatternBeats() * kTicksPerBeat);
     if (cloneCurrent)
     {
-        pattern.notes = arrangement.patterns[static_cast<size_t> (currentPattern)].notes;
-        pattern.steps = arrangement.patterns[static_cast<size_t> (currentPattern)].steps;
+        const auto& source = arrangement.patterns[static_cast<size_t> (currentPattern)];
+        pattern.notes = source.notes;
+        pattern.steps = source.steps;
+        pattern.lengthTicks = source.lengthTicks;
+        pattern.loopStartTick = source.loopStartTick;
+        pattern.loopEndTick = source.loopEndTick;
     }
     arrangement.patterns.push_back (std::move (pattern));
     const int ownTrack = arrangement.addPatternTrack (static_cast<int> (arrangement.patterns.size()) - 1); // its own playlist track (0.44.0)
@@ -88,9 +94,9 @@ void MainComponent::showNewPatternMenu (juce::Component& target)
     juce::PopupMenu lengths;
     for (const int choice : kPatternBarChoices)
         lengths.addItem (100 + choice, juce::String (choice) + (choice == 1 ? " bar" : " bars"), true,
-                         arrangement.patternTicks == choice * 4 * kTicksPerBeat); // 5 quarters ticks none
+                         currentPatternTicks() == choice * 4 * kTicksPerBeat); // 5 quarters ticks none
     menu.addSeparator();
-    menu.addSubMenu ("Pattern length (all patterns)", lengths);
+    menu.addSubMenu ("Length of this pattern", lengths);
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&target),
                         [safe = juce::Component::SafePointer<MainComponent> (this)] (int result)
                         {
@@ -108,7 +114,7 @@ void MainComponent::showNewPatternMenu (juce::Component& target)
 void MainComponent::showPatternLength()
 {
     showMeter(); // the time signature first: the rack and the rolls count bars with it (0.46.0)
-    const int ticks = arrangement.patternTicks;
+    const int ticks = currentPatternTicks();
     pianoRoll.setLoopLengthTicks (ticks);
     for (auto& strip : strips)
     {
@@ -121,10 +127,11 @@ void MainComponent::showPatternLength()
     rackBody.setPatternBeats (ticks / kTicksPerBeat, arrangement.minPatternBeats(), arrangement.meter);
 }
 
-// Every pattern gets the new length, counted in quarter notes (0.42.0): the Channel Rack's + and - change it one quarter at a time,
-// the pattern menu offers whole bars. Notes past the end of a shorter pattern are kept but not played, and come back when the
-// patterns are made longer again. Playlist clips stay where they are (they are placed in ticks); a clip that was a whole number of
-// patterns long keeps that number of repeats. Refused when something would no longer fit in the timeline.
+// The current pattern gets the new length, counted in quarter notes (0.42.0; 0.56.0: that pattern only, the others keep theirs): the
+// Channel Rack's + and - change it one quarter at a time, the pattern menu offers whole bars. Notes past the end of a shorter pattern
+// are kept but not played, and come back when the pattern is made longer again. Its playlist clips stay where they are (they are
+// placed in ticks); a clip that was a whole number of patterns long keeps that number of repeats. Refused when something would no
+// longer fit in the timeline.
 void MainComponent::setPatternLength (int bars)
 {
     setPatternBeats (bars * 4);
@@ -134,10 +141,11 @@ void MainComponent::setPatternBeats (int beats)
 {
     beats = std::clamp (beats, arrangement.minPatternBeats(), kMaxPatternBeats);
     const int ticks = beats * kTicksPerBeat;
-    if (ticks == arrangement.patternTicks)
+    if (ticks == currentPatternTicks())
         return;
     auto changed = arrangement;
-    changed.setPatternLengthKeepingClips (ticks);
+    if (! changed.setPatternLengthKeepingClips (currentPattern, ticks))
+        return;
     bool fits = true;
     for (const auto& c : changed.clips)
         fits = fits && c.endTick() <= changed.timelineTicks();
@@ -147,13 +155,13 @@ void MainComponent::setPatternBeats (int beats)
         fits = fits && a.endTick() <= changed.timelineTicks();
     if (! fits)
     {
-        statusLabel.setText ("The playlist would not fit in the timeline with patterns of " + juce::String (beats) + " quarters: move the last clips first",
+        statusLabel.setText ("The playlist would not fit in the timeline with this pattern " + juce::String (beats) + " quarters long: move the last clips first",
                              juce::dontSendNotification);
         return;
     }
     commitCurrentPattern();
     arrangement.clips = changed.clips;
-    arrangement.patternTicks = ticks;
+    arrangement.patterns[static_cast<size_t> (currentPattern)].lengthTicks = ticks;
     if (! arrangement.hasLoop())
         arrangement.clearLoop();
     showPatternLength();
@@ -162,7 +170,9 @@ void MainComponent::setPatternBeats (int beats)
     pianoRoll.setNotes (channels[static_cast<size_t> (selected)].notes);
     songStartTick = std::min (songStartTick, arrangement.timelineTicks() - 1);
     publishProject();
-    statusLabel.setText ("Patterns are " + juce::String (beats) + " quarters long (" + juce::String (beats * 4) + " steps)", juce::dontSendNotification);
+    statusLabel.setText (juce::String (arrangement.patterns[static_cast<size_t> (currentPattern)].name) + " is " + juce::String (beats)
+                             + " quarters long (" + juce::String (beats * 4) + " steps)",
+                         juce::dontSendNotification);
 }
 
 void MainComponent::renamePattern (int index)
@@ -196,8 +206,9 @@ void MainComponent::loadPatternIntoChannels (int index)
     {
         channels[c].notes = pattern.notes[c];
         channels[c].steps = pattern.stepsOf (c);
-        strips[c]->refreshFromChannel();
     }
+    currentPattern = index;
+    showPatternLength(); // its own length (0.56.0); refreshes the strips
     pianoRoll.setNotes (channels[static_cast<size_t> (selected)].notes);
 }
 
@@ -318,7 +329,7 @@ void MainComponent::seekPattern (int tick)
 {
     if (songMode)
         setSongMode (false); // the ruler of the piano roll is the pattern's
-    patternStartTick = std::clamp (tick, 0, arrangement.patternTicks - 1);
+    patternStartTick = std::clamp (tick, 0, currentPatternTicks() - 1);
     engine.requestSeek (patternStartTick);
     pianoRoll.setStartTick (patternStartTick);
 }

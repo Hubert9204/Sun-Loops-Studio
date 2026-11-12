@@ -67,7 +67,7 @@ void MainComponent::openDrumMachine (int channelIndex)
                 safe->statusLabel.setText (text, juce::dontSendNotification);
         };
         view.setKitsFolder (library.drumKits);
-        view.setLoopTicks (arrangement.patternTicks);
+        view.setLoopTicks (currentPatternTicks());
     }
 
     drumWindowChannel = channelIndex;

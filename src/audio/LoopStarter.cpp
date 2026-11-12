@@ -402,6 +402,7 @@ Loop make (const Request& request)
     Loop loop;
     loop.genre = genre;
     loop.bpm = info.bpm;
+    loop.patternTicks = patternTicks;
     loop.scale.root = ((request.key % 12) + 12) % 12;
     loop.scale.type = request.minor ? 2 : 1; // natural minor / major (theory::scales())
 

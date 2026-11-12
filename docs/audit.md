@@ -27,6 +27,12 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.56.0
+The shared `Arrangement::patternTicks` was removed rather than kept beside the new `Pattern::lengthTicks`, so the compiler found
+every place that read it (about 150 in the program and the tests) and none can go on using a stale shared length. The editors read
+the current pattern's length through `MainComponent::currentPatternTicks()`, and `selectPattern` / `loadPatternIntoChannels` call
+`showPatternLength()`, so the rack, the rolls, the drum machine and the note recorder follow a pattern switch.
+
 ## After 0.52.0
 The demo song is built by code (`DemoSong.cpp`) rather than stored as a file, so it follows changes to the project format and to the
 effects' parameters; the test renders it and checks levels, so a change that breaks a part of it (a preset renamed, an effect

@@ -88,11 +88,11 @@ juce::String MainComponent::pitchNotesToPattern (const std::vector<pitchtrack::N
     for (const auto& n : notes)
     {
         const int start = static_cast<int> (std::lround (secondsToTicks (n.start, bpm)));
-        if (start >= arrangement.patternTicks)
+        if (start >= currentPatternTicks())
             break;
         const int length = std::max (1, static_cast<int> (std::lround (secondsToTicks (n.end - n.start, bpm))));
         const float velocity = loudest > 0.0 ? static_cast<float> (0.4 + 0.6 * std::sqrt (n.level / loudest)) : 0.8f;
-        written.push_back ({ n.nearestKey(), start, std::min (length, arrangement.patternTicks - start), std::clamp (velocity, 0.05f, 1.0f) });
+        written.push_back ({ n.nearestKey(), start, std::min (length, currentPatternTicks() - start), std::clamp (velocity, 0.05f, 1.0f) });
     }
     auto& channel = channels[static_cast<size_t> (selected)];
     channel.notes = written;

@@ -295,8 +295,9 @@ private:
     int loopStarterGenre = 0, loopStarterKey = 9, loopStarterParts = 0; // the last choices (A, all parts)
     std::uint32_t loopStarterVariation = 0;
     void setPatternLength (int bars);
-    void setPatternBeats (int beats); // 0.42.0: the Channel Rack's + / - (one quarter at a time)
-    void showPatternLength(); // the editors follow arrangement.patternTicks
+    void setPatternBeats (int beats); // 0.42.0: the Channel Rack's + / - (one quarter at a time); 0.56.0: the current pattern only
+    void showPatternLength(); // the editors follow the current pattern's length
+    int currentPatternTicks() const noexcept { return arrangement.patternLength (currentPattern); } // 0.56.0
     void renamePattern (int index);
     void deletePattern (int index);
     void loadPatternIntoChannels (int index);

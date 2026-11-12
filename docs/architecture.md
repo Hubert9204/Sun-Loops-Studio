@@ -709,8 +709,11 @@ ring, applies a Hann window and the library-free radix-2 FFT of `SpectrumAnalyse
 
 `Arrangement` is the song as the user edits it: **patterns** (notes per channel, ticks relative to the pattern start)
 and **clips** (pattern, track, start tick, length in ticks, offset into the pattern; in pattern units before 0.42.0). The
-pattern length is shared by all patterns (one bar of 4/4 by default). Limits: 1 to 128 playlist tracks (0.44.0; 8 before), a timeline of at least 32 pattern
-lengths and 64 bars, 64 patterns.
+length is each pattern's own (`Pattern::lengthTicks`, 0.56.0; before, `Arrangement::patternTicks` was shared by all): a new pattern
+is one bar of 4/4, `setPatternLengthKeepingClips (p, ticks)` changes one pattern and only its clips, `compilePattern` loops a pattern
+over its length and `compileSong` repeats each clip over its own pattern's length. The project file writes `beats` per pattern and,
+for older versions, the longest as `patternBeats`. The playlist's zoom unit is a fixed bar of 4/4 (`kPlaylistUnitTicks`). Limits:
+1 to 128 playlist tracks (0.44.0; 8 before), a timeline of at least 32 lengths of the longest pattern and 64 bars, 64 patterns.
 
 It is never played directly. It is *compiled* into an ordinary `Project`:
 

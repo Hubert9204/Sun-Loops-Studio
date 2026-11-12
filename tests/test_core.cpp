@@ -111,10 +111,18 @@ void check (bool ok, const char* name)
 constexpr double kSr = 48000.0;
 constexpr int kBeat = sls::kTicksPerBeat;
 
-// A pattern clip given in whole pattern lengths, as the playlist placed them before 0.42.0 (start and length in "units").
+// Every pattern the same length, as all of them were before 0.56.0 (since then each has its own).
+void setLengths (sls::Arrangement& a, int ticks)
+{
+    for (auto& p : a.patterns)
+        p.lengthTicks = ticks;
+}
+
+// A pattern clip given in whole lengths of its pattern, as the playlist placed them before 0.42.0 (start and length in "units").
 sls::Clip uc (const sls::Arrangement& a, int pattern, int track, int startUnit, int lengthUnits)
 {
-    return { pattern, track, startUnit * a.patternTicks, lengthUnits * a.patternTicks, 0 };
+    const int unit = a.patternLength (pattern);
+    return { pattern, track, startUnit * unit, lengthUnits * unit, 0 };
 }
 
 // Magnitude of the component of x[begin,end) at `hz` (single-bin DFT).
@@ -732,8 +740,8 @@ void testArrangement()
     using sls::Clip;
 
     Arrangement a;
-    a.patternTicks = 4 * kBeat; // one bar = 2 s at 120 BPM
     a.patterns.resize (3);
+    setLengths (a, 4 * kBeat); // one bar = 2 s at 120 BPM
     a.patterns[0].name = "Tone";
     a.patterns[0].notes = { { { 69, 0, kBeat, 0.8f } } };            // A4 on beat 1
     a.patterns[1].name = "Empty";
@@ -755,17 +763,17 @@ void testArrangement()
     check (! a.canPlace (uc (a, 0, a.trackCount(), 0, 1)), "a clip below the last track is refused");
     check (! a.canPlace (uc (a, 0, 0, -1, 1)), "a clip before the start is refused");
     check (! a.canPlace (uc (a, 0, 0, 0, 0)), "a zero-length clip is refused");
-    check (! a.canPlace (uc (a, 0, 0, (a.timelineTicks() / a.patternTicks) - 1, 2)), "a clip past the end of the timeline is refused");
-    check (a.canPlace (uc (a, 0, 0, (a.timelineTicks() / a.patternTicks) - 2, 2)), "a clip ending exactly at the end is accepted");
+    check (! a.canPlace (uc (a, 0, 0, (a.timelineTicks() / a.patternLength (0)) - 1, 2)), "a clip past the end of the timeline is refused");
+    check (a.canPlace (uc (a, 0, 0, (a.timelineTicks() / a.patternLength (0)) - 2, 2)), "a clip ending exactly at the end is accepted");
 
     // song with two clips on one track, a gap between them
     a.clips = { uc (a, 0, 0, 0, 1), uc (a, 0, 0, 2, 1) };
-    check (a.songLengthTicks() == 3 * a.patternTicks, "song length is the end of the last clip");
+    check (a.songLengthTicks() == 3 * a.patternLength (0), "song length is the end of the last clip");
     check (a.canPlace (uc (a, 1, 0, 1, 2)), "a clip may overlap another on its track (0.33.0: layering)");
     check (a.canPlace (uc (a, 1, 0, 1, 1)), "filling the gap exactly is accepted");
     check (a.canPlace (uc (a, 1, 1, 0, 3)), "the same time on another track is accepted");
     check (a.canPlace (a.clips[0], 0), "a clip does not collide with itself when moved");
-    check (a.clipAt (0, 2 * a.patternTicks) == 1 && a.clipAt (0, a.patternTicks) == -1 && a.clipAt (1, 0) == -1, "clipAt finds the clip under a tick");
+    check (a.clipAt (0, 2 * a.patternLength (0)) == 1 && a.clipAt (0, a.patternLength (0)) == -1 && a.clipAt (1, 0) == -1, "clipAt finds the clip under a tick");
 
     const auto song = sls::compileSong (channels, a);
     check (song.lengthTicks == 3 * 4 * kBeat, "song mode loops the whole arrangement");
@@ -990,12 +998,12 @@ void testSwing()
         sls::Arrangement a;
         a.patterns.resize (1);
         a.patterns[0].notes = { { { 60, 120, 60, 0.8f } } };
-        a.patterns[0].steps = { sls::steps::patternSteps (a.patternTicks) }; // the whole pattern (one step: it would repeat each bar)
+        a.patterns[0].steps = { sls::steps::patternSteps (a.patternLength (0)) }; // the whole pattern (one step: it would repeat each bar)
         a.clips = { uc (a, 0, 0, 1, 1) };
         auto c = synthChannel ({});
         c.swing = 1.0f;
         const auto song = sls::compileSong ({ c }, a);
-        check (song.channels[0].notes.size() == 1 && song.channels[0].notes[0].startTick == a.patternTicks + 180,
+        check (song.channels[0].notes.size() == 1 && song.channels[0].notes[0].startTick == a.patternLength (0) + 180,
                "compileSong applies swing to the placed notes");
     }
 }
@@ -2811,8 +2819,8 @@ sls::ProjectDocument richDocument()
     d.masterSlots[3] = sls::EffectSlot::make (sls::EffectType::Compressor);
     d.masterSlots[3].bypass = true;
 
-    d.arrangement.patternTicks = 8 * kBeat; // two bars (the default before 0.42.0), so the note at beat 5 fits
     d.arrangement.patterns.resize (2);
+    setLengths (d.arrangement, 8 * kBeat); // two bars (the default before 0.42.0), so the note at beat 5 fits
     d.arrangement.patterns[0].name = "Intro";
     d.arrangement.patterns[1].name = "Verse";
     d.arrangement.ensureChannelCount (2);
@@ -3484,7 +3492,7 @@ void testAudioClips()
     check (a.canPlace (uc (a, 0, 0, 0, 1)), "a pattern clip may cover an audio clip");
     check (a.canPlace (uc (a, 0, 0, 1, 1)), "but can sit after it");
     a.clips.push_back (uc (a, 0, 2, 1, 1));
-    check (a.canPlaceAudio (audio (2, a.patternTicks + 480, 480)), "and an audio clip a pattern clip");
+    check (a.canPlaceAudio (audio (2, a.patternLength (0) + 480, 480)), "and an audio clip a pattern clip");
     check (a.audioClipAt (0, 0) == 0 && a.audioClipAt (0, 959) == 0 && a.audioClipAt (0, 960) == -1, "audioClipAt finds the clip under a tick");
     check (a.findFreeAudioStart (0, 0, 960) == 0 && a.findFreeAudioStart (1, 100, 480) == 100 && a.findFreeAudioStart (0, 100, 480) == 100,
            "findFreeAudioStart uses the wanted tick (clips may overlap)");
@@ -3589,7 +3597,7 @@ void testAudioClips()
         auto p2 = sls::compileSong (empty, with); // same audio: keeps playing
         sls::Arrangement removed;
         removed.patterns = { sls::Pattern {} };
-        removed.patternTicks = 8 * kBeat;
+        setLengths (removed, 8 * kBeat);
         auto p3 = sls::compileSong (empty, removed); // clip removed
         p1.revision = 1;
         p2.revision = 2;
@@ -3682,8 +3690,8 @@ void testPlaylistLayering()
     a.ensureChannelCount (1);
     a.patterns[0].notes[0] = { { 60, 0, 240, 0.8f } };
     a.patterns[1].notes[0] = { { 72, 120, 240, 0.8f } };
-    a.patterns[0].steps = { st_whole (a.patternTicks) };
-    a.patterns[1].steps = { st_whole (a.patternTicks) };
+    a.patterns[0].steps = { st_whole (a.patternLength (0)) };
+    a.patterns[1].steps = { st_whole (a.patternLength (1)) };
     a.clips = { uc (a, 0, 0, 0, 2), uc (a, 1, 0, 1, 1) }; // the second lies over the first's second repeat, on the same track
     const std::vector<sls::Channel> channels { synthChannel ({}) };
     const auto song = sls::compileSong (channels, a);
@@ -3691,10 +3699,10 @@ void testPlaylistLayering()
     for (const auto& n : song.channels[0].notes)
     {
         at60 += n.pitch == 60 ? 1 : 0;
-        at72 += n.pitch == 72 && n.startTick == a.patternTicks + 120 ? 1 : 0;
+        at72 += n.pitch == 72 && n.startTick == a.patternLength (0) + 120 ? 1 : 0;
     }
     check (at60 == 2 && at72 == 1, "pattern clips laid over each other on a track all play");
-    check (a.clipAt (0, a.patternTicks) == 1 && a.clipAt (0, 0) == 0, "the clip on top (the later one) is the one picked under the mouse");
+    check (a.clipAt (0, a.patternLength (0)) == 1 && a.clipAt (0, 0) == 0, "the clip on top (the later one) is the one picked under the mouse");
 
     // Two audio clips over each other on one track are both heard.
     const auto tone = [] (double hz)
@@ -3795,8 +3803,8 @@ void testFlpFiles()
     doc.sampleSources = { "", "/home/me/Samples/kick.wav" };
     doc.kitSpecs.push_back (sls::KitSpec::empty());
     auto& a = doc.arrangement;
-    a.patternTicks = 2 * 1920;
     a.patterns.resize (2);
+    setLengths (a, 2 * 1920);
     a.patterns[1].name = "Verse \xc3\xa8";
     a.ensureChannelCount (2);
     a.patterns[0].notes[0] = { { 64, 0, 480, 0.5f }, { 67, 1000, 333, 1.0f } };
@@ -3856,7 +3864,7 @@ void testFlpFiles()
         check (d.channels.size() == 2 && d.channels[0].name == "Lead" && d.channels[0].instrument == sls::Instrument::Sampler
                    && d.channels[1].instrument == sls::Instrument::Sampler && d.sampleSources[1] == "/home/me/Samples/kick.wav" && d.channels[1].rootPitch == 48,
                "the channels come back (the synth as an empty Sampler, as FL Studio would have it); the audio file is not a rack channel");
-        check (d.arrangement.patternTicks == 2 * 1920 && d.arrangement.patterns.size() == 2, "two-bar patterns, both of them");
+        check (d.arrangement.patternLength (0) == 2 * 1920 && d.arrangement.patternLength (1) == 2 * 1920 && d.arrangement.patterns.size() == 2, "two-bar patterns, both of them");
         const auto& n = d.arrangement.patterns[0].notes[0];
         check (n.size() == 2 && n[1].pitch == 67 && n[1].startTick == 1000 && n[1].lengthTicks == 333 && std::abs (n[1].velocity - 1.0f) < 1.0e-6f
                    && std::abs (n[0].velocity - 0.5f) < 1.0e-6f,
@@ -3902,7 +3910,7 @@ void testFlpFiles()
             const auto d = sls::projectFromFlp (*old.song);
             check (d.document.has_value() && d.document->channels.size() == 1 && d.document->channels[0].instrument == sls::Instrument::Synth
                        && d.document->arrangement.patterns[0].notes[0].size() == 1 && d.document->arrangement.patterns[0].notes[0][0].startTick == 480
-                       && d.document->arrangement.patterns[0].notes[0][0].lengthTicks == 240 && d.document->arrangement.patternTicks == 1920,
+                       && d.document->arrangement.patterns[0].notes[0][0].lengthTicks == 240 && d.document->arrangement.patternLength (0) == 1920,
                    "its generator plays on a default synth, the automation channel is left out, 96 PPQ becomes 480");
             check (d.warnings.size() >= 2, "and that is reported");
         }
@@ -4166,8 +4174,9 @@ void testTempoAndMeter046()
     sls::Arrangement arr;
     arr.meter = threeFour;
     check (arr.minPatternBeats() == 3, "in 3/4 a pattern can be 3 beats long");
-    arr.setPatternLengthKeepingClips (2 * kBeat);
-    check (arr.patternTicks == 3 * kBeat, "but not shorter than a bar");
+    arr.patterns.resize (1);
+    arr.setPatternLengthKeepingClips (0, 2 * kBeat);
+    check (arr.patternLength (0) == 3 * kBeat, "but not shorter than a bar");
     arr.meter = twoFour;
     const int twoFourMin = arr.minPatternBeats();
     arr.meter = sevenFour;
@@ -4514,7 +4523,8 @@ void testFreePlaylist()
     std::cout << "Playlist: pattern clips anywhere on the grid, the pattern length in quarters (0.42.0)\n";
     const int bar = 4 * kBeat;
     sls::Arrangement a;
-    check (a.patternTicks == bar, "a new project's patterns are one bar of 4/4 (4 quarters, 16 steps)");
+    check (sls::Pattern {}.lengthTicks == bar && sls::ProjectDocument::blank().arrangement.patternLength (0) == bar,
+           "a new pattern is one bar of 4/4 (4 quarters, 16 steps)");
     a.patterns.resize (1);
     a.ensureChannelCount (1);
     a.patterns[0].notes[0] = { { 60, 0, 120, 0.8f }, { 62, kBeat, 120, 0.8f }, { 64, 2 * kBeat, 120, 0.8f }, { 65, 3 * kBeat, 120, 0.8f } };
@@ -4552,24 +4562,26 @@ void testFreePlaylist()
 
     // The pattern length in quarters, kept for clips.
     a.clips = { { 0, 0, 120, 2 * bar, 0 }, { 0, 1, 0, 3 * kBeat, 0 } };
-    a.setPatternLengthKeepingClips (5 * kBeat);
-    check (a.patternTicks == 5 * kBeat && a.clips[0].startTick == 120 && a.clips[0].lengthTicks == 10 * kBeat && a.clips[1].lengthTicks == 3 * kBeat,
+    a.setPatternLengthKeepingClips (0, 5 * kBeat);
+    check (a.patternLength (0) == 5 * kBeat && a.clips[0].startTick == 120 && a.clips[0].lengthTicks == 10 * kBeat && a.clips[1].lengthTicks == 3 * kBeat,
            "one quarter longer: clips stay put, a two-pattern clip keeps its two repeats, a shorter one its length");
-    a.setPatternLengthKeepingClips (2 * kBeat);
-    check (a.patternTicks == 4 * kBeat, "never shorter than one bar of 4/4");
+    a.setPatternLengthKeepingClips (0, 2 * kBeat);
+    check (a.patternLength (0) == 4 * kBeat, "never shorter than one bar of 4/4");
 
     // Saved and read back in ticks; older files in whole patterns.
     auto doc = sls::ProjectDocument::blank();
-    doc.arrangement.patternTicks = 5 * kBeat;
+    setLengths (doc.arrangement, 5 * kBeat);
     doc.arrangement.clips = { { 0, 2, 777, 3000, 240 } };
     auto back = sls::ProjectDocument::fromJson (doc.toJson());
-    check (back.document && back.document->arrangement.patternTicks == 5 * kBeat && back.document->arrangement.clips.size() == 1
+    check (back.document && back.document->arrangement.patternLength (0) == 5 * kBeat && back.document->arrangement.clips.size() == 1
                && back.document->arrangement.clips[0].startTick == 777 && back.document->arrangement.clips[0].lengthTicks == 3000
                && back.document->arrangement.clips[0].offsetTicks == 240 && back.document->arrangement.clips[0].track == 2,
            "a pattern length of 5 quarters and a clip at tick 777 with an offset are saved and read back");
-    doc.arrangement.patternTicks = 8 * kBeat;
+    setLengths (doc.arrangement, 8 * kBeat);
     auto v = juce::JSON::parse (doc.toJson());
     v.getDynamicObject()->removeProperty ("patternBeats");
+    for (auto& pv : *v.getDynamicObject()->getProperty ("patterns").getArray())
+        pv.getDynamicObject()->removeProperty ("beats"); // no length of its own either (0.56.0)
     auto* clip = v.getDynamicObject()->getProperty ("clips").getArray()->getReference (0).getDynamicObject();
     clip->removeProperty ("startTick");
     clip->removeProperty ("lengthTicks");
@@ -4577,7 +4589,7 @@ void testFreePlaylist()
     clip->setProperty ("start", 3);
     clip->setProperty ("length", 2);
     back = sls::ProjectDocument::fromJson (juce::JSON::toString (v));
-    check (back.document && back.document->arrangement.patternTicks == 8 * kBeat && back.document->arrangement.clips[0].startTick == 3 * 8 * kBeat
+    check (back.document && back.document->arrangement.patternLength (0) == 8 * kBeat && back.document->arrangement.clips[0].startTick == 3 * 8 * kBeat
                && back.document->arrangement.clips[0].lengthTicks == 2 * 8 * kBeat,
            "a file from before 0.42.0 (whole patterns of two bars) opens with its clips in the same places");
 }
@@ -4633,8 +4645,8 @@ void testStepSequencer()
     // Pattern and song mode play the notes as written.
     {
         sls::Arrangement arrangement;
-        arrangement.patternTicks = pattern2;
         arrangement.patterns.resize (1);
+        setLengths (arrangement, pattern2);
         std::vector<sls::Channel> channels { sampler, sampler };
         arrangement.ensureChannelCount (channels.size());
         arrangement.patterns[0].notes[0] = kicks;
@@ -4661,7 +4673,7 @@ void testStepSequencer()
         check (melody.size() == chord.size(), "a channel written in the piano roll did not repeat: unchanged");
 
         auto doc = richDocument();
-        doc.arrangement.patternTicks = pattern2;
+        setLengths (doc.arrangement, pattern2);
         doc.arrangement.ensureChannelCount (doc.channels.size());
         doc.channels[0].instrument = sls::Instrument::Sampler;
         doc.channels[0].rootPitch = 60;
@@ -6611,7 +6623,7 @@ void testClipEditing()
     {
         sls::Arrangement a;
         a.patterns.resize (1);
-        const int pt = a.patternTicks; // one bar of 4/4 since 0.42.0
+        const int pt = a.patternLength (0); // one bar of 4/4 since 0.42.0
         a.clips = { { 0, 0, 2 * pt, 6 * pt, 0 } };
         check (sls::splitPatternClip (a, 0, 2 * pt) == -1 && sls::splitPatternClip (a, 0, 8 * pt) == -1 && a.clips.size() == 1, "pattern clips split only strictly inside");
         check (sls::splitPatternClip (a, 0, 5 * pt) == 1 && a.clips[0].lengthTicks == 3 * pt && a.clips[1].startTick == 5 * pt && a.clips[1].lengthTicks == 3 * pt
@@ -9104,18 +9116,19 @@ void testPatternLength()
     std::cout << "Pattern length\n";
     const int bar = 4 * kBeat;
     sls::Arrangement a;
-    a.patternTicks = bar;
-    check ((a.timelineTicks() / a.patternTicks) == 64 && a.timelineTicks() == 64 * bar, "1-bar patterns: 64 of them fit (64 bars)");
-    a.patternTicks = 2 * bar;
-    check ((a.timelineTicks() / a.patternTicks) == 32 && a.timelineTicks() == 64 * bar, "2-bar patterns: 32 (64 bars, as before)");
-    a.patternTicks = 4 * bar;
-    check ((a.timelineTicks() / a.patternTicks) == 32 && a.timelineTicks() == 128 * bar, "4-bar patterns: 32 (128 bars)");
-    a.patternTicks = 8 * bar;
     a.patterns.resize (1);
-    check ((a.timelineTicks() / a.patternTicks) == 32 && a.canPlace (uc (a, 0, 0, 31, 1)) && ! a.canPlace (uc (a, 0, 0, 32, 1)), "8-bar patterns: 32, and the last unit is the end");
+    setLengths (a, bar);
+    check ((a.timelineTicks() / a.patternLength (0)) == 64 && a.timelineTicks() == 64 * bar, "1-bar patterns: 64 of them fit (64 bars)");
+    setLengths (a, 2 * bar);
+    check ((a.timelineTicks() / a.patternLength (0)) == 32 && a.timelineTicks() == 64 * bar, "2-bar patterns: 32 (64 bars, as before)");
+    setLengths (a, 4 * bar);
+    check ((a.timelineTicks() / a.patternLength (0)) == 32 && a.timelineTicks() == 128 * bar, "4-bar patterns: 32 (128 bars)");
+    a.patterns.resize (1);
+    setLengths (a, 8 * bar);
+    check ((a.timelineTicks() / a.patternLength (0)) == 32 && a.canPlace (uc (a, 0, 0, 31, 1)) && ! a.canPlace (uc (a, 0, 0, 32, 1)), "8-bar patterns: 32, and the last unit is the end");
 
     // A 4-bar pattern played twice in Song mode: its note in bar 3 comes at bars 3 and 7.
-    a.patternTicks = 4 * bar;
+    setLengths (a, 4 * bar);
     a.patterns[0].notes = { { { 60, 2 * bar, kBeat, 0.8f } } };
     a.clips = { uc (a, 0, 0, 0, 2) };
     const auto song = sls::compileSong ({ synthChannel ({}) }, a);
@@ -9123,15 +9136,17 @@ void testPatternLength()
            "4-bar patterns compile to a song with the notes in the right bars");
 
     auto doc = sls::ProjectDocument::blank();
-    doc.arrangement.patternTicks = 4 * bar;
+    setLengths (doc.arrangement, 4 * bar);
     doc.arrangement.patterns[0].notes[0] = { { 60, 3 * bar, kBeat, 0.8f } }; // only exists in a 4-bar pattern
     auto parsed = sls::ProjectDocument::fromJson (doc.toJson());
-    check (parsed.document && parsed.document->arrangement.patternTicks == 4 * bar && parsed.document->arrangement.patterns[0].notes[0].size() == 1,
+    check (parsed.document && parsed.document->arrangement.patternLength (0) == 4 * bar && parsed.document->arrangement.patterns[0].notes[0].size() == 1,
            "the pattern length is saved, and notes beyond two bars are read back");
     const auto withBars = [&] (const juce::var& value)
     {
         auto v = juce::JSON::parse (doc.toJson());
         v.getDynamicObject()->removeProperty ("patternBeats"); // as files from before 0.42.0
+        for (auto& pv : *v.getDynamicObject()->getProperty ("patterns").getArray())
+            pv.getDynamicObject()->removeProperty ("beats");
         if (value.isVoid())
             v.getDynamicObject()->removeProperty ("patternBars");
         else
@@ -9139,10 +9154,10 @@ void testPatternLength()
         return juce::JSON::toString (v);
     };
     parsed = sls::ProjectDocument::fromJson (withBars (3));
-    check (parsed.document && parsed.document->arrangement.patternTicks == 2 * bar && ! parsed.warnings.empty(),
+    check (parsed.document && parsed.document->arrangement.patternLength (0) == 2 * bar && ! parsed.warnings.empty(),
            "a length that is not offered becomes two bars, with a warning");
     parsed = sls::ProjectDocument::fromJson (withBars (juce::var()));
-    check (parsed.document && parsed.document->arrangement.patternTicks == 2 * bar, "older files (no length) are two bars");
+    check (parsed.document && parsed.document->arrangement.patternLength (0) == 2 * bar, "older files (no length) are two bars");
 }
 
 void testPatternLoopRegion()
@@ -9150,10 +9165,13 @@ void testPatternLoopRegion()
     std::cout << "Piano roll loop region of a pattern (0.20.0)\n";
     sls::Pattern pattern;
     const int ticks = 8 * kBeat;
-    check (! pattern.hasLoop (ticks), "a new pattern has no loop region");
+    pattern.lengthTicks = ticks;
+    check (! pattern.hasLoop(), "a new pattern has no loop region");
     pattern.loopStartTick = kBeat;
     pattern.loopEndTick = 3 * kBeat;
-    check (pattern.hasLoop (ticks) && ! pattern.hasLoop (2 * kBeat), "a region inside the pattern counts; made shorter than its end, it no longer does");
+    auto shorter = pattern;
+    shorter.lengthTicks = 2 * kBeat;
+    check (pattern.hasLoop() && ! shorter.hasLoop(), "a region inside the pattern counts; made shorter than its end, it no longer does");
 
     // In Pattern mode the region is the snapshot's loop region: one bar note at 0 (A) and one at beat 3 (E5); a region over beats 3..4 repeats E5 only.
     auto project = sls::Project::make ({ synthChannel ({ { 69, 0, kBeat, 0.8f }, { 76, 2 * kBeat, kBeat, 0.8f } }) }, ticks);
@@ -9187,11 +9205,11 @@ void testPatternLoopRegion()
     auto* first = v.getDynamicObject()->getProperty ("patterns").getArray()->getReference (0).getDynamicObject();
     first->setProperty ("loop", juce::Array<juce::var> { 3 * kBeat, kBeat });
     parsed = sls::ProjectDocument::fromJson (juce::JSON::toString (v));
-    check (parsed.document && ! parsed.document->arrangement.patterns[0].hasLoop (parsed.document->arrangement.patternTicks),
+    check (parsed.document && ! parsed.document->arrangement.patterns[0].hasLoop(),
            "a backwards region in a file is left out");
     first->setProperty ("loop", juce::Array<juce::var> { 0, 999999 });
     parsed = sls::ProjectDocument::fromJson (juce::JSON::toString (v));
-    check (parsed.document && ! parsed.document->arrangement.patterns[0].hasLoop (parsed.document->arrangement.patternTicks),
+    check (parsed.document && ! parsed.document->arrangement.patterns[0].hasLoop(),
            "a region past the end of the pattern is left out");
 }
 
@@ -11046,8 +11064,8 @@ void testPluginHosting()
             continue;
 
         sls::Arrangement a;
-        a.patternTicks = 8 * kBeat;
         a.patterns.resize (1);
+        setLengths (a, 8 * kBeat);
         a.ensureChannelCount (1);
         a.patterns[0].notes[0] = { { 69, 0, 8 * kBeat, 0.8f } };
         a.patterns[0].steps = { 64 };
@@ -11218,6 +11236,98 @@ void testPluginHosting()
 void supportCheck (bool ok, const char* name) { check (ok, name); }
 // The demo song (0.52.0): a valid project that uses the program's features, SunBurst and HexForge with their presets, and that
 // renders loud enough without clipping.
+// 0.56.0: every pattern has its own length; changing one leaves the others (and their clips) alone, a new one is 4 quarters.
+void testPatternLengths056()
+{
+    std::cout << "Each pattern has its own length (0.56.0)\n";
+    const int bar = 4 * kBeat;
+    sls::Arrangement a;
+    a.patterns.resize (3);
+    a.ensureChannelCount (1);
+    a.patterns[0].notes[0] = { { 60, 0, 120, 0.8f }, { 62, 5 * kBeat, 120, 0.8f } }; // the second note needs 6 quarters
+    a.patterns[1].notes[0] = { { 72, 0, 120, 0.8f } };
+    a.clips = { { 0, 0, 0, 2 * bar, 0 }, { 1, 1, 0, 2 * bar, 0 }, { 1, 2, 0, 3 * kBeat, 0 } };
+    check (a.patternLength (0) == bar && a.patternLength (1) == bar && a.patternLength (2) == bar && a.patternLength (7) == bar,
+           "every pattern starts at 4 quarters (and a missing one counts as 4)");
+
+    check (a.setPatternLengthKeepingClips (0, 6 * kBeat), "pattern 1 made 6 quarters long");
+    check (a.patternLength (0) == 6 * kBeat && a.patternLength (1) == bar && a.patternLength (2) == bar, "only that pattern changes");
+    check (a.clips[0].lengthTicks == 12 * kBeat && a.clips[1].lengthTicks == 2 * bar && a.clips[2].lengthTicks == 3 * kBeat,
+           "its clip keeps its two repeats; the other pattern's clips keep their lengths");
+    check (! a.setPatternLengthKeepingClips (5, 8 * kBeat) && ! a.setPatternLengthKeepingClips (-1, 8 * kBeat), "a pattern that does not exist is refused");
+
+    a.patterns.push_back (sls::Pattern {});
+    check (a.patternLength (3) == bar, "a new pattern is 4 quarters, whatever the others are");
+
+    const std::vector<sls::Channel> channels { synthChannel ({}) };
+    check (sls::compilePattern (channels, a, 0).lengthTicks == 6 * kBeat && sls::compilePattern (channels, a, 1).lengthTicks == bar,
+           "Pattern mode loops each pattern over its own length");
+    const auto pattern0 = sls::compilePattern (channels, a, 0);
+    check (pattern0.channels[0].notes.size() == 2, "and plays the note in its fifth quarter");
+
+    a.clips = { { 0, 0, 0, 12 * kBeat, 0 }, { 1, 1, 0, 2 * bar, 0 } };
+    const auto song = sls::compileSong (channels, a);
+    std::vector<int> at60, at72;
+    for (const auto& n : song.channels[0].notes)
+        if (n.pitch == 60)
+            at60.push_back (n.startTick);
+        else if (n.pitch == 72)
+            at72.push_back (n.startTick);
+    std::sort (at60.begin(), at60.end());
+    std::sort (at72.begin(), at72.end());
+    check (at60 == std::vector<int> { 0, 6 * kBeat } && at72 == std::vector<int> { 0, bar },
+           "in Song mode each clip repeats its own pattern's length (6 quarters and 4)");
+
+    // Splitting a clip goes on from where its own pattern had got to.
+    a.clips = { { 0, 0, 0, 12 * kBeat, 0 } };
+    check (sls::splitPatternClip (a, 0, 7 * kBeat) == 1 && a.clips[1].offsetTicks == kBeat, "a split counts in the clip's own pattern length");
+
+    // The timeline follows the longest pattern.
+    a.setPatternLengthKeepingClips (2, 16 * kBeat);
+    check (a.longestPatternTicks() == 16 * kBeat && a.timelineTicks() == sls::kPlaylistUnits * 16 * kBeat, "the timeline holds 32 of the longest pattern");
+
+    // Only the patterns shorter than a bar are lengthened when the time signature asks for more.
+    a.setPatternLengthKeepingClips (1, 3 * kBeat); // refused below 4 quarters in 4/4
+    check (a.patternLength (1) == bar, "4/4: no pattern shorter than 4 quarters");
+    a.meter = sls::TimeSignature::valid (3, 4);
+    a.setPatternLengthKeepingClips (1, 3 * kBeat);
+    check (a.patternLength (1) == 3 * kBeat, "3/4: 3 quarters are allowed");
+    a.meter = {};
+    a.lengthenPatternsTo (a.minPatternBeats() * kBeat);
+    check (a.patternLength (1) == bar && a.patternLength (0) == 6 * kBeat && a.patternLength (2) == 16 * kBeat,
+           "back in 4/4 the short one becomes 4 quarters, the others keep theirs");
+
+    // Saved per pattern, read back per pattern.
+    auto doc = sls::ProjectDocument::blank();
+    doc.arrangement.patterns.resize (3);
+    doc.arrangement.ensureChannelCount (doc.channels.size());
+    doc.arrangement.patterns[0].lengthTicks = 5 * kBeat;
+    doc.arrangement.patterns[1].lengthTicks = 2 * bar;
+    doc.arrangement.patterns[1].notes[0] = { { 60, 7 * kBeat, 120, 0.8f } }; // only fits in the 8-quarter pattern
+    doc.arrangement.clips = { { 0, 0, 0, 10 * kBeat, 2 * kBeat }, { 1, 1, 0, 2 * bar, 0 } };
+    const auto text = doc.toJson();
+    auto v = juce::JSON::parse (text);
+    const auto* list = v.getDynamicObject()->getProperty ("patterns").getArray();
+    check (static_cast<int> (list->getReference (0).getDynamicObject()->getProperty ("beats")) == 5
+               && static_cast<int> (list->getReference (2).getDynamicObject()->getProperty ("beats")) == 4
+               && static_cast<int> (v.getDynamicObject()->getProperty ("patternBeats")) == 8,
+           "each pattern writes its length; the shared one older versions read is the longest");
+    const auto back = sls::ProjectDocument::fromJson (text);
+    check (back.document && back.document->arrangement.patternLength (0) == 5 * kBeat && back.document->arrangement.patternLength (1) == 2 * bar
+               && back.document->arrangement.patternLength (2) == bar && back.document->arrangement.patterns[1].notes[0].size() == 1
+               && back.document->arrangement.clips.size() == 2 && back.document->arrangement.clips[0].offsetTicks == 2 * kBeat,
+           "the lengths, the notes and the clips come back");
+
+    // A file from 0.42.0 - 0.55.x: one length for all.
+    for (auto& pv : *v.getDynamicObject()->getProperty ("patterns").getArray())
+        pv.getDynamicObject()->removeProperty ("beats");
+    v.getDynamicObject()->setProperty ("patternBeats", 6);
+    const auto old = sls::ProjectDocument::fromJson (juce::JSON::toString (v));
+    check (old.document && old.document->arrangement.patternLength (0) == 6 * kBeat && old.document->arrangement.patternLength (1) == 6 * kBeat
+               && old.document->arrangement.patternLength (2) == 6 * kBeat,
+           "an older file gives every pattern its one length");
+}
+
 void testDemoSong()
 {
     std::cout << "The demo song (0.52.0)\n";
@@ -11240,7 +11350,7 @@ void testDemoSong()
         int here = 0;
         for (const auto& n : p.notes)
             for (const auto& note : n)
-                here += note.startTick >= 0 && note.startTick + note.lengthTicks <= a.patternTicks ? 1 : 0;
+                here += note.startTick >= 0 && note.startTick + note.lengthTicks <= p.length() ? 1 : 0;
         notes += here;
         emptyPatterns += here == 0 ? 1 : 0;
         if (here == 0)
@@ -11474,6 +11584,7 @@ int main()
     testSfz();
     testSfzFiles();
     testFreePlaylist();
+    testPatternLengths056();
     testPlaylistTracks();
     testMixerAndExport045();
     testTempoAndMeter046();

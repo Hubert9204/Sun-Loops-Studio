@@ -73,6 +73,7 @@ struct Loop
     theory::Scale scale;
     std::string progression; // its name, for the status line
     std::vector<Part> parts;  // drums, bass, chords, melody (those asked for)
+    int patternTicks = 2 * 4 * kTicksPerBeat; // its length: the request's, in whole bars (0.56.0: the new pattern gets it)
 };
 
 struct Request

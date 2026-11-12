@@ -79,8 +79,8 @@ void MainComponent::showTempoMenu()
         {
             const auto chosen = TimeSignature::choices()[static_cast<size_t> (result - 100)];
             self.arrangement.meter = chosen;
-            if (self.arrangement.patternTicks < self.arrangement.minPatternBeats() * kTicksPerBeat)
-                self.arrangement.setPatternLengthKeepingClips (self.arrangement.minPatternBeats() * kTicksPerBeat);
+            self.commitCurrentPattern();
+            self.arrangement.lengthenPatternsTo (self.arrangement.minPatternBeats() * kTicksPerBeat);
             self.showPatternLength();
             self.tempoChanged ("Time signature " + juce::String (chosen.text()));
         }
