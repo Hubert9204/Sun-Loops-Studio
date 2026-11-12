@@ -440,6 +440,75 @@ void flip (std::vector<Note>& notes, std::vector<bool>& selected)
         notes[i].pitch = clampPitch (lo + hi - notes[i].pitch);
 }
 
+void reverse (std::vector<Note>& notes, std::vector<bool>& selected)
+{
+    const auto which = targets (notes, selected);
+    if (which.empty())
+        return;
+    int first = notes[which.front()].startTick, last = 0;
+    for (const auto i : which)
+    {
+        first = std::min (first, notes[i].startTick);
+        last = std::max (last, notes[i].startTick + notes[i].lengthTicks);
+    }
+    for (const auto i : which)
+    {
+        notes[i].startTick = first + (last - (notes[i].startTick + notes[i].lengthTicks));
+        notes[i].link = NoteLink::None;
+    }
+    std::stable_sort (notes.begin(), notes.end(), [] (const Note& a, const Note& b) { return a.startTick < b.startTick; });
+}
+
+void glue (std::vector<Note>& notes, std::vector<bool>& selected)
+{
+    const auto which = targets (notes, selected);
+    if (which.size() < 2)
+        return;
+    std::vector<size_t> order (which.begin(), which.end());
+    std::sort (order.begin(), order.end(), [&] (size_t a, size_t b)
+               { return notes[a].pitch != notes[b].pitch ? notes[a].pitch < notes[b].pitch : notes[a].startTick < notes[b].startTick; });
+    std::vector<size_t> drop;
+    size_t keep = order.front();
+    for (size_t k = 1; k < order.size(); ++k)
+    {
+        const size_t i = order[k];
+        auto& head = notes[keep];
+        const auto& next = notes[i];
+        if (next.pitch == head.pitch && next.startTick <= head.startTick + head.lengthTicks)
+        {
+            head.lengthTicks = std::max (head.lengthTicks, next.startTick + next.lengthTicks - head.startTick);
+            drop.push_back (i);
+        }
+        else
+            keep = i;
+    }
+    removeAt (notes, selected, drop);
+}
+
+void flam (std::vector<Note>& notes, std::vector<bool>& selected, int ticks, float velocity)
+{
+    ticks = std::max (1, ticks);
+    std::vector<Note> made;
+    for (const auto i : targets (notes, selected))
+    {
+        const auto& n = notes[i];
+        if (n.startTick < ticks)
+            continue;
+        Note grace = n;
+        grace.startTick = n.startTick - ticks;
+        grace.lengthTicks = ticks;
+        grace.velocity = std::clamp (n.velocity * velocity, 0.05f, 1.0f);
+        grace.link = NoteLink::None;
+        made.push_back (grace);
+    }
+    for (const auto& n : made)
+    {
+        notes.push_back (n);
+        selected.push_back (true);
+    }
+    std::stable_sort (notes.begin(), notes.end(), [] (const Note& a, const Note& b) { return a.startTick < b.startTick; });
+}
+
 void velocityRamp (std::vector<Note>& notes, std::vector<bool>& selected, float from, float to)
 {
     const auto which = targets (notes, selected);

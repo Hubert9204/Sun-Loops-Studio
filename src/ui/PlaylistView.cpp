@@ -34,10 +34,18 @@ PlaylistView::PlaylistView (Arrangement& arrangementToEdit) : timeline (arrangem
     undoButton.onClick = [this] { timeline.undo(); updateUndoButtons(); };
     redoButton.setTooltip ("Redo (Ctrl+Y)");
     redoButton.onClick = [this] { timeline.redo(); updateUndoButtons(); };
+    // 0.61.0: time markers
+    markerButton.setTooltip ("Add a named time marker at the playhead (click the ruler to move the playhead). Click a marker's flag in the ruler to rename or delete it.");
+    markerButton.onClick = [this] { timeline.addMarkerAtPlayhead(); };
+    markerPrevButton.setTooltip ("Jump to the previous marker");
+    markerPrevButton.onClick = [this] { timeline.jumpToMarker (-1); };
+    markerNextButton.setTooltip ("Jump to the next marker");
+    markerNextButton.onClick = [this] { timeline.jumpToMarker (1); };
 
     // The tools in FL Studio's order and with its names (0.60.0); the keys 1..8 still choose them.
     const struct { juce::TextButton* button; PlaylistTool tool; const char* tip; } tools[] = {
         { &drawTool,   PlaylistTool::Draw,   "Draw: click empty space to place a pattern (drag to lengthen it); drag a clip to move it, an edge to trim it (1)" },
+        { &paintTool,  PlaylistTool::Paint,  "Paint: click empty space to place a pattern, drag along the track to paint one clip after another (9)" },
         { &eraseTool,  PlaylistTool::Erase,  "Delete: click a clip to delete it, or drag across several (4)" },
         { &muteTool,   PlaylistTool::Mute,   "Mute: click a clip to mute or unmute it (it stays, greyed, and does not play); drag across several (7)" },
         { &slipTool,   PlaylistTool::Slip,   "Slip: drag a clip sideways to move what plays inside it, while the clip stays where it is (8)" },
@@ -119,12 +127,13 @@ PlaylistView::PlaylistView (Arrangement& arrangementToEdit) : timeline (arrangem
     timeline.onLoopChanged = [this] { if (onLoopChanged) onLoopChanged(); };
 
     for (juce::Component* c : std::initializer_list<juce::Component*> { &patternLabel, &patternBox, &newButton, &renameButton, &deleteButton,
-                                                                          &undoButton, &redoButton, &snapLabel, &snapBox, &zoomOutButton,
+                                                                          &undoButton, &redoButton, &markerButton, &markerPrevButton, &markerNextButton,
+                                                                          &snapLabel, &snapBox, &zoomOutButton,
                                                                           &zoomInButton, &zoomFitButton, &positionLabel, &selectionLabel, &timeline })
         addAndMakeVisible (c);
 
     for (juce::Button* b : std::initializer_list<juce::Button*> { &newButton, &renameButton, &deleteButton, &undoButton, &redoButton, &drawTool,
-                                                                   &splitTool, &cutTool, &eraseTool, &muteTool, &slipTool, &zoomTool, &selectTool,
+                                                                   &splitTool, &cutTool, &eraseTool, &muteTool, &slipTool, &paintTool, &markerButton, &markerPrevButton, &markerNextButton, &zoomTool, &selectTool,
                                                                    &zoomOutButton, &zoomInButton, &zoomFitButton })
         b->setMouseClickGrabsKeyboardFocus (false); // Space must keep playing after a click here
 
@@ -162,6 +171,7 @@ void PlaylistView::syncToolButtons()
     eraseTool.setToggleState (timeline.getTool() == PlaylistTool::Erase, juce::dontSendNotification);
     muteTool.setToggleState (timeline.getTool() == PlaylistTool::Mute, juce::dontSendNotification);
     slipTool.setToggleState (timeline.getTool() == PlaylistTool::Slip, juce::dontSendNotification);
+    paintTool.setToggleState (timeline.getTool() == PlaylistTool::Paint, juce::dontSendNotification);
     zoomTool.setToggleState (timeline.getTool() == PlaylistTool::Zoom, juce::dontSendNotification);
 }
 
@@ -187,11 +197,17 @@ void PlaylistView::resized()
     undoButton.setBounds (row1.removeFromLeft (52));
     row1.removeFromLeft (3);
     redoButton.setBounds (row1.removeFromLeft (52));
+    row1.removeFromLeft (14);
+    markerPrevButton.setBounds (row1.removeFromLeft (22)); // 0.61.0
+    row1.removeFromLeft (2);
+    markerButton.setBounds (row1.removeFromLeft (72));
+    row1.removeFromLeft (2);
+    markerNextButton.setBounds (row1.removeFromLeft (22));
 
     auto row2 = area.removeFromTop (kToolbarRowHeight + 4).reduced (4, 2);
-    for (auto* b : { &drawTool, &eraseTool, &muteTool, &slipTool, &splitTool, &cutTool, &selectTool, &zoomTool }) // FL Studio's order (0.60.0)
+    for (auto* b : { &drawTool, &paintTool, &eraseTool, &muteTool, &slipTool, &splitTool, &cutTool, &selectTool, &zoomTool }) // FL Studio's order (0.60.0; Paint 0.61.0)
     {
-        b->setBounds (row2.removeFromLeft (54));
+        b->setBounds (row2.removeFromLeft (52));
         row2.removeFromLeft (2);
     }
     row2.removeFromLeft (14);

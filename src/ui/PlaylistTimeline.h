@@ -12,7 +12,7 @@ namespace sls
 {
 // 0.59.0: Draw was called Select; Select is the rectangle. 0.60.0: Mute and Slip, as in FL Studio's Playlist (the toolbar shows the
 // tools in FL Studio's order and with its names: Draw, Delete (Erase), Mute, Slip, Slice (Split), Cut, Select, Zoom).
-enum class PlaylistTool { Draw, Split, Cut, Erase, Zoom, Select, Mute, Slip };
+enum class PlaylistTool { Draw, Split, Cut, Erase, Zoom, Select, Mute, Slip, Paint }; // 0.61.0: Paint
 
 // The timeline of the Playlist panel: the ruler, the tracks and their clips (the toolbar around it is PlaylistView).
 //
@@ -34,6 +34,7 @@ enum class PlaylistTool { Draw, Split, Cut, Erase, Zoom, Select, Mute, Slip };
 //            several to give them all the state of the first one. Tracks have their own M / S switches in their headers.
 //   Slip   : (8, 0.60.0) drag a clip sideways to move what plays inside it while the clip itself stays where it is: a pattern
 //            clip starts further into (or earlier in) its pattern, an audio clip plays from another point of its file.
+//   Paint  : (9, 0.61.0) as Draw on empty space, but dragging along the track paints one clip after another (as FL Studio's).
 //   Zoom   : click zooms in, right click or Shift+click zooms out, drag a stretch to zoom to it.
 // Always: Ctrl+wheel zooms around the mouse, the wheel scrolls in time, Alt while dragging switches the grid off.
 // Delete removes the selected clip; Ctrl+C / Ctrl+X / Ctrl+V / Ctrl+D copy, cut, paste and duplicate it; Ctrl+Z / Ctrl+Y undo and redo.
@@ -173,7 +174,8 @@ private:
     enum class Drag { None, MovePattern, ResizePattern, MoveAudio, ResizeAudio, TrimAudio, CutRange, EraseSweep, ZoomRange, MoveAutomation, ResizeAutomation,
                       Seek, LoopCreate, LoopPress, LoopMove, LoopResizeStart, LoopResizeEnd,
                       MoveGroup, RubberBand, RightPress, RightErase, // 0.57.0: the selection rectangle, the right-button eraser
-                      MuteSweep, Slip };                             // 0.60.0
+                      MuteSweep, Slip,                               // 0.60.0
+                      PaintSweep };                                  // 0.61.0
     // After "Move" or "Resize" in the loop region's menu the region follows the mouse until a click (right click / Escape: back as it was).
     enum class LoopMode { None, Move, Resize };
     enum class Kind { None, Pattern, Audio, Automation };
@@ -298,6 +300,16 @@ private:
     void startGroupMove (Kind kind, int index, int tick);
     void moveGroup (const juce::MouseEvent& e);
     bool placeClipAt (int track, int tick, bool noSnap); // a click on empty space: a clip of the track's (or the selected) pattern
+    // 0.61.0: time markers (the ruler's flags).
+    int markerAt (int x) const noexcept;                 // the marker whose flag is under x in the ruler, -1 for none
+    void showMarkerMenu (int marker);
+public:
+    void addMarker (int tick);                           // asks for the name, then adds it (undoable)
+    void addMarkerAtPlayhead() { addMarker (playheadTick >= 0 ? playheadTick : lastSeekTick); }
+    void jumpToMarker (int direction);                   // +1 the next marker after the playhead, -1 the previous one
+private:
+    int paintTrack = -1;                                 // the Paint tool's track
+    int lastSeekTick = 0;                                // the last place clicked in the ruler
     juce::Rectangle<int> bandRect() const noexcept;
     bool splitAt (int track, int tick, bool noSnap);
     void showClipMenu (int x, int y);

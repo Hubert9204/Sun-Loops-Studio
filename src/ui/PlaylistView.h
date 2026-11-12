@@ -111,6 +111,10 @@ private:
     juce::TextButton eraseTool { "Delete" };  // 0.60.0: FL Studio's name (the tool is PlaylistTool::Erase)
     juce::TextButton muteTool { "Mute" };     // 0.60.0
     juce::TextButton slipTool { "Slip" };     // 0.60.0
+    juce::TextButton paintTool { "Paint" };   // 0.61.0
+    // 0.61.0: time markers, as FL Studio's: add one at the playhead, jump to the previous / next one
+    juce::TextButton markerButton { "+ Marker" };
+    juce::TextButton markerPrevButton { juce::String::fromUTF8 ("\xe2\x97\x82") }, markerNextButton { juce::String::fromUTF8 ("\xe2\x96\xb8") };
     juce::TextButton zoomTool { "Zoom" };
     int mainSnapCode = kTicksPerBeat;         // 0.60.0: the toolbar's global snap
     juce::Label snapLabel { {}, "Grid" };

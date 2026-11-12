@@ -36,6 +36,13 @@ struct SamplerSettings
     float cutoff = 1.0f;    // 0..1, logarithmic from 20 Hz to 20 kHz (see cutoffHz)
     float resonance = 0.0f; // 0..1
 
+    // 0.61.0, as FL Studio's sampler channel: play the sample backwards, start further into it (SMP START), fade it in and out
+    // (the IN and OUT knobs). Start and the fades are fractions of the sample (0..1).
+    bool reverse = false;
+    float start = 0.0f;     // 0..0.99
+    float fadeIn = 0.0f;    // 0..1
+    float fadeOut = 0.0f;   // 0..1
+
     static double cutoffHz (float c) noexcept { return 20.0 * std::pow (1000.0, std::clamp (static_cast<double> (c), 0.0, 1.0)); }
 
     // A note sounds as long as it is held (and its release) instead of to the end of the sample.
@@ -54,6 +61,9 @@ struct SamplerSettings
             std::swap (s.loopStart, s.loopEnd);
         s.cutoff = std::clamp (finiteOr (s.cutoff, 1.0f), 0.0f, 1.0f);
         s.resonance = std::clamp (finiteOr (s.resonance, 0.0f), 0.0f, 1.0f);
+        s.start = std::clamp (finiteOr (s.start, 0.0f), 0.0f, 0.99f);
+        s.fadeIn = std::clamp (finiteOr (s.fadeIn, 0.0f), 0.0f, 1.0f);
+        s.fadeOut = std::clamp (finiteOr (s.fadeOut, 0.0f), 0.0f, 1.0f);
         if (static_cast<int> (s.loop) > static_cast<int> (LoopMode::Forward))
             s.loop = LoopMode::Off;
         if (static_cast<int> (s.filter) > static_cast<int> (SamplerFilter::BandPass))

@@ -30,6 +30,14 @@ juce::String shortEffectName (EffectType t)
         case EffectType::Imager:     return "Imager";
         case EffectType::TimeShaper: return "Time";
         case EffectType::PitchCorrector: return "Pitch";
+        case EffectType::Flanger:    return "Flang"; // 0.61.0
+        case EffectType::Gate:       return "Gate";
+        case EffectType::BassBoost:  return "Bass+";
+        case EffectType::Panomatic:  return "Pano";
+        case EffectType::Squeeze:    return "Squeez";
+        case EffectType::Vibrato:    return "Vibr";
+        case EffectType::ParametricEq2: return "P-EQ2";
+        case EffectType::MultibandComp: return "MB-Cmp";
         case EffectType::None:       break;
     }
     return juce::String::fromUTF8 ("\xe2\x80\x94");
@@ -169,6 +177,41 @@ MixerStrip::MixerStrip (MixerTrack& trackToControl, int trackIndex, bool isAuxBu
         track.sendsPreFader = preButton.getToggleState();
         if (onChanged) onChanged (index);
     };
+    // 0.61.0: polarity, swap and stereo separation, as on an FL Studio mixer track
+    phaseButton.setClickingTogglesState (true);
+    phaseButton.setTooltip ("Invert polarity: both channels of this track are inverted (after its effects)");
+    phaseButton.setMouseClickGrabsKeyboardFocus (false);
+    phaseButton.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xffe8943a));
+    phaseButton.onClick = [this]
+    {
+        track.invertPhase = phaseButton.getToggleState();
+        if (onChanged) onChanged (index);
+    };
+    swapButton.setClickingTogglesState (true);
+    swapButton.setTooltip ("Swap left and right");
+    swapButton.setMouseClickGrabsKeyboardFocus (false);
+    swapButton.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xffe8943a));
+    swapButton.onClick = [this]
+    {
+        track.swapStereo = swapButton.getToggleState();
+        if (onChanged) onChanged (index);
+    };
+    separationSlider.setRange (-1.0, 1.0, 0.01);
+    separationSlider.setDoubleClickReturnValue (true, 0.0);
+    separationSlider.setTooltip ("Stereo separation: left of the middle widens the stereo image, right narrows it down to mono (double-click: middle)");
+    separationSlider.setMouseClickGrabsKeyboardFocus (false);
+    separationSlider.onValueChange = [this]
+    {
+        track.separation = static_cast<float> (separationSlider.getValue());
+        if (onChanged) onChanged (index);
+    };
+    if (! isAux) // the aux buses have none of the three
+    {
+        addAndMakeVisible (phaseButton);
+        addAndMakeVisible (swapButton);
+        addAndMakeVisible (separationSlider);
+    }
+
     for (size_t g = 0; g < vcaButtons.size(); ++g)
     {
         auto& b = vcaButtons[g];
@@ -293,6 +336,9 @@ void MixerStrip::refreshFromTrack()
     for (size_t a = 0; a < sendSliders.size(); ++a)
         sendSliders[a].setValue (track.sends[a], juce::dontSendNotification);
     preButton.setToggleState (track.sendsPreFader, juce::dontSendNotification);
+    phaseButton.setToggleState (track.invertPhase, juce::dontSendNotification);
+    swapButton.setToggleState (track.swapStereo, juce::dontSendNotification);
+    separationSlider.setValue (track.separation, juce::dontSendNotification);
     for (size_t g = 0; g < vcaButtons.size(); ++g)
         vcaButtons[g].setToggleState (((track.vcaMask >> g) & 1u) != 0, juce::dontSendNotification);
     panSlider.setValue (track.pan, juce::dontSendNotification);
@@ -373,6 +419,16 @@ void MixerStrip::resized()
 
     panSlider.setBounds (area.removeFromTop (16));
     panLabel.setBounds (area.removeFromTop (12));
+    area.removeFromTop (2);
+    if (! isAux)
+    {
+        // 0.61.0: polarity, swap, separation
+        separationSlider.setBounds (area.removeFromTop (14));
+        area.removeFromTop (2);
+        auto row = area.removeFromTop (16);
+        phaseButton.setBounds (row.removeFromLeft (row.getWidth() / 2).reduced (2, 0));
+        swapButton.setBounds (row.reduced (2, 0));
+    }
     area.removeFromTop (4);
 
     auto buttons = area.removeFromTop (22);
@@ -630,10 +686,14 @@ FxPanel::FxPanel()
         row.name.setFont (juce::FontOptions (12.0f));
         row.name.setInterceptsMouseClicks (false, false);
         row.slider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 64, 20);
-        addChildComponent (row.name);
-        addChildComponent (row.slider);
-        addChildComponent (row.choice);
+        paramsInner.addChildComponent (row.name);
+        paramsInner.addChildComponent (row.slider);
+        paramsInner.addChildComponent (row.choice);
     }
+    paramsViewport.setViewedComponent (&paramsInner, false);
+    paramsViewport.setScrollBarsShown (true, false);
+    paramsViewport.setScrollBarThickness (8);
+    addAndMakeVisible (paramsViewport);
 
     refresh();
 }
@@ -747,7 +807,9 @@ void FxPanel::rebuildParameters()
             if (current > tracks)
                 row.choice.addItem ("Track " + juce::String (current) + " (not in the mixer)", current + 1);
             row.choice.setSelectedId (current + 1, juce::dontSendNotification);
-            row.choice.setTooltip ("The compressor turns this track down when the chosen track plays (its sound before its own effects and fader)");
+            row.choice.setTooltip (slot.type == EffectType::Gate
+                                       ? "The gate opens when the chosen track plays (its sound before its own effects and fader)"
+                                       : "The compressor turns this track down when the chosen track plays (its sound before its own effects and fader)");
             row.choice.onChange = [this, i]
             {
                 if (track == nullptr)
@@ -839,7 +901,7 @@ void FxPanel::showPresetMenu()
                             const auto& list = effectPresets (current.type);
                             if (result >= 1 && result <= static_cast<int> (list.size()))
                                 s.params = list[static_cast<size_t> (result - 1)].params;
-                            if (current.type == EffectType::Compressor)
+                            if (current.type == EffectType::Compressor || current.type == EffectType::Gate)
                                 s.params[5] = current.params[5]; // a preset does not change where the sidechain comes from
                             safe->applySlot (slot, s.sanitised());
                         });
@@ -964,6 +1026,22 @@ void FxPanel::resized()
     pluginButton.setBounds (area.getX(), area.getY(), std::min (200, area.getWidth()), 26);
     automatePluginButton.setBounds (area.getX(), area.getY() + 32, std::min (200, area.getWidth()), 26);
 
+    paramsViewport.setBounds (area);
+    layoutParams();
+}
+
+// The parameter rows in their scrolling pane (0.61.0); called after a resize and after the rows change.
+void FxPanel::layoutParams()
+{
+    int shown = 0;
+    for (auto& row : params)
+        if (row.slider.isVisible() || row.choice.isVisible())
+            ++shown;
+    const int needed = shown * 25;
+    const bool scrolls = needed > paramsViewport.getHeight();
+    const int width = paramsViewport.getWidth() - (scrolls ? paramsViewport.getScrollBarThickness() : 0);
+    paramsInner.setSize (std::max (10, width), std::max (paramsViewport.getHeight(), needed));
+    auto area = paramsInner.getLocalBounds();
     for (auto& row : params)
     {
         if (! row.slider.isVisible() && ! row.choice.isVisible())

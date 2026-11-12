@@ -424,6 +424,14 @@ juce::var samplerSettingsToVar (const SamplerSettings& s)
                                 : s.filter == SamplerFilter::BandPass ? "bandpass" : "off");
     o->setProperty ("cutoff", s.cutoff);
     o->setProperty ("resonance", s.resonance);
+    if (s.reverse) // 0.61.0
+        o->setProperty ("reverse", true);
+    if (s.start > 0.0f)
+        o->setProperty ("start", s.start);
+    if (s.fadeIn > 0.0f)
+        o->setProperty ("fadeIn", s.fadeIn);
+    if (s.fadeOut > 0.0f)
+        o->setProperty ("fadeOut", s.fadeOut);
     return juce::var (o);
 }
 
@@ -445,6 +453,10 @@ SamplerSettings samplerSettingsFromVar (const juce::var& v)
     s.filter = filter == "lowpass" ? SamplerFilter::LowPass : filter == "highpass" ? SamplerFilter::HighPass : filter == "bandpass" ? SamplerFilter::BandPass : SamplerFilter::Off;
     s.cutoff = static_cast<float> (readNumber (o->getProperty ("cutoff"), 1.0, 0.0, 1.0));
     s.resonance = static_cast<float> (readNumber (o->getProperty ("resonance"), 0.0, 0.0, 1.0));
+    s.reverse = readBool (o->getProperty ("reverse"), false); // 0.61.0
+    s.start = static_cast<float> (readNumber (o->getProperty ("start"), 0.0, 0.0, 0.99));
+    s.fadeIn = static_cast<float> (readNumber (o->getProperty ("fadeIn"), 0.0, 0.0, 1.0));
+    s.fadeOut = static_cast<float> (readNumber (o->getProperty ("fadeOut"), 0.0, 0.0, 1.0));
     return s.sanitised();
 }
 } // namespace sls

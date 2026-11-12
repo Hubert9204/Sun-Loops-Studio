@@ -2,6 +2,37 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.61.0 - 2026-11-12
+
+A review of every module against its FL Studio counterpart (the list is in `docs/fl-studio-alignment.md`), with the gaps that
+could be closed in one release closed.
+
+### Added
+- **Eight native effects**, the counterparts of FL Studio's that were missing: **Parametric EQ 2** (seven bands: a low shelf,
+  five bells, a high shelf, with Freq, Gain and Q each), **Bass Boost**, **Multiband Compressor** (three bands, in the manner of
+  Maximus), **Gate** (with Hold, Range and a sidechain), **Squeeze** (bit reduction, downsampling, puncher, filter), **Flanger**,
+  **Vibrato** and **Panomatic** (volume, pan and a free or tempo-synced LFO on either: auto-pan and tremolo). They are in the slot
+  menu, in the Plugin picker, in effect chains and in the project file; most have presets.
+- **Mixer tracks**: **stereo separation**, **polarity** (Ø) and **swap left / right** (⇄) on every track, as on an FL Studio mixer
+  track; applied after the track's effects, saved with the project.
+- **Sampler**: **Reverse**, **Start** (SMP START), **Fade in** and **Fade out** (IN / OUT), as on FL Studio's sampler channel.
+- **Playlist: Paint tool** (key 9): dragging along a track paints one clip after another.
+- **Playlist: time markers**: *+ Marker* adds a named flag on the ruler at the place last clicked; ◂ ▸ jump between markers; a
+  click on a flag renames, deletes or jumps to it. Saved with the project, undoable.
+- **Piano Roll tools**: **Reverse** (mirror in time), **Glue** (join touching notes of one pitch) and **Flam** (a grace note
+  before each note), in the Tools menu.
+- **Channel Rack**: **Steps** in the channel's right-click menu, as FL Studio's step menu: *Fill each 2 / 4 / 8 steps*, *Fill
+  every step*, *Clear the steps*.
+
+### Changed
+- An effect can have up to 24 parameters (8 before); the effects panel scrolls when an effect has more rows than fit.
+- The gate, like the compressor, keeps a copy of its sidechain track's sound before any effect runs.
+
+### Fixed
+- The project file wrote effects it did not know by name as empty slots: every effect type now has a name there, and a test
+  saves and reloads each one.
+- `scripts/build_appimage.sh` failed on a system without `desktop-file-utils` (it passed appimagetool an option it does not have).
+
 ## 0.60.0 - 2026-11-12
 
 Aligned with FL Studio's manual (Image-Line's online manual: Basics > Workflow, Toolbar panels, Channel Rack, Piano Roll,

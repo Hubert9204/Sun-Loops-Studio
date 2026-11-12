@@ -27,7 +27,7 @@ SamplerPanel::SamplerPanel()
     sourceLabel.setFont (juce::FontOptions (15.0f, juce::Font::bold));
 
     for (auto* l : { &rootLabel, &attackLabel, &decayLabel, &sustainLabel, &releaseLabel, &loopLabel, &loopStartLabel, &loopEndLabel,
-                     &filterLabel, &cutoffLabel, &resonanceLabel })
+                     &filterLabel, &cutoffLabel, &resonanceLabel, &startLabel, &fadeInLabel, &fadeOutLabel })
     {
         l->setColour (juce::Label::textColourId, kPanelText);
         addAndMakeVisible (*l);
@@ -84,7 +84,21 @@ SamplerPanel::SamplerPanel()
     cutoffSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.cutoff = static_cast<float> (cutoffSlider.getValue()); }); };
     resonanceSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.resonance = static_cast<float> (resonanceSlider.getValue() / 100.0); }); };
 
-    setSize (600, 590);
+    // 0.61.0: reverse, start point and fades (they apply to notes that do not loop)
+    reverseToggle.setTooltip ("Play the sample backwards (notes that do not loop)");
+    reverseToggle.onClick = [this] { write ([this] (Channel& c) { c.sampler.reverse = reverseToggle.getToggleState(); }); };
+    addAndMakeVisible (reverseToggle);
+    slider (startSlider, 0.0, 99.0, 0.1, " %");
+    startSlider.setTooltip ("Where in the sample a note starts (FL Studio's SMP START)");
+    startSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.start = static_cast<float> (startSlider.getValue() / 100.0); }); };
+    slider (fadeInSlider, 0.0, 100.0, 0.1, " %");
+    fadeInSlider.setTooltip ("Fade the start of the sample in over this much of its length (FL Studio's IN)");
+    fadeInSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.fadeIn = static_cast<float> (fadeInSlider.getValue() / 100.0); }); };
+    slider (fadeOutSlider, 0.0, 100.0, 0.1, " %");
+    fadeOutSlider.setTooltip ("Fade the end of the sample out over this much of its length (FL Studio's OUT)");
+    fadeOutSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.fadeOut = static_cast<float> (fadeOutSlider.getValue() / 100.0); }); };
+
+    setSize (600, 656);
 }
 
 juce::Slider& SamplerPanel::slider (juce::Slider& s, double lo, double hi, double step, const juce::String& suffix)
@@ -169,6 +183,10 @@ void SamplerPanel::refresh()
     resonanceSlider.setEnabled (s.filter != SamplerFilter::Off);
     cutoffSlider.setValue (s.cutoff, juce::dontSendNotification);
     resonanceSlider.setValue (s.resonance * 100.0, juce::dontSendNotification);
+    reverseToggle.setToggleState (s.reverse, juce::dontSendNotification);
+    startSlider.setValue (s.start * 100.0, juce::dontSendNotification);
+    fadeInSlider.setValue (s.fadeIn * 100.0, juce::dontSendNotification);
+    fadeOutSlider.setValue (s.fadeOut * 100.0, juce::dontSendNotification);
 }
 
 void SamplerPanel::paint (juce::Graphics& g)
@@ -210,6 +228,21 @@ void SamplerPanel::resized()
     headers[0] = area.removeFromTop (18);
     area.removeFromTop (4);
     row (rootLabel, rootSlider);
+    {
+        // 0.61.0: Reverse and Start on one row, the two fades on the next
+        auto r = area.removeFromTop (26);
+        area.removeFromTop (6);
+        reverseToggle.setBounds (r.removeFromLeft (100));
+        startLabel.setBounds (r.removeFromLeft (70));
+        startSlider.setBounds (r);
+        r = area.removeFromTop (26);
+        area.removeFromTop (6);
+        fadeInLabel.setBounds (r.removeFromLeft (100));
+        fadeInSlider.setBounds (r.removeFromLeft (r.getWidth() / 2 - 4));
+        r.removeFromLeft (8);
+        fadeOutLabel.setBounds (r.removeFromLeft (70));
+        fadeOutSlider.setBounds (r);
+    }
     area.removeFromTop (4);
     headers[1] = area.removeFromTop (18);
     area.removeFromTop (4);

@@ -67,6 +67,10 @@ struct MixerTrack
     std::array<float, kAuxBuses> sends {}; // level sent to each aux bus, 0 (off) .. 1.5
     bool sendsPreFader = false;            // sends take the signal before the fader, balance and VCA (they still follow mute/solo)
     std::uint8_t vcaMask = 0;              // bit n: this track is a member of VCA group n
+    // 0.61.0, as the buttons and the knob of every FL Studio mixer track (applied after the effects, before the fader):
+    bool invertPhase = false;              // polarity: both channels are inverted
+    bool swapStereo = false;               // left and right are swapped
+    float separation = 0.0f;               // stereo separation, -1 (wider: the side doubled) .. 0 .. +1 (mono)
 };
 
 // The part of the mixer that is not a track: the aux buses (a MixerTrack each: name, fader, balance, mute and effect chain),

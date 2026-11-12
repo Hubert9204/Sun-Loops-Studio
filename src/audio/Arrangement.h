@@ -165,6 +165,15 @@ inline LoopTakes loopTakesOf (const std::vector<TempoMarker>& markers, double bp
 // A playlist track's own name and colour (0.33.0). An empty name shows "Track N" - or, on a track dedicated to a pattern
 // (0.44.0), the pattern's name; colour 0 is the default look. `pattern` is the pattern the track is dedicated to (a click on
 // an empty place of the track puts that pattern there), -1 for a free track.
+// 0.61.0: a named time marker on the playlist's ruler, as FL Studio's (Add time marker): a place in the song to jump to.
+struct TimeMarker
+{
+    int tick = 0;
+    std::string name;
+    bool operator== (const TimeMarker&) const = default;
+};
+constexpr int kMaxTimeMarkers = 128;
+
 struct PlaylistTrack
 {
     std::string name;
@@ -189,6 +198,7 @@ struct Arrangement
     int loopEndTick = -1;
     // Tempo changes in the song (0.46.0, see TempoMap.h); the song starts at the toolbar's BPM.
     std::vector<TempoMarker> tempoMarkers;
+    std::vector<TimeMarker> markers; // 0.61.0: sorted by tick (see tidyMarkers)
     TimeSignature meter; // the time signature (0.46.0)
     // The shortest pattern: 4 quarters, or one bar when the bar is shorter (2/4, 3/4, 6/8) (0.46.0).
     int minPatternBeats() const noexcept { return std::min (kMinPatternBeats, meter.barQuarters()); }
@@ -196,6 +206,41 @@ struct Arrangement
     std::vector<PlaylistTrack> playlistTracks = std::vector<PlaylistTrack> (kDefaultGenericTracks);
 
     int trackCount() const noexcept { return static_cast<int> (playlistTracks.size()); }
+
+    // 0.61.0: the markers sorted by tick, one per tick (the last one given wins), inside the timeline, at most kMaxTimeMarkers.
+    void tidyMarkers()
+    {
+        std::vector<TimeMarker> out;
+        for (const auto& m : markers)
+        {
+            if (m.tick < 0 || m.tick >= timelineTicks())
+                continue;
+            const auto same = std::find_if (out.begin(), out.end(), [&] (const TimeMarker& o) { return o.tick == m.tick; });
+            if (same != out.end())
+                *same = m;
+            else
+                out.push_back (m);
+        }
+        std::stable_sort (out.begin(), out.end(), [] (const TimeMarker& a, const TimeMarker& b) { return a.tick < b.tick; });
+        if (out.size() > static_cast<size_t> (kMaxTimeMarkers))
+            out.resize (static_cast<size_t> (kMaxTimeMarkers));
+        markers = std::move (out);
+    }
+    // The marker after / before `tick` (-1: none).
+    int nextMarker (int tick) const noexcept
+    {
+        for (size_t i = 0; i < markers.size(); ++i)
+            if (markers[i].tick > tick)
+                return static_cast<int> (i);
+        return -1;
+    }
+    int previousMarker (int tick) const noexcept
+    {
+        for (int i = static_cast<int> (markers.size()) - 1; i >= 0; --i)
+            if (markers[static_cast<size_t> (i)].tick < tick)
+                return i;
+        return -1;
+    }
 
     // 0.60.0: is any playlist track soloed?
     bool anyTrackSoloed() const noexcept

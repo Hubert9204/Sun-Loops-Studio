@@ -301,6 +301,7 @@ open the piano roll, add a channel) and the current pattern's length with **-** 
 | --- | --- |
 | Drum machine... | (Drum channels) opens the drum machine window. |
 | Piano roll | Selects the channel and opens the Piano Roll for it. |
+| Steps > Fill each 2 / 4 / 8 steps, Fill every step, Clear the steps | (0.61.0, as FL Studio's step menu) Writes a step every 2, 4 or 8 steps of the pattern (or all of them), or removes them all. |
 | Instrument > Synth / Sampler | Chooses what makes the sound. Switching to Sampler on a channel without a sample asks for one. The sample is kept if you switch back to Synth. |
 | Instrument > Plugin instruments | The instrument plugins found by the last scan: the channel plays the chosen plugin (see *Plugins*). |
 | Plugin window... | (Plugin channels) opens the plugin's own window. A double-click on the channel does the same. |
@@ -375,6 +376,9 @@ Right-click a sampler channel > **Sampler settings...** opens a window for that 
 
 - **Sound**: the sample (or the SoundFont preset / slice program) the channel plays, **Load sample...**, **Load SoundFont (.sf2)...**, and **Use the
   sample** (forgets a program, the channel plays its own sample again). **Root key**: the key at which the sample plays at its own pitch (C5 = 60).
+- **Reverse**, **Start**, **Fade in**, **Fade out** (0.61.0, as *Reverse*, *SMP START*, *IN* and *OUT* of FL Studio's sampler channel):
+  play the sample backwards; start a note further into the sample (0-99 %); fade the start in and the end out over a part of the
+  sample's length. They apply to notes that do not loop (a looping note keeps its fade in).
 - **Envelope**: off (the default), a note plays its sample once to the end, whatever its length, as in every earlier version. On, a note sounds while
   it is held: **Attack** (fade in), **Decay** to the **Sustain** level, and **Release** after the note ends. Notes played by hand (piano roll, MIDI
   keyboard) are held too.
@@ -635,7 +639,7 @@ global snap (0.60.0).
   height is remembered (0.54.0).
 - **Tools** works on the selected notes (or all when none is selected): Quantize (starts; starts and ends; half way), Humanize (light /
   medium / strong), Legato, Staccato, Strum chords (up / down, fast / slow), Arpeggiate chords (up, down, up and down, random; 8ths
-  or 16ths), Chop (8ths, 16ths, 32nds), Flip, Transpose an octave, Snap to the scale, Velocity (crescendo, decrescendo, random, fixed).
+  or 16ths), Chop (8ths, 16ths, 32nds), Flip, Reverse (0.61.0: mirrors the notes in time), Glue (0.61.0: touching or overlapping notes of one pitch become one), Flam (0.61.0: a softer grace note just before each note, light or strong), Transpose an octave, Snap to the scale, Velocity (crescendo, decrescendo, random, fixed).
 - **Generate** writes into this channel's pattern (replacing its notes; **Ctrl+Z** undoes it), in the key chosen under Scale:
   a **chord progression** (twelve, from pop I-V-vi-IV to jazz ii-V-I and minor ones; held, syncopated stabs, eighth-note pulse or
   arpeggio; one or two chords a bar, voiced so that each voice moves as little as possible), or a **bassline** (roots, eighths,
@@ -797,14 +801,22 @@ numbers. The orange vertical line marks the end of the song: in Song mode playba
 | Zoom in / out | Mouse wheel (up: in, down: out), around the mouse, anywhere on the playlist. |
 | Scroll time | Shift + wheel, a sideways wheel or touchpad swipe, or the scroll bar. |
 
+### Time markers (0.61.0)
+
+As FL Studio's time markers: named places in the song. Click the ruler where the marker should go, then **+ Marker** (next to
+Undo / Redo) and type its name: a teal flag appears in the upper row of the ruler, with a faint line down the tracks. **◂** and
+**▸** jump to the previous and the next marker. Click a marker's flag for its menu: *Jump here*, *Rename...*, *Delete marker*.
+Markers are saved with the project and adding, renaming and deleting them can be undone.
+
 ### Tools, grid, zoom and undo
 
-The toolbar under the pattern box has eight tools, in FL Studio's order and with its names since 0.60.0 (keys **1** - **8** while
+The toolbar under the pattern box has nine tools, in FL Studio's order and with its names since 0.60.0 (keys **1** - **9** while
 the mouse is over the timeline):
 
 | Tool | What it does |
 | --- | --- |
 | **Draw** (1) | The normal tool (called *Select* before 0.59.0), described above and below: click empty space to place a clip (drag to lengthen it), click a clip to select it, drag to move it, drag its **left or right edge** to trim or lengthen it (an audio clip keeps its sound in place: only more or less of it is heard), right-click for a menu (*Split here, Duplicate, Copy, Delete*, plus *Position, gain, pan and fades...*, *Reverse* and *Stretch and pitch...* on an audio clip or *Open this pattern* on a pattern clip), double-click a pattern clip to open that pattern. |
+| **Paint** (9) | (0.61.0) As Draw on empty space, but dragging along the track paints one clip after another, each at the next free place on the grid. |
 | **Delete** (4) | (called *Erase* before 0.60.0) Click a clip to delete it, or drag across several (automation clips too, since 0.57.0). With the other tools the right button does the same. |
 | **Mute** (7) | (0.60.0) Click a clip to mute or unmute it: it stays on the playlist, greyed with an *M*, and does not play. Drag across several to give them all the state of the first one. *Mute clip* is in the clip's right-click menu too. |
 | **Slip** (8) | (0.60.0) Drag a clip sideways to move what plays inside it while the clip stays where it is: a pattern clip starts further into (or earlier in) its pattern, an audio clip plays from another point of its file. |
@@ -1168,6 +1180,9 @@ Each track, from top to bottom:
 - its name (Track 1...) and the channels routed to it;
 - **ten effect slots** (0.45.0; four before), one above the other (see below);
 - **balance** (stereo) - double-click to centre. It is a balance control: at the centre the sound is untouched;
+- **stereo separation** (0.61.0, the thin slider under the balance, as the knob of an FL Studio mixer track): left of the middle
+  widens the stereo image (the side signal up to doubled), right narrows it down to mono; double-click for the middle;
+- **Ø** (0.61.0) inverts the polarity of both channels and **⇄** (0.61.0) swaps left and right, after the track's effects;
 - **M** (mute) and **S** (solo) - these belong to the track and are independent of the channel buttons in the rack.
   If any track is soloed, only soloed tracks are heard;
 - a vertical **fader** with its dB read-out (silence up to +3.5 dB, 1.0 = 0 dB; double-click returns to 0 dB);
@@ -1185,7 +1200,7 @@ aux bus or the master (it replaces every slot), or clears every slot. Presets ke
 bypass; plugin slots are left out (the status line says so).
 
 Click a slot for the menu: the effects, grouped (**EQ and filter**, **Dynamics**, **Drive**, **Modulation**, **Space and time**,
-**Stereo**), then **Plugin effects**, **Bypass** and **Remove effect**. The effects run in order, top to bottom, before the track
+**Pitch**, **Stereo**), then **Plugin effects**, **Bypass** and **Remove effect**. The effects run in order, top to bottom, before the track
 fader. The effects panel has a power button per slot (bypass), a slider per parameter of the selected slot (a choice such as
 *Type* or *Mode* steps through its names; double-click a slider for its default) and, for most effects, **Presets...** with
 ready-made settings.
@@ -1206,6 +1221,14 @@ ready-made settings.
 | Stereo Imager | Width (0-200 %), Mid and Side gain, Mono bass (below this frequency the sound becomes mono), Balance | Wider, Mono bass, Mono |
 | Time Shaper (0.25.0) | In the manner of Gross Beat, synced to the song. **Time**: None, Half speed, Reverse (each cycle plays the one before backwards), Tape stop, Slow down, Stutter 1/8 and 1/16, Repeat 1/4 (the cycle's first quarter four times), Scratch. **Volume**: None, Gate 1/8, 1/16, 1/32, Trance gate, Pump (like sidechain), Fade in, Fade out. **Cycle** (1 beat to 2 bars) is what the time pattern spans; **Depth** of the volume pattern; **Smooth** (crossfades the jumps and softens the gates); Mix. Up to four Time Shapers in a project play their time patterns (each needs a recording of the last 8.5 s); more only shape the volume, and since 0.41.0 the effects panel says so (in orange) when one of those is selected | Half-time bar, Reverse every bar, Tape stop, Stutter 1/16, Beat repeat, Scratch, Trance gate, Gate 1/16, Sidechain pump, Half-time gated |
 | Pitch Corrector (0.26.0) | In the manner of Pitcher, for one voice or instrument at a time (not chords). **Key** and **Scale** (the piano roll's scales): each note is pulled to the nearest note of the scale. **Speed**: how fast (0 ms = at once, the hard "tuned" sound; 50-100 ms sounds natural and lets vibrato through). **Amount** of the correction. **Shift** moves everything up or down (up to an octave, in fractions of a semitone too). **Range** of the voice: Low (40-400 Hz), Voice (70-900 Hz), High (150-2000 Hz). Mix (with Shift and Mix at 50 %, a harmony). The corrected sound is 10-15 ms late (the time it needs to hear the pitch); formants move with the pitch, so big shifts sound like a different voice. Breath, consonants and noise pass unchanged. **Follow** (0.41.0): *Scale* (as above), or a **channel**: the voice is pulled to the note that channel is playing, in the octave nearest to the voice (as Pitcher with MIDI); while the channel plays nothing, the voice is left alone. Put the notes you want sung in a pattern of an instrument channel (turn its volume down if you do not want to hear it) | Natural (chromatic), Hard tune (chromatic), C major fast, A minor natural, A minor pentatonic hard, Bass chromatic, Octave up, Fifth harmony |
+| Parametric EQ 2 (0.61.0) | Seven bands, as Fruity Parametric EQ 2: band 1 a low shelf, bands 2-6 bells, band 7 a high shelf; each with Freq (20 Hz - 20 kHz), Gain (-18 to +18 dB) and Q; Output. The parameters scroll in the effects panel. | |
+| Bass Boost (0.61.0) | As Fruity Bass Boost: Frequency (20-500 Hz) and Amount (a low shelf of up to +15 dB with a gentle saturation of what it adds) | |
+| Multiband Compressor (0.61.0) | Three bands of compression in the manner of Maximus: Low split and High split (the two crossovers), Threshold and Ratio for Low, Mid and High, shared Attack and Release, a Gain per band after it. At 1:1 the bands sum back to the input. | Gentle master, Tight low end, De-harsh |
+| Gate (0.61.0) | A noise gate (as the gate of Fruity Limiter): Threshold, Attack, Hold, Release, Range (how far the closed gate turns the sound down: -100 dB = silence), **Sidechain** (a mixer track that opens the gate instead of the track's own sound) | Noise gate, Drum tightener, Hard chop |
+| Squeeze (0.61.0) | As Fruity Squeeze: Bits (1-16), Downsample (x1-x64, sample and hold), Puncher (a drive before the crusher), Filter (a low-pass after it), Mix | 8-bit, Lo-fi radio, Crushed |
+| Flanger (0.61.0) | As Fruity Flanger: Delay (0.1-20 ms), Depth, Rate, Phase (the right channel's LFO offset, 0-360 degrees), Feedback (negative inverts it), Shape (sine, triangle), Mix | Classic jet, Slow sweep, Metallic |
+| Vibrato (0.61.0) | As Fruity Vibrator: the pitch moves up and down by Depth (0-100 cents) at Rate; Shape (sine, triangle), Stereo (offsets the right channel's LFO) | |
+| Panomatic (0.61.0) | As Fruity Panomatic / Fruity Balance: Volume (-48 to +12 dB), Pan, and an LFO on the pan (auto-pan) or the volume (tremolo): LFO target, rate (free, in Hz) or sync (1/8, 1/4, 1/2, 1 bar, 2 bars of the song), depth, shape (sine, triangle, square, saw) | Auto-pan 1 bar, Tremolo 1/8, Helicopter |
 
 Projects made before 0.21.0 sound the same: their reverbs are Halls without pre-delay and their delays are Stereo.
 Files with the new effects cannot be read by older versions (the slot comes back empty there).

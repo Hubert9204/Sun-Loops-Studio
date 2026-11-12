@@ -134,6 +134,9 @@ private:
         double glideTarget = 0.0;           // the exact rate at the end of the slide
         int pad = -1;                       // drum voices: the pad (0..15) and its choke group; -1 for every other voice
         int choke = 0;
+        // 0.61.0: the sampler channel's reverse, and its fades as frames of the sample (0 = none)
+        bool mirror = false;
+        float fadeInFrames = 0.0f, fadeOutFrames = 0.0f, fadeFrom = 0.0f; // fadeFrom: the frame the note starts at
         float padGain = 1.0f;               // the pad's (or a sampler zone's) level and pan (1 / 1 / 1 for every other voice)
         float padLeft = 1.0f;
         float padRight = 1.0f;

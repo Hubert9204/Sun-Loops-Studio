@@ -222,6 +222,14 @@ void PianoRollToolbar::showToolsMenu()
     menu.addSubMenu ("Chop", chop);
     menu.addSeparator();
     menu.addItem (70, "Flip (upside down)");
+    menu.addItem (74, "Reverse (flip in time)");        // 0.61.0, as FL Studio's tools
+    menu.addItem (75, "Glue (join touching notes of one pitch)");
+    {
+        juce::PopupMenu flamMenu;
+        flamMenu.addItem (76, "Light (grace note 1/64 before, 60 % velocity)");
+        flamMenu.addItem (77, "Strong (1/32 before, 80 % velocity)");
+        menu.addSubMenu ("Flam", flamMenu);
+    }
     menu.addItem (71, "Transpose up an octave");
     menu.addItem (72, "Transpose down an octave");
     menu.addItem (73, "Snap to the scale", scale.type != 0);
@@ -275,6 +283,10 @@ void PianoRollToolbar::showToolsMenu()
                                     break;
                                 }
                                 case 70: editor.applyTool ([] (Notes& n, Sel& s) { theory::flip (n, s); }, "Flipped"); break;
+                                case 74: editor.applyTool ([] (Notes& n, Sel& s) { theory::reverse (n, s); }, "Reversed in time"); break;
+                                case 75: editor.applyTool ([] (Notes& n, Sel& s) { theory::glue (n, s); }, "Glued"); break;
+                                case 76: editor.applyTool ([] (Notes& n, Sel& s) { theory::flam (n, s, kTicksPerBeat / 16, 0.6f); }, "Flammed (light)"); break;
+                                case 77: editor.applyTool ([] (Notes& n, Sel& s) { theory::flam (n, s, kTicksPerBeat / 8, 0.8f); }, "Flammed (strong)"); break;
                                 case 71: editor.applyTool ([] (Notes& n, Sel& s) { theory::transpose (n, s, 12); }, "Up an octave"); break;
                                 case 72: editor.applyTool ([] (Notes& n, Sel& s) { theory::transpose (n, s, -12); }, "Down an octave"); break;
                                 case 73: editor.applyTool ([=] (Notes& n, Sel& s) { theory::snapToScale (n, s, scale); }, "Snapped to the scale"); break;

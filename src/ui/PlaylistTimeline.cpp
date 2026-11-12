@@ -1,4 +1,5 @@
 #include "ui/PlaylistTimeline.h"
+#include "ui/TextPrompt.h"
 
 #include <limits>
 
@@ -352,6 +353,7 @@ void PlaylistTimeline::setTool (PlaylistTool newTool)
         case PlaylistTool::Select: setMouseCursor (juce::MouseCursor::CrosshairCursor); break;
         case PlaylistTool::Mute:   setMouseCursor (juce::MouseCursor::PointingHandCursor); break;
         case PlaylistTool::Slip:   setMouseCursor (juce::MouseCursor::LeftRightResizeCursor); break;
+        case PlaylistTool::Paint:  setMouseCursor (juce::MouseCursor::CrosshairCursor); break;
     }
     repaint();
 }
@@ -706,6 +708,110 @@ void PlaylistTimeline::paintRuler (juce::Graphics& g)
         g.setColour (juce::Colours::black);
         g.drawText (label, box, juce::Justification::centred, false);
     }
+
+    // Time markers (0.61.0): a teal flag with the name in the upper row, and a faint line down the tracks.
+    g.setFont (juce::FontOptions (10.5f, juce::Font::bold));
+    for (const auto& m : arrangement.markers)
+    {
+        if (m.tick < firstTick || m.tick > lastTick)
+            continue;
+        const int x = tickToX (m.tick);
+        const auto colour = juce::Colour (0xff3fc1b0);
+        g.setColour (colour);
+        g.fillRect (x, 0, 2, rowH);
+        const int width = std::clamp (juce::GlyphArrangement::getStringWidthInt (g.getCurrentFont(), m.name) + 10, 24, 140);
+        const auto box = juce::Rectangle<int> (x + 2, 1, width, rowH - 2);
+        g.fillRoundedRectangle (box.toFloat(), 2.0f);
+        g.setColour (juce::Colours::black);
+        g.drawText (m.name.empty() ? juce::String ("Marker") : juce::String (m.name), box.reduced (4, 0), juce::Justification::centredLeft, true);
+        g.setColour (colour.withAlpha (0.25f));
+        g.drawVerticalLine (x, static_cast<float> (kRulerHeight), static_cast<float> (getHeight()));
+    }
+}
+
+// ------------------------------------------------------------------------- time markers (0.61.0)
+
+int PlaylistTimeline::markerAt (int x) const noexcept
+{
+    for (int i = static_cast<int> (arrangement.markers.size()) - 1; i >= 0; --i)
+    {
+        const int mx = tickToX (arrangement.markers[static_cast<size_t> (i)].tick);
+        if (x >= mx - 2 && x <= mx + 40)
+            return i;
+    }
+    return -1;
+}
+
+void PlaylistTimeline::addMarker (int tick)
+{
+    tick = std::clamp (tick, 0, std::max (0, arrangement.timelineTicks() - 1));
+    promptForText (*this, "Add a time marker", "Name of the marker at " + jstr (formatBarsBeatsTicks (tick)) + ":",
+                   "Marker " + juce::String (arrangement.markers.size() + 1), "Add",
+                   [this, tick] (const juce::String& typed)
+                   {
+                       beginEdit();
+                       arrangement.markers.push_back ({ tick, typed.trim().substring (0, 64).toStdString() });
+                       arrangement.tidyMarkers();
+                       commitPendingUndo();
+                       notifyChanged();
+                   });
+}
+
+void PlaylistTimeline::jumpToMarker (int direction)
+{
+    const int from = playheadTick >= 0 ? playheadTick : lastSeekTick;
+    const int i = direction > 0 ? arrangement.nextMarker (from) : arrangement.previousMarker (from);
+    if (i < 0)
+        return;
+    const int tick = arrangement.markers[static_cast<size_t> (i)].tick;
+    lastSeekTick = tick;
+    setPlayheadTick (tick);
+    if (onSeek)
+        onSeek (tick);
+}
+
+void PlaylistTimeline::showMarkerMenu (int marker)
+{
+    if (marker < 0 || marker >= static_cast<int> (arrangement.markers.size()))
+        return;
+    juce::PopupMenu menu;
+    menu.addSectionHeader (arrangement.markers[static_cast<size_t> (marker)].name.empty() ? "Marker" : juce::String (arrangement.markers[static_cast<size_t> (marker)].name));
+    menu.addItem (1, "Jump here");
+    menu.addItem (2, "Rename...");
+    menu.addItem (3, "Delete marker");
+    menu.showMenuAsync (juce::PopupMenu::Options(), [safe = juce::Component::SafePointer<PlaylistTimeline> (this), marker] (int choice)
+    {
+        if (safe == nullptr || choice == 0 || marker >= static_cast<int> (safe->arrangement.markers.size()))
+            return;
+        auto& m = safe->arrangement.markers[static_cast<size_t> (marker)];
+        if (choice == 1)
+        {
+            safe->lastSeekTick = m.tick;
+            safe->setPlayheadTick (m.tick);
+            if (safe->onSeek)
+                safe->onSeek (m.tick);
+        }
+        else if (choice == 3)
+        {
+            safe->beginEdit();
+            safe->arrangement.markers.erase (safe->arrangement.markers.begin() + marker);
+            safe->commitPendingUndo();
+            safe->notifyChanged();
+        }
+        else if (choice == 2)
+        {
+            promptForText (*safe, "Rename the marker", "Name:", juce::String (m.name), "Rename",
+                           [safe, marker] (const juce::String& typed)
+                           {
+                               if (safe == nullptr || marker >= static_cast<int> (safe->arrangement.markers.size()))
+                                   return;
+                               safe->beginEdit();
+                               safe->arrangement.markers[static_cast<size_t> (marker)].name = typed.trim().substring (0, 64).toStdString();
+                               safe->commitPendingUndo();
+                               safe->notifyChanged();
+                           });
+        }
+    });
 }
 
 // ------------------------------------------------------------------------- loop region (ruler)
@@ -2542,6 +2648,7 @@ bool PlaylistTimeline::handleKey (const juce::KeyPress& key)
         case '6': changeTool (PlaylistTool::Select); return true;
         case '7': changeTool (PlaylistTool::Mute); return true;   // 0.60.0
         case '8': changeTool (PlaylistTool::Slip); return true;
+        case '9': changeTool (PlaylistTool::Paint); return true; // 0.61.0
         case '+': case '=': zoomBy (1.5, lastMouseX); return true;
         case '-': zoomBy (1.0 / 1.5, lastMouseX); return true;
         case 's': case 'S':
@@ -2645,6 +2752,11 @@ void PlaylistTimeline::mouseDown (const juce::MouseEvent& e)
     if (e.x >= kNameWidth && e.y < kRulerHeight && (tool != PlaylistTool::Zoom || e.mods.isPopupMenu()))
     {
         const bool noSnap = e.mods.isAltDown();
+        if (e.y < kRulerHeight / 2 && markerAt (e.x) >= 0) // 0.61.0: a marker's flag: its menu
+        {
+            showMarkerMenu (markerAt (e.x));
+            return;
+        }
         if (e.mods.isPopupMenu())
         {
             pressX = e.x;
@@ -2669,6 +2781,7 @@ void PlaylistTimeline::mouseDown (const juce::MouseEvent& e)
         }
         drag = Drag::Seek;
         const int tick = std::clamp (snapTick (xToTick (e.x), noSnap), 0, arrangement.timelineTicks() - 1);
+        lastSeekTick = tick; // 0.61.0: where "+ Marker" puts a marker while nothing plays
         setPlayheadTick (tick);
         if (onSeek)
             onSeek (tick);
@@ -2835,6 +2948,18 @@ void PlaylistTimeline::mouseDown (const juce::MouseEvent& e)
         eraseLastY = e.y;
         if (muteUnder (e.x, e.y, muteSweepState))
             notifyChanged();
+        return;
+    }
+
+    if (tool == PlaylistTool::Paint) // 0.61.0: as FL Studio's Paint: one clip, then more while the mouse moves along the track
+    {
+        if (hit >= 0 || audioHit >= 0)
+            return;
+        if (placeClipAt (track, tick, noSnap))
+        {
+            paintTrack = track;
+            drag = Drag::PaintSweep;
+        }
         return;
     }
 
@@ -3027,6 +3152,7 @@ void PlaylistTimeline::mouseDrag (const juce::MouseEvent& e)
     if (drag == Drag::Seek)
     {
         const int tick = std::clamp (snapTick (xToTick (e.x), noSnap), 0, arrangement.timelineTicks() - 1);
+        lastSeekTick = tick;
         if (tick != playheadTick)
         {
             setPlayheadTick (tick);
@@ -3092,6 +3218,13 @@ void PlaylistTimeline::mouseDrag (const juce::MouseEvent& e)
     {
         const int delta = snapTick (xToTick (e.x), noSnap) - snapTick (slipStartTick, noSnap);
         applySlip (delta);
+        return;
+    }
+    if (drag == Drag::PaintSweep) // 0.61.0: a clip wherever the mouse is over empty space on the track
+    {
+        const int tick = xToTick (e.x);
+        if (tick >= 0 && tick < arrangement.timelineTicks() && arrangement.clipAt (paintTrack, tick) < 0 && arrangement.audioClipAt (paintTrack, tick) < 0)
+            placeClipAt (paintTrack, tick, noSnap);
         return;
     }
     if (drag == Drag::RubberBand)

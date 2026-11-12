@@ -1356,7 +1356,13 @@ void Player::samplerVoiceOn (const Channel& channel, int channelIndex, const Not
     v.age = ++ageCounter;
     v.endTick = held && ! live ? std::min (n.startTick + n.lengthTicks, loopLength) : INT_MAX;
     v.sample = sample;
-    v.pos = 0.0;
+    // 0.61.0: the start point, the reverse and the fades of the sampler channel (a looping note keeps to its loop: no fade out)
+    const double frames = static_cast<double> (sample->numFrames());
+    v.pos = loops ? 0.0 : std::floor (static_cast<double> (set.start) * frames);
+    v.fadeFrom = static_cast<float> (v.pos);
+    v.mirror = set.reverse && ! loops;
+    v.fadeInFrames = static_cast<float> (static_cast<double> (set.fadeIn) * frames);
+    v.fadeOutFrames = loops ? 0.0f : static_cast<float> (static_cast<double> (set.fadeOut) * frames);
     v.step = std::pow (2.0, ((n.pitch - rootKey) * keyTrack + tune + static_cast<double> (channel.pitch)) / 12.0) * sample->sampleRate / sampleRate;
     if (loops)
     {
@@ -1869,8 +1875,22 @@ void Player::render (const Project& project, double bpm, bool playing,
                     const float frac = static_cast<float> (v.pos - idx);
                     const float* sl = v.sample->left.data();
                     const float* sr = v.sample->right.data();
-                    float xl = sl[idx] + frac * (sl[next] - sl[idx]);
-                    float xr = sr[idx] + frac * (sr[next] - sr[idx]);
+                    // 0.61.0: reversed, the same walk reads the sample from its end
+                    const int ri = v.mirror ? frames - 1 - idx : idx;
+                    const int rn = v.mirror ? frames - 1 - next : next;
+                    float xl = sl[ri] + frac * (sl[rn] - sl[ri]);
+                    float xr = sr[ri] + frac * (sr[rn] - sr[ri]);
+                    if (v.fadeInFrames > 0.0f || v.fadeOutFrames > 0.0f)
+                    {
+                        float fade = 1.0f;
+                        if (v.fadeInFrames > 0.0f)
+                            fade = std::min (fade, (static_cast<float> (v.pos) - v.fadeFrom) / v.fadeInFrames);
+                        if (v.fadeOutFrames > 0.0f)
+                            fade = std::min (fade, static_cast<float> (frames - 1 - v.pos) / v.fadeOutFrames);
+                        fade = std::clamp (fade, 0.0f, 1.0f);
+                        xl *= fade;
+                        xr *= fade;
+                    }
                     if (v.filter != SamplerFilter::Off)
                     {
                         const auto svf = [&v] (float x, float& ic1, float& ic2)
@@ -2026,7 +2046,7 @@ void Player::render (const Project& project, double bpm, bool playing,
         const auto wantKeys = [&] (const std::array<EffectSlot, kSlotsPerTrack>& slots)
         {
             for (const auto& slot : slots)
-                if (slot.type == EffectType::Compressor && ! slot.bypass)
+                if ((slot.type == EffectType::Compressor || slot.type == EffectType::Gate) && ! slot.bypass) // 0.61.0: the gate too
                     if (const auto k = std::lround (slot.params[5]) - 1; k >= 0 && k < static_cast<long> (numTracks))
                     {
                         keyWanted[static_cast<size_t> (k)] = 1;
@@ -2087,6 +2107,21 @@ void Player::render (const Project& project, double bpm, bool playing,
 
             for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
                 effects[t][s].process (automated ? trackSlotsNow[t][s] : tr.slots[s], l, r, n, trackTransport);
+
+            // 0.61.0: the track's polarity, channel swap and stereo separation (as an FL Studio mixer track's), after its effects
+            if (tr.invertPhase || tr.swapStereo || std::abs (tr.separation) > 0.0005f)
+            {
+                const float polarity = tr.invertPhase ? -1.0f : 1.0f;
+                const float sideGain = tr.separation >= 0.0f ? 1.0f - std::min (tr.separation, 1.0f) : 1.0f + std::min (-tr.separation, 1.0f);
+                for (int i = 0; i < n; ++i)
+                {
+                    const float a = (tr.swapStereo ? r[i] : l[i]) * polarity;
+                    const float b = (tr.swapStereo ? l[i] : r[i]) * polarity;
+                    const float mid = 0.5f * (a + b), side = 0.5f * (a - b) * sideGain;
+                    l[i] = mid + side;
+                    r[i] = mid - side;
+                }
+            }
 
             const float gateTarget = trackAudible[t] ? 1.0f : 0.0f;
             for (int i = 0; i < n; ++i)

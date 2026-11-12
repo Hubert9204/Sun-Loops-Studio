@@ -103,6 +103,37 @@ void StepGrid::paintStep (int step, bool on)
     }
 }
 
+bool StepGrid::fillEvery (int every)
+{
+    every = std::max (1, every);
+    bool changed = false;
+    const int pitch = steps::stepPitch (channel);
+    for (int step = 0; step < stepCount(); ++step)
+        changed = steps::setStep (channel.notes, channel.steps, step, step % every == 0, loopLengthTicks, pitch) || changed;
+    if (changed)
+    {
+        repaint();
+        if (onStepsEdited)
+            onStepsEdited();
+    }
+    return changed;
+}
+
+bool StepGrid::clearSteps()
+{
+    bool changed = false;
+    const int pitch = steps::stepPitch (channel);
+    for (int step = 0; step < stepCount(); ++step)
+        changed = steps::setStep (channel.notes, channel.steps, step, false, loopLengthTicks, pitch) || changed;
+    if (changed)
+    {
+        repaint();
+        if (onStepsEdited)
+            onStepsEdited();
+    }
+    return changed;
+}
+
 void StepGrid::mouseDown (const juce::MouseEvent& e)
 {
     drag = Drag::None;
@@ -419,6 +450,17 @@ void ChannelStrip::showContextMenu()
     menu.addItem (20, "Automate a plugin parameter...", channel.instrument == Instrument::Plugin && channel.plugin != nullptr && channel.plugin->parameterCount() > 0);
     menu.addItem (10, "Drum machine...", channel.instrument == Instrument::Drums);
     menu.addItem (1, "Piano roll");
+    {
+        // 0.61.0: the steps, as FL Studio's step menu
+        juce::PopupMenu stepMenu;
+        stepMenu.addItem (30, "Fill each 2 steps");
+        stepMenu.addItem (31, "Fill each 4 steps");
+        stepMenu.addItem (32, "Fill each 8 steps");
+        stepMenu.addItem (33, "Fill every step");
+        stepMenu.addSeparator();
+        stepMenu.addItem (34, "Clear the steps");
+        menu.addSubMenu ("Steps", stepMenu);
+    }
     menu.addSeparator();
     menu.addSubMenu ("Instrument", instrument);
     menu.addItem (4, "Load sample...", channel.instrument == Instrument::Sampler);
@@ -470,6 +512,11 @@ void ChannelStrip::showContextMenu()
                                 case 14: if (safe->onDelete) safe->onDelete (i); break;
                                 case 15: if (safe->onSamplerSettings) safe->onSamplerSettings (i); break;
                                 case 21: if (safe->onOpenSlicer) safe->onOpenSlicer (i); break;
+                                case 30: safe->grid.fillEvery (2); break;
+                                case 31: safe->grid.fillEvery (4); break;
+                                case 32: safe->grid.fillEvery (8); break;
+                                case 33: safe->grid.fillEvery (1); break;
+                                case 34: safe->grid.clearSteps(); break;
                                 case 16: if (safe->onLoadSoundFont) safe->onLoadSoundFont (i); break;
                                 case 18: if (safe->onOpenPlugin) safe->onOpenPlugin (i); break;
                                 case 19: if (safe->onSynthSettings) safe->onSynthSettings (i); break;

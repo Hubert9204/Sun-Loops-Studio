@@ -57,12 +57,12 @@ export NO_STRIP=1
     --icon-file "$root/resources/icons/app_icon_256.png" --icon-filename sun-loops-studio
 
 out="$dist/Sun-Loops-Studio-$version-x86_64.AppImage"
-validate=()
+# appimagetool checks the .desktop file with desktop-file-validate when that program is installed, and skips the check
+# otherwise (0.61.0: it has no --no-validate option; passing one made the script fail on a system without desktop-file-utils).
 if ! command -v desktop-file-validate >/dev/null 2>&1; then
-    echo "warning: desktop-file-validate not found (package desktop-file-utils): skipping the .desktop check" >&2
-    validate=(--no-validate)
+    echo "warning: desktop-file-validate not found (package desktop-file-utils): the .desktop file is not checked" >&2
 fi
-ARCH=x86_64 "$tools/appimagetool-x86_64.AppImage" --no-appstream "${validate[@]}" "$appdir" "$out"
+ARCH=x86_64 "$tools/appimagetool-x86_64.AppImage" --no-appstream "$appdir" "$out"
 chmod +x "$out"
 echo
 echo "Built $out ($(du -h "$out" | cut -f1))"

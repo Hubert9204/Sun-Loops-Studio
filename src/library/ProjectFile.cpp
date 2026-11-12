@@ -63,6 +63,14 @@ const char* effectKey (EffectType t)
         case EffectType::Imager:       return "imager";
         case EffectType::TimeShaper:   return "time-shaper";
         case EffectType::PitchCorrector: return "pitch-corrector";
+        case EffectType::Flanger:      return "flanger"; // 0.61.0
+        case EffectType::Gate:         return "gate";
+        case EffectType::BassBoost:    return "bass-boost";
+        case EffectType::Panomatic:    return "panomatic";
+        case EffectType::Squeeze:      return "squeeze";
+        case EffectType::Vibrato:      return "vibrato";
+        case EffectType::ParametricEq2: return "parametric-eq-2";
+        case EffectType::MultibandComp: return "multiband-compressor";
         case EffectType::None:       break;
     }
     return "none";
@@ -276,6 +284,12 @@ juce::String ProjectDocument::toJson() const
         o->setProperty ("sends", sendList);
         o->setProperty ("sendsPreFader", t.sendsPreFader);
         o->setProperty ("vca", static_cast<int> (t.vcaMask)); // bit n: member of VCA group n
+        if (t.invertPhase) // 0.61.0
+            o->setProperty ("invertPhase", true);
+        if (t.swapStereo)
+            o->setProperty ("swapStereo", true);
+        if (std::abs (t.separation) > 0.0f)
+            o->setProperty ("separation", number (static_cast<double> (t.separation)));
         trackList.add (juce::var (o));
     }
     root->setProperty ("tracks", trackList);
@@ -473,6 +487,13 @@ juce::String ProjectDocument::toJson() const
             tempos.add (juce::Array<juce::var> { m.tick, number (m.bpm) });
         root->setProperty ("tempoChanges", tempos);
     }
+    if (! arrangement.markers.empty()) // 0.61.0: time markers
+    {
+        juce::Array<juce::var> list;
+        for (const auto& m : arrangement.markers)
+            list.add (juce::Array<juce::var> { m.tick, juce::String (m.name) });
+        root->setProperty ("markers", list);
+    }
 
     return juce::JSON::toString (juce::var (root), false);
 }
@@ -604,6 +625,9 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
                     t.sends[static_cast<size_t> (a)] = static_cast<float> (readNumber ((*sendList)[a], 0.0, 0.0, 1.5));
             t.sendsPreFader = readBool (o->getProperty ("sendsPreFader"), false);
             t.vcaMask = static_cast<std::uint8_t> (readInt (o->getProperty ("vca"), 0, 0, (1 << kVcaGroups) - 1));
+            t.invertPhase = readBool (o->getProperty ("invertPhase"), false); // 0.61.0
+            t.swapStereo = readBool (o->getProperty ("swapStereo"), false);
+            t.separation = static_cast<float> (readNumber (o->getProperty ("separation"), 0.0, -1.0, 1.0));
         }
     }
     for (auto& c : d.channels) // a channel on a track the file does not have goes to the last one
@@ -899,6 +923,13 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
             if (auto* pair = t.getArray(); pair != nullptr && pair->size() == 2)
                 markers.push_back ({ readInt ((*pair)[0], 0, 0, d.arrangement.timelineTicks()), readNumber ((*pair)[1], 120.0, kMinBpm, kMaxBpm) });
         d.arrangement.tempoMarkers = tidyTempoMarkers (std::move (markers));
+    }
+    if (auto* list = root->getProperty ("markers").getArray()) // 0.61.0
+    {
+        for (const auto& t : *list)
+            if (auto* pair = t.getArray(); pair != nullptr && pair->size() == 2)
+                d.arrangement.markers.push_back ({ readInt ((*pair)[0], 0, 0, d.arrangement.timelineTicks()), (*pair)[1].toString().substring (0, 64).toStdString() });
+        d.arrangement.tidyMarkers();
     }
 
     d.arrangement.ensureChannelCount (numChannels);

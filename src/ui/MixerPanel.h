@@ -81,6 +81,10 @@ private:
     std::array<AutomatableSlider, kAuxBuses> sendSliders;
     std::array<juce::Label, kAuxBuses> sendLabels;
     juce::TextButton preButton { "Pre" };
+    // 0.61.0, as on every FL Studio mixer track: polarity, swap left / right, stereo separation
+    juce::TextButton phaseButton { juce::String::fromUTF8 ("\xc3\x98") };          // "Ø"
+    juce::TextButton swapButton { juce::String::fromUTF8 ("\xe2\x87\x84") };       // "⇄"
+    juce::Slider separationSlider { juce::Slider::LinearHorizontal, juce::Slider::NoTextBox };
     std::array<juce::TextButton, kVcaGroups> vcaButtons;
     AutomatableSlider panSlider { juce::Slider::LinearHorizontal, juce::Slider::NoTextBox };
     juce::Label panLabel;
@@ -227,6 +231,10 @@ private:
         juce::ComboBox choice; // a mixer track (0.45.0: the compressor's sidechain), shown instead of the slider
     };
     std::array<ParamRow, kMaxEffectParams> params;
+    // 0.61.0: the rows live in a scrolling pane, since the 7-band EQ has more of them than the panel is tall.
+    juce::Viewport paramsViewport;
+    juce::Component paramsInner;
+    void layoutParams();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (FxPanel)
 };

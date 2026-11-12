@@ -40,6 +40,10 @@ private:
     juce::Slider attackSlider, decaySlider, sustainSlider, releaseSlider;
     juce::ComboBox loopBox, filterBox;
     juce::Slider loopStartSlider, loopEndSlider, cutoffSlider, resonanceSlider;
+    // 0.61.0, as FL Studio's sampler channel: Reverse, SMP START, the IN and OUT fades
+    juce::ToggleButton reverseToggle { "Reverse" };
+    juce::Slider startSlider, fadeInSlider, fadeOutSlider;
+    juce::Label startLabel { {}, "Start" }, fadeInLabel { {}, "Fade in" }, fadeOutLabel { {}, "Fade out" };
     juce::Label rootLabel { {}, "Root key" }, attackLabel { {}, "Attack" }, decayLabel { {}, "Decay" }, sustainLabel { {}, "Sustain" },
         releaseLabel { {}, "Release" }, loopLabel { {}, "Loop" }, loopStartLabel { {}, "Loop start" }, loopEndLabel { {}, "Loop end" },
         filterLabel { {}, "Filter" }, cutoffLabel { {}, "Cutoff" }, resonanceLabel { {}, "Resonance" };

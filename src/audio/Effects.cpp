@@ -197,6 +197,17 @@ void EffectUnit::reset() noexcept
     svf1a = svf1b = svf2a = svf2b = {};
     controlLeft = 0;
     sideLow = {};
+    for (auto& b : bands) // 0.61.0
+        b.clearState();
+    for (auto* pair : { &xLow, &xMidHp, &xMidLp, &xHigh })
+        for (auto& b : *pair)
+            b.clearState();
+    bandEnv = {};
+    gateHold = 0;
+    gateGain = 0.0f;
+    sqHold = {};
+    sqCount = 0;
+    panPhase = 0.0;
     if (timeL != nullptr)
     {
         std::fill_n (timeL, timeFrames, 0.0f);
@@ -291,6 +302,14 @@ void EffectUnit::process (const EffectSlot& requested, float* left, float* right
         case EffectType::Imager:       runImager (slot, left, right, numSamples); break;
         case EffectType::TimeShaper:   runTimeShaper (slot, left, right, numSamples, transport); break;
         case EffectType::PitchCorrector: runPitchCorrector (slot, left, right, numSamples, transport); break;
+        case EffectType::Flanger:      runFlanger (slot, left, right, numSamples); break;
+        case EffectType::Gate:         runGate (slot, left, right, numSamples, transport); break;
+        case EffectType::BassBoost:    runBassBoost (slot, left, right, numSamples); break;
+        case EffectType::Panomatic:    runPanomatic (slot, left, right, numSamples, transport); break;
+        case EffectType::Squeeze:      runSqueeze (slot, left, right, numSamples); break;
+        case EffectType::Vibrato:      runVibrato (slot, left, right, numSamples); break;
+        case EffectType::ParametricEq2: runParametricEq2 (slot, left, right, numSamples); break;
+        case EffectType::MultibandComp: runMultibandComp (slot, left, right, numSamples); break;
         case EffectType::Plugin:
         case EffectType::None:         break;
     }
@@ -891,6 +910,329 @@ void EffectUnit::runImager (const EffectSlot& s, float* l, float* r, int n) noex
     }
 }
 
+// ------------------------------------------------------------------------- 0.61.0: FL Studio's remaining native effects
+
+namespace
+{
+// An LFO value in -1..1 for a phase in 0..1: 0 sine, 1 triangle, 2 square, 3 saw.
+inline float lfoShape (int shape, double phase) noexcept
+{
+    phase -= std::floor (phase);
+    switch (shape)
+    {
+        case 1: return static_cast<float> (phase < 0.5 ? 4.0 * phase - 1.0 : 3.0 - 4.0 * phase);
+        case 2: return phase < 0.5 ? 1.0f : -1.0f;
+        case 3: return static_cast<float> (2.0 * phase - 1.0);
+        default: return static_cast<float> (std::sin (2.0 * kPi * phase));
+    }
+}
+
+// A linear read of a delay line `d` samples behind `write`.
+inline float readLine (const std::vector<float>& line, int write, float d) noexcept
+{
+    const int size = static_cast<int> (line.size());
+    float rp = static_cast<float> (write) - d;
+    while (rp < 0.0f)
+        rp += static_cast<float> (size);
+    const int i0 = std::min (static_cast<int> (rp), size - 1);
+    const float frac = rp - static_cast<float> (i0);
+    const int i1 = i0 + 1 >= size ? 0 : i0 + 1;
+    return line[static_cast<size_t> (i0)] + frac * (line[static_cast<size_t> (i1)] - line[static_cast<size_t> (i0)]);
+}
+} // namespace
+
+// Flanger: a short modulated delay with feedback, the two channels' LFOs offset by Phase (as Fruity Flanger).
+void EffectUnit::runFlanger (const EffectSlot& s, float* l, float* r, int n) noexcept
+{
+    if (memory == nullptr)
+        return;
+    auto& delayLine = memory->delayLine;
+    const int size = static_cast<int> (delayLine[0].size());
+    const float base = static_cast<float> (s.params[0] * 0.001 * sampleRate);
+    const float depth = static_cast<float> (s.params[1] * 0.001 * sampleRate);
+    const double step = static_cast<double> (s.params[2]) / sampleRate;
+    const double phaseOffset = static_cast<double> (s.params[3]) / 360.0;
+    const float feedback = s.params[4];
+    const int shape = effectChoice (EffectType::Flanger, 5, s.params[5]);
+    const float mix = s.params[6];
+    float* io[2] = { l, r };
+    for (int i = 0; i < n; ++i)
+    {
+        lfoPhase += step;
+        if (lfoPhase >= 1.0)
+            lfoPhase -= 1.0;
+        for (size_t ch = 0; ch < 2; ++ch)
+        {
+            const float d = std::max (1.0f, base + depth * 0.5f * (1.0f + lfoShape (shape, lfoPhase + (ch == 1 ? phaseOffset : 0.0))));
+            const float tap = readLine (delayLine[ch], delayWrite, d);
+            const float in = io[ch][i];
+            delayLine[ch][static_cast<size_t> (delayWrite)] = flush (in + feedback * tap);
+            io[ch][i] = in * (1.0f - mix) + tap * mix;
+        }
+        if (++delayWrite >= size)
+            delayWrite = 0;
+    }
+}
+
+// Gate: below the threshold the sound is turned down by Range, after Hold, with the attack and release times; a sidechain track
+// may drive it instead of the track's own sound.
+void EffectUnit::runGate (const EffectSlot& s, float* l, float* r, int n, const EffectTransport& transport) noexcept
+{
+    const int key = static_cast<int> (std::lround (s.params[5])) - 1;
+    const float* detectL = l;
+    const float* detectR = r;
+    if (key >= 0 && key < transport.numKeys && transport.keyLeft != nullptr && transport.keyRight != nullptr
+        && transport.keyLeft[key] != nullptr && transport.keyRight[key] != nullptr)
+    {
+        detectL = transport.keyLeft[key];
+        detectR = transport.keyRight[key];
+    }
+    const float threshold = dbToGain (s.params[0]);
+    const float attack = static_cast<float> (1.0 - std::exp (-1.0 / (s.params[1] * 0.001 * sampleRate)));
+    const int hold = static_cast<int> (s.params[2] * 0.001 * sampleRate);
+    const float release = static_cast<float> (1.0 - std::exp (-1.0 / (s.params[3] * 0.001 * sampleRate)));
+    const float floorGain = s.params[4] <= -99.9f ? 0.0f : dbToGain (s.params[4]);
+    const float detectorRate = static_cast<float> (1.0 - std::exp (-1.0 / (0.002 * sampleRate)));
+    for (int i = 0; i < n; ++i)
+    {
+        const float level = std::max (std::fabs (detectL[i]), std::fabs (detectR[i]));
+        env += (level - env) * (level > env ? 1.0f : detectorRate);
+        env = flush (env);
+        const bool open = env >= threshold;
+        if (open)
+            gateHold = hold;
+        else if (gateHold > 0)
+            --gateHold;
+        const float target = open || gateHold > 0 ? 1.0f : floorGain;
+        gateGain += (target - gateGain) * (target > gateGain ? attack : release);
+        l[i] *= gateGain;
+        r[i] *= gateGain;
+    }
+}
+
+// Bass Boost: a low shelf (up to +15 dB) at the frequency, with a gentle saturation of what it adds, as Fruity Bass Boost.
+void EffectUnit::runBassBoost (const EffectSlot& s, float* l, float* r, int n) noexcept
+{
+    if (! eqValid || s.params != eqCached)
+    {
+        eqCached = s.params;
+        eqValid = true;
+        bands[0].setCoefs (shelfCoefs (true, s.params[0], 15.0 * s.params[1], sampleRate));
+        bands[1].setCoefs (BiquadCoefs::lowPass (2.0 * kPi * std::min (static_cast<double> (s.params[0]) * 2.0, sampleRate * 0.45) / sampleRate, 0.7071));
+    }
+    if (s.params[1] < 0.001f)
+    {
+        bands[0].clearState();
+        bands[1].clearState();
+        return;
+    }
+    const float amount = s.params[1];
+    float* io[2] = { l, r };
+    for (size_t ch = 0; ch < 2; ++ch)
+        for (int i = 0; i < n; ++i)
+        {
+            const float in = io[ch][i];
+            const float shelved = static_cast<float> (bands[0].tick (ch, in));
+            const float lows = static_cast<float> (bands[1].tick (ch, shelved - in)); // what the shelf added, kept to the lows
+            io[ch][i] = in + std::tanh (lows * (1.0f + 2.0f * amount)) / (1.0f + 2.0f * amount) * (1.0f + amount);
+        }
+}
+
+// Panomatic: a volume and a pan, and an LFO (free or synced to the song) on one of them, as Fruity Panomatic.
+void EffectUnit::runPanomatic (const EffectSlot& s, float* l, float* r, int n, const EffectTransport& transport) noexcept
+{
+    const float gain = dbToGain (s.params[0]);
+    const float pan = s.params[1];
+    const int target = effectChoice (EffectType::Panomatic, 2, s.params[2]);
+    const int sync = effectChoice (EffectType::Panomatic, 4, s.params[4]);
+    const float depth = s.params[5];
+    const int shape = effectChoice (EffectType::Panomatic, 6, s.params[6]);
+    double step = static_cast<double> (s.params[3]) / sampleRate;
+    if (sync > 0 && transport.ticksPerSample > 0.0)
+    {
+        static constexpr double cycleBeats[] = { 0.0, 0.5, 1.0, 2.0, 4.0, 8.0 };
+        const double cycleTicks = cycleBeats[sync] * 480.0; // 480 ticks per beat (NoteSequence.h)
+        step = transport.ticksPerSample / cycleTicks;
+        if (transport.tick >= 0.0)
+            panPhase = std::fmod (transport.tick / cycleTicks, 1.0);
+    }
+    for (int i = 0; i < n; ++i)
+    {
+        float p = pan, g = gain;
+        if (target != 0 && depth > 0.0f)
+        {
+            const float lfo = lfoShape (shape, panPhase);
+            if (target == 1)
+                p = std::clamp (pan + depth * lfo, -1.0f, 1.0f);
+            else
+                g = gain * (1.0f - depth * 0.5f * (1.0f - lfo)); // tremolo: down to (1 - depth) of the volume
+        }
+        panPhase += step;
+        if (panPhase >= 1.0)
+            panPhase -= 1.0;
+        // a balance: the louder side stays at unity, the other goes down
+        l[i] *= g * std::min (1.0f, 1.0f - p);
+        r[i] *= g * std::min (1.0f, 1.0f + p);
+    }
+}
+
+// Squeeze: a puncher (drive) before a bit reduction and a sample-and-hold downsampler, a low-pass after them, as Fruity Squeeze.
+void EffectUnit::runSqueeze (const EffectSlot& s, float* l, float* r, int n) noexcept
+{
+    if (! eqValid || s.params != eqCached)
+    {
+        eqCached = s.params;
+        eqValid = true;
+        bands[0].setCoefs (BiquadCoefs::lowPass (2.0 * kPi * std::min (static_cast<double> (s.params[3]), sampleRate * 0.45) / sampleRate, 0.7071));
+    }
+    const float levels = std::pow (2.0f, std::round (s.params[0])) * 0.5f; // steps per unit
+    const int hold = std::max (1, static_cast<int> (std::lround (s.params[1])));
+    const float punch = s.params[2];
+    const bool filtered = s.params[3] < 19999.0f;
+    const float mix = s.params[4];
+    float* io[2] = { l, r };
+    for (int i = 0; i < n; ++i)
+    {
+        const bool sample = sqCount == 0;
+        for (size_t ch = 0; ch < 2; ++ch)
+        {
+            const float in = io[ch][i];
+            if (sample)
+            {
+                float v = punch > 0.0f ? std::tanh (in * (1.0f + 8.0f * punch)) : in;
+                v = std::round (v * levels) / levels;
+                sqHold[ch] = v;
+            }
+            float wet = sqHold[ch];
+            if (filtered)
+                wet = static_cast<float> (bands[0].tick (ch, wet));
+            io[ch][i] = in * (1.0f - mix) + wet * mix;
+        }
+        if (++sqCount >= hold)
+            sqCount = 0;
+    }
+}
+
+// Vibrato: a modulated delay that moves the pitch up and down by Depth cents, as Fruity Vibrator.
+void EffectUnit::runVibrato (const EffectSlot& s, float* l, float* r, int n) noexcept
+{
+    if (memory == nullptr)
+        return;
+    auto& delayLine = memory->delayLine;
+    const int size = static_cast<int> (delayLine[0].size());
+    const double rate = static_cast<double> (s.params[0]);
+    const double step = rate / sampleRate;
+    // a sinusoidal delay d(t) = D sin(2 pi f t) shifts the pitch by up to 2 pi f D; for `cents` of vibrato D = ratio / (2 pi f)
+    const double ratio = std::pow (2.0, s.params[1] / 1200.0) - 1.0;
+    const float depth = static_cast<float> (ratio * sampleRate / (2.0 * kPi * rate));
+    const float base = depth + 2.0f;
+    const int shape = effectChoice (EffectType::Vibrato, 2, s.params[2]);
+    const double offset = 0.5 * s.params[3];
+    float* io[2] = { l, r };
+    for (int i = 0; i < n; ++i)
+    {
+        lfoPhase += step;
+        if (lfoPhase >= 1.0)
+            lfoPhase -= 1.0;
+        for (size_t ch = 0; ch < 2; ++ch)
+        {
+            const float d = std::clamp (base + depth * lfoShape (shape, lfoPhase + (ch == 1 ? offset : 0.0)), 1.0f, static_cast<float> (size - 2));
+            const float in = io[ch][i];
+            delayLine[ch][static_cast<size_t> (delayWrite)] = in;
+            io[ch][i] = readLine (delayLine[ch], delayWrite, d);
+        }
+        if (++delayWrite >= size)
+            delayWrite = 0;
+    }
+}
+
+// Parametric EQ 2: seven bands (a low shelf, five peaks, a high shelf) and an output gain, as Fruity Parametric EQ 2.
+void EffectUnit::runParametricEq2 (const EffectSlot& s, float* l, float* r, int n) noexcept
+{
+    if (! eqValid || s.params != eqCached)
+    {
+        eqCached = s.params;
+        eqValid = true;
+        for (int b = 0; b < effect_tables::kPeq2Bands; ++b)
+        {
+            const double hz = s.params[static_cast<size_t> (3 * b)], gain = s.params[static_cast<size_t> (3 * b + 1)], q = s.params[static_cast<size_t> (3 * b + 2)];
+            if (b == 0)
+                bands[0].setCoefs (shelfCoefs (true, hz, gain, sampleRate));
+            else if (b == effect_tables::kPeq2Bands - 1)
+                bands[static_cast<size_t> (b)].setCoefs (shelfCoefs (false, hz, gain, sampleRate));
+            else
+                bands[static_cast<size_t> (b)].setCoefs (peakCoefs (hz, gain, q, sampleRate));
+        }
+    }
+    for (int b = 0; b < effect_tables::kPeq2Bands; ++b)
+    {
+        if (std::fabs (s.params[static_cast<size_t> (3 * b + 1)]) >= 0.01f)
+            processStereo (bands[static_cast<size_t> (b)], l, r, n);
+        else
+            bands[static_cast<size_t> (b)].clearState();
+    }
+    const float out = s.params[21];
+    if (std::fabs (out) >= 0.01f)
+    {
+        const float g = dbToGain (out);
+        for (int i = 0; i < n; ++i)
+        {
+            l[i] *= g;
+            r[i] *= g;
+        }
+    }
+}
+
+// Multiband compressor: the sound is split in three by two Linkwitz-Riley crossovers, each band compressed on its own and given
+// its gain, then summed again, as Maximus.
+void EffectUnit::runMultibandComp (const EffectSlot& s, float* l, float* r, int n) noexcept
+{
+    if (! eqValid || s.params != eqCached)
+    {
+        eqCached = s.params;
+        eqValid = true;
+        const double w1 = 2.0 * kPi * std::min (static_cast<double> (s.params[0]), sampleRate * 0.45) / sampleRate;
+        const double w2 = 2.0 * kPi * std::min (static_cast<double> (std::max (s.params[1], s.params[0] * 1.5f)), sampleRate * 0.45) / sampleRate;
+        for (auto& b : xLow) b.setCoefs (BiquadCoefs::lowPass (w1, 0.7071));
+        for (auto& b : xMidHp) b.setCoefs (BiquadCoefs::highPass (w1, 0.7071));
+        for (auto& b : xMidLp) b.setCoefs (BiquadCoefs::lowPass (w2, 0.7071));
+        for (auto& b : xHigh) b.setCoefs (BiquadCoefs::highPass (w2, 0.7071));
+    }
+    const float attack = static_cast<float> (1.0 - std::exp (-1.0 / (s.params[8] * 0.001 * sampleRate)));
+    const float release = static_cast<float> (1.0 - std::exp (-1.0 / (s.params[9] * 0.001 * sampleRate)));
+    constexpr float kLn10Over20 = 0.115129254649702f;
+    const float threshold[3] = { s.params[2], s.params[4], s.params[6] };
+    const float slope[3] = { 1.0f - 1.0f / s.params[3], 1.0f - 1.0f / s.params[5], 1.0f - 1.0f / s.params[7] };
+    const float makeup[3] = { s.params[10], s.params[11], s.params[12] };
+    for (int i = 0; i < n; ++i)
+    {
+        float band[3][2];
+        const float in[2] = { l[i], r[i] };
+        for (size_t ch = 0; ch < 2; ++ch)
+        {
+            const double x = in[ch];
+            band[0][ch] = static_cast<float> (xLow[1].tick (ch, xLow[0].tick (ch, x)));
+            band[1][ch] = static_cast<float> (xMidLp[1].tick (ch, xMidLp[0].tick (ch, xMidHp[1].tick (ch, xMidHp[0].tick (ch, x)))));
+            band[2][ch] = static_cast<float> (xHigh[1].tick (ch, xHigh[0].tick (ch, x)));
+        }
+        float outL = 0.0f, outR = 0.0f;
+        for (size_t b = 0; b < 3; ++b)
+        {
+            const float level = std::max (std::fabs (band[b][0]), std::fabs (band[b][1]));
+            bandEnv[b] += (level - bandEnv[b]) * (level > bandEnv[b] ? attack : release);
+            bandEnv[b] = flush (bandEnv[b]);
+            const float levelDb = 20.0f * std::log10 (std::max (bandEnv[b], 1.0e-6f));
+            const float over = levelDb - threshold[b];
+            const float reduction = over > 0.0f ? over * slope[b] : 0.0f;
+            const float gain = std::exp ((makeup[b] - reduction) * kLn10Over20);
+            outL += band[b][0] * gain;
+            outR += band[b][1] * gain;
+        }
+        l[i] = outL;
+        r[i] = outR;
+    }
+}
+
 // ------------------------------------------------------------------------- presets
 
 const std::vector<EffectPreset>& effectPresets (EffectType t)
@@ -1029,6 +1371,51 @@ const std::vector<EffectPreset>& effectPresets (EffectType t)
             };
             return list;
         }
+        case EffectType::Flanger:
+        {
+            static const std::vector<EffectPreset> list {
+                make ("Classic jet", { 1.0f, 3.0f, 0.2f, 90.0f, 0.6f, 0.0f, 0.5f }),
+                make ("Slow sweep", { 3.0f, 6.0f, 0.08f, 180.0f, 0.4f, 1.0f, 0.5f }),
+                make ("Metallic", { 0.5f, 1.0f, 2.0f, 0.0f, 0.85f, 0.0f, 0.6f }),
+            };
+            return list;
+        }
+        case EffectType::Gate:
+        {
+            static const std::vector<EffectPreset> list {
+                make ("Noise gate", { -50.0f, 1.0f, 30.0f, 150.0f, -100.0f, 0.0f }),
+                make ("Drum tightener", { -30.0f, 0.5f, 10.0f, 60.0f, -24.0f, 0.0f }),
+                make ("Hard chop", { -20.0f, 0.2f, 0.0f, 20.0f, -100.0f, 0.0f }),
+            };
+            return list;
+        }
+        case EffectType::Panomatic:
+        {
+            static const std::vector<EffectPreset> list {
+                make ("Auto-pan 1 bar", { 0.0f, 0.0f, 1.0f, 1.0f, 4.0f, 1.0f, 0.0f }),
+                make ("Tremolo 1/8", { 0.0f, 0.0f, 2.0f, 1.0f, 1.0f, 0.8f, 0.0f }),
+                make ("Helicopter", { 0.0f, 0.0f, 2.0f, 12.0f, 0.0f, 1.0f, 2.0f }),
+            };
+            return list;
+        }
+        case EffectType::Squeeze:
+        {
+            static const std::vector<EffectPreset> list {
+                make ("8-bit", { 8.0f, 4.0f, 0.0f, 8000.0f, 1.0f }),
+                make ("Lo-fi radio", { 10.0f, 2.0f, 0.3f, 4000.0f, 1.0f }),
+                make ("Crushed", { 4.0f, 8.0f, 0.5f, 20000.0f, 1.0f }),
+            };
+            return list;
+        }
+        case EffectType::MultibandComp:
+        {
+            static const std::vector<EffectPreset> list {
+                make ("Gentle master", { 150.0f, 2500.0f, -14.0f, 2.0f, -12.0f, 2.0f, -14.0f, 2.0f, 15.0f, 150.0f, 1.0f, 0.0f, 1.0f }),
+                make ("Tight low end", { 120.0f, 3000.0f, -24.0f, 6.0f, -12.0f, 1.5f, -12.0f, 1.5f, 8.0f, 100.0f, 3.0f, 0.0f, 0.0f }),
+                make ("De-harsh", { 200.0f, 2500.0f, -12.0f, 1.5f, -12.0f, 1.5f, -26.0f, 8.0f, 2.0f, 80.0f, 0.0f, 0.0f, 2.0f }),
+            };
+            return list;
+        }
         case EffectType::Imager:
         {
             static const std::vector<EffectPreset> list {
@@ -1048,6 +1435,9 @@ const std::vector<EffectPreset>& effectPresets (EffectType t)
             return list;
         }
         case EffectType::Equalizer:
+        case EffectType::BassBoost:
+        case EffectType::Vibrato:
+        case EffectType::ParametricEq2:
         case EffectType::Plugin:
         case EffectType::None:
             break;

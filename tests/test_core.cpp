@@ -1297,8 +1297,10 @@ void testEffects()
                 float worst = 0.0f;
                 for (float v : out)
                 {
-                    // (the parametric EQ at its maximum adds up to +54 dB to this +6 dBFS noise on purpose: 500 is still "bounded")
-                    fine = fine && std::isfinite (v) && std::abs (v) < (type == sls::EffectType::ParametricEq ? 1000.0f : 100.0f);
+                    // (the parametric EQ at its maximum adds up to +54 dB to this +6 dBFS noise on purpose: 500 is still "bounded";
+                    //  the seven-band one, 0.61.0, stacks seven +18 dB bands and +18 dB of output at one frequency: up to +144 dB)
+                    const float bound = type == sls::EffectType::ParametricEq ? 1000.0f : type == sls::EffectType::ParametricEq2 ? 1.0e8f : 100.0f;
+                    fine = fine && std::isfinite (v) && std::abs (v) < bound;
                     worst = std::max (worst, std::isfinite (v) ? std::abs (v) : 1.0e30f);
                 }
                 if (! fine)
@@ -2093,6 +2095,25 @@ void testConsole()
         const auto none = render ([] (auto& t, auto&) { t[0].sends[0] = 1.0f; t[0].sendsPreFader = true; t[0].volume = 0.0f; });
         check (peakIn (echo, 37000, 66000) > 0.05f && peakIn (none, 37000, 66000) == 0.0f, "an effect on the aux bus processes the sends (echo after the note)");
         check (peakIn (echo, 0, 38000) < 0.001f, "and the dry signal is not in the bus output (delay mix 100 %)");
+    }
+    {
+        // 0.61.0: a track's polarity, channel swap and stereo separation (as an FL Studio mixer track's)
+        const auto inverted = render ([] (auto& t, auto&) { t[0].invertPhase = true; });
+        bool opposite = true;
+        for (int i = 0; i < 24000; ++i)
+            opposite = opposite && std::abs (inverted.getSample (0, i) + dry.getSample (0, i)) < 1.0e-5f;
+        check (opposite, "track polarity: every sample comes out inverted");
+        const auto panned = render ([] (auto& t, auto&) { t[0].pan = 0.0f; t[0].slots[0] = slotWith (sls::EffectType::Panomatic, { 0.0f, -1.0f, 0.0f, 1.0f, 0.0f, 0.5f, 0.0f }); });
+        const auto swapped = render ([] (auto& t, auto&) { t[0].swapStereo = true; t[0].slots[0] = slotWith (sls::EffectType::Panomatic, { 0.0f, -1.0f, 0.0f, 1.0f, 0.0f, 0.5f, 0.0f }); });
+        check (peakOf (panned.getReadPointer (1), 0, 24000) == 0.0f && peakOf (panned.getReadPointer (0), 0, 24000) > 0.05f
+                   && peakOf (swapped.getReadPointer (0), 0, 24000) == 0.0f && peakOf (swapped.getReadPointer (1), 0, 24000) > 0.05f,
+               "track swap: a sound on the left comes out on the right");
+        const auto mono = render ([] (auto& t, auto&) { t[0].separation = 1.0f; t[0].slots[0] = slotWith (sls::EffectType::Panomatic, { 0.0f, -1.0f, 0.0f, 1.0f, 0.0f, 0.5f, 0.0f }); });
+        check (std::abs (peakOf (mono.getReadPointer (0), 0, 24000) - peakOf (mono.getReadPointer (1), 0, 24000)) < 1.0e-6f
+                   && std::abs (peakOf (mono.getReadPointer (0), 0, 24000) / peakOf (panned.getReadPointer (0), 0, 24000) - 0.5f) < 0.02f,
+               "track separation at +1: mono, the same on both sides");
+        const auto untouched = render ([] (auto& t, auto&) { t[0].separation = -1.0f; });
+        check (std::abs (peakIn (untouched, 0, 24000) / refPeak - 1.0f) < 0.01f, "track separation does not change a sound that is already in the middle");
     }
     {
         const auto half = render ([] (auto& t, auto& c) { t[0].vcaMask = 1; c.vcaLevel[0] = 0.5f; });
@@ -7358,6 +7379,269 @@ std::vector<int> pitchesOf (const std::vector<sls::Note>& notes)
     return p;
 }
 
+// 0.61.0: the effects, piano roll tools and playlist markers added for parity with FL Studio.
+void testFlParity061()
+{
+    std::cout << "FL Studio parity (0.61.0)\n";
+    using ET = sls::EffectType;
+    const auto runStereo = [] (const sls::EffectSlot& slot, std::vector<float> l, std::vector<float> r)
+    {
+        sls::EffectUnit unit;
+        unit.prepare (kSr);
+        sls::EffectMemory mem;
+        mem.prepare (kSr);
+        unit.attachMemory (&mem);
+        for (size_t i = 0; i < l.size(); i += 64)
+            unit.process (slot, l.data() + i, r.data() + i, static_cast<int> (std::min<size_t> (64, l.size() - i)));
+        return std::pair { l, r };
+    };
+    const auto tone = sineWave (1000.0, 0.5, 48000);
+
+    // Gate
+    {
+        const auto quiet = sineWave (1000.0, 0.001, 48000); // -60 dBFS, under the -40 dB threshold
+        const auto q = runEffect (slotWith (ET::Gate, { -40.0f, 1.0f, 20.0f, 100.0f, -100.0f, 0.0f }), quiet);
+        check (peakOf (q.data(), 24000, 48000) < 1.0e-5f, "gate: a signal under the threshold is silenced");
+        const auto loud = runEffect (slotWith (ET::Gate, { -40.0f, 1.0f, 20.0f, 100.0f, -100.0f, 0.0f }), tone);
+        check (std::abs (peakOf (loud.data(), 24000, 48000) / 0.5f - 1.0f) < 0.02f, "gate: a signal over the threshold passes untouched");
+        const auto ranged = runEffect (slotWith (ET::Gate, { -40.0f, 1.0f, 20.0f, 100.0f, -20.0f, 0.0f }), quiet);
+        check (std::abs (peakOf (ranged.data(), 24000, 48000) / 0.0001f - 1.0f) < 0.1f, "gate: Range -20 dB turns the closed gate down by 20 dB, not to silence");
+    }
+    // Panomatic
+    {
+        const auto [l, r] = runStereo (slotWith (ET::Panomatic, { 0.0f, -1.0f, 0.0f, 1.0f, 0.0f, 0.5f, 0.0f }), tone, tone);
+        check (peakOf (r.data(), 0, 48000) < 1.0e-6f && std::abs (peakOf (l.data(), 0, 48000) / 0.5f - 1.0f) < 0.01f, "panomatic: pan hard left silences the right, keeps the left");
+        const auto half = runEffect (slotWith (ET::Panomatic, { -6.0206f, 0.0f, 0.0f, 1.0f, 0.0f, 0.5f, 0.0f }), tone);
+        check (std::abs (peakOf (half.data(), 0, 48000) / 0.25f - 1.0f) < 0.01f, "panomatic: -6 dB halves the level");
+        const auto trem = runEffect (slotWith (ET::Panomatic, { 0.0f, 0.0f, 2.0f, 4.0f, 0.0f, 1.0f, 0.0f }), tone);
+        float lo = 1.0f;
+        for (int w = 0; w < 48000; w += 480)
+            lo = std::min (lo, peakOf (trem.data(), w, w + 480));
+        check (lo < 0.05f && peakOf (trem.data(), 0, 48000) > 0.45f, "panomatic: the volume LFO at full depth swings between silence and full level");
+        const auto [al, ar] = runStereo (slotWith (ET::Panomatic, { 0.0f, 0.0f, 1.0f, 2.0f, 0.0f, 1.0f, 0.0f }), tone, tone);
+        check (std::abs (rmsOf (al, 0, 48000) - rmsOf (ar, 0, 48000)) < 0.02 && rmsOf (al, 0, 48000) < 0.33, "panomatic: the pan LFO moves the sound between the two sides evenly");
+    }
+    // Squeeze
+    {
+        const auto crushed = runEffect (slotWith (ET::Squeeze, { 2.0f, 1.0f, 0.0f, 20000.0f, 1.0f }), tone);
+        bool stepped = true;
+        for (int i = 0; i < 48000; ++i)
+            stepped = stepped && std::abs (crushed[static_cast<size_t> (i)] * 2.0f - std::round (crushed[static_cast<size_t> (i)] * 2.0f)) < 1.0e-5f;
+        check (stepped, "squeeze: at 2 bits every sample sits on one of the coarse levels");
+        const auto held = runEffect (slotWith (ET::Squeeze, { 16.0f, 8.0f, 0.0f, 20000.0f, 1.0f }), tone);
+        bool holds = true;
+        for (int i = 0; i + 8 <= 4800; i += 8)
+            for (int k = 1; k < 8; ++k)
+                holds = holds && held[static_cast<size_t> (i + k)] == held[static_cast<size_t> (i)];
+        check (holds, "squeeze: downsample x8 holds each sample for eight");
+        const auto dry = runEffect (slotWith (ET::Squeeze, { 2.0f, 8.0f, 1.0f, 500.0f, 0.0f }), tone);
+        check (dry == tone, "squeeze: mix 0 is the dry signal");
+    }
+    // Flanger and vibrato
+    {
+        const auto dry = runEffect (slotWith (ET::Flanger, { 2.0f, 2.0f, 0.3f, 90.0f, 0.5f, 0.0f, 0.0f }), tone);
+        check (dry == tone, "flanger: mix 0 is the dry signal");
+        const auto wet = runEffect (slotWith (ET::Flanger, { 2.0f, 2.0f, 0.3f, 90.0f, 0.5f, 0.0f, 0.5f }), tone);
+        check (wet != tone && peakOf (wet.data(), 0, 48000) < 2.0f, "flanger: mixed in, it changes the sound and stays bounded");
+        const auto vib = runEffect (slotWith (ET::Vibrato, { 5.0f, 50.0f, 0.0f, 0.0f }), tone);
+        check (std::abs (rmsOf (vib, 4800, 48000) / rmsOf (tone, 4800, 48000) - 1.0) < 0.03, "vibrato: the level stays, only the pitch moves");
+        int crossings = 0, longest = 0, shortest = 1 << 20, last = -1;
+        for (int i = 4801; i < 48000; ++i)
+            if (vib[static_cast<size_t> (i - 1)] < 0.0f && vib[static_cast<size_t> (i)] >= 0.0f)
+            {
+                if (last >= 0)
+                {
+                    longest = std::max (longest, i - last);
+                    shortest = std::min (shortest, i - last);
+                }
+                last = i;
+                ++crossings;
+            }
+        check (crossings > 800 && longest > shortest, "vibrato: the period of a steady tone now varies");
+    }
+    // Parametric EQ 2
+    {
+        const auto flat = runEffect (sls::EffectSlot::make (ET::ParametricEq2), tone);
+        check (flat == tone, "parametric EQ 2: with every gain at 0 dB the sound is untouched");
+        auto slot = sls::EffectSlot::make (ET::ParametricEq2);
+        slot.params[9] = 1000.0f;  // band 4 at 1 kHz
+        slot.params[10] = 12.0f;   // +12 dB
+        const auto boosted = runEffect (slot, tone);
+        check (std::abs (peakOf (boosted.data(), 24000, 48000) / 0.5f - 3.981f) < 0.15f, "parametric EQ 2: +12 dB on a band's own frequency is about 4 times the level");
+        const auto low = sineWave (60.0, 0.5, 48000);
+        check (std::abs (peakOf (runEffect (slot, low).data(), 24000, 48000) / 0.5f - 1.0f) < 0.05f, "parametric EQ 2: a peak at 1 kHz leaves 60 Hz alone");
+        auto shelf = sls::EffectSlot::make (ET::ParametricEq2);
+        shelf.params[1] = -18.0f; // band 1, the low shelf at 50 Hz... moved up to 200 Hz
+        shelf.params[0] = 200.0f;
+        check (peakOf (runEffect (shelf, sineWave (30.0, 0.5, 96000)).data(), 48000, 96000) < 0.1f, "parametric EQ 2: band 1 is a low shelf (-18 dB well under its frequency)");
+        slot.params[21] = -6.0206f;
+        check (std::abs (peakOf (runEffect (slot, tone).data(), 24000, 48000) / 0.5f - 1.99f) < 0.1f, "parametric EQ 2: the output gain follows the bands");
+    }
+    // Bass boost
+    {
+        const auto slot = slotWith (ET::BassBoost, { 80.0f, 1.0f });
+        const auto bass = sineWave (40.0, 0.05, 96000), treble = sineWave (5000.0, 0.05, 96000);
+        check (peakOf (runEffect (slot, bass).data(), 48000, 96000) > 0.05f * 2.0f, "bass boost: the lows come out at least twice as loud");
+        check (std::abs (peakOf (runEffect (slot, treble).data(), 48000, 96000) / 0.05f - 1.0f) < 0.05f, "bass boost: the highs are left alone");
+        check (runEffect (slotWith (ET::BassBoost, { 80.0f, 0.0f }), bass) == bass, "bass boost: amount 0 is the dry signal");
+    }
+    // Multiband compressor
+    {
+        // ratio 1:1 everywhere: the crossovers sum back to the same level at any frequency
+        const std::initializer_list<float> open { 200.0f, 3000.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, 10.0f, 120.0f, 0.0f, 0.0f, 0.0f };
+        bool flat = true;
+        for (double hz : { 60.0, 200.0, 1000.0, 3000.0, 9000.0 })
+            flat = flat && std::abs (peakOf (runEffect (slotWith (ET::MultibandComp, open), sineWave (hz, 0.5, 48000)).data(), 24000, 48000) / 0.5f - 1.0f) < 0.03f;
+        check (flat, "multiband compressor: at 1:1 the three bands sum back to the input level at every frequency");
+        // only the mid band compresses: 1 kHz goes down, 60 Hz does not
+        const std::initializer_list<float> mid { 200.0f, 3000.0f, 0.0f, 1.0f, -26.0f, 20.0f, 0.0f, 1.0f, 1.0f, 120.0f, 0.0f, 0.0f, 0.0f };
+        const float midOut = peakOf (runEffect (slotWith (ET::MultibandComp, mid), sineWave (1000.0, 0.5, 48000)).data(), 24000, 48000);
+        const float lowOut = peakOf (runEffect (slotWith (ET::MultibandComp, mid), sineWave (60.0, 0.5, 48000)).data(), 24000, 48000);
+        check (midOut < 0.12f && lowOut > 0.45f, "multiband compressor: a band's compression touches that band only");
+        const std::initializer_list<float> gain { 200.0f, 3000.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, 10.0f, 120.0f, 6.0206f, 0.0f, 0.0f };
+        check (std::abs (peakOf (runEffect (slotWith (ET::MultibandComp, gain), sineWave (50.0, 0.25, 48000)).data(), 24000, 48000) / 0.5f - 1.0f) < 0.05f,
+               "multiband compressor: a band's gain raises that band");
+    }
+    // every new effect has a name, a place in the menu and sane defaults
+    {
+        bool ok = true;
+        for (ET t : { ET::Flanger, ET::Gate, ET::BassBoost, ET::Panomatic, ET::Squeeze, ET::Vibrato, ET::ParametricEq2, ET::MultibandComp })
+        {
+            bool inMenu = false;
+            for (const auto& entry : sls::kEffectMenu)
+                inMenu = inMenu || entry.type == t;
+            ok = ok && inMenu && std::string (sls::effectName (t)) != "Empty" && sls::effectParamCount (t) > 0 && sls::effectParamCount (t) <= sls::kMaxEffectParams;
+            for (int i = 0; i < sls::effectParamCount (t); ++i)
+            {
+                const auto info = sls::effectParamInfo (t, i);
+                ok = ok && info.min < info.max && info.def >= info.min && info.def <= info.max;
+            }
+        }
+        check (ok, "the new effects are named, listed in the menu and have defaults inside their ranges");
+        check (sls::effectNeedsMemory (ET::Flanger) && sls::effectNeedsMemory (ET::Vibrato) && ! sls::effectNeedsMemory (ET::Gate), "flanger and vibrato borrow the delay memory");
+
+        // every effect type, with its last parameter moved, comes back from a saved project as it was
+        sls::ProjectDocument doc = sls::ProjectDocument::blank();
+        bool saved = ! doc.tracks.empty();
+        if (saved)
+        {
+            std::vector<ET> types;
+            for (int t = 1; t < sls::kEffectTypeCount; ++t)
+                if (static_cast<ET> (t) != ET::Plugin)
+                    types.push_back (static_cast<ET> (t));
+            for (size_t k = 0; k < types.size(); ++k)
+            {
+                while (doc.tracks.size() <= k / static_cast<size_t> (sls::kSlotsPerTrack))
+                    doc.tracks.push_back (sls::MixerTrack {});
+                auto slot = sls::EffectSlot::make (types[k]);
+                const int last = sls::effectParamCount (types[k]) - 1;
+                slot.params[static_cast<size_t> (last)] = sls::effectParamInfo (types[k], last).max;
+                doc.tracks[k / static_cast<size_t> (sls::kSlotsPerTrack)].slots[k % static_cast<size_t> (sls::kSlotsPerTrack)] = slot;
+            }
+            doc.tracks[0].invertPhase = true;
+            doc.tracks[0].swapStereo = true;
+            doc.tracks[0].separation = -0.5f;
+            const auto parsed = sls::ProjectDocument::fromJson (doc.toJson());
+            saved = parsed.document.has_value() && parsed.document->tracks.size() == doc.tracks.size();
+            for (size_t k = 0; saved && k < types.size(); ++k)
+            {
+                const auto& a = doc.tracks[k / static_cast<size_t> (sls::kSlotsPerTrack)].slots[k % static_cast<size_t> (sls::kSlotsPerTrack)];
+                const auto& b = parsed.document->tracks[k / static_cast<size_t> (sls::kSlotsPerTrack)].slots[k % static_cast<size_t> (sls::kSlotsPerTrack)];
+                const int last = sls::effectParamCount (types[k]) - 1;
+                saved = a.type == b.type && std::abs (a.params[static_cast<size_t> (last)] - b.params[static_cast<size_t> (last)]) < 1.0e-3f * std::max (1.0f, std::abs (a.params[static_cast<size_t> (last)]));
+                if (! saved)
+                    std::cout << "    (" << sls::effectName (types[k]) << " did not come back)\n";
+            }
+            saved = saved && parsed.document->tracks[0].invertPhase && parsed.document->tracks[0].swapStereo && std::abs (parsed.document->tracks[0].separation + 0.5f) < 1.0e-6f;
+        }
+        check (saved, "every effect type (and a track's polarity, swap and separation) survives a save and a load");
+    }
+
+    // Sampler: reverse, start point, fades (as FL Studio's sampler channel)
+    {
+        // a sample whose first half is silent and whose second half is a tone: the order tells the direction
+        auto sample = std::make_shared<sls::SampleData>();
+        sample->sampleRate = 48000.0;
+        sample->left.assign (24000, 0.0f);
+        for (int i = 12000; i < 24000; ++i)
+            sample->left[static_cast<size_t> (i)] = static_cast<float> (0.5 * std::sin (6.283185307179586 * 1000.0 * i / 48000.0));
+        sample->right = sample->left;
+        const auto play = [&] (auto&& edit)
+        {
+            auto c = samplerChannel (sample, { { 60, 0, kBeat / 4, 1.0f } });
+            edit (c.sampler);
+            return sls::renderToBuffer (oneBar ({ c }), {});
+        };
+        const auto forward = play ([] (sls::SamplerSettings&) {});
+        check (peakOf (forward.getReadPointer (0), 0, 11000) == 0.0f && peakOf (forward.getReadPointer (0), 13000, 23000) > 0.05f, "sampler: forwards, the silent half comes first");
+        const auto backward = play ([] (sls::SamplerSettings& s) { s.reverse = true; });
+        check (peakOf (backward.getReadPointer (0), 500, 11000) > 0.05f && peakOf (backward.getReadPointer (0), 13000, 23000) == 0.0f, "sampler: reversed, the tone comes first");
+        const auto late = play ([] (sls::SamplerSettings& s) { s.start = 0.5f; });
+        check (peakOf (late.getReadPointer (0), 500, 11000) > 0.05f && peakOf (late.getReadPointer (0), 12500, 23000) == 0.0f, "sampler: start at 50 % skips the first half");
+        const auto faded = play ([] (sls::SamplerSettings& s) { s.start = 0.5f; s.fadeIn = 0.5f; });
+        check (peakOf (faded.getReadPointer (0), 0, 1200) < 0.3f * peakOf (late.getReadPointer (0), 600, 1200)
+                   && peakOf (faded.getReadPointer (0), 10000, 11500) > 0.8f * peakOf (late.getReadPointer (0), 10000, 11500),
+               "sampler: the fade in starts from silence at the start point and reaches the full level");
+        const auto tail = play ([] (sls::SamplerSettings& s) { s.fadeOut = 0.5f; });
+        check (peakOf (tail.getReadPointer (0), 22800, 23900) < 0.15f * peakOf (forward.getReadPointer (0), 22800, 23900)
+                   && std::abs (peakOf (tail.getReadPointer (0), 12000, 12600) / peakOf (forward.getReadPointer (0), 12000, 12600) - 1.0f) < 0.08f,
+               "sampler: the fade out brings the end of the sample down to silence");
+        auto doc = sls::ProjectDocument::blank();
+        doc.channels[0].instrument = sls::Instrument::Sampler;
+        doc.channels[0].sampler.reverse = true;
+        doc.channels[0].sampler.start = 0.25f;
+        doc.channels[0].sampler.fadeIn = 0.1f;
+        doc.channels[0].sampler.fadeOut = 0.3f;
+        const auto parsed = sls::ProjectDocument::fromJson (doc.toJson());
+        check (parsed.document.has_value() && parsed.document->channels[0].sampler.reverse && std::abs (parsed.document->channels[0].sampler.start - 0.25f) < 1.0e-6f
+                   && std::abs (parsed.document->channels[0].sampler.fadeIn - 0.1f) < 1.0e-6f && std::abs (parsed.document->channels[0].sampler.fadeOut - 0.3f) < 1.0e-6f,
+               "sampler: reverse, start and fades survive a save and a load");
+    }
+
+    // Piano roll tools: reverse, glue, flam
+    {
+        const auto note = [] (int pitch, int start, int length, float vel = 0.8f) { sls::Note n; n.pitch = pitch; n.startTick = start; n.lengthTicks = length; n.velocity = vel; return n; };
+        std::vector<sls::Note> notes { note (60, 0, 120), note (64, 240, 240), note (67, 720, 240) };
+        std::vector<bool> sel (3, false);
+        sls::theory::reverse (notes, sel);
+        check (notes.size() == 3 && notes[0].pitch == 67 && notes[0].startTick == 0 && notes[1].pitch == 64 && notes[1].startTick == 480
+                   && notes[2].pitch == 60 && notes[2].startTick == 840 && notes[2].lengthTicks == 120,
+               "reverse: the notes are mirrored in time inside their own span");
+
+        notes = { note (60, 0, 240), note (60, 240, 240), note (60, 600, 120), note (62, 0, 480), note (60, 300, 100) };
+        sel.assign (5, false);
+        sls::theory::glue (notes, sel);
+        int c = 0, d = 0, longC = 0;
+        for (const auto& n : notes)
+        {
+            if (n.pitch == 60) { ++c; longC = std::max (longC, n.lengthTicks); }
+            if (n.pitch == 62) ++d;
+        }
+        check (notes.size() == 3 && c == 2 && d == 1 && longC == 480, "glue: touching and overlapping notes of one pitch become one; a gap keeps them apart");
+
+        notes = { note (60, 0, 240), note (62, 480, 240, 1.0f) };
+        sel.assign (2, false);
+        sls::theory::flam (notes, sel, 30, 0.5f);
+        check (notes.size() == 3 && notes[1].pitch == 62 && notes[1].startTick == 450 && notes[1].lengthTicks == 30 && std::abs (notes[1].velocity - 0.5f) < 1.0e-6f
+                   && notes[2].startTick == 480,
+               "flam: a softer grace note just before each note (none before a note at the very start)");
+    }
+
+    // Playlist time markers
+    {
+        sls::Arrangement a;
+        a.markers = { { 1920, "Drop" }, { 0, "Intro" }, { 1920, "Chorus" }, { -5, "bad" }, { 100000000, "far" } };
+        a.tidyMarkers();
+        check (a.markers.size() == 2 && a.markers[0].name == "Intro" && a.markers[1].name == "Chorus" && a.markers[1].tick == 1920,
+               "markers: sorted, one per tick (the last wins), none outside the song");
+        check (a.nextMarker (0) == 1 && a.nextMarker (1920) == -1 && a.previousMarker (1920) == 0 && a.previousMarker (0) == -1, "markers: next and previous from a position");
+        sls::ProjectDocument doc = sls::ProjectDocument::blank();
+        doc.arrangement.markers = { { 960, "Verse" }, { 3840, "Outro" } };
+        const auto parsed = sls::ProjectDocument::fromJson (doc.toJson());
+        check (parsed.document.has_value() && parsed.document->arrangement.markers == doc.arrangement.markers, "markers survive a save and a load");
+    }
+}
+
 void testMusicTheory()
 {
     namespace th = sls::theory;
@@ -11694,6 +11978,7 @@ int main()
     testNoteRecording();
     testSoundLibrary();
     testMusicTheory();
+    testFlParity061();
     testOneShot();
     testAutomation();
     testMidiImport();

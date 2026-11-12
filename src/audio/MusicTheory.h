@@ -76,6 +76,10 @@ void arpeggiate (std::vector<Note>& notes, std::vector<bool>& selected, int rate
 
 void chop (std::vector<Note>& notes, std::vector<bool>& selected, int pieceTicks); // each note cut into pieces of that length
 void flip (std::vector<Note>& notes, std::vector<bool>& selected);                 // upside down around the middle of their range
+// 0.61.0, as FL Studio's Piano Roll tools:
+void reverse (std::vector<Note>& notes, std::vector<bool>& selected);              // mirrored in time (Flip horizontally)
+void glue (std::vector<Note>& notes, std::vector<bool>& selected);                 // notes of one pitch that touch or overlap become one
+void flam (std::vector<Note>& notes, std::vector<bool>& selected, int ticks, float velocity); // a grace note `ticks` before each note
 void velocityRamp (std::vector<Note>& notes, std::vector<bool>& selected, float from, float to); // by start time
 void setVelocity (std::vector<Note>& notes, std::vector<bool>& selected, float velocity);
 void randomizeVelocity (std::vector<Note>& notes, std::vector<bool>& selected, float low, float high, std::uint32_t seed);

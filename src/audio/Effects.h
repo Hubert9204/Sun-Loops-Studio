@@ -22,11 +22,20 @@ enum class EffectType : std::uint8_t
     None, Equalizer, Reverb, Delay, Compressor, Plugin,
     Overdrive, Chorus, Phaser, Filter, ParametricEq, Maximizer, Transient, Imager,
     TimeShaper, // 0.25.0: tempo-synced time and volume patterns (half speed, reverse, tape stop, stutter, gates), like Gross Beat
-    PitchCorrector // 0.26.0: pulls a monophonic voice or instrument to the notes of a scale, like Pitcher
+    PitchCorrector, // 0.26.0: pulls a monophonic voice or instrument to the notes of a scale, like Pitcher
+    // 0.61.0: the counterparts of FL Studio's remaining native effects
+    Flanger,        // Fruity Flanger
+    Gate,           // Fruity Limiter's gate / a noise gate
+    BassBoost,      // Fruity Bass Boost
+    Panomatic,      // Fruity Panomatic / Fruity Balance: volume, pan and an LFO on either
+    Squeeze,        // Fruity Squeeze: bit reduction, downsampling and a puncher
+    Vibrato,        // Fruity Vibrator: a pitch vibrato
+    ParametricEq2,  // Fruity Parametric EQ 2: seven bands
+    MultibandComp   // Maximus (three bands of compression)
 };
 
-constexpr int kEffectTypeCount = 16;
-constexpr int kMaxEffectParams = 8;
+constexpr int kEffectTypeCount = 24;
+constexpr int kMaxEffectParams = 24; // 0.61.0: 24 (the 7-band EQ has 22); 8 before
 constexpr int kSlotsPerTrack = 10; // insert effects per mixer track, aux bus and master (0.45.0: 10, as in FL Studio; 4 before)
 
 // The built-in effects in the order of the slot menu, grouped (the group starts where `group` is set).
@@ -36,13 +45,16 @@ struct EffectMenuEntry
     const char* group; // nullptr: same group as the entry before
 };
 inline constexpr EffectMenuEntry kEffectMenu[] = {
-    { EffectType::Equalizer, "EQ and filter" }, { EffectType::ParametricEq, nullptr }, { EffectType::Filter, nullptr },
-    { EffectType::Compressor, "Dynamics" },     { EffectType::Maximizer, nullptr },    { EffectType::Transient, nullptr },
-    { EffectType::Overdrive, "Drive" },
-    { EffectType::Chorus, "Modulation" },       { EffectType::Phaser, nullptr },
+    { EffectType::Equalizer, "EQ and filter" }, { EffectType::ParametricEq, nullptr }, { EffectType::ParametricEq2, nullptr },
+    { EffectType::Filter, nullptr },            { EffectType::BassBoost, nullptr },
+    { EffectType::Compressor, "Dynamics" },     { EffectType::MultibandComp, nullptr }, { EffectType::Maximizer, nullptr },
+    { EffectType::Gate, nullptr },              { EffectType::Transient, nullptr },
+    { EffectType::Overdrive, "Drive" },         { EffectType::Squeeze, nullptr },
+    { EffectType::Chorus, "Modulation" },       { EffectType::Flanger, nullptr },        { EffectType::Phaser, nullptr },
+    { EffectType::Vibrato, nullptr },
     { EffectType::Reverb, "Space and time" },   { EffectType::Delay, nullptr },          { EffectType::TimeShaper, nullptr },
     { EffectType::PitchCorrector, "Pitch" },
-    { EffectType::Imager, "Stereo" },
+    { EffectType::Imager, "Stereo" },           { EffectType::Panomatic, nullptr },
 };
 
 struct EffectParamInfo
@@ -72,6 +84,14 @@ inline const char* effectName (EffectType t) noexcept
         case EffectType::Imager:       return "Stereo Imager";
         case EffectType::TimeShaper:   return "Time Shaper";
         case EffectType::PitchCorrector: return "Pitch Corrector";
+        case EffectType::Flanger:      return "Flanger";
+        case EffectType::Gate:         return "Gate";
+        case EffectType::BassBoost:    return "Bass Boost";
+        case EffectType::Panomatic:    return "Panomatic";
+        case EffectType::Squeeze:      return "Squeeze";
+        case EffectType::Vibrato:      return "Vibrato";
+        case EffectType::ParametricEq2: return "Parametric EQ 2";
+        case EffectType::MultibandComp: return "Multiband Compressor";
         case EffectType::None:         break;
     }
     return "Empty";
@@ -182,6 +202,64 @@ inline constexpr EffectParamInfo pitch[] = {
     // 0.41.0: the notes to pull to: those of the scale, or the note a channel is playing (as Pitcher's MIDI mode)
     { "Follow", "", 0.0f, 32.0f, 0.0f, "Scale|Channel 1|Channel 2|Channel 3|Channel 4|Channel 5|Channel 6|Channel 7|Channel 8|Channel 9|Channel 10|Channel 11|Channel 12|Channel 13|Channel 14|Channel 15|Channel 16|Channel 17|Channel 18|Channel 19|Channel 20|Channel 21|Channel 22|Channel 23|Channel 24|Channel 25|Channel 26|Channel 27|Channel 28|Channel 29|Channel 30|Channel 31|Channel 32" } };
 
+// 0.61.0: the counterparts of FL Studio's remaining native effects.
+inline constexpr EffectParamInfo flanger[] = { { "Delay", "ms", 0.1f, 20.0f, 2.0f },
+                                               { "Depth", "ms", 0.0f, 10.0f, 2.0f },
+                                               { "Rate", "Hz", 0.01f, 10.0f, 0.3f },
+                                               { "Phase", "deg", 0.0f, 360.0f, 90.0f }, // the right channel's LFO offset
+                                               { "Feedback", "", -0.95f, 0.95f, 0.5f },
+                                               { "Shape", "", 0.0f, 1.0f, 0.0f, "Sine|Triangle" },
+                                               { "Mix", "", 0.0f, 1.0f, 0.5f } };
+inline constexpr EffectParamInfo gate[] = { { "Threshold", "dB", -80.0f, 0.0f, -40.0f },
+                                            { "Attack", "ms", 0.1f, 100.0f, 1.0f },
+                                            { "Hold", "ms", 0.0f, 500.0f, 20.0f },
+                                            { "Release", "ms", 1.0f, 2000.0f, 100.0f },
+                                            { "Range", "dB", -100.0f, 0.0f, -100.0f }, // how far the gate closes (-100 = silence)
+                                            { "Sidechain", "track", 0.0f, 500.0f, 0.0f } };
+inline constexpr EffectParamInfo bassboost[] = { { "Frequency", "Hz", 20.0f, 500.0f, 80.0f },
+                                                 { "Amount", "", 0.0f, 1.0f, 0.5f } };
+inline constexpr EffectParamInfo panomatic[] = { { "Volume", "dB", -48.0f, 12.0f, 0.0f },
+                                                 { "Pan", "", -1.0f, 1.0f, 0.0f },
+                                                 { "LFO target", "", 0.0f, 2.0f, 0.0f, "Off|Pan|Volume" },
+                                                 { "LFO rate", "Hz", 0.01f, 20.0f, 1.0f },
+                                                 { "LFO sync", "", 0.0f, 5.0f, 0.0f, "Free|1/8|1/4|1/2|1 bar|2 bars" },
+                                                 { "LFO depth", "", 0.0f, 1.0f, 0.5f },
+                                                 { "LFO shape", "", 0.0f, 3.0f, 0.0f, "Sine|Triangle|Square|Saw" } };
+inline constexpr EffectParamInfo squeeze[] = { { "Bits", "", 1.0f, 16.0f, 16.0f },
+                                               { "Downsample", "x", 1.0f, 64.0f, 1.0f },
+                                               { "Puncher", "", 0.0f, 1.0f, 0.0f },   // a drive before the crusher
+                                               { "Filter", "Hz", 200.0f, 20000.0f, 20000.0f }, // a low-pass after it
+                                               { "Mix", "", 0.0f, 1.0f, 1.0f } };
+inline constexpr EffectParamInfo vibrato[] = { { "Rate", "Hz", 0.1f, 20.0f, 5.0f },
+                                               { "Depth", "cents", 0.0f, 100.0f, 20.0f },
+                                               { "Shape", "", 0.0f, 1.0f, 0.0f, "Sine|Triangle" },
+                                               { "Stereo", "", 0.0f, 1.0f, 0.0f } }; // the right channel's LFO offset
+// Seven bands as Fruity Parametric EQ 2: band 1 a low shelf, 2 to 6 peaks, 7 a high shelf; Freq, Gain, Q for each, then Output.
+inline constexpr EffectParamInfo peq2[] = { { "1 Freq", "Hz", 20.0f, 20000.0f, 50.0f },   { "1 Gain", "dB", -18.0f, 18.0f, 0.0f }, { "1 Q", "", 0.1f, 10.0f, 0.7f },
+                                            { "2 Freq", "Hz", 20.0f, 20000.0f, 120.0f },  { "2 Gain", "dB", -18.0f, 18.0f, 0.0f }, { "2 Q", "", 0.1f, 10.0f, 1.0f },
+                                            { "3 Freq", "Hz", 20.0f, 20000.0f, 300.0f },  { "3 Gain", "dB", -18.0f, 18.0f, 0.0f }, { "3 Q", "", 0.1f, 10.0f, 1.0f },
+                                            { "4 Freq", "Hz", 20.0f, 20000.0f, 800.0f },  { "4 Gain", "dB", -18.0f, 18.0f, 0.0f }, { "4 Q", "", 0.1f, 10.0f, 1.0f },
+                                            { "5 Freq", "Hz", 20.0f, 20000.0f, 2500.0f }, { "5 Gain", "dB", -18.0f, 18.0f, 0.0f }, { "5 Q", "", 0.1f, 10.0f, 1.0f },
+                                            { "6 Freq", "Hz", 20.0f, 20000.0f, 6000.0f }, { "6 Gain", "dB", -18.0f, 18.0f, 0.0f }, { "6 Q", "", 0.1f, 10.0f, 1.0f },
+                                            { "7 Freq", "Hz", 20.0f, 20000.0f, 12000.0f }, { "7 Gain", "dB", -18.0f, 18.0f, 0.0f }, { "7 Q", "", 0.1f, 10.0f, 0.7f },
+                                            { "Output", "dB", -18.0f, 18.0f, 0.0f } };
+constexpr int kPeq2Bands = 7;
+// Three bands of compression as Maximus: the two crossovers, each band's threshold and ratio, the shared attack and release,
+// each band's gain after it.
+inline constexpr EffectParamInfo mbcomp[] = { { "Low split", "Hz", 40.0f, 1000.0f, 200.0f },
+                                              { "High split", "Hz", 1000.0f, 12000.0f, 3000.0f },
+                                              { "Low thresh", "dB", -60.0f, 0.0f, -18.0f },
+                                              { "Low ratio", ":1", 1.0f, 20.0f, 3.0f },
+                                              { "Mid thresh", "dB", -60.0f, 0.0f, -18.0f },
+                                              { "Mid ratio", ":1", 1.0f, 20.0f, 3.0f },
+                                              { "High thresh", "dB", -60.0f, 0.0f, -18.0f },
+                                              { "High ratio", ":1", 1.0f, 20.0f, 3.0f },
+                                              { "Attack", "ms", 0.1f, 100.0f, 10.0f },
+                                              { "Release", "ms", 10.0f, 1000.0f, 120.0f },
+                                              { "Low gain", "dB", -12.0f, 12.0f, 0.0f },
+                                              { "Mid gain", "dB", -12.0f, 12.0f, 0.0f },
+                                              { "High gain", "dB", -12.0f, 12.0f, 0.0f } };
+
 // The scales' notes as bit masks (bit n: n semitones above the key), in the order of the Scale choice; equal to theory::scales().
 inline constexpr std::uint16_t kPitchScaleMasks[] = { 0x0fff, 0x0ab5, 0x05ad, 0x09ad, 0x0aad, 0x06ad, 0x05ab, 0x0ad5, 0x06b5, 0x056b, 0x0295, 0x04a9, 0x04e9 };
 
@@ -208,6 +286,14 @@ inline int effectParamCount (EffectType t) noexcept
         case EffectType::Imager:       return count (imager);
         case EffectType::TimeShaper:   return count (timeshaper);
         case EffectType::PitchCorrector: return count (pitch);
+        case EffectType::Flanger:      return count (flanger);
+        case EffectType::Gate:         return count (gate);
+        case EffectType::BassBoost:    return count (bassboost);
+        case EffectType::Panomatic:    return count (panomatic);
+        case EffectType::Squeeze:      return count (squeeze);
+        case EffectType::Vibrato:      return count (vibrato);
+        case EffectType::ParametricEq2: return count (peq2);
+        case EffectType::MultibandComp: return count (mbcomp);
         case EffectType::Plugin:
         case EffectType::None:         break;
     }
@@ -237,6 +323,14 @@ inline EffectParamInfo effectParamInfo (EffectType t, int index) noexcept
         case EffectType::Imager:       return imager[i];
         case EffectType::TimeShaper:   return timeshaper[i];
         case EffectType::PitchCorrector: return pitch[i];
+        case EffectType::Flanger:      return flanger[i];
+        case EffectType::Gate:         return gate[i];
+        case EffectType::BassBoost:    return bassboost[i];
+        case EffectType::Panomatic:    return panomatic[i];
+        case EffectType::Squeeze:      return squeeze[i];
+        case EffectType::Vibrato:      return vibrato[i];
+        case EffectType::ParametricEq2: return peq2[i];
+        case EffectType::MultibandComp: return mbcomp[i];
         case EffectType::Plugin:
         case EffectType::None:         break;
     }
@@ -364,7 +458,8 @@ private:
 // True for the effects that need an EffectMemory to work.
 inline bool effectNeedsMemory (EffectType t) noexcept
 {
-    return t == EffectType::Reverb || t == EffectType::Delay || t == EffectType::Chorus || t == EffectType::PitchCorrector;
+    return t == EffectType::Reverb || t == EffectType::Delay || t == EffectType::Chorus || t == EffectType::PitchCorrector
+        || t == EffectType::Flanger || t == EffectType::Vibrato; // 0.61.0
 }
 
 // The DSP behind one slot. All memory is allocated in prepare() (or lent: attachMemory, attachTimeBuffer); process() never
@@ -417,6 +512,15 @@ private:
     void runImager (const EffectSlot&, float*, float*, int) noexcept;
     void runTimeShaper (const EffectSlot&, float*, float*, int, const EffectTransport&) noexcept;
     void runPitchCorrector (const EffectSlot&, float*, float*, int, const EffectTransport&) noexcept;
+    // 0.61.0
+    void runFlanger (const EffectSlot&, float*, float*, int) noexcept;
+    void runGate (const EffectSlot&, float*, float*, int, const EffectTransport&) noexcept;
+    void runBassBoost (const EffectSlot&, float*, float*, int) noexcept;
+    void runPanomatic (const EffectSlot&, float*, float*, int, const EffectTransport&) noexcept;
+    void runSqueeze (const EffectSlot&, float*, float*, int) noexcept;
+    void runVibrato (const EffectSlot&, float*, float*, int) noexcept;
+    void runParametricEq2 (const EffectSlot&, float*, float*, int) noexcept;
+    void runMultibandComp (const EffectSlot&, float*, float*, int) noexcept;
     void setReverbType (int type) noexcept;
 
     double sampleRate = 48000.0;
@@ -466,6 +570,18 @@ private:
 
     // imager
     std::array<float, 2> sideLow {};
+
+    // 0.61.0: the seven-band EQ (also the bass boost's shelf and the squeeze's filter use bands[0]), the multiband compressor's
+    // crossovers (Linkwitz-Riley: two Butterworth biquads per path) and envelopes, the gate's hold counter, the squeeze's
+    // sample-and-hold, the panomatic's LFO
+    std::array<Biquad, 7> bands;
+    std::array<Biquad, 2> xLow, xMidHp, xMidLp, xHigh;
+    std::array<float, 3> bandEnv {};
+    int gateHold = 0;
+    float gateGain = 0.0f;
+    std::array<float, 2> sqHold {};
+    int sqCount = 0;
+    double panPhase = 0.0;
 
     // time shaper
     float* timeL = nullptr;
