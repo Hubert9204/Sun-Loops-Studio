@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <tuple>
+#include <iterator>
 
 namespace sls
 {
@@ -49,6 +51,8 @@ bool PianoRoll::isBlackKey (int pitch) noexcept
 void PianoRoll::setNotes (std::vector<Note> newNotes)
 {
     notes = std::move (newNotes);
+    reportedNotes = notes;
+    lengthRequest = 0;
     selected.assign (notes.size(), false);
     sound (-1);
     keyboardHeld = false;
@@ -80,8 +84,28 @@ void PianoRoll::scrollToNotes()
 void PianoRoll::setLoopLengthTicks (int ticks)
 {
     loopLengthTicks = std::max (kGridTicks, ticks);
+    fitWidth();
     clampScroll();
     repaint();
+}
+
+void PianoRoll::setGrowable (bool canGrow)
+{
+    if (canGrow == growable)
+        return;
+    growable = canGrow;
+    fitWidth();
+    clampScroll();
+    repaint();
+}
+
+void PianoRoll::fitWidth()
+{
+    if (userZoomed || getWidth() <= 0)
+        return;
+    // Zoom so the whole pattern, and its spare quarter, fit the width; follows the panel while it is being resized.
+    const double beats = static_cast<double> (editLimit()) / kTicksPerBeat;
+    pixelsPerBeat = std::clamp (static_cast<double> (gridArea().getWidth()) / beats, 16.0, 240.0);
 }
 
 void PianoRoll::setPlayheadTick (int tick)
@@ -368,7 +392,7 @@ void PianoRoll::clampScroll()
 {
     const auto grid = gridArea();
     const double totalH = (kHighPitch - kLowPitch + 1) * kRowHeight;
-    const double totalW = loopLengthTicks * pixelsPerTick();
+    const double totalW = editLimit() * pixelsPerTick();
     scrollY = std::clamp (scrollY, 0.0, std::max (0.0, totalH - grid.getHeight()));
     scrollX = std::clamp (scrollX, 0.0, std::max (0.0, totalW - grid.getWidth()));
 }
@@ -384,12 +408,7 @@ void PianoRoll::resized()
             initialScrollDone = true;
         }
 
-        if (! userZoomed)
-        {
-            // Zoom so the whole loop fits the width; follows the panel while it is being resized.
-            const double beats = static_cast<double> (loopLengthTicks) / kTicksPerBeat;
-            pixelsPerBeat = std::clamp (static_cast<double> (gridArea().getWidth()) / beats, 16.0, 240.0);
-        }
+        fitWidth();
     }
     clampScroll();
 }
@@ -421,6 +440,28 @@ void PianoRoll::visibilityChanged()
 
 void PianoRoll::notifyChanged()
 {
+    // A note that this edit put into the spare quarter (created, moved, lengthened, pasted there) asks for one more quarter
+    // (0.58.0). Only the notes the edit changed count: notes kept past the end after the pattern was shortened do not.
+    lengthRequest = 0;
+    if (growable)
+    {
+        const auto before = [] (const Note& a, const Note& b)
+        {
+            return std::tie (a.startTick, a.pitch, a.lengthTicks, a.velocity, a.link) < std::tie (b.startTick, b.pitch, b.lengthTicks, b.velocity, b.link);
+        };
+        auto now = notes, was = reportedNotes;
+        std::sort (now.begin(), now.end(), before);
+        std::sort (was.begin(), was.end(), before);
+        std::vector<Note> changed;
+        std::set_difference (now.begin(), now.end(), was.begin(), was.end(), std::back_inserter (changed), before);
+        for (const auto& n : changed)
+            if (n.startTick + n.lengthTicks > loopLengthTicks && n.startTick < editLimit())
+            {
+                lengthRequest = loopLengthTicks + kTicksPerBeat;
+                break;
+            }
+    }
+    reportedNotes = notes;
     if (onNotesChanged)
         onNotesChanged();
 }
@@ -459,7 +500,7 @@ void PianoRoll::paint (juce::Graphics& g)
         // Lines: every bar and beat, and the snap grid when it is at least 5 pixels wide.
         const int lineStep = gridTicks * pixelsPerTick() >= 5.0 ? gridTicks : kTicksPerBeat;
         const int firstTick = std::max (0, static_cast<int> (xToTick (static_cast<float> (grid.getX()))) / lineStep * lineStep);
-        for (int t = firstTick; t <= loopLengthTicks; t += lineStep)
+        for (int t = firstTick; t <= editLimit(); t += lineStep)
         {
             const float x = tickToX (t);
             if (x > grid.getRight())
@@ -468,18 +509,29 @@ void PianoRoll::paint (juce::Graphics& g)
             g.drawVerticalLine (static_cast<int> (x), static_cast<float> (grid.getY()), static_cast<float> (grid.getBottom()));
         }
         if (lineStep != kTicksPerBeat && kTicksPerBeat % lineStep != 0) // triplets: the beats too
-            for (int t = 0; t <= loopLengthTicks; t += kTicksPerBeat)
+            for (int t = 0; t <= editLimit(); t += kTicksPerBeat)
             {
                 g.setColour (t % interfaceMeter().barTicks() == 0 ? kLineBar : kLineBeat);
                 g.drawVerticalLine (static_cast<int> (tickToX (t)), static_cast<float> (grid.getY()), static_cast<float> (grid.getBottom()));
             }
 
-        // Everything after the loop end is dimmed.
+        // The spare quarter after the end (0.58.0) is shaded lightly, with a dashed line at the pattern's end; everything after it is
+        // dimmed.
         const float loopEndX = tickToX (loopLengthTicks);
-        if (loopEndX < grid.getRight())
+        const float limitX = tickToX (editLimit());
+        if (growable && loopEndX < grid.getRight())
+        {
+            g.setColour (juce::Colour (0x44000000));
+            g.fillRect (loopEndX, static_cast<float> (grid.getY()), limitX - loopEndX, static_cast<float> (grid.getHeight()));
+            g.setColour (kPlayhead.withAlpha (0.55f));
+            const float dashes[] = { 4.0f, 4.0f };
+            g.drawDashedLine (juce::Line<float> (loopEndX, static_cast<float> (grid.getY()), loopEndX, static_cast<float> (grid.getBottom())),
+                              dashes, 2, 1.0f);
+        }
+        if (limitX < grid.getRight())
         {
             g.setColour (juce::Colour (0xaa000000));
-            g.fillRect (loopEndX, static_cast<float> (grid.getY()), grid.getRight() - loopEndX, static_cast<float> (grid.getHeight()));
+            g.fillRect (limitX, static_cast<float> (grid.getY()), grid.getRight() - limitX, static_cast<float> (grid.getHeight()));
         }
 
         // The loop region, faintly over the grid.
@@ -598,7 +650,7 @@ void PianoRoll::paint (juce::Graphics& g)
         g.setColour (juce::Colours::white.withAlpha (0.75f));
         g.setFont (11.0f);
         const int barTicks = interfaceMeter().barTicks(); // the time signature (0.46.0)
-        for (int t = 0; t < loopLengthTicks; t += barTicks)
+        for (int t = 0; t < editLimit(); t += barTicks)
         {
             const float x = tickToX (t);
             g.drawVerticalLine (static_cast<int> (x), static_cast<float> (ruler.getY() + 4), static_cast<float> (ruler.getBottom()));
@@ -832,7 +884,7 @@ void PianoRoll::mouseDown (const juce::MouseEvent& e)
 
     // Empty grid (0.44.0): a drag draws a selection rectangle, a click (released without moving) creates a note there.
     const int tick = e.mods.isAltDown() ? static_cast<int> (xToTick (pos.x)) : snapDown (xToTick (pos.x));
-    if (tick < 0 || tick >= loopLengthTicks)
+    if (tick < 0 || tick >= editLimit())
         return;
     dragMode = Drag::PendingEmpty;
     pendingPosition = pos;
@@ -846,7 +898,7 @@ void PianoRoll::mouseDown (const juce::MouseEvent& e)
 void PianoRoll::createNotesAt (juce::Point<float> pos, bool noSnap)
 {
     const int tick = noSnap ? static_cast<int> (xToTick (pos.x)) : snapDown (xToTick (pos.x));
-    if (tick < 0 || tick >= loopLengthTicks)
+    if (tick < 0 || tick >= editLimit())
         return;
 
     // A new note, or a whole chord when one is chosen in the toolbar (its root on the clicked key).
@@ -859,7 +911,7 @@ void PianoRoll::createNotesAt (juce::Point<float> pos, bool noSnap)
         Note n;
         n.pitch = pitch;
         n.startTick = tick;
-        n.lengthTicks = std::max (1, std::min (lastLengthTicks, loopLengthTicks - tick));
+        n.lengthTicks = std::max (1, std::min (lastLengthTicks, editLimit() - tick));
         n.velocity = 0.8f;
         notes.push_back (n);
         selected.push_back (true);
@@ -956,7 +1008,7 @@ void PianoRoll::mouseDrag (const juce::MouseEvent& e)
             if (selected[i])
             {
                 const auto& o = dragOriginal[i];
-                delta = std::clamp (delta, -o.startTick, loopLengthTicks - o.lengthTicks - o.startTick);
+                delta = std::clamp (delta, -o.startTick, std::max (-o.startTick, editLimit() - o.lengthTicks - o.startTick));
                 pitchDelta = std::clamp (pitchDelta, kLowPitch - o.pitch, kHighPitch - o.pitch);
             }
         bool changed = false;
@@ -1016,7 +1068,7 @@ void PianoRoll::mouseDrag (const juce::MouseEvent& e)
             if (selected[i])
             {
                 const auto& o = dragOriginal[i];
-                const int length = std::clamp (o.lengthTicks + delta, std::min (shortest, o.lengthTicks), std::max (1, loopLengthTicks - o.startTick));
+                const int length = std::clamp (o.lengthTicks + delta, std::min (shortest, o.lengthTicks), std::max (1, editLimit() - o.startTick));
                 changed = changed || length != notes[i].lengthTicks;
                 notes[i].lengthTicks = length;
             }
@@ -1097,20 +1149,63 @@ void PianoRoll::mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWhee
 {
     if (e.mods.isCtrlDown() || e.mods.isCommandDown())
     {
+        stopTimer(); // a zoom lands at once
         const double anchorTick = xToTick (e.position.x);
         userZoomed = true;
         pixelsPerBeat = std::clamp (pixelsPerBeat * std::pow (1.25, wheel.deltaY * 4.0), 16.0, 240.0);
         scrollX += tickToX (anchorTick) - e.position.x; // keep the tick under the cursor
+        clampScroll();
+        repaint();
+        return;
     }
-    else if (e.mods.isShiftDown())
+
+    // Scrolling glides to where the wheel sends it (0.58.0): the wheel moves pitch, Shift+wheel or a sideways wheel / touchpad moves
+    // time. Turns that come quickly add up.
+    if (! isTimerRunning())
     {
-        scrollX -= wheel.deltaY * 400.0;
+        targetScrollX = glideX = scrollX;
+        targetScrollY = glideY = scrollY;
     }
-    else
+    const double sideways = e.mods.isShiftDown() ? wheel.deltaY + wheel.deltaX : wheel.deltaX;
+    const double upDown = e.mods.isShiftDown() ? 0.0 : wheel.deltaY;
+    const auto grid = gridArea();
+    const double totalH = (kHighPitch - kLowPitch + 1) * kRowHeight;
+    const double totalW = editLimit() * pixelsPerTick();
+    targetScrollX = std::clamp (targetScrollX - sideways * 400.0, 0.0, std::max (0.0, totalW - grid.getWidth()));
+    targetScrollY = std::clamp (targetScrollY - upDown * 400.0, 0.0, std::max (0.0, totalH - grid.getHeight()));
+    if (wheel.isSmooth)
     {
-        scrollY -= wheel.deltaY * 400.0;
+        // A touchpad already sends small, smooth steps: follow them directly.
+        stopTimer();
+        scrollX = targetScrollX;
+        scrollY = targetScrollY;
+        clampScroll();
+        repaint();
+        return;
+    }
+    if (! isTimerRunning())
+        startTimerHz (60);
+}
+
+void PianoRoll::timerCallback()
+{
+    // Something else moved the view (a zoom, scrolling to the notes, a resize): the glide gives way.
+    if (std::abs (scrollX - glideX) > 0.5 || std::abs (scrollY - glideY) > 0.5)
+    {
+        stopTimer();
+        return;
+    }
+    scrollX += (targetScrollX - scrollX) * 0.35;
+    scrollY += (targetScrollY - scrollY) * 0.35;
+    if (std::abs (targetScrollX - scrollX) < 0.5 && std::abs (targetScrollY - scrollY) < 0.5)
+    {
+        scrollX = targetScrollX;
+        scrollY = targetScrollY;
+        stopTimer();
     }
     clampScroll();
+    glideX = scrollX;
+    glideY = scrollY;
     repaint();
 }
 // --- toolbar settings and editing (0.23.0) -----------------------------------------------------------------------------------
@@ -1240,9 +1335,9 @@ void PianoRoll::paste()
     for (auto n : clip)
     {
         n.startTick += at - first;
-        if (n.startTick < 0 || n.startTick >= loopLengthTicks)
+        if (n.startTick < 0 || n.startTick >= editLimit())
             continue;
-        n.lengthTicks = std::min (n.lengthTicks, loopLengthTicks - n.startTick);
+        n.lengthTicks = std::min (n.lengthTicks, editLimit() - n.startTick);
         notes.push_back (n);
         selected.push_back (true);
         ++added;
@@ -1255,7 +1350,7 @@ void PianoRoll::paste()
 
 void PianoRoll::duplicateSelected()
 {
-    int first = loopLengthTicks, last = 0;
+    int first = editLimit(), last = 0;
     for (size_t i = 0; i < notes.size(); ++i)
         if (selected[i])
         {
@@ -1268,11 +1363,11 @@ void PianoRoll::duplicateSelected()
     const int span = std::max (gridTicks, (last - first + gridTicks - 1) / gridTicks * gridTicks);
     std::vector<Note> copies;
     for (size_t i = 0; i < notes.size(); ++i)
-        if (selected[i] && notes[i].startTick + span < loopLengthTicks)
+        if (selected[i] && notes[i].startTick + span < editLimit())
         {
             auto n = notes[i];
             n.startTick += span;
-            n.lengthTicks = std::min (n.lengthTicks, loopLengthTicks - n.startTick);
+            n.lengthTicks = std::min (n.lengthTicks, editLimit() - n.startTick);
             copies.push_back (n);
         }
     if (copies.empty())
@@ -1298,7 +1393,7 @@ void PianoRoll::moveSelected (int ticks, int semitones, int scaleSteps)
     for (size_t i = 0; i < notes.size(); ++i)
         if (selected[i])
         {
-            ticks = std::clamp (ticks, -notes[i].startTick, loopLengthTicks - notes[i].lengthTicks - notes[i].startTick);
+            ticks = std::clamp (ticks, -notes[i].startTick, std::max (-notes[i].startTick, editLimit() - notes[i].lengthTicks - notes[i].startTick));
             semitones = std::clamp (semitones, kLowPitch - notes[i].pitch, kHighPitch - notes[i].pitch);
         }
     for (size_t i = 0; i < notes.size(); ++i)

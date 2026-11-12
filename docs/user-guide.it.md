@@ -455,7 +455,7 @@ MIDI suona i pad e le note importate in quell'intervallo li suonano. Clic su un 
 **Step.** La griglia in basso ha una riga per pad e uno step per ogni sedicesimo del pattern (16 per la battuta predefinita). Clic su uno step per accenderlo o spegnerlo (senti il pad), trascina per dipingere o cancellare una serie, tasto destro
 per cancellare. Maiusc+clic mette uno step piano (velocità 0,45), Ctrl+clic uno accentato (1,0), un clic semplice 0,8; la luminosità di uno step mostra la sua velocità. Un clic sull'etichetta di una riga
 seleziona (e suona) quel pad. La griglia modifica le note del canale nel **pattern corrente** (annulla e ripristina delle note funzionano), mostra le note fatte altrove (una nota appartiene allo step in cui
-inizia) e in modalità Pattern una linea segue il playhead.
+inizia) e una linea segue il playhead (anche in modalità Song, mentre suona una clip del pattern corrente: 0.58.0).
 
 **Kit incorporati** (0.22.0). Ogni kit ha i pad nell'ordine General MIDI della batteria (pad 1 = tasto 36 = cassa, 3 = rullante, 7 / 9 / 11 =
 charleston chiuso, a pedale e aperto nel choke group 1, 14 = crash), così una parte di batteria General MIDI suona i suoni giusti, e fino
@@ -608,9 +608,11 @@ chiuso all'avvio e si apre da un canale, come sopra.
 | Copiare, tagliare, incollare, duplicare | **Ctrl + C / X / V** con il mouse sul piano roll (incolla mettendo la prima nota sotto il mouse; le note copiate si incollano nello stesso piano roll o in quello di un altro canale o pattern - scegli il canale o il pattern, poi Ctrl + V), **Ctrl + D** (una copia subito dopo la selezione). **Canc** elimina la selezione. |
 | Spostare con i tasti | **Su / Giù**: un semitono (Maiusc: un'ottava, Ctrl: un grado della scala); **Sinistra / Destra**: un passo dello snap (Maiusc: un movimento). |
 | Legato / slide | Maiusc + clic su una nota: normale -> **legato** (blu, "L") -> **slide** (arancione, "S") -> normale. |
-| Scorrere in altezza | Rotella del mouse. |
-| Scorrere nel tempo | Maiusc + rotella. |
-| Zoom nel tempo | Ctrl + rotella. Finché non zoomi, tutto il pattern entra nella larghezza del pannello. |
+| Scorrere in altezza | Rotella del mouse. La vista scivola fluida dove la manda la rotella (0.58.0). |
+| Scorrere nel tempo | Maiusc + rotella, una rotella laterale o il touchpad (0.58.0). |
+| Zoom nel tempo | Ctrl + rotella. Finché non zoomi, tutto il pattern (e il suo quarto extra) entra nella larghezza del pannello. |
+| **Quarto extra** (0.58.0) | Dopo la fine del pattern (linea tratteggiata) il roll mostra **un quarto in più**, leggermente ombreggiato. Finché è vuoto non conta e non suona. **Scrivi una nota lì dentro** - un clic, oppure sposta, allunga, incolla o duplica una nota fin lì - e il pattern diventa **lungo un quarto in più** nel Piano Roll e nel Channel Rack (4 step in più); dopo la nuova fine compare un nuovo quarto extra. La nota e l'allungamento sono un solo passo di annullamento. Al pattern più lungo (64 quarti) il quarto extra non c'è. |
+| Playhead | Una linea arancione sulla griglia e un segno sul righello durante la riproduzione: in modalità **Pattern** sempre; in modalità **Song** (0.58.0) mentre suona una clip del pattern che stai modificando, nel punto del pattern che quella clip sta suonando (sparisce mentre suonano altri pattern). |
 | Spostare la posizione nel pattern | Clic sinistro (o trascinamento) sul **righello**, anche durante la riproduzione (a passi di 16esimi; Alt: libero). A riproduzione ferma il segno arancione mostra da dove parte Play. La riproduzione passa in modalità Pattern. |
 | Ripetere una parte del pattern | **Trascinamento col destro sul righello**: disegna una zona di loop (blu, "LOOP") e la modalità Pattern ripete solo quella parte. A riproduzione ferma Play parte dalla zona. |
 | Spostare / ridimensionare la zona | Trascinamento col destro dentro la zona la sposta; su uno dei suoi bordi la ridimensiona. |
@@ -1055,6 +1057,7 @@ tastiera MIDI o da sequenziare nel piano roll (senza canali liberi viene messa n
 Il pulsante **Pattern / Song** decide cosa fa Play.
 
 - **Pattern**: ripete il pattern corrente. Il cursore di riproduzione corre nel Piano Roll e nel Rack.
+- In modalità **Song** il Piano Roll, il Rack e la drum machine mostrano il cursore mentre suona una clip del pattern corrente (0.58.0).
 - **Song**: suona la Playlist dall'inizio (o dal punto cliccato sul righello) alla fine dell'ultima clip, poi ricomincia, oppure ripete la zona di
   loop se c'è. Il cursore corre nella Playlist e resta visibile da fermo (mostra da dove partirà Play). Una playlist vuota è silenziosa.
 

@@ -2,6 +2,21 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.58.0 - 2026-11-12
+
+### Added
+- **Piano Roll: the playhead in Song mode too.** While the song plays, the Piano Roll (and the rack's step grid and the drum
+  machine) show where the pattern you are editing is, while one of its clips plays - at the place in the pattern that clip plays,
+  repeats and split clips included; nothing while other patterns play. In Pattern mode it runs as before.
+- **Piano Roll: the spare quarter.** After the pattern's end the roll shows one more quarter, lightly shaded behind a dashed line.
+  It does not count or play while it is empty; a note written into it (clicked, moved, lengthened, pasted, duplicated) makes the
+  pattern one quarter longer, in the Piano Roll and the Channel Rack alike, and a new spare quarter appears after the new end. The
+  note and the longer pattern are one undo step. None at the longest length (64 quarters).
+
+### Changed
+- **Piano Roll: smoother wheel.** The view glides to where the wheel sends it; a sideways wheel or a touchpad swipe scrolls time
+  (as Shift+wheel does), and a touchpad's smooth scrolling is followed directly.
+
 ## 0.57.0 - 2026-11-12
 
 ### Added

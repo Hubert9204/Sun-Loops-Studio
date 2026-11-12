@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(SunLoopsStudio VERSION 0.57.0 LANGUAGES C CXX ASM)
+project(SunLoopsStudio VERSION 0.58.0 LANGUAGES C CXX ASM)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -331,6 +331,7 @@ target_sources(SunLoopsStudioTests PRIVATE
     tests/test_support.cpp
     tests/test_sunburst.cpp
     tests/test_hexforge.cpp
+    src/ui/PianoRoll.cpp # 0.58.0: the spare quarter is tested through its public functions
     ${SLS_CORE_SOURCES}
     ${SUNBURST_SOURCES}
     ${HEXFORGE_SOURCES})

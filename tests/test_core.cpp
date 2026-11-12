@@ -63,6 +63,7 @@
 #include "library/ChannelPreset.h"
 #include "library/Library.h"
 #include "library/ProjectFile.h"
+#include "ui/PianoRoll.h"
 #include "library/DemoSong.h"
 #include "library/FlpProject.h"
 #include "plugins/PluginScanner.h"
@@ -11333,6 +11334,61 @@ void testPatternLengths056()
            "an older file gives every pattern its one length");
 }
 
+// 0.58.0: the piano roll's spare quarter after the pattern's end, and where a pattern is while the song plays.
+void testPianoRollSpareQuarter()
+{
+    std::cout << "Piano roll: the spare quarter, the pattern's place in the song (0.58.0)\n";
+    const juce::ScopedJuceInitialiser_GUI juceInit;
+    const int bar = 4 * kBeat;
+
+    sls::PianoRoll roll;
+    roll.setSize (800, 400);
+    roll.setLoopLengthTicks (bar);
+    check (roll.editLimit() == bar, "not growable: notes stop at the pattern's end");
+    roll.setGrowable (true);
+    check (roll.editLimit() == bar + kBeat, "growable: one spare quarter after the end");
+
+    int reports = 0;
+    roll.onNotesChanged = [&reports] { ++reports; };
+    roll.setNotes ({ { 60, 3 * kBeat, kBeat, 0.8f } }); // the last quarter, ending exactly at the end
+    roll.selectAll();
+    roll.handleKey (juce::KeyPress (juce::KeyPress::leftKey, juce::ModifierKeys::shiftModifier, 0));
+    check (reports == 1 && roll.takeLengthRequest() == 0, "an edit inside the pattern asks for nothing");
+    roll.handleKey (juce::KeyPress (juce::KeyPress::rightKey, juce::ModifierKeys::shiftModifier, 0));
+    roll.handleKey (juce::KeyPress (juce::KeyPress::rightKey, juce::ModifierKeys::shiftModifier, 0));
+    check (roll.getNotes()[0].startTick == bar && roll.takeLengthRequest() == bar + kBeat,
+           "a note moved into the spare quarter asks for one more quarter");
+    check (roll.takeLengthRequest() == 0, "reading the request clears it");
+    roll.handleKey (juce::KeyPress (juce::KeyPress::rightKey, juce::ModifierKeys::shiftModifier, 0));
+    check (roll.getNotes()[0].startTick == bar, "but no further than the spare quarter");
+
+    // Grown: a new spare quarter after the new end.
+    roll.setLoopLengthTicks (bar + kBeat);
+    check (roll.editLimit() == bar + 2 * kBeat, "after growing, the spare quarter moves on");
+
+    // Notes kept past a shortened end do not grow it again when something else is edited.
+    roll.setLoopLengthTicks (bar);
+    roll.setNotes ({ { 60, 0, kBeat, 0.8f }, { 64, bar + kBeat / 2, kBeat / 2, 0.8f } });
+    roll.selectNone();
+    roll.replaceAllNotes ({ { 62, 0, kBeat, 0.8f }, { 64, bar + kBeat / 2, kBeat / 2, 0.8f } }, "edit");
+    check (roll.takeLengthRequest() == 0, "a note that was already past the end does not count");
+    roll.setGrowable (false);
+    roll.replaceAllNotes ({ { 62, 0, kBeat, 0.8f }, { 65, bar, kBeat / 2, 0.8f } }, "edit");
+    check (roll.takeLengthRequest() == 0, "at the longest length there is no spare quarter to grow into");
+
+    // Where the current pattern is while the song plays.
+    sls::Arrangement a;
+    a.patterns.resize (2);
+    a.patterns[0].lengthTicks = 6 * kBeat;
+    a.clips = { { 0, 0, 2 * bar, 12 * kBeat, 0 }, { 1, 1, 0, 4 * bar, 0 }, { 0, 2, 7 * bar, 6 * kBeat, 2 * kBeat } };
+    check (a.patternTickAt (0, 0) == -1 && a.patternTickAt (0, 2 * bar) == 0 && a.patternTickAt (0, 2 * bar + 7 * kBeat) == kBeat,
+           "a pattern's place: nothing before its clip, then counted from the clip's start, repeating over its own length");
+    check (a.patternTickAt (1, 3 * bar + 5) == (3 * bar + 5) % bar, "another pattern repeats over its own length");
+    check (a.patternTickAt (0, 7 * bar) == 2 * kBeat && a.patternTickAt (0, 7 * bar + 4 * kBeat) == 0,
+           "a clip that starts inside its pattern starts there");
+    check (a.patternTickAt (0, 5 * bar) == -1 && a.patternTickAt (0, -1) == -1, "no clip of it there: nothing");
+}
+
 void testDemoSong()
 {
     std::cout << "The demo song (0.52.0)\n";
@@ -11590,6 +11646,7 @@ int main()
     testSfzFiles();
     testFreePlaylist();
     testPatternLengths056();
+    testPianoRollSpareQuarter();
     testPlaylistTracks();
     testMixerAndExport045();
     testTempoAndMeter046();

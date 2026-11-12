@@ -417,6 +417,22 @@ struct Arrangement
         return -1;
     }
 
+    // Where pattern `p` is at song tick `songTick` (0.58.0): the tick inside the pattern that its clip on the playlist plays there
+    // (of overlapping clips, the one drawn on top), or -1 when no clip of that pattern plays at that tick.
+    int patternTickAt (int p, int songTick) const noexcept
+    {
+        if (songTick < 0)
+            return -1;
+        const int length = patternLength (p);
+        for (int i = static_cast<int> (clips.size()) - 1; i >= 0; --i)
+        {
+            const auto& c = clips[static_cast<size_t> (i)];
+            if (c.pattern == p && songTick >= c.startTick && songTick < c.endTick())
+                return ((songTick - c.startTick + c.offsetTicks) % length + length) % length;
+        }
+        return -1;
+    }
+
     // Where the song ends: the end of the last pattern or audio clip, rounded up to a whole bar (0 for an empty playlist).
     int songLengthTicks() const
     {

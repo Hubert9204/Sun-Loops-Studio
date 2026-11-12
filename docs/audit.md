@@ -27,6 +27,13 @@ The 0.10.0 audit had already removed ten unused getters and two duplicates; this
   project / pattern / recording controller) is for when automation and buses have added their own state.
 - `tests/test_core.cpp` is 3 900 lines in one file; the same applies.
 
+## After 0.58.0
+The spare quarter compares the notes after an edit with the notes before it (`PianoRoll::notifyChanged`, a sorted difference), so
+only notes that the edit put into the spare quarter make the pattern grow, never notes kept past an end that was shortened. The
+growth goes through `setPatternBeats`, which publishes once, so the note and the longer pattern are one undo step; the piano roll is
+not given its notes again when they are already the same (it would lose the selection). `PianoRoll.cpp` is now also built into the
+test program, which drives it through its public functions (keys, notes) without a window.
+
 ## After 0.57.0
 The Playlist's selection became a set (`PlaylistTimeline::Group`, indices of pattern, audio and automation clips) beside the single
 selection the menus and the readout use; every edit that removes clips clears it, so stale indices are not kept, and the group

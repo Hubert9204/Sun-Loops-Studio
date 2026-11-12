@@ -19,6 +19,15 @@
 
 namespace sls
 {
+namespace
+{
+bool sameNotes (const std::vector<Note>& a, const std::vector<Note>& b)
+{
+    return std::equal (a.begin(), a.end(), b.begin(), b.end(), [] (const Note& x, const Note& y)
+                       { return x.pitch == y.pitch && x.startTick == y.startTick && x.lengthTicks == y.lengthTicks && std::abs (x.velocity - y.velocity) < 1.0e-6f && x.link == y.link; });
+}
+} // namespace
+
 // ------------------------------------------------------------------------- Patterns and playlist
 
 void MainComponent::commitCurrentPattern()
@@ -115,6 +124,7 @@ void MainComponent::showPatternLength()
 {
     showMeter(); // the time signature first: the rack and the rolls count bars with it (0.46.0)
     const int ticks = currentPatternTicks();
+    pianoRoll.setGrowable (ticks < kMaxPatternBeats * kTicksPerBeat); // the spare quarter after the end (0.58.0)
     pianoRoll.setLoopLengthTicks (ticks);
     for (auto& strip : strips)
     {
@@ -167,7 +177,8 @@ void MainComponent::setPatternBeats (int beats)
     showPatternLength();
     playlistView.clearHistory();
     playlistView.refreshTimeline();
-    pianoRoll.setNotes (channels[static_cast<size_t> (selected)].notes);
+    if (! sameNotes (pianoRoll.getNotes(), channels[static_cast<size_t> (selected)].notes))
+        pianoRoll.setNotes (channels[static_cast<size_t> (selected)].notes); // (grown from the piano roll: it already has them, selection and all)
     songStartTick = std::min (songStartTick, arrangement.timelineTicks() - 1);
     publishProject();
     statusLabel.setText (juce::String (arrangement.patterns[static_cast<size_t> (currentPattern)].name) + " is " + juce::String (beats)

@@ -438,7 +438,7 @@ so you can hear the velocity layers). Right-click a pad for *Load a sound*, *Cle
 
 **Steps.** The grid at the bottom has one row per pad and one step per 16th of the pattern (16 for the default bar). Click a step to switch it on or off (you hear the pad), drag to paint or erase a run, right-click to erase.
 Shift+click puts a soft step (velocity 0.45), Ctrl+click an accented one (1.0), a plain click 0.8; the brightness of a step shows its velocity. A click on a row label selects (and plays) that pad.
-The grid edits the channel's notes of the **current pattern** (undo and redo of notes work), shows notes made elsewhere (a note belongs to the step it starts in), and a line follows the playhead in Pattern mode.
+The grid edits the channel's notes of the **current pattern** (undo and redo of notes work), shows notes made elsewhere (a note belongs to the step it starts in), and a line follows the playhead (in Song mode too, while a clip of the current pattern plays: 0.58.0).
 
 **Built-in kits** (0.22.0). Every kit has its pads in the General MIDI drum order (pad 1 = key 36 = kick, 3 = snare, 7 / 9 / 11 = closed, pedal and open
 hi-hat in choke group 1, 14 = crash), so a General MIDI drum part plays the right sounds, and up to four velocity layers per pad
@@ -590,9 +590,11 @@ It is closed at start and opens from a channel, as above.
 | Copy, cut, paste, duplicate | **Ctrl + C / X / V** with the mouse over the piano roll (paste puts the first note under the mouse; the copied notes can be pasted in the same piano roll or in another channel's or pattern's - select the channel or pattern, then Ctrl + V), **Ctrl + D** (a copy right after the selection). **Delete** removes the selection. |
 | Move with the keys | **Up / Down**: a semitone (Shift: an octave, Ctrl: a step of the scale); **Left / Right**: a snap step (Shift: a beat). |
 | Legato / slide | Shift + click a note: normal -> **legato** (blue, "L") -> **slide** (amber, "S") -> normal. |
-| Scroll pitch | Mouse wheel. |
-| Scroll time | Shift + wheel. |
-| Zoom time | Ctrl + wheel. Until you zoom, the whole pattern fits the panel width. |
+| Scroll pitch | Mouse wheel. The view glides to where the wheel sends it (0.58.0). |
+| Scroll time | Shift + wheel, a sideways wheel or a touchpad swipe (0.58.0). |
+| Zoom time | Ctrl + wheel. Until you zoom, the whole pattern (and its spare quarter) fits the panel width. |
+| **Spare quarter** (0.58.0) | After the pattern's end (dashed line) the roll shows **one more quarter**, lightly shaded. It does not count and does not play while it is empty. **Write a note in it** - click there, or move, lengthen, paste or duplicate a note into it - and the pattern becomes **one quarter longer** in the Piano Roll and in the Channel Rack (4 more steps); a new spare quarter appears after the new end. The note and the longer pattern are one undo step. At the longest pattern (64 quarters) there is no spare quarter. |
+| Playhead | An orange line on the grid and a marker on the ruler while playing: in **Pattern** mode always; in **Song** mode (0.58.0) while a clip of the pattern you are editing plays, at the place in the pattern that clip is playing (it disappears while other patterns play). |
 | Move the pattern position | Left click (or drag) on the **ruler**, also while playing (snapped to 16ths; Alt: no snap). Stopped, the orange marker shows where Play starts. The playback switches to Pattern mode. |
 | Loop part of the pattern | **Right drag on the ruler** draws a loop region (blue, "LOOP"): Pattern mode then repeats only that part. Stopped, Play starts at the region. |
 | Move / resize the region | Right drag inside it moves it; right drag on one of its edges resizes it. |
@@ -1022,6 +1024,7 @@ a MIDI keyboard or sequenced in the piano roll (with no free channel it is put o
 The **Pattern / Song** button decides what Play does.
 
 - **Pattern**: loops the current pattern. The playhead runs in the Piano Roll and the Rack.
+- In **Song** mode the Piano Roll, the Rack and the drum machine also show the playhead while a clip of the current pattern plays (0.58.0).
 - **Song**: plays the Playlist from the start (or from where you clicked the ruler) to the end of the last clip, then loops, or repeats the loop
   region if there is one. The playhead runs in the Playlist and stays visible when stopped (it shows where Play will start). An empty playlist is silent.
 

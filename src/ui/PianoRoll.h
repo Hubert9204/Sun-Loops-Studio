@@ -27,7 +27,11 @@ namespace sls
 //   Alt while dragging         : no snapping to the grid
 //   Left button on a key       : plays that note for as long as the button is down (slide to change the note)
 //   Left button on the grid    : the note being created, moved or resized sounds while the button is down
-//   Mouse wheel                : scroll pitch   | Shift+wheel: scroll time | Ctrl+wheel: zoom time
+//   Mouse wheel                : scroll pitch   | Shift+wheel (or a sideways wheel / touchpad): scroll time | Ctrl+wheel: zoom time;
+//                                the scrolling glides (0.58.0)
+// The spare quarter (0.58.0): after the pattern's end the roll shows one more quarter, shaded. It does not play while it is empty;
+// a note written into it (created, moved, lengthened, pasted) asks for the pattern to become one quarter longer (takeLengthRequest),
+// and the roll then shows a new spare quarter after the new end.
 // Velocity lane (0.23.0), under the grid: a stalk per note; drag across it to draw the velocities (only of the selected notes, if any).
 // Keys (handleKey, with the mouse over the piano roll): Delete, Ctrl+A / Escape (select all / none), Ctrl+C / X / V (copy, cut, paste
 // at the mouse), Ctrl+D (duplicate after itself), Up / Down (a semitone; Shift: an octave; Ctrl: a step of the scale), Left / Right
@@ -37,7 +41,7 @@ namespace sls
 //   Right drag                 : draw a loop region; Pattern mode then repeats only that part of the pattern
 //   Right drag on the region   : move it (on one of its edges: resize it)
 //   Right click on the region  : menu Move / Resize / Delete loop region (Delete removes only the highlight)
-class PianoRoll : public juce::Component
+class PianoRoll : public juce::Component, private juce::Timer
 {
 public:
     PianoRoll();
@@ -50,6 +54,12 @@ public:
 
     void setLoopLengthTicks (int ticks);
     int getLoopLengthTicks() const noexcept { return loopLengthTicks; }
+    // The spare quarter after the end (0.58.0): shown and writable while the pattern can still grow.
+    void setGrowable (bool canGrow);
+    int editLimit() const noexcept { return loopLengthTicks + (growable ? kTicksPerBeat : 0); }
+    // After onNotesChanged: the length the pattern should now have because a note went into the spare quarter (0: none). Reading it
+    // clears it.
+    int takeLengthRequest() noexcept { const int r = lengthRequest; lengthRequest = 0; return r; }
 
     // tick < 0 hides the playhead.
     void setPlayheadTick (int tick);
@@ -145,7 +155,9 @@ private:
     int noteIndexAt (juce::Point<float> p) const noexcept;
     int soundingNoteBefore (int index) const noexcept; // the note that a legato / slide note takes over from, or -1
     void clampScroll();
+    void fitWidth(); // until the user zooms, the pattern and its spare quarter fill the width
     void notifyChanged();
+    void timerCallback() override; // the gliding scroll
     void sound (int pitch); // -1 stops; a different pitch stops the previous one and starts the new one
     bool isOnKeyboard (juce::Point<int> p) const noexcept;
     static bool isBlackKey (int pitch) noexcept;
@@ -162,6 +174,11 @@ private:
     std::vector<Note> notes;
     std::vector<bool> selected; // one per note
     int loopLengthTicks = 16 * kTicksPerBeat;
+    bool growable = false;
+    int lengthRequest = 0;
+    std::vector<Note> reportedNotes; // the notes as last set or reported: what an edit is compared with
+    double targetScrollX = 0.0, targetScrollY = 0.0; // where the gliding scroll is heading
+    double glideX = 0.0, glideY = 0.0;               // where it put the view last (moved by something else: the glide stops)
 
     double pixelsPerBeat = 56.0;
     double scrollX = 0.0;

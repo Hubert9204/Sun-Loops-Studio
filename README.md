@@ -39,7 +39,7 @@ Sun Loops Studio is inspired by the workflow of loop-based DAWs such as FL Studi
 that uses no code, names, graphics or assets from other products, and it is not affiliated with or endorsed by
 their makers.
 
-**Status: alpha (0.57.0).** It builds, more than 1,600 automated checks pass and every feature has been exercised in a virtual
+**Status: alpha (0.58.0).** It builds, more than 1,600 automated checks pass and every feature has been exercised in a virtual
 display. The AppImage runs on Nobara; playback was first confirmed on a real Nobara machine with version 0.3. Most of what came
 later (recording, MIDI hardware, plugins, the synthesizers' sound) was tested headless and in a virtual display with a silent audio
 device, and is now being tried on real hardware. **Plugins (VST3, LV2, LADSPA)** work as instruments and as mixer effects since 0.17.0;
@@ -194,7 +194,7 @@ Press **Space** to play, **F5 / F6 / F7 / F9** to show panels and **F8** for the
 ./build/SunLoopsStudioTests_artefacts/Release/SunLoopsStudioTests
 ```
 
-Headless (no audio device or display needed), 1711 checks at 0.56.0. They cover, among other things, synth pitch and
+Headless (no audio device or display needed), 1724 checks at 0.58.0. They cover, among other things, synth pitch and
 sample-exact timing, every instrument and effect, that `Player::render` never allocates (effects included), a concurrent stress test of
 the UI-to-audio hand-over, the project file (round trip, damaged and hostile files, missing samples, atomic writing), FL Studio and MIDI
 import, export to every format, recording, automation, tempo changes, the plugin host, SunBurst and HexForge (presets, voices,

@@ -298,6 +298,15 @@ MainComponent::MainComponent()
     {
         channels[static_cast<size_t> (selected)].notes = pianoRoll.getNotes();
         strips[static_cast<size_t> (selected)]->repaint();
+        // A note written into the spare quarter after the end makes the pattern one quarter longer (0.58.0); setPatternBeats
+        // publishes, so the note and the new length are one undo step.
+        if (const int wanted = pianoRoll.takeLengthRequest(); wanted > currentPatternTicks())
+        {
+            const int before = currentPatternTicks();
+            setPatternBeats (wanted / kTicksPerBeat);
+            if (currentPatternTicks() > before)
+                return;
+        }
         publishProject();
     };
 
@@ -772,10 +781,11 @@ void MainComponent::timerCallback()
             mixerPanel.setAuxLevels (a, auxPeak, engine.getAuxRms (a));
     }
 
-    // In pattern mode the playhead is a position inside the pattern (piano roll, rack); in song mode it is
-    // a position in the song, shown on the playlist only.
+    // In pattern mode the playhead is a position inside the pattern (piano roll, rack). In song mode it is a position in the song,
+    // on the playlist; the piano roll, the rack and the drum machine show where the current pattern is while one of its clips plays
+    // (0.58.0; before, nothing).
     const int playhead = engine.isPlaying() ? engine.getPlayheadTick() : -1;
-    const int patternPlayhead = songMode ? -1 : playhead;
+    const int patternPlayhead = ! songMode ? playhead : playhead >= 0 ? arrangement.patternTickAt (currentPattern, playhead) : -1;
     pianoRoll.setPlayheadTick (patternPlayhead);
     playlistView.setPlayheadTick (songMode ? engine.getPlayheadTick() : -1); // stopped: where Play will start
     if (drumWindow != nullptr)
