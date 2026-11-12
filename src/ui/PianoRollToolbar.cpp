@@ -1,5 +1,7 @@
 #include "ui/PianoRollToolbar.h"
 
+#include "audio/TimeSignature.h"
+
 #include <random>
 
 namespace sls
@@ -53,6 +55,16 @@ PianoRollToolbar::PianoRollToolbar (PianoRoll& rollToEdit) : roll (rollToEdit)
         if (channelBox.getSelectedId() > 0 && onChannelChosen)
             onChannelChosen (channelBox.getSelectedId() - 1);
     };
+    // 0.62.0: the tools, as FL Studio's
+    toolBox.addItem ("Draw", 1);
+    toolBox.addItem ("Paint", 2);
+    toolBox.addItem ("Mute", 3);
+    toolBox.addItem ("Slice", 4);
+    toolBox.setSelectedId (1, juce::dontSendNotification);
+    toolBox.setTooltip ("Tool. Draw: click draws a note, drag moves it. Paint: drag over empty grid to draw a row of notes. "
+                        "Mute: click a note to mute or unmute it. Slice: click a note to cut it in two at the grid.");
+    toolBox.setWantsKeyboardFocus (false);
+    toolBox.onChange = [this] { roll.setTool (static_cast<PianoRoll::Tool> (std::max (0, toolBox.getSelectedId() - 1))); };
     ghostToggle.setTooltip ("Ghost notes: show the other channels' notes of this pattern, faintly, behind this channel's");
     ghostToggle.onClick = [this] { refreshGhostNotes(); };
 
@@ -95,7 +107,7 @@ PianoRollToolbar::PianoRollToolbar (PianoRoll& rollToEdit) : roll (rollToEdit)
     generateButton.setTooltip ("Write a chord progression or a bassline into this channel's pattern (Ctrl+Z undoes it)");
     generateButton.onClick = [this] { showGenerateMenu(); };
 
-    for (juce::Component* c : std::initializer_list<juce::Component*> { &channelBox, &snapBox, &rootBox, &scaleBox, &scaleSnapToggle, &chordBox, &inversionBox,
+    for (juce::Component* c : std::initializer_list<juce::Component*> { &channelBox, &toolBox, &snapBox, &rootBox, &scaleBox, &scaleSnapToggle, &chordBox, &inversionBox,
                                                                        &velocityToggle, &ghostToggle, &toolsButton, &generateButton })
         addAndMakeVisible (c);
 }
@@ -165,7 +177,8 @@ void PianoRollToolbar::resized()
     r.removeFromRight (4);
     toolsButton.setBounds (r.removeFromRight (60));
     r.removeFromRight (8);
-    place (channelBox, 130); // the target channel first, as FL Studio's title bar (0.60.0)
+    place (channelBox, 120); // the target channel first, as FL Studio's title bar (0.60.0)
+    place (toolBox, 72);     // 0.62.0
     place (snapLabel, 36);
     place (snapBox, 96);
     place (ghostToggle, 64); // before the scale and chord settings, so it stays in view in a narrow panel (0.60.0)
@@ -230,6 +243,30 @@ void PianoRollToolbar::showToolsMenu()
         flamMenu.addItem (77, "Strong (1/32 before, 80 % velocity)");
         menu.addSubMenu ("Flam", flamMenu);
     }
+    {
+        // 0.62.0: Limit, the LFO on the event lane, the notes' colour groups
+        juce::PopupMenu limitMenu;
+        limitMenu.addItem (90, "To two octaves (C4 - B5)");
+        limitMenu.addItem (91, "To three octaves (C3 - B5)");
+        limitMenu.addItem (92, "To one octave (C5 - B5)");
+        menu.addSubMenu ("Limit (move notes by octaves into a range)", limitMenu);
+        juce::PopupMenu lfoMenu;
+        lfoMenu.addItem (93, "One cycle per beat");
+        lfoMenu.addItem (94, "One cycle per bar");
+        lfoMenu.addItem (95, "One cycle every 2 bars");
+        lfoMenu.addItem (96, "One cycle every 4 bars");
+        menu.addSubMenu (juce::String ("LFO on the event lane (") + PianoRoll::laneName (roll.getLane()) + ")", lfoMenu);
+        juce::PopupMenu colourMenu;
+        for (int c = 0; c < 16; ++c)
+        {
+            juce::PopupMenu::Item item ("Colour " + juce::String (c + 1) + (c == 0 ? " (default)" : ""));
+            item.itemID = 300 + c;
+            item.colour = PianoRoll::noteColour (c);
+            item.isTicked = c == roll.getNoteColour();
+            colourMenu.addItem (item);
+        }
+        menu.addSubMenu ("Note colour", colourMenu);
+    }
     menu.addItem (71, "Transpose up an octave");
     menu.addItem (72, "Transpose down an octave");
     menu.addItem (73, "Snap to the scale", scale.type != 0);
@@ -254,6 +291,11 @@ void PianoRollToolbar::showToolsMenu()
                             using Notes = std::vector<Note>;
                             using Sel = std::vector<bool>;
                             const auto seed = freshSeed();
+                            if (result >= 300 && result < 316) // 0.62.0: a colour group for the selected notes and the next ones
+                            {
+                                editor.setNoteColour (result - 300);
+                                return;
+                            }
                             switch (result)
                             {
                                 case 1: editor.selectAll(); break;
@@ -283,6 +325,13 @@ void PianoRollToolbar::showToolsMenu()
                                     break;
                                 }
                                 case 70: editor.applyTool ([] (Notes& n, Sel& s) { theory::flip (n, s); }, "Flipped"); break;
+                                case 90: editor.applyTool ([] (Notes& n, Sel& s) { theory::limit (n, s, 48, 71); }, "Limited to C4 - B5"); break;
+                                case 91: editor.applyTool ([] (Notes& n, Sel& s) { theory::limit (n, s, 36, 71); }, "Limited to C3 - B5"); break;
+                                case 92: editor.applyTool ([] (Notes& n, Sel& s) { theory::limit (n, s, 60, 71); }, "Limited to C5 - B5"); break;
+                                case 93: editor.applyLaneLfo (kTicksPerBeat, 1.0f); break;
+                                case 94: editor.applyLaneLfo (interfaceMeter().barTicks(), 1.0f); break;
+                                case 95: editor.applyLaneLfo (2 * interfaceMeter().barTicks(), 1.0f); break;
+                                case 96: editor.applyLaneLfo (4 * interfaceMeter().barTicks(), 1.0f); break;
                                 case 74: editor.applyTool ([] (Notes& n, Sel& s) { theory::reverse (n, s); }, "Reversed in time"); break;
                                 case 75: editor.applyTool ([] (Notes& n, Sel& s) { theory::glue (n, s); }, "Glued"); break;
                                 case 76: editor.applyTool ([] (Notes& n, Sel& s) { theory::flam (n, s, kTicksPerBeat / 16, 0.6f); }, "Flammed (light)"); break;

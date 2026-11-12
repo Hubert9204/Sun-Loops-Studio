@@ -509,6 +509,20 @@ void flam (std::vector<Note>& notes, std::vector<bool>& selected, int ticks, flo
     std::stable_sort (notes.begin(), notes.end(), [] (const Note& a, const Note& b) { return a.startTick < b.startTick; });
 }
 
+void limit (std::vector<Note>& notes, std::vector<bool>& selected, int lowest, int highest)
+{
+    lowest = std::clamp (lowest, 0, 127 - 11);
+    highest = std::clamp (std::max (highest, lowest + 11), 0, 127);
+    for (const auto i : targets (notes, selected))
+    {
+        auto& p = notes[i].pitch;
+        while (p < lowest)
+            p += 12;
+        while (p > highest)
+            p -= 12;
+    }
+}
+
 void velocityRamp (std::vector<Note>& notes, std::vector<bool>& selected, float from, float to)
 {
     const auto which = targets (notes, selected);

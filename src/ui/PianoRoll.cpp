@@ -34,6 +34,52 @@ std::vector<Note>& PianoRoll::clipboard()
     return notes;
 }
 
+namespace
+{
+// A note's property as the lane shows it, 0 (bottom) .. 1 (top).
+float laneValue (const Note& n, PianoRoll::Lane lane) noexcept
+{
+    switch (lane)
+    {
+        case PianoRoll::Lane::Pan:       return (n.pan + 1.0f) * 0.5f;
+        case PianoRoll::Lane::Release:   return n.release;
+        case PianoRoll::Lane::FinePitch: return (n.finePitch + 1200.0f) / 2400.0f;
+        case PianoRoll::Lane::Velocity:  break;
+    }
+    return n.velocity;
+}
+
+void setLaneValue (Note& n, PianoRoll::Lane lane, float v) noexcept
+{
+    v = std::clamp (v, 0.0f, 1.0f);
+    const auto snapToMiddle = [] (float x) { return std::abs (x - 0.5f) < 0.03f ? 0.5f : x; }; // the middle is easy to hit
+    switch (lane)
+    {
+        case PianoRoll::Lane::Pan:       n.pan = snapToMiddle (v) * 2.0f - 1.0f; return;
+        case PianoRoll::Lane::Release:   n.release = snapToMiddle (v); return;
+        case PianoRoll::Lane::FinePitch: n.finePitch = std::round ((snapToMiddle (v) * 2400.0f - 1200.0f) / 10.0f) * 10.0f; return; // steps of 10 cents
+        case PianoRoll::Lane::Velocity:  n.velocity = std::max (0.01f, v); return;
+    }
+}
+
+
+juce::String laneText (const Note& n, PianoRoll::Lane lane)
+{
+    switch (lane)
+    {
+        case PianoRoll::Lane::Pan:
+            return std::abs (n.pan) < 0.005f ? juce::String ("Pan centre")
+                                            : "Pan " + juce::String (juce::roundToInt (std::abs (n.pan) * 100.0f)) + " % " + (n.pan < 0.0f ? "left" : "right");
+        case PianoRoll::Lane::Release:
+            return "Release x" + juce::String (n.releaseScale(), 2);
+        case PianoRoll::Lane::FinePitch:
+            return "Fine pitch " + juce::String (n.finePitch > 0.0f ? "+" : "") + juce::String (juce::roundToInt (n.finePitch)) + " cents";
+        case PianoRoll::Lane::Velocity: break;
+    }
+    return "Velocity " + juce::String (juce::roundToInt (n.velocity * 100.0f)) + " %";
+}
+} // namespace
+
 PianoRoll::PianoRoll()
 {
     setOpaque (true);
@@ -453,7 +499,8 @@ void PianoRoll::notifyChanged()
     {
         const auto before = [] (const Note& a, const Note& b)
         {
-            return std::tie (a.startTick, a.pitch, a.lengthTicks, a.velocity, a.link) < std::tie (b.startTick, b.pitch, b.lengthTicks, b.velocity, b.link);
+            return std::tie (a.startTick, a.pitch, a.lengthTicks, a.velocity, a.link, a.pan, a.release, a.finePitch, a.colour, a.muted)
+                 < std::tie (b.startTick, b.pitch, b.lengthTicks, b.velocity, b.link, b.pan, b.release, b.finePitch, b.colour, b.muted);
         };
         auto now = notes, was = reportedNotes;
         std::sort (now.begin(), now.end(), before);
@@ -562,10 +609,13 @@ void PianoRoll::paint (juce::Graphics& g)
         {
             const auto r = noteRect (notes[i]);
             const bool isSelected = i < selected.size() && selected[i];
-            const auto base = notes[i].link == NoteLink::Slide ? kNoteSlide : notes[i].link == NoteLink::Legato ? kNoteLegato : kNote;
+            const auto base = notes[i].link == NoteLink::Slide ? kNoteSlide : notes[i].link == NoteLink::Legato ? kNoteLegato
+                              : notes[i].colour != 0 ? noteColour (notes[i].colour) : kNote; // 0.62.0: the note's colour group
             g.setColour (base.withAlpha (0.45f + 0.55f * notes[i].velocity));
+            if (notes[i].muted) // 0.62.0: a muted note is grey and faint
+                g.setColour (juce::Colour (0xff6b7280).withAlpha (0.45f));
             if (isSelected)
-                g.setColour (kNoteSelected);
+                g.setColour (kNoteSelected.withAlpha (notes[i].muted ? 0.5f : 1.0f));
             g.fillRoundedRectangle (r, 2.0f);
             g.setColour (isSelected ? juce::Colours::white.withAlpha (0.95f) : juce::Colours::black.withAlpha (0.5f));
             g.drawRoundedRectangle (r, 2.0f, isSelected ? 1.5f : 1.0f);
@@ -623,10 +673,13 @@ void PianoRoll::paint (juce::Graphics& g)
         g.setColour (juce::Colours::white.withAlpha (dragMode == Drag::LaneHeight ? 0.6f : 0.25f));
         for (int i = -2; i <= 2; ++i)
             g.fillEllipse (static_cast<float> (lane.getCentreX() + i * 7) - 1.5f, static_cast<float> (lane.getY()) + 3.0f, 3.0f, 3.0f);
-        g.setColour (kLineSub);
+        const bool bipolar = eventLane != Lane::Velocity; // pan, release and fine pitch rest in the middle (0.62.0)
         for (const float level : { 0.25f, 0.5f, 0.75f })
+        {
+            g.setColour (bipolar && std::abs (level - 0.5f) < 0.01f ? juce::Colours::white.withAlpha (0.28f) : kLineSub);
             g.drawHorizontalLine (lane.getBottom() - 4 - static_cast<int> (level * static_cast<float> (lane.getHeight() - 8)),
                                   static_cast<float> (lane.getX()), static_cast<float> (lane.getRight()));
+        }
         const bool anySelected = selectedCount() > 0;
         for (int pass = 0; pass < 2; ++pass) // unselected notes first, the selected ones on top
             for (size_t i = 0; i < notes.size(); ++i)
@@ -635,10 +688,13 @@ void PianoRoll::paint (juce::Graphics& g)
                 if ((pass == 1) != isSelected)
                     continue;
                 const float x = tickToX (notes[i].startTick);
-                const float top = static_cast<float> (lane.getBottom() - 4) - notes[i].velocity * static_cast<float> (lane.getHeight() - 8);
-                const auto colour = isSelected ? kNoteSelected : (anySelected ? kNote.withAlpha (0.35f) : kNote);
+                const float span = static_cast<float> (lane.getHeight() - 8);
+                const float top = static_cast<float> (lane.getBottom() - 4) - laneValue (notes[i], eventLane) * span;
+                const float rest = static_cast<float> (lane.getBottom() - 4) - (bipolar ? 0.5f * span : 0.0f); // where the stalk starts
+                const auto own = notes[i].colour != 0 ? noteColour (notes[i].colour) : kNote;
+                const auto colour = isSelected ? kNoteSelected : (anySelected ? own.withAlpha (0.35f) : own);
                 g.setColour (colour);
-                g.fillRect (x, top, 2.0f, static_cast<float> (lane.getBottom() - 4) - top);
+                g.fillRect (x, std::min (top, rest), 2.0f, std::max (1.0f, std::abs (rest - top)));
                 g.fillEllipse (x - 3.0f, top - 3.0f, 8.0f, 8.0f);
             }
     }
@@ -720,7 +776,7 @@ void PianoRoll::paint (juce::Graphics& g)
         g.fillRect (corner);
         g.setColour (juce::Colours::white.withAlpha (0.55f));
         g.setFont (11.0f);
-        g.drawText ("Velocity", corner.reduced (4), juce::Justification::centred);
+        g.drawText (juce::String (laneName (eventLane)) + juce::String::fromUTF8 (" \xe2\x96\xbe"), corner.reduced (2), juce::Justification::centred); // 0.62.0: click to choose
     }
 }
 
@@ -796,6 +852,12 @@ void PianoRoll::mouseDown (const juce::MouseEvent& e)
         return;
     }
 
+    if (velocityLane && e.x < kKeyboardWidth && e.y >= getHeight() - laneHeight()) // 0.62.0: the lane's label: which property
+    {
+        showLaneMenu();
+        return;
+    }
+
     if (velocityArea().contains (e.getPosition()))
     {
         if (right)
@@ -855,6 +917,55 @@ void PianoRoll::mouseDown (const juce::MouseEvent& e)
                 notifyChanged();
             }
         }
+        return;
+    }
+
+    // 0.62.0: the Mute and Slice tools act on the note under the mouse; Paint starts a stroke on empty grid.
+    if (activeTool == Tool::Mute && hit >= 0 && ! ctrl)
+    {
+        const bool muted = ! notes[static_cast<size_t> (hit)].muted;
+        if (selected[static_cast<size_t> (hit)])
+        {
+            for (size_t i = 0; i < notes.size(); ++i)
+                if (selected[i])
+                    notes[i].muted = muted; // a selected note takes the whole selection with it
+        }
+        else
+            notes[static_cast<size_t> (hit)].muted = muted;
+        say (muted ? "Note muted" : "Note unmuted");
+        repaint();
+        notifyChanged();
+        return;
+    }
+    if (activeTool == Tool::Slice && hit >= 0 && ! ctrl)
+    {
+        auto& n = notes[static_cast<size_t> (hit)];
+        const int at = e.mods.isAltDown() ? static_cast<int> (xToTick (pos.x)) : static_cast<int> (std::llround (xToTick (pos.x) / gridTicks)) * gridTicks;
+        if (at > n.startTick && at < n.startTick + n.lengthTicks)
+        {
+            Note tail = n;
+            tail.startTick = at;
+            tail.lengthTicks = n.startTick + n.lengthTicks - at;
+            tail.link = NoteLink::None;
+            n.lengthTicks = at - n.startTick;
+            notes.push_back (tail);
+            selected.push_back (false);
+            say ("Note sliced");
+            repaint();
+            notifyChanged();
+        }
+        return;
+    }
+    if (activeTool == Tool::Paint && hit < 0 && ! ctrl)
+    {
+        const int tick = e.mods.isAltDown() ? static_cast<int> (xToTick (pos.x)) : snapDown (xToTick (pos.x));
+        if (tick < 0 || tick >= editLimit())
+            return;
+        dragChanged = false;
+        createNotesAt (pos, e.mods.isAltDown());
+        paintNextTick = tick + std::max (gridTicks, lastLengthTicks);
+        dragMode = Drag::Paint;
+        sound (fitPitch (yToPitch (pos.y)));
         return;
     }
 
@@ -929,6 +1040,7 @@ void PianoRoll::createNotesAt (juce::Point<float> pos, bool noSnap)
         n.startTick = tick;
         n.lengthTicks = std::max (1, std::min (lastLengthTicks, editLimit() - tick));
         n.velocity = 0.8f;
+        n.colour = static_cast<std::uint8_t> (currentColour); // 0.62.0
         notes.push_back (n);
         selected.push_back (true);
     }
@@ -940,6 +1052,26 @@ void PianoRoll::createNotesAt (juce::Point<float> pos, bool noSnap)
 
 void PianoRoll::mouseDrag (const juce::MouseEvent& e)
 {
+    if (dragMode == Drag::Paint) // 0.62.0: one note after another along the stroke, each on the key under the mouse
+    {
+        const int tick = snapDown (xToTick (e.position.x));
+        if (tick >= paintNextTick && tick < editLimit() && gridArea().contains (e.getPosition()))
+        {
+            Note n;
+            n.pitch = fitPitch (yToPitch (e.position.y));
+            n.startTick = tick;
+            n.lengthTicks = std::max (1, std::min (lastLengthTicks, editLimit() - tick));
+            n.velocity = 0.8f;
+            n.colour = static_cast<std::uint8_t> (currentColour);
+            notes.push_back (n);
+            selected.push_back (true);
+            paintNextTick = tick + std::max (gridTicks, lastLengthTicks);
+            dragChanged = true;
+            sound (n.pitch);
+            repaint();
+        }
+        return;
+    }
     if (dragMode == Drag::LaneHeight)
     {
         const int most = std::max (kMinVelocityHeight, getHeight() - kRulerHeight - kMinGridHeight);
@@ -1428,9 +1560,101 @@ void PianoRoll::moveSelected (int ticks, int semitones, int scaleSteps)
         }
 }
 
+// ------------------------------------------------------------------------- the event lane (0.62.0)
+
+
+const char* PianoRoll::laneName (Lane l) noexcept
+{
+    switch (l)
+    {
+        case Lane::Pan:       return "Pan";
+        case Lane::Release:   return "Release";
+        case Lane::FinePitch: return "Fine pitch";
+        case Lane::Velocity:  break;
+    }
+    return "Velocity";
+}
+
+void PianoRoll::setLane (Lane newLane)
+{
+    if (newLane == eventLane)
+        return;
+    eventLane = newLane;
+    repaint();
+    say (juce::String ("Event lane: ") + laneName (eventLane));
+}
+
+void PianoRoll::showLaneMenu()
+{
+    juce::PopupMenu menu;
+    menu.addSectionHeader ("Event lane");
+    int id = 1;
+    for (const Lane l : { Lane::Velocity, Lane::Pan, Lane::Release, Lane::FinePitch })
+        menu.addItem (id++, laneName (l), true, l == eventLane);
+    menu.showMenuAsync (juce::PopupMenu::Options(), [safe = juce::Component::SafePointer<PianoRoll> (this)] (int result)
+    {
+        if (safe != nullptr && result >= 1 && result <= 4)
+            safe->setLane (static_cast<Lane> (result - 1));
+    });
+}
+
+void PianoRoll::setTool (Tool newTool)
+{
+    if (newTool == activeTool)
+        return;
+    activeTool = newTool;
+    setMouseCursor (activeTool == Tool::Slice ? juce::MouseCursor::IBeamCursor : activeTool == Tool::Mute ? juce::MouseCursor::PointingHandCursor
+                                                                                             : juce::MouseCursor::NormalCursor);
+    if (onToolChanged)
+        onToolChanged();
+}
+
+juce::Colour PianoRoll::noteColour (int colour) noexcept
+{
+    static const juce::uint32 palette[16] = { 0xff4cc38a, 0xff5fb0ff, 0xffe8943a, 0xffd9534f, 0xffb07cff, 0xffe8d44d, 0xff3fc1b0, 0xffff7eb6,
+                                              0xff9ccc65, 0xff64b5f6, 0xffffb74d, 0xffe57373, 0xffba68c8, 0xfffff176, 0xff4dd0e1, 0xfff06292 };
+    return juce::Colour (palette[std::clamp (colour, 0, 15)]);
+}
+
+void PianoRoll::setNoteColour (int colour)
+{
+    currentColour = std::clamp (colour, 0, 15);
+    bool changed = false;
+    for (size_t i = 0; i < notes.size() && i < selected.size(); ++i)
+        if (selected[i] && notes[i].colour != currentColour)
+        {
+            notes[i].colour = static_cast<std::uint8_t> (currentColour);
+            changed = true;
+        }
+    repaint();
+    if (changed)
+        notifyChanged();
+}
+
+void PianoRoll::applyLaneLfo (int cycleTicks, float depth)
+{
+    cycleTicks = std::max (1, cycleTicks);
+    const bool onlySelected = selectedCount() > 0;
+    int first = -1;
+    for (size_t i = 0; i < notes.size(); ++i)
+        if ((! onlySelected || selected[i]) && (first < 0 || notes[i].startTick < first))
+            first = notes[i].startTick;
+    if (first < 0)
+        return;
+    for (size_t i = 0; i < notes.size(); ++i)
+        if (! onlySelected || selected[i])
+        {
+            const double phase = static_cast<double> (notes[i].startTick - first) / cycleTicks;
+            setLaneValue (notes[i], eventLane, 0.5f + 0.5f * std::clamp (depth, 0.0f, 1.0f) * static_cast<float> (std::sin (6.283185307179586 * phase)));
+        }
+    repaint();
+    say (juce::String ("LFO on ") + laneName (eventLane));
+    notifyChanged();
+}
+
 void PianoRoll::editVelocities (juce::Point<float> from, juce::Point<float> to)
 {
-    // Every note whose stalk lies between the two mouse positions takes the velocity of the line between them.
+    // Every note whose stalk lies between the two mouse positions takes the value (of the lane's property) of the line between them.
     const auto lane = velocityArea();
     if (lane.isEmpty())
         return;
@@ -1438,8 +1662,9 @@ void PianoRoll::editVelocities (juce::Point<float> from, juce::Point<float> to)
     const float x0 = std::min (from.x, to.x) - 3.0f, x1 = std::max (from.x, to.x) + 3.0f;
     const auto velocityAt = [&] (float y)
     {
-        return std::clamp ((static_cast<float> (lane.getBottom() - 4) - y) / static_cast<float> (lane.getHeight() - 8), 0.01f, 1.0f);
+        return std::clamp ((static_cast<float> (lane.getBottom() - 4) - y) / static_cast<float> (lane.getHeight() - 8), 0.0f, 1.0f);
     };
+    const Lane shown = eventLane;
     bool changed = false;
     int last = -1;
     for (size_t i = 0; i < notes.size(); ++i)
@@ -1451,9 +1676,11 @@ void PianoRoll::editVelocities (juce::Point<float> from, juce::Point<float> to)
             continue;
         const float t = std::abs (to.x - from.x) > 0.5f ? std::clamp ((x - from.x) / (to.x - from.x), 0.0f, 1.0f) : 1.0f;
         const float v = velocityAt (from.y + t * (to.y - from.y));
-        if (std::abs (notes[i].velocity - v) > 1e-4f)
+        Note edited = notes[i];
+        setLaneValue (edited, shown, v);
+        if (std::abs (laneValue (edited, shown) - laneValue (notes[i], shown)) > 1e-4f)
         {
-            notes[i].velocity = v;
+            notes[i] = edited;
             changed = true;
             last = static_cast<int> (i);
         }
@@ -1462,7 +1689,7 @@ void PianoRoll::editVelocities (juce::Point<float> from, juce::Point<float> to)
     {
         dragChanged = true;
         repaint();
-        say ("Velocity " + juce::String (juce::roundToInt (notes[static_cast<size_t> (last)].velocity * 100.0f)) + " %");
+        say (laneText (notes[static_cast<size_t> (last)], shown));
     }
 }
 

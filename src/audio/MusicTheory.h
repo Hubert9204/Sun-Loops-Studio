@@ -80,6 +80,8 @@ void flip (std::vector<Note>& notes, std::vector<bool>& selected);              
 void reverse (std::vector<Note>& notes, std::vector<bool>& selected);              // mirrored in time (Flip horizontally)
 void glue (std::vector<Note>& notes, std::vector<bool>& selected);                 // notes of one pitch that touch or overlap become one
 void flam (std::vector<Note>& notes, std::vector<bool>& selected, int ticks, float velocity); // a grace note `ticks` before each note
+// 0.62.0: Limit, as FL Studio's: notes outside lowest..highest move by octaves until they are inside (the range is at least an octave).
+void limit (std::vector<Note>& notes, std::vector<bool>& selected, int lowest, int highest);
 void velocityRamp (std::vector<Note>& notes, std::vector<bool>& selected, float from, float to); // by start time
 void setVelocity (std::vector<Note>& notes, std::vector<bool>& selected, float velocity);
 void randomizeVelocity (std::vector<Note>& notes, std::vector<bool>& selected, float low, float high, std::uint32_t seed);

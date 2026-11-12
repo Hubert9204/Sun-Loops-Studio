@@ -50,6 +50,7 @@ private:
 
     PianoRoll& roll;
     juce::ComboBox channelBox; // 0.60.0
+    juce::ComboBox toolBox;    // 0.62.0: Draw, Paint, Mute, Slice
     juce::Label snapLabel { {}, "Snap" }, scaleLabel { {}, "Scale" }, chordLabel { {}, "Chord" };
     juce::ComboBox snapBox, rootBox, scaleBox, chordBox, inversionBox;
     juce::ToggleButton scaleSnapToggle { "Snap to scale" }, velocityToggle { "Velocity" }, ghostToggle { "Ghost" };

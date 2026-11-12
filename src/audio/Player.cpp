@@ -8,6 +8,19 @@ namespace sls
 {
 namespace
 {
+// 0.62.0: a note's own pan, release and (through the callers) fine pitch, as FL Studio's note properties.
+template <class VoiceType>
+inline void applyNoteProperties (VoiceType& v, const Note& n, float defaultReleaseStep) noexcept
+{
+    v.noteLeft = std::min (1.0f, 1.0f - n.pan);
+    v.noteRight = std::min (1.0f, 1.0f + n.pan);
+    if (std::abs (n.release - 0.5f) > 1.0e-3f)
+        v.relStep = (v.relStep > 0.0f ? v.relStep : defaultReleaseStep) / n.releaseScale();
+}
+} // namespace
+
+namespace
+{
 constexpr double kTwoPi = 6.283185307179586476925286766559;
 constexpr float kSynthGain = 0.25f;
 constexpr float kSubtractiveGain = 0.35f; // a full saw through an open filter about as loud as the classic synth's fundamental
@@ -533,10 +546,22 @@ void Player::drumNoteOn (const Channel& channel, int channelIndex, const Note& n
     v.padGain = pad.volume;
     v.padLeft = static_cast<float> (std::cos (angle) * 1.4142135623730951); // 1 at the centre, like a channel's pan
     v.padRight = static_cast<float> (std::sin (angle) * 1.4142135623730951);
+    applyNoteProperties (v, n, releaseStep);
 }
 
 void Player::noteOn (const Channel& channel, int channelIndex, const Note& n, int loopLength, bool live) noexcept
 {
+    // 0.62.0: cut groups, as FL Studio's "Cut / Cut by": this note cuts the notes of every channel that is cut by its group
+    // (the channel itself too, when its own cutBy is the same number), with a 5 ms fade.
+    if (channel.cutGroup > 0)
+        for (auto& other : voices)
+            if ((other.state == State::Attack || other.state == State::Sustain) && other.channel >= 0 && other.channel < kMaxChannels
+                && channelCutBy[static_cast<size_t> (other.channel)] == channel.cutGroup)
+            {
+                other.state = State::Release;
+                other.relStep = static_cast<float> (1.0 / (0.005 * sampleRate));
+            }
+
     if (channel.instrument == Instrument::Drums)
     {
         drumNoteOn (channel, channelIndex, n);
@@ -552,12 +577,34 @@ void Player::noteOn (const Channel& channel, int channelIndex, const Note& n, in
     if (isSampler && ! hasProgram && (channel.sample == nullptr || channel.sample->numFrames() < 2))
         return;
 
-    // Legato and slide: the note sounding in this channel goes on instead of a new voice starting.
-    if (! live && n.link != NoteLink::None)
+    // 0.62.0: the channel's maximum polyphony: the oldest notes give way (5 ms fade) so that this one fits.
+    if (channel.maxPoly > 0 && ! channel.mono)
+    {
+        for (;;)
+        {
+            int sounding = 0;
+            Voice* oldest = nullptr;
+            for (auto& v : voices)
+                if (v.channel == channelIndex && (v.state == State::Attack || v.state == State::Sustain))
+                {
+                    ++sounding;
+                    if (oldest == nullptr || v.age < oldest->age)
+                        oldest = &v;
+                }
+            if (sounding < channel.maxPoly || oldest == nullptr)
+                break;
+            oldest->state = State::Release;
+            oldest->relStep = static_cast<float> (1.0 / (0.005 * sampleRate));
+        }
+    }
+
+    // Legato and slide: the note sounding in this channel goes on instead of a new voice starting. A mono channel (0.62.0)
+    // does this for every note, sliding over its portamento time.
+    if ((! live && n.link != NoteLink::None) || channel.mono)
     {
         Voice* held = nullptr;
         for (auto& v : voices)
-            if (v.channel == channelIndex && ! v.live && v.sampler == isSampler
+            if (v.channel == channelIndex && (channel.mono ? v.live == live : ! v.live) && v.sampler == isSampler
                 && (v.state == State::Attack || v.state == State::Sustain)
                 && (! isSampler || hasProgram || v.sample == channel.sample.get())
                 && (held == nullptr || v.age > held->age))
@@ -570,16 +617,18 @@ void Player::noteOn (const Channel& channel, int channelIndex, const Note& n, in
             const double newRate = hasProgram
                 ? settled * std::pow (2.0, (n.pitch - held->livePitch) / 12.0) // a zone keeps playing, retuned by the step between the notes
                 : isSampler
-                ? std::pow (2.0, (n.pitch - channel.rootPitch + static_cast<double> (channel.pitch)) / 12.0) * held->sample->sampleRate / sampleRate
-                : kTwoPi * pitchToHz (n.pitch + static_cast<double> (channel.pitch)) / sampleRate;
+                ? std::pow (2.0, (n.pitch - channel.rootPitch + static_cast<double> (channel.pitch) + n.finePitch / 100.0) / 12.0) * held->sample->sampleRate / sampleRate
+                : kTwoPi * pitchToHz (n.pitch + static_cast<double> (channel.pitch) + n.finePitch / 100.0) / sampleRate;
             held->livePitch = n.pitch;
             if (! isSampler || held->held)
                 held->endTick = std::min (n.startTick + n.lengthTicks, loopLength);
 
-            if (n.link == NoteLink::Slide && rate > 0.0 && newRate > 0.0)
+            const bool portamento = channel.mono && n.link != NoteLink::Slide && channel.portamento > 0.0005f;
+            if ((n.link == NoteLink::Slide || portamento) && rate > 0.0 && newRate > 0.0)
             {
                 const int glideTicks = std::min (n.lengthTicks, kTicksPerBeat / 2);
-                held->glideLeft = std::max (1, static_cast<int> (std::lround (glideTicks / std::max (ticksPerSampleNow, 1.0e-9))));
+                held->glideLeft = portamento ? std::max (1, static_cast<int> (std::lround (static_cast<double> (channel.portamento) * sampleRate)))
+                                             : std::max (1, static_cast<int> (std::lround (glideTicks / std::max (ticksPerSampleNow, 1.0e-9))));
                 held->glideRatio = std::pow (newRate / rate, 1.0 / held->glideLeft);
                 held->glideTarget = newRate;
             }
@@ -639,7 +688,7 @@ void Player::noteOn (const Channel& channel, int channelIndex, const Note& n, in
     v.age = ++ageCounter;
     v.endTick = live ? INT_MAX : std::min (n.startTick + n.lengthTicks, loopLength);
     v.phase = 0.0;
-    v.increment = kTwoPi * pitchToHz (n.pitch + static_cast<double> (channel.pitch)) / sampleRate;
+    v.increment = kTwoPi * pitchToHz (n.pitch + static_cast<double> (channel.pitch) + n.finePitch / 100.0) / sampleRate; // 0.62.0: the note's fine pitch
     v.attackStep = static_cast<float> (1.0 / (0.005 * sampleRate)); // 5 ms
     if (channel.synth.engine == SynthEngine::Subtractive)
         subtractiveVoiceOn (v, channel.synth, n.pitch);
@@ -650,6 +699,7 @@ void Player::noteOn (const Channel& channel, int channelIndex, const Note& n, in
     else if (channel.synth.engine == SynthEngine::Physical)
         physicalVoiceOn (v, channel.synth, static_cast<size_t> (target - voices.data()));
 
+    applyNoteProperties (v, n, releaseStep);
     *target = v;
 }
 
@@ -1363,7 +1413,7 @@ void Player::samplerVoiceOn (const Channel& channel, int channelIndex, const Not
     v.mirror = set.reverse && ! loops;
     v.fadeInFrames = static_cast<float> (static_cast<double> (set.fadeIn) * frames);
     v.fadeOutFrames = loops ? 0.0f : static_cast<float> (static_cast<double> (set.fadeOut) * frames);
-    v.step = std::pow (2.0, ((n.pitch - rootKey) * keyTrack + tune + static_cast<double> (channel.pitch)) / 12.0) * sample->sampleRate / sampleRate;
+    v.step = std::pow (2.0, ((n.pitch - rootKey) * keyTrack + tune + static_cast<double> (channel.pitch) + n.finePitch / 100.0) / 12.0) * sample->sampleRate / sampleRate;
     if (loops)
     {
         v.loopStart = loopStart;
@@ -1400,7 +1450,24 @@ void Player::samplerVoiceOn (const Channel& channel, int channelIndex, const Not
         v.fa1 = static_cast<float> (a1);
         v.fa2 = static_cast<float> (g * a1);
         v.fa3 = static_cast<float> (g * g * a1);
+        v.cutoffBase = static_cast<float> (fc);
     }
+
+    // 0.62.0: ping-pong and crossfaded loops (the channel's own sample only), the LFO, the pitch envelope, the cutoff envelope
+    const bool ownSample = sample == channel.sample.get();
+    v.pingPong = loops && ownSample && set.loop == LoopMode::PingPong;
+    v.xfade = loops && ! v.pingPong && ownSample ? static_cast<float> (std::min (static_cast<double> (set.crossfade) * (v.loopEnd - v.loopStart), v.loopStart)) : 0.0f;
+    v.smpLfoTarget = set.lfoDepth > 0.0f ? static_cast<std::uint8_t> (set.lfoTarget) : std::uint8_t { 0 };
+    if (v.smpLfoTarget == static_cast<std::uint8_t> (SamplerLfoTarget::Cutoff) && set.filter == SamplerFilter::Off)
+        v.smpLfoTarget = 0;
+    v.smpLfoStep = static_cast<float> (static_cast<double> (set.lfoRate) * kModStep / sampleRate);
+    v.smpLfoDepth = set.lfoDepth;
+    v.pitchEnv = set.pitchEnv;
+    v.pitchEnvMul = static_cast<float> (std::pow (0.001, kModStep / (std::max (0.005, static_cast<double> (set.pitchEnvTime)) * sampleRate)));
+    v.cutoffEnv = set.envelope && set.filter != SamplerFilter::Off ? set.cutoffEnv : 0.0f;
+    v.mods = v.smpLfoTarget != 0 || std::abs (v.pitchEnv) > 0.0f || std::abs (v.cutoffEnv) > 0.0f;
+
+    applyNoteProperties (v, n, releaseStep);
     *target = v;
 }
 
@@ -1547,6 +1614,7 @@ void Player::render (const Project& project, double bpm, bool playing,
         const auto& c = project.channels[ch];
         channelAudible[ch] = anySolo ? c.solo : ! c.mute;
         routedTo[ch] = static_cast<size_t> (std::clamp (c.mixerTrack, 0, static_cast<int> (numTracks) - 1));
+        channelCutBy[ch] = static_cast<std::uint8_t> (std::clamp (c.cutBy, 0, 255)); // 0.62.0
         setChannel (ch, c.volume, c.pan);
 
         if (smoothedGain[ch] < 0.0f)
@@ -1861,8 +1929,57 @@ void Player::render (const Project& project, double bpm, bool playing,
                 if (v.sampler)
                 {
                     const bool looping = v.loopEnd > v.loopStart + 1.0;
-                    if (looping && v.pos >= v.loopEnd)
+                    if (looping && v.pingPong) // 0.62.0: forwards to the loop's end, then backwards to its start
+                    {
+                        if (! v.backwards && v.pos >= v.loopEnd - 1.0)
+                        {
+                            v.pos = std::max (v.loopStart, 2.0 * (v.loopEnd - 1.0) - v.pos);
+                            v.backwards = true;
+                        }
+                        else if (v.backwards && v.pos <= v.loopStart)
+                        {
+                            v.pos = std::min (v.loopEnd - 1.0, 2.0 * v.loopStart - v.pos);
+                            v.backwards = false;
+                        }
+                    }
+                    else if (looping && v.pos >= v.loopEnd)
                         v.pos = v.loopStart + std::fmod (v.pos - v.loopStart, v.loopEnd - v.loopStart);
+
+                    if (v.mods && --v.modCount <= 0) // 0.62.0: the LFO, the pitch envelope and the moving cutoff, every kModStep samples
+                    {
+                        v.modCount = kModStep;
+                        const float lfo = v.smpLfoTarget != 0 ? std::sin (6.2831853f * v.smpLfoPhase) : 0.0f;
+                        v.smpLfoPhase += v.smpLfoStep;
+                        if (v.smpLfoPhase >= 1.0f)
+                            v.smpLfoPhase -= 1.0f;
+                        float semitones = v.pitchEnv;
+                        v.pitchEnv = std::abs (v.pitchEnv) > 0.002f ? v.pitchEnv * v.pitchEnvMul : 0.0f;
+                        v.modLeft = v.modRight = 1.0f;
+                        float octaves = v.cutoffEnv * v.env;
+                        switch (static_cast<SamplerLfoTarget> (v.smpLfoTarget))
+                        {
+                            case SamplerLfoTarget::Pitch:  semitones += 2.0f * v.smpLfoDepth * lfo; break;
+                            case SamplerLfoTarget::Cutoff: octaves += 3.0f * v.smpLfoDepth * lfo; break;
+                            case SamplerLfoTarget::Pan:
+                                v.modLeft = std::min (1.0f, 1.0f - v.smpLfoDepth * lfo);
+                                v.modRight = std::min (1.0f, 1.0f + v.smpLfoDepth * lfo);
+                                break;
+                            case SamplerLfoTarget::Volume: v.modLeft = v.modRight = 1.0f - v.smpLfoDepth * 0.5f * (1.0f - lfo); break;
+                            case SamplerLfoTarget::Off:    break;
+                        }
+                        v.modPitch = std::abs (semitones) > 0.0f ? std::pow (2.0f, semitones / 12.0f) : 1.0f;
+                        if (v.filter != SamplerFilter::Off && v.cutoffBase > 0.0f
+                            && (std::abs (v.cutoffEnv) > 0.0f || v.smpLfoTarget == static_cast<std::uint8_t> (SamplerLfoTarget::Cutoff)))
+                        {
+                            const double fc = std::clamp (static_cast<double> (v.cutoffBase) * std::pow (2.0, static_cast<double> (octaves)), 20.0, 0.45 * sampleRate);
+                            const double g = std::tan (kTwoPi * 0.5 * fc / sampleRate);
+                            const double a1 = 1.0 / (1.0 + g * (g + static_cast<double> (v.fk)));
+                            v.fa1 = static_cast<float> (a1);
+                            v.fa2 = static_cast<float> (g * a1);
+                            v.fa3 = static_cast<float> (g * g * a1);
+                        }
+                    }
+
                     const int idx = static_cast<int> (v.pos);
                     const int frames = v.sample->numFrames();
                     if (idx + 1 >= frames && ! (looping && idx < frames))
@@ -1871,7 +1988,7 @@ void Player::render (const Project& project, double bpm, bool playing,
                         continue;
                     }
                     // The sample after this one: at the end of a loop it is the loop's first sample.
-                    const int next = looping && idx + 1 >= static_cast<int> (v.loopEnd) ? static_cast<int> (v.loopStart) : idx + 1;
+                    const int next = looping && idx + 1 >= static_cast<int> (v.loopEnd) ? (v.pingPong ? idx : static_cast<int> (v.loopStart)) : idx + 1;
                     const float frac = static_cast<float> (v.pos - idx);
                     const float* sl = v.sample->left.data();
                     const float* sr = v.sample->right.data();
@@ -1880,6 +1997,18 @@ void Player::render (const Project& project, double bpm, bool playing,
                     const int rn = v.mirror ? frames - 1 - next : next;
                     float xl = sl[ri] + frac * (sl[rn] - sl[ri]);
                     float xr = sr[ri] + frac * (sr[rn] - sr[ri]);
+                    if (v.xfade > 0.0f && v.pos > v.loopEnd - static_cast<double> (v.xfade)) // 0.62.0: the loop's end fades into its start
+                    {
+                        const double other = v.pos - (v.loopEnd - v.loopStart);
+                        const int oi = static_cast<int> (other);
+                        if (other >= 0.0 && oi + 1 < frames)
+                        {
+                            const float of = static_cast<float> (other - oi);
+                            const float t = static_cast<float> ((v.pos - (v.loopEnd - static_cast<double> (v.xfade))) / static_cast<double> (v.xfade));
+                            xl += t * ((sl[oi] + of * (sl[oi + 1] - sl[oi])) - xl);
+                            xr += t * ((sr[oi] + of * (sr[oi + 1] - sr[oi])) - xr);
+                        }
+                    }
                     if (v.fadeInFrames > 0.0f || v.fadeOutFrames > 0.0f)
                     {
                         float fade = 1.0f;
@@ -1906,9 +2035,9 @@ void Player::render (const Project& project, double bpm, bool playing,
                         xr = svf (xr, v.s1R, v.s2R);
                     }
                     const float gain = v.env * v.velocity * kSampleGain * v.padGain;
-                    l = xl * gain * v.padLeft;
-                    r = xr * gain * v.padRight;
-                    v.pos += v.step;
+                    l = xl * gain * v.padLeft * v.modLeft;
+                    r = xr * gain * v.padRight * v.modRight;
+                    v.pos += (v.backwards ? -v.step : v.step) * static_cast<double> (v.modPitch);
                 }
                 else if (v.subtractive)
                 {
@@ -1954,8 +2083,8 @@ void Player::render (const Project& project, double bpm, bool playing,
                         rate *= v.glideRatio;
                 }
 
-                busL[static_cast<size_t> (v.channel)] += l;
-                busR[static_cast<size_t> (v.channel)] += r;
+                busL[static_cast<size_t> (v.channel)] += l * v.noteLeft;
+                busR[static_cast<size_t> (v.channel)] += r * v.noteRight;
 
                 if (v.state == State::Attack)
                 {

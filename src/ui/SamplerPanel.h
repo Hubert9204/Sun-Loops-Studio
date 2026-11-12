@@ -44,10 +44,15 @@ private:
     juce::ToggleButton reverseToggle { "Reverse" };
     juce::Slider startSlider, fadeInSlider, fadeOutSlider;
     juce::Label startLabel { {}, "Start" }, fadeInLabel { {}, "Fade in" }, fadeOutLabel { {}, "Fade out" };
+    // 0.62.0: loop crossfade, the envelope's hold on the cutoff, the LFO and the pitch envelope
+    juce::Slider crossfadeSlider, cutoffEnvSlider, lfoRateSlider, lfoDepthSlider, pitchEnvSlider, pitchEnvTimeSlider;
+    juce::ComboBox lfoBox;
+    juce::Label crossfadeLabel { {}, "Crossfade" }, cutoffEnvLabel { {}, "Envelope" }, lfoLabel { {}, "LFO" }, lfoRateLabel { {}, "Rate" },
+        lfoDepthLabel { {}, "Depth" }, pitchEnvLabel { {}, "Pitch env." }, pitchEnvTimeLabel { {}, "Time" };
     juce::Label rootLabel { {}, "Root key" }, attackLabel { {}, "Attack" }, decayLabel { {}, "Decay" }, sustainLabel { {}, "Sustain" },
         releaseLabel { {}, "Release" }, loopLabel { {}, "Loop" }, loopStartLabel { {}, "Loop start" }, loopEndLabel { {}, "Loop end" },
         filterLabel { {}, "Filter" }, cutoffLabel { {}, "Cutoff" }, resonanceLabel { {}, "Resonance" };
-    std::array<juce::Rectangle<int>, 4> headers; // SOUND, ENVELOPE, LOOP, FILTER
+    std::array<juce::Rectangle<int>, 5> headers; // SOUND, ENVELOPE, LOOP, FILTER, MODULATION (0.62.0)
     bool updating = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SamplerPanel)

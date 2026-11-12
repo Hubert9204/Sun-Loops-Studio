@@ -48,6 +48,12 @@ struct Channel
     float pitch = 0.0f;                       // channel tuning in semitones (-24..+24), applied to every note
     float swing = 0.0f;                       // 0..1: delays notes that fall on the second half of every 8th
     int mixerTrack = 0;                       // which mixer track this channel plays through (0-based)
+    // 0.62.0, as the polyphony and cut settings of an FL Studio channel:
+    int maxPoly = 0;                          // the most notes at once (0 = no limit); the oldest gives way
+    bool mono = false;                        // one note at a time: a new note takes over the sounding one (no new attack)
+    float portamento = 0.0f;                  // seconds a mono channel's pitch takes to slide to the new note (0 = jumps)
+    int cutGroup = 0;                         // 0 = none; a note on this channel cuts the notes of every channel whose cutBy is this
+    int cutBy = 0;                            // 0 = none (cutGroup == cutBy on one channel: it cuts itself)
     int steps = 0;                            // step sequencer (0.31.0): the active length the user set in the current pattern, in
                                               // steps (0 = not set); kept per pattern in Pattern::steps, like `notes`
 };

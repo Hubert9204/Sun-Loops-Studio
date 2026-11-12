@@ -7642,6 +7642,216 @@ void testFlParity061()
     }
 }
 
+// 0.62.0: the items the 0.61.0 review left open.
+void testFlParity062()
+{
+    std::cout << "FL Studio parity (0.62.0)\n";
+
+    // Note properties: pan, fine pitch, release, mute
+    {
+        const auto note = [] (float pan, float fine, float release, bool muted)
+        {
+            sls::Note n { 60, 0, kBeat / 2, 1.0f };
+            n.pan = pan; n.finePitch = fine; n.release = release; n.muted = muted;
+            return n;
+        };
+        const auto centre = sls::renderToBuffer (oneBar ({ synthChannel ({ note (0.0f, 0.0f, 0.5f, false) }) }), {});
+        const auto left = sls::renderToBuffer (oneBar ({ synthChannel ({ note (-1.0f, 0.0f, 0.5f, false) }) }), {});
+        const auto half = sls::renderToBuffer (oneBar ({ synthChannel ({ note (0.5f, 0.0f, 0.5f, false) }) }), {});
+        check (peakOf (left.getReadPointer (1), 0, 24000) == 0.0f && std::abs (peakOf (left.getReadPointer (0), 0, 24000) / peakOf (centre.getReadPointer (0), 0, 24000) - 1.0f) < 0.01f,
+               "note pan: hard left silences the right side and keeps the left");
+        check (std::abs (peakOf (half.getReadPointer (0), 0, 24000) / peakOf (centre.getReadPointer (0), 0, 24000) - 0.5f) < 0.02f
+                   && std::abs (peakOf (half.getReadPointer (1), 0, 24000) / peakOf (centre.getReadPointer (1), 0, 24000) - 1.0f) < 0.01f,
+               "note pan: half right halves the left side");
+
+        const auto sample = sineSample (1000.0, 0.5, 48000.0);
+        sls::Note up { 60, 0, kBeat / 4, 1.0f };
+        up.finePitch = 1200.0f;
+        const auto octave = sls::renderToBuffer (oneBar ({ samplerChannel (sample, { up }) }), {});
+        check (toneEnergy (octave.getReadPointer (0), 1200, 9600, 2000.0) > 4.0 * toneEnergy (octave.getReadPointer (0), 1200, 9600, 1000.0),
+               "note fine pitch: +1200 cents plays the sampler an octave up");
+        sls::Note sharp { 69, 0, kBeat, 1.0f };
+        sharp.finePitch = 100.0f; // A4 + 100 cents = A#4 = 466.16 Hz
+        const auto synth = sls::renderToBuffer (oneBar ({ synthChannel ({ sharp }) }), {});
+        check (toneEnergy (synth.getReadPointer (0), 2400, 21600, 466.16) > 10.0 * toneEnergy (synth.getReadPointer (0), 2400, 21600, 440.0),
+               "note fine pitch: +100 cents raises a synth note by a semitone");
+
+        const auto shortTail = sls::renderToBuffer (oneBar ({ synthChannel ({ note (0.0f, 0.0f, 0.0f, false) }) }), {});
+        const auto longTail = sls::renderToBuffer (oneBar ({ synthChannel ({ note (0.0f, 0.0f, 1.0f, false) }) }), {});
+        // the note ends at 12000 samples (half a beat at 120 BPM, 48 kHz); the default release lasts 80 ms = 3840 samples
+        const double tailShort = rmsOf (std::vector<float> (shortTail.getReadPointer (0), shortTail.getReadPointer (0) + 48000), 13500, 15500);
+        const double tailLong = rmsOf (std::vector<float> (longTail.getReadPointer (0), longTail.getReadPointer (0) + 48000), 13500, 15500);
+        const double tailNormal = rmsOf (std::vector<float> (centre.getReadPointer (0), centre.getReadPointer (0) + 48000), 13500, 15500);
+        check (tailShort < 1.0e-6 && tailLong > 2.0 * tailNormal && tailNormal > 0.0, "note release: 0 shortens the release, 1 lengthens it");
+
+        const auto silent = sls::renderToBuffer (oneBar ({ synthChannel ({ note (0.0f, 0.0f, 0.5f, true) }) }), {});
+        check (peakOf (silent.getReadPointer (0), 0, silent.getNumSamples()) == 0.0f, "a muted note does not play");
+
+        auto doc = sls::ProjectDocument::blank();
+        sls::Note n { 64, 240, 120, 0.7f };
+        n.pan = -0.5f; n.release = 0.8f; n.finePitch = -30.0f; n.colour = 5; n.muted = true;
+        doc.arrangement.patterns[0].notes[0] = { n, sls::Note { 60, 0, 120, 0.8f } };
+        const auto parsed = sls::ProjectDocument::fromJson (doc.toJson());
+        bool same = parsed.document.has_value() && parsed.document->arrangement.patterns[0].notes[0].size() == 2;
+        if (same)
+        {
+            const auto& all = parsed.document->arrangement.patterns[0].notes[0];
+            const auto& back = all[0].pitch == 64 ? all[0] : all[1];
+            const auto& plain = all[0].pitch == 64 ? all[1] : all[0];
+            same = std::abs (back.pan + 0.5f) < 1.0e-6f && std::abs (back.release - 0.8f) < 1.0e-6f && std::abs (back.finePitch + 30.0f) < 1.0e-4f
+                   && back.colour == 5 && back.muted && ! plain.hasProperties();
+        }
+        check (same, "note pan, release, fine pitch, colour and mute survive a save and a load");
+        auto plainDoc = sls::ProjectDocument::blank();
+        plainDoc.arrangement.patterns[0].notes[0] = { sls::Note { 60, 0, 120, 0.8f } };
+        check (! plainDoc.toJson().contains ("\"fine\"") && ! plainDoc.toJson().contains ("\"muted\"") && doc.toJson().contains ("\"fine\""),
+               "a note without properties is written as before (no sixth value)");
+
+        std::vector<sls::Note> notes { { 30, 0, 120, 0.8f }, { 100, 120, 120, 0.8f }, { 62, 240, 120, 0.8f } };
+        std::vector<bool> sel (3, false);
+        sls::theory::limit (notes, sel, 48, 71);
+        check (notes[0].pitch == 54 && notes[1].pitch == 64 && notes[2].pitch == 62, "limit: notes move by octaves into the range, those inside stay");
+    }
+
+    // Channels: cut groups, maximum polyphony, mono and portamento
+    {
+        const auto sample = sineSample (1000.0, 0.5, 48000.0); // half a second of tone
+        // two notes a 16th apart on one sampler channel: the first rings on unless it is cut
+        const std::vector<sls::Note> two { { 60, 0, kBeat / 4, 1.0f }, { 72, kBeat / 4, kBeat / 4, 1.0f } };
+        const auto play = [&] (auto&& edit)
+        {
+            auto c = samplerChannel (sample, two);
+            edit (c);
+            return sls::renderToBuffer (oneBar ({ c }), {});
+        };
+        const auto free = play ([] (sls::Channel&) {});
+        const auto cutSelf = play ([] (sls::Channel& c) { c.cutGroup = 3; c.cutBy = 3; });
+        const auto limited = play ([] (sls::Channel& c) { c.maxPoly = 1; });
+        // after the second note has started (6000 samples), the first note's 1 kHz is still there unless it was cut
+        const double ringing = toneEnergy (free.getReadPointer (0), 8000, 20000, 1000.0);
+        check (ringing > 0.01 && toneEnergy (cutSelf.getReadPointer (0), 8000, 20000, 1000.0) < 0.01 * ringing
+                   && toneEnergy (cutSelf.getReadPointer (0), 8000, 20000, 2000.0) > 0.01,
+               "cut itself: the new note stops the one before, and sounds itself");
+        check (toneEnergy (limited.getReadPointer (0), 8000, 20000, 1000.0) < 0.01 * ringing && toneEnergy (limited.getReadPointer (0), 8000, 20000, 2000.0) > 0.01,
+               "maximum polyphony 1: the oldest note gives way");
+
+        // a second channel cut by the first one's group
+        auto hat = samplerChannel (sample, { { 60, 0, kBeat / 4, 1.0f } });
+        hat.cutBy = 5;
+        auto closer = samplerChannel (sineSample (3000.0, 0.1, 48000.0), { { 60, kBeat / 4, kBeat / 4, 1.0f } });
+        closer.cutGroup = 5;
+        const auto choked = sls::renderToBuffer (oneBar ({ hat, closer }), {});
+        closer.cutGroup = 0;
+        const auto open = sls::renderToBuffer (oneBar ({ hat, closer }), {});
+        check (toneEnergy (choked.getReadPointer (0), 8000, 20000, 1000.0) < 0.01 * toneEnergy (open.getReadPointer (0), 8000, 20000, 1000.0),
+               "cut group: a note on one channel cuts the channel that is cut by its group");
+
+        // mono synth: the second note takes the first voice over (no second attack: the level does not dip), and with a
+        // portamento the pitch is still on its way a moment later
+        const std::vector<sls::Note> line { { 57, 0, kBeat, 1.0f }, { 69, kBeat / 2, kBeat, 1.0f } }; // A3 then A4, overlapping
+        auto mono = synthChannel (line);
+        mono.mono = true;
+        const auto jump = sls::renderToBuffer (oneBar ({ mono }), {});
+        mono.portamento = 0.25f; // the second note starts at 12000 samples and ends at 36000: the slide arrives at 24000
+        const auto slide = sls::renderToBuffer (oneBar ({ mono }), {});
+        auto poly = synthChannel (line);
+        const auto both = sls::renderToBuffer (oneBar ({ poly }), {});
+        // from 13000 to 20000 samples the second note sounds: poly has both 220 and 440 Hz; mono (jump) only 440
+        check (toneEnergy (both.getReadPointer (0), 13000, 20000, 220.0) > 100.0 * toneEnergy (jump.getReadPointer (0), 13000, 20000, 220.0)
+                   && toneEnergy (jump.getReadPointer (0), 13000, 20000, 440.0) > 0.001,
+               "mono: the new note takes over the sounding one");
+        check (toneEnergy (slide.getReadPointer (0), 12500, 15500, 440.0) < 0.2 * toneEnergy (jump.getReadPointer (0), 12500, 15500, 440.0)
+                   && toneEnergy (slide.getReadPointer (0), 26000, 34000, 440.0) > 0.5 * toneEnergy (jump.getReadPointer (0), 26000, 34000, 440.0),
+               "portamento: the pitch slides to the new note and arrives");
+
+        auto doc = sls::ProjectDocument::blank();
+        doc.channels[0].maxPoly = 4; doc.channels[0].mono = true; doc.channels[0].portamento = 0.12f; doc.channels[0].cutGroup = 2; doc.channels[0].cutBy = 7;
+        const auto parsed = sls::ProjectDocument::fromJson (doc.toJson());
+        check (parsed.document.has_value() && parsed.document->channels[0].maxPoly == 4 && parsed.document->channels[0].mono
+                   && std::abs (parsed.document->channels[0].portamento - 0.12f) < 1.0e-6f && parsed.document->channels[0].cutGroup == 2 && parsed.document->channels[0].cutBy == 7,
+               "polyphony, mono, portamento and cut groups survive a save and a load");
+    }
+
+    // Sampler: ping-pong and crossfaded loops, LFO, pitch envelope, cutoff envelope
+    {
+        // a ramp from -0.5 to +0.5 over 4800 frames: looped forwards it jumps at the join, ping-pong it does not
+        auto ramp = std::make_shared<sls::SampleData>();
+        ramp->sampleRate = 48000.0;
+        ramp->left.resize (4800);
+        for (int i = 0; i < 4800; ++i)
+            ramp->left[static_cast<size_t> (i)] = -0.5f + static_cast<float> (i) / 4800.0f;
+        ramp->right = ramp->left;
+        const auto play = [&] (std::shared_ptr<const sls::SampleData> sample, auto&& edit)
+        {
+            auto c = samplerChannel (sample, { { 60, 0, 2 * kBeat, 1.0f } });
+            edit (c.sampler);
+            return sls::renderToBuffer (oneBar ({ c }), {});
+        };
+        const auto biggestStep = [] (const juce::AudioBuffer<float>& b, int from, int to)
+        {
+            float worst = 0.0f;
+            for (int i = from + 1; i < to; ++i)
+                worst = std::max (worst, std::abs (b.getSample (0, i) - b.getSample (0, i - 1)));
+            return worst;
+        };
+        const auto forward = play (ramp, [] (sls::SamplerSettings& s) { s.loop = sls::LoopMode::Forward; });
+        const auto pingPong = play (ramp, [] (sls::SamplerSettings& s) { s.loop = sls::LoopMode::PingPong; });
+        const auto crossfaded = play (ramp, [] (sls::SamplerSettings& s) { s.loop = sls::LoopMode::Forward; s.loopStart = 0.5f; s.crossfade = 0.5f; });
+        const auto plainHalf = play (ramp, [] (sls::SamplerSettings& s) { s.loop = sls::LoopMode::Forward; s.loopStart = 0.5f; });
+        check (biggestStep (forward, 1000, 30000) > 20.0f * biggestStep (pingPong, 1000, 30000) && peakOf (pingPong.getReadPointer (0), 20000, 30000) > 0.05f,
+               "ping-pong loop: the sample turns round at the ends instead of jumping back");
+        check (biggestStep (plainHalf, 3000, 30000) > 10.0f * biggestStep (crossfaded, 3000, 30000) && peakOf (crossfaded.getReadPointer (0), 20000, 30000) > 0.02f,
+               "loop crossfade: the end of the loop fades into its start");
+
+        const auto tone = sineSample (1000.0, 1.0, 48000.0);
+        const auto steady = play (tone, [] (sls::SamplerSettings&) {});
+        const auto tremolo = play (tone, [] (sls::SamplerSettings& s) { s.lfoTarget = sls::SamplerLfoTarget::Volume; s.lfoRate = 5.0f; s.lfoDepth = 1.0f; });
+        float lowest = 1.0f, highest = 0.0f;
+        for (int w = 2400; w < 40000; w += 480)
+        {
+            lowest = std::min (lowest, peakOf (tremolo.getReadPointer (0), w, w + 480));
+            highest = std::max (highest, peakOf (tremolo.getReadPointer (0), w, w + 480));
+        }
+        check (lowest < 0.2f * highest && std::abs (highest / peakOf (steady.getReadPointer (0), 2400, 40000) - 1.0f) < 0.05f, "sampler LFO on the volume: a tremolo down to silence");
+        const auto autoPan = play (tone, [] (sls::SamplerSettings& s) { s.lfoTarget = sls::SamplerLfoTarget::Pan; s.lfoRate = 2.0f; s.lfoDepth = 1.0f; });
+        float lMin = 1.0f, rMin = 1.0f;
+        for (int w = 2400; w < 40000; w += 480)
+        {
+            lMin = std::min (lMin, peakOf (autoPan.getReadPointer (0), w, w + 480));
+            rMin = std::min (rMin, peakOf (autoPan.getReadPointer (1), w, w + 480));
+        }
+        check (lMin < 0.1f * peakOf (steady.getReadPointer (0), 2400, 40000) && rMin < 0.1f * peakOf (steady.getReadPointer (1), 2400, 40000), "sampler LFO on the pan: each side in turn goes silent");
+        const auto vibrato = play (tone, [] (sls::SamplerSettings& s) { s.lfoTarget = sls::SamplerLfoTarget::Pitch; s.lfoRate = 5.0f; s.lfoDepth = 1.0f; });
+        check (toneEnergy (vibrato.getReadPointer (0), 2400, 40000, 1000.0) < 0.5 * toneEnergy (steady.getReadPointer (0), 2400, 40000, 1000.0)
+                   && std::abs (rmsOf (std::vector<float> (vibrato.getReadPointer (0), vibrato.getReadPointer (0) + 40000), 2400, 40000)
+                                / rmsOf (std::vector<float> (steady.getReadPointer (0), steady.getReadPointer (0) + 40000), 2400, 40000) - 1.0) < 0.05,
+               "sampler LFO on the pitch: the tone leaves its frequency, the level stays");
+        const auto dive = play (tone, [] (sls::SamplerSettings& s) { s.pitchEnv = 12.0f; s.pitchEnvTime = 0.2f; });
+        check (toneEnergy (dive.getReadPointer (0), 0, 1200, 2000.0) > 3.0 * toneEnergy (dive.getReadPointer (0), 0, 1200, 1000.0)
+                   && toneEnergy (dive.getReadPointer (0), 20000, 23000, 1000.0) > 10.0 * toneEnergy (dive.getReadPointer (0), 20000, 23000, 2000.0),
+               "sampler pitch envelope: a note starts an octave up and settles on its pitch");
+        const auto dark = play (tone, [] (sls::SamplerSettings& s) { s.envelope = true; s.filter = sls::SamplerFilter::LowPass; s.cutoff = 0.3f; });
+        const auto opened = play (tone, [] (sls::SamplerSettings& s) { s.envelope = true; s.filter = sls::SamplerFilter::LowPass; s.cutoff = 0.3f; s.cutoffEnv = 5.0f; });
+        check (peakOf (opened.getReadPointer (0), 6000, 20000) > 3.0f * peakOf (dark.getReadPointer (0), 6000, 20000), "sampler cutoff envelope: the envelope opens the filter");
+
+        auto doc = sls::ProjectDocument::blank();
+        doc.channels[0].instrument = sls::Instrument::Sampler;
+        auto& s = doc.channels[0].sampler;
+        s.loop = sls::LoopMode::PingPong; s.crossfade = 0.25f; s.lfoTarget = sls::SamplerLfoTarget::Cutoff; s.lfoRate = 3.0f; s.lfoDepth = 0.7f;
+        s.cutoffEnv = -2.0f; s.pitchEnv = 7.0f; s.pitchEnvTime = 0.4f;
+        const auto parsed = sls::ProjectDocument::fromJson (doc.toJson());
+        bool same = parsed.document.has_value();
+        if (same)
+        {
+            const auto& b = parsed.document->channels[0].sampler;
+            same = b.loop == sls::LoopMode::PingPong && std::abs (b.crossfade - 0.25f) < 1.0e-6f && b.lfoTarget == sls::SamplerLfoTarget::Cutoff
+                   && std::abs (b.lfoRate - 3.0f) < 1.0e-6f && std::abs (b.lfoDepth - 0.7f) < 1.0e-6f && std::abs (b.cutoffEnv + 2.0f) < 1.0e-6f
+                   && std::abs (b.pitchEnv - 7.0f) < 1.0e-6f && std::abs (b.pitchEnvTime - 0.4f) < 1.0e-6f;
+        }
+        check (same, "sampler loop mode, crossfade, LFO and envelopes survive a save and a load");
+    }
+}
+
 void testMusicTheory()
 {
     namespace th = sls::theory;
@@ -11979,6 +12189,7 @@ int main()
     testSoundLibrary();
     testMusicTheory();
     testFlParity061();
+    testFlParity062();
     testOneShot();
     testAutomation();
     testMidiImport();

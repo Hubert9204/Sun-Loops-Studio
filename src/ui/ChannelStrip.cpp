@@ -461,6 +461,33 @@ void ChannelStrip::showContextMenu()
         stepMenu.addItem (34, "Clear the steps");
         menu.addSubMenu ("Steps", stepMenu);
     }
+    if (channel.instrument != Instrument::Plugin)
+    {
+        // 0.62.0: polyphony and cut groups, as the settings of an FL Studio channel
+        juce::PopupMenu poly;
+        poly.addItem (400, "Mono (one note at a time, no new attack)", true, channel.mono);
+        poly.addSeparator();
+        poly.addSectionHeader ("Most notes at once");
+        for (int n : { 0, 1, 2, 4, 8, 16 })
+            poly.addItem (410 + n, n == 0 ? juce::String ("No limit") : juce::String (n), ! channel.mono, channel.maxPoly == n);
+        poly.addSeparator();
+        poly.addSectionHeader ("Portamento (mono: the pitch slides to the new note)");
+        const int portaMs[] = { 0, 30, 60, 120, 250, 500 };
+        for (int k = 0; k < 6; ++k)
+            poly.addItem (430 + k, portaMs[k] == 0 ? juce::String ("Off") : juce::String (portaMs[k]) + " ms", channel.mono,
+                          juce::roundToInt (channel.portamento * 1000.0f) == portaMs[k]);
+        menu.addSubMenu ("Polyphony", poly);
+        juce::PopupMenu cut, cutBy;
+        for (int g = 0; g <= 8; ++g)
+        {
+            cut.addItem (440 + g, g == 0 ? juce::String ("None") : "Group " + juce::String (g), true, channel.cutGroup == g);
+            cutBy.addItem (460 + g, g == 0 ? juce::String ("None") : "Group " + juce::String (g), true, channel.cutBy == g);
+        }
+        cut.addSeparator();
+        cut.addItem (480, "Cut itself (each note stops the one before)", true, channel.cutGroup > 0 && channel.cutGroup == channel.cutBy);
+        menu.addSubMenu ("Cut group (its notes cut...)", cut);
+        menu.addSubMenu ("Cut by group", cutBy);
+    }
     menu.addSeparator();
     menu.addSubMenu ("Instrument", instrument);
     menu.addItem (4, "Load sample...", channel.instrument == Instrument::Sampler);
@@ -493,6 +520,32 @@ void ChannelStrip::showContextMenu()
                                     safe->onPluginChosen (i, plugins[static_cast<size_t> (result - 1000)].second);
                                 return;
                             }
+                            // 0.62.0: polyphony, portamento and cut groups
+                            if (result >= 410 && result <= 426)
+                            {
+                                safe->channel.maxPoly = result - 410;
+                                if (safe->onChanged) safe->onChanged (i);
+                                return;
+                            }
+                            if (result >= 430 && result < 436)
+                            {
+                                static constexpr float portaSeconds[] = { 0.0f, 0.03f, 0.06f, 0.12f, 0.25f, 0.5f };
+                                safe->channel.portamento = portaSeconds[result - 430];
+                                if (safe->onChanged) safe->onChanged (i);
+                                return;
+                            }
+                            if (result >= 440 && result <= 448)
+                            {
+                                safe->channel.cutGroup = result - 440;
+                                if (safe->onChanged) safe->onChanged (i);
+                                return;
+                            }
+                            if (result >= 460 && result <= 468)
+                            {
+                                safe->channel.cutBy = result - 460;
+                                if (safe->onChanged) safe->onChanged (i);
+                                return;
+                            }
                             switch (result)
                             {
                                 case 1: if (safe->onOpenPianoRoll) safe->onOpenPianoRoll (i); break;
@@ -512,6 +565,15 @@ void ChannelStrip::showContextMenu()
                                 case 14: if (safe->onDelete) safe->onDelete (i); break;
                                 case 15: if (safe->onSamplerSettings) safe->onSamplerSettings (i); break;
                                 case 21: if (safe->onOpenSlicer) safe->onOpenSlicer (i); break;
+                                case 400: safe->channel.mono = ! safe->channel.mono; if (safe->onChanged) safe->onChanged (i); break;
+                                case 480:
+                                {
+                                    // "Cut itself": a group of its own (the channel's number, so two channels do not share one by accident)
+                                    const bool on = safe->channel.cutGroup > 0 && safe->channel.cutGroup == safe->channel.cutBy;
+                                    safe->channel.cutGroup = safe->channel.cutBy = on ? 0 : 10 + i;
+                                    if (safe->onChanged) safe->onChanged (i);
+                                    break;
+                                }
                                 case 30: safe->grid.fillEvery (2); break;
                                 case 31: safe->grid.fillEvery (4); break;
                                 case 32: safe->grid.fillEvery (8); break;

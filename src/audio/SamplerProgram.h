@@ -14,7 +14,9 @@ namespace sls
 // The advanced sampler (0.16.0): how a sampler channel shapes its sound, and multi-sample programs (zones by key and velocity, as
 // in a SoundFont). Plain C++, immutable once shared with the audio thread.
 
-enum class LoopMode : std::uint8_t { Off, Forward };
+enum class LoopMode : std::uint8_t { Off, Forward, PingPong }; // 0.62.0: PingPong plays the loop forwards, then backwards
+// What a sampler channel's LFO moves (0.62.0).
+enum class SamplerLfoTarget : std::uint8_t { Off, Pitch, Cutoff, Pan, Volume };
 enum class SamplerFilter : std::uint8_t { Off, LowPass, HighPass, BandPass };
 
 // Settings of a sampler channel. With the envelope off and no loop a note plays its sample once to the end, whatever its length (the
@@ -38,6 +40,15 @@ struct SamplerSettings
 
     // 0.61.0, as FL Studio's sampler channel: play the sample backwards, start further into it (SMP START), fade it in and out
     // (the IN and OUT knobs). Start and the fades are fractions of the sample (0..1).
+    // 0.62.0, as the loop options, envelopes and LFOs of FL Studio's sampler channel:
+    float crossfade = 0.0f;                       // forward loops: the end of the loop fades into its start over this much of its length, 0..1
+    SamplerLfoTarget lfoTarget = SamplerLfoTarget::Off;
+    float lfoRate = 5.0f;                         // Hz, 0.05..20
+    float lfoDepth = 0.5f;                        // 0..1: pitch up to 2 semitones, cutoff up to 3 octaves, pan and volume full
+    float cutoffEnv = 0.0f;                       // octaves the envelope moves the cutoff (-5..5); needs the envelope and a filter
+    float pitchEnv = 0.0f;                        // semitones (-24..24): a note starts this far from its pitch and settles on it
+    float pitchEnvTime = 0.1f;                    // seconds, 0.005..5
+
     bool reverse = false;
     float start = 0.0f;     // 0..0.99
     float fadeIn = 0.0f;    // 0..1
@@ -64,8 +75,16 @@ struct SamplerSettings
         s.start = std::clamp (finiteOr (s.start, 0.0f), 0.0f, 0.99f);
         s.fadeIn = std::clamp (finiteOr (s.fadeIn, 0.0f), 0.0f, 1.0f);
         s.fadeOut = std::clamp (finiteOr (s.fadeOut, 0.0f), 0.0f, 1.0f);
-        if (static_cast<int> (s.loop) > static_cast<int> (LoopMode::Forward))
+        if (static_cast<int> (s.loop) > static_cast<int> (LoopMode::PingPong))
             s.loop = LoopMode::Off;
+        s.crossfade = std::clamp (finiteOr (s.crossfade, 0.0f), 0.0f, 1.0f);
+        if (static_cast<int> (s.lfoTarget) > static_cast<int> (SamplerLfoTarget::Volume))
+            s.lfoTarget = SamplerLfoTarget::Off;
+        s.lfoRate = std::clamp (finiteOr (s.lfoRate, 5.0f), 0.05f, 20.0f);
+        s.lfoDepth = std::clamp (finiteOr (s.lfoDepth, 0.5f), 0.0f, 1.0f);
+        s.cutoffEnv = std::clamp (finiteOr (s.cutoffEnv, 0.0f), -5.0f, 5.0f);
+        s.pitchEnv = std::clamp (finiteOr (s.pitchEnv, 0.0f), -24.0f, 24.0f);
+        s.pitchEnvTime = std::clamp (finiteOr (s.pitchEnvTime, 0.1f), 0.005f, 5.0f);
         if (static_cast<int> (s.filter) > static_cast<int> (SamplerFilter::BandPass))
             s.filter = SamplerFilter::Off;
         return s;

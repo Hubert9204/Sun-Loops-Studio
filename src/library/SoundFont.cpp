@@ -417,7 +417,24 @@ juce::var samplerSettingsToVar (const SamplerSettings& s)
     o->setProperty ("decay", s.decay);
     o->setProperty ("sustain", s.sustain);
     o->setProperty ("release", s.release);
-    o->setProperty ("loop", s.loop == LoopMode::Forward ? "forward" : "off");
+    o->setProperty ("loop", s.loop == LoopMode::Forward ? "forward" : s.loop == LoopMode::PingPong ? "pingpong" : "off");
+    // 0.62.0
+    if (s.crossfade > 0.0f)
+        o->setProperty ("crossfade", s.crossfade);
+    if (s.lfoTarget != SamplerLfoTarget::Off)
+    {
+        static const char* const targets[] = { "off", "pitch", "cutoff", "pan", "volume" };
+        o->setProperty ("lfoTarget", targets[static_cast<int> (s.lfoTarget)]);
+        o->setProperty ("lfoRate", s.lfoRate);
+        o->setProperty ("lfoDepth", s.lfoDepth);
+    }
+    if (std::abs (s.cutoffEnv) > 0.0f)
+        o->setProperty ("cutoffEnv", s.cutoffEnv);
+    if (std::abs (s.pitchEnv) > 0.0f)
+    {
+        o->setProperty ("pitchEnv", s.pitchEnv);
+        o->setProperty ("pitchEnvTime", s.pitchEnvTime);
+    }
     o->setProperty ("loopStart", s.loopStart);
     o->setProperty ("loopEnd", s.loopEnd);
     o->setProperty ("filter", s.filter == SamplerFilter::LowPass ? "lowpass" : s.filter == SamplerFilter::HighPass ? "highpass"
@@ -446,7 +463,17 @@ SamplerSettings samplerSettingsFromVar (const juce::var& v)
     s.decay = static_cast<float> (readNumber (o->getProperty ("decay"), s.decay, 0.0, 10.0));
     s.sustain = static_cast<float> (readNumber (o->getProperty ("sustain"), s.sustain, 0.0, 1.0));
     s.release = static_cast<float> (readNumber (o->getProperty ("release"), s.release, 0.0, 10.0));
-    s.loop = o->getProperty ("loop").toString() == "forward" ? LoopMode::Forward : LoopMode::Off;
+    const auto loopText = o->getProperty ("loop").toString();
+    s.loop = loopText == "forward" ? LoopMode::Forward : loopText == "pingpong" ? LoopMode::PingPong : LoopMode::Off;
+    s.crossfade = static_cast<float> (readNumber (o->getProperty ("crossfade"), 0.0, 0.0, 1.0)); // 0.62.0
+    const auto lfoText = o->getProperty ("lfoTarget").toString();
+    s.lfoTarget = lfoText == "pitch" ? SamplerLfoTarget::Pitch : lfoText == "cutoff" ? SamplerLfoTarget::Cutoff : lfoText == "pan" ? SamplerLfoTarget::Pan
+                  : lfoText == "volume" ? SamplerLfoTarget::Volume : SamplerLfoTarget::Off;
+    s.lfoRate = static_cast<float> (readNumber (o->getProperty ("lfoRate"), 5.0, 0.05, 20.0));
+    s.lfoDepth = static_cast<float> (readNumber (o->getProperty ("lfoDepth"), 0.5, 0.0, 1.0));
+    s.cutoffEnv = static_cast<float> (readNumber (o->getProperty ("cutoffEnv"), 0.0, -5.0, 5.0));
+    s.pitchEnv = static_cast<float> (readNumber (o->getProperty ("pitchEnv"), 0.0, -24.0, 24.0));
+    s.pitchEnvTime = static_cast<float> (readNumber (o->getProperty ("pitchEnvTime"), 0.1, 0.005, 5.0));
     s.loopStart = static_cast<float> (readNumber (o->getProperty ("loopStart"), 0.0, 0.0, 1.0));
     s.loopEnd = static_cast<float> (readNumber (o->getProperty ("loopEnd"), 1.0, 0.0, 1.0));
     const auto filter = o->getProperty ("filter").toString();

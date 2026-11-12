@@ -93,8 +93,23 @@ juce::var noteToVar (const Note& n)
     a.add (n.startTick);
     a.add (n.lengthTicks);
     a.add (number (static_cast<double> (n.velocity)));
-    if (n.link != NoteLink::None)
+    if (n.link != NoteLink::None || n.hasProperties())
         a.add (static_cast<int> (n.link)); // 1 = legato, 2 = slide; older programs ignore this fifth value
+    if (n.hasProperties()) // 0.62.0: the note's own pan, release, fine pitch, colour and mute, as a sixth value
+    {
+        auto* o = new juce::DynamicObject();
+        if (std::abs (n.pan) > 0.0f)
+            o->setProperty ("pan", number (static_cast<double> (n.pan)));
+        if (std::abs (n.release - 0.5f) > 0.0f)
+            o->setProperty ("release", number (static_cast<double> (n.release)));
+        if (std::abs (n.finePitch) > 0.0f)
+            o->setProperty ("fine", number (static_cast<double> (n.finePitch)));
+        if (n.colour != 0)
+            o->setProperty ("colour", static_cast<int> (n.colour));
+        if (n.muted)
+            o->setProperty ("muted", true);
+        a.add (juce::var (o));
+    }
     return a;
 }
 
@@ -194,6 +209,14 @@ bool readNote (const juce::var& v, int patternTicks, Note& out)
     out.velocity = static_cast<float> (readNumber (a->size() > 3 ? (*a)[3] : juce::var (0.8), 0.8, 0.0, 1.0));
     const int link = static_cast<int> (std::lround (readNumber (a->size() > 4 ? (*a)[4] : juce::var (0), 0, 0, 2)));
     out.link = link == 1 ? NoteLink::Legato : link == 2 ? NoteLink::Slide : NoteLink::None;
+    if (auto* o = a->size() > 5 ? (*a)[5].getDynamicObject() : nullptr) // 0.62.0
+    {
+        out.pan = static_cast<float> (readNumber (o->getProperty ("pan"), 0.0, -1.0, 1.0));
+        out.release = static_cast<float> (readNumber (o->getProperty ("release"), 0.5, 0.0, 1.0));
+        out.finePitch = static_cast<float> (readNumber (o->getProperty ("fine"), 0.0, -1200.0, 1200.0));
+        out.colour = static_cast<std::uint8_t> (readInt (o->getProperty ("colour"), 0, 0, 15));
+        out.muted = readBool (o->getProperty ("muted"), false);
+    }
     return true;
 }
 } // namespace
@@ -260,6 +283,16 @@ juce::String ProjectDocument::toJson() const
         o->setProperty ("pitch", number (static_cast<double> (c.pitch)));
         o->setProperty ("swing", number (static_cast<double> (c.swing)));
         o->setProperty ("mixerTrack", c.mixerTrack);
+        if (c.maxPoly > 0) // 0.62.0: polyphony and cut groups
+            o->setProperty ("maxPoly", c.maxPoly);
+        if (c.mono)
+            o->setProperty ("mono", true);
+        if (c.portamento > 0.0f)
+            o->setProperty ("portamento", number (static_cast<double> (c.portamento)));
+        if (c.cutGroup > 0)
+            o->setProperty ("cutGroup", c.cutGroup);
+        if (c.cutBy > 0)
+            o->setProperty ("cutBy", c.cutBy);
         channelList.add (juce::var (o));
     }
     root->setProperty ("channels", channelList);
@@ -584,6 +617,11 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
         c.pitch = static_cast<float> (readNumber (o->getProperty ("pitch"), 0.0, -24.0, 24.0));
         c.swing = static_cast<float> (readNumber (o->getProperty ("swing"), 0.0, 0.0, 1.0));
         c.mixerTrack = readInt (o->getProperty ("mixerTrack"), std::min (i, kMaxTracks - 1), 0, kMaxTracks - 1);
+        c.maxPoly = readInt (o->getProperty ("maxPoly"), 0, 0, 64); // 0.62.0
+        c.mono = readBool (o->getProperty ("mono"), false);
+        c.portamento = static_cast<float> (readNumber (o->getProperty ("portamento"), 0.0, 0.0, 2.0));
+        c.cutGroup = readInt (o->getProperty ("cutGroup"), 0, 0, 99);
+        c.cutBy = readInt (o->getProperty ("cutBy"), 0, 0, 99);
 
         d.kitSpecs.push_back (c.instrument == Instrument::Drums ? kitSpecFromVar (o->getProperty ("kit")) : KitSpec::empty());
         c.sampler = samplerSettingsFromVar (o->getProperty ("sampler")); // older files: the defaults (one-shot)

@@ -58,8 +58,12 @@ SamplerPanel::SamplerPanel()
 
     loopBox.addItem ("Off", 1);
     loopBox.addItem ("Forward", 2);
+    loopBox.addItem ("Ping-pong", 3); // 0.62.0
     addAndMakeVisible (loopBox);
-    loopBox.onChange = [this] { write ([this] (Channel& c) { c.sampler.loop = loopBox.getSelectedId() == 2 ? LoopMode::Forward : LoopMode::Off; }); };
+    loopBox.onChange = [this]
+    {
+        write ([this] (Channel& c) { c.sampler.loop = loopBox.getSelectedId() == 2 ? LoopMode::Forward : loopBox.getSelectedId() == 3 ? LoopMode::PingPong : LoopMode::Off; });
+    };
     slider (loopStartSlider, 0.0, 100.0, 0.1, " %");
     slider (loopEndSlider, 0.0, 100.0, 0.1, " %");
     loopStartSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.loopStart = static_cast<float> (loopStartSlider.getValue() / 100.0); }); };
@@ -98,7 +102,38 @@ SamplerPanel::SamplerPanel()
     fadeOutSlider.setTooltip ("Fade the end of the sample out over this much of its length (FL Studio's OUT)");
     fadeOutSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.fadeOut = static_cast<float> (fadeOutSlider.getValue() / 100.0); }); };
 
-    setSize (600, 656);
+    // 0.62.0: the loop's crossfade, the envelope's hold on the cutoff, the LFO and the pitch envelope
+    for (auto* l : { &crossfadeLabel, &cutoffEnvLabel, &lfoLabel, &lfoRateLabel, &lfoDepthLabel, &pitchEnvLabel, &pitchEnvTimeLabel })
+    {
+        l->setColour (juce::Label::textColourId, kPanelText);
+        addAndMakeVisible (*l);
+    }
+    slider (crossfadeSlider, 0.0, 100.0, 1.0, " %");
+    crossfadeSlider.setTooltip ("Forward loops: the end of the loop fades into its start over this much of the loop, so the join does not click");
+    crossfadeSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.crossfade = static_cast<float> (crossfadeSlider.getValue() / 100.0); }); };
+    slider (cutoffEnvSlider, -5.0, 5.0, 0.1, " oct");
+    cutoffEnvSlider.setTooltip ("How far the envelope moves the cutoff, in octaves (needs the envelope and a filter)");
+    cutoffEnvSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.cutoffEnv = static_cast<float> (cutoffEnvSlider.getValue()); }); };
+    lfoBox.addItem ("Off", 1);
+    lfoBox.addItem ("Pitch (vibrato)", 2);
+    lfoBox.addItem ("Cutoff", 3);
+    lfoBox.addItem ("Pan", 4);
+    lfoBox.addItem ("Volume (tremolo)", 5);
+    lfoBox.setTooltip ("What the LFO moves: the pitch (up to 2 semitones), the filter's cutoff (up to 3 octaves), the pan or the volume");
+    addAndMakeVisible (lfoBox);
+    lfoBox.onChange = [this] { write ([this] (Channel& c) { c.sampler.lfoTarget = static_cast<SamplerLfoTarget> (std::clamp (lfoBox.getSelectedId() - 1, 0, 4)); }); };
+    slider (lfoRateSlider, 0.05, 20.0, 0.05, " Hz");
+    lfoRateSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.lfoRate = static_cast<float> (lfoRateSlider.getValue()); }); };
+    slider (lfoDepthSlider, 0.0, 100.0, 1.0, " %");
+    lfoDepthSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.lfoDepth = static_cast<float> (lfoDepthSlider.getValue() / 100.0); }); };
+    slider (pitchEnvSlider, -24.0, 24.0, 0.5, " st");
+    pitchEnvSlider.setTooltip ("Pitch envelope: every note starts this many semitones away from its pitch and settles on it over Time");
+    pitchEnvSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.pitchEnv = static_cast<float> (pitchEnvSlider.getValue()); }); };
+    slider (pitchEnvTimeSlider, 0.005, 5.0, 0.005, " s");
+    pitchEnvTimeSlider.setSkewFactorFromMidPoint (0.3);
+    pitchEnvTimeSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.pitchEnvTime = static_cast<float> (pitchEnvTimeSlider.getValue()); }); };
+
+    setSize (600, 750);
 }
 
 juce::Slider& SamplerPanel::slider (juce::Slider& s, double lo, double hi, double step, const juce::String& suffix)
@@ -175,7 +210,18 @@ void SamplerPanel::refresh()
     decaySlider.setValue (s.decay, juce::dontSendNotification);
     sustainSlider.setValue (s.sustain * 100.0, juce::dontSendNotification);
     releaseSlider.setValue (s.release, juce::dontSendNotification);
-    loopBox.setSelectedId (s.loop == LoopMode::Forward ? 2 : 1, juce::dontSendNotification);
+    loopBox.setSelectedId (s.loop == LoopMode::Forward ? 2 : s.loop == LoopMode::PingPong ? 3 : 1, juce::dontSendNotification);
+    crossfadeSlider.setEnabled (! program && s.loop == LoopMode::Forward);
+    crossfadeSlider.setValue (s.crossfade * 100.0, juce::dontSendNotification);
+    cutoffEnvSlider.setEnabled (s.filter != SamplerFilter::Off && s.envelope);
+    cutoffEnvSlider.setValue (s.cutoffEnv, juce::dontSendNotification);
+    lfoBox.setSelectedId (static_cast<int> (s.lfoTarget) + 1, juce::dontSendNotification);
+    lfoRateSlider.setEnabled (s.lfoTarget != SamplerLfoTarget::Off);
+    lfoDepthSlider.setEnabled (s.lfoTarget != SamplerLfoTarget::Off);
+    lfoRateSlider.setValue (s.lfoRate, juce::dontSendNotification);
+    lfoDepthSlider.setValue (s.lfoDepth * 100.0, juce::dontSendNotification);
+    pitchEnvSlider.setValue (s.pitchEnv, juce::dontSendNotification);
+    pitchEnvTimeSlider.setValue (s.pitchEnvTime, juce::dontSendNotification);
     loopStartSlider.setValue (s.loopStart * 100.0, juce::dontSendNotification);
     loopEndSlider.setValue (s.loopEnd * 100.0, juce::dontSendNotification);
     filterBox.setSelectedId (static_cast<int> (s.filter) + 1, juce::dontSendNotification);
@@ -194,7 +240,7 @@ void SamplerPanel::paint (juce::Graphics& g)
     g.fillAll (kPanelBackground);
     g.setColour (kPanelDim);
     g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
-    const char* names[] = { "SOUND", "ENVELOPE", "LOOP", "FILTER" };
+    const char* names[] = { "SOUND", "ENVELOPE", "LOOP", "FILTER", "MODULATION" };
     for (size_t i = 0; i < headers.size(); ++i)
     {
         g.drawText (names[i], headers[i], juce::Justification::centredLeft);
@@ -260,6 +306,9 @@ void SamplerPanel::resized()
         area.removeFromTop (6);
         loopLabel.setBounds (r.removeFromLeft (100));
         loopBox.setBounds (r.removeFromLeft (120));
+        r.removeFromLeft (16);
+        crossfadeLabel.setBounds (r.removeFromLeft (70)); // 0.62.0
+        crossfadeSlider.setBounds (r);
     }
     {
         auto r = area.removeFromTop (26);
@@ -278,9 +327,36 @@ void SamplerPanel::resized()
         area.removeFromTop (6);
         filterLabel.setBounds (r.removeFromLeft (100));
         filterBox.setBounds (r.removeFromLeft (120));
+        r.removeFromLeft (16);
+        cutoffEnvLabel.setBounds (r.removeFromLeft (70)); // 0.62.0
+        cutoffEnvSlider.setBounds (r);
     }
     row (cutoffLabel, cutoffSlider);
     row (resonanceLabel, resonanceSlider);
+    // 0.62.0: the LFO and the pitch envelope
+    area.removeFromTop (4);
+    headers[4] = area.removeFromTop (18);
+    area.removeFromTop (4);
+    {
+        auto r = area.removeFromTop (26);
+        area.removeFromTop (6);
+        lfoLabel.setBounds (r.removeFromLeft (100));
+        lfoBox.setBounds (r.removeFromLeft (120));
+        r.removeFromLeft (8);
+        lfoRateLabel.setBounds (r.removeFromLeft (36));
+        lfoRateSlider.setBounds (r.removeFromLeft ((r.getWidth() - 52) / 2));
+        r.removeFromLeft (8);
+        lfoDepthLabel.setBounds (r.removeFromLeft (44));
+        lfoDepthSlider.setBounds (r);
+    }
+    {
+        auto r = area.removeFromTop (26);
+        pitchEnvLabel.setBounds (r.removeFromLeft (100));
+        pitchEnvSlider.setBounds (r.removeFromLeft (r.getWidth() / 2 - 4));
+        r.removeFromLeft (8);
+        pitchEnvTimeLabel.setBounds (r.removeFromLeft (70));
+        pitchEnvTimeSlider.setBounds (r);
+    }
 }
 
 SamplerWindow::SamplerWindow()

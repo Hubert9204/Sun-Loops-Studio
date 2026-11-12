@@ -78,6 +78,25 @@ public:
     int getGridTicks() const noexcept { return gridTicks; }
     void setScale (const theory::Scale& s, bool snapNotes); // the scale shown on the grid; snapNotes: new and moved notes go into it
     void setChordStamp (int chord, int inversion); // chord < 0: a click makes one note
+    // 0.62.0: the event lane shows one of the notes' properties (as FL Studio's event editor): velocity, pan, release or fine
+    // pitch. Click the lane's label (bottom left) to choose.
+    enum class Lane { Velocity, Pan, Release, FinePitch };
+    void setLane (Lane newLane);
+    Lane getLane() const noexcept { return eventLane; }
+    static const char* laneName (Lane l) noexcept;
+    // 0.62.0: the tools, as FL Studio's: Draw (the roll's usual behaviour), Paint (drag to draw a row of notes), Mute (click a
+    // note to mute or unmute it), Slice (click a note to cut it in two).
+    enum class Tool { Draw, Paint, Mute, Slice };
+    void setTool (Tool newTool);
+    Tool getTool() const noexcept { return activeTool; }
+    std::function<void()> onToolChanged;
+    // 0.62.0: the colour group (0..15) of the selected notes and of the notes drawn next.
+    void setNoteColour (int colour);
+    // 0.62.0: the LFO tool, as FL Studio's: the lane's property of the selected notes (or all) follows a sine, one cycle every
+    // `cycleTicks`, from the first of those notes; `depth` 0..1 around the middle of the lane.
+    void applyLaneLfo (int cycleTicks, float depth);
+    int getNoteColour() const noexcept { return currentColour; }
+    static juce::Colour noteColour (int colour) noexcept;
     void setVelocityLaneVisible (bool visible);
     bool isVelocityLaneVisible() const noexcept { return velocityLane; }
     // The velocity lane's height (0.54.0): dragged by its top edge, double-click there for the default.
@@ -117,7 +136,8 @@ public:
 
 private:
     // PendingEmpty (0.44.0): the button went down on empty grid; a drag turns it into Select, a release creates the note there.
-    enum class Drag { None, Move, Resize, ResizeStart, Seek, LoopCreate, LoopMove, LoopResize, Select, Velocity, PendingEmpty, LaneHeight };
+    enum class Drag { None, Move, Resize, ResizeStart, Seek, LoopCreate, LoopMove, LoopResize, Select, Velocity, PendingEmpty, LaneHeight,
+                      Paint }; // 0.62.0
     void createNotesAt (juce::Point<float> pos, bool noSnap);
     juce::Point<float> pendingPosition;
     bool pendingNoSnap = false;
@@ -194,6 +214,11 @@ private:
     theory::Scale scale;
     bool scaleSnap = false;
     int chordStamp = -1, chordInversion = 0;
+    Lane eventLane = Lane::Velocity; // 0.62.0
+    Tool activeTool = Tool::Draw;
+    int currentColour = 0;
+    int paintNextTick = 0;        // the Paint tool: where the next note of the stroke may start
+    void showLaneMenu();
     bool velocityLane = true;
     int velocityHeight = kVelocityHeight;
     int laneGrab = 0; // while the splitter is dragged: the mouse's distance from the lane's top edge

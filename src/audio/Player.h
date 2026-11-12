@@ -137,6 +137,17 @@ private:
         // 0.61.0: the sampler channel's reverse, and its fades as frames of the sample (0 = none)
         bool mirror = false;
         float fadeInFrames = 0.0f, fadeOutFrames = 0.0f, fadeFrom = 0.0f; // fadeFrom: the frame the note starts at
+        float noteLeft = 1.0f, noteRight = 1.0f; // 0.62.0: the note's own pan (a balance: the louder side stays at unity)
+        // 0.62.0: the sampler channel's loop direction and crossfade, LFO, pitch envelope and moving cutoff
+        bool pingPong = false, backwards = false;
+        float xfade = 0.0f;                 // frames of loop crossfade (0 = none)
+        bool mods = false;                  // any of the modulations below is on
+        std::uint8_t smpLfoTarget = 0;      // SamplerLfoTarget
+        float smpLfoPhase = 0.0f, smpLfoStep = 0.0f, smpLfoDepth = 0.0f;
+        float pitchEnv = 0.0f, pitchEnvMul = 1.0f; // semitones left, and their decay every kModStep samples
+        float cutoffBase = 0.0f, cutoffEnv = 0.0f; // Hz, octaves
+        int modCount = 0;
+        float modPitch = 1.0f, modLeft = 1.0f, modRight = 1.0f;
         float padGain = 1.0f;               // the pad's (or a sampler zone's) level and pan (1 / 1 / 1 for every other voice)
         float padLeft = 1.0f;
         float padRight = 1.0f;
@@ -347,6 +358,8 @@ private:
     bool wasPlaying = false;
     bool releaseSamplesOnStop = true;
     float releaseStep = 0.001f;
+    std::array<std::uint8_t, kMaxChannels> channelCutBy {}; // 0.62.0: each channel's cutBy in this block
+    static constexpr int kModStep = 16;                     // the sampler's modulations are worked out every 16 samples
     std::uint64_t liveLimitSamples = 20ull * 48000;
 
     // Metronome state.
