@@ -10,16 +10,19 @@
 
 namespace sls
 {
-enum class PlaylistTool { Select, Split, Cut, Erase, Zoom };
+enum class PlaylistTool { Draw, Split, Cut, Erase, Zoom, Select }; // 0.59.0: Draw was called Select; Select is the rectangle
 
 // The timeline of the Playlist panel: the ruler, the tracks and their clips (the toolbar around it is PlaylistView).
 //
 // Tools (chosen in the toolbar, or with the keys 1..5 while the mouse is over the timeline):
-//   Select : click a clip to select it; drag it to move it (to another track too); drag its left or right edge to trim
-//            or lengthen it (audio keeps its place: only more or less of the sound is heard); click empty space to put a
-//            clip of the selected pattern there. Drag from empty space (0.57.0): a rectangle selects every clip it touches
-//            (Shift adds to the selection; Shift+click adds or removes one clip); dragging one of the selected clips moves
-//            them all; Delete, Ctrl+C / Ctrl+X / Ctrl+D act on all of them; Ctrl+A selects everything, Escape nothing.
+//   Draw   : (1; called Select before 0.59.0) click a clip to select it; drag it to move it (to another track too); drag its
+//            left or right edge to trim or lengthen it (audio keeps its place: only more or less of the sound is heard); click
+//            empty space to put a clip of the selected pattern there, and drag right away to lengthen it. Dragging one of
+//            several selected clips moves them all.
+//   Select : (6, 0.59.0) drag from empty space: a rectangle selects every clip it touches (Shift adds to the selection;
+//            Shift+click adds or removes one clip; a click on empty space selects nothing); drag a clip to move it, or all the
+//            selected ones together. Delete, Ctrl+C / Ctrl+X / Ctrl+D act on all of them; Ctrl+A selects everything, Escape
+//            nothing (with any tool).
 // Any tool but Zoom: right click opens the menu of the clip under the mouse; right drag (0.57.0) erases every clip the mouse
 // passes over - pattern, audio and automation clips - as one undo step.
 //   Split  : click a clip to cut it in two at that point (snapped to the grid).
@@ -279,7 +282,7 @@ private:
     bool pasteSet (const ClipSet& set, int deltaTicks, int deltaTracks); // adds the clips moved by these amounts, as one undo step
     void startGroupMove (Kind kind, int index, int tick);
     void moveGroup (const juce::MouseEvent& e);
-    void placeClipAt (int track, int tick, bool noSnap); // a click on empty space: a clip of the track's (or the selected) pattern
+    bool placeClipAt (int track, int tick, bool noSnap); // a click on empty space: a clip of the track's (or the selected) pattern
     juce::Rectangle<int> bandRect() const noexcept;
     bool splitAt (int track, int tick, bool noSnap);
     void showClipMenu (int x, int y);
@@ -315,7 +318,7 @@ private:
     juce::ScrollBar trackScrollBar { true };
     juce::TextButton removeTrackButton { "-" }, addTrackButton { "+" };
 
-    PlaylistTool tool = PlaylistTool::Select;
+    PlaylistTool tool = PlaylistTool::Draw;
     int snapTicks = kTicksPerBeat;
 
     Drag drag = Drag::None;
@@ -346,10 +349,11 @@ private:
     Kind groupGrabKind = Kind::None;
     int groupGrabIndex = -1, groupGrabStart = 0, groupGrabTrack = -1;
     int bandStartX = 0, bandStartY = 0, bandEndX = 0, bandEndY = 0;
-    bool bandActive = false, bandAdds = false, bandPlacesClip = false, bandNoSnap = false;
+    bool bandActive = false, bandAdds = false;
     Group bandBase;              // the selection before a Shift+rectangle (it adds to it)
     int rightPressX = 0, rightPressY = 0, eraseLastX = 0, eraseLastY = 0;
     void toggleInGroup (Kind kind, int index); // Shift+click on a clip
+    void selectToolPress (Kind kind, int index, int tick, const juce::MouseEvent& e);
 
     int armedTrack = 0;                          // the selected track (named so before 0.36.0, when it was also the one recorded)
     std::array<bool, kMaxPlaylistTracks> recordArms {}; // the tracks Record writes to

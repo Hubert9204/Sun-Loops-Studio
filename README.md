@@ -39,7 +39,7 @@ Sun Loops Studio is inspired by the workflow of loop-based DAWs such as FL Studi
 that uses no code, names, graphics or assets from other products, and it is not affiliated with or endorsed by
 their makers.
 
-**Status: alpha (0.58.0).** It builds, more than 1,600 automated checks pass and every feature has been exercised in a virtual
+**Status: alpha (0.59.0).** It builds, more than 1,600 automated checks pass and every feature has been exercised in a virtual
 display. The AppImage runs on Nobara; playback was first confirmed on a real Nobara machine with version 0.3. Most of what came
 later (recording, MIDI hardware, plugins, the synthesizers' sound) was tested headless and in a virtual display with a silent audio
 device, and is now being tried on real hardware. **Plugins (VST3, LV2, LADSPA)** work as instruments and as mixer effects since 0.17.0;
@@ -78,7 +78,7 @@ plugins. See [docs/roadmap.md](docs/roadmap.md) for exactly what is and is not v
   built-in sounds, as a new pattern. Made by rules and chance (no AI, nothing online); each variation is different.
 - **Patterns and Playlist** - several patterns (new, cloned, renamed or deleted from buttons above the playlist), arranged
   as clips on tracks (0.44.0: 4 free tracks plus one per pattern, added automatically with each new pattern, and **-** / **+** to
-  remove or add tracks by hand, up to 128; each with its own name and colour, and clips may lie over each other: 0.33.0); patterns are 4 to 64 quarters long, each with its own length (0.56.0), and pattern clips move by grid squares (or freely with Alt), so they can start out of step with each other (0.42.0); a rectangle dragged from an empty place selects several clips to move, copy or delete together, and a right-button drag erases every clip it passes over (0.57.0). A *Pattern / Song* switch chooses between looping the selected pattern and playing the whole
+  remove or add tracks by hand, up to 128; each with its own name and colour, and clips may lie over each other: 0.33.0); patterns are 4 to 64 quarters long, each with its own length (0.56.0), and pattern clips move by grid squares (or freely with Alt), so they can start out of step with each other (0.42.0); the Select tool drags a rectangle that selects several clips (0.59.0) to move, copy or delete together, and a right-button drag erases every clip it passes over (0.57.0). A *Pattern / Song* switch chooses between looping the selected pattern and playing the whole
   playlist. **Click the ruler to move the playhead, even while playing; right-drag on it to draw a loop region** (right-click it to move, resize or delete it).
 - **Audio in the Playlist** - drag audio files (`.wav .aiff .flac .ogg .oga .mp3 .aac`) or video files (their sound
   track) from the file manager onto the Playlist: they become clips with a waveform. **Select, Split, Cut, Erase and Zoom

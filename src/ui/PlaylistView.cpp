@@ -36,11 +36,13 @@ PlaylistView::PlaylistView (Arrangement& arrangementToEdit) : timeline (arrangem
     redoButton.onClick = [this] { timeline.redo(); updateUndoButtons(); };
 
     const struct { juce::TextButton* button; PlaylistTool tool; const char* tip; } tools[] = {
-        { &selectTool, PlaylistTool::Select, "Select and move clips; drag an edge to trim; click empty space to place a pattern (1)" },
+        { &drawTool,   PlaylistTool::Draw,   "Draw: click empty space to place a pattern (drag to lengthen it); drag a clip to move it, an edge to trim it (1)" },
         { &splitTool,  PlaylistTool::Split,  "Split: click a clip to cut it in two at that point (2). The grid decides where." },
         { &cutTool,    PlaylistTool::Cut,    "Cut: drag across a clip to remove that stretch of it (3)" },
         { &eraseTool,  PlaylistTool::Erase,  "Erase: click a clip to delete it, or drag across several (4)" },
-        { &zoomTool,   PlaylistTool::Zoom,   "Zoom: click to zoom in, right click to zoom out, drag to zoom to a stretch (5)" } };
+        { &zoomTool,   PlaylistTool::Zoom,   "Zoom: click to zoom in, right click to zoom out, drag to zoom to a stretch (5)" },
+        { &selectTool, PlaylistTool::Select, "Select: drag from empty space to select every clip in the rectangle (Shift adds), then drag them, "
+                                             "Delete, Ctrl+C, Ctrl+D (6)" } };
     for (const auto& t : tools)
     {
         auto* button = t.button;
@@ -53,7 +55,7 @@ PlaylistView::PlaylistView (Arrangement& arrangementToEdit) : timeline (arrangem
         addAndMakeVisible (button);
     }
     timeline.onToolChanged = [this] (PlaylistTool) { syncToolButtons(); };
-    selectTool.setToggleState (true, juce::dontSendNotification);
+    drawTool.setToggleState (true, juce::dontSendNotification);
 
     struct SnapOption { const char* label; int ticks; };
     // "Bar" and "1/2" follow the time signature (0.46.0): 0 and -1 stand for them.
@@ -116,8 +118,8 @@ PlaylistView::PlaylistView (Arrangement& arrangementToEdit) : timeline (arrangem
                                                                           &zoomInButton, &zoomFitButton, &positionLabel, &selectionLabel, &timeline })
         addAndMakeVisible (c);
 
-    for (juce::Button* b : std::initializer_list<juce::Button*> { &newButton, &renameButton, &deleteButton, &undoButton, &redoButton, &selectTool,
-                                                                   &splitTool, &cutTool, &eraseTool, &zoomTool, &zoomOutButton, &zoomInButton, &zoomFitButton })
+    for (juce::Button* b : std::initializer_list<juce::Button*> { &newButton, &renameButton, &deleteButton, &undoButton, &redoButton, &drawTool,
+                                                                   &splitTool, &cutTool, &eraseTool, &zoomTool, &selectTool, &zoomOutButton, &zoomInButton, &zoomFitButton })
         b->setMouseClickGrabsKeyboardFocus (false); // Space must keep playing after a click here
 
     updateUndoButtons();
@@ -147,6 +149,7 @@ void PlaylistView::updateUndoButtons()
 
 void PlaylistView::syncToolButtons()
 {
+    drawTool.setToggleState (timeline.getTool() == PlaylistTool::Draw, juce::dontSendNotification);
     selectTool.setToggleState (timeline.getTool() == PlaylistTool::Select, juce::dontSendNotification);
     splitTool.setToggleState (timeline.getTool() == PlaylistTool::Split, juce::dontSendNotification);
     cutTool.setToggleState (timeline.getTool() == PlaylistTool::Cut, juce::dontSendNotification);
@@ -178,7 +181,7 @@ void PlaylistView::resized()
     redoButton.setBounds (row1.removeFromLeft (52));
 
     auto row2 = area.removeFromTop (kToolbarRowHeight + 4).reduced (4, 2);
-    for (auto* b : { &selectTool, &splitTool, &cutTool, &eraseTool, &zoomTool })
+    for (auto* b : { &drawTool, &splitTool, &cutTool, &eraseTool, &zoomTool, &selectTool })
     {
         b->setBounds (row2.removeFromLeft (58));
         row2.removeFromLeft (2);

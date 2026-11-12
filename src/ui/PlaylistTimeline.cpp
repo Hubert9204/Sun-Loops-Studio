@@ -344,11 +344,12 @@ void PlaylistTimeline::setTool (PlaylistTool newTool)
     tool = newTool;
     switch (tool)
     {
-        case PlaylistTool::Select: setMouseCursor (juce::MouseCursor::NormalCursor); break;
+        case PlaylistTool::Draw: setMouseCursor (juce::MouseCursor::NormalCursor); break;
         case PlaylistTool::Split:  setMouseCursor (juce::MouseCursor::IBeamCursor); break;
         case PlaylistTool::Cut:    setMouseCursor (juce::MouseCursor::CrosshairCursor); break;
         case PlaylistTool::Erase:  setMouseCursor (juce::MouseCursor::PointingHandCursor); break;
         case PlaylistTool::Zoom:   setMouseCursor (juce::MouseCursor::CrosshairCursor); break;
+        case PlaylistTool::Select: setMouseCursor (juce::MouseCursor::CrosshairCursor); break;
     }
     repaint();
 }
@@ -2349,11 +2350,12 @@ bool PlaylistTimeline::handleKey (const juce::KeyPress& key)
     };
     switch (key.getTextCharacter())
     {
-        case '1': changeTool (PlaylistTool::Select); return true;
+        case '1': changeTool (PlaylistTool::Draw); return true;
         case '2': changeTool (PlaylistTool::Split); return true;
         case '3': changeTool (PlaylistTool::Cut); return true;
         case '4': changeTool (PlaylistTool::Erase); return true;
         case '5': changeTool (PlaylistTool::Zoom); return true;
+        case '6': changeTool (PlaylistTool::Select); return true;
         case '+': case '=': zoomBy (1.5, lastMouseX); return true;
         case '-': zoomBy (1.0 / 1.5, lastMouseX); return true;
         case 's': case 'S':
@@ -2401,7 +2403,7 @@ void PlaylistTimeline::mouseMove (const juce::MouseEvent& e)
     if (tool == PlaylistTool::Split || tool == PlaylistTool::Cut)
         repaint();
 
-    if (tool == PlaylistTool::Select && e.x >= kNameWidth && inLanes (e.y))
+    if (tool == PlaylistTool::Draw && e.x >= kNameWidth && inLanes (e.y))
     {
         const int hitClip = arrangement.automationClipAt (yToLane (e.y), xToTick (e.x));
         const bool edge = hitClip >= 0 && e.x >= automationClipRect (arrangement.automationClips[static_cast<size_t> (hitClip)]).getRight() - kEdgeGrab;
@@ -2409,8 +2411,8 @@ void PlaylistTimeline::mouseMove (const juce::MouseEvent& e)
         return;
     }
 
-    // Resize cursor over the edge of an audio clip (Select tool).
-    if (tool == PlaylistTool::Select && hoverTrack >= 0)
+    // Resize cursor over the edge of an audio clip (Draw tool).
+    if (tool == PlaylistTool::Draw && hoverTrack >= 0)
     {
         const int audio = arrangement.audioClipAt (hoverTrack, hoverTick);
         bool edge = false;
@@ -2541,30 +2543,19 @@ void PlaylistTimeline::mouseDown (const juce::MouseEvent& e)
                 notifyChanged();
             return;
         }
+        if (tool == PlaylistTool::Select)
+        {
+            selectToolPress (Kind::Automation, hitClip, tick, e);
+            return;
+        }
         if (hitClip < 0)
         {
-            if (tool == PlaylistTool::Select)
-            {
-                drag = Drag::RubberBand; // a drag selects with a rectangle; a click clears the selection
-                bandStartX = bandEndX = e.x;
-                bandStartY = bandEndY = e.y;
-                bandActive = false;
-                bandAdds = e.mods.isShiftDown();
-                bandBase = bandAdds ? group : Group {};
-                bandPlacesClip = false;
-            }
-            else
-                clearSelection();
+            clearSelection();
             return;
         }
-        if (tool != PlaylistTool::Select)
+        if (tool != PlaylistTool::Draw)
         {
             select (Kind::Automation, hitClip);
-            return;
-        }
-        if (e.mods.isShiftDown())
-        {
-            toggleInGroup (Kind::Automation, hitClip);
             return;
         }
         const bool atEdge = e.x >= automationClipRect (arrangement.automationClips[static_cast<size_t> (hitClip)]).getRight() - kEdgeGrab;
@@ -2664,12 +2655,16 @@ void PlaylistTimeline::mouseDown (const juce::MouseEvent& e)
         return;
     }
 
-    // Select tool.
-    if (e.mods.isShiftDown() && (audioHit >= 0 || hit >= 0))
+    if (tool == PlaylistTool::Select)
     {
-        toggleInGroup (audioHit >= 0 ? Kind::Audio : Kind::Pattern, audioHit >= 0 ? audioHit : hit);
+        if (audioHit >= 0)
+            selectToolPress (Kind::Audio, audioHit, tick, e);
+        else
+            selectToolPress (Kind::Pattern, hit, tick, e);
         return;
     }
+
+    // Draw tool.
     if (audioHit >= 0)
     {
         const auto& clip = arrangement.audioClips[static_cast<size_t> (audioHit)];
@@ -2698,15 +2693,12 @@ void PlaylistTimeline::mouseDown (const juce::MouseEvent& e)
 
     if (hit < 0)
     {
-        // Empty space (0.57.0): a drag draws the selection rectangle; a click (the button comes up where it went down) puts a clip there.
-        drag = Drag::RubberBand;
-        bandStartX = bandEndX = e.x;
-        bandStartY = bandEndY = e.y;
-        bandActive = false;
-        bandAdds = e.mods.isShiftDown();
-        bandBase = bandAdds ? group : Group {};
-        bandPlacesClip = true;
-        bandNoSnap = noSnap;
+        // Empty space: a new clip there; dragging right away lengthens it, in the same undo step (as before 0.57.0).
+        if (placeClipAt (track, tick, noSnap))
+        {
+            dragClip = static_cast<int> (arrangement.clips.size()) - 1;
+            drag = Drag::ResizePattern;
+        }
         return;
     }
 
@@ -2731,7 +2723,31 @@ void PlaylistTimeline::mouseDown (const juce::MouseEvent& e)
 
 // A new clip: one pattern long, on the grid square clicked (anywhere with Alt) - not on whole pattern lengths (0.42.0).
 // On a track dedicated to a pattern that pattern goes there (0.44.0); on a free track, the one selected in the pattern box.
-void PlaylistTimeline::placeClipAt (int track, int tick, bool noSnap)
+// The Select tool (0.59.0): on empty space a press starts the selection rectangle (a click selects nothing); on a clip, Shift adds it
+// to the selection or takes it out, otherwise the press selects it (or keeps the selection it belongs to) and a drag moves them all.
+void PlaylistTimeline::selectToolPress (Kind kind, int index, int tick, const juce::MouseEvent& e)
+{
+    if (index < 0)
+    {
+        drag = Drag::RubberBand;
+        bandStartX = bandEndX = e.x;
+        bandStartY = bandEndY = e.y;
+        bandActive = false;
+        bandAdds = e.mods.isShiftDown();
+        bandBase = bandAdds ? group : Group {};
+        return;
+    }
+    if (e.mods.isShiftDown())
+    {
+        toggleInGroup (kind, index);
+        return;
+    }
+    if (! isSelected (kind, index))
+        select (kind, index);
+    startGroupMove (kind, index, tick);
+}
+
+bool PlaylistTimeline::placeClipAt (int track, int tick, bool noSnap)
 {
     const int ownPattern = track >= 0 && track < arrangement.trackCount() ? arrangement.playlistTracks[static_cast<size_t> (track)].pattern : -1;
     const int placed = ownPattern >= 0 && ownPattern < static_cast<int> (arrangement.patterns.size()) ? ownPattern : selectedPattern;
@@ -2741,13 +2757,14 @@ void PlaylistTimeline::placeClipAt (int track, int tick, bool noSnap)
     if (! arrangement.canPlace (c))
     {
         clearSelection();
-        return;
+        return false;
     }
     beginEdit();
     commitPendingUndo();
     arrangement.clips.push_back (c);
     select (Kind::Pattern, static_cast<int> (arrangement.clips.size()) - 1);
     notifyChanged();
+    return true;
 }
 
 void PlaylistTimeline::toggleInGroup (Kind kind, int index)
@@ -2981,12 +2998,7 @@ void PlaylistTimeline::mouseUp (const juce::MouseEvent& e)
             repaint();
         }
         else if (! bandAdds)
-        {
-            if (bandPlacesClip && inTracks (bandStartY))
-                placeClipAt (yToTrack (bandStartY), xToTick (bandStartX), bandNoSnap);
-            else
-                clearSelection();
-        }
+            clearSelection(); // a click on empty space with the Select tool: nothing selected
         pendingUndoValid = false;
         return;
     }
@@ -3047,7 +3059,7 @@ void PlaylistTimeline::mouseDoubleClick (const juce::MouseEvent& e)
         renameTrack (yToTrack (e.y)); // a double click on a track's name renames it (0.33.0)
         return;
     }
-    if (e.x < kNameWidth || e.y < kRulerHeight || tool != PlaylistTool::Select)
+    if (e.x < kNameWidth || e.y < kRulerHeight || (tool != PlaylistTool::Draw && tool != PlaylistTool::Select))
         return;
 
     if (inLanes (e.y))

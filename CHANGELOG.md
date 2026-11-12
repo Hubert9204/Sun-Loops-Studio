@@ -2,6 +2,17 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.59.0 - 2026-11-12
+
+### Changed
+- **Playlist: the selection rectangle is a tool of its own, Select** (key 6, last button of the toolbar). The default tool is now
+  called **Draw** (key 1; it was called Select) and its left button no longer draws a rectangle: a click on empty space places a
+  clip, and dragging right away lengthens it, as before 0.57.0.
+- With the **Select** tool a drag from an empty place selects every clip the rectangle touches (Shift adds), Shift+click adds or
+  removes one clip, a click on empty space selects nothing and places no clip, and dragging a clip moves it or the whole selection.
+  Delete, Ctrl+C / Ctrl+X / Ctrl+V, Ctrl+D, Ctrl+A and Escape work on the selection with any tool, and the right-button eraser
+  works as before.
+
 ## 0.58.0 - 2026-11-12
 
 ### Added

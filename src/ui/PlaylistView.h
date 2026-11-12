@@ -100,7 +100,8 @@ private:
     juce::TextButton deleteButton { "Delete" };
     juce::TextButton undoButton { "Undo" };
     juce::TextButton redoButton { "Redo" };
-    juce::TextButton selectTool { "Select" };
+    juce::TextButton drawTool { "Draw" };     // 0.59.0: was "Select"
+    juce::TextButton selectTool { "Select" }; // 0.59.0: the selection rectangle
     juce::TextButton splitTool { "Split" };
     juce::TextButton cutTool { "Cut" };
     juce::TextButton eraseTool { "Erase" };
