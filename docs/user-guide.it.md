@@ -7,79 +7,56 @@ Questa guida descrive cosa fa oggi Sun Loops Studio. Limiti e funzioni mancanti 
 ## Novità dalla 0.60.0 alla 0.62.0 (allineamento a FL Studio)
 
 Le tre versioni nate dal confronto modulo per modulo con FL Studio (il confronto completo, in inglese, è in
-[fl-studio-alignment.md](fl-studio-alignment.md); la descrizione dettagliata di ogni funzione è nella [guida inglese](user-guide.md)).
+[fl-studio-alignment.md](fl-studio-alignment.md)). Ogni novità è descritta nel suo capitolo:
 
-**Finestra e barra (0.60.0).** La barra dei menu come in FL Studio (**FILE, EDIT, ADD, PATTERNS, VIEW, OPTIONS, TOOLS, HELP**) con
-la barra dei suggerimenti; **Play** e **Stop** separati, pannello del tempo (battuta.quarto.tick e minuti:secondi), **snap
-globale** (le griglie di Piano Roll e Playlist lo seguono con *Main*), pannello CPU, e i pulsanti delle finestre nell'ordine di FL
-Studio (*Playlist F5, Piano roll F7, Channel rack F6, Mixer F9, Browser F8, Plugin picker*). Il **Plugin picker** elenca tutti
-gli strumenti e gli effetti, interni e plugin, con ricerca.
-
-**Barra (0.62.0).** **Pitch**: sposta tutte le note di synth, sampler e plugin da -12 a +12 semitoni (le batterie restano
-dove sono). Sotto la CPU, **RAM**: la memoria usata dal programma. **Step edit**: a canzone ferma, ogni nota suonata (tasti del
-computer o tastiera MIDI) viene scritta nel pattern al marcatore di inizio, che poi avanza dello snap; più tasti insieme
-fanno un accordo.
-
-**Browser (0.62.0).** Quattro schede sopra la ricerca: **All**, **Project** (il progetto corrente: pattern, canali, campioni,
-effetti, automazione; un clic porta lì), **Plugins** e **★** (i preferiti: clic destro su un suono, un preset o un plugin >
-*Add to the favourites*).
-
-**Channel Rack.** Ordine della riga come in FL Studio e menu ≡ (0.60.0); *Steps > Fill each 2 / 4 / 8 steps* (0.61.0). Dalla
-0.62.0: **gruppi filtro** (menu del canale > *Filter group*; la casella accanto a ≡ mostra tutti i canali o un solo gruppo),
-**colori** dei canali, **Graph** (l'editor a barre: velocity, pan, release e fine pitch di ogni step del canale selezionato),
-il **canale Layer** (non suona: le sue note sono suonate dai canali spuntati nel suo menu), e nel menu del canale
-**Polyphony** (Mono, numero massimo di note, Portamento) e **Cut group / Cut by group** (una nota di un canale tronca quelle di
-un altro: charleston chiuso e aperto).
-
-**Sampler.** *Reverse*, *Start*, *Fade in*, *Fade out* (0.61.0). Dalla 0.62.0: loop **Ping-pong** e **Crossfade**, un **LFO**
-(su pitch, cutoff, pan o volume), un **inviluppo del pitch** e *Envelope to cutoff*.
-
-**Piano Roll.** Canale di destinazione e note fantasma (0.60.0); strumenti *Reverse*, *Glue*, *Flam* (0.61.0). Dalla 0.62.0:
-la casella degli strumenti **Draw / Paint / Mute / Slice**; la corsia degli eventi mostra a scelta **Velocity, Pan, Release
-o Fine pitch** per ogni nota (clic sull'etichetta nell'angolo della corsia); **colori delle note**; nel menu Tools **Limit**
-(porta le note in una, due o tre ottave) e **LFO** (un'onda sui valori della corsia mostrata).
-
-**Playlist.** Strumenti *Mute* e *Slip*, M / S sulle tracce (0.60.0); strumento *Paint* e **marcatori** con nome (0.61.0).
-Dalla 0.62.0:
-- **azioni dei marcatori** (menu del marcatore > *Action*): *Loop* (torna al marcatore precedente), *Skip* (salta al
-  successivo), *Pause* (si ferma lì), *Start* (da dove parte Play);
-- menu della traccia: **Lock** (le clip non si possono modificare), **Group with the track above** (gruppi: mute e solo
-  della prima traccia valgono per tutte, e il triangolo le ripiega), **Consolidate** (le clip pattern della traccia diventano
-  una clip audio; le clip pattern restano, mute);
-- menu della clip pattern: **Make unique** (la clip ottiene una copia propria del pattern) e *Consolidate to audio*;
-- **Performance mode** (*View > Performance mode...*): ogni traccia della Playlist con clip pattern è una riga, ogni clip
-  una cella. Un clic lancia la clip alla battuta successiva e la ripete; un'altra cella della stessa riga la sostituisce
-  alla battuta dopo; il quadratino ferma la riga; *Scene n* lancia una colonna intera; *Launch on* sceglie il confine
-  (battuta, 2 o 4 battute, quarto, sedicesimo). Mentre è attiva, l'arrangiamento della Playlist non suona. Per ora le
-  celle si lanciano con il mouse (nessuna mappatura di controller MIDI).
-
-**Mixer.** Su ogni traccia separazione stereo, Ø (polarità) e ⇄ (scambio sinistra / destra) (0.61.0). Dalla 0.62.0:
-- **instradamento libero**: il pulsante **> M** sopra M e S manda la traccia al master, ad altre tracce (fino a quattro,
-  ognuna con il suo livello) o a entrambi; *Route to this track only* crea un bus;
-- **compensazione del ritardo dei plugin**, automatica: se un effetto ritarda la sua traccia (il look-ahead del Maximizer,
-  la latenza dichiarata da un plugin), le altre tracce aspettano; l'esportazione toglie il ritardo dall'inizio del file.
-
-**Effetti.** Nella 0.61.0: Parametric EQ 2, Bass Boost, Multiband Compressor, Gate, Squeeze, Flanger, Vibrato, Panomatic.
-Nella 0.62.0:
-- **WaveShaper** (sei curve di distorsione, con Amount e Bias);
-- **Convolver** (riverbero a convoluzione senza latenza: cinque ambienti interni o un file audio come risposta
-  all'impulso, *Load IR...*);
-- **Vocoder** (8, 12 o 16 bande; la voce è un'altra traccia del mixer, scelta in *Modulator*);
-- **Peak Controller** (il livello della sua traccia, più un LFO, muove un parametro di un altro effetto o plugin su
-  qualsiasi traccia; la riga sotto il nome dice che cosa sta pilotando; *Mute* fa sì che la traccia serva solo da comando).
+- **La finestra**: barra dei menu e pannelli come in FL Studio, snap globale, Plugin picker (0.60.0); master pitch, RAM,
+  step edit (0.62.0).
+- **Browser**: schede, preferiti, il progetto corrente (0.62.0).
+- **Channel Rack**: menu ≡, riempimento degli step (0.60.0 - 0.61.0); gruppi filtro, colori, Graph, canale Layer,
+  polifonia e cut group (0.62.0).
+- **Sampler**: Reverse, Start, Fade (0.61.0); loop ping-pong e crossfade, LFO, inviluppo del pitch (0.62.0).
+- **Piano Roll**: canale di destinazione e note fantasma (0.60.0); Reverse, Glue, Flam (0.61.0); strumenti Paint / Mute /
+  Slice, corsie Pan / Release / Fine pitch, colori delle note, Limit, LFO (0.62.0).
+- **Playlist**: nove strumenti, M / S sulle tracce (0.60.0); Paint e marcatori (0.61.0); azioni dei marcatori, blocco e
+  gruppi di tracce, Make unique, Consolidate, performance mode (0.62.0).
+- **Mixer**: separazione stereo, Ø, ⇄ e otto effetti nuovi (0.61.0); instradamento libero, compensazione del ritardo,
+  WaveShaper, Convolver, Vocoder, Peak Controller (0.62.0).
 
 ## La finestra
 
-Una **barra degli strumenti** su due righe, una riga di stato e sotto il **browser** (barra laterale a sinistra) e
+Disposta come quella di FL Studio (0.60.0): una **barra dei menu** con la **barra dei suggerimenti**, una riga di **pannelli**,
+il **pannello delle scorciatoie** che apre le finestre, una riga di stato e sotto il **browser** (barra laterale a sinistra) e
 l'**area di lavoro**, dove i pannelli fluttuano.
 
-Barra, prima riga: **File** (progetti, vedi sotto), **Play / Stop**, pulsante **Pattern / Song**, il **menu dei pattern** con **+**, **BPM**
-(40-240), volume **Master** con il suo indicatore, il pulsante **Metronome**, **Record** (con una freccia per le opzioni) e **Audio...**
-(impostazioni del dispositivo). L'esportazione è nel menu **File**.
+**Barra dei menu**: **FILE** (progetti, vedi sotto), **EDIT** (annulla, ripristina e, per il canale selezionato, *clear notes*,
+*rename*, *clone*, *delete*), **ADD** (un canale: *Synth*, *Sampler*, *Drum machine*, *Slicer*, *Layer*, SunBurst, HexForge, i
+plugin strumento trovati, e *More plugins...* che apre il Plugin picker), **PATTERNS** (nuovo, clona, *Loop Starter*, rinomina,
+elimina, *Pattern length*, precedente / successivo), **VIEW** (le finestre, il browser, i misuratori, *Performance mode...*,
+*Reset the layout*), **OPTIONS** (impostazioni audio, metronomo, opzioni di registrazione, *Typing keyboard to piano*, il suono di
+avvio), **TOOLS** (Helios, Loop Starter, Slicer, le importazioni, lo scambio con FL Studio, *Export project with samples*,
+*Scan for plugins*) e **HELP**. La **barra dei suggerimenti** accanto ai menu dice cosa fa il controllo sotto il mouse.
 
-Barra, seconda riga: i pulsanti che mostrano o nascondono il browser (**Browser F8**) e i pannelli (**Rack F6**,
-**Playlist F5**, **Piano F7**, **Mixer F9**), **Reset** (disposizione predefinita dei pannelli) e **Clear notes** (svuota il canale selezionato nel
-pattern corrente), poi **Meters**, **Typing keys**, **Helios** e **Help**.
+**Pannelli**, da sinistra: il **trasporto** (**Play**, acceso mentre suona, **Stop**, **Record** con la freccia delle opzioni,
+**Rec notes**, il commutatore **Pattern / Song**), il **pannello dei pattern** (**◂ ▸** precedente / successivo, il menu dei
+pattern, **+**), **BPM** (40-240; clic sul punto per il tap tempo e i cambi di tempo) e il **metro**, il **pannello del tempo**
+(la posizione del brano come *battuta.quarto.tick* e *minuti:secondi*), lo **snap globale** (*Bar* ... *1/64*, *Off*: la griglia che
+Piano Roll e Playlist usano quando il loro menu Snap dice *Main*), il volume **Master** con il suo indicatore e il pannello **CPU**
+(quanto del tempo di ogni buffer audio serve all'audio; vicino al 100 % usa un buffer più grande) con sotto la **RAM** (0.62.0:
+la memoria usata dal programma, su Linux).
+
+**Pannello delle scorciatoie**, nell'ordine di FL Studio: **Playlist F5**, **Piano roll F7**, **Channel rack F6**, **Mixer F9**,
+**Browser F8**, **Plugin picker**, poi **Reset** (disposizione predefinita dei pannelli), **Pitch**, **Step edit**, e a destra
+**Metronome**, **Typing keys**, **Meters**, **Helios** e **Audio...** (impostazioni del dispositivo). L'esportazione è nel menu
+**FILE**.
+
+### Master pitch e step edit (0.62.0)
+
+- **Pitch** sposta tutte le note di synth, sampler e plugin strumento da -12 a +12 semitoni, come il pitch principale di FL
+  Studio (i canali drum restano come sono; i plugin ricevono tasti interi; doppio clic per 0; si salva col progetto).
+- **Step edit**: a canzone ferma, ogni nota che suoni - tasti del computer o tastiera MIDI - viene scritta nel pattern del canale
+  che suoni, al **marcatore di inizio** del pattern (clic sul righello del Piano Roll per spostarlo); quando lasci tutti i tasti
+  il marcatore avanza dello snap della barra (un sedicesimo se lo snap è una battuta o *Off*). Più tasti tenuti insieme fanno un
+  accordo sullo stesso step. Mentre il brano suona, a registrare è *Rec notes*, come prima.
 
 **Help** (0.55.0): *Helios*, la *User guide* su GitHub (in italiano su un sistema in italiano), **Join the Sun Loops Discord** (la
 community: domande, problemi, musica), *Sun Loops Studio on GitHub*, *Report a problem or suggest an idea* (una nuova issue su GitHub),
@@ -244,7 +221,8 @@ internet, non viene inviato nulla.
 
 Come trova le cose: cerca le parole della domanda (senza accenti, plurali e desinenze comuni, ignorando parole come "come", "un",
 "how", "the"), dà più peso ai titoli, capisce alcuni nomi di FL Studio (insert = mixer, Slicex = Slicer, Newtone = editor di
-intonazione, VST = plugin) e preferisce il manuale nella lingua della domanda. Non capisce le frasi: se non esce nulla di utile, prova
+intonazione, VST = plugin, Vocodex = Vocoder, PDC = compensazione del ritardo, live = performance mode) e preferisce il manuale
+nella lingua della domanda. Tra i comandi ci sono anche *Plugin picker*, *Performance mode*, *Step edit* e *Typing keys*. Non capisce le frasi: se non esce nulla di utile, prova
 con meno parole o con altre.
 
 ## Tastiera
@@ -317,10 +295,28 @@ nel file manager; **Refresh** cerca file nuovi (il browser non controlla il disc
 Sono supportati solo i trascinamenti che partono dal browser; trascinare file dal file manager del desktop sul programma
 non è ancora implementato (copiali nella cartella Samples e premi Refresh).
 
+### Schede, preferiti e progetto corrente (0.62.0)
+
+Sopra la ricerca, quattro schede scelgono cosa mostra l'albero: **All** (tutto), **Project** (solo la cartella *Current
+project*), **Plugins** (i plugin trovati) e **★** (i preferiti). La scheda scelta viene ricordata.
+
+- **Preferiti**: tasto destro su un suono, un preset, uno strumento o un plugin > *Add to the favourites*. Compaiono sotto ★ e in
+  una cartella *Favourites* in cima ad *All*; si trascinano e si ascoltano come tutto il resto e restano da una sessione all'altra.
+  *Remove from the favourites* è nello stesso menu.
+- **Progetto corrente** (come la cartella *Current project* di FL Studio): *Patterns* (un clic seleziona il pattern), *Channels*
+  (un clic seleziona il canale e mostra il rack), *Samples* (i file audio usati dai canali sampler e dalle clip audio della
+  Playlist: clic per ascoltarli, trascinali per riusarli), *Effects* (ogni traccia del mixer con effetti e quali sono: un clic
+  apre il mixer su quella traccia) e *Automation* (i bersagli delle clip di automazione). La cartella segue il progetto mentre
+  cambia.
+
 ## Channel Rack
 
-Una riga per canale: un display **Track N** e il nome, **M** (mute), **S** (solo), volume, pan, le manopole **Pitch** e
-**Swing**, un indicatore di livello e, a destra, l'area degli step.
+Una riga per canale, nell'ordine di FL Studio dalla 0.60.0: **M** (mute), **S** (solo), pan, volume, il display **Track N**, il
+**pulsante del nome** del canale (acceso per il canale selezionato: clic per selezionarlo, doppio clic per aprire la sua finestra,
+tasto destro per il menu), le manopole **Pitch** e **Swing**, un indicatore di livello, *Load* su un sampler e, a destra, l'area
+degli step. La barra sopra le righe ha il menu **≡** delle opzioni del canale (0.60.0: rinomina, clona, elimina, sposta su / giù,
+assegna una traccia libera del mixer, apri il piano roll, aggiungi un canale), il **filtro dei gruppi**, il pulsante **Graph**
+(0.62.0, vedi sotto) e la lunghezza del pattern corrente con **-** / **+**.
 
 - **Volume** da 0 a 1,5 (predefinito 0,8) e **pan** da sinistra a destra; doppio clic su un cursore per
   riportarlo al valore predefinito.
@@ -360,13 +356,36 @@ Una riga per canale: un display **Track N** e il nome, **M** (mute), **S** (solo
 - **+ Add channel** sotto l'ultima riga aggiunge un canale synth, sampler o drum machine, fino a 32 canali in tutto
   (i canali possono condividere le tracce del mixer, che possono essere fino a 500).
 
+### Gruppi filtro, colori, editor a barre e canale Layer (0.62.0)
+
+- **Gruppi filtro** (come il selettore di gruppo in cima al rack di FL Studio): tasto destro su un canale > *Filter group* > *New
+  group...* (o un gruppo esistente) mette il canale in un gruppo; la casella accanto a ≡ mostra **All** (tutti i canali) o solo
+  quelli di un gruppo. Un gruppo esiste finché un canale ci sta dentro. I gruppi si salvano col progetto.
+- **Colore**: tasto destro su un canale > *Colour* dà al pulsante del nome uno di 16 colori (*Default* lo toglie).
+- **Graph** (l'editor a barre di FL Studio): il pulsante accanto alla casella dei gruppi apre sotto le righe una striscia con una
+  barra per ogni step del canale **selezionato**, allineata ai suoi step. La casella a sinistra sceglie cosa mostrano le barre:
+  *Velocity*, *Pan*, *Release* o *Fine pitch* (±100 cent; pan e fine pitch crescono dalla linea centrale). Trascina sulle barre per
+  impostarle; il tasto destro riporta una barra al valore predefinito. Sono gli stessi valori delle corsie degli eventi del
+  Piano Roll.
+- **Canale Layer** (*ADD > Layer channel*, oppure *Instrument > Layer*): un canale che non suona da solo. Le sue note - step,
+  note del Piano Roll, note suonate a mano - sono suonate dai canali spuntati in *Layer: the channels that play its notes* nel suo
+  menu, ognuno con il proprio suono, pitch, swing e traccia del mixer. Un layer non può suonare un altro layer. Spostando o
+  eliminando canali le spunte restano sui canali giusti.
+- **Polifonia** e **cut group** (menu del canale): *Mono* (una nota alla volta; con *Portamento* il pitch scivola alla nota
+  successiva), *Maximum notes* (la nota più vecchia lascia il posto), *Cut group* 1-8 e *Cut by group* (una nota di un canale del
+  gruppo tronca le note dei canali che ne dipendono: l'hi-hat chiuso che tronca quello aperto; *Cut itself* per un canale la cui
+  nota nuova tronca quella vecchia).
+
 ### Menu del tasto destro su un canale
 
 | Voce | Effetto |
 | --- | --- |
 | Drum machine... | (Canali drum) apre la finestra della drum machine. |
 | Piano roll | Seleziona il canale e apre il Piano Roll per quel canale. |
-| Instrument > Synth / Sampler | Sceglie cosa produce il suono. Passando a Sampler su un canale senza sample ne viene chiesto uno. Il sample resta se torni a Synth. |
+| Steps > Fill each 2 / 4 / 8 steps, Fill every step, Clear the steps | (0.61.0, come il menu degli step di FL Studio) Scrive uno step ogni 2, 4 o 8 step del pattern (o in tutti), oppure li toglie tutti. |
+| Polyphony, Cut group, Cut by group | (0.62.0) Mono, numero massimo di note, portamento; i cut group (vedi sopra). |
+| Colour, Filter group, Layer | (0.62.0) Colore del canale, gruppo filtro, e per un canale Layer i canali che suonano le sue note (vedi sopra). |
+| Instrument > Synth / Sampler / Drum machine / Layer | Sceglie cosa produce il suono. Passando a Sampler su un canale senza sample ne viene chiesto uno. Il sample resta se torni a Synth. |
 | Instrument > Plugin instruments | I plugin strumento trovati dall'ultima scansione: il canale suona il plugin scelto (vedi *Plugin*). |
 | Plugin window... | (Canali plugin) apre la finestra del plugin. Anche il doppio clic sul canale la apre. |
 | Load sample... | Scegli un file WAV, FLAC, OGG o AIFF (si usano i primi 30 secondi). Il canale prende il nome del file. |
@@ -446,6 +465,14 @@ Tasto destro su un canale sampler > **Sampler settings...** apre una finestra pe
   versioni precedenti. Acceso, una nota suona finché è tenuta: **Attack** (entrata), **Decay** fino al livello di **Sustain**, e **Release** dopo la fine
   della nota. Anche le note suonate a mano (piano roll, tastiera MIDI) vengono tenute.
 - **Loop**: *Forward* ripete la parte tra **Loop start** e **Loop end** (in % del sample) finché la nota è tenuta, così un suono corto può durare.
+  **Ping-pong** (0.62.0) la suona avanti, poi indietro, e così via; **Crossfade** (0.62.0) sfuma la fine del loop nel suo inizio
+  perché non faccia clic.
+- **Reverse**, **Start**, **Fade in**, **Fade out** (0.61.0, come *Reverse*, *SMP START*, *IN* e *OUT* del canale sampler di FL
+  Studio): suona il sample al contrario; fa partire la nota più avanti nel sample (0-99 %); fa entrare e uscire il suono in
+  dissolvenza su una parte della durata del sample. Valgono per le note che non vanno in loop.
+- **Modulazione** (0.62.0): un **LFO** con un bersaglio (*Pitch*, *Cutoff*, *Pan* o *Volume*), una velocità e una profondità; un
+  **inviluppo del pitch** (la nota parte fino a due ottave sopra o sotto e scende o sale alla sua altezza nel tempo scelto: il
+  colpo di una cassa, un riser); **Envelope to cutoff** apre (o, negativo, chiude) il filtro con l'inviluppo del volume.
 - **Filter**: *Low-pass*, *High-pass* o *Band-pass*, con **Cutoff** (da 20 Hz a 20 kHz) e **Resonance**. Ogni nota è filtrata per conto suo.
 
 **SoundFont.** *Load SoundFont (.sf2)...* (nel menu del canale o nella finestra del sampler) chiede un file ed elenca i suoi preset (per banco se ce
@@ -555,6 +582,12 @@ di un MIDI importato. I progetti con una drum machine non si aprono con versioni
 
 Sun Loops Studio ospita plugin esterni **VST3**, **LV2** e **LADSPA**, come strumenti e come effetti.
 
+Il **Plugin picker** (0.60.0, come quello di FL Studio: il pulsante *Plugin picker*, *VIEW > Plugin picker* o *ADD > More
+plugins...*) elenca tutti gli strumenti e tutti gli effetti - quelli interni e i plugin trovati - in due elenchi con una casella di
+ricerca. Doppio clic su uno strumento (o *Add channel*) per un canale nuovo, oppure trascinalo sul Channel Rack o sulla Playlist;
+doppio clic su un effetto (o *Add to the selected track*) lo mette nel primo slot libero della traccia del mixer del canale
+selezionato. *Scan plugins again* rifà la scansione descritta sotto.
+
 1. Nel browser apri **Plugin** e clicca **Scan for plugins (VST3, LV2, LADSPA)...**. La scansione gira in background
    (la riga di stato mostra il file che sta leggendo) e cerca nelle cartelle abituali, comprese quelle `lib64` (dove li
    installano Fedora e Nobara): VST3 in `~/.vst3`, `/usr/lib/vst3`, `/usr/lib64/vst3` e le stesse sotto `/usr/local`; LV2 in `~/.lv2`,
@@ -658,7 +691,9 @@ larghezza dell'unison. I tuoi preset vanno in `~/.config/HexForge/Presets`.
 ## Piano Roll
 
 Modifica le note del canale selezionato nel pattern corrente. Il titolo mostra il canale ("Piano Roll - Lead"). È
-chiuso all'avvio e si apre da un canale, come sopra.
+chiuso all'avvio e si apre da un canale, come sopra. La casella del **canale di destinazione** a sinistra della sua barra (0.60.0,
+come la barra del titolo di FL Studio) passa alle note di un altro canale; il pulsante **Ghost** mostra, sbiadite dietro, le note
+degli altri canali del pattern (lì non si modificano). La voce *Main* del menu **Snap** segue lo snap globale (0.60.0).
 
 | Azione | Come |
 | --- | --- |
@@ -695,7 +730,9 @@ chiuso all'avvio e si apre da un canale, come sopra.
   iniziale. L'altezza viene ricordata (0.54.0).
 - **Tools** agisce sulle note selezionate (o su tutte se nessuna è selezionata): Quantize (inizi; inizi e fini; a metà), Humanize
   (leggero / medio / forte), Legato, Staccato, Strum degli accordi (su / giù, veloce / lento), Arpeggio degli accordi (su, giù, su e
-  giù, casuale; ottavi o sedicesimi), Chop (ottavi, sedicesimi, trentaduesimi), Flip, trasposizione di un'ottava, Snap alla scala,
+  giù, casuale; ottavi o sedicesimi), Chop (ottavi, sedicesimi, trentaduesimi), Flip, Reverse (0.61.0: specchia le note nel tempo),
+  Glue (0.61.0: le note della stessa altezza che si toccano o si sovrappongono diventano una), Flam (0.61.0: una nota d'abbellimento
+  più leggera appena prima di ogni nota), trasposizione di un'ottava, Snap alla scala,
   Velocity (crescendo, diminuendo, casuale, fissa).
 - **Generate** scrive nel pattern di questo canale (sostituendo le sue note; **Ctrl+Z** annulla), nella tonalità scelta in Scale:
   una **progressione di accordi** (dodici, dal pop I-V-vi-IV al jazz ii-V-I e a quelle minori; accordi tenuti, stab sincopati, pulsazione
@@ -724,6 +761,20 @@ suo attacco). Funziona su canali synth e sampler e viene salvato nel progetto.
 
 Le note si agganciano ai sedicesimi. Un pattern dura una battuta (4 quarti), se non hai scelto un'altra lunghezza (vedi *Pattern*). Una nota synth termina alla sua lunghezza o alla
 fine del pattern, quale viene prima. Quando apri un canale la vista scorre fino alle sue note.
+
+### Strumenti, corsie degli eventi e colori delle note (0.62.0)
+
+La **casella degli strumenti** nella barra sceglie cosa fa il pulsante sinistro sulla griglia: **Draw** (come descritto sopra),
+**Paint** (trascina lungo una riga per scrivere una nota dopo l'altra, ognuna lunga quanto lo snap), **Mute** (clic su una nota:
+resta, grigia, e non suona; un altro clic la riporta) e **Slice** (clic su una nota per tagliarla in due allo snap).
+
+L'etichetta nell'angolo della **corsia degli eventi** sotto la griglia sceglie cosa mostra e modifica la corsia: *Velocity*,
+**Pan** (per nota, dal centro), **Release** (quanto suona la nota dopo la sua fine, rispetto al release dello strumento) o **Fine
+pitch** (in cent). Tutti gli strumenti suonano questi valori, e si salvano con le note.
+
+Nel menu **Tools**: *Note colour* (16 colori per le note che scrivi dopo o per quelle selezionate), **Limit** (sposta le note
+selezionate di ottave dentro una, due o tre ottave) e **LFO** (scrive un'onda - un ciclo per quarto, per battuta, ogni 2 o ogni 4
+battute - nei valori della corsia mostrata).
 
 ## Pattern
 
@@ -867,21 +918,74 @@ loop, sotto).
 | Ingrandire / rimpicciolire | Rotella del mouse (su: ingrandisce, giù: rimpicciolisce), intorno al mouse, in tutta la playlist. |
 | Scorrere nel tempo | Shift + rotella, rotella laterale o touchpad, oppure la barra di scorrimento. |
 
+### Marcatori (0.61.0) e loro azioni (0.62.0)
+
+Come i marcatori di FL Studio: punti con un nome nel brano. Clic sul righello dove va il marcatore, poi **+ Marker** (accanto ad
+Annulla / Ripristina) e scrivi il nome: compare una bandierina nella riga alta del righello, con una linea tenue lungo le tracce.
+**◂** e **▸** saltano al marcatore precedente e successivo. Clic sulla bandierina per il suo menu: *Jump here*, *Rename...*,
+*Action*, *Delete marker*. I marcatori si salvano col progetto e aggiungerli, rinominarli ed eliminarli si annulla.
+
+**Action** è ciò che fa il trasporto quando ci arriva mentre il brano suona (come le azioni dei marcatori di FL Studio;
+l'esportazione le ignora): **Loop** torna al marcatore precedente (o all'inizio), **Skip** prosegue dal marcatore successivo,
+**Pause** si ferma lì (Play riparte dal marcatore), **Start** è il punto da cui Play fa partire il brano quando l'inizio non è stato
+messo altrove. Un marcatore con un'azione la mostra dopo il nome, con un colore suo.
+
+### Blocco e gruppi di tracce, Make unique, Consolidate (0.62.0)
+
+Tasto destro sul nome di una traccia:
+
+- **Lock**: le clip della traccia non si possono spostare, tagliare, silenziare, eliminare né aggiungere finché non la sblocchi
+  (un lucchetto prima del nome).
+- **Group with the track above**: la traccia entra nel gruppo della traccia sopra; la prima traccia di un gruppo ne è la *testa*.
+  **M** e **S** della testa valgono per tutto il gruppo, e il triangolo prima del suo nome (o *Fold the group*) nasconde le
+  tracce raggruppate e mostra quante sono; le loro clip continuano a suonare.
+- **Consolidate this track's pattern clips to audio**: le renderizza (attraverso le tracce del mixer dei loro canali, senza gli
+  effetti del master, con fino a due secondi di coda) in un file WAV in `Samples/Consolidated` e lo mette sulla traccia come clip
+  audio; le clip di pattern restano, in mute, e Annulla riporta tutto. *Consolidate to audio (this clip)* nel menu di una clip di
+  pattern fa una sola clip.
+- **Make unique** (menu di una clip di pattern): la clip riceve una copia propria del pattern, che si apre per essere modificata;
+  le altre clip del vecchio pattern non cambiano.
+
+### Performance mode (0.62.0)
+
+*VIEW > Performance mode...* apre una finestra in cui le clip di pattern della Playlist si lanciano a mano, come nella performance
+mode di FL Studio. Ogni traccia della Playlist che contiene clip di pattern è una riga; le sue clip, nell'ordine in cui stanno
+sulla traccia, sono le celle. Accendi **Performance mode** (o clicca direttamente una cella):
+
+- un clic su una **cella** fa partire quella clip alla battuta successiva e la ripete finché sulla sua riga non succede altro; una
+  seconda cella della stessa riga le subentra alla battuta dopo. Una cella in attesa lampeggia; quella che suona è accesa;
+- il **quadratino** prima di una riga la ferma alla battuta successiva; **Stop all** ferma tutte le righe;
+- **Scene 1, 2, ...** sopra le colonne lanciano la cella di quella colonna di ogni riga alla stessa battuta;
+- **Launch on** sceglie il confine: la battuta successiva, ogni 2 o 4 battute, il quarto successivo, il sedicesimo successivo.
+
+La prima cella avvia il trasporto; **Stop** termina la performance. Mentre la modalità è attiva l'arrangiamento della Playlist non
+suona (clip di automazione e clip audio non fanno parte della performance); chiudendo la finestra o spegnendo la modalità torna il
+brano. I pattern si possono modificare mentre suonano. Gli scambi sono esatti al campione. Per ora le celle si cliccano: non c'è
+ancora la mappatura di un controller MIDI.
+
 ### Strumenti, griglia, zoom e annulla
 
-La barra sotto il menu dei pattern ha sei strumenti (tasti **1** - **6** con il mouse sopra la linea del tempo):
+La barra sotto il menu dei pattern ha nove strumenti, nell'ordine e con i nomi di FL Studio dalla 0.60.0 (tasti **1** - **9** con il
+mouse sopra la linea del tempo):
 
 | Strumento | Cosa fa |
 | --- | --- |
-| **Draw** (1) | Lo strumento normale (prima della 0.59.0 si chiamava *Select*): clic su un punto vuoto per mettere una clip (trascina per allungarla), clic su una clip per selezionarla, trascina per spostarla, trascina il **bordo sinistro o destro** per accorciarla o allungarla (una clip audio mantiene il suono al suo posto: se ne sente solo di più o di meno), tasto destro per un menu (*Split here, Duplicate, Copy, Delete*, più *Position, gain, pan and fades...*, *Reverse* e *Stretch and pitch...* su una clip audio oppure *Open this pattern* su una clip di pattern), doppio clic su una clip di pattern per aprirla. |
-| **Split** (2) | Clic su una clip per tagliarla in due in quel punto (agganciato alla griglia). Il tasto **S** divide la clip selezionata dove si trova il mouse. |
+| **Draw** (1) | Lo strumento normale (prima della 0.59.0 si chiamava *Select*): clic su un punto vuoto per mettere una clip (trascina per allungarla), clic su una clip per selezionarla, trascina per spostarla, trascina il **bordo sinistro o destro** per accorciarla o allungarla (una clip audio mantiene il suono al suo posto: se ne sente solo di più o di meno), tasto destro per un menu (*Split here, Duplicate, Copy, Delete*, più *Position, gain, pan and fades...*, *Reverse* e *Stretch and pitch...* su una clip audio oppure *Open this pattern*, *Make unique* e *Consolidate to audio* su una clip di pattern), doppio clic su una clip di pattern per aprirla. |
+| **Paint** (9) | (0.61.0) Come Draw su un punto vuoto, ma trascinando lungo la traccia dipinge una clip dopo l'altra, ognuna al primo posto libero della griglia. |
+| **Delete** (4) | (prima della 0.60.0 *Erase*) Clic su una clip per eliminarla, o trascina su più clip (anche di automazione, dalla 0.57.0). Con gli altri strumenti il tasto destro fa lo stesso. |
+| **Mute** (7) | (0.60.0) Clic su una clip per silenziarla o riattivarla: resta nella playlist, grigia con una *M*, e non suona. Trascinando su più clip prendono tutte lo stato della prima. *Mute clip* è anche nel menu del tasto destro della clip. |
+| **Slip** (8) | (0.60.0) Trascina una clip di lato per spostare ciò che suona al suo interno mentre la clip resta ferma: una clip di pattern parte più avanti (o più indietro) nel suo pattern, una clip audio suona da un altro punto del file. |
+| **Slice** (2) | (prima della 0.60.0 *Split*) Clic su una clip per tagliarla in due in quel punto (agganciato alla griglia). Il tasto **S** divide la clip selezionata dove si trova il mouse. |
 | **Cut** (3) | Trascina su una clip per togliere quel tratto: il suono dopo il vuoto resta dov'era. |
-| **Erase** (4) | Clic su una clip per eliminarla, o trascina su più clip (anche di automazione, dalla 0.57.0). Con gli altri strumenti il tasto destro fa lo stesso. |
-| **Zoom** (5) | Il clic ingrandisce, il tasto destro o Maiusc+clic rimpicciolisce, trascinando un tratto si ingrandisce su quel tratto. |
 | **Select** (6) | (0.59.0) Trascina da un punto vuoto: un rettangolo seleziona tutte le clip che tocca (di pattern, audio, di automazione). Maiusc aggiunge alla selezione, Maiusc+clic aggiunge o toglie una clip, un clic su un punto vuoto non seleziona niente. Trascina una clip per spostarla, o spostare tutte quelle selezionate; Canc, Ctrl+C / Ctrl+X / Ctrl+V e Ctrl+D agiscono su tutta la selezione. Non mette clip e non le ridimensiona. |
+| **Zoom** (5) | Il clic ingrandisce, il tasto destro o Maiusc+clic rimpicciolisce, trascinando un tratto si ingrandisce su quel tratto. |
 
-**Grid** (il menu accanto agli strumenti) è la griglia a cui si agganciano le clip audio quando vengono spostate, ritagliate, divise
-o tagliate: una battuta, mezza battuta (1/2, 0.32.0), un quarto e così via fino al singolo tick (1 battito = 480 tick); tieni premuto **Alt** mentre trascini per ignorarla. Dalla 0.42.0
+Ogni intestazione di traccia ha gli interruttori **M** e **S** (0.60.0), come in FL Studio: le clip di una traccia in mute non
+suonano; se una traccia è in solo suonano solo quelle in solo. Il menu del tasto destro della traccia ha anche *Mute* e *Solo*.
+Clip e tracce in mute si salvano col progetto.
+
+**Grid** (il menu accanto agli strumenti) è la griglia a cui si agganciano le clip quando vengono spostate, ritagliate, divise
+o tagliate: **Main** (0.60.0: lo snap globale della barra), una battuta, mezza battuta (1/2, 0.32.0), un quarto e così via fino al singolo tick (1 battito = 480 tick); tieni premuto **Alt** mentre trascini per ignorarla. Dalla 0.42.0
 anche le clip di pattern si agganciano alla stessa griglia (prima stavano su pattern interi). **-**, **+** e **Fit** rimpiccioliscono, ingrandiscono e mostrano tutto il brano;
 la **rotella del mouse** ingrandisce e rimpicciolisce intorno al mouse, Shift+rotella e la barra di scorrimento muovono nel tempo. Il righello mostra
 **minuti:secondi.millisecondi** e i numeri di battuta (solo quanti ne stanno allo zoom attuale); le due righe sotto la linea del
@@ -1234,6 +1338,11 @@ Ogni traccia, dall'alto in basso:
 - il nome (Track 1...) e i canali che le sono assegnati;
 - **dieci slot effetti** (0.45.0; quattro prima), uno sopra l'altro (vedi sotto);
 - **bilanciamento** (stereo) - doppio clic per centrarlo. È un bilanciamento: al centro il suono non cambia;
+- **separazione stereo** (0.61.0, il cursore sottile sotto il bilanciamento, come la manopola di una traccia del mixer di FL
+  Studio): a sinistra del centro allarga l'immagine stereo (il segnale laterale fino al doppio), a destra la stringe fino al mono;
+  doppio clic per il centro;
+- **Ø** (0.61.0) inverte la polarità dei due canali e **⇄** (0.61.0) scambia sinistra e destra, dopo gli effetti della traccia;
+- il pulsante di **instradamento** (0.62.0, **> M** all'inizio: vedi *Instradamento tra tracce* sotto);
 - **M** (mute) e **S** (solo) - appartengono alla traccia e sono indipendenti dai pulsanti del canale nel rack. Se
   una traccia è in solo, si sentono solo quelle in solo;
 - un **fader** verticale con la lettura in dB (dal silenzio a +3,5 dB, 1,0 = 0 dB; doppio clic per tornare a 0 dB);
@@ -1272,6 +1381,18 @@ quasi tutti gli effetti, **Presets...** con impostazioni pronte.
 | Stereo Imager | Width (0-200 %), guadagno di Mid e Side, Mono bass (sotto questa frequenza il suono diventa mono), Balance | Wider, Mono bass, Mono |
 | Time Shaper (0.25.0) | Nello stile di Gross Beat, sincronizzato alla song. **Time**: None, Half speed, Reverse (ogni ciclo suona al contrario quello prima), Tape stop, Slow down, Stutter 1/8 e 1/16, Repeat 1/4 (il primo quarto del ciclo quattro volte), Scratch. **Volume**: None, Gate 1/8, 1/16, 1/32, Trance gate, Pump (tipo sidechain), Fade in, Fade out. **Cycle** (da 1 movimento a 2 battute) è la durata del pattern di tempo; **Depth** del pattern di volume; **Smooth** (dissolve i salti e ammorbidisce i gate); Mix. Fino a quattro Time Shaper in un progetto suonano i pattern di tempo (ognuno ha bisogno di una registrazione degli ultimi 8,5 s); gli altri modellano solo il volume, e dalla 0.41.0 il pannello effetti lo dice (in arancione) quando ne selezioni uno | Half-time bar, Reverse every bar, Tape stop, Stutter 1/16, Beat repeat, Scratch, Trance gate, Gate 1/16, Sidechain pump, Half-time gated |
 | Pitch Corrector (0.26.0) | Nello stile di Pitcher, per una voce o uno strumento alla volta (non accordi). **Key** e **Scale** (le scale del piano roll): ogni nota viene portata alla nota più vicina della scala. **Speed**: quanto in fretta (0 ms = subito, il suono "intonato" netto; 50-100 ms suona naturale e lascia passare il vibrato). **Amount** della correzione. **Shift** sposta tutto in su o in giù (fino a un'ottava, anche a frazioni di semitono). **Range** della voce: Low (40-400 Hz), Voice (70-900 Hz), High (150-2000 Hz). Mix (con Shift e Mix al 50 %, un'armonia). Il suono corretto arriva 10-15 ms dopo (il tempo che serve per sentire l'intonazione); le formanti si spostano con l'intonazione, quindi spostamenti grandi suonano come un'altra voce. Respiri, consonanti e rumore passano invariati. **Follow** (0.41.0): *Scale* (come sopra), oppure un **canale**: la voce viene portata alla nota che quel canale sta suonando, nell'ottava più vicina alla voce (come Pitcher con il MIDI); finché il canale non suona nulla, la voce resta com'è. Metti le note da cantare in un pattern di un canale strumento (abbassane il volume se non vuoi sentirlo) | Natural (chromatic), Hard tune (chromatic), C major fast, A minor natural, A minor pentatonic hard, Bass chromatic, Octave up, Fifth harmony |
+| Parametric EQ 2 (0.61.0) | Sette bande, come Fruity Parametric EQ 2: banda 1 uno shelf basso, bande 2-6 a campana, banda 7 uno shelf alto; ognuna con Freq (20 Hz - 20 kHz), Gain (da -18 a +18 dB) e Q; Output. I parametri scorrono nel pannello effetti. | |
+| Bass Boost (0.61.0) | Come Fruity Bass Boost: Frequency (20-500 Hz) e Amount (uno shelf basso fino a +15 dB con una leggera saturazione di ciò che aggiunge) | |
+| Multiband Compressor (0.61.0) | Tre bande di compressione nello stile di Maximus: Low split e High split (i due incroci), Threshold e Ratio per Low, Mid e High, Attack e Release comuni, un Gain per banda. A 1:1 le bande sommate ridanno l'ingresso. | Gentle master, Tight low end, De-harsh |
+| Gate (0.61.0) | Un noise gate (come il gate di Fruity Limiter): Threshold, Attack, Hold, Release, Range (quanto il gate chiuso abbassa il suono: -100 dB = silenzio), **Sidechain** (una traccia del mixer che apre il gate al posto del suono della traccia) | Noise gate, Drum tightener, Hard chop |
+| Squeeze (0.61.0) | Come Fruity Squeeze: Bits (1-16), Downsample (x1-x64), Puncher (una spinta prima del crusher), Filter (un passa-basso dopo), Mix | 8-bit, Lo-fi radio, Crushed |
+| Flanger (0.61.0) | Come Fruity Flanger: Delay (0,1-20 ms), Depth, Rate, Phase (lo sfasamento dell'LFO del canale destro, 0-360 gradi), Feedback (negativo lo inverte), Shape (seno, triangolo), Mix | Classic jet, Slow sweep, Metallic |
+| Vibrato (0.61.0) | Come Fruity Vibrator: il pitch sale e scende di Depth (0-100 cent) a velocità Rate; Shape (seno, triangolo), Stereo (sfasa l'LFO del canale destro) | |
+| Panomatic (0.61.0) | Come Fruity Panomatic / Fruity Balance: Volume (da -48 a +12 dB), Pan, e un LFO sul pan (auto-pan) o sul volume (tremolo): bersaglio, velocità (libera in Hz) o sync (1/8, 1/4, 1/2, 1 battuta, 2 battute del brano), profondità, forma (seno, triangolo, quadra, dente di sega) | Auto-pan 1 bar, Tremolo 1/8, Helicopter |
+| WaveShaper (0.62.0) | Come Fruity WaveShaper: Pre gain, Curve (Soft clip, Hard clip, Fold, Sine, Rectify - un'ottava sopra -, Tube), Amount (0 = una linea retta), Bias (rende la curva asimmetrica), Post gain, Mix. Sovracampionato 4x. | Warm tube, Hard clip, Wave folder, Octave up |
+| Convolver (0.62.0) | Un riverbero a convoluzione, come Fruity Convolver: Space (Room, Hall, Plate, Spring, Cathedral, oppure **File**: *Load IR...* prende un qualsiasi file audio come risposta all'impulso), Length (0,1-4 s), Brightness, Pre-delay, Mix, Output. Nessuna latenza. Il percorso del file si salva col progetto. | Small room, Concert hall, Vocal plate, Guitar spring, Cathedral |
+| Vocoder (0.62.0) | Come Fruity Vocoder / Vocodex: **Modulator** (la traccia del mixer con la voce; *None*: l'ingresso sinistro è la voce e il destro la portante), Bands (8, 12, 16), Attack, Release, Width, Formant (sposta le bande della portante), Output, Mix. Mettilo sulla traccia di un suono ricco e tenuto (un accordo di dente di sega) e scegli la traccia della voce. | Robot, Old vocoder, Whisper |
+| Peak Controller (0.62.0) | Come Fruity Peak Controller: valore = Base + Volume x il livello di picco della traccia + un LFO (LFO amount, LFO rate), che ricade secondo Decay. Il valore imposta il parametro **Target param** dell'effetto nello slot **Target slot** della traccia **Target track** (*This track* o un'altra) tra il suo minimo e il suo massimo; la riga sotto il nome dell'effetto dice cosa sta pilotando. Funziona anche sui parametri dei plugin. **Mute**: il suono della traccia serve solo a pilotare il controller (una cassa fantasma che abbassa un basso). | Follow the level, Duck, Slow LFO, Level and wobble |
 
 I progetti fatti prima della 0.21.0 suonano uguali: i loro riverberi sono Hall senza pre-delay e i delay sono Stereo. I file con i
 nuovi effetti non si possono leggere con le versioni precedenti (lì lo slot torna vuoto).
@@ -1290,6 +1411,27 @@ slot si possono escludere (bypass) o rimuovere come quelli di una traccia, e la 
 
 Il volume master è il cursore della barra degli strumenti e il fader master è lo stesso controllo. La strip master ha un
 indicatore.
+
+### Instradamento tra tracce e compensazione del ritardo (0.62.0)
+
+Il piccolo pulsante sopra **M** e **S** su ogni traccia (**> M** all'inizio) dice dove va la traccia, come i cavi in fondo al mixer
+di FL Studio:
+
+- **The master** (spuntato all'inizio);
+- **Also send to** > una traccia: il suono della traccia dopo il fader va anche in quella traccia, prima dei suoi effetti. Fino a
+  quattro mandate per traccia; *Level to Track n* le regola da 25 a 150 %, o le toglie;
+- **Route to this track only**: non al master, solo alla traccia scelta - un bus (tutte le batterie in un solo compressore);
+- **Reset** la riporta al solo master.
+
+Il pulsante mostra il risultato: **> M+2** (master e due mandate), **> 5** (solo la traccia 5), **> -** (da nessuna parte: muta).
+Una traccia viene elaborata prima delle tracce in cui manda, qualunque sia il loro numero; una mandata che chiuderebbe un anello
+viene ignorata; una traccia in mute non manda nulla. Un bus alimentato da mandate si può scegliere come sidechain di un
+compressore, un gate o un vocoder.
+
+La **compensazione del ritardo** (PDC) è automatica: se un effetto ritarda la sua traccia (il look-ahead del Maximizer, un plugin
+che dichiara una latenza), tutte le altre tracce vengono ritardate della stessa quantità dopo i loro effetti, così restano insieme -
+anche quando l'effetto lento è su un bus. L'esportazione toglie dall'inizio del file il ritardo del mix. Gli effetti su Aux A / B
+non vengono compensati.
 
 ### Send, bus aux e gruppi VCA
 

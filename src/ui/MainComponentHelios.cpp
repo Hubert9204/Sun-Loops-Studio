@@ -54,6 +54,11 @@ std::vector<HeliosCommand> MainComponent::heliosCommands()
         { "GitHub token for crash reports", "github token crash report bug segnalazione arresto anomalo", run ([] (MainComponent& m) { m.askForGitHubToken(); }) },
         { "Join the Sun Loops Discord", "discord community chat server comunità canale", run ([] (MainComponent&) { MainComponent::openDiscord(); }) },
         { "About Sun Loops Studio", "about version credits author github informazioni versione autore", run ([] (MainComponent& m) { m.showAbout(); }) },
+        // 0.60.0 - 0.62.0
+        { "Open or close the Plugin picker", "plugin picker instruments effects list browse strumenti effetti elenco", run ([] (MainComponent& m) { m.togglePanel (m.pluginPanel); }) },
+        { "Performance mode: launch clips live", "performance mode live launch clips scenes performance dal vivo lancia clip scene", run ([] (MainComponent& m) { m.togglePerformanceWindow(); }) },
+        { "Step edit on or off", "step edit editing step by step input passo passo inserimento note", run ([] (MainComponent& m) { m.stepEditButton.triggerClick(); }) },
+        { "Typing keys on or off (computer keyboard as a piano)", "typing keys keyboard piano computer tastiera pianoforte", run ([] (MainComponent& m) { m.setTypingOn (! m.typingOn); }) },
         { "Restore the panel layout", "reset layout panels windows ripristina pannelli finestre", run ([] (MainComponent& m) { m.resetLayout(); }) },
     };
 }

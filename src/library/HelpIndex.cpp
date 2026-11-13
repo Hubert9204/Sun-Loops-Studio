@@ -79,6 +79,20 @@ const std::map<std::string, std::string>& synonyms()
         { "traccia", "track" }, { "tracce", "track" }, { "nota", "note" }, { "note", "note" }, { "automazione", "automation" },
         { "effetto", "effect" }, { "effetti", "effect" }, { "reverb", "effect" }, { "riverbero", "effect" }, { "delay", "effect" },
         { "compressor", "effect" }, { "compressore", "effect" }, { "chorus", "effect" }, { "eq", "effect" }, { "equalizzatore", "effect" }, { "canale", "channel" }, { "canali", "channel" }, { "tastiera", "keyboard" },
+        // 0.62.0: FL Studio's names for what 0.60 - 0.62 added, and the Italian words for them
+        { "vocodex", "vocoder" }, { "convolution", "convolver" }, { "convoluzione", "convolver" }, { "impulse", "convolver" },
+        { "impulso", "convolver" }, { "ir", "convolver" }, { "distructor", "waveshaper" }, { "distorsione", "waveshaper" },
+        { "distortion", "waveshaper" }, { "pdc", "compensation" }, { "latency", "compensation" }, { "latenza", "compensazione" },
+        { "ritardo", "compensazione" }, { "routing", "routing" }, { "route", "routing" }, { "cables", "routing" }, { "cavi", "routing" },
+        { "instradamento", "routing" }, { "instrada", "routing" }, { "live", "performance" }, { "vivo", "performance" },
+        { "scene", "scene" }, { "lancia", "launch" }, { "favourites", "favourites" }, { "favorites", "favourites" },
+        { "preferiti", "favourites" }, { "preferito", "favourites" }, { "layering", "layer" }, { "strato", "layer" },
+        { "choke", "cut" }, { "glide", "portamento" }, { "slide", "portamento" }, { "legato", "portamento" },
+        { "graph", "graph" }, { "grafico", "graph" }, { "marker", "marker" }, { "marcatore", "marker" }, { "marcatori", "marker" },
+        { "consolidate", "consolidate" }, { "consolida", "consolidate" }, { "bounce", "consolidate" }, { "lock", "lock" },
+        { "blocca", "lock" }, { "bloccare", "lock" }, { "gruppo", "group" }, { "gruppi", "group" }, { "raggruppa", "group" },
+        { "controller", "controller" }, { "peak", "controller" }, { "ducking", "controller" }, { "colore", "colour" },
+        { "colori", "colour" }, { "color", "colour" }, { "colors", "colour" }, { "intonazione", "pitch" },
     };
     return map;
 }

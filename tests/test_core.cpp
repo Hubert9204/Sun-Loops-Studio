@@ -5646,6 +5646,47 @@ void testHelios()
     check (true, "broken text does not crash");
 }
 
+// 0.62.0: the manuals that are built into the program answer the questions about what 0.60 - 0.62 added, in both languages.
+void testHeliosManual062()
+{
+    std::cout << "Helios: the real manuals know the 0.60 - 0.62 features\n";
+    const auto docs = juce::File (SLS_SOURCE_DIR).getChildFile ("docs");
+    const auto en = docs.getChildFile ("user-guide.md").loadFileAsString().toStdString();
+    const auto it = docs.getChildFile ("user-guide.it.md").loadFileAsString().toStdString();
+    check (en.size() > 10000 && it.size() > 10000, "both manuals are read");
+    sls::HelpIndex index;
+    index.add (en, "en");
+    index.add (it, "it");
+    const auto top = [&index] (const std::string& question, const std::string& wanted, const std::string& language)
+    {
+        const auto hits = index.search (question, 3);
+        for (const auto& h : hits)
+        {
+            const auto& section = index.sections()[static_cast<size_t> (h.section)];
+            if (section.language == language && section.title.find (wanted) != std::string::npos)
+                return true;
+        }
+        std::cout << "    (" << question << ": " << (hits.empty() ? std::string ("nothing") : index.sections()[static_cast<size_t> (hits[0].section)].title) << ")\n";
+        return false;
+    };
+    check (top ("performance mode launch clips", "Performance mode", "en"), "Helios: performance mode (English)");
+    check (top ("performance mode dal vivo lanciare clip", "Performance mode", "it"), "Helios: performance mode (Italian)");
+    check (top ("route a track to another track bus", "Routing between tracks", "en"), "Helios: routing between tracks");
+    check (top ("instradamento tra tracce bus", "Instradamento tra tracce", "it"), "Helios: instradamento tra tracce");
+    check (top ("pdc plugin latency", "delay compensation", "en"), "Helios: FL Studio's PDC means delay compensation");
+    check (top ("vocodex", "Effects", "en") || top ("vocodex", "Effect", "en"), "Helios: Vocodex finds the effects");
+    check (top ("convolution reverb impulse response", "Effect", "en") || top ("convolution reverb impulse response", "Mixer", "en"), "Helios: the convolution reverb");
+    check (top ("layer channel", "Layer channel", "en") && top ("canale layer", "canale Layer", "it"), "Helios: the Layer channel in both languages");
+    check (top ("marker actions loop skip pause", "arker", "en") && top ("azioni dei marcatori", "arcatori", "it"), "Helios: marker actions");
+    check (top ("favourites browser tabs", "favourites", "en") && top ("preferiti browser", "preferiti", "it"), "Helios: the browser's favourites");
+    check (top ("graph editor velocity steps", "graph editor", "en") && top ("editor a barre", "editor a barre", "it"), "Helios: the graph editor");
+    check (top ("step edit", "step edit", "en") && top ("step edit", "step edit", "it"), "Helios: step editing");
+    check (top ("lock track group fold", "Track lock", "en") && top ("bloccare tracce gruppi", "Blocco e gruppi", "it"), "Helios: track lock and groups");
+    check (top ("make unique consolidate", "Make unique", "en"), "Helios: Make unique and Consolidate");
+    check (top ("note pan release fine pitch lane", "event lanes", "en") && top ("corsie degli eventi pan release", "corsie degli eventi", "it"),
+           "Helios: the Piano Roll's event lanes");
+}
+
 double energyOf (const sls::SampleData& s, int from, int to)
 {
     double e = 0.0;
@@ -12800,6 +12841,7 @@ int main()
     testPitchTools();
     testStemSplit();
     testHelios();
+    testHeliosManual062();
     testSfz();
     testSfzFiles();
     testFreePlaylist();

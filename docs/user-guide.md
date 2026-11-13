@@ -35,7 +35,9 @@ reports...*, *Show the session log folder*) and **About Sun Loops Studio** (vers
 AI -, license, credits, with buttons for the GitHub page and Discord). Until 0.54.0 the update and crash-report items were under
 *File > Updates and crash reports*.
 
-**Master pitch, memory and step editing (0.62.0).** In the row of window buttons: **Pitch** moves every note of the synths,
+### Master pitch, memory and step editing (0.62.0)
+
+In the row of window buttons: **Pitch** moves every note of the synths,
 samplers and plugin instruments by -12 to +12 semitones (drum channels keep their pitch; plugins get whole keys; double-click
 for 0; saved with the project). Under the CPU read-out, **RAM** is the memory the program holds (on Linux). **Step edit**: while
 the song is stopped, every note you play - typing keys or a MIDI keyboard - is written into the pattern of the channel you play,
@@ -192,8 +194,9 @@ nothing is sent anywhere.
 
 How it finds things: it looks for the words of your question (without accents, plurals and common endings, and ignoring words like
 "how", "the", "come", "un"), counts titles more, understands a few FL Studio names (insert = mixer, Slicex = Slicer, Newtone = pitch
-editor, VST = plugin) and prefers the manual in the language of the question. It does not understand sentences: if nothing useful
-comes up, try fewer or other words.
+editor, VST = plugin, Vocodex = Vocoder, PDC = delay compensation, live = performance mode) and prefers the manual in the
+language of the question. It does not understand sentences: if nothing useful comes up, try fewer or other words. Among the
+commands are also *Plugin picker*, *Performance mode*, *Step edit* and *Typing keys* (0.62.0).
 
 ## Keyboard
 
@@ -650,15 +653,6 @@ FL Studio's title bar) switches to another channel's notes; the **Ghost** switch
 pattern, faint behind the channel's own (they cannot be edited there). The **Snap** box's *Main* entry follows the toolbar's
 global snap (0.60.0).
 
-**Tools, event lanes and note colours (0.62.0).** The **tool box** in the toolbar chooses what the left button does on the
-grid: **Draw** (as described below), **Paint** (drag along a row to write one note after another, each as long as the snap),
-**Mute** (click a note: it stays, grey, and is not played; click again to bring it back) and **Slice** (click a note to cut it
-in two at the snap). The label at the corner of the **event lane** under the grid chooses what the lane shows and edits:
-*Velocity*, **Pan** (per note, from the middle), **Release** (how long the note rings after its end, against the instrument's
-own release) or **Fine pitch** (cents). Every instrument plays these values. In the **Tools** menu: *Note colour* (16 colours
-for the notes you write next or the selected ones), **Limit** (moves the selected notes by octaves into one, two or three octaves) and
-**LFO** (writes a wave - one cycle per beat, per bar, every 2 or every 4 bars - into the values of the lane shown).
-
 | Action | How |
 | --- | --- |
 | Play a note | Left button on a key of the keyboard (held = sounds). |
@@ -721,6 +715,17 @@ and sampler channels and is saved in the project.
 
 Notes snap to 16th notes. A pattern is one bar (4 quarters) long unless you chose another length (see *Patterns*). A synth note ends at its length or at the end of the pattern,
 whichever comes first. When you open a channel the view scrolls to its notes.
+
+### Tools, event lanes and note colours (0.62.0)
+
+The **tool box** in the toolbar chooses what the left button does on the
+grid: **Draw** (as described above), **Paint** (drag along a row to write one note after another, each as long as the snap),
+**Mute** (click a note: it stays, grey, and is not played; click again to bring it back) and **Slice** (click a note to cut it
+in two at the snap). The label at the corner of the **event lane** under the grid chooses what the lane shows and edits:
+*Velocity*, **Pan** (per note, from the middle), **Release** (how long the note rings after its end, against the instrument's
+own release) or **Fine pitch** (cents). Every instrument plays these values. In the **Tools** menu: *Note colour* (16 colours
+for the notes you write next or the selected ones), **Limit** (moves the selected notes by octaves into one, two or three octaves) and
+**LFO** (writes a wave - one cycle per beat, per bar, every 2 or every 4 bars - into the values of the lane shown).
 
 ## Patterns
 

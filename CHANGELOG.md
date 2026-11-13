@@ -2,6 +2,21 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.62.1 - 2026-11-13
+
+The manuals and Helios catch up with 0.60 - 0.62.
+
+### Changed
+- **Italian user guide**: every feature of 0.60.0 - 0.62.0 is now described in its own chapter (the window and its menus, the
+  Plugin picker, the browser's tabs and favourites, the Channel Rack's groups, colours, graph editor and Layer channel, the
+  sampler's loops and modulation, the Piano Roll's tools and event lanes, the Playlist's nine tools, markers, track lock and
+  groups, Make unique, Consolidate and performance mode, the mixer's routing and delay compensation, the twelve new effects),
+  instead of a summary at the top. The English guide gives step editing and the Piano Roll's event lanes their own sections.
+- **Helios** (F1) finds all of it, in both languages: the manuals built into the program are the updated ones, and it
+  understands more FL Studio and Italian words (Vocodex, convolution, PDC / latency, routing / instradamento, live, favourites /
+  preferiti, layer, choke, glide, graph, marker / marcatore, consolidate / bounce, lock / blocca, peak, colour / colore...).
+- **Helios commands**: *Open or close the Plugin picker*, *Performance mode*, *Step edit on or off*, *Typing keys on or off*.
+
 ## 0.62.0 - 2026-11-13
 
 Everything that `docs/fl-studio-alignment.md` listed as "still open" after 0.61.0, implemented in its order. What is still
