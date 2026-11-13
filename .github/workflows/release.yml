@@ -1,6 +1,7 @@
 # Publishes a release - when a version tag (v0.51.0) is pushed, or with "Run workflow" on GitHub (Actions > Release), which
 # releases the version written in CMakeLists.txt of the chosen branch and creates its tag. It builds the AppImage on Fedora 41
-# (glibc 2.40) and attaches it, with its checksum and the CHANGELOG section, to a GitHub release. The program's update check
+# (glibc 2.40) and attaches it, with its checksum and the CHANGELOG section, to a GitHub release; since 0.63.0 a second job adds
+# the universal macOS disk image (Sun-Loops-Studio-<version>-macOS.dmg) to the same release. The program's update check
 # reads /releases/latest and offers that AppImage (0.51.0).
 name: Release
 
@@ -66,3 +67,32 @@ jobs:
             gh release create "$TAG" $files --target "$COMMIT" --title "Sun Loops Studio $VERSION" \
               --notes-file release-notes.md --repo "$GITHUB_REPOSITORY"
           fi
+
+  macos:
+    # After the AppImage job, which creates the release: this one adds the .dmg and its checksum to it.
+    needs: appimage
+    runs-on: macos-latest
+    env:
+      TAG: ${{ github.event_name == 'push' && github.ref_name || github.event.inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG || github.ref }}
+      - name: Read the version
+        run: |
+          version="$(sed -n 's/^project(SunLoopsStudio VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)"
+          [ -n "$TAG" ] || TAG="v$version"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+      - name: Install the build tools
+        run: brew install ninja
+      - name: Build the universal .dmg
+        run: scripts/build_macos.sh
+      - name: Attach it to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd dist
+          shasum -a 256 "Sun-Loops-Studio-$VERSION-macOS.dmg" > SHA256SUMS-macOS.txt
+          cat SHA256SUMS-macOS.txt
+          gh release upload "$TAG" "Sun-Loops-Studio-$VERSION-macOS.dmg" SHA256SUMS-macOS.txt --clobber --repo "$GITHUB_REPOSITORY"

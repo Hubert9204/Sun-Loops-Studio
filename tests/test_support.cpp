@@ -254,6 +254,16 @@ void testSemVerAndUpdates()
     supportCheck (info && info->version == "0.43.0" && info->tag == "v0.43.0" && info->url == "https://x/amd64"
                && info->pageUrl == "https://github.com/o/r/releases/tag/v0.43.0" && info->changelog == "## What's new\n- Crash reports\n- Update check",
            "a release: version from tag_name, the x86_64 AppImage as the download, the notes without their blank first line");
+    {
+        const std::string both = R"({"tag_name":"v0.63.0","html_url":"https://page","assets":[
+            {"name":"Sun-Loops-Studio-0.63.0-x86_64.AppImage","browser_download_url":"https://x/linux"},
+            {"name":"Sun-Loops-Studio-0.63.0-macOS.dmg","browser_download_url":"https://x/mac"}]})";
+        const auto onLinux = sls::updates::parseRelease (both, nullptr, "x86_64");
+        const auto mac = sls::updates::parseRelease (both, nullptr, "macOS");
+        const auto macOnlyLinux = sls::updates::parseRelease (release, nullptr, "macOS");
+        supportCheck (onLinux && onLinux->url == "https://x/linux" && mac && mac->url == "https://x/mac" && macOnlyLinux && macOnlyLinux->url == macOnlyLinux->pageUrl,
+                      "on macOS the update is the .dmg (a release without one: its page), on Linux the AppImage");
+    }
     std::string why;
     supportCheck (! sls::updates::parseRelease ("{\"html_url\":\"x\"}", &why) && why.find ("tag_name") != std::string::npos
                && ! sls::updates::parseRelease ("not json") && ! sls::updates::parseRelease ("{\"tag_name\":\"nightly\",\"html_url\":\"x\"}")
