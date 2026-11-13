@@ -27,7 +27,7 @@ jobs:
         run: ./build/SunLoopsStudioTests_artefacts/Release/SunLoopsStudioTests
 
   macos:
-    runs-on: macos-14 # Apple silicon
+    runs-on: macos-latest # Apple silicon
     steps:
       - uses: actions/checkout@v4
       - name: Install the build tools
