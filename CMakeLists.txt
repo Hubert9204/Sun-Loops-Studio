@@ -362,6 +362,9 @@ target_compile_definitions(SunLoopsStudioTests PRIVATE ${SLS_COMMON_DEFINITIONS}
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_link_options(SunLoopsStudioTests PRIVATE "LINKER:--export-dynamic-symbol=_ZN3sls*")
 endif()
+if(APPLE) # the Audio Unit host's generic editor (a window the tests never open, but the code is linked)
+    target_link_libraries(SunLoopsStudioTests PRIVATE "-framework CoreAudioKit")
+endif()
 
 target_link_libraries(SunLoopsStudioTests PRIVATE
     spdlog::spdlog
