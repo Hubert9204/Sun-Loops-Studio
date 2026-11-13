@@ -34,8 +34,8 @@ jobs:
         run: brew install ninja
       - name: "Configure (Apple silicon only; the universal build is made for releases)"
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64
-      - name: Build (warnings are reported in the log)
-        run: cmake --build build
+      - name: Build (warnings are reported in the log; every error is shown, not only the first)
+        run: cmake --build build -- -k 0
       - name: Run the tests
         run: ./build/SunLoopsStudioTests_artefacts/Release/SunLoopsStudioTests
       - name: Pack the app (universal .dmg)

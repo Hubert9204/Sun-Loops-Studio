@@ -1,5 +1,15 @@
 /* The built-in sound library (resources/sounds/library packed into one zip by the build), linked into the program as read-only data.
-   Generated from src/audio/SoundLibraryData.S.in by CMake. */
+   Generated from src/audio/SoundLibraryData.S.in by CMake. ELF (Linux) and Mach-O (macOS, 0.63.0: C names start with "_"). */
+#if defined(__APPLE__)
+    .section __TEXT,__const
+    .p2align 4
+    .globl _sls_sound_library
+_sls_sound_library:
+    .incbin "@SLS_LIBRARY_ZIP@"
+    .globl _sls_sound_library_end
+_sls_sound_library_end:
+    .byte 0
+#else
     .section .rodata
     .balign 16
     .global sls_sound_library
@@ -11,3 +21,4 @@ sls_sound_library:
 sls_sound_library_end:
     .byte 0
     .section .note.GNU-stack,"",@progbits
+#endif
