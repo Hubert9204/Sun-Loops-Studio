@@ -109,6 +109,11 @@ public:
     std::function<void (int)> onEditSample;
     std::function<void (int)> onEditPitch; // an audio clip's "Edit pitch..." (0.38.0): its index
     std::function<void (int)> onSplitStems; // ... "Split into stems..." (0.39.0)
+    // 0.62.0, as FL Studio's clip menu: a pattern clip gets a pattern of its own; the pattern clips of a track between two ticks
+    // are rendered to an audio clip (to < 0: the whole track)
+    std::function<void (int)> onMakeUnique;
+    std::function<void (const juce::String&)> onStatus; // a line for the status bar
+    std::function<void (int, int, int)> onConsolidate;
     // Replaces audio clip `index` (if it still plays `expected`) by `with`, as one undo step. An error, or "".
     juce::String replaceAudioClip (int index, const std::shared_ptr<const SampleData>& expected, const std::vector<AudioClip>& with);
     // The sample editor saved an edited copy of clip `index`'s audio (`expected` is what the clip played when the editor
@@ -251,7 +256,16 @@ private:
     int trackCount() const noexcept { return std::max (1, arrangement.trackCount()); }
     int trackHeight() const noexcept;
     int tracksViewHeight() const noexcept;          // the visible height of the tracks (they scroll when there are more)
-    int trackTop (int track) const noexcept { return kRulerHeight + track * trackHeight() - scrollY; }
+    // 0.62.0: tracks folded away under their group's head take no row (and sit far off-screen, so nothing of theirs is drawn or hit)
+    int rowOf (int track) const noexcept;
+    int visibleRows() const noexcept;
+    int trackAtRow (int row) const noexcept;
+    int trackTop (int track) const noexcept
+    {
+        return arrangement.trackHidden (track) ? -100000 : kRulerHeight + rowOf (track) * trackHeight() - scrollY;
+    }
+    juce::Rectangle<int> foldRect (int track) const noexcept; // the fold triangle of a group's head
+    void toggleTrackFlag (int track, int which);              // 0 lock, 1 grouped with the track above, 2 folded
     bool inTracks (int y) const noexcept { return y >= kRulerHeight && y < kRulerHeight + tracksViewHeight(); }
     void clampScrollY();
     void updateTrackScrollBar();

@@ -60,6 +60,7 @@ struct ProjectDocument
     bool songMode = false;
     double bpm = 120.0;
     float masterVolume = 0.8f;
+    float masterPitch = 0.0f;                // 0.62.0: semitones, -12 .. +12 (see Project::masterPitch)
 
     // A new, empty project: one synth channel, one empty pattern, an empty playlist.
     static ProjectDocument blank();

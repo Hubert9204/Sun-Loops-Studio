@@ -331,8 +331,16 @@ void ChannelStrip::paint (juce::Graphics& g)
     // 0.60.0: the name sits on a button, like FL Studio's channel button (click: select; double click: the channel's window;
     // right click: the menu). The selected channel's button is lit.
     const auto button = nameLabel.getBounds().toFloat().reduced (0.0f, 3.0f);
-    g.setColour (selected ? kPreview.withAlpha (0.28f) : juce::Colour (0xff23272e));
+    // 0.62.0: the channel's own colour, when it has one
+    const auto own = juce::Colour (channel.colour);
+    g.setColour (channel.colour != 0 ? own.withAlpha (selected ? 0.75f : 0.5f) : (selected ? kPreview.withAlpha (0.28f) : juce::Colour (0xff23272e)));
     g.fillRoundedRectangle (button, 3.0f);
+    if (channel.instrument == Instrument::Layer) // a layer: a small mark at the button's right
+    {
+        g.setColour (juce::Colours::white.withAlpha (0.75f));
+        for (int k = 0; k < 3; ++k)
+            g.fillRect (button.getRight() - 12.0f, button.getY() + 6.0f + static_cast<float> (k) * 5.0f, 8.0f, 2.0f);
+    }
     g.setColour (selected ? kPreview.withAlpha (0.9f) : juce::Colours::white.withAlpha (0.12f));
     g.drawRoundedRectangle (button, 3.0f, 1.0f);
 }
@@ -424,6 +432,13 @@ void ChannelStrip::mouseDoubleClick (const juce::MouseEvent& e)
         onOpenPianoRoll (index);
 }
 
+juce::Colour ChannelStrip::paletteColour (int index)
+{
+    static constexpr std::uint32_t kPalette[16] = { 0xffd9534f, 0xffe8843a, 0xffe8a93a, 0xffd9c94a, 0xff9ccc4a, 0xff4cc38a, 0xff4ac9b0, 0xff3aa6a0,
+                                                    0xff3ab6d9, 0xff4a9be8, 0xff4a72e8, 0xff6a5ae8, 0xff9a5ae8, 0xffc94ad0, 0xffe86aa0, 0xff8a909a };
+    return juce::Colour (kPalette[static_cast<size_t> (std::clamp (index, 0, 15))]);
+}
+
 // Right click on a channel, like FL Studio: open its piano roll, choose what makes the sound, rename.
 void ChannelStrip::showContextMenu()
 {
@@ -434,6 +449,7 @@ void ChannelStrip::showContextMenu()
     instrument.addItem (2, "Synth", true, channel.instrument == Instrument::Synth);
     instrument.addItem (3, "Sampler (WAV / FLAC / OGG / AIFF)", true, channel.instrument == Instrument::Sampler);
     instrument.addItem (9, "Drum machine (16 pads)", true, channel.instrument == Instrument::Drums);
+    instrument.addItem (22, "Layer (its notes are played by other channels)", true, channel.instrument == Instrument::Layer);
     const auto plugins = listInstrumentPlugins ? listInstrumentPlugins() : std::vector<std::pair<juce::String, juce::String>> {};
     if (plugins.empty())
         instrument.addItem (17, "Plugin instruments (scan the browser's Plugin folder first)", false);
@@ -488,6 +504,42 @@ void ChannelStrip::showContextMenu()
         menu.addSubMenu ("Cut group (its notes cut...)", cut);
         menu.addSubMenu ("Cut by group", cutBy);
     }
+    // 0.62.0: the Layer's children, the channel's colour and its filter group
+    const auto names = listChannelNames ? listChannelNames() : juce::StringArray();
+    if (channel.instrument == Instrument::Layer)
+    {
+        juce::PopupMenu children;
+        for (int c = 0; c < names.size() && c < kMaxChannels; ++c)
+            if (c != index)
+                children.addItem (600 + c, juce::String (c + 1) + ": " + names[c], true, ((channel.layerMask >> c) & 1u) != 0);
+        children.addSeparator();
+        children.addItem (598, "All the channels");
+        children.addItem (599, "None");
+        menu.addSubMenu ("Layer: the channels that play its notes", children);
+    }
+    {
+        juce::PopupMenu colours;
+        colours.addItem (500, "Default", true, channel.colour == 0);
+        static const char* const kColourNames[] = { "Red", "Orange", "Amber", "Yellow", "Lime", "Green", "Mint", "Teal",
+                                                    "Cyan", "Sky", "Blue", "Indigo", "Violet", "Magenta", "Pink", "Grey" };
+        for (int k = 0; k < 16; ++k)
+        {
+            juce::PopupMenu::Item item (kColourNames[k]);
+            item.itemID = 501 + k;
+            item.colour = paletteColour (k);
+            item.isTicked = channel.colour == paletteColour (k).getARGB();
+            colours.addItem (item);
+        }
+        menu.addSubMenu ("Colour", colours);
+        juce::PopupMenu groups;
+        const auto existing = listGroups ? listGroups() : juce::StringArray();
+        groups.addItem (519, "None (shown under All only)", true, channel.group.empty());
+        for (int k = 0; k < existing.size() && k < 60; ++k)
+            groups.addItem (520 + k, existing[k], true, juce::String (channel.group) == existing[k]);
+        groups.addSeparator();
+        groups.addItem (518, "New group...");
+        menu.addSubMenu ("Filter group", groups);
+    }
     menu.addSeparator();
     menu.addSubMenu ("Instrument", instrument);
     menu.addItem (4, "Load sample...", channel.instrument == Instrument::Sampler);
@@ -497,7 +549,7 @@ void ChannelStrip::showContextMenu()
                                        && (channel.program == nullptr ? channel.sample != nullptr && channel.sample->numFrames() > 1
                                                                       : ! channel.program->sliceStarts.empty()));
     menu.addItem (19, "Synth settings...", channel.instrument == Instrument::Synth);
-    menu.addItem (16, "Load SoundFont / SFZ (.sf2, .sfz)...", channel.instrument != Instrument::Drums);
+    menu.addItem (16, "Load SoundFont / SFZ (.sf2, .sfz)...", channel.instrument != Instrument::Drums && channel.instrument != Instrument::Layer);
     menu.addItem (5, "Rename...");
     menu.addItem (11, "Clone channel");
     menu.addItem (12, "Move up", index > 0);
@@ -518,6 +570,38 @@ void ChannelStrip::showContextMenu()
                             {
                                 if (safe->onPluginChosen)
                                     safe->onPluginChosen (i, plugins[static_cast<size_t> (result - 1000)].second);
+                                return;
+                            }
+                            // 0.62.0: colour, filter group, the layer's children
+                            if (result >= 500 && result <= 516)
+                            {
+                                safe->channel.colour = result == 500 ? 0u : paletteColour (result - 501).getARGB();
+                                safe->repaint();
+                                if (safe->onLooksChanged) safe->onLooksChanged (i);
+                                return;
+                            }
+                            if (result == 518)
+                            {
+                                if (safe->onNewGroup) safe->onNewGroup (i);
+                                return;
+                            }
+                            if (result >= 519 && result < 580)
+                            {
+                                const auto existing = safe->listGroups ? safe->listGroups() : juce::StringArray();
+                                safe->channel.group = result == 519 ? std::string() : existing[result - 520].toStdString();
+                                if (safe->onLooksChanged) safe->onLooksChanged (i);
+                                return;
+                            }
+                            if (result >= 598 && result < 600 + kMaxChannels)
+                            {
+                                const auto all = safe->listChannelNames ? safe->listChannelNames() : juce::StringArray();
+                                if (result == 598)
+                                    safe->channel.layerMask = (all.size() >= 32 ? 0xffffffffu : ((1u << all.size()) - 1u)) & ~(1u << i);
+                                else if (result == 599)
+                                    safe->channel.layerMask = 0;
+                                else
+                                    safe->channel.layerMask ^= 1u << (result - 600);
+                                if (safe->onChanged) safe->onChanged (i);
                                 return;
                             }
                             // 0.62.0: polyphony, portamento and cut groups
@@ -555,6 +639,7 @@ void ChannelStrip::showContextMenu()
                                 case 4: if (safe->onLoadSample) safe->onLoadSample (i); break;
                                 case 8: if (safe->onEditSample) safe->onEditSample (i); break;
                                 case 9: if (safe->onInstrumentChosen) safe->onInstrumentChosen (i, Instrument::Drums); break;
+                                case 22: if (safe->onInstrumentChosen) safe->onInstrumentChosen (i, Instrument::Layer); break;
                                 case 10: if (safe->onOpenDrumMachine) safe->onOpenDrumMachine (i); break;
                                 case 5: if (safe->onRename) safe->onRename (i); break;
                                 case 6: if (safe->onSavePreset) safe->onSavePreset (i); break;

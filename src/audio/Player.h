@@ -80,6 +80,14 @@ public:
     // A synth note sounds until liveNoteOff; a sampler note plays its sample once. `project` must be the snapshot
     // that the next render() call will use. Both calls are real-time safe and ignore a channel that does not exist.
     void liveNoteOn (const Project& project, int channel, int pitch, float velocity) noexcept;
+    // 0.62.0: true once after the transport stopped itself at a Pause marker (any thread), and the tick it stopped at.
+    bool takeMarkerPause (int& tick) noexcept
+    {
+        if (! markerPause.exchange (false, std::memory_order_acq_rel))
+            return false;
+        tick = markerPauseTick.load (std::memory_order_relaxed);
+        return true;
+    }
     void liveNoteOff (int channel, int pitch) noexcept;
 
     // Peak (after volume and pan) of mixer channel `channel` in the last rendered block.
@@ -255,7 +263,8 @@ private:
     {
         const HostedPlugin* plugin = nullptr;
         int channel = 0;
-        int pitch = 0;
+        int pitch = 0;  // the key the plugin was sent
+        int source = 0; // the note's own pitch (0.62.0: the master pitch moves the key)
         int endTick = 0;
         bool live = false;
     };
@@ -390,6 +399,13 @@ private:
     bool releaseSamplesOnStop = true;
     float releaseStep = 0.001f;
     std::array<std::uint8_t, kMaxChannels> channelCutBy {}; // 0.62.0: each channel's cutBy in this block
+    std::array<std::uint32_t, kMaxChannels> layerChildren {}; // 0.62.0: a Layer channel's children (0 for the other channels)
+    double masterPitch = 0.0;                                // 0.62.0: the project's, in semitones
+    bool halted = false;                                     // 0.62.0: stopped at a Pause marker until the transport is stopped
+    std::atomic<bool> markerPause { false };
+    std::atomic<int> markerPauseTick { 0 };
+    // The note with the master pitch applied, started on its channel (noteOn adds the layer's children and the master pitch).
+    void startNote (const Channel& channel, int channelIndex, const Note& n, int loopLength, bool live) noexcept;
     static constexpr int kModStep = 16;                     // the sampler's modulations are worked out every 16 samples
     std::uint64_t liveLimitSamples = 20ull * 48000;
 

@@ -274,6 +274,8 @@ juce::String ProjectDocument::toJson() const
     root->setProperty ("version", kProjectFormatVersion);
     root->setProperty ("bpm", number (bpm));
     root->setProperty ("masterVolume", number (static_cast<double> (masterVolume)));
+    if (std::abs (masterPitch) > 0.0f) // 0.62.0
+        root->setProperty ("masterPitch", number (static_cast<double> (masterPitch)));
     root->setProperty ("songMode", songMode);
     root->setProperty ("currentPattern", currentPattern);
 
@@ -284,7 +286,19 @@ juce::String ProjectDocument::toJson() const
         auto* o = new juce::DynamicObject();
         o->setProperty ("name", juce::String (c.name));
         o->setProperty ("instrument", c.instrument == Instrument::Sampler ? "sampler" : c.instrument == Instrument::Drums ? "drums"
-                                    : c.instrument == Instrument::Plugin ? "plugin" : "synth");
+                                    : c.instrument == Instrument::Plugin ? "plugin" : c.instrument == Instrument::Layer ? "layer" : "synth");
+        if (c.instrument == Instrument::Layer) // 0.62.0: the channels that play this one's notes
+        {
+            juce::Array<juce::var> children;
+            for (int child = 0; child < kMaxChannels; ++child)
+                if (((c.layerMask >> child) & 1u) != 0)
+                    children.add (child);
+            o->setProperty ("layer", children);
+        }
+        if (c.colour != 0)
+            o->setProperty ("colour", juce::String::toHexString (static_cast<juce::int64> (c.colour)).paddedLeft ('0', 8));
+        if (! c.group.empty())
+            o->setProperty ("group", juce::String (c.group));
         if (c.instrument == Instrument::Plugin)
             if (const auto* spec = findPlugin (PluginSpec::Place::Channel, static_cast<int> (i), 0))
                 o->setProperty ("plugin", pluginToVar (*spec));
@@ -470,6 +484,12 @@ juce::String ProjectDocument::toJson() const
             o->setProperty ("mute", true); // 0.60.0
         if (pt.solo)
             o->setProperty ("solo", true);
+        if (pt.locked) // 0.62.0
+            o->setProperty ("locked", true);
+        if (pt.grouped)
+            o->setProperty ("grouped", true);
+        if (pt.collapsed)
+            o->setProperty ("collapsed", true);
         playlistTrackList.add (juce::var (o));
     }
     if (! playlistTrackList.isEmpty())
@@ -563,7 +583,13 @@ juce::String ProjectDocument::toJson() const
     {
         juce::Array<juce::var> list;
         for (const auto& m : arrangement.markers)
-            list.add (juce::Array<juce::var> { m.tick, juce::String (m.name) });
+        {
+            static constexpr const char* kActions[] = { "", "loop", "skip", "pause", "start" };
+            juce::Array<juce::var> entry { m.tick, juce::String (m.name) };
+            if (m.action != MarkerAction::None) // 0.62.0 (a third value; older versions read the first two)
+                entry.add (juce::String (kActions[static_cast<int> (m.action)]));
+            list.add (entry);
+        }
         root->setProperty ("markers", list);
     }
 
@@ -599,6 +625,7 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
     ProjectDocument d;
     d.bpm = readNumber (root->getProperty ("bpm"), 120.0, 40.0, 240.0);
     d.masterVolume = static_cast<float> (readNumber (root->getProperty ("masterVolume"), 0.8, 0.0, 1.0));
+    d.masterPitch = static_cast<float> (readNumber (root->getProperty ("masterPitch"), 0.0, -12.0, 12.0)); // 0.62.0
     d.songMode = readBool (root->getProperty ("songMode"), false);
 
     // --- channels
@@ -621,7 +648,19 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
         Channel c;
         c.name = readName (o->getProperty ("name"), "Channel " + std::to_string (i + 1));
         const auto instrument = o->getProperty ("instrument").toString();
-        if (instrument == "sampler")
+        // 0.62.0: the rack's colour and filter group, the Layer channel
+        if (const auto hex = o->getProperty ("colour").toString().trim(); hex.length() == 8 && hex.containsOnly ("0123456789abcdefABCDEF"))
+            c.colour = static_cast<std::uint32_t> (hex.getHexValue64()) | 0xff000000u;
+        c.group = o->getProperty ("group").toString().substring (0, 32).toStdString();
+        if (instrument == "layer")
+        {
+            c.instrument = Instrument::Layer;
+            if (auto* children = o->getProperty ("layer").getArray())
+                for (const auto& child : *children)
+                    if (const int index = readInt (child, -1, -1, kMaxChannels - 1); index >= 0)
+                        c.layerMask |= 1u << index;
+        }
+        else if (instrument == "sampler")
             c.instrument = Instrument::Sampler;
         else if (instrument == "drums")
             c.instrument = Instrument::Drums; // files from before 0.14.0 never say this
@@ -867,6 +906,9 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
                     pt.colour = static_cast<std::uint32_t> (hex.getHexValue64()) | 0xff000000u;
                 pt.mute = readBool (o->getProperty ("mute"), false); // 0.60.0
                 pt.solo = readBool (o->getProperty ("solo"), false);
+                pt.locked = readBool (o->getProperty ("locked"), false); // 0.62.0
+                pt.grouped = t > 0 && readBool (o->getProperty ("grouped"), false);
+                pt.collapsed = readBool (o->getProperty ("collapsed"), false);
             }
 
     // --- clips (each must fit, in order; the rest are dropped; since 0.33.0 they may overlap)
@@ -1012,8 +1054,14 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
     if (auto* list = root->getProperty ("markers").getArray()) // 0.61.0
     {
         for (const auto& t : *list)
-            if (auto* pair = t.getArray(); pair != nullptr && pair->size() == 2)
-                d.arrangement.markers.push_back ({ readInt ((*pair)[0], 0, 0, d.arrangement.timelineTicks()), (*pair)[1].toString().substring (0, 64).toStdString() });
+            if (auto* pair = t.getArray(); pair != nullptr && pair->size() >= 2)
+            {
+                TimeMarker marker { readInt ((*pair)[0], 0, 0, d.arrangement.timelineTicks()), (*pair)[1].toString().substring (0, 64).toStdString() };
+                const auto action = pair->size() > 2 ? (*pair)[2].toString() : juce::String(); // 0.62.0
+                marker.action = action == "loop" ? MarkerAction::Loop : action == "skip" ? MarkerAction::Skip
+                              : action == "pause" ? MarkerAction::Pause : action == "start" ? MarkerAction::Start : MarkerAction::None;
+                d.arrangement.markers.push_back (std::move (marker));
+            }
         d.arrangement.tidyMarkers();
     }
 

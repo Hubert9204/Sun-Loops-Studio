@@ -103,6 +103,7 @@ ProjectDocument MainComponent::makeDocument (bool withPluginStates)
     doc.songMode = songMode;
     doc.bpm = bpmSlider.getValue();
     doc.masterVolume = static_cast<float> (volumeSlider.getValue());
+    doc.masterPitch = masterPitch; // 0.62.0
     return doc;
 }
 
@@ -214,6 +215,8 @@ void MainComponent::applyDocument (ProjectDocument doc, const juce::File& file, 
     bpmSlider.setValue (doc.bpm, juce::dontSendNotification);
     playlistView.setBpm (doc.bpm);
     engine.setBpm (doc.bpm);
+    masterPitch = doc.masterPitch; // 0.62.0
+    pitchSlider.setValue (masterPitch, juce::dontSendNotification);
     volumeSlider.setValue (doc.masterVolume, juce::dontSendNotification);
     engine.setGain (doc.masterVolume);
     mixerPanel.setMasterVolume (doc.masterVolume);

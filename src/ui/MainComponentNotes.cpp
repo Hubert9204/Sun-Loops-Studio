@@ -1,6 +1,8 @@
 // Part of MainComponent: recording notes from MIDI keyboards.
 #include "ui/MainComponent.h"
 
+#include "audio/TimeFormat.h"
+
 #include "ui/AssignTrackDialog.h"
 #include "ui/AudioSettings.h"
 #include "ui/MetronomePanel.h"
@@ -158,7 +160,51 @@ void MainComponent::drainScoreEvents()
 {
     ScoreEvent e;
     while (engine.popScoreEvent (e))
+    {
         scoreLog.add (e);
+        if (stepEditOn)
+            stepEditNote (e); // 0.62.0
+    }
+}
+
+// 0.62.0, step editing (as FL Studio's): the grid's step, from the global snap (a 16th when the snap is a bar or finer than a 64th).
+int MainComponent::stepEditTicks() const
+{
+    static constexpr int ticks[] = { kTicksPerBeat / 4, 2 * kTicksPerBeat, kTicksPerBeat, kTicksPerBeat / 2, kTicksPerBeat / 4, kTicksPerBeat / 8,
+                                     kTicksPerBeat / 16, kTicksPerBeat / 4 };
+    return ticks[std::clamp (snapBox.getSelectedId(), 1, 8) - 1];
+}
+
+void MainComponent::stepEditNote (const ScoreEvent& e)
+{
+    if (engine.isPlaying() || recording)
+        return; // (while the song plays, Rec notes is what records)
+    if (! e.on)
+    {
+        stepEditHeld = std::max (0, stepEditHeld - 1);
+        if (stepEditHeld == 0) // every key let go: on to the next step (a chord's notes share one)
+        {
+            const int next = patternStartTick + stepEditTicks();
+            seekPattern (next >= currentPatternTicks() ? 0 : next);
+        }
+        return;
+    }
+    const int channel = e.channel;
+    if (channel < 0 || channel >= static_cast<int> (channels.size()))
+        return;
+    if (songMode)
+        setSongMode (false); // the notes go into the pattern
+    ++stepEditHeld;
+    const int step = stepEditTicks();
+    Note n { static_cast<int> (e.pitch), std::clamp (patternStartTick, 0, currentPatternTicks() - 1), step, std::clamp (e.velocity, 0.05f, 1.0f) };
+    n.lengthTicks = std::min (step, currentPatternTicks() - n.startTick);
+    auto& notes = channels[static_cast<size_t> (channel)].notes;
+    if (! addRecordedNote (notes, n))
+        return;
+    if (channel == selected)
+        pianoRoll.setNotes (notes);
+    publishProject();
+    statusLabel.setText ("Step edit: " + juce::String (theory::noteName (n.pitch)) + " at " + juce::String (formatBarsBeatsTicks (n.startTick)), juce::dontSendNotification);
 }
 
 // The score log's notes into the current pattern, each on the channel it was played on, from the pattern's start. The timing is

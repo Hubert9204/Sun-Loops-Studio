@@ -29,6 +29,7 @@
 #include "library/ChannelPreset.h"
 #include "library/Library.h"
 #include "library/ProjectFile.h"
+#include "ui/PerformancePanel.h"
 #include "ui/ChannelStrip.h"
 #include "ui/FileBrowser.h"
 #include "audio/AudioExport.h"
@@ -109,6 +110,7 @@ private:
         int selected = 0;
         double bpm = 120.0;
         double masterVolume = 0.8;
+        float masterPitch = 0.0f; // 0.62.0
     };
     static constexpr size_t kMaxHistory = 100;
     EditState captureEditState();
@@ -158,6 +160,11 @@ private:
     juce::uint32 lastAutosaveMs = 0;
 
     void refreshRackStrips();
+    // 0.62.0: the rack's filter group ("" = all the channels), the groups in use, the graph editor's channel, the master pitch
+    juce::String rackGroup;
+    juce::StringArray rackGroups() const;
+    void refreshStepGraph();
+    float masterPitch = 0.0f;
     void applyMetronome();                                  // button state, engine and saved settings
     void openAssignTrack (int channelIndex);                 // the "Assign free mixer track" window
     void assignChannelToTrack (int channelIndex, int track); // puts the instrument on that mixer track
@@ -225,6 +232,13 @@ private:
     // Browser sidebar: sounds dragged (or double-clicked) onto channels. channelIndex -1 = a new channel.
     void setBrowserOpen (bool shouldBeOpen);
     void rebuildBrowser();
+    // 0.62.0: the browser's "Current project" node (rebuilt when what it lists changes), the library's part of the tree as it
+    // was last scanned, and the favourites kept in the settings
+    BrowserNode libraryTree;
+    juce::String projectNodeSignature;
+    BrowserNode projectBrowserNode (juce::String* signature = nullptr) const;
+    void refreshProjectNode (bool force = false);
+    void browserAction (const juce::String& action);
     void startPluginScan();
 
     // Plugins (0.17.0, MainComponentPlugins.cpp)
@@ -503,6 +517,44 @@ private:
     // The computer keyboard as a MIDI keyboard (0.32.0, see TypingKeyboard.h): notes go to the selected channel like a MIDI
     // keyboard's (so Rec notes and the score log take them too).
     juce::TextButton typingButton { "Typing keys" };
+    // 0.62.0: the master pitch and step editing (notes played while the song is stopped are written at the pattern's start
+    // marker, which then moves on by the snap)
+    juce::Label pitchLabel { {}, "Pitch" };
+    juce::Slider pitchSlider { juce::Slider::LinearBar, juce::Slider::NoTextBox };
+    juce::TextButton stepEditButton { "Step edit" };
+    bool stepEditOn = false;
+    bool performanceOn = false; // 0.62.0: the performance mode plays its own schedule of clips (see MainComponentPerformance.cpp)
+    // A launched clip on the performance timeline: it repeats from `fromTick` to `toTick` (open-ended until something replaces it).
+    struct PerformanceSegment
+    {
+        Clip clip;
+        int fromTick = 0, toTick = 0;
+    };
+    struct PerformanceLane // one playlist track: what plays, and what takes over (or the stop) at `queuedAt`
+    {
+        Clip playing, queued;
+        bool hasPlaying = false, hasQueued = false, stopQueued = false;
+        int queuedAt = 0;
+    };
+    std::vector<PerformanceSegment> performanceSegments;
+    std::vector<PerformanceLane> performanceLanes;
+    int performanceQuantise = 1; // the id of the panel's choice: 1 bar, 2 bars, 4 bars, a beat, a 16th
+    int performanceHorizon = 0;  // how far ahead the timeline is written
+    std::unique_ptr<PerformanceWindow> performanceWindow;
+    void togglePerformanceWindow();
+    void setPerformanceMode (bool on);
+    void performanceLaunch (int clipIndex);
+    void performanceStop (int track);
+    void performanceCut (int track, int atTick);
+    void performanceTick();           // from the timer
+    void refreshPerformancePanel();
+    int performanceBoundary() const;  // the tick at which a launch or a stop takes effect
+    Arrangement performanceArrangement();
+    void makeClipUnique (int clipIndex);                       // the Playlist's "Make unique"
+    void consolidateClips (int track, int fromTick, int toTick); // ... and "Consolidate" (toTick < 0: the whole track)
+    int stepEditHeld = 0;
+    void stepEditNote (const ScoreEvent& e);
+    int stepEditTicks() const;
     bool typingOn = true;
     int typingOctave = 0;
     int typingVelocity = 100;

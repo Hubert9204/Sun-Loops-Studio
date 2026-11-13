@@ -87,6 +87,20 @@ MainComponent::MainComponent()
     refreshRackStrips();
     rackView.onAddChannel = [this] { showAddMenu (rackView); };
     rackBody.onOptionsMenu = [this] (juce::Component& target) { showRackOptionsMenu (target); }; // 0.60.0
+    rackBody.onGroupChosen = [this] (const juce::String& group) // 0.62.0
+    {
+        rackGroup = group;
+        refreshRackStrips();
+    };
+    rackBody.stepGraph().onEdited = [this]
+    {
+        if (selected >= 0 && selected < static_cast<int> (channels.size()))
+        {
+            pianoRoll.setNotes (channels[static_cast<size_t> (selected)].notes);
+            strips[static_cast<size_t> (selected)]->repaintGrid();
+        }
+        publishProject();
+    };
 
     rackView.onItemDroppedOnEmptyArea = [this] (const drag::Item& item) { applyBrowserItem (-1, item); };
 
@@ -339,6 +353,9 @@ MainComponent::MainComponent()
     playlistView.onEditSample = [this] (int index) { openSampleEditorForClip (index); };
     playlistView.onEditPitch = [this] (int index) { openPitchEditorForClip (index); };
     playlistView.onSplitStems = [this] (int index) { splitClipIntoStems (index); };
+    playlistView.onMakeUnique = [this] (int clip) { makeClipUnique (clip); }; // 0.62.0
+    playlistView.onConsolidate = [this] (int track, int from, int to) { consolidateClips (track, from, to); };
+    playlistView.onStatus = [this] (const juce::String& text) { statusLabel.setText (text, juce::dontSendNotification); };
     playlistView.onSeek = [this] (int tick) { seekSong (tick); };
     playlistView.onLoopChanged = [this]
     {
@@ -396,7 +413,35 @@ MainComponent::MainComponent()
         applyBrowserItem (item.kind == "plugin" && item.payload.startsWith ("instrument|") ? -1 : selected, item);
     };
     browser.onItemPreview = [this] (const drag::Item& item) { previewBrowserItem (item); };
-    browser.onAction = [this] (const juce::String& action) { if (action == "scan-plugins") startPluginScan(); };
+    browser.onAction = [this] (const juce::String& action) { browserAction (action); };
+    // 0.62.0: the favourites live in the settings (one per line: kind, payload, name)
+    if (settings != nullptr)
+    {
+        std::vector<BrowserNode> favourites;
+        for (const auto& line : juce::StringArray::fromLines (settings->getValue ("browser.favourites")))
+        {
+            const auto fields = juce::StringArray::fromTokens (line, "\t", "");
+            if (fields.size() == 3 && fields[1].isNotEmpty())
+                favourites.push_back ({ fields[2].toStdString(), static_cast<NodeKind> (std::clamp (fields[0].getIntValue(), 1, 5)), fields[1].toStdString(), {} });
+        }
+        browser.setFavourites (std::move (favourites));
+        browser.setTab (settings->getIntValue ("browser.tab", 0));
+    }
+    browser.onFavouritesChanged = [this]
+    {
+        if (settings == nullptr)
+            return;
+        juce::StringArray lines;
+        for (const auto& f : browser.getFavourites())
+            lines.add (juce::String (static_cast<int> (f.kind)) + "\t" + juce::String (f.payload) + "\t" + juce::String (f.name));
+        settings->setValue ("browser.favourites", lines.joinIntoString ("\n"));
+        settings->saveIfNeeded();
+    };
+    browser.onTabChanged = [this] (int tab)
+    {
+        if (settings != nullptr)
+            settings->setValue ("browser.tab", tab);
+    };
     browser.onRefresh = [this] { rebuildBrowser(); };
     browser.onOpenFolder = [this] { library.ensureExists(); library.root.revealToUser(); };
     browser.onCollapse = [this] { setBrowserOpen (false); };
@@ -415,6 +460,36 @@ MainComponent::MainComponent()
     heliosButton.onClick = [this] { openHelios(); };
     heliosButton.setTooltip ("Helios (F1): ask how to do something; searches the manual on this computer (no AI, no internet)");
     heliosButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff5a3d1e));
+    // 0.62.0: the master pitch (as FL Studio's main pitch knob) and step editing
+    pitchLabel.setFont (juce::FontOptions (12.0f));
+    pitchLabel.setColour (juce::Label::textColourId, juce::Colour (0xffb9bfc9));
+    pitchSlider.setRange (-12.0, 12.0, 1.0);
+    pitchSlider.setDoubleClickReturnValue (true, 0.0);
+    pitchSlider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+    pitchSlider.textFromValueFunction = [] (double v) { return (v > 0.0 ? "+" : "") + juce::String (juce::roundToInt (v)) + " st"; };
+    pitchSlider.setTooltip ("Master pitch: every note of the synths, samplers and plugin instruments moves by this many semitones "
+                            "(drum channels keep their pitch). Double-click: 0");
+    pitchSlider.onValueChange = [this]
+    {
+        masterPitch = static_cast<float> (pitchSlider.getValue());
+        publishProject();
+    };
+    stepEditButton.setClickingTogglesState (false);
+    stepEditButton.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xffd9433b));
+    stepEditButton.setTooltip ("Step editing: while the song is stopped, each note you play (typing keys or a MIDI keyboard) is written into "
+                               "the pattern at its start marker, which then moves on by the snap. Keys held together make a chord.");
+    stepEditButton.onClick = [this]
+    {
+        stepEditOn = ! stepEditOn;
+        stepEditHeld = 0;
+        stepEditButton.setToggleState (stepEditOn, juce::dontSendNotification);
+        statusLabel.setText (stepEditOn ? "Step editing is on: stop the song and play; the notes go to the pattern's start marker (click the piano roll's ruler to move it)"
+                                        : "Step editing is off",
+                             juce::dontSendNotification);
+    };
+    for (auto* c : std::initializer_list<juce::Component*> { &pitchLabel, &pitchSlider, &stepEditButton })
+        addAndMakeVisible (c);
+
     typingButton.setClickingTogglesState (false);
     typingButton.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xffe8943a));
     typingButton.setTooltip ("Play the selected channel from the computer keyboard: A S D F G H J K L are the white keys from C5, "
@@ -542,14 +617,37 @@ MainComponent::MainComponent()
 }
 
 // Hands the strips to the rack (after strips were created or removed) and enables or disables "add channel".
+// 0.62.0: the rack shows the channels of the chosen filter group (all of them without one).
+juce::StringArray MainComponent::rackGroups() const
+{
+    juce::StringArray groups;
+    for (const auto& c : channels)
+        if (! c.group.empty())
+            groups.addIfNotAlreadyThere (juce::String (c.group));
+    groups.sortNatural();
+    return groups;
+}
+
 void MainComponent::refreshRackStrips()
 {
+    const auto groups = rackGroups();
+    if (! groups.contains (rackGroup))
+        rackGroup.clear(); // the group is gone (its last channel left it)
+    rackBody.setGroups (groups, rackGroup);
     std::vector<ChannelStrip*> stripPointers;
     stripPointers.reserve (strips.size());
-    for (auto& s : strips)
-        stripPointers.push_back (s.get());
+    for (size_t i = 0; i < strips.size(); ++i)
+        if (rackGroup.isEmpty() || (i < channels.size() && juce::String (channels[i].group) == rackGroup))
+            stripPointers.push_back (strips[i].get());
     rackView.setStrips (std::move (stripPointers));
     rackView.setAddChannelEnabled (channels.size() < static_cast<size_t> (kMaxChannels));
+    refreshStepGraph();
+}
+
+void MainComponent::refreshStepGraph()
+{
+    const bool valid = selected >= 0 && selected < static_cast<int> (channels.size());
+    rackBody.stepGraph().setChannel (valid ? &channels[static_cast<size_t> (selected)] : nullptr, currentPatternTicks());
 }
 
 MainComponent::~MainComponent()
@@ -566,6 +664,7 @@ MainComponent::~MainComponent()
     samplerWindow.reset();
     synthWindow.reset();
     metersWindow.reset();
+    performanceWindow.reset();
     engine.getDeviceManager().removeChangeListener (this);
     audioDialog.deleteAndZero(); // it refers to the engine
     assignDialog.deleteAndZero();
@@ -654,6 +753,11 @@ void MainComponent::resized()
     typingButton.setBounds (views.removeFromRight (90));
     views.removeFromRight (4);
     metronomeButton.setBounds (views.removeFromRight (90));
+    views.removeFromRight (4);
+    stepEditButton.setBounds (views.removeFromRight (74)); // 0.62.0
+    views.removeFromRight (6);
+    pitchSlider.setBounds (views.removeFromRight (76).reduced (0, 3));
+    pitchLabel.setBounds (views.removeFromRight (36));
     const struct { juce::TextButton* b; int w; } shortcuts[] = { { &playlistToggle, 96 }, { &pianoToggle, 104 }, { &rackToggle, 120 },
                                                                 { &mixerToggle, 82 }, { &browserToggle, 94 }, { &pluginPickerToggle, 100 } };
     for (const auto& sc : shortcuts)
@@ -801,6 +905,13 @@ void MainComponent::timerCallback()
     autosaveIfNeeded();
     logStatusChanges();
     updateToolbarReadouts(); // 0.60.0: the time and CPU panels, the hint bar
+    performanceTick(); // 0.62.0
+    if (int pausedAt = 0; engine.takeMarkerPause (pausedAt)) // 0.62.0: a Pause marker stopped the transport: stay there
+    {
+        setPlaying (false);
+        seekSong (pausedAt);
+        statusLabel.setText ("Paused at a marker: Play goes on from here", juce::dontSendNotification);
+    }
     if (! typingHeld.empty())
         releaseTypingKeys (! juce::Process::isForegroundProcess()); // keys let go while another window had the keyboard
 
@@ -1004,6 +1115,37 @@ void MainComponent::createStrip (size_t channelIndex)
         publishProject();
     };
     strip->onAutomate = [this] (int idx, AutomationKind kind) { createAutomationFor ({ kind, idx, 0, kind == AutomationKind::ChannelPlugin ? -1 : 0 }); };
+    // 0.62.0: filter groups, colours, the Layer's children
+    strip->listGroups = [this] { return rackGroups(); };
+    strip->listChannelNames = [this]
+    {
+        juce::StringArray names;
+        for (const auto& c : channels)
+            names.add (juce::String (c.name));
+        return names;
+    };
+    strip->onLooksChanged = [this] (int)
+    {
+        markDirty();
+        juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<MainComponent> (this)]
+                                         {
+                                             if (safe != nullptr)
+                                                 safe->refreshRackStrips(); // (not from inside the strip's own menu callback)
+                                         });
+    };
+    strip->onNewGroup = [this] (int idx)
+    {
+        promptForText (*this, "New filter group", "Name of the group (for example Drums, Bass, Leads):", {}, "OK",
+                       [safe = juce::Component::SafePointer<MainComponent> (this), idx] (const juce::String& typed)
+                       {
+                           const auto name = typed.trim().substring (0, 24);
+                           if (safe == nullptr || name.isEmpty() || idx >= static_cast<int> (safe->channels.size()))
+                               return;
+                           safe->channels[static_cast<size_t> (idx)].group = name.toStdString();
+                           safe->markDirty();
+                           safe->refreshRackStrips();
+                       });
+    };
     strip->onSavePreset = [this] (int idx) { savePresetFor (idx); };
     strip->onAssignTrack = [this] (int idx) { openAssignTrack (idx); };
     strip->onItemDropped = [this] (int idx, const drag::Item& item) { applyBrowserItem (idx, item); };
@@ -1047,7 +1189,8 @@ int MainComponent::addChannel (Instrument instrument, bool askForSample)
 
     Channel c;
     c.instrument = instrument;
-    c.name = (instrument == Instrument::Synth ? "Synth " : instrument == Instrument::Drums ? "Drums " : instrument == Instrument::Plugin ? "Plugin " : "Sampler ")
+    c.name = (instrument == Instrument::Synth ? "Synth " : instrument == Instrument::Drums ? "Drums " : instrument == Instrument::Plugin ? "Plugin "
+              : instrument == Instrument::Layer ? "Layer " : "Sampler ")
            + std::to_string (channels.size() + 1);
     if (instrument == Instrument::Drums)
         c.kit = defaultDrumKit();
@@ -1128,7 +1271,12 @@ void MainComponent::publishProject()
         synthWindow->panel().refresh();
     for (auto& strip : strips)
         strip->repaintGrid(); // the notes may have changed from somewhere else (drum machine, recording, undo): squares follow
+    refreshStepGraph(); // 0.62.0: the graph editor follows the notes too
+    refreshPerformancePanel(); // ... and the performance window the clips
+    refreshProjectNode();      // ... and the browser's Current project node (only when what it lists changed)
     auto project = std::make_unique<Project> (compileCurrent());
+    if (songMode && ! performanceOn) // 0.62.0: the markers' actions (live playback only, as the loop region)
+        project->jumps = arrangement.markerJumps();
     followEvents = songMode ? project->automation : std::vector<AutomationEvent> {};
     if (! songMode && currentPattern >= 0 && currentPattern < static_cast<int> (arrangement.patterns.size()))
     {
@@ -1170,6 +1318,7 @@ void MainComponent::selectChannel (int index)
     mixerPanel.setSelectedTrack (channels[static_cast<size_t> (selected)].mixerTrack);
     engine.setMidiTargetChannel (selected); // a MIDI keyboard plays the selected channel
 
+    refreshStepGraph(); // 0.62.0
     const auto name = juce::String (channels[static_cast<size_t> (selected)].name);
     pianoRoll.setNotes (channels[static_cast<size_t> (selected)].notes);
     pianoRoll.scrollToNotes();
@@ -1188,6 +1337,10 @@ void MainComponent::setPlaying (bool shouldPlay)
         statusLabel.setText ("Recording notes into " + juce::String (channels[static_cast<size_t> (selected)].name) + ", "
                                  + juce::String (arrangement.patterns[static_cast<size_t> (currentPattern)].name) + ": play your keyboard",
                              juce::dontSendNotification);
+    // 0.62.0: a Start marker is where the song starts from (when the start has not been put somewhere else)
+    if (shouldPlay && ! engine.isPlaying() && songMode && ! performanceOn && songStartTick == 0)
+        if (const int start = arrangement.startMarkerTick(); start > 0)
+            seekSong (start);
     engine.setPlaying (shouldPlay);
     playButton.setToggleState (shouldPlay, juce::dontSendNotification); // 0.60.0: Play stays Play (lit while playing); Stop is its own button
 }

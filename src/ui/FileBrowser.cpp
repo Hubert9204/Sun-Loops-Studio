@@ -101,7 +101,20 @@ public:
     void itemClicked (const juce::MouseEvent& e) override
     {
         if (e.mods.isPopupMenu())
+        {
+            // 0.62.0: the favourites, from a right click on anything that can be dragged
+            if (! node.isDraggable())
+                return;
+            juce::PopupMenu menu;
+            const bool starred = owner.isFavourite (node);
+            menu.addItem (1, starred ? "Remove from the favourites" : "Add to the favourites");
+            menu.showMenuAsync (juce::PopupMenu::Options(), [safe = juce::Component::SafePointer<FileBrowser> (&owner), copy = node] (int result)
+                                {
+                                    if (safe != nullptr && result == 1)
+                                        safe->toggleFavourite (copy);
+                                });
             return;
+        }
         if ((node.kind == NodeKind::AudioFile && ! juce::String (node.payload).endsWithIgnoreCase (".sf2")
              && ! juce::String (node.payload).endsWithIgnoreCase (".sfz")) || node.kind == NodeKind::BuiltinSample)
         {
@@ -150,6 +163,24 @@ FileBrowser::FileBrowser()
     refreshButton.setTooltip ("Look for new files");
     for (auto* b : { &collapseButton, &folderButton, &refreshButton })
         b->setMouseClickGrabsKeyboardFocus (false);
+
+    // 0.62.0: the tabs
+    static const char* const kTabNames[] = { "All", "Project", "Plugins", "\xe2\x98\x85" };
+    static const char* const kTabTips[] = { "Everything: the library, the current project, the plugins and the favourites",
+                                            "The current project: its patterns, channels, samples, effects and automation",
+                                            "The plugins found on this computer", "The favourites (right-click an item to add it)" };
+    for (size_t i = 0; i < tabButtons.size(); ++i)
+    {
+        auto& b = tabButtons[i];
+        b.setButtonText (juce::String::fromUTF8 (kTabNames[i]));
+        b.setTooltip (kTabTips[i]);
+        b.setMouseClickGrabsKeyboardFocus (false);
+        b.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff3b4150));
+        b.setConnectedEdges ((i > 0 ? juce::Button::ConnectedOnLeft : 0) | (i + 1 < tabButtons.size() ? juce::Button::ConnectedOnRight : 0));
+        b.onClick = [this, i] { setTab (static_cast<int> (i)); };
+        addAndMakeVisible (b);
+    }
+    tabButtons[0].setToggleState (true, juce::dontSendNotification);
 
     collapseButton.onClick = [this] { if (onCollapse) onCollapse(); };
     folderButton.onClick = [this] { if (onOpenFolder) onOpenFolder(); };
@@ -215,6 +246,13 @@ void FileBrowser::resized()
     titleLabel.setBounds (head);
 
     area.removeFromTop (6);
+    {
+        auto tabs = area.removeFromTop (22); // 0.62.0
+        const int each = tabs.getWidth() / static_cast<int> (tabButtons.size());
+        for (size_t i = 0; i < tabButtons.size(); ++i)
+            tabButtons[i].setBounds (i + 1 < tabButtons.size() ? tabs.removeFromLeft (each) : tabs);
+    }
+    area.removeFromTop (4);
     search.setBounds (area.removeFromTop (26));
     area.removeFromTop (2);
     statusLabel.setBounds (area.removeFromTop (16));
@@ -225,6 +263,48 @@ void FileBrowser::setTree (BrowserNode root)
 {
     fullTree = std::move (root);
     applyFilter();
+}
+
+// 0.62.0
+void FileBrowser::setTab (int newTab)
+{
+    tab = std::clamp (newTab, 0, static_cast<int> (tabButtons.size()) - 1);
+    for (size_t i = 0; i < tabButtons.size(); ++i)
+        tabButtons[i].setToggleState (static_cast<int> (i) == tab, juce::dontSendNotification);
+    applyFilter();
+    if (onTabChanged)
+        onTabChanged (tab);
+}
+
+void FileBrowser::setFavourites (std::vector<BrowserNode> list)
+{
+    favourites = std::move (list);
+    applyFilter();
+}
+
+bool FileBrowser::isFavourite (const BrowserNode& node) const noexcept
+{
+    for (const auto& f : favourites)
+        if (f.kind == node.kind && f.payload == node.payload)
+            return true;
+    return false;
+}
+
+void FileBrowser::toggleFavourite (const BrowserNode& node)
+{
+    const auto found = std::find_if (favourites.begin(), favourites.end(),
+                                     [&] (const BrowserNode& f) { return f.kind == node.kind && f.payload == node.payload; });
+    if (found != favourites.end())
+        favourites.erase (found);
+    else
+    {
+        BrowserNode leaf = node;
+        leaf.children.clear();
+        favourites.push_back (std::move (leaf));
+    }
+    applyFilter();
+    if (onFavouritesChanged)
+        onFavouritesChanged();
 }
 
 void FileBrowser::openAll (juce::TreeViewItem& item)
@@ -247,7 +327,34 @@ void FileBrowser::applyFilter()
     if (nowSearching && ! searching && openness != nullptr)
         opennessBeforeSearch = std::make_unique<juce::XmlElement> (*openness);
 
-    const auto shown = filterTree (fullTree, query);
+    // 0.62.0: what the tab shows - everything (with the favourites in a folder of their own), or one part of it
+    BrowserNode base;
+    base.name = fullTree.name;
+    const auto favouritesFolder = [this]
+    {
+        BrowserNode folder;
+        folder.name = "Favourites";
+        folder.children = favourites;
+        if (favourites.empty())
+            folder.children.push_back ({ "Right-click a sound, preset or plugin to add it here", NodeKind::Note, {}, {} });
+        return folder;
+    };
+    if (tab == Favourites)
+        base.children = favouritesFolder().children;
+    else
+    {
+        if (tab == All && ! favourites.empty())
+            base.children.push_back (favouritesFolder()); // (above the project and the library)
+        for (const auto& child : fullTree.children)
+        {
+            const bool project = child.name == "Current project", plugins = child.name == "Plugin";
+            if (tab == All)
+                base.children.push_back (child);
+            else if ((tab == Project && project) || (tab == Plugins && plugins))
+                base.children.insert (base.children.end(), child.children.begin(), child.children.end()); // the part's own content, one level up
+        }
+    }
+    const auto shown = filterTree (base, query);
     shownLeaves = countLeaves (shown);
 
     tree.setRootItem (nullptr);

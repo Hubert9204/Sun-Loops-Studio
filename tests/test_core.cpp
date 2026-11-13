@@ -8286,6 +8286,207 @@ void testMixer062()
     }
 }
 
+// 0.62.0: the Layer channel, the master pitch, the markers' actions, playlist groups, and what performance mode rests on.
+void testRackPlaylistToolbar062()
+{
+    std::cout << "Layer channel, master pitch, marker actions, playlist groups (0.62.0)\n";
+    const auto leftOf = [] (const juce::AudioBuffer<float>& b) { return std::vector<float> (b.getReadPointer (0), b.getReadPointer (0) + b.getNumSamples()); };
+    const auto tone = [] (double hz, int startTick, int lengthTicks = kBeat)
+    {
+        auto c = samplerChannel (sineSample (hz, 0.4, 48000.0), { sls::Note { 60, startTick, lengthTicks, 1.0f } });
+        c.volume = 0.4f;
+        return c;
+    };
+
+    // --- Layer channel
+    {
+        const std::vector<sls::Note> notes { { 60, 0, kBeat, 0.9f }, { 64, kBeat, kBeat / 2, 0.7f } };
+        auto layer = synthChannel (notes);
+        layer.instrument = sls::Instrument::Layer;
+        layer.layerMask = 0b110; // channels 2 and 3
+        auto synth = synthChannel ({}, 0.3f);
+        auto sampler = samplerChannel (sineSample (700.0, 0.3, 48000.0), {});
+        sampler.volume = 0.3f;
+        const auto layered = sls::renderToBuffer (oneBar ({ layer, synth, sampler }), {});
+        auto synthDirect = synth, samplerDirect = sampler;
+        synthDirect.notes = notes;
+        samplerDirect.notes = notes;
+        const auto direct = sls::renderToBuffer (oneBar ({ synthChannel ({}), synthDirect, samplerDirect }), {});
+        check (leftOf (layered) == leftOf (direct) && peakOf (layered.getReadPointer (0), 0, 48000) > 0.05f,
+               "layer: its notes are played by its children, exactly as if they were theirs");
+        const auto project = oneBar ({ layer, synth, sampler });
+        check (project.channels[0].notes.empty() && project.channels[1].notes.size() == 2 && project.channels[2].notes.size() == 2,
+               "layer: the layer itself keeps no notes to play");
+        layer.layerMask = 0;
+        check (peakOf (sls::renderToBuffer (oneBar ({ layer, synth, sampler }), {}).getReadPointer (0), 0, 96000) == 0.0f, "layer: without children it is silent");
+        layer.layerMask = 0b111; // itself too: ignored
+        auto other = layer; // a layer among the children is not played either
+        other.notes.clear();
+        check (leftOf (sls::renderToBuffer (oneBar ({ layer, synth, sampler, other }), {})) == leftOf (direct), "layer: a layer is never its own child");
+
+        // played by hand
+        layer.layerMask = 0b010;
+        const auto liveProject = oneBar ({ [&] { auto l = layer; l.notes.clear(); return l; }(), synth });
+        sls::Player player;
+        player.prepare (kSr);
+        renderBlocks (player, liveProject, false, 0.05);
+        player.liveNoteOn (liveProject, 0, 69, 0.9f);
+        const auto held = renderBlocks (player, liveProject, false, 0.3);
+        player.liveNoteOff (0, 69);
+        const auto after = renderBlocks (player, liveProject, false, 0.5);
+        check (toneEnergy (held.data(), 2400, 12000, 440.0) > 0.01 && peakOf (after.data(), 14400, 24000) < 1.0e-4f,
+               "layer: a note played by hand sounds on the children and ends with the key");
+
+        auto doc = sls::ProjectDocument::blank();
+        doc.channels[0].instrument = sls::Instrument::Layer;
+        doc.channels[0].layerMask = 0b1010;
+        doc.channels[0].colour = 0xff4a9be8u;
+        doc.channels[0].group = "Leads";
+        const auto parsed = sls::ProjectDocument::fromJson (doc.toJson());
+        check (parsed.document.has_value() && parsed.document->channels[0].instrument == sls::Instrument::Layer && parsed.document->channels[0].layerMask == 0b1010u
+                   && parsed.document->channels[0].colour == 0xff4a9be8u && parsed.document->channels[0].group == "Leads",
+               "a layer's children and a channel's colour and filter group survive a save and a load");
+    }
+
+    // --- master pitch
+    {
+        auto synthProject = oneBar ({ synthChannel ({ { 69, 0, 2 * kBeat, 0.9f } }) });
+        synthProject.masterPitch = 12.0f;
+        const auto up = sls::renderToBuffer (synthProject, {});
+        check (toneEnergy (up.getReadPointer (0), 4800, 40000, 880.0) > 10.0 * toneEnergy (up.getReadPointer (0), 4800, 40000, 440.0),
+               "master pitch: +12 plays a synth an octave up");
+        auto samplerProject = oneBar ({ tone (1000.0, 0) });
+        samplerProject.masterPitch = -12.0f;
+        const auto down = sls::renderToBuffer (samplerProject, {});
+        check (toneEnergy (down.getReadPointer (0), 2400, 20000, 500.0) > 10.0 * toneEnergy (down.getReadPointer (0), 2400, 20000, 1000.0),
+               "master pitch: -12 plays a sampler an octave down");
+        sls::Channel drums;
+        drums.instrument = sls::Instrument::Drums;
+        juce::StringArray problems;
+        drums.kit = std::make_shared<const sls::DrumKit> (sls::loadKit (sls::builtinKitSpec ("basic"), problems));
+        drums.notes = { { 36, 0, kBeat / 4, 1.0f } }; // the kick's pad
+        auto drumProject = oneBar ({ drums });
+        const auto plainDrums = leftOf (sls::renderToBuffer (drumProject, {}));
+        drumProject.masterPitch = 7.0f;
+        check (leftOf (sls::renderToBuffer (drumProject, {})) == plainDrums && peakOf (plainDrums.data(), 0, 24000) > 0.01f, "master pitch: drum channels keep their pitch");
+
+        auto doc = sls::ProjectDocument::blank();
+        doc.masterPitch = -5.0f;
+        const auto parsed = sls::ProjectDocument::fromJson (doc.toJson());
+        check (parsed.document.has_value() && std::abs (parsed.document->masterPitch + 5.0f) < 1.0e-6f
+                   && std::abs (sls::ProjectDocument::fromJson (sls::ProjectDocument::blank().toJson()).document->masterPitch) < 1.0e-6f,
+               "the master pitch survives a save and a load (and is 0 when the file has none)");
+    }
+
+    // --- the markers' actions in the transport: 1 kHz on beat 1, 2 kHz on beat 3 (a beat is 24000 samples)
+    {
+        auto project = oneBar ({ tone (1000.0, 0), tone (2000.0, 2 * kBeat) });
+        const auto render = [&] (std::vector<sls::Project::Jump> jumps, double seconds, sls::Player* use = nullptr)
+        {
+            project.jumps = std::move (jumps);
+            sls::Player own;
+            auto& player = use != nullptr ? *use : own;
+            player.prepare (kSr);
+            return renderBlocks (player, project, true, seconds);
+        };
+        const auto plain = render ({}, 2.0);
+        check (toneEnergy (plain.data(), 49000, 58000, 2000.0) > 0.02 && toneEnergy (plain.data(), 25000, 34000, 2000.0) < 0.002, "markers: without actions the song plays straight through");
+        const auto skipped = render ({ { kBeat, 2 * kBeat } }, 2.0);
+        check (toneEnergy (skipped.data(), 25000, 34000, 2000.0) > 0.02, "markers: Skip goes on from the next marker");
+        const auto looped = render ({ { 2 * kBeat, 0 } }, 2.0);
+        check (toneEnergy (looped.data(), 49000, 58000, 1000.0) > 0.02 && toneEnergy (looped.data(), 49000, 58000, 2000.0) < 0.002, "markers: Loop goes back to the marker before");
+        sls::Player player;
+        const auto paused = render ({ { kBeat, -1 } }, 2.0, &player);
+        int pausedAt = -1;
+        check (player.takeMarkerPause (pausedAt) && pausedAt == kBeat && ! player.takeMarkerPause (pausedAt), "markers: Pause asks for the transport to stop, once");
+        check (toneEnergy (paused.data(), 49000, 58000, 2000.0) < 1.0e-4 && peakOf (paused.data(), 40000, 96000) < 1.0e-4f, "markers: nothing plays after a Pause marker");
+        // a jump lands exactly: the skipped render from the jump on is the plain one from beat 3 on
+        double worst = 0.0;
+        for (int i = 100; i < 20000; ++i)
+            worst = std::max (worst, static_cast<double> (std::abs (skipped[static_cast<size_t> (24000 + i)] - plain[static_cast<size_t> (48000 + i)])));
+        check (worst < 0.02, "markers: a jump lands on the sample (worst difference " + std::to_string (worst) + ")");
+
+        sls::Arrangement a;
+        a.patterns.resize (1);
+        a.markers = { { 960, "A" }, { 1920, "B", sls::MarkerAction::Loop }, { 3840, "C", sls::MarkerAction::Skip }, { 5760, "D", sls::MarkerAction::Start },
+                      { 7680, "E", sls::MarkerAction::Pause }, { 9600, "F", sls::MarkerAction::Skip } };
+        const auto jumps = a.markerJumps();
+        check (jumps.size() == 3 && jumps[0].atTick == 1920 && jumps[0].toTick == 960 && jumps[1].atTick == 3840 && jumps[1].toTick == 5760
+                   && jumps[2].atTick == 7680 && jumps[2].toTick == -1 && a.startMarkerTick() == 5760,
+               "markers: Loop, Skip, Pause and Start become what the transport does (a Skip with no marker after it does nothing)");
+        auto doc = sls::ProjectDocument::blank();
+        doc.arrangement.markers = { { 480, "Intro" }, { 960, "Drop", sls::MarkerAction::Loop }, { 1440, "", sls::MarkerAction::Pause } };
+        const auto parsed = sls::ProjectDocument::fromJson (doc.toJson());
+        check (parsed.document.has_value() && parsed.document->arrangement.markers == doc.arrangement.markers, "markers: their actions survive a save and a load");
+    }
+
+    // --- playlist groups and locks
+    {
+        sls::Arrangement a;
+        a.patterns.resize (1);
+        a.ensureChannelCount (1);
+        a.patterns[0].notes[0] = { { 60, 0, 240, 0.8f } };
+        a.playlistTracks.resize (6);
+        a.playlistTracks[2].grouped = a.playlistTracks[3].grouped = true; // tracks 2 to 4 are a group, its head is track 2 (index 1)
+        check (a.groupHead (3) == 1 && a.groupHead (2) == 1 && a.groupHead (1) == 1 && a.groupHead (4) == 4 && a.groupEnd (1) == 3 && a.groupEnd (0) == 0,
+               "playlist groups: a grouped track belongs to the first track above that is not grouped");
+        a.clips = { uc (a, 0, 3, 0, 1) };
+        const std::vector<sls::Channel> channels { synthChannel ({}) };
+        check (sls::compileSong (channels, a).channels[0].notes.size() == 1, "playlist groups: a grouped track plays");
+        a.playlistTracks[1].mute = true;
+        check (sls::compileSong (channels, a).channels[0].notes.empty() && ! a.trackPlays (2) && a.trackPlays (4), "playlist groups: the head's mute silences the group");
+        a.playlistTracks[1].mute = false;
+        a.playlistTracks[5].solo = true;
+        check (! a.trackPlays (3), "playlist groups: another track's solo leaves the group out");
+        a.playlistTracks[1].solo = true;
+        check (a.trackPlays (3) && a.trackPlays (2) && ! a.trackPlays (0), "playlist groups: the head's solo counts for the group");
+        a.playlistTracks[1].collapsed = true;
+        check (a.trackHidden (2) && a.trackHidden (3) && ! a.trackHidden (1) && ! a.trackHidden (4), "playlist groups: a folded head hides the tracks grouped under it");
+        a.playlistTracks[4].locked = true;
+        check (a.trackLocked (4) && ! a.trackLocked (3) && ! a.trackLocked (99), "playlist tracks can be locked");
+
+        auto doc = sls::ProjectDocument::blank();
+        doc.arrangement.playlistTracks[2].grouped = true;
+        doc.arrangement.playlistTracks[1].collapsed = true;
+        doc.arrangement.playlistTracks[3].locked = true;
+        const auto parsed = sls::ProjectDocument::fromJson (doc.toJson());
+        check (parsed.document.has_value() && parsed.document->arrangement.playlistTracks[2].grouped && parsed.document->arrangement.playlistTracks[1].collapsed
+                   && parsed.document->arrangement.playlistTracks[3].locked && ! parsed.document->arrangement.playlistTracks[0].locked,
+               "playlist groups, folds and locks survive a save and a load");
+    }
+
+    // --- what performance mode rests on: a timeline rewritten ahead of the playhead plays as if it had always been so
+    {
+        sls::Arrangement a;
+        a.patterns.resize (2);
+        a.ensureChannelCount (2);
+        a.patterns[0].notes[0] = { { 57, 0, 400, 0.8f }, { 60, 480, 400, 0.8f }, { 64, 960, 900, 0.8f } };
+        a.patterns[1].notes[1] = { { 60, 0, 200, 1.0f }, { 60, 960, 200, 1.0f } };
+        const int bar = a.patternLength (0);
+        const std::vector<sls::Channel> channels { synthChannel ({}, 0.3f), [&] { auto c = samplerChannel (sineSample (900.0, 0.2, 48000.0), {}); c.volume = 0.3f; return c; }() };
+        const auto clip = [&] (int pattern, int track, int start, int length)
+        {
+            sls::Clip c;
+            c.pattern = pattern; c.track = track; c.startTick = start; c.lengthTicks = length;
+            return c;
+        };
+        auto before = a, after = a;
+        before.clips = { clip (0, 0, 0, bar), clip (0, 0, bar, bar), clip (0, 0, 2 * bar, bar), clip (0, 0, 3 * bar, bar) }; // pattern 1 looping
+        after.clips = { clip (0, 0, 0, bar), clip (0, 0, bar, bar), clip (1, 1, 2 * bar, bar), clip (1, 1, 3 * bar, bar) };  // pattern 2 takes over at bar 3
+        const auto first = sls::compileSong (channels, before);
+        const auto second = sls::compileSong (channels, after);
+        sls::Player switched, straight;
+        switched.prepare (kSr);
+        straight.prepare (kSr);
+        auto live = renderBlocks (switched, first, true, 2.9); // 1.45 bars in: the new timeline is published ahead of bar 3
+        const auto rest = renderBlocks (switched, second, true, 4.0);
+        live.insert (live.end(), rest.begin(), rest.end());
+        const auto reference = renderBlocks (straight, second, true, 6.9);
+        check (live == reference && toneEnergy (live.data(), 193000, 200000, 900.0) > 0.01,
+               "performance: a clip launched for the next bar starts there to the sample, and what played before is untouched");
+    }
+}
+
 void testMusicTheory()
 {
     namespace th = sls::theory;
@@ -12625,6 +12826,7 @@ int main()
     testFlParity061();
     testFlParity062();
     testMixer062();
+    testRackPlaylistToolbar062();
     testOneShot();
     testAutomation();
     testMidiImport();

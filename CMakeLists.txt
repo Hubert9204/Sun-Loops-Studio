@@ -165,6 +165,7 @@ target_sources(SunLoopsStudio PRIVATE
     src/ui/PianoRoll.cpp
     src/ui/PianoRollToolbar.cpp
     src/ui/ChannelStrip.cpp
+    src/ui/StepGraph.cpp
     src/ui/PanelWindow.cpp
     src/ui/MixerPanel.cpp
     src/ui/PlaylistTimeline.cpp
@@ -173,6 +174,8 @@ target_sources(SunLoopsStudio PRIVATE
     src/ui/MainComponentToolbar.cpp
     src/ui/MainComponent.cpp
     src/ui/MainComponentNotes.cpp
+    src/ui/MainComponentPerformance.cpp
+    src/ui/PerformancePanel.cpp
     src/ui/MainComponentPatterns.cpp
     src/ui/MainComponentLoopStarter.cpp
     src/ui/MainComponentImport.cpp

@@ -484,17 +484,33 @@ void Player::liveNoteOn (const Project& project, int channel, int pitch, float v
     n.lengthTicks = 0;
     n.velocity = std::isfinite (velocity) ? std::clamp (velocity, 0.0f, 1.0f) : 0.8f;
     chunkSample = 0;
-    noteOn (project.channels[static_cast<size_t> (channel)], channel, n, 1, true);
+    const auto& played = project.channels[static_cast<size_t> (channel)];
+    masterPitch = std::clamp (static_cast<double> (project.masterPitch), -24.0, 24.0);
+    if (played.instrument == Instrument::Layer) // 0.62.0: the children play (their voices are theirs: liveNoteOff ends them)
+    {
+        layerChildren[static_cast<size_t> (channel)] = played.layerMask;
+        for (size_t c = 0; c < project.channels.size() && c < static_cast<size_t> (kMaxChannels); ++c)
+            if (c != static_cast<size_t> (channel) && ((played.layerMask >> c) & 1u) != 0 && project.channels[c].instrument != Instrument::Layer)
+                noteOn (project.channels[c], static_cast<int> (c), n, 1, true);
+        return;
+    }
+    noteOn (played, channel, n, 1, true);
 }
 
 void Player::liveNoteOff (int channel, int pitch) noexcept
 {
     chunkSample = 0;
+    // 0.62.0: a Layer channel's note is sounding on its children
+    const std::uint32_t children = channel >= 0 && channel < kMaxChannels ? layerChildren[static_cast<size_t> (channel)] : 0u;
+    const auto mine = [channel, children] (int other) noexcept
+    {
+        return other == channel || (other >= 0 && other < kMaxChannels && ((children >> other) & 1u) != 0);
+    };
     for (int i = numPluginNotes - 1; i >= 0; --i)
-        if (pluginNotes[static_cast<size_t> (i)].live && pluginNotes[static_cast<size_t> (i)].channel == channel && pluginNotes[static_cast<size_t> (i)].pitch == pitch)
+        if (pluginNotes[static_cast<size_t> (i)].live && mine (pluginNotes[static_cast<size_t> (i)].channel) && pluginNotes[static_cast<size_t> (i)].source == pitch)
             pluginNoteOff (i);
     for (auto& v : voices)
-        if (v.live && v.channel == channel && v.livePitch == pitch
+        if (v.live && mine (v.channel) && v.livePitch == pitch
             && (v.state == State::Attack || v.state == State::Sustain))
             v.state = State::Release;
 }
@@ -561,7 +577,24 @@ void Player::drumNoteOn (const Channel& channel, int channelIndex, const Note& n
     applyNoteProperties (v, n, releaseStep);
 }
 
+// 0.62.0: a Layer channel hands the note to its children (sequenced notes were given to them when the project was made, so
+// this is for notes played by hand); the master pitch moves the note (as cents for the built-in instruments, as a key for a plugin
+// in pluginNoteOn); drum channels keep their pitch.
 void Player::noteOn (const Channel& channel, int channelIndex, const Note& n, int loopLength, bool live) noexcept
+{
+    if (channel.instrument == Instrument::Layer)
+        return; // (liveNoteOn plays the children: it has the project)
+    if (std::abs (masterPitch) > 0.0 && channel.instrument != Instrument::Drums && channel.instrument != Instrument::Plugin)
+    {
+        Note moved = n;
+        moved.finePitch += static_cast<float> (masterPitch * 100.0);
+        startNote (channel, channelIndex, moved, loopLength, live);
+        return;
+    }
+    startNote (channel, channelIndex, n, loopLength, live);
+}
+
+void Player::startNote (const Channel& channel, int channelIndex, const Note& n, int loopLength, bool live) noexcept
 {
     // 0.62.0: cut groups, as FL Studio's "Cut / Cut by": this note cuts the notes of every channel that is cut by its group
     // (the channel itself too, when its own cutBy is the same number), with a 5 ms fade.
@@ -1366,17 +1399,19 @@ void Player::pluginNoteOn (const Channel& channel, int channelIndex, const Note&
 {
     if (channel.plugin == nullptr)
         return;
+    const int key = std::clamp (n.pitch + static_cast<int> (std::lround (masterPitch)), 0, 127); // 0.62.0: the master pitch, in whole keys
     // The same key still sounding on this plugin: end it first (a plugin may not expect two note-ons for one key).
     for (int i = numPluginNotes - 1; i >= 0; --i)
-        if (pluginNotes[static_cast<size_t> (i)].plugin == channel.plugin.get() && pluginNotes[static_cast<size_t> (i)].pitch == n.pitch)
+        if (pluginNotes[static_cast<size_t> (i)].plugin == channel.plugin.get() && pluginNotes[static_cast<size_t> (i)].pitch == key)
             pluginNoteOff (i);
     if (numPluginNotes >= kMaxPluginNotes)
         pluginNoteOff (0); // the oldest makes room
-    pluginEvent (channelIndex, 0x90, n.pitch, std::max (1, static_cast<int> (std::lround (n.velocity * 127.0f))));
+    pluginEvent (channelIndex, 0x90, key, std::max (1, static_cast<int> (std::lround (n.velocity * 127.0f))));
     PluginNote note;
     note.plugin = channel.plugin.get();
     note.channel = channelIndex;
-    note.pitch = n.pitch;
+    note.pitch = key;
+    note.source = n.pitch;
     note.live = live;
     note.endTick = live ? INT_MAX : std::min (n.startTick + std::max (1, n.lengthTicks), loopLength);
     pluginNotes[static_cast<size_t> (numPluginNotes++)] = note;
@@ -1598,6 +1633,26 @@ void Player::render (const Project& project, double bpm, bool playing,
     const bool loopRegion = project.loopStartTick >= 0 && project.loopEndTick > project.loopStartTick
                             && project.loopEndTick <= loopLength;
 
+    // 0.62.0: the master pitch, and the marker action the transport meets next (see Project::jumps).
+    masterPitch = std::clamp (static_cast<double> (finiteOr (project.masterPitch, 0.0f)), -24.0, 24.0);
+    if (! playing)
+        halted = false;
+    double nextJumpAt = 1.0e300;
+    int nextJumpTo = 0;
+    const auto findNextJump = [&]() noexcept
+    {
+        nextJumpAt = 1.0e300;
+        for (const auto& jump : project.jumps)
+            if (static_cast<double> (jump.atTick) > tickPos && jump.atTick < loopLength && jump.toTick < loopLength && jump.toTick != jump.atTick
+                && static_cast<double> (jump.atTick) < nextJumpAt)
+            {
+                nextJumpAt = jump.atTick;
+                nextJumpTo = jump.toTick;
+            }
+    };
+    if (! project.jumps.empty())
+        findNextJump();
+
     // Per-block channel state: target gain and pan gains for every channel.
     bool anySolo = false;
     for (size_t ch = 0; ch < numMixerChannels; ++ch)
@@ -1627,6 +1682,7 @@ void Player::render (const Project& project, double bpm, bool playing,
         channelAudible[ch] = anySolo ? c.solo : ! c.mute;
         routedTo[ch] = static_cast<size_t> (std::clamp (c.mixerTrack, 0, static_cast<int> (numTracks) - 1));
         channelCutBy[ch] = static_cast<std::uint8_t> (std::clamp (c.cutBy, 0, 255)); // 0.62.0
+        layerChildren[ch] = c.instrument == Instrument::Layer ? c.layerMask : 0u;
         setChannel (ch, c.volume, c.pan);
 
         if (smoothedGain[ch] < 0.0f)
@@ -2270,12 +2326,30 @@ void Player::render (const Project& project, double bpm, bool playing,
                 trackR[routedTo[ch]][static_cast<size_t> (i)] += r;
             }
 
-            if (playing)
+            if (playing && ! halted)
             {
                 const double before = tickPos;
                 tickPos += ticksPerSample;
                 const auto regionEnd = static_cast<double> (project.loopEndTick);
-                if (loopRegion && before < regionEnd && tickPos >= regionEnd)
+                // 0.62.0: a marker's action (the one the transport meets next; none at or behind it: nextJumpAt is huge)
+                if (tickPos >= nextJumpAt && before < nextJumpAt)
+                {
+                    const int to = nextJumpTo;
+                    if (to < 0)
+                    {
+                        // Pause: the transport holds at the marker; the engine sees the request and stops it.
+                        tickPos = nextJumpAt;
+                        halted = true;
+                        releaseVoices (releaseSamplesOnStop);
+                        releaseClips();
+                        markerPauseTick.store (static_cast<int> (nextJumpAt), std::memory_order_relaxed);
+                        markerPause.store (true, std::memory_order_release);
+                    }
+                    else
+                        jumpTo (project, to + (tickPos - nextJumpAt), ticksPerSecond);
+                    findNextJump();
+                }
+                else if (loopRegion && before < regionEnd && tickPos >= regionEnd)
                     jumpTo (project, project.loopStartTick + (tickPos - regionEnd), ticksPerSecond); // the loop region repeats
                 else if (tickPos >= static_cast<double> (loopLength))
                 {
@@ -2290,6 +2364,8 @@ void Player::render (const Project& project, double bpm, bool playing,
                         releaseClips();        // audio clips are cut there
                     }
                 }
+                if (tickPos < before && ! project.jumps.empty())
+                    findNextJump(); // (the transport went back: the markers ahead are others now)
             }
         }
 

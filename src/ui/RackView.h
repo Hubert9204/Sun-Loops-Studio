@@ -6,6 +6,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include "ui/ChannelStrip.h"
+#include "ui/StepGraph.h"
 #include "ui/DragItems.h"
 #include "audio/Arrangement.h"
 
@@ -145,8 +146,38 @@ public:
         optionsButton.setTooltip ("Channel options: add, clone, rename, move or delete channels, assign mixer tracks");
         optionsButton.onClick = [this] { if (onOptionsMenu) onOptionsMenu (optionsButton); };
         addAndMakeVisible (optionsButton);
+        // 0.62.0: the filter group shown (as the group selector at the top of FL Studio's rack) and the graph editor's switch
+        groupBox.setTooltip ("Channel filter: show every channel, or only those of one group (a channel's group is in its menu)");
+        groupBox.onChange = [this] { if (onGroupChosen) onGroupChosen (groupBox.getSelectedId() <= 1 ? juce::String() : groupBox.getText()); };
+        addAndMakeVisible (groupBox);
+        graphButton.setClickingTogglesState (true);
+        graphButton.setMouseClickGrabsKeyboardFocus (false);
+        graphButton.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff2f7d5b));
+        graphButton.setTooltip ("Graph editor: velocity, pan, release and fine pitch of each step of the selected channel");
+        graphButton.onClick = [this]
+        {
+            graph.setVisible (graphButton.getToggleState());
+            resized();
+        };
+        addAndMakeVisible (graphButton);
+        addChildComponent (graph);
+        setGroups ({}, {});
         setPatternBeats (4);
     }
+
+    // 0.62.0
+    std::function<void (const juce::String&)> onGroupChosen; // "" = all the channels
+    void setGroups (const juce::StringArray& groups, const juce::String& current)
+    {
+        groupBox.clear (juce::dontSendNotification);
+        groupBox.addItem ("All", 1);
+        for (int i = 0; i < groups.size(); ++i)
+            groupBox.addItem (groups[i], i + 2);
+        const int found = groups.indexOf (current);
+        groupBox.setSelectedId (current.isEmpty() || found < 0 ? 1 : found + 2, juce::dontSendNotification);
+    }
+    StepGraph& stepGraph() noexcept { return graph; }
+    bool graphShown() const noexcept { return graph.isVisible(); }
 
     std::function<void (juce::Component&)> onOptionsMenu; // 0.60.0: show the channel options menu under this button
 
@@ -177,7 +208,13 @@ public:
         auto area = getLocalBounds();
         auto bar = area.removeFromTop (kBarHeight).reduced (6, 3);
         optionsButton.setBounds (bar.removeFromLeft (30));
+        bar.removeFromLeft (6);
+        groupBox.setBounds (bar.removeFromLeft (120));
+        bar.removeFromLeft (6);
+        graphButton.setBounds (bar.removeFromLeft (58));
         bar.removeFromLeft (8);
+        if (graph.isVisible()) // (as wide as the rows above it, which a scroll bar may have narrowed)
+            graph.setBounds (area.removeFromBottom (StepGraph::kHeight).withWidth (std::max (1, rack.getMaximumVisibleWidth())));
         longerButton.setBounds (bar.removeFromRight (28));
         bar.removeFromRight (4);
         shorterButton.setBounds (bar.removeFromRight (28));
@@ -194,5 +231,8 @@ private:
     juce::Label lengthLabel;
     juce::TextButton shorterButton { "-" }, longerButton { "+" };
     juce::TextButton optionsButton { juce::String::fromUTF8 ("\xe2\x89\xa1") }; // "≡" (0.60.0)
+    juce::ComboBox groupBox;                   // 0.62.0
+    juce::TextButton graphButton { "Graph" };
+    StepGraph graph;
 };
 } // namespace sls

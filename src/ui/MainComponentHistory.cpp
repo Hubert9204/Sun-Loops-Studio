@@ -23,6 +23,7 @@ MainComponent::EditState MainComponent::captureEditState()
     s.selected = selected;
     s.bpm = bpmSlider.getValue();
     s.masterVolume = volumeSlider.getValue();
+    s.masterPitch = masterPitch;
     return s;
 }
 
@@ -117,6 +118,8 @@ void MainComponent::applyEditState (const EditState& s)
         engine.setBpm (s.bpm);
         playlistView.setBpm (s.bpm);
     }
+    masterPitch = s.masterPitch; // 0.62.0
+    pitchSlider.setValue (masterPitch, juce::dontSendNotification);
     if (std::abs (volumeSlider.getValue() - s.masterVolume) > 1.0e-9)
     {
         volumeSlider.setValue (s.masterVolume, juce::dontSendNotification);

@@ -384,6 +384,12 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* in, int 
     player.setMetronome (metronomeOn.load (std::memory_order_relaxed) || countInNow,
                          countInNow ? std::max (0.5f, metronomeVolume.load (std::memory_order_relaxed)) : metronomeVolume.load (std::memory_order_relaxed));
     player.render (*project, currentBpm, isPlaying, out, numOut, numSamples);
+    if (int pausedAt = 0; player.takeMarkerPause (pausedAt)) // 0.62.0: a Pause marker stops the transport
+    {
+        playing.store (false, std::memory_order_seq_cst);
+        markerPauseTick.store (pausedAt, std::memory_order_relaxed);
+        markerPaused.store (true, std::memory_order_release);
+    }
     if (startTakeAfterThisBlock)
     {
         // Same order as startRecording: the transport, then the gate (the next block starts the take and the song together).

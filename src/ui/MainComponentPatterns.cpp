@@ -358,8 +358,12 @@ Project MainComponent::compileCurrent()
 {
     commitCurrentPattern();
     prepareConvolvers (tracks, masterTrack.slots, console.aux, engine.getSampleRate()); // 0.62.0: impulse responses for the device's rate
-    return songMode ? compileSong (channels, arrangement, tracks, masterTrack.slots, console)
-                    : compilePattern (channels, arrangement, currentPattern, tracks, masterTrack.slots, console);
+    // 0.62.0: in performance mode the timeline is the one the launched clips write
+    auto project = performanceOn ? compileSong (channels, performanceArrangement(), tracks, masterTrack.slots, console)
+                 : songMode ? compileSong (channels, arrangement, tracks, masterTrack.slots, console)
+                            : compilePattern (channels, arrangement, currentPattern, tracks, masterTrack.slots, console);
+    project.masterPitch = masterPitch; // 0.62.0
+    return project;
 }
 
 } // namespace sls

@@ -63,7 +63,15 @@ void MainComponent::updateToolbarReadouts()
     {
         const double load = engine.getDeviceManager().getCpuUsage();
         const int percent = std::clamp (juce::roundToInt (load * 100.0), 0, 100);
-        cpuLabel.setText ("CPU " + juce::String (percent) + " %", juce::dontSendNotification);
+        // 0.62.0: the memory the program holds (as FL Studio's memory read-out), where the system says (Linux: /proc)
+        static juce::String memoryText;
+        if (cpuTicks % 25 == 0 || memoryText.isEmpty())
+        {
+            const auto statm = juce::File ("/proc/self/statm").loadFileAsString();
+            const auto pages = juce::StringArray::fromTokens (statm, " ", "")[1].getLargeIntValue();
+            memoryText = pages > 0 ? "\nRAM " + juce::String (pages * 4096 / (1024 * 1024)) + " MB" : juce::String ("\n");
+        }
+        cpuLabel.setText ("CPU " + juce::String (percent) + " %" + (memoryText.length() > 1 ? memoryText : juce::String()), juce::dontSendNotification);
         cpuLabel.setColour (juce::Label::textColourId, percent >= 85 ? juce::Colour (0xffd9534f) : percent >= 60 ? juce::Colour (0xffe8b030)
                                                                                                                  : juce::Colour (0xffb9bfc9));
     }
@@ -269,6 +277,7 @@ void MainComponent::showViewMenu()
     menu.addItem (menuItem (6, "Plugin picker", "", true, pluginPanel.isOpen()));
     menu.addSeparator();
     menu.addItem (menuItem (7, "Meters", "", true, metersWindow != nullptr));
+    menu.addItem (menuItem (9, "Performance mode...", "", true, performanceWindow != nullptr)); // 0.62.0
     menu.addSeparator();
     menu.addItem (8, "Reset the layout");
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&viewButton),
@@ -283,6 +292,7 @@ void MainComponent::showViewMenu()
                                 case 3: safe->togglePanel (safe->rackPanel); break;
                                 case 4: safe->togglePanel (safe->mixerPanelWindow); break;
                                 case 5: safe->setBrowserOpen (! safe->browserOpen); break;
+                                case 9: safe->togglePerformanceWindow(); break;
                                 case 6: safe->togglePanel (safe->pluginPanel); break;
                                 case 7: safe->toggleMeters(); break;
                                 case 8: safe->resetLayout(); break;

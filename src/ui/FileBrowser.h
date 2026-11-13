@@ -1,7 +1,9 @@
 #pragma once
 
 #include <functional>
+#include <array>
 #include <memory>
+#include <vector>
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -25,6 +27,17 @@ public:
     std::function<void (const drag::Item&)> onItemActivated; // double-click on a draggable item
     std::function<void (const juce::String&)> onAction;      // click on an action ("scan-plugins")
     std::function<void (const drag::Item&)> onItemPreview;   // left click on a sound (an audio file or a built-in sample): listen to it (0.31.0)
+    // 0.62.0: the tabs (All, the current project, the plugins, the favourites) and the favourites themselves (leaves the user
+    // starred from an item's right-click menu; the owner keeps them between sessions)
+    enum Tab { All, Project, Plugins, Favourites };
+    void setTab (int newTab);
+    int currentTab() const noexcept { return tab; }
+    void setFavourites (std::vector<BrowserNode> list);
+    const std::vector<BrowserNode>& getFavourites() const noexcept { return favourites; }
+    bool isFavourite (const BrowserNode& node) const noexcept;
+    void toggleFavourite (const BrowserNode& node);
+    std::function<void()> onFavouritesChanged;
+    std::function<void (int)> onTabChanged;
     std::function<void()> onRefresh;
     std::function<void()> onOpenFolder;
     std::function<void()> onCollapse;
@@ -40,6 +53,9 @@ private:
     void openAll (juce::TreeViewItem&);
 
     BrowserNode fullTree;
+    int tab = All;
+    std::vector<BrowserNode> favourites;
+    std::array<juce::TextButton, 4> tabButtons;
     juce::Label titleLabel;
     juce::TextButton collapseButton { juce::String::fromUTF8 ("\xe2\x97\x80") };
     juce::TextButton folderButton { "Folder" };

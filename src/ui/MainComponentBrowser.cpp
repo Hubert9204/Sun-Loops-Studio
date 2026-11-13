@@ -40,7 +40,124 @@ void MainComponent::setBrowserOpen (bool shouldBeOpen)
 void MainComponent::rebuildBrowser()
 {
     library.ensureExists();
-    browser.setTree (buildBrowserTree (library, foundPlugins, pluginScanState));
+    libraryTree = buildBrowserTree (library, foundPlugins, pluginScanState);
+    refreshProjectNode (true);
+}
+
+// 0.62.0: the current project as the browser lists it (FL Studio's "Current project" folder): a click on a pattern, a channel or a
+// mixer track goes there; the samples can be dragged and listened to like any other.
+BrowserNode MainComponent::projectBrowserNode (juce::String* signature) const
+{
+    BrowserNode node;
+    node.name = "Current project";
+    juce::String sig;
+    const auto folder = [] (const char* name)
+    {
+        BrowserNode f;
+        f.name = name;
+        return f;
+    };
+    auto patterns = folder ("Patterns");
+    for (size_t i = 0; i < arrangement.patterns.size(); ++i)
+    {
+        patterns.children.push_back ({ arrangement.patterns[i].name, NodeKind::Action, "pattern:" + std::to_string (i), {} });
+        sig << "p" << juce::String (arrangement.patterns[i].name) << "|";
+    }
+    auto channelFolder = folder ("Channels");
+    auto samples = folder ("Samples");
+    const auto addSample = [&samples] (const std::shared_ptr<const SampleData>& data)
+    {
+        if (data == nullptr || data->source.empty() || juce::String (data->source).startsWith ("builtin:"))
+            return;
+        for (const auto& s : samples.children)
+            if (s.payload == data->source)
+                return;
+        samples.children.push_back ({ juce::File (data->source).getFileName().toStdString(), NodeKind::AudioFile, data->source, {} });
+    };
+    for (size_t i = 0; i < channels.size(); ++i)
+    {
+        const auto& c = channels[i];
+        const char* kind = c.instrument == Instrument::Sampler ? "Sampler" : c.instrument == Instrument::Drums ? "Drum machine"
+                         : c.instrument == Instrument::Plugin ? "Plugin" : c.instrument == Instrument::Layer ? "Layer" : "Synth";
+        channelFolder.children.push_back ({ std::to_string (i + 1) + ": " + c.name + "  (" + kind + ")", NodeKind::Action, "channel:" + std::to_string (i), {} });
+        sig << "c" << juce::String (c.name) << kind << "|";
+        if (c.instrument == Instrument::Sampler)
+            addSample (c.sample);
+    }
+    for (const auto& a : arrangement.audioClips)
+        addSample (a.data);
+    for (const auto& s : samples.children)
+        sig << "s" << juce::String (s.payload) << "|";
+    auto effects = folder ("Effects");
+    const auto chain = [] (const std::array<EffectSlot, kSlotsPerTrack>& slots)
+    {
+        juce::StringArray names;
+        for (const auto& slot : slots)
+            if (slot.type == EffectType::Plugin && slot.plugin != nullptr)
+                names.add (juce::String (slot.plugin->displayName()));
+            else if (slot.type != EffectType::None)
+                names.add (effectName (slot.type));
+        return names.joinIntoString (", ");
+    };
+    for (size_t t = 0; t < tracks.size(); ++t)
+        if (const auto names = chain (tracks[t].slots); names.isNotEmpty())
+        {
+            effects.children.push_back ({ ("Track " + juce::String (static_cast<int> (t) + 1) + ": " + names).toStdString(), NodeKind::Action,
+                                          "track:" + std::to_string (t), {} });
+            sig << "t" << juce::String (static_cast<int> (t)) << names << "|";
+        }
+    if (const auto names = chain (masterTrack.slots); names.isNotEmpty())
+    {
+        effects.children.push_back ({ ("Master: " + names).toStdString(), NodeKind::Action, "track:master", {} });
+        sig << "m" << names << "|";
+    }
+    auto automation = folder ("Automation");
+    for (const auto& clip : arrangement.automationClips)
+    {
+        automation.children.push_back ({ automationLabelFor (clip.target).toStdString(), NodeKind::Note, {}, {} });
+        sig << "a" << automationLabelFor (clip.target) << "|";
+    }
+    for (auto* part : { &patterns, &channelFolder, &samples, &effects, &automation })
+    {
+        if (part->children.empty())
+            part->children.push_back ({ "(none)", NodeKind::Note, {}, {} });
+        node.children.push_back (std::move (*part));
+    }
+    if (signature != nullptr)
+        *signature = sig;
+    return node;
+}
+
+void MainComponent::refreshProjectNode (bool force)
+{
+    juce::String signature;
+    auto node = projectBrowserNode (&signature);
+    if (! force && signature == projectNodeSignature)
+        return;
+    projectNodeSignature = signature;
+    BrowserNode tree = libraryTree;
+    tree.children.insert (tree.children.begin(), std::move (node));
+    browser.setTree (std::move (tree));
+}
+
+void MainComponent::browserAction (const juce::String& action)
+{
+    if (action == "scan-plugins")
+        startPluginScan();
+    else if (action.startsWith ("pattern:"))
+        selectPattern (action.fromFirstOccurrenceOf (":", false, false).getIntValue());
+    else if (action.startsWith ("channel:"))
+    {
+        selectChannel (action.fromFirstOccurrenceOf (":", false, false).getIntValue());
+        showPanel (rackPanel);
+    }
+    else if (action.startsWith ("track:"))
+    {
+        const auto which = action.fromFirstOccurrenceOf (":", false, false);
+        showPanel (mixerPanelWindow);
+        if (which != "master")
+            mixerPanel.setSelectedTrack (which.getIntValue());
+    }
 }
 
 namespace
@@ -277,6 +394,8 @@ void MainComponent::savePresetFor (int channelIndex)
 // chooser and remembered in the settings.
 void MainComponent::exportAs (ExportFormat format)
 {
+    if (performanceOn)
+        setPerformanceMode (false); // 0.62.0: an export is of the song, not of what is being performed
     const auto& info = exportFormatInfo (format);
     auto* window = new juce::AlertWindow ("Export options", juce::String ("Export the ") + (songMode ? "song" : "pattern") + " as "
                                               + juce::String (info.label).upToFirstOccurrenceOf ("  (", false, false),

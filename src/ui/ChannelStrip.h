@@ -107,6 +107,12 @@ public:
     std::function<void (int)> onAssignTrack;   // context menu "Assign free mixer track"
     std::function<void (int, const drag::Item&)> onItemDropped; // something was dropped from the browser
     std::function<void (int, AutomationKind)> onAutomate;       // right click on volume / pan: create an automation clip
+    // 0.62.0: the rack's filter groups, the channel's colour and the Layer channel
+    std::function<juce::StringArray()> listGroups;              // the groups the project's channels are in
+    std::function<void (int)> onNewGroup;                       // "New group...": ask for a name and put the channel there
+    std::function<void (int)> onLooksChanged;                   // the colour or the group changed (nothing the sound depends on)
+    std::function<juce::StringArray()> listChannelNames;        // every channel's name, in order (for the Layer's children)
+    static juce::Colour paletteColour (int index);              // the 16 colours of the Colour menu
 
     void paint (juce::Graphics&) override;
     void resized() override;

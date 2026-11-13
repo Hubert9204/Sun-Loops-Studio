@@ -28,6 +28,16 @@ void MainComponent::remapChannels (const std::vector<int>& newToOld, int newSele
         rebuilt.push_back (channels[static_cast<size_t> (old)]);
     }
 
+    // 0.62.0: a Layer's children are channel numbers: they follow the channels
+    for (auto& c : rebuilt)
+    {
+        std::uint32_t moved = 0;
+        for (size_t k = 0; k < newToOld.size() && k < 32; ++k)
+            if (((c.layerMask >> newToOld[k]) & 1u) != 0)
+                moved |= 1u << k;
+        c.layerMask = moved;
+    }
+
     remapArrangementChannels (arrangement, newToOld, oldCount);
 
     // The strips refer to `channels`: tear them down, refill the vector within its capacity, build them again.

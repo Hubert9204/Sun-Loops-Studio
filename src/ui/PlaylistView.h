@@ -71,6 +71,9 @@ public:
     std::function<void (int)> onEditSample; // an audio clip's "Edit sample..." was chosen: its index
     std::function<void (int)> onEditPitch;  // ... "Edit pitch..."
     std::function<void (int)> onSplitStems; // ... "Split into stems..."
+    std::function<void (int)> onMakeUnique;            // 0.62.0 (see PlaylistTimeline)
+    std::function<void (const juce::String&)> onStatus;
+    std::function<void (int, int, int)> onConsolidate;
     juce::String replaceAudioClip (int index, const std::shared_ptr<const SampleData>& expected, const std::vector<AudioClip>& with)
     {
         auto error = timeline.replaceAudioClip (index, expected, with);

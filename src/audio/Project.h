@@ -27,7 +27,8 @@ constexpr int kAuxBuses = 2;  // aux buses ("returns"): tracks send to them, the
 constexpr int kVcaGroups = 2; // VCA groups: one fader that scales the faders of its member tracks
 static_assert (kAuxBuses == kAutomationAuxBuses && kVcaGroups == kAutomationVcaGroups);
 
-enum class Instrument { Synth, Sampler, Drums, Plugin };
+// Layer (0.62.0, as FL Studio's Layer channel): it makes no sound itself; its notes are played by its children (layerMask).
+enum class Instrument { Synth, Sampler, Drums, Plugin, Layer };
 
 struct Channel
 {
@@ -54,6 +55,10 @@ struct Channel
     float portamento = 0.0f;                  // seconds a mono channel's pitch takes to slide to the new note (0 = jumps)
     int cutGroup = 0;                         // 0 = none; a note on this channel cuts the notes of every channel whose cutBy is this
     int cutBy = 0;                            // 0 = none (cutGroup == cutBy on one channel: it cuts itself)
+    // 0.62.0, the Channel Rack's looks and the Layer channel:
+    std::uint32_t colour = 0;                 // 0xAARRGGBB of the channel's button; 0 = the default look
+    std::string group;                        // the rack's filter group this channel belongs to ("" = none: only shown under All)
+    std::uint32_t layerMask = 0;              // Layer only: bit n = channel n plays this channel's notes
     int steps = 0;                            // step sequencer (0.31.0): the active length the user set in the current pattern, in
                                               // steps (0 = not set); kept per pattern in Pattern::steps, like `notes`
 };
@@ -165,6 +170,15 @@ struct Project
     // loopStartTick, and the end of the song goes back to it too. -1 / -1 when there is none (always so in exports).
     int loopStartTick = -1;
     int loopEndTick = -1;
+    // 0.62.0. The master pitch (semitones): every note of the synths, samplers and plugin instruments is moved by it (drum
+    // channels are not). And the time markers' actions (live playback only): when the transport reaches `atTick` it goes on from
+    // `toTick`, or stops there (toTick -1). Sorted by atTick.
+    float masterPitch = 0.0f;
+    struct Jump
+    {
+        int atTick = 0, toTick = 0;
+    };
+    std::vector<Jump> jumps;
     std::uint64_t revision = 0; // assigned by SnapshotExchange
 
     static std::vector<MixerTrack> defaultTracks()
@@ -198,6 +212,21 @@ struct Project
 
         if (input.size() > static_cast<size_t> (kMaxChannels))
             input.resize (kMaxChannels);
+
+        // 0.62.0, Layer channels: their notes go to their children (which play them with their own swing, pitch and sound); a
+        // layer keeps none, and a layer is never the child of a layer.
+        for (size_t l = 0; l < input.size(); ++l)
+        {
+            if (input[l].instrument != Instrument::Layer)
+            {
+                input[l].layerMask = 0;
+                continue;
+            }
+            for (size_t c = 0; c < input.size(); ++c)
+                if (c != l && ((input[l].layerMask >> c) & 1u) != 0 && input[c].instrument != Instrument::Layer)
+                    input[c].notes.insert (input[c].notes.end(), input[l].notes.begin(), input[l].notes.end());
+            input[l].notes.clear();
+        }
 
         if (tracks.empty())
             tracks = defaultTracks();

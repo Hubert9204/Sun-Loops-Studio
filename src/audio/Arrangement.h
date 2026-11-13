@@ -166,10 +166,15 @@ inline LoopTakes loopTakesOf (const std::vector<TempoMarker>& markers, double bp
 // (0.44.0), the pattern's name; colour 0 is the default look. `pattern` is the pattern the track is dedicated to (a click on
 // an empty place of the track puts that pattern there), -1 for a free track.
 // 0.61.0: a named time marker on the playlist's ruler, as FL Studio's (Add time marker): a place in the song to jump to.
+// 0.62.0, a marker's action, as FL Studio's (live playback only): Loop goes back to the marker before it (or the start), Skip
+// goes on from the marker after it, Pause stops there, Start is where Play starts the song from.
+enum class MarkerAction : std::uint8_t { None, Loop, Skip, Pause, Start };
+
 struct TimeMarker
 {
     int tick = 0;
     std::string name;
+    MarkerAction action = MarkerAction::None;
     bool operator== (const TimeMarker&) const = default;
 };
 constexpr int kMaxTimeMarkers = 128;
@@ -183,6 +188,12 @@ struct PlaylistTrack
     // while any track is soloed, only the soloed tracks play (see Arrangement::trackPlays).
     bool mute = false;
     bool solo = false;
+    // 0.62.0: a locked track's clips cannot be moved, edited, added or deleted; a track grouped with the one above belongs to
+    // the group that starts at the first track above that is not grouped (the group's head: its mute and solo count for all of
+    // them, and it can fold the others away).
+    bool locked = false;
+    bool grouped = false;
+    bool collapsed = false; // a group's head: the grouped tracks under it are hidden
     bool operator== (const PlaylistTrack&) const = default;
 };
 
@@ -247,13 +258,62 @@ struct Arrangement
     {
         return std::any_of (playlistTracks.begin(), playlistTracks.end(), [] (const PlaylistTrack& t) { return t.solo; });
     }
+    // 0.62.0: the head of the group track `t` belongs to (t itself when it is not grouped, or is a head).
+    int groupHead (int t) const noexcept
+    {
+        while (t > 0 && t < trackCount() && playlistTracks[static_cast<size_t> (t)].grouped)
+            --t;
+        return t;
+    }
+    // ... the last track of the group that starts at `head` (head itself when nothing is grouped under it)
+    int groupEnd (int head) const noexcept
+    {
+        int last = head;
+        while (last + 1 < trackCount() && playlistTracks[static_cast<size_t> (last + 1)].grouped)
+            ++last;
+        return last;
+    }
+    // ... and is the track hidden (grouped under a head that is folded)?
+    bool trackHidden (int t) const noexcept
+    {
+        if (t <= 0 || t >= trackCount() || ! playlistTracks[static_cast<size_t> (t)].grouped)
+            return false;
+        return playlistTracks[static_cast<size_t> (groupHead (t))].collapsed;
+    }
+    bool trackLocked (int t) const noexcept { return t >= 0 && t < trackCount() && playlistTracks[static_cast<size_t> (t)].locked; }
     // 0.60.0: do the clips on track `t` play? Not when the track is muted, and not when other tracks are soloed and this one is not.
+    // 0.62.0: the mute and solo of a group's head count for every track of the group.
     bool trackPlays (int t) const noexcept
     {
         if (t < 0 || t >= trackCount())
             return false;
         const auto& track = playlistTracks[static_cast<size_t> (t)];
-        return ! track.mute && (track.solo || ! anyTrackSoloed());
+        const auto& head = playlistTracks[static_cast<size_t> (groupHead (t))];
+        return ! track.mute && ! head.mute && (track.solo || head.solo || ! anyTrackSoloed());
+    }
+    // 0.62.0: what the markers' actions ask of the transport (see Project::jumps), and where Play starts the song (the first
+    // Start marker; 0 without one).
+    std::vector<Project::Jump> markerJumps() const
+    {
+        std::vector<Project::Jump> jumps;
+        for (size_t i = 0; i < markers.size(); ++i)
+        {
+            const auto& m = markers[i];
+            if (m.action == MarkerAction::Loop && m.tick > 0)
+                jumps.push_back ({ m.tick, i > 0 ? markers[i - 1].tick : 0 });
+            else if (m.action == MarkerAction::Skip && i + 1 < markers.size())
+                jumps.push_back ({ m.tick, markers[i + 1].tick });
+            else if (m.action == MarkerAction::Pause && m.tick > 0)
+                jumps.push_back ({ m.tick, -1 });
+        }
+        return jumps;
+    }
+    int startMarkerTick() const noexcept
+    {
+        for (const auto& m : markers)
+            if (m.action == MarkerAction::Start)
+                return m.tick;
+        return 0;
     }
 
     // The length of pattern `p` (0.56.0); 4 quarters for an index that is not a pattern.

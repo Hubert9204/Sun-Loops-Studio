@@ -123,6 +123,9 @@ PlaylistView::PlaylistView (Arrangement& arrangementToEdit) : timeline (arrangem
     timeline.onEditSample = [this] (int index) { if (onEditSample) onEditSample (index); };
     timeline.onEditPitch = [this] (int index) { if (onEditPitch) onEditPitch (index); };
     timeline.onSplitStems = [this] (int index) { if (onSplitStems) onSplitStems (index); };
+    timeline.onMakeUnique = [this] (int clip) { if (onMakeUnique) onMakeUnique (clip); }; // 0.62.0
+    timeline.onStatus = [this] (const juce::String& text) { if (onStatus) onStatus (text); };
+    timeline.onConsolidate = [this] (int track, int from, int to) { if (onConsolidate) onConsolidate (track, from, to); };
     timeline.onSeek = [this] (int tick) { if (onSeek) onSeek (tick); };
     timeline.onLoopChanged = [this] { if (onLoopChanged) onLoopChanged(); };
 

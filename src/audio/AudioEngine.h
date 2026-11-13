@@ -142,6 +142,14 @@ public:
     void setSuspended (bool shouldSuspend);
     // Moves the song position to `tick` (playing or stopped); it is also where Stop returns to. Applied by the next audio block.
     void requestSeek (int tick) noexcept { seekRequest.store (std::max (0, tick), std::memory_order_release); }
+    // 0.62.0: true once after the transport stopped itself at a Pause marker (message thread), and the marker's tick.
+    bool takeMarkerPause (int& tick) noexcept
+    {
+        if (! markerPaused.exchange (false, std::memory_order_acq_rel))
+            return false;
+        tick = markerPauseTick.load (std::memory_order_relaxed);
+        return true;
+    }
 
     // Peak since the last call (master, and per mixer channel).
     float consumePeak() noexcept { return peak.exchange (0.0f, std::memory_order_relaxed); }
@@ -268,6 +276,8 @@ private:
     std::atomic<float> inputPeak { 0.0f };
 
     std::atomic<bool> playing { false };
+    std::atomic<bool> markerPaused { false }; // 0.62.0
+    std::atomic<int> markerPauseTick { 0 };
     std::atomic<double> bpm { 120.0 };
     std::atomic<float> gain { 0.8f };
     std::atomic<float> peak { 0.0f };
