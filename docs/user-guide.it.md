@@ -69,7 +69,7 @@ La riga di stato mostra il dispositivo audio (frequenza, buffer, latenza dichiar
 
 ## Su un Mac (0.63.0)
 
-Sun Loops Studio funziona su macOS 11 o successivo (Apple silicon e Intel) come su Linux, con queste differenze:
+Sun Loops Studio funziona su macOS 10.15 Catalina o successivo, sui Mac Apple silicon e sui Mac Intel (dal 2012 in poi, come il Mac mini 2012), come su Linux, con queste differenze:
 
 - **Scorciatoie**: dove questa guida dice **Ctrl** (Ctrl+Z, Ctrl+C, Ctrl+S...), su un Mac si preme **⌘ Cmd**. I tasti funzione
   (F1 Helios, F5 - F9 le finestre) possono richiedere il tasto **fn**, secondo le impostazioni della tastiera.

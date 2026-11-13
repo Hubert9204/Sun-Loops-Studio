@@ -22,7 +22,7 @@ holds your sounds; every other tool lives in a floating panel that you can move,
 From the [Releases page](https://github.com/Hubert9204/Sun-Loops-Studio/releases/latest):
 
 - **Linux**: `Sun-Loops-Studio-<version>-x86_64.AppImage` (see below);
-- **macOS** (since 0.63.0): `Sun-Loops-Studio-<version>-macOS.dmg`, one app for Apple silicon and Intel Macs, macOS 11 or newer.
+- **macOS** (since 0.63.0): `Sun-Loops-Studio-<version>-macOS.dmg`, one app for Apple silicon and Intel Macs, macOS 10.15 Catalina or newer (so Intel Macs from 2012 on, such as the Mac mini 2012).
   Open the disk image and drag **Sun Loops Studio** onto **Applications**. The app is not signed with an Apple Developer
   certificate, so the first time macOS refuses to open it: right-click (or Control-click) the app > **Open** > **Open**, or
   *System Settings > Privacy & Security > Open Anyway*. Recording asks once for the microphone.

@@ -5,7 +5,7 @@ All notable changes to Sun Loops Studio. Newest first.
 ## 0.63.0 - 2026-11-13
 
 ### Added
-- **macOS** (11 or newer, Apple silicon and Intel): `Sun-Loops-Studio-<version>-macOS.dmg`, a universal app with SunBurst and
+- **macOS** (10.15 Catalina or newer, Apple silicon and Intel - Intel Macs from 2012 on, such as the Mac mini 2012): `Sun-Loops-Studio-<version>-macOS.dmg`, a universal app with SunBurst and
   HexForge inside it, signed ad hoc (the first start needs right-click > Open). Built from the same code as the Linux program;
   the few differences are written for both systems side by side:
   - the crash handler and crash reports (thread, program, system name; macOS stack traces are read);
@@ -15,6 +15,7 @@ All notable changes to Sun Loops Studio. Newest first.
   - the built-in sound library linked in as Mach-O data;
   - recording asks for the microphone with a sentence of its own; `.slp` files open from the Finder;
   - the update check offers the `.dmg` on a Mac.
+  - the CI also builds the Intel half on its own and runs every test with it under Rosetta.
 - **Continuous integration on macOS**: every push is built and tested on a GitHub Mac as well as on Fedora, and the run keeps
   the `.dmg`; a release attaches the `.dmg` next to the AppImage (`scripts/build_macos.sh`).
 - A **"On a Mac"** chapter in the user guide (both languages).
