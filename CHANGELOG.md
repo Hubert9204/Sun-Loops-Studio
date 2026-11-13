@@ -2,6 +2,59 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.62.0 - 2026-11-13
+
+Everything that `docs/fl-studio-alignment.md` listed as "still open" after 0.61.0, implemented in its order. What is still
+narrower than FL Studio's is listed there, in section 13.
+
+### Added
+- **Piano Roll: per-note pan, release and fine pitch.** The label at the corner of the event lane chooses what the lane shows:
+  *Velocity*, *Pan*, *Release* or *Fine pitch*. The values are saved with the notes and played by the synths, the samplers and
+  the drum machine.
+- **Piano Roll: tools.** A tool box with **Draw**, **Paint** (drag to write a row of notes), **Mute** (a muted note stays,
+  grey, and is not played) and **Slice** (cuts a note where clicked). **Note colours** (16), and in the Tools menu **Limit**
+  (fold the notes into a range of keys) and **LFO** (a wave over the values of the lane shown).
+- **Sampler: modulation and loops.** An **LFO** (to pitch, cutoff, pan or volume, with rate and depth), a **pitch envelope**,
+  **Envelope to cutoff**, **Ping-pong** loops and a loop **Crossfade**.
+- **Channels: polyphony and cut groups** (the channel's right-click menu): **Mono**, **Maximum notes**, **Portamento**, **Cut
+  group** and **Cut by group** (a note of one channel ends the notes of another: open and closed hi-hat).
+- **Mixer: free routing.** The **> M** button on every strip: the track goes to the master, to up to four other tracks (each
+  with its own level, 25-150 %), or both; *Route to this track only* makes a bus. Tracks are processed in the order the routing
+  asks for; a send that would close a loop is ignored. A bus that is fed by sends can be a sidechain source.
+- **Mixer: plugin delay compensation.** A track whose effects delay the sound less than the slowest path (the Maximizer's
+  look-ahead, the latency a plugin reports) is delayed by the difference, through buses too. An export is trimmed by the mix's
+  latency, so a look-ahead limiter no longer shifts the file.
+- **Peak Controller** (effect, *Controllers*): the level of its track (Base, Volume, Decay) and an LFO set one parameter of any
+  built-in effect or plugin on any track (Target track, slot and parameter; the panel says what it drives). *Mute* lets the
+  track only drive the controller.
+- **Convolver** (effect, *Space and time*): a convolution reverb with no latency - five built-in spaces (Room, Hall, Plate,
+  Spring, Cathedral) or an audio file as the impulse response (*Load IR...*), with Length, Brightness, Pre-delay, Mix, Output.
+- **WaveShaper** (effect, *Drive*): Soft clip, Hard clip, Fold, Sine, Rectify or Tube, with Amount, Bias, pre and post gain,
+  4x oversampled.
+- **Vocoder** (effect, *Pitch and voice*): 8, 12 or 16 bands; the voice is another mixer track (*Modulator*) or the left
+  channel, the carrier this track.
+- **Playlist: track lock, groups and folding** (the track's menu): a locked track's clips cannot be changed; *Group with the
+  track above* makes groups whose head mutes, solos and folds them.
+- **Playlist: marker actions**: *Loop* (back to the marker before), *Skip* (on from the marker after), *Pause*, *Start* (where
+  Play starts the song).
+- **Playlist: Make unique** (the clip gets its own copy of the pattern) and **Consolidate to audio** (a clip, or all the
+  pattern clips of a track, rendered to an audio clip; the pattern clips stay, muted).
+- **Performance mode** (*View > Performance mode...*): every Playlist track with pattern clips is a row, every clip a cell.
+  A click launches the clip at the next bar (or 2 / 4 bars, a beat, a 16th) and loops it; another cell of the row takes over at
+  the next boundary; the square stops the row; *Scene n* launches a column of every row.
+- **Channel Rack: filter groups** (a channel's *Filter group*; the box at the top of the rack shows one group or all),
+  **channel colours**, the **graph editor** (*Graph*: velocity, pan, release and fine pitch of each step of the selected
+  channel) and the **Layer channel** (its notes are played by the channels ticked in its menu).
+- **Browser: tabs** (All, Project, Plugins, ★), **favourites** (right-click a sound, preset or plugin) and the **Current
+  project** node (patterns, channels, samples, effects, automation; a click goes there).
+- **Toolbar: master pitch** (±12 semitones), the program's **memory** under the CPU read-out, and **Step edit** (with the song
+  stopped, the notes you play are written at the pattern's start marker, which moves on by the snap).
+
+### Changed
+- An effect that listens to another track (compressor, gate, vocoder) is chosen by one rule; the project file names all 28
+  effect types.
+- A Convolver's response is made when the project is published, for the audio device's sample rate; an export makes its own.
+
 ## 0.61.0 - 2026-11-12
 
 A review of every module against its FL Studio counterpart (the list is in `docs/fl-studio-alignment.md`), with the gaps that

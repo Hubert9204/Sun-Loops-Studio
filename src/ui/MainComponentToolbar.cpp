@@ -69,7 +69,9 @@ void MainComponent::updateToolbarReadouts()
         {
             const auto statm = juce::File ("/proc/self/statm").loadFileAsString();
             const auto pages = juce::StringArray::fromTokens (statm, " ", "")[1].getLargeIntValue();
-            memoryText = pages > 0 ? "\nRAM " + juce::String (pages * 4096 / (1024 * 1024)) + " MB" : juce::String ("\n");
+            const auto megabytes = pages * 4096 / (1024 * 1024);
+            memoryText = pages <= 0 ? juce::String ("\n")
+                       : megabytes < 1000 ? "\nRAM " + juce::String (megabytes) + "M" : "\nRAM " + juce::String (static_cast<double> (megabytes) / 1024.0, 1) + "G";
         }
         cpuLabel.setText ("CPU " + juce::String (percent) + " %" + (memoryText.length() > 1 ? memoryText : juce::String()), juce::dontSendNotification);
         cpuLabel.setColour (juce::Label::textColourId, percent >= 85 ? juce::Colour (0xffd9534f) : percent >= 60 ? juce::Colour (0xffe8b030)
@@ -170,6 +172,7 @@ void MainComponent::showAddMenu (juce::Component& target)
     menu.addItem (2, "Sampler channel (load a sample)");
     menu.addItem (3, "Drum machine (16 pads)");
     menu.addItem (4, "Slicer (slice a loop)...");
+    menu.addItem (8, "Layer channel (its notes are played by other channels)"); // 0.62.0
     juce::String sunburst, hexforge; // the synthesizer plugins that come with the program (0.48.0, 0.50.0)
     std::vector<juce::String> others;
     for (const auto& p : foundPlugins)
@@ -216,9 +219,13 @@ void MainComponent::showAddMenu (juce::Component& target)
                                 case 7: safe->showPanel (safe->pluginPanel); safe->saveLayout(); safe->updateToggleButtons(); return;
                                 default: break;
                             }
-                            const int index = safe->addChannel (result == 1 ? Instrument::Synth : result == 2 ? Instrument::Sampler : Instrument::Drums);
+                            const int index = safe->addChannel (result == 1 ? Instrument::Synth : result == 2 ? Instrument::Sampler
+                                                                : result == 8 ? Instrument::Layer : Instrument::Drums);
                             if (index >= 0 && result == 3)
                                 safe->openDrumMachine (index);
+                            if (index >= 0 && result == 8)
+                                safe->statusLabel.setText ("Layer channel added: right-click it and tick the channels that play its notes under Layer",
+                                                           juce::dontSendNotification);
                         });
 }
 

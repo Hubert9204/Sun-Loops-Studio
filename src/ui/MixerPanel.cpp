@@ -672,6 +672,7 @@ FxPanel::FxPanel()
     irButton.setTooltip ("Use an audio file as the impulse response (the Space becomes File)");
     hintLabel.setFont (juce::Font (juce::FontOptions (12.0f)));
     hintLabel.setColour (juce::Label::textColourId, juce::Colour (0xffe8b25a));
+    hintLabel.setMinimumHorizontalScale (0.8f);
     addChildComponent (hintLabel);
     addAndMakeVisible (effectLabel);
     addAndMakeVisible (notePlaceholder);
@@ -885,15 +886,20 @@ void FxPanel::rebuildParameters()
         else
         {
             row.slider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 64, 20);
-            row.slider.setRange (info.min, info.max, 0.0);
+            // (0.62.0: the Peak Controller's target slot and parameter are whole numbers)
+            const bool whole = slot.type == EffectType::PeakController && (i == effect_tables::kPeakTargetSlot || i == effect_tables::kPeakTargetParam);
+            row.slider.setRange (info.min, info.max, whole ? 1.0 : 0.0);
             if ((unit == "Hz" || unit == "ms" || unit == ":1") && info.min > 0.0f)
                 row.slider.setSkewFactorFromMidPoint (std::sqrt (static_cast<double> (info.min) * static_cast<double> (info.max)));
             else if (unit == "Hz" || unit == "ms")
                 row.slider.setSkewFactorFromMidPoint (std::max (1.0, static_cast<double> (info.max) / 8.0));
-            row.slider.textFromValueFunction = [decimals, unit] (double v)
-            {
-                return juce::String (v, decimals) + (unit.isEmpty() ? juce::String() : " " + unit);
-            };
+            if (whole)
+                row.slider.textFromValueFunction = [] (double v) { return juce::String (juce::roundToInt (v)); };
+            else
+                row.slider.textFromValueFunction = [decimals, unit] (double v)
+                {
+                    return juce::String (v, decimals) + (unit.isEmpty() ? juce::String() : " " + unit);
+                };
             row.slider.valueFromTextFunction = nullptr;
         }
         row.slider.setDoubleClickReturnValue (true, info.def);
@@ -937,23 +943,23 @@ void FxPanel::updateHint()
             const int targetParam = juce::roundToInt (slot.params[kPeakTargetParam]) - 1;
             const MixerTrack* target = targetTrack <= 0 ? track : (trackAt ? trackAt (targetTrack - 1) : nullptr);
             const auto where = targetTrack <= 0 ? juce::String ("this track") : "track " + juce::String (targetTrack);
+            const auto place = " (" + where + ", slot " + juce::String (targetSlot + 1) + ")";
             if (target == nullptr || targetSlot < 0 || targetSlot >= kSlotsPerTrack)
-                text = "Drives: nothing (" + where + " is not in the mixer)";
+                text = "Drives nothing: no such track";
             else
             {
                 const auto& driven = target->slots[static_cast<size_t> (targetSlot)];
                 if (driven.type == EffectType::None)
-                    text = "Drives: nothing yet (slot " + juce::String (targetSlot + 1) + " of " + where + " is empty)";
+                    text = "Drives nothing yet: empty slot" + place;
                 else if (driven.type == EffectType::Plugin && driven.plugin != nullptr)
                     text = "Drives: " + juce::String (driven.plugin->displayName()) + " > "
                          + (targetParam < driven.plugin->parameterCount() ? juce::String (driven.plugin->parameterName (targetParam)) : juce::String ("(no such parameter)"))
-                         + "  (" + where + ", slot " + juce::String (targetSlot + 1) + ")";
+                         + place;
                 else if (driven.type == EffectType::PeakController || targetParam >= effectParamCount (driven.type)
                          || juce::String (effectParamInfo (driven.type, targetParam).unit) == "track")
-                    text = "Drives: nothing (" + juce::String (effectName (driven.type)) + " has no such parameter to sweep)";
+                    text = "Drives nothing: " + juce::String (effectName (driven.type)) + " has no parameter " + juce::String (targetParam + 1);
                 else
-                    text = "Drives: " + juce::String (effectName (driven.type)) + " > " + effectParamInfo (driven.type, targetParam).name
-                         + "  (" + where + ", slot " + juce::String (targetSlot + 1) + ")";
+                    text = "Drives: " + juce::String (effectName (driven.type)) + " > " + effectParamInfo (driven.type, targetParam).name + place;
             }
         }
         else if (slot.type == EffectType::Convolver)
@@ -1106,7 +1112,12 @@ void FxPanel::showSlotMenu (int slot)
                             {
                                 const auto type = static_cast<EffectType> (result);
                                 if (type != current.type)
-                                    safe->applySlot (slot, EffectSlot::make (type));
+                                {
+                                    auto made = EffectSlot::make (type);
+                                    if (type == EffectType::PeakController) // 0.62.0: it drives the slot after its own to begin with
+                                        made.params[effect_tables::kPeakTargetSlot] = static_cast<float> (slot + 1 < kSlotsPerTrack ? slot + 2 : 1);
+                                    safe->applySlot (slot, made);
+                                }
                             }
                             else if (result == 101)
                             {

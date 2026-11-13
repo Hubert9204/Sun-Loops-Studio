@@ -1369,7 +1369,7 @@ void PlaylistTimeline::paint (juce::Graphics& g)
         }
         g.setColour (! arrangement.trackPlays (t) ? kText.withAlpha (0.45f) : t == armedTrack ? juce::Colours::white : kText);
         g.drawText ((own.locked ? juce::String::fromUTF8 ("\xf0\x9f\x94\x92 ") : juce::String()) + trackName (t)
-                        + (head && own.collapsed ? "  (+" + juce::String (arrangement.groupEnd (t) - t) + ")" : juce::String()),
+                        + (head && own.collapsed ? " +" + juce::String (arrangement.groupEnd (t) - t) : juce::String()),
                     nameX, trackTop (t), kNameWidth - 14 - nameX - 2 * (kHeaderSwitch + 2), th, juce::Justification::centredLeft, true);
         g.setColour (kText.withAlpha (0.08f));
         g.drawHorizontalLine (trackTop (t) + th - 1, 0.0f, static_cast<float> (kNameWidth));

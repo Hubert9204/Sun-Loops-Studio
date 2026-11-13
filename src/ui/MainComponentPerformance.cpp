@@ -127,10 +127,7 @@ void MainComponent::consolidateClips (int track, int fromTick, int toTick)
     arrangement.audioClips.push_back (std::move (clip));
     playlistView.refreshTimeline();
     publishProject();
-    statusLabel.setText ("Consolidated " + juce::String (static_cast<int> (sources.size())) + (sources.size() == 1 ? " clip" : " clips") + " of "
-                             + playlistView.trackName (track) + " to " + file.getFileName()
-                             + " (it plays through mixer track " + juce::String (track + 1) + "; the pattern clips are muted, Undo brings them back)",
-                         juce::dontSendNotification);
+    statusLabel.setText ("Consolidated to " + file.getFileName() + " (the pattern clips are muted; Undo brings them back)", juce::dontSendNotification);
 }
 
 // ------------------------------------------------------------------------- Performance mode

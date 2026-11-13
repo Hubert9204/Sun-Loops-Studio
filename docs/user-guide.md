@@ -35,6 +35,14 @@ reports...*, *Show the session log folder*) and **About Sun Loops Studio** (vers
 AI -, license, credits, with buttons for the GitHub page and Discord). Until 0.54.0 the update and crash-report items were under
 *File > Updates and crash reports*.
 
+**Master pitch, memory and step editing (0.62.0).** In the row of window buttons: **Pitch** moves every note of the synths,
+samplers and plugin instruments by -12 to +12 semitones (drum channels keep their pitch; plugins get whole keys; double-click
+for 0; saved with the project). Under the CPU read-out, **RAM** is the memory the program holds (on Linux). **Step edit**: while
+the song is stopped, every note you play - typing keys or a MIDI keyboard - is written into the pattern of the channel you play,
+at the pattern's start marker (click the Piano Roll's ruler to move it); when you let go of every key the marker moves on by
+the toolbar's snap (a 16th when the snap is a bar or *None*). Keys held together make a chord on one step. While the song
+plays, *Rec notes* records as before.
+
 The status line shows the audio device (sample rate, buffer size, reported latency) and the last message.
 
 ## Projects
@@ -253,6 +261,19 @@ location in your file manager; **Refresh** looks for new files (the browser does
 Only drags that start in the browser are supported; dropping files from the desktop file manager onto the program is
 not implemented yet (copy them into the Samples folder and press Refresh).
 
+### Tabs, favourites and the current project (0.62.0)
+
+Above the search box four tabs choose what the tree shows: **All**, **Project** (the *Current project* folder on its own),
+**Plugins** (the plugins found) and **★** (your favourites). The tab is remembered.
+
+- **Favourites**: right-click a sound, a preset, an instrument or a plugin > *Add to the favourites*. They are listed under ★
+  and in a *Favourites* folder at the top of *All*; they can be dragged and listened to like anything else, and are kept
+  between sessions. *Remove from the favourites* is in the same menu.
+- **Current project**: *Patterns* (a click selects the pattern), *Channels* (a click selects the channel and shows the rack),
+  *Samples* (the audio files the sampler channels and the Playlist's audio clips use: click to hear, drag to use again),
+  *Effects* (each mixer track with effects and what they are: a click opens the mixer on it) and *Automation* (the automation
+  clips' targets). The folder follows the project as it changes.
+
 ## Channel Rack
 
 One row per channel, in FL Studio's order since 0.60.0: **M** (mute), **S** (solo), pan, volume, the **Track N** display, the
@@ -294,6 +315,25 @@ open the piano roll, add a channel) and the current pattern's length with **-** 
 - Click a row to select that channel (the Piano Roll and the Mixer follow the selection).
 - **+ Add channel** under the last row adds a synth, sampler or drum-machine channel, up to 32 channels in total
   (channels can share mixer tracks, and the mixer can have up to 500).
+
+### Filter groups, colours, the graph editor and the Layer channel (0.62.0)
+
+- **Filter groups** (as the group selector at the top of FL Studio's rack): right-click a channel > *Filter group* > *New
+  group...* (or an existing one) puts the channel in a group; the box next to ≡ shows **All** channels or only one group's.
+  A group exists as long as a channel is in it. Groups are saved with the project.
+- **Colour**: right-click a channel > *Colour* gives its name button one of 16 colours (*Default* takes it away).
+- **Graph** (as FL Studio's graph editor): the button next to the group box opens a strip under the rows with one bar per step
+  of the **selected** channel, under its step buttons. The box on the left chooses what the bars show: *Velocity*, *Pan*,
+  *Release* or *Fine pitch* (±100 cents; pan and fine pitch grow from the middle line). Drag across the bars to set them;
+  a right click puts a bar back to its default. They are the same values as the Piano Roll's event lanes.
+- **Layer channel** (*+ Add channel > Layer channel*, or *Instrument > Layer*): a channel that makes no sound itself. Its notes
+  - steps, Piano Roll notes, notes played by hand - are played by the channels ticked under *Layer: the channels that play its
+  notes* in its menu, each with its own sound, pitch, swing and mixer track. A layer cannot play another layer. Moving or
+  deleting channels keeps the ticks on the right channels.
+- **Polyphony** and **cut groups** (the channel's menu): *Mono* (one note at a time; with *Portamento* the pitch glides to the
+  next note), *Maximum notes* (the oldest note makes room), *Cut group* 1-8 and *Cut by group* (a note of a channel in the
+  group ends the notes of the channels cut by it - a closed hi-hat cutting the open one; *Cut itself* for a channel whose new
+  note ends its old one).
 
 ### Right-click menu on a channel
 
@@ -376,6 +416,12 @@ Right-click a sampler channel > **Sampler settings...** opens a window for that 
 
 - **Sound**: the sample (or the SoundFont preset / slice program) the channel plays, **Load sample...**, **Load SoundFont (.sf2)...**, and **Use the
   sample** (forgets a program, the channel plays its own sample again). **Root key**: the key at which the sample plays at its own pitch (C5 = 60).
+- **Loop** (0.62.0): *Off*, *Forward* or **Ping-pong** (the loop plays forwards, then backwards, and so on); **Crossfade**
+  blends the end of the loop into its start so that it does not click. **Envelope to cutoff** opens (or, negative, closes) the
+  filter with the volume envelope.
+- **Modulation** (0.62.0): an **LFO** with a target (*Pitch*, *Cutoff*, *Pan* or *Volume*), a rate and a depth, and a **pitch
+  envelope** (the note starts up to two octaves above or below and falls or rises to its pitch in the time set: a kick's
+  thump, a riser).
 - **Reverse**, **Start**, **Fade in**, **Fade out** (0.61.0, as *Reverse*, *SMP START*, *IN* and *OUT* of FL Studio's sampler channel):
   play the sample backwards; start a note further into the sample (0-99 %); fade the start in and the end out over a part of the
   sample's length. They apply to notes that do not loop (a looping note keeps its fade in).
@@ -604,6 +650,15 @@ FL Studio's title bar) switches to another channel's notes; the **Ghost** switch
 pattern, faint behind the channel's own (they cannot be edited there). The **Snap** box's *Main* entry follows the toolbar's
 global snap (0.60.0).
 
+**Tools, event lanes and note colours (0.62.0).** The **tool box** in the toolbar chooses what the left button does on the
+grid: **Draw** (as described below), **Paint** (drag along a row to write one note after another, each as long as the snap),
+**Mute** (click a note: it stays, grey, and is not played; click again to bring it back) and **Slice** (click a note to cut it
+in two at the snap). The label at the corner of the **event lane** under the grid chooses what the lane shows and edits:
+*Velocity*, **Pan** (per note, from the middle), **Release** (how long the note rings after its end, against the instrument's
+own release) or **Fine pitch** (cents). Every instrument plays these values. In the **Tools** menu: *Note colour* (16 colours
+for the notes you write next or the selected ones), **Limit** (moves the selected notes by octaves into one, two or three octaves) and
+**LFO** (writes a wave - one cycle per beat, per bar, every 2 or every 4 bars - into the values of the lane shown).
+
 | Action | How |
 | --- | --- |
 | Play a note | Left button on a key of the keyboard (held = sounds). |
@@ -807,6 +862,43 @@ As FL Studio's time markers: named places in the song. Click the ruler where the
 Undo / Redo) and type its name: a teal flag appears in the upper row of the ruler, with a faint line down the tracks. **◂** and
 **▸** jump to the previous and the next marker. Click a marker's flag for its menu: *Jump here*, *Rename...*, *Delete marker*.
 Markers are saved with the project and adding, renaming and deleting them can be undone.
+
+**Marker actions (0.62.0).** A marker's menu has *Action*, what the transport does when it gets there while the song plays (as
+the actions of FL Studio's markers; an export ignores them): **Loop** goes back to the marker before it (or the start),
+**Skip** goes on from the marker after it, **Pause** stops there (Play goes on from the marker), **Start** is where Play starts
+the song when the start has not been put somewhere else. A marker with an action shows it after its name, in its own colour.
+
+### Track lock, groups, Make unique, Consolidate (0.62.0)
+
+Right-click a track's name:
+
+- **Lock**: the track's clips cannot be moved, cut, muted, deleted or added to until it is unlocked (a padlock before the name).
+- **Group with the track above**: the track joins the group of the track above it; the first track of a group is its *head*.
+  The head's **M** and **S** count for the whole group, and the triangle before its name (or *Fold the group*) hides the
+  grouped tracks and shows how many there are; their clips keep playing.
+- **Consolidate this track's pattern clips to audio**: renders them (through their channels' mixer tracks, without the
+  master's effects, with up to two seconds of tail) to a WAV file in `Samples/Consolidated` and puts it on the track as an audio
+  clip; the pattern clips stay, muted, and Undo brings everything back. *Consolidate to audio (this clip)* in a pattern clip's
+  menu does one clip. The audio clip plays through the mixer track of its playlist track, like any audio clip.
+- **Make unique** (a pattern clip's menu): the clip gets its own copy of the pattern, which opens for editing; the other clips
+  of the old pattern are not touched.
+
+### Performance mode (0.62.0)
+
+*View > Performance mode...* opens a window in which the Playlist's pattern clips are launched by hand, as in FL Studio's
+performance mode. Every playlist track that holds pattern clips is a row; its clips, in the order they stand on the track,
+are the cells. Switch **Performance mode** on (or just click a cell):
+
+- a click on a **cell** starts that clip at the next bar and repeats it until something else happens on its row; a second cell
+  of the same row takes over at the next bar. A cell that waits for its turn blinks; the one that plays is bright;
+- the **square** before a row stops it at the next bar; **Stop all** stops every row;
+- **Scene 1, 2, ...** above the columns launch that column's cell of every row at the same bar;
+- **Launch on** chooses the boundary: the next bar, every 2 or 4 bars, the next beat, the next 16th.
+
+The first cell starts the transport; **Stop** ends the performance. While the mode is on the Playlist's own arrangement does
+not play (automation clips and audio clips are not part of a performance); closing the window or switching the mode off gives
+the song back. Patterns can be edited while they are performed. The switches are exact to the sample: a launched clip is
+written into the timeline ahead of the playhead. There is no MIDI controller mapping yet: the cells are clicked.
 
 ### Tools, grid, zoom and undo
 
@@ -1230,6 +1322,15 @@ ready-made settings.
 | Vibrato (0.61.0) | As Fruity Vibrator: the pitch moves up and down by Depth (0-100 cents) at Rate; Shape (sine, triangle), Stereo (offsets the right channel's LFO) | |
 | Panomatic (0.61.0) | As Fruity Panomatic / Fruity Balance: Volume (-48 to +12 dB), Pan, and an LFO on the pan (auto-pan) or the volume (tremolo): LFO target, rate (free, in Hz) or sync (1/8, 1/4, 1/2, 1 bar, 2 bars of the song), depth, shape (sine, triangle, square, saw) | Auto-pan 1 bar, Tremolo 1/8, Helicopter |
 
+**New in 0.62.0:**
+
+| Effect | Parameters | Presets |
+| --- | --- | --- |
+| WaveShaper | As Fruity WaveShaper: Pre gain, Curve (Soft clip, Hard clip, Fold, Sine, Rectify - an octave up -, Tube), Amount (0 = a straight line), Bias (makes the curve asymmetric), Post gain, Mix. 4x oversampled. | Warm tube, Hard clip, Wave folder, Octave up |
+| Convolver | A convolution reverb, as Fruity Convolver: Space (Room, Hall, Plate, Spring, Cathedral, or **File**: *Load IR...* takes any audio file as the impulse response), Length (0.1-4 s), Brightness, Pre-delay, Mix, Output. No latency. The file's path is saved with the project. | Small room, Concert hall, Vocal plate, Guitar spring, Cathedral |
+| Vocoder | As Fruity Vocoder: **Modulator** (the mixer track with the voice; *None*: the left input is the voice and the right one the carrier), Bands (8, 12, 16), Attack, Release, Width, Formant (moves the carrier's bands), Output, Mix. Put it on the track of a rich sustained sound (a saw chord) and choose the voice's track. | Robot, Old vocoder, Whisper |
+| Peak Controller | As Fruity Peak Controller: value = Base + Volume x the track's peak level + an LFO (LFO amount, LFO rate), falling back by Decay. The value sets parameter **Target param** of the effect in **Target slot** of **Target track** (*This track* or another) between its minimum and maximum; the line under the effect's name says what it drives. Works on plugins' parameters too. **Mute**: the track's sound only drives the controller (a ghost kick that ducks a bass). | Follow the level, Duck, Slow LFO, Level and wobble |
+
 Projects made before 0.21.0 sound the same: their reverbs are Halls without pre-delay and their delays are Stereo.
 Files with the new effects cannot be read by older versions (the slot comes back empty there).
 
@@ -1246,6 +1347,25 @@ it for glue compression, a final EQ, or a touch of reverb on everything. Slots c
 on a track, and the chain is saved in the project.
 
 The master volume is the toolbar slider and the master fader is the same control. The master strip has a meter.
+
+### Routing between tracks and delay compensation (0.62.0)
+
+The small button above **M** and **S** on every track (**> M** to begin with) says where the track goes, as the cables at the
+bottom of FL Studio's mixer:
+
+- **The master** (ticked by default);
+- **Also send to** > a track: the track's sound after its fader also goes into that track, before that track's effects. Up to
+  four sends per track; *Level to Track n* sets each from 25 to 150 %, or removes it;
+- **Route to this track only**: not to the master, only to the chosen track - a bus (all the drums through one compressor);
+- **Reset** puts it back to the master only.
+
+The button shows the result: **> M+2** (master and two sends), **> 5** (only track 5), **> -** (nowhere: silent). A track is
+processed before the tracks it feeds, whatever their numbers; a send that would close a loop is ignored; a muted track sends
+nothing. A bus fed by sends can be chosen as the sidechain of a compressor, gate or vocoder.
+
+**Delay compensation** is automatic: when an effect delays its track (the Maximizer's look-ahead, a plugin that reports a
+latency), every other track is delayed by the same amount after its own effects, so that they stay together - also when the
+slow effect is on a bus. An export drops the mix's latency from its start. The effects on Aux A / B are not compensated.
 
 ### Sends, aux buses and VCA groups
 

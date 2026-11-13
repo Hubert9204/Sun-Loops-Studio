@@ -465,8 +465,9 @@ MainComponent::MainComponent()
     pitchLabel.setColour (juce::Label::textColourId, juce::Colour (0xffb9bfc9));
     pitchSlider.setRange (-12.0, 12.0, 1.0);
     pitchSlider.setDoubleClickReturnValue (true, 0.0);
-    pitchSlider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+    pitchSlider.setTextBoxStyle (juce::Slider::TextBoxLeft, true, 60, 20); // (a bar slider writes its value inside the bar)
     pitchSlider.textFromValueFunction = [] (double v) { return (v > 0.0 ? "+" : "") + juce::String (juce::roundToInt (v)) + " st"; };
+    pitchSlider.updateText();
     pitchSlider.setTooltip ("Master pitch: every note of the synths, samplers and plugin instruments moves by this many semitones "
                             "(drum channels keep their pitch). Double-click: 0");
     pitchSlider.onValueChange = [this]
@@ -750,14 +751,14 @@ void MainComponent::resized()
     views.removeFromRight (4);
     metersButton.setBounds (views.removeFromRight (64));
     views.removeFromRight (4);
-    typingButton.setBounds (views.removeFromRight (90));
+    typingButton.setBounds (views.removeFromRight (86));
     views.removeFromRight (4);
-    metronomeButton.setBounds (views.removeFromRight (90));
+    metronomeButton.setBounds (views.removeFromRight (86));
     views.removeFromRight (4);
-    stepEditButton.setBounds (views.removeFromRight (74)); // 0.62.0
+    stepEditButton.setBounds (views.removeFromRight (70)); // 0.62.0
     views.removeFromRight (6);
-    pitchSlider.setBounds (views.removeFromRight (76).reduced (0, 3));
-    pitchLabel.setBounds (views.removeFromRight (36));
+    pitchSlider.setBounds (views.removeFromRight (62).reduced (0, 3));
+    pitchLabel.setBounds (views.removeFromRight (34));
     const struct { juce::TextButton* b; int w; } shortcuts[] = { { &playlistToggle, 96 }, { &pianoToggle, 104 }, { &rackToggle, 120 },
                                                                 { &mixerToggle, 82 }, { &browserToggle, 94 }, { &pluginPickerToggle, 100 } };
     for (const auto& sc : shortcuts)

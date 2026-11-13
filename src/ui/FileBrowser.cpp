@@ -383,6 +383,11 @@ void FileBrowser::applyFilter()
             tree.restoreOpennessState (*openness, true);
     }
 
+    if (! nowSearching && tab == Project) // 0.62.0: the project's parts are shown open
+        for (int i = 0; i < rootItem->getNumSubItems(); ++i)
+            if (auto* top = rootItem->getSubItem (i))
+                top->setOpen (true);
+
     firstTree = false;
     searching = nowSearching;
 }
