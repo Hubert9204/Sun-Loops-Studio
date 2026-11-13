@@ -33,7 +33,7 @@ set(SPDLOG_INSTALL OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
     spdlog
     GIT_REPOSITORY https://github.com/gabime/spdlog.git
-    GIT_TAG v1.14.1
+    GIT_TAG v1.15.3 # (0.63.0: 1.14 bundles a fmt that recent Apple compilers reject)
     GIT_SHALLOW ON
     SYSTEM
     ${SLS_JUCE_FETCH_OPTIONS}
