@@ -49,7 +49,7 @@ The status line shows the audio device (sample rate, buffer size, reported laten
 
 ## On a Mac (0.63.0)
 
-Sun Loops Studio runs on macOS 11 or newer (Apple silicon and Intel) as on Linux, with these differences:
+Sun Loops Studio runs on macOS 10.15 Catalina or newer, on Apple silicon and on Intel Macs (from 2012 on, such as the Mac mini 2012), as on Linux, with these differences:
 
 - **Shortcuts**: where this guide says **Ctrl** (Ctrl+Z, Ctrl+C, Ctrl+S...), press **⌘ Cmd** on a Mac. The function keys
   (F1 Helios, F5 - F9 the windows) may need the **fn** key, depending on the keyboard's settings.

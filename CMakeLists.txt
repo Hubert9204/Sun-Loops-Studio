@@ -1,7 +1,9 @@
 cmake_minimum_required(VERSION 3.22)
 # macOS (0.63.0): the oldest system the program runs on. Must be set before project(). A universal build (Apple silicon and
 # Intel) is configured with -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" (scripts/build_macos.sh does).
-set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Oldest macOS the program runs on")
+# 10.15 Catalina (0.63.0): the newest macOS of Intel Macs from 2012 (Mac mini, iMac, MacBook Pro). The Apple silicon half of the
+# app needs macOS 11 in any case (the first macOS for those Macs); the compiler refuses any call that Catalina does not have.
+set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Oldest macOS the program runs on")
 project(SunLoopsStudio VERSION 0.63.0 LANGUAGES C CXX ASM)
 
 set(CMAKE_CXX_STANDARD 20)

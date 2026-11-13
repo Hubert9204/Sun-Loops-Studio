@@ -5678,6 +5678,7 @@ void testHeliosManual062()
     check (top ("convolution reverb impulse response", "Effect", "en") || top ("convolution reverb impulse response", "Mixer", "en"), "Helios: the convolution reverb");
     check (top ("layer channel", "Layer channel", "en") && top ("canale layer", "canale Layer", "it"), "Helios: the Layer channel in both languages");
     check (top ("marker actions loop skip pause", "arker", "en") && top ("azioni dei marcatori", "arcatori", "it"), "Helios: marker actions");
+    check (top ("mac mini 2012 catalina", "On a Mac", "en") && top ("mac mini 2012 catalina", "Su un Mac", "it"), "Helios: which Macs it runs on (0.63.0)");
     check (top ("favourites browser tabs", "favourites", "en") && top ("preferiti browser", "preferiti", "it"), "Helios: the browser's favourites");
     check (top ("graph editor velocity steps", "graph editor", "en") && top ("editor a barre", "editor a barre", "it"), "Helios: the graph editor");
     check (top ("step edit", "step edit", "en") && top ("step edit", "step edit", "it"), "Helios: step editing");

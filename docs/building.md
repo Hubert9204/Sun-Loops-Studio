@@ -33,7 +33,7 @@ libxrandr-dev libxcursor-dev libxrender-dev libxcomposite-dev libgl1-mesa-dev li
 
 ### macOS (0.63.0)
 
-macOS 11 or newer, on Apple silicon or Intel. Install the Xcode command line tools (`xcode-select --install`) and, with
+The program runs on macOS 10.15 Catalina or newer, on Apple silicon or Intel (Intel Macs from 2012 on); building it needs macOS 11 or newer, on Apple silicon or Intel. Install the Xcode command line tools (`xcode-select --install`) and, with
 [Homebrew](https://brew.sh), `brew install cmake ninja` (`brew install ffmpeg` for MP3 / AAC export, optional). libcurl and every
 other library come with macOS. Then:
 
