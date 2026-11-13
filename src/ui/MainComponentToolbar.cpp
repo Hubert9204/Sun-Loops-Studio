@@ -2,6 +2,8 @@
 // bar, the Plugin picker's lists and the Channel Rack's options menu. The layout itself is in MainComponent::resized().
 #include "ui/MainComponent.h"
 
+#include "support/ProcessMemory.h"
+
 #include "audio/TempoMap.h"
 #include "audio/TimeFormat.h"
 
@@ -67,10 +69,9 @@ void MainComponent::updateToolbarReadouts()
         static juce::String memoryText;
         if (cpuTicks % 25 == 0 || memoryText.isEmpty())
         {
-            const auto statm = juce::File ("/proc/self/statm").loadFileAsString();
-            const auto pages = juce::StringArray::fromTokens (statm, " ", "")[1].getLargeIntValue();
-            const auto megabytes = pages * 4096 / (1024 * 1024);
-            memoryText = pages <= 0 ? juce::String ("\n")
+            const auto bytes = residentMemoryBytes();
+            const auto megabytes = bytes / (1024 * 1024);
+            memoryText = bytes <= 0 ? juce::String ("\n")
                        : megabytes < 1000 ? "\nRAM " + juce::String (megabytes) + "M" : "\nRAM " + juce::String (static_cast<double> (megabytes) / 1024.0, 1) + "G";
         }
         cpuLabel.setText ("CPU " + juce::String (percent) + " %" + (memoryText.length() > 1 ? memoryText : juce::String()), juce::dontSendNotification);

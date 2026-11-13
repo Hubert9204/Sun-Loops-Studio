@@ -51,7 +51,10 @@ std::optional<UpdateInfo> parseRelease (std::string_view json, std::string* erro
                 continue;
             const auto name = stringField (asset, "name");
             const auto link = stringField (asset, "browser_download_url");
-            if (! link.empty() && endsWith (name, ".AppImage") && name.find (std::string (arch)) != std::string::npos)
+            // the AppImage for this processor; on macOS (0.63.0, arch "macOS") the universal disk image
+            const bool wanted = arch == "macOS" ? endsWith (name, "-macOS.dmg")
+                                                : endsWith (name, ".AppImage") && name.find (std::string (arch)) != std::string::npos;
+            if (! link.empty() && wanted)
             {
                 info.url = link;
                 break;
@@ -195,7 +198,15 @@ bool UpdateChecker::start (Callback callback)
         request.connectTimeoutSeconds = options.timeoutSeconds;
         request.maxResponseBytes = std::size_t { 1024 } * 1024;
         request.cancel = &cancel;
-        auto result = evaluate (http::perform (request), options.currentVersion);
+        // which download fits this computer: the macOS disk image, or the AppImage for this processor (0.63.0)
+#if defined(__APPLE__)
+        constexpr std::string_view platform = "macOS";
+#elif defined(__aarch64__)
+        constexpr std::string_view platform = "aarch64";
+#else
+        constexpr std::string_view platform = "x86_64";
+#endif
+        auto result = evaluate (http::perform (request), options.currentVersion, platform);
         running.store (false);
         if (! callback || ! aliveFlag->load())
             return;

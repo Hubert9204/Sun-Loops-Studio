@@ -14,15 +14,58 @@
 #include <cerrno> // program_invocation_name
 #include <execinfo.h>
 #include <fcntl.h>
-#include <sys/prctl.h>
-#include <sys/syscall.h>
+#include <pthread.h>
 #include <sys/utsname.h>
 #include <unistd.h>
+#if defined(__linux__)
+ #include <sys/prctl.h>
+ #include <sys/syscall.h>
+#elif defined(__APPLE__)
+ #include <cstdlib> // getprogname
+ #include <sys/sysctl.h>
+ #include <sys/ucontext.h>
+#endif
 
 namespace sls::crash
 {
 namespace
 {
+// The calling thread's id and name (0.63.0: Linux and macOS each have their own calls; both are safe in a signal handler).
+long long currentThreadId() noexcept
+{
+#if defined(__linux__)
+    return static_cast<long long> (::syscall (SYS_gettid));
+#elif defined(__APPLE__)
+    std::uint64_t id = 0;
+    ::pthread_threadid_np (nullptr, &id);
+    return static_cast<long long> (id);
+#else
+    return 0;
+#endif
+}
+
+void currentThreadName (char* name, std::size_t size) noexcept
+{
+#if defined(__linux__)
+    if (size >= 16)
+        ::prctl (PR_GET_NAME, name, 0, 0, 0);
+#else
+    ::pthread_getname_np (::pthread_self(), name, size);
+#endif
+}
+
+const char* programName() noexcept
+{
+#if defined(__linux__)
+    return program_invocation_name != nullptr ? program_invocation_name : "";
+#elif defined(__APPLE__)
+    const char* name = ::getprogname();
+    return name != nullptr ? name : "";
+#else
+    return "";
+#endif
+}
+
 // Everything the signal handler reads is prepared beforehand in fixed buffers: in the handler nothing may allocate or lock.
 constexpr std::size_t kPathSize = 4096;
 constexpr std::size_t kTextSize = 1024;
@@ -35,7 +78,7 @@ char contextText[2][kTextSize] {};
 std::atomic<int> contextIndex { 0 };
 char exceptionText[512] {};
 std::atomic<bool> handling { false };
-pid_t mainThread = 0;
+long long mainThread = 0;
 bool installed = false;
 struct sigaction previous[kSignals.size()] {};
 std::terminate_handler previousTerminate = nullptr;
@@ -134,11 +177,12 @@ const char* signalName (int sig) noexcept
 // Not in the anonymous namespace: their names are exported, so a trace shows (and the report skips) the handler's own frames.
 namespace detail
 {
-void onSignal (int sig, siginfo_t* info, void* /*context*/);
+void onSignal (int sig, siginfo_t* info, void* context);
 [[noreturn]] void onTerminate();
 
-void onSignal (int sig, siginfo_t* info, void* /*context*/)
+void onSignal (int sig, siginfo_t* info, void* context)
 {
+    static_cast<void> (context);
     if (handling.exchange (true))
     {
         // Another thread is already writing the report; it will end the process.
@@ -162,11 +206,11 @@ void onSignal (int sig, siginfo_t* info, void* /*context*/)
         w.hex (info != nullptr ? reinterpret_cast<std::uintptr_t> (info->si_addr) : 0);
         w.text ("\ntime=");
         w.number (static_cast<long long> (::time (nullptr)));
-        const auto tid = static_cast<pid_t> (::syscall (SYS_gettid));
+        const auto tid = currentThreadId();
         w.text ("\nthread=");
         w.text (tid == mainThread ? "main" : "other");
         char threadName[17] {};
-        ::prctl (PR_GET_NAME, threadName, 0, 0, 0);
+        currentThreadName (threadName, sizeof (threadName));
         w.text ("\nthread_name=");
         w.text (threadName);
         if (exceptionText[0] != '\0')
@@ -178,8 +222,32 @@ void onSignal (int sig, siginfo_t* info, void* /*context*/)
         w.text (systemText);
         w.text (contextText[contextIndex.load (std::memory_order_acquire)]);
         w.text ("frames:\n");
-        void* frames[64];
-        const int n = ::backtrace (frames, 64);
+        void* frames[65];
+        int n = ::backtrace (frames, 64);
+#if defined(__APPLE__)
+        // macOS follows the frame pointers, and a function that calls nothing (often the one that crashed) has none of its own:
+        // the trace jumps from _sigtramp to its caller. The crashing instruction is in the saved registers; it goes in after
+        // _sigtramp (frame 1) when the trace does not have it already (0.63.0).
+        if (context != nullptr && n >= 2 && (sig == SIGSEGV || sig == SIGBUS || sig == SIGILL || sig == SIGFPE))
+        {
+            const auto* uc = static_cast<const ucontext_t*> (context);
+ #if defined(__arm64__) || defined(__aarch64__)
+  #if defined(__darwin_arm_thread_state64_get_pc)
+            void* pc = reinterpret_cast<void*> (__darwin_arm_thread_state64_get_pc (uc->uc_mcontext->__ss));
+  #else
+            void* pc = reinterpret_cast<void*> (uc->uc_mcontext->__ss.__pc);
+  #endif
+ #else
+            void* pc = reinterpret_cast<void*> (uc->uc_mcontext->__ss.__rip);
+ #endif
+            if (pc != nullptr && std::find (frames, frames + n, pc) == frames + n)
+            {
+                std::memmove (frames + 3, frames + 2, static_cast<size_t> (n - 2) * sizeof (void*));
+                frames[2] = pc;
+                ++n;
+            }
+        }
+#endif
         ::backtrace_symbols_fd (frames, n, fd);
         w.text ("end\n");
         ::fsync (fd);
@@ -219,6 +287,13 @@ namespace
 {
 std::string readOsName()
 {
+#if defined(__APPLE__)
+    char version[64] {};
+    std::size_t size = sizeof (version);
+    if (::sysctlbyname ("kern.osproductversion", version, &size, nullptr, 0) == 0)
+        return std::string ("macOS ") + version;
+    return "macOS";
+#else
     std::ifstream in ("/etc/os-release");
     std::string line;
     while (std::getline (in, line))
@@ -230,6 +305,7 @@ std::string readOsName()
             return value;
         }
     return "Linux";
+#endif
 }
 } // namespace
 
@@ -257,9 +333,9 @@ bool install (const InstallOptions& options)
     // glibc names the main program in stack traces by argv[0] (program_invocation_name): "AppRun" in the AppImage. Recorded so
     // that the next start knows which frames are the program's own.
     auto fields = systemFields();
-    fields.emplace_back ("program", program_invocation_name != nullptr ? program_invocation_name : "");
+    fields.emplace_back ("program", programName());
     copyText (systemText, sizeof (systemText), fieldsText (fields));
-    mainThread = static_cast<pid_t> (::syscall (SYS_gettid));
+    mainThread = currentThreadId();
     exceptionText[0] = '\0';
     handling.store (false);
 

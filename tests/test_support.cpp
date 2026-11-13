@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <cstdio>
 #include <iostream>
 #include <mutex>
 #include <stdexcept>
@@ -18,7 +19,9 @@
 
 #include <arpa/inet.h>
 #include <dlfcn.h>
-#include <link.h>
+#if defined(__linux__)
+ #include <link.h>
+#endif
 #include <netinet/in.h>
 #include <poll.h>
 #include <sys/resource.h>
@@ -158,6 +161,8 @@ private:
 // Runs `crash` in a child process with the handler installed; returns the signal that ended the child (0 if none).
 int crashInChild (const fs::path& dir, const std::function<void()>& crash)
 {
+    std::cout.flush(); // or the child flushes the parent's buffered output a second time when it exits
+    std::fflush (nullptr);
     const pid_t child = ::fork();
     if (child == 0)
     {
@@ -252,6 +257,16 @@ void testSemVerAndUpdates()
     supportCheck (info && info->version == "0.43.0" && info->tag == "v0.43.0" && info->url == "https://x/amd64"
                && info->pageUrl == "https://github.com/o/r/releases/tag/v0.43.0" && info->changelog == "## What's new\n- Crash reports\n- Update check",
            "a release: version from tag_name, the x86_64 AppImage as the download, the notes without their blank first line");
+    {
+        const std::string both = R"({"tag_name":"v0.63.0","html_url":"https://page","assets":[
+            {"name":"Sun-Loops-Studio-0.63.0-x86_64.AppImage","browser_download_url":"https://x/linux"},
+            {"name":"Sun-Loops-Studio-0.63.0-macOS.dmg","browser_download_url":"https://x/mac"}]})";
+        const auto onLinux = sls::updates::parseRelease (both, nullptr, "x86_64");
+        const auto mac = sls::updates::parseRelease (both, nullptr, "macOS");
+        const auto macOnlyLinux = sls::updates::parseRelease (release, nullptr, "macOS");
+        supportCheck (onLinux && onLinux->url == "https://x/linux" && mac && mac->url == "https://x/mac" && macOnlyLinux && macOnlyLinux->url == macOnlyLinux->pageUrl,
+                      "on macOS the update is the .dmg (a release without one: its page), on Linux the AppImage");
+    }
     std::string why;
     supportCheck (! sls::updates::parseRelease ("{\"html_url\":\"x\"}", &why) && why.find ("tag_name") != std::string::npos
                && ! sls::updates::parseRelease ("not json") && ! sls::updates::parseRelease ("{\"tag_name\":\"nightly\",\"html_url\":\"x\"}")
@@ -320,7 +335,15 @@ void testSemVerAndUpdates()
                    && request.find ("User-Agent: SunLoopsStudio/0.42.0") != std::string::npos
                    && request.find ("Accept: application/vnd.github+json") != std::string::npos && request.find ("Authorization") == std::string::npos,
                "GET /repos/{owner}/{repo}/releases/latest with a User-Agent and GitHub's Accept header, no token");
-        supportCheck (delivered && got.status == sls::updates::Status::UpdateAvailable && got.info.version == "0.43.0" && got.info.url == "https://x/amd64"
+        // the download this computer gets: the test release has only AppImages, so on a Mac it is the release page (0.63.0)
+#if defined(__APPLE__)
+        const std::string expectedUrl = "https://github.com/o/r/releases/tag/v0.43.0";
+#elif defined(__aarch64__)
+        const std::string expectedUrl = "https://x/arm";
+#else
+        const std::string expectedUrl = "https://x/amd64";
+#endif
+        supportCheck (delivered && got.status == sls::updates::Status::UpdateAvailable && got.info.version == "0.43.0" && got.info.url == expectedUrl
                    && callbackThread == callerThread,
                "the result (0.43.0 available) arrives through the dispatcher, on the calling (main) thread");
     }
@@ -392,12 +415,19 @@ void testCrashReports()
         const int sig = crashInChild (dir, [] { sls::crashtest::writeThroughNull (static_cast<std::uintptr_t> (::getpid() & 0) + 16); });
         auto report = sls::crash::load (sls::crash::crashFile (dir));
         if (report)
-            sls::crash::symbolize (*report, fs::read_symlink ("/proc/self/exe"));
+            sls::crash::symbolize (*report, sls::crash::executablePath());
         supportCheck (sig == SIGSEGV, "a write through a null pointer still ends the program with SIGSEGV (the handler does not swallow it)");
         supportCheck (report && report->signalName == "SIGSEGV" && report->signal == SIGSEGV && report->version == "9.8.7" && report->address == "0x10"
                    && report->thread == "main" && report->time > 1700000000,
                "crash_last_session.log: signal, faulting address 0x10, version, thread and time");
-        supportCheck (report && report->where() == "sls::crashtest::writeThroughNull", "the stack trace names the function that crashed (after the handler and libc's frames)");
+        const bool named = report && report->where() == "sls::crashtest::writeThroughNull";
+        if (! named && report) // the frames differ between systems: show them
+        {
+            std::cout << "    crash frame " << report->crashFrame << ", where " << report->where() << "\n";
+            for (const auto& f : report->frames)
+                std::cout << "    | " << f.raw << "  =>  " << f.symbol << " " << f.offset << "\n";
+        }
+        supportCheck (named, "the stack trace names the function that crashed (after the handler and libc's frames)");
         supportCheck (report && report->field ("audio_device") == "Test Card" && report->field ("sample_rate") == "48000" && report->field ("arch") != "unknown"
                    && report->field ("os") != "unknown",
                "the audio settings set beforehand and the system (OS, architecture) are in it");
@@ -407,7 +437,7 @@ void testCrashReports()
         const int sig = crashInChild (dir, [] { sls::crashtest::throwUncaught (7); });
         auto report = sls::crash::load (sls::crash::crashFile (dir));
         if (report)
-            sls::crash::symbolize (*report, fs::read_symlink ("/proc/self/exe"));
+            sls::crash::symbolize (*report, sls::crash::executablePath());
         const bool ok = sig == SIGABRT && report && report->signalName == "SIGABRT" && report->exception == "uncaught exception: test exception 7"
                         && report->where() == "sls::crashtest::throwUncaught";
         if (! ok) // the frames differ between systems: show them
@@ -428,7 +458,7 @@ void testCrashReports()
         const int sig = crashInChild (dir, [] { std::raise (SIGFPE); });
         auto report = sls::crash::load (sls::crash::crashFile (dir));
         if (report)
-            sls::crash::symbolize (*report, fs::read_symlink ("/proc/self/exe"));
+            sls::crash::symbolize (*report, sls::crash::executablePath());
         supportCheck (sig == SIGFPE && report && report->signalName == "SIGFPE" && report->description().find ("arithmetic") != std::string::npos,
                "SIGFPE is caught and named");
     }
@@ -437,7 +467,7 @@ void testCrashReports()
         const int sig = crashInChild (dir, [] { static_cast<void> (sls::crashtest::recurseForever (0)); });
         auto report = sls::crash::load (sls::crash::crashFile (dir));
         if (report)
-            sls::crash::symbolize (*report, fs::read_symlink ("/proc/self/exe"));
+            sls::crash::symbolize (*report, sls::crash::executablePath());
         supportCheck (sig == SIGSEGV && report && report->where() == "sls::crashtest::recurseForever",
                "a stack overflow is caught too (the handler runs on its own stack)");
     }
@@ -489,12 +519,25 @@ void testCrashReports()
                && body.find ("#2  sls::Player::render(juce::AudioBuffer<float>&, int) +0x1a  in sun-loops-studio  [0x55d0c2a10011]   <-- crashed here")
                       != std::string::npos,
            "the stack trace in a Markdown code block, the crashing frame marked");
+    {
+        // 0.63.0: a stack trace as macOS writes it
+        const auto mac = sls::crash::parse ("SLS-CRASH 1\nversion=0.63.0\nsignal=11\nsigname=SIGSEGV\nframes:\n"
+                                            "0   SunLoopsStudio                      0x0000000104f00010 _ZN3sls5crash12_GLOBAL__N_18onSignalEiP9__siginfoPv + 120\n"
+                                            "1   libsystem_platform.dylib            0x000000018c8b2584 _sigtramp + 56\n"
+                                            "2   SunLoopsStudio                      0x0000000104f2c8e4 _ZN3sls6Player6renderERN4juce11AudioBufferIfEEi + 26\n"
+                                            "3   SunLoopsStudio                      0x0000000104f2c9e4 0x0 + 4378511844\n"
+                                            "end\n");
+        supportCheck (mac && mac->frames.size() == 4 && mac->frames[2].module == "SunLoopsStudio" && mac->frames[2].offset == "+0x1a"
+                          && mac->frames[2].address == "0x0000000104f2c8e4" && mac->where() == "sls::Player::render" && mac->frames[3].symbol.empty(),
+                      "a macOS stack trace is read: module, address, function and offset; the crash is in Player::render");
+    }
     supportCheck (body.find ("hubert") == std::string::npos && body.find ("~/Music/song.slp") != std::string::npos && body.find ("~/Apps") == std::string::npos
                && body.find ("contains ''' fences") != std::string::npos,
            "the user's name and home folder are removed; ``` in the log cannot break the code block");
     const auto link = sls::github::newIssueLink ({ "Hubert9204", "Sun-Loops-Studio" }, "Crash: x", std::string (20000, 'a') + "\n" + body);
     supportCheck (link.rfind ("https://github.com/Hubert9204/Sun-Loops-Studio/issues/new?labels=crash&title=Crash%3A%20x&body=", 0) == 0 && link.size() <= 7500,
            "without a token: a GitHub \"new issue\" link, the body cut to fit");
+#if defined(__linux__) // (an ELF symbol table and glibc's load map: Linux only)
     {
         // The AppImage: the main program appears as "AppRun" in the trace; the recorded program name ties it to the executable.
         // The offset glibc would print: from the load address (l_addr; 0 for a non-PIE executable).
@@ -518,6 +561,7 @@ void testCrashReports()
                           && namedOther == 0 && sls::crash::issueBody (appImage, who).find ("| program |") == std::string::npos,
                       "a frame of the recorded program (AppRun in the AppImage) is named from the executable's symbol table, another file's is not");
     }
+#endif
     supportCheck (! sls::crash::parse ("hello\nsignal=11") && ! sls::crash::parse ("SLS-CRASH 1\nframes:\nend\n"), "a file that is not a crash report is refused");
 
     // The log goes into the crash file at the next start; after sending, the file is archived.

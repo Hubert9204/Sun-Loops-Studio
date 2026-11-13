@@ -102,7 +102,7 @@ bool MainComponent::offerCrashReport (std::function<void()> then)
         return false;
     }
     if (report->version == JUCE_APPLICATION_VERSION_STRING)
-        crash::symbolize (*report, std::filesystem::read_symlink ("/proc/self/exe", error)); // the same build: name every frame
+        crash::symbolize (*report, crash::executablePath()); // the same build: name every frame
     spdlog::warn ("The last session crashed: {} in {}", report->signalName, report->signature());
 
     CrashReportDialog::Setup setup;

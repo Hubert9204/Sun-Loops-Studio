@@ -54,6 +54,9 @@ std::optional<Report> load (const std::filesystem::path& file);
 // Then finds the crash frame again. Returns how many frames got a name.
 int symbolize (Report& report, const std::filesystem::path& executable);
 
+// The file of the running program (Linux: /proc/self/exe; macOS: the dynamic loader's answer). Empty when it cannot be found.
+std::filesystem::path executablePath();
+
 // "_ZN3sls6Player6renderEv" -> "sls::Player::render()"; other text is returned as it is. GCC's clone suffixes (".cold",
 // ".isra.0", ".constprop.0", ".part.0") are kept after the demangled name.
 std::string demangle (const std::string& symbol);

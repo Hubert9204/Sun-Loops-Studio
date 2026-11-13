@@ -47,6 +47,25 @@ plays, *Rec notes* records as before.
 
 The status line shows the audio device (sample rate, buffer size, reported latency) and the last message.
 
+## On a Mac (0.63.0)
+
+Sun Loops Studio runs on macOS 11 or newer (Apple silicon and Intel) as on Linux, with these differences:
+
+- **Shortcuts**: where this guide says **Ctrl** (Ctrl+Z, Ctrl+C, Ctrl+S...), press **⌘ Cmd** on a Mac. The function keys
+  (F1 Helios, F5 - F9 the windows) may need the **fn** key, depending on the keyboard's settings.
+- **The first start**: the app is not signed with an Apple Developer certificate, so macOS refuses to open it the first
+  time: right-click it > **Open** > **Open** (or *System Settings > Privacy & Security > Open Anyway*). After that it opens
+  normally. **Record** asks once for the microphone (*System Settings > Privacy & Security > Microphone* changes the answer).
+- **Audio**: the devices are Core Audio's (every built-in, USB and Thunderbolt interface); there is no ALSA or JACK.
+- **Plugins**: VST3 (`/Library/Audio/Plug-Ins/VST3`, `~/Library/Audio/Plug-Ins/VST3`), **Audio Units** (the Mac's own format:
+  every instrument and effect installed for GarageBand or Logic) and LV2; LADSPA plugins exist only on Linux. SunBurst and
+  HexForge are inside the app.
+- **Files**: projects, samples, kits and presets are in `~/Music/Sun Loops Studio` as on Linux; the session log and crash
+  reports are in `~/Library/Application Support/SunLoopsStudio` (*Help > Show the session log folder*). A double-click on a
+  `.slp` file in the Finder opens it.
+- **Current limits**: crash reports name the functions only as far as macOS's own stack trace does. The program was built and its automated tests were run on a GitHub Mac; it has not yet been
+  tried by hand on a real Mac.
+
 ## Projects
 
 **The demo song (0.52.0).** On its first start the program opens with "Sunrise Drive" (since 0.53.0 only then; later starts begin

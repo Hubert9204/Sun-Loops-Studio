@@ -183,6 +183,9 @@ bool JucePlugin::setState (const juce::MemoryBlock& state)
 PluginHost::PluginHost()
 {
     formatManager.addFormat (new juce::VST3PluginFormat());
+#if JUCE_PLUGINHOST_AU && JUCE_MAC
+    formatManager.addFormat (new juce::AudioUnitPluginFormat()); // 0.63.0: macOS's own plugin format
+#endif
 #if JUCE_PLUGINHOST_LV2
     formatManager.addFormat (new juce::LV2PluginFormat());
 #endif
@@ -239,13 +242,21 @@ juce::FileSearchPath PluginHost::bundledPaths()
     // as JUCE sees it and through /proc/self/exe (the real file, whatever symbolic link started it).
     if (const auto appDir = juce::SystemStats::getEnvironmentVariable ("APPDIR", {}); appDir.isNotEmpty())
         prefixes.add (juce::File (appDir).getChildFile ("usr"));
-    prefixes.add (juce::File::getSpecialLocation (juce::File::currentExecutableFile).getParentDirectory().getParentDirectory());
+    const auto executable = juce::File::getSpecialLocation (juce::File::currentExecutableFile);
+    prefixes.add (executable.getParentDirectory().getParentDirectory());
+#if JUCE_MAC
+    // 0.63.0: Sun Loops Studio.app/Contents/MacOS/Sun Loops Studio. The bundled plugins are in Contents/PlugIns/VST3; a
+    // development build's .app sits in build/SunLoopsStudio_artefacts/Release, as the Linux program does.
+    const auto contents = executable.getParentDirectory().getParentDirectory();
+    prefixes.add (contents.getParentDirectory().getParentDirectory().getParentDirectory());
+#else
     const auto self = juce::File ("/proc/self/exe");
     if (self.isSymbolicLink())
         prefixes.add (self.getLinkedTarget().getParentDirectory().getParentDirectory());
+#endif
     for (const auto& prefix : prefixes)
     {
-        juce::Array<juce::File> dirs { prefix.getChildFile ("lib/vst3"), prefix.getChildFile ("lib64/vst3") };
+        juce::Array<juce::File> dirs { prefix.getChildFile ("lib/vst3"), prefix.getChildFile ("lib64/vst3"), prefix.getChildFile ("PlugIns/VST3") };
         // A development build: build/SunLoopsStudio_artefacts/Release/Sun Loops Studio -> build/<Plugin>_artefacts/Release/VST3
         for (const char* name : { "SunBurst", "HexForge" })
             for (const char* config : { "Release", "Debug" })
