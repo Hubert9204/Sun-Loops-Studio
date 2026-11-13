@@ -27,6 +27,10 @@ public:
 
     virtual bool isInstrument() const noexcept = 0;
 
+    // Samples by which the plugin delays its output (a look-ahead limiter, a linear-phase EQ), for the mixer's delay compensation
+    // (0.62.0). Any thread.
+    virtual int latencySamples() const noexcept { return 0; }
+
     // Audio thread, before process(): the song's tempo, its position in quarter notes and whether it plays (0.48.0), for plugins that
     // follow the tempo (synced LFOs, delays, arpeggiators).
     virtual void setTransport (double /*bpm*/, double /*quarters*/, bool /*playing*/) noexcept {}

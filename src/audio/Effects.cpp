@@ -95,6 +95,13 @@ void EffectMemory::clear() noexcept
     pcDecim.fill (0.0f);
     pcScratch.fill (0.0f);
     pcDiff.fill (0.0f);
+    for (auto& stage : vocMod)
+        for (auto& q : stage)
+            q.clearState();
+    for (auto& stage : vocCar)
+        for (auto& q : stage)
+            q.clearState();
+    vocEnv.fill (0.0f);
 }
 
 void EffectUnit::attachMemory (EffectMemory* m) noexcept
@@ -208,6 +215,9 @@ void EffectUnit::reset() noexcept
     sqHold = {};
     sqCount = 0;
     panPhase = 0.0;
+    control = 0.0f; // 0.62.0
+    vocCached.fill (-1.0f);
+    convolverSeen = nullptr; // the convolver it meets next starts silent
     if (timeL != nullptr)
     {
         std::fill_n (timeL, timeFrames, 0.0f);
@@ -310,6 +320,10 @@ void EffectUnit::process (const EffectSlot& requested, float* left, float* right
         case EffectType::Vibrato:      runVibrato (slot, left, right, numSamples); break;
         case EffectType::ParametricEq2: runParametricEq2 (slot, left, right, numSamples); break;
         case EffectType::MultibandComp: runMultibandComp (slot, left, right, numSamples); break;
+        case EffectType::WaveShaper:   runWaveShaper (slot, left, right, numSamples); break;
+        case EffectType::Vocoder:      runVocoder (slot, left, right, numSamples, transport); break;
+        case EffectType::PeakController: runPeakController (slot, left, right, numSamples); break;
+        case EffectType::Convolver:    runConvolver (slot, left, right, numSamples); break;
         case EffectType::Plugin:
         case EffectType::None:         break;
     }
@@ -1434,6 +1448,46 @@ const std::vector<EffectPreset>& effectPresets (EffectType t)
             };
             return list;
         }
+        case EffectType::WaveShaper: // 0.62.0
+        {
+            static const std::vector<EffectPreset> list {
+                make ("Warm tube", { 9.0f, 5.0f, 0.8f, 0.1f, -6.0f, 1.0f }),
+                make ("Hard clip", { 18.0f, 1.0f, 1.0f, 0.0f, -4.0f, 1.0f }),
+                make ("Wave folder", { 14.0f, 2.0f, 1.0f, 0.0f, -3.0f, 1.0f }),
+                make ("Octave up", { 6.0f, 4.0f, 1.0f, 0.0f, -3.0f, 1.0f }),
+            };
+            return list;
+        }
+        case EffectType::Vocoder:
+        {
+            static const std::vector<EffectPreset> list {
+                make ("Robot", { 0.0f, 2.0f, 2.0f, 30.0f, 1.0f, 0.0f, 6.0f, 1.0f }),
+                make ("Old vocoder", { 0.0f, 0.0f, 5.0f, 80.0f, 0.7f, 0.0f, 8.0f, 1.0f }),
+                make ("Whisper", { 0.0f, 2.0f, 1.0f, 15.0f, 1.6f, 4.0f, 6.0f, 1.0f }),
+            };
+            return list;
+        }
+        case EffectType::PeakController:
+        {
+            static const std::vector<EffectPreset> list {
+                make ("Follow the level", { 0.0f, 100.0f, 150.0f, 0.0f, 2.0f }),
+                make ("Duck (level pushes down)", { 100.0f, -150.0f, 250.0f, 0.0f, 2.0f }),
+                make ("Slow LFO", { 50.0f, 0.0f, 150.0f, 50.0f, 0.25f }),
+                make ("Level and wobble", { 20.0f, 80.0f, 200.0f, 20.0f, 6.0f }),
+            };
+            return list;
+        }
+        case EffectType::Convolver:
+        {
+            static const std::vector<EffectPreset> list {
+                make ("Small room", { 0.0f, 0.5f, 0.6f, 0.0f, 0.2f, 0.0f }),
+                make ("Concert hall", { 1.0f, 2.2f, 0.55f, 20.0f, 0.3f, 0.0f }),
+                make ("Vocal plate", { 2.0f, 1.4f, 0.8f, 30.0f, 0.25f, 0.0f }),
+                make ("Guitar spring", { 3.0f, 1.8f, 0.7f, 0.0f, 0.3f, 0.0f }),
+                make ("Cathedral", { 4.0f, 4.0f, 0.4f, 40.0f, 0.4f, 0.0f }),
+            };
+            return list;
+        }
         case EffectType::Equalizer:
         case EffectType::BassBoost:
         case EffectType::Vibrato:
@@ -1443,6 +1497,188 @@ const std::vector<EffectPreset>& effectPresets (EffectType t)
             break;
     }
     return empty;
+}
+
+// ------------------------------------------------------------------------- 0.62.0: waveshaper, vocoder, peak controller, convolver
+
+// WaveShaper: the sound is bent by one of six curves at 4x the sample rate (the same anti-aliasing filters as the Overdrive), with
+// a bias that makes the curve asymmetric and a DC blocker after it. Amount blends the straight line with the curve.
+void EffectUnit::runWaveShaper (const EffectSlot& s, float* l, float* r, int n) noexcept
+{
+    const double pre = dbToGain (s.params[0]);
+    const int curve = effectChoice (EffectType::WaveShaper, 1, s.params[1]);
+    const double amount = s.params[2];
+    const double bias = s.params[3];
+    const float post = dbToGain (s.params[4]);
+    const float mix = s.params[5];
+    const auto bend = [curve] (double v) noexcept -> double
+    {
+        switch (curve)
+        {
+            case 1:  return std::clamp (v, -1.0, 1.0);
+            case 2:  return std::asin (std::sin (v * kPi * 0.5)) * (2.0 / kPi); // folds back at +-1
+            case 3:  return std::sin (v * kPi * 0.5);
+            case 4:  return std::abs (std::tanh (v));                             // full-wave: an octave up
+            case 5:  return v >= 0.0 ? std::tanh (v) : 0.6 * std::tanh (v / 0.6);   // the negative half gives in sooner
+            default: return std::tanh (v);
+        }
+    };
+    const double offset = bias + amount * (bend (bias) - bias);
+    float* io[2] = { l, r };
+    for (size_t ch = 0; ch < 2; ++ch)
+    {
+        float* x = io[ch];
+        for (int i = 0; i < n; ++i)
+        {
+            const float dry = x[i];
+            float y = 0.0f;
+            for (int k = 0; k < kOversample; ++k)
+            {
+                double u = k == 0 ? static_cast<double> (dry) * kOversample : 0.0;
+                for (auto& q : upFilter)
+                    u = q.tick (ch, u);
+                const double v = pre * u + bias;
+                double d = v + amount * (bend (v) - v) - offset;
+                for (auto& q : downFilter)
+                    d = q.tick (ch, d);
+                if (k == kOversample - 1)
+                    y = static_cast<float> (d);
+            }
+            const float blocked = y - dcX[ch] + 0.995f * dcY[ch];
+            dcX[ch] = y;
+            dcY[ch] = flush (blocked);
+            x[i] = dry + mix * (blocked * post - dry);
+        }
+    }
+}
+
+// Vocoder: the modulator (the voice) and the carrier are split into the same bands; the level of each band of the voice sets the
+// level of that band of the carrier. Its filters and levels live in the lent memory.
+void EffectUnit::runVocoder (const EffectSlot& s, float* l, float* r, int n, const EffectTransport& transport) noexcept
+{
+    if (memory == nullptr)
+        return;
+    const int key = static_cast<int> (std::lround (s.params[0])) - 1;
+    const float* modL = nullptr;
+    const float* modR = nullptr;
+    if (key >= 0 && key < transport.numKeys && transport.keyLeft != nullptr && transport.keyRight != nullptr
+        && transport.keyLeft[key] != nullptr && transport.keyRight[key] != nullptr)
+    {
+        modL = transport.keyLeft[key];
+        modR = transport.keyRight[key];
+    }
+    static constexpr int kBandChoices[] = { 8, 12, 16 };
+    const int bandCount = kBandChoices[std::clamp (effectChoice (EffectType::Vocoder, 1, s.params[1]), 0, 2)];
+    if (std::abs (vocCached[0] - static_cast<float> (bandCount)) > 0.0f || std::abs (vocCached[1] - s.params[4]) > 0.0f
+        || std::abs (vocCached[2] - s.params[5]) > 0.0f)
+    {
+        vocCached = { static_cast<float> (bandCount), s.params[4], s.params[5], 0.0f };
+        // Bands from 90 Hz to 9 kHz, evenly spaced in pitch; Q so that neighbours cross near -3 dB at Width 1.
+        const double lowHz = 90.0, highHz = std::min (9000.0, 0.4 * sampleRate);
+        const double step = std::pow (highHz / lowHz, 1.0 / (bandCount - 1));
+        const double q = std::sqrt (step) / (step - 1.0) * 1.3 / std::max (0.1, static_cast<double> (s.params[4]));
+        const double shift = std::pow (2.0, s.params[5] / 12.0);
+        for (int b = 0; b < bandCount; ++b)
+        {
+            const double hz = lowHz * std::pow (step, b);
+            const auto mod = BiquadCoefs::bandPass (2.0 * kPi * hz / sampleRate, q);
+            const auto car = BiquadCoefs::bandPass (2.0 * kPi * std::min (hz * shift, 0.45 * sampleRate) / sampleRate, q);
+            for (size_t stage = 0; stage < 2; ++stage)
+            {
+                memory->vocMod[stage][static_cast<size_t> (b)].setCoefs (mod);
+                memory->vocCar[stage][static_cast<size_t> (b)].setCoefs (car);
+            }
+        }
+    }
+    const float attack = static_cast<float> (1.0 - std::exp (-1.0 / (s.params[2] * 0.001 * sampleRate)));
+    const float release = static_cast<float> (1.0 - std::exp (-1.0 / (s.params[3] * 0.001 * sampleRate)));
+    const float out = dbToGain (s.params[6]) * 4.0f; // (a band-passed carrier is much quieter than the carrier)
+    const float mix = s.params[7];
+    for (int i = 0; i < n; ++i)
+    {
+        const double voice = modL != nullptr ? 0.5 * (static_cast<double> (modL[i]) + modR[i]) : static_cast<double> (l[i]);
+        const double carL = modL != nullptr ? static_cast<double> (l[i]) : static_cast<double> (r[i]);
+        const double carR = static_cast<double> (r[i]);
+        double sumL = 0.0, sumR = 0.0;
+        for (int b = 0; b < bandCount; ++b)
+        {
+            const auto band = static_cast<size_t> (b);
+            const double m = memory->vocMod[1][band].tick (0, memory->vocMod[0][band].tick (0, voice));
+            auto& level = memory->vocEnv[band];
+            const auto rectified = static_cast<float> (std::abs (m));
+            level = flush (level + (rectified - level) * (rectified > level ? attack : release));
+            sumL += memory->vocCar[1][band].tick (0, memory->vocCar[0][band].tick (0, carL)) * level;
+            sumR += memory->vocCar[1][band].tick (1, memory->vocCar[0][band].tick (1, carR)) * level;
+        }
+        const float wetL = static_cast<float> (sumL) * out, wetR = static_cast<float> (sumR) * out;
+        l[i] += mix * (wetL - l[i]);
+        r[i] += mix * (wetR - r[i]);
+    }
+}
+
+// Peak Controller: follows the track's peak level (at once up, by Decay down) and adds an LFO; the result, 0..1, is read by the
+// Player after the block (controlValue) and written into the parameter it drives. The sound passes unchanged, or not at all (Mute).
+void EffectUnit::runPeakController (const EffectSlot& s, float* l, float* r, int n) noexcept
+{
+    const float decay = static_cast<float> (std::exp (-1.0 / (s.params[2] * 0.001 * sampleRate)));
+    for (int i = 0; i < n; ++i)
+    {
+        const float level = std::max (std::fabs (l[i]), std::fabs (r[i]));
+        env = level > env ? level : flush (env * decay);
+    }
+    panPhase += static_cast<double> (s.params[4]) * n / sampleRate;
+    panPhase -= std::floor (panPhase);
+    const double lfo = std::sin (2.0 * kPi * panPhase);
+    control = static_cast<float> (std::clamp (s.params[0] * 0.01 + s.params[1] * 0.01 * std::min (env, 1.0f) + s.params[3] * 0.01 * 0.5 * lfo, 0.0, 1.0));
+    if (effectChoice (EffectType::PeakController, 8, s.params[8]) == 1)
+    {
+        std::fill_n (l, n, 0.0f);
+        std::fill_n (r, n, 0.0f);
+    }
+}
+
+// Convolver: the slot's impulse response does the work (see Convolver.h); here only the mix and the output level. A response made
+// for another sample rate (the device changed and the project has not been published since) lets the sound through unchanged.
+void EffectUnit::runConvolver (const EffectSlot& s, float* l, float* r, int n) noexcept
+{
+    Convolver* c = s.convolver.get();
+    if (c == nullptr || std::abs (c->settings().sampleRate - sampleRate) > 0.5)
+        return;
+    if (c != convolverSeen)
+    {
+        convolverSeen = c;
+        c->clearState();
+    }
+    const float mix = s.params[4];
+    const float out = dbToGain (s.params[5]);
+    std::array<float, 256> wetL, wetR;
+    for (int done = 0; done < n; done += 256)
+    {
+        const int count = std::min (256, n - done);
+        std::copy_n (l + done, count, wetL.begin());
+        std::copy_n (r + done, count, wetR.begin());
+        c->process (wetL.data(), wetR.data(), count);
+        for (int i = 0; i < count; ++i)
+        {
+            l[done + i] = (l[done + i] + mix * (wetL[static_cast<size_t> (i)] - l[done + i])) * out;
+            r[done + i] = (r[done + i] + mix * (wetR[static_cast<size_t> (i)] - r[done + i])) * out;
+        }
+    }
+}
+
+void prepareConvolver (EffectSlot& slot, double sampleRate, bool fresh)
+{
+    if (slot.type != EffectType::Convolver)
+        return;
+    Convolver::Settings wanted;
+    wanted.space = effectChoice (EffectType::Convolver, 0, slot.params[0]);
+    wanted.seconds = slot.params[1];
+    wanted.brightness = slot.params[2];
+    wanted.preDelayMs = slot.params[3];
+    wanted.sampleRate = sampleRate;
+    if (! fresh && slot.convolver != nullptr && slot.convolver->settings() == wanted)
+        return;
+    slot.convolver = Convolver::make (wanted, slot.convolver != nullptr ? slot.convolver->file() : nullptr);
 }
 
 // ------------------------------------------------------------------------- time shaper (0.25.0)

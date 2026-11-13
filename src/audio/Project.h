@@ -60,6 +60,16 @@ struct Channel
 
 // One vertical strip of the mixer: its own fader, balance, mute/solo and a chain of insert effects.
 // The channels routed to it are summed, run through the effects (pre-fader), then through the fader.
+// 0.62.0: what a mixer track sends to another mixer track (FL Studio's routing cables with their level knob).
+struct TrackSend
+{
+    int target = -1;    // index of the track it feeds; -1: not in use
+    float level = 1.0f; // 0..1.5
+
+    bool operator== (const TrackSend& o) const noexcept { return target == o.target && std::abs (level - o.level) < 1.0e-6f; }
+};
+constexpr int kTrackSends = 4;
+
 struct MixerTrack
 {
     std::string name = "Track";
@@ -77,7 +87,33 @@ struct MixerTrack
     bool invertPhase = false;              // polarity: both channels are inverted
     bool swapStereo = false;               // left and right are swapped
     float separation = 0.0f;               // stereo separation, -1 (wider: the side doubled) .. 0 .. +1 (mono)
+    // 0.62.0, free routing: the track goes to the master (the default), to other tracks (after its fader, each with a level), or
+    // both. A track that feeds another is processed before it; a send that would close a loop is ignored.
+    bool toMaster = true;
+    std::array<TrackSend, kTrackSends> trackSends {};
+
+    bool sendsTo (int track) const noexcept
+    {
+        for (const auto& s : trackSends)
+            if (s.target == track && s.level > 0.0f)
+                return true;
+        return false;
+    }
 };
+
+// Message thread (0.62.0): every Convolver slot of the mixer gets its impulse response for this sample rate (see prepareConvolver).
+inline void prepareConvolvers (std::vector<MixerTrack>& tracks, std::array<EffectSlot, kSlotsPerTrack>& masterSlots,
+                               std::array<MixerTrack, kAuxBuses>& aux, double sampleRate, bool fresh = false)
+{
+    for (auto& t : tracks)
+        for (auto& slot : t.slots)
+            prepareConvolver (slot, sampleRate, fresh);
+    for (auto& bus : aux)
+        for (auto& slot : bus.slots)
+            prepareConvolver (slot, sampleRate, fresh);
+    for (auto& slot : masterSlots)
+        prepareConvolver (slot, sampleRate, fresh);
+}
 
 // The part of the mixer that is not a track: the aux buses (a MixerTrack each: name, fader, balance, mute and effect chain),
 // and the VCA groups (a level and a mute switch each).

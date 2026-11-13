@@ -357,6 +357,7 @@ void MainComponent::seekSong (int tick)
 Project MainComponent::compileCurrent()
 {
     commitCurrentPattern();
+    prepareConvolvers (tracks, masterTrack.slots, console.aux, engine.getSampleRate()); // 0.62.0: impulse responses for the device's rate
     return songMode ? compileSong (channels, arrangement, tracks, masterTrack.slots, console)
                     : compilePattern (channels, arrangement, currentPattern, tracks, masterTrack.slots, console);
 }

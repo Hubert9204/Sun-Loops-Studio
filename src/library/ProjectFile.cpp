@@ -1,5 +1,7 @@
 #include "library/ProjectFile.h"
 
+#include "audio/AudioImport.h"
+
 #include "library/ChannelPreset.h"
 #include "library/JsonRead.h"
 
@@ -71,6 +73,10 @@ const char* effectKey (EffectType t)
         case EffectType::Vibrato:      return "vibrato";
         case EffectType::ParametricEq2: return "parametric-eq-2";
         case EffectType::MultibandComp: return "multiband-compressor";
+        case EffectType::WaveShaper:   return "waveshaper";
+        case EffectType::Vocoder:      return "vocoder";
+        case EffectType::PeakController: return "peak-controller";
+        case EffectType::Convolver:    return "convolver";
         case EffectType::None:       break;
     }
     return "none";
@@ -141,6 +147,9 @@ juce::var slotToVar (const EffectSlot& slot, const PluginSpec* plugin)
     for (int i = 0; i < effectParamCount (s.type); ++i)
         params.add (number (static_cast<double> (s.params[static_cast<size_t> (i)])));
     o->setProperty ("params", params);
+    // 0.62.0: a convolver's own impulse response is a file; the project keeps where it is
+    if (s.type == EffectType::Convolver && s.convolver != nullptr && s.convolver->file() != nullptr && ! s.convolver->file()->source.empty())
+        o->setProperty ("ir", juce::String (s.convolver->file()->source));
     return juce::var (o);
 }
 
@@ -188,6 +197,21 @@ EffectSlot readSlot (const juce::var& v, std::vector<PluginSpec>& plugins, Plugi
             const auto info = effectParamInfo (slot.type, i);
             slot.params[static_cast<size_t> (i)] = static_cast<float> (readNumber ((*params)[i], info.def, info.min, info.max));
         }
+    if (slot.type == EffectType::Convolver)
+    {
+        // The impulse response file is read here (it is a few seconds of sound); a file that is gone leaves the File space silent.
+        // The response itself is made when the project is published, for the audio device's sample rate (prepareConvolver).
+        const juce::File file (o->getProperty ("ir").toString());
+        if (o->getProperty ("ir").toString().isNotEmpty() && file.existsAsFile())
+            if (auto loaded = importAudioFile (file); loaded.data != nullptr)
+            {
+                Convolver::Settings none;
+                none.sampleRate = 0.0; // (never the device's: the first publish builds the real one)
+                none.seconds = 0.05f;
+                none.space = Convolver::Room;
+                slot.convolver = Convolver::make (none, loaded.data);
+            }
+    }
     return slot.sanitised();
 }
 
@@ -323,6 +347,21 @@ juce::String ProjectDocument::toJson() const
             o->setProperty ("swapStereo", true);
         if (std::abs (t.separation) > 0.0f)
             o->setProperty ("separation", number (static_cast<double> (t.separation)));
+        if (! t.toMaster) // 0.62.0
+            o->setProperty ("toMaster", false);
+        {
+            juce::Array<juce::var> routes;
+            for (const auto& send : t.trackSends)
+                if (send.target >= 0)
+                {
+                    auto* r = new juce::DynamicObject();
+                    r->setProperty ("track", send.target);
+                    r->setProperty ("level", number (static_cast<double> (send.level)));
+                    routes.add (juce::var (r));
+                }
+            if (! routes.isEmpty())
+                o->setProperty ("trackSends", routes);
+        }
         trackList.add (juce::var (o));
     }
     root->setProperty ("tracks", trackList);
@@ -666,6 +705,14 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
             t.invertPhase = readBool (o->getProperty ("invertPhase"), false); // 0.61.0
             t.swapStereo = readBool (o->getProperty ("swapStereo"), false);
             t.separation = static_cast<float> (readNumber (o->getProperty ("separation"), 0.0, -1.0, 1.0));
+            t.toMaster = readBool (o->getProperty ("toMaster"), true); // 0.62.0
+            if (auto* routes = o->getProperty ("trackSends").getArray())
+                for (int k = 0; k < std::min (routes->size(), kTrackSends); ++k)
+                    if (auto* route = (*routes)[k].getDynamicObject())
+                    {
+                        t.trackSends[static_cast<size_t> (k)].target = readInt (route->getProperty ("track"), -1, -1, kMaxTracks - 1);
+                        t.trackSends[static_cast<size_t> (k)].level = static_cast<float> (readNumber (route->getProperty ("level"), 1.0, 0.0, 1.5));
+                    }
         }
     }
     for (auto& c : d.channels) // a channel on a track the file does not have goes to the last one

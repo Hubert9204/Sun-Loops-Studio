@@ -29,6 +29,7 @@ public:
 
     void process (float* left, float* right, int numSamples, const PluginMidiEvent* events, int numEvents) noexcept override;
     bool isInstrument() const noexcept override { return instrument; }
+    int latencySamples() const noexcept override { return instance != nullptr ? instance->getLatencySamples() : 0; }
     void setTransport (double bpm, double quarters, bool playing) noexcept override
     {
         head.bpm = bpm;

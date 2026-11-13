@@ -108,6 +108,7 @@ void check (bool ok, const char* name)
     if (! ok)
         ++failures;
 }
+void check (bool ok, const std::string& name) { check (ok, name.c_str()); }
 
 constexpr double kSr = 48000.0;
 constexpr int kBeat = sls::kTicksPerBeat;
@@ -7852,6 +7853,439 @@ void testFlParity062()
     }
 }
 
+// 0.62.0: the mixer's free routing, delay compensation, the Peak Controller and the three new effects.
+void testMixer062()
+{
+    std::cout << "Mixer routing, delay compensation and new effects (0.62.0)\n";
+    const auto leftOf = [] (const juce::AudioBuffer<float>& b) { return std::vector<float> (b.getReadPointer (0), b.getReadPointer (0) + b.getNumSamples()); };
+    const auto held = [] (double hz, int track, float volume = 0.2f)
+    {
+        auto c = samplerChannel (sineSample (hz, 1.5, 48000.0), { sls::Note { 60, 0, 2 * kBeat, 1.0f } });
+        c.mixerTrack = track;
+        c.volume = volume;
+        return c;
+    };
+
+    // --- WaveShaper
+    {
+        const auto sine = sineWave (500.0, 0.5, 24000);
+        const auto clipped = runEffect (slotWith (sls::EffectType::WaveShaper, { 24.0f, 1.0f, 1.0f, 0.0f, 0.0f, 1.0f }), sine);
+        check (peakOf (clipped.data(), 4000, 24000) < 1.2f && peakOf (clipped.data(), 4000, 24000) > 0.8f, "waveshaper: the hard clip holds a hot signal at the ceiling");
+        check (toneEnergy (clipped.data(), 4000, 24000, 1500.0) > 0.01 * toneEnergy (clipped.data(), 4000, 24000, 500.0),
+               "waveshaper: clipping adds the third harmonic");
+        const auto straight = runEffect (slotWith (sls::EffectType::WaveShaper, { 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f }), sine);
+        // (the window does not hold a whole number of cycles, so the dry sine itself leaks a little into 1500 Hz)
+        check (toneEnergy (straight.data(), 4000, 24000, 1500.0) < 1.5 * toneEnergy (sine.data(), 4000, 24000, 1500.0)
+                   && std::abs (rmsOf (straight, 4000, 24000) / rmsOf (sine, 4000, 24000) - 1.0) < 0.02,
+               "waveshaper: amount 0 is a straight line");
+        const auto rectified = runEffect (slotWith (sls::EffectType::WaveShaper, { 6.0f, 4.0f, 1.0f, 0.0f, 0.0f, 1.0f }), sine);
+        check (toneEnergy (rectified.data(), 4000, 24000, 1000.0) > 20.0 * toneEnergy (rectified.data(), 4000, 24000, 500.0),
+               "waveshaper: the rectifier moves the sound an octave up");
+        check (runEffect (slotWith (sls::EffectType::WaveShaper, { 24.0f, 2.0f, 1.0f, 0.3f, 0.0f, 0.0f }), sine) == sine, "waveshaper: mix 0 is bit-exact");
+        const auto folded = runEffect (slotWith (sls::EffectType::WaveShaper, { 36.0f, 2.0f, 1.0f, 1.0f, 12.0f, 1.0f }), sineWave (100.0, 1.0, 24000));
+        bool finite = true;
+        for (const float v : folded)
+            finite = finite && std::isfinite (v) && std::abs (v) < 8.0f;
+        check (finite, "waveshaper: the folder at its extremes stays finite and bounded");
+    }
+
+    // --- Vocoder (no modulator track: left = voice, right = carrier)
+    {
+        const int n = 48000;
+        std::vector<float> carrier (static_cast<size_t> (n));
+        for (int i = 0; i < n; ++i)
+            carrier[static_cast<size_t> (i)] = static_cast<float> (0.3 * std::sin (6.283185307179586 * 500.0 * i / kSr) + 0.3 * std::sin (6.283185307179586 * 4000.0 * i / kSr));
+        const auto slot = slotWith (sls::EffectType::Vocoder, { 0.0f, 2.0f, 3.0f, 40.0f, 1.0f, 0.0f, 6.0f, 1.0f });
+        const auto lowVoice = runEffectStereo (slot, sineWave (500.0, 0.5, n), carrier).first;
+        const auto highVoice = runEffectStereo (slot, sineWave (4000.0, 0.5, n), carrier).first;
+        const auto noVoice = runEffectStereo (slot, std::vector<float> (static_cast<size_t> (n), 0.0f), carrier).first;
+        check (toneEnergy (lowVoice.data(), 12000, n, 500.0) > 30.0 * toneEnergy (lowVoice.data(), 12000, n, 4000.0),
+               "vocoder: a low voice lets the carrier's low band through");
+        check (toneEnergy (highVoice.data(), 12000, n, 4000.0) > 30.0 * toneEnergy (highVoice.data(), 12000, n, 500.0),
+               "vocoder: a high voice lets the carrier's high band through");
+        check (peakOf (noVoice.data(), 12000, n) < 1.0e-4f && peakOf (lowVoice.data(), 12000, n) > 0.02f, "vocoder: without a voice the carrier is silent");
+        sls::EffectUnit bare; // without the lent memory it lets the sound through
+        bare.prepare (kSr);
+        auto l = carrier, r = carrier;
+        bare.process (slot, l.data(), r.data(), 64);
+        check (l == carrier, "vocoder: without its memory the sound passes unchanged");
+
+        // the modulator is another mixer track: the bass (track 2) only sounds while the voice (track 1, not sent to the master) does
+        auto voice = samplerChannel (sineSample (500.0, 0.4, 48000.0), { sls::Note { 60, 0, kBeat / 2, 1.0f } });
+        voice.mixerTrack = 0;
+        auto project = oneBar ({ voice, held (500.0, 1, 0.5f) });
+        project.tracks[0].toMaster = false;
+        project.tracks[1].slots[0] = slotWith (sls::EffectType::Vocoder, { 1.0f, 2.0f, 3.0f, 30.0f, 1.0f, 0.0f, 6.0f, 1.0f });
+        const auto out = leftOf (sls::renderToBuffer (project, {}));
+        check (rmsOf (out, 3000, 11000) > 20.0 * rmsOf (out, 30000, 44000) && rmsOf (out, 3000, 11000) > 0.01,
+               "vocoder: with another track as the modulator, the carrier sounds only while that track does");
+    }
+
+    // --- Peak Controller
+    {
+        sls::EffectUnit unit;
+        unit.prepare (kSr);
+        auto slot = slotWith (sls::EffectType::PeakController, { 10.0f, 100.0f, 50.0f, 0.0f, 2.0f });
+        auto loud = sineWave (1000.0, 0.5, 4800);
+        auto copy = loud;
+        for (size_t i = 0; i < loud.size(); i += 64)
+            unit.process (slot, loud.data() + i, copy.data() + i, 64);
+        check (std::abs (unit.controlValue() - 0.6f) < 0.02f && loud == sineWave (1000.0, 0.5, 4800), "peak controller: the value is base + volume x peak, and the sound passes");
+        std::vector<float> quiet (48000, 0.0f), quietR (48000, 0.0f);
+        for (size_t i = 0; i < quiet.size(); i += 64)
+            unit.process (slot, quiet.data() + i, quietR.data() + i, 64);
+        check (std::abs (unit.controlValue() - 0.1f) < 0.01f, "peak controller: the value falls back to the base when the sound stops");
+        slot.params[8] = 1.0f;
+        auto muted = sineWave (1000.0, 0.5, 640);
+        auto mutedR = muted;
+        for (size_t i = 0; i < muted.size(); i += 64)
+            unit.process (slot, muted.data() + i, mutedR.data() + i, 64);
+        check (peakOf (muted.data(), 0, 640) == 0.0f && unit.controlValue() > 0.5f, "peak controller: Mute silences the track and still follows it");
+
+        // In the mixer: the kick's level (track 1, muted by the controller) pushes down the volume of a Panomatic on track 2.
+        auto kick = samplerChannel (sineSample (200.0, 0.4, 48000.0), { sls::Note { 60, 0, kBeat / 2, 1.0f } });
+        kick.mixerTrack = 0;
+        auto project = oneBar ({ kick, held (1000.0, 1) });
+        project.tracks[0].slots[0] = slotWith (sls::EffectType::PeakController, { 80.0f, -200.0f, 60.0f, 0.0f, 2.0f, 2.0f, 1.0f, 1.0f, 1.0f });
+        project.tracks[1].slots[0] = sls::EffectSlot::make (sls::EffectType::Panomatic);
+        const auto ducked = leftOf (sls::renderToBuffer (project, {}));
+        // while the kick plays (peak 0.5: value 0.8 - 1.0 -> 0, the Panomatic's lowest volume, -48 dB); after it, value 0.8 (0 dB)
+        check (rmsOf (ducked, 30000, 44000) > 50.0 * rmsOf (ducked, 3000, 10000) && rmsOf (ducked, 30000, 44000) > 0.01,
+               "peak controller: the level of one track drives a parameter of an effect on another");
+        check (toneEnergy (ducked.data(), 3000, 10000, 200.0) < 1.0e-6, "peak controller: the muted source does not reach the master");
+        auto own = oneBar ({ held (1000.0, 0) });
+        own.tracks[0].slots[0] = slotWith (sls::EffectType::PeakController, { 0.0f, 0.0f, 60.0f, 0.0f, 2.0f, 0.0f, 2.0f, 1.0f, 0.0f });
+        own.tracks[0].slots[1] = sls::EffectSlot::make (sls::EffectType::Panomatic); // driven to its lowest volume by a value of 0
+        const auto plainProject = oneBar ({ held (1000.0, 0) });
+        check (rmsOf (leftOf (sls::renderToBuffer (own, {})), 20000, 40000) < 0.01 * rmsOf (leftOf (sls::renderToBuffer (plainProject, {})), 20000, 40000),
+               "peak controller: target track 0 is the controller's own track");
+        check (own.tracks[0].slots[1].params[0] == 0.0f, "peak controller: the project's own parameter is left alone");
+    }
+
+    // --- Convolver
+    {
+        // the convolution itself against the definition, in uneven pieces, with a response of several partitions
+        auto file = std::make_shared<sls::SampleData>();
+        file->sampleRate = 48000.0;
+        std::uint32_t seed = 12345u;
+        const auto next = [&seed] { seed = seed * 1664525u + 1013904223u; return static_cast<float> (static_cast<double> (seed >> 8) / 8388608.0 - 1.0); };
+        for (int i = 0; i < 1500; ++i)
+        {
+            const float decay = std::exp (-i / 400.0f);
+            file->left.push_back (next() * decay);
+            file->right.push_back (next() * decay);
+        }
+        sls::Convolver::Settings settings;
+        settings.space = sls::Convolver::File;
+        settings.seconds = 1.0f;
+        auto convolver = sls::Convolver::make (settings, file);
+        std::vector<float> in (3000), inR (3000);
+        for (auto& v : in)
+            v = next();
+        for (auto& v : inR)
+            v = next();
+        auto outL = in, outR = inR;
+        for (size_t at = 0; at < outL.size();)
+        {
+            const int n = static_cast<int> (std::min<size_t> (37, outL.size() - at));
+            convolver->process (outL.data() + at, outR.data() + at, n);
+            at += static_cast<size_t> (n);
+        }
+        double worst = 0.0;
+        for (int ch = 0; ch < 2; ++ch)
+        {
+            const auto& h = convolver->impulseResponse (ch);
+            const auto& x = ch == 0 ? in : inR;
+            const auto& y = ch == 0 ? outL : outR;
+            for (size_t i = 0; i < x.size(); i += 7)
+            {
+                double direct = 0.0;
+                for (size_t m = 0; m < h.size() && m <= i; ++m)
+                    direct += static_cast<double> (h[m]) * x[i - m];
+                worst = std::max (worst, std::abs (direct - y[i]));
+            }
+        }
+        check (convolver->impulseFrames() == 1500 && worst < 2.0e-4, "convolver: the partitioned convolution equals the definition, with no latency (worst error " + std::to_string (worst) + ")");
+        convolver->clearState();
+        std::vector<float> zl (600, 0.0f), zr (600, 0.0f);
+        convolver->process (zl.data(), zr.data(), 600);
+        check (peakOf (zl.data(), 0, 600) == 0.0f, "convolver: clearing the state silences what was ringing");
+
+        // the built-in spaces
+        sls::Convolver::Settings hall;
+        hall.space = sls::Convolver::Hall;
+        hall.seconds = 2.0f;
+        const auto ir = sls::makeImpulseResponse (hall, 0);
+        const auto irRight = sls::makeImpulseResponse (hall, 1);
+        check (ir.size() == 96000 && rmsOf (ir, 0, 9600) > 30.0 * rmsOf (ir, 76800, 96000) && rmsOf (ir, 76800, 90000) > 0.0,
+               "convolver: a built-in response dies away over its length");
+        check (ir != irRight && ir == sls::makeImpulseResponse (hall, 0), "convolver: left and right differ, and a response is the same every time");
+        auto dark = hall, bright = hall;
+        dark.brightness = 0.0f;
+        bright.brightness = 1.0f;
+        const auto highShare = [] (const std::vector<float>& x)
+        {
+            double diff = 0.0, total = 0.0;
+            for (size_t i = 1; i < x.size(); ++i)
+            {
+                diff += static_cast<double> (x[i] - x[i - 1]) * (x[i] - x[i - 1]);
+                total += static_cast<double> (x[i]) * x[i];
+            }
+            return diff / total;
+        };
+        check (highShare (sls::makeImpulseResponse (bright, 0)) > 3.0 * highShare (sls::makeImpulseResponse (dark, 0)), "convolver: Brightness keeps more of the high end");
+        auto late = hall;
+        late.preDelayMs = 100.0f;
+        const auto delayed = sls::makeImpulseResponse (late, 0);
+        check (delayed.size() == 96000 + 4800 && peakOf (delayed.data(), 0, 4800) == 0.0f, "convolver: the pre-delay comes before the response");
+
+        // as an effect slot
+        auto slot = slotWith (sls::EffectType::Convolver, { 1.0f, 1.0f, 0.6f, 0.0f, 1.0f, 0.0f });
+        std::vector<float> burst (48000, 0.0f);
+        for (int i = 0; i < 2400; ++i)
+            burst[static_cast<size_t> (i)] = 0.5f * std::sin (6.283185307179586f * 800.0f * static_cast<float> (i) / 48000.0f);
+        check (runEffect (slot, burst) == burst, "convolver: without a response (not prepared yet) the sound passes unchanged");
+        sls::prepareConvolver (slot, kSr);
+        const auto first = slot.convolver;
+        sls::prepareConvolver (slot, kSr);
+        check (first != nullptr && slot.convolver == first, "convolver: the same settings keep the same response");
+        const auto wet = runEffect (slot, burst);
+        check (rmsOf (wet, 4800, 24000) > 0.002 && rmsOf (wet, 4800, 24000) > 5.0 * rmsOf (wet, 40000, 48000), "convolver: a burst rings on and dies away");
+        slot.params[1] = 0.3f;
+        sls::prepareConvolver (slot, kSr);
+        check (slot.convolver != first, "convolver: a new length makes a new response");
+        check (rmsOf (runEffect (slot, burst), 24000, 40000) < 0.05 * rmsOf (wet, 24000, 40000), "convolver: a shorter response rings for a shorter time");
+        slot.params[4] = 0.0f;
+        check (runEffect (slot, burst) == burst, "convolver: mix 0 is bit-exact");
+        sls::prepareConvolver (slot, 44100.0);
+        slot.params[4] = 1.0f;
+        check (runEffect (slot, burst) == burst, "convolver: a response made for another sample rate is not used");
+
+        // in a project: the export makes its own response, and the tail outlasts the note
+        auto channel = samplerChannel (sineSample (800.0, 0.1, 48000.0), { sls::Note { 60, 0, kBeat / 8, 1.0f } });
+        auto project = oneBar ({ channel });
+        project.tracks[0].slots[0] = slotWith (sls::EffectType::Convolver, { 1.0f, 1.5f, 0.6f, 0.0f, 0.5f, 0.0f });
+        const auto rendered = leftOf (sls::renderToBuffer (project, {}));
+        const auto dry = leftOf (sls::renderToBuffer (oneBar ({ channel }), {}));
+        check (project.tracks[0].slots[0].convolver == nullptr && rmsOf (rendered, 20000, 40000) > 1.0e-4 && rmsOf (dry, 20000, 40000) < 1.0e-6,
+               "convolver: an export builds its own response and the reverb outlasts the note");
+        check (leftOf (sls::renderToBuffer (project, {})) == rendered, "convolver: two exports of the same project are identical");
+
+        // save and load: the settings, and the file of the File space
+        const auto wav = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("sls_test_ir.wav");
+        {
+            juce::AudioBuffer<float> buffer (2, 1500);
+            for (int i = 0; i < 1500; ++i)
+            {
+                buffer.setSample (0, i, file->left[static_cast<size_t> (i)] * 0.5f);
+                buffer.setSample (1, i, file->right[static_cast<size_t> (i)] * 0.5f);
+            }
+            wav.deleteFile();
+            juce::WavAudioFormat format;
+            std::unique_ptr<juce::AudioFormatWriter> writer (format.createWriterFor (new juce::FileOutputStream (wav), 48000.0, 2, 16, {}, 0));
+            if (writer != nullptr)
+                writer->writeFromAudioSampleBuffer (buffer, 0, 1500);
+        }
+        auto doc = sls::ProjectDocument::blank();
+        auto fileSlot = slotWith (sls::EffectType::Convolver, { 5.0f, 2.0f, 0.4f, 12.0f, 0.7f, -3.0f });
+        const auto imported = sls::importAudioFile (wav);
+        fileSlot.convolver = sls::Convolver::make (settings, imported.data);
+        doc.tracks[2].slots[3] = fileSlot;
+        const auto parsed = sls::ProjectDocument::fromJson (doc.toJson());
+        bool same = parsed.document.has_value() && imported.data != nullptr;
+        if (same)
+        {
+            auto back = parsed.document->tracks[2].slots[3];
+            same = back.type == sls::EffectType::Convolver && back.params == fileSlot.params && back.convolver != nullptr && back.convolver->file() != nullptr
+                   && back.convolver->file()->source == imported.data->source;
+            sls::prepareConvolver (back, kSr);
+            same = same && back.convolver != nullptr && back.convolver->settings().space == sls::Convolver::File && back.convolver->impulseFrames() == 576 + 1500;
+        }
+        check (same, "convolver: the settings and the impulse response file survive a save and a load");
+        wav.deleteFile();
+    }
+
+    // --- free routing
+    {
+        const auto plain = leftOf (sls::renderToBuffer (oneBar ({ held (1000.0, 0) }), {}));
+        const double reference = rmsOf (plain, 12000, 36000);
+        auto none = oneBar ({ held (1000.0, 0) });
+        none.tracks[0].toMaster = false;
+        check (peakOf (leftOf (sls::renderToBuffer (none, {})).data(), 0, 96000) == 0.0f && reference > 0.01, "routing: a track sent nowhere is silent");
+
+        auto through = oneBar ({ held (1000.0, 0) });
+        through.tracks[0].toMaster = false;
+        through.tracks[0].trackSends[0] = { 3, 0.5f };
+        check (std::abs (rmsOf (leftOf (sls::renderToBuffer (through, {})), 12000, 36000) / reference - 0.5) < 0.01, "routing: a track sent to another at half level arrives at half level");
+        through.tracks[3].volume = 0.5f;
+        check (std::abs (rmsOf (leftOf (sls::renderToBuffer (through, {})), 12000, 36000) / reference - 0.25) < 0.01, "routing: the receiving track's fader applies to what it receives");
+
+        auto both = oneBar ({ held (1000.0, 0) });
+        both.tracks[0].trackSends[1] = { 1, 1.0f };
+        check (std::abs (rmsOf (leftOf (sls::renderToBuffer (both, {})), 12000, 36000) / reference - 2.0) < 0.02, "routing: to the master and to another track at once");
+
+        // the target has a lower number than its source: it is still processed after it (its effect sees the sound)
+        auto backwards = oneBar ({ held (1000.0, 5) });
+        backwards.tracks[5].toMaster = false;
+        backwards.tracks[5].trackSends[0] = { 2, 1.0f };
+        backwards.tracks[2].slots[0] = slotWith (sls::EffectType::Panomatic, { -6.0f });
+        const auto viaLower = leftOf (sls::renderToBuffer (backwards, {}));
+        check (std::abs (rmsOf (viaLower, 12000, 36000) / reference - 0.5012) < 0.01, "routing: a source is processed before the track it feeds, whatever their numbers");
+        // a chain of three
+        auto chain = oneBar ({ held (1000.0, 6) });
+        chain.tracks[6].toMaster = false;
+        chain.tracks[6].trackSends[0] = { 4, 1.0f };
+        chain.tracks[4].toMaster = false;
+        chain.tracks[4].trackSends[0] = { 1, 0.5f };
+        chain.tracks[1].volume = 0.5f;
+        check (std::abs (rmsOf (leftOf (sls::renderToBuffer (chain, {})), 12000, 36000) / reference - 0.25) < 0.01, "routing: a chain of three tracks");
+
+        auto loop = oneBar ({ held (1000.0, 0) });
+        loop.tracks[0].trackSends[0] = { 1, 1.0f };
+        loop.tracks[1].trackSends[0] = { 0, 1.0f };
+        loop.tracks[1].toMaster = false;
+        loop.tracks[0].trackSends[1] = { 0, 1.0f };  // to itself: ignored
+        const auto looped = leftOf (sls::renderToBuffer (loop, {}));
+        bool sane = true;
+        for (const float v : looped)
+            sane = sane && std::isfinite (v) && std::abs (v) <= 1.0f;
+        check (sane && std::abs (rmsOf (looped, 12000, 36000) / reference - 1.0) < 0.01, "routing: a loop of sends is broken, not fed back");
+
+        auto mutedSource = through;
+        mutedSource.tracks[0].mute = true;
+        check (peakOf (leftOf (sls::renderToBuffer (mutedSource, {})).data(), 4800, 96000) < 1.0e-5f, "routing: a muted track sends nothing to other tracks");
+
+        // a sidechain source that is fed by another track is heard with what it receives
+        auto keyed = oneBar ({ held (1000.0, 0, 0.5f), held (300.0, 1) });
+        keyed.tracks[0].toMaster = false;
+        keyed.tracks[0].trackSends[0] = { 2, 1.0f };
+        keyed.tracks[2].toMaster = false;
+        keyed.tracks[1].slots[0] = slotWith (sls::EffectType::Gate, { -30.0f, 1.0f, 20.0f, 50.0f, -100.0f, 3.0f });
+        const auto opened = leftOf (sls::renderToBuffer (keyed, {}));
+        keyed.tracks[0].trackSends[0] = {};
+        const auto closed = leftOf (sls::renderToBuffer (keyed, {}));
+        check (rmsOf (opened, 12000, 36000) > 0.01 && rmsOf (closed, 12000, 36000) < 1.0e-4, "routing: a bus track fed by sends works as a sidechain source");
+
+        auto doc = sls::ProjectDocument::blank();
+        doc.tracks[4].toMaster = false;
+        doc.tracks[4].trackSends[0] = { 7, 0.75f };
+        doc.tracks[4].trackSends[2] = { 1, 1.25f };
+        const auto parsed = sls::ProjectDocument::fromJson (doc.toJson());
+        bool same = parsed.document.has_value();
+        if (same)
+        {
+            const auto& t = parsed.document->tracks[4];
+            same = ! t.toMaster && t.sendsTo (7) && t.sendsTo (1) && ! t.sendsTo (2) && parsed.document->tracks[0].toMaster && ! parsed.document->tracks[0].sendsTo (1);
+            float level7 = 0.0f, level1 = 0.0f;
+            for (const auto& send : t.trackSends)
+            {
+                level7 = send.target == 7 ? send.level : level7;
+                level1 = send.target == 1 ? send.level : level1;
+            }
+            same = same && std::abs (level7 - 0.75f) < 1.0e-6f && std::abs (level1 - 1.25f) < 1.0e-6f;
+        }
+        check (same, "routing: the master switch and the sends between tracks survive a save and a load");
+    }
+
+    // --- delay compensation
+    {
+        const auto maximizer = slotWith (sls::EffectType::Maximizer, { 0.0f, -1.0f, 100.0f, 0.0f, 0.0f }); // far below its ceiling: only its look-ahead
+        const auto plainProject = oneBar ({ held (1000.0, 0, 0.1f), held (1500.0, 1, 0.1f) });
+        const auto plain = leftOf (sls::renderToBuffer (plainProject, {}));
+        auto withLatency = plainProject;
+        withLatency.tracks[0].slots[0] = maximizer;
+        sls::Player player;
+        player.prepare (kSr);
+        const auto live = renderBlocks (player, withLatency, true, 1.0);
+        const int latency = player.outputLatencySamples();
+        check (latency > 16 && player.delayCompensationShortfall() == 0, "delay compensation: the mixer reports the latency of the slowest track (" + std::to_string (latency) + " samples)");
+        double liveError = 0.0, uncompensated = 0.0;
+        for (int i = 4800; i < 40000; ++i)
+        {
+            liveError = std::max (liveError, static_cast<double> (std::abs (live[static_cast<size_t> (i + latency)] - plain[static_cast<size_t> (i)])));
+            uncompensated = std::max (uncompensated, static_cast<double> (std::abs (live[static_cast<size_t> (i)] - plain[static_cast<size_t> (i)])));
+        }
+        check (liveError < 0.004 && uncompensated > 0.02, "delay compensation: the track without latency waits for the one with it (error " + std::to_string (liveError) + ")");
+        const auto exported = leftOf (sls::renderToBuffer (withLatency, {}));
+        double exportError = 0.0;
+        for (size_t i = 4800; i < 40000; ++i)
+            exportError = std::max (exportError, static_cast<double> (std::abs (exported[i] - plain[i])));
+        check (exported.size() == plain.size() && exportError < 0.004, "delay compensation: an export drops the latency from its start");
+
+        // through a bus: track 1 (with latency) and track 2 (without) both feed track 3
+        auto bus = plainProject;
+        for (size_t t = 0; t < 2; ++t)
+        {
+            bus.tracks[t].toMaster = false;
+            bus.tracks[t].trackSends[0] = { 2, 1.0f };
+        }
+        const auto busPlain = leftOf (sls::renderToBuffer (bus, {}));
+        bus.tracks[0].slots[0] = maximizer;
+        const auto busLatent = leftOf (sls::renderToBuffer (bus, {}));
+        double busError = 0.0;
+        for (size_t i = 4800; i < 40000; ++i)
+            busError = std::max (busError, static_cast<double> (std::abs (busLatent[i] - busPlain[i])));
+        check (busError < 0.004, "delay compensation: two tracks that feed a bus arrive there together");
+        // ... and latency on the bus itself delays a track that goes straight to the master
+        auto late = oneBar ({ held (1000.0, 0, 0.1f), held (1500.0, 1, 0.1f) });
+        late.tracks[0].toMaster = false;
+        late.tracks[0].trackSends[0] = { 2, 1.0f };
+        const auto latePlain = leftOf (sls::renderToBuffer (late, {}));
+        late.tracks[2].slots[0] = maximizer;
+        const auto lateLatent = leftOf (sls::renderToBuffer (late, {}));
+        double lateError = 0.0;
+        for (size_t i = 4800; i < 40000; ++i)
+            lateError = std::max (lateError, static_cast<double> (std::abs (lateLatent[i] - latePlain[i])));
+        check (lateError < 0.004, "delay compensation: latency on a bus delays the tracks that bypass it");
+
+        // taking the effect away again brings the mix back on time, and a bypassed effect has no latency
+        renderBlocks (player, plainProject, true, 0.2);
+        check (player.outputLatencySamples() == 0, "delay compensation: no latency once the effect is gone");
+        withLatency.tracks[0].slots[0].bypass = true;
+        renderBlocks (player, withLatency, true, 0.05);
+        check (player.outputLatencySamples() == 0, "delay compensation: a bypassed effect has no latency");
+    }
+
+    // --- real-time safety of all of it
+    {
+        auto project = oneBar ({ held (1000.0, 0), held (300.0, 1), held (500.0, 2) });
+        project.tracks[0].slots[0] = slotWith (sls::EffectType::PeakController, { 20.0f, 80.0f, 60.0f, 30.0f, 4.0f, 2.0f, 1.0f, 2.0f, 0.0f });
+        project.tracks[0].slots[1] = sls::EffectSlot::make (sls::EffectType::WaveShaper);
+        project.tracks[0].slots[2] = sls::EffectSlot::make (sls::EffectType::Maximizer);
+        project.tracks[1].slots[0] = sls::EffectSlot::make (sls::EffectType::Filter);
+        project.tracks[1].slots[1] = slotWith (sls::EffectType::Convolver, { 2.0f, 1.0f });
+        project.tracks[1].slots[2] = slotWith (sls::EffectType::Vocoder, { 1.0f });
+        project.tracks[1].toMaster = false;
+        project.tracks[1].trackSends[0] = { 3, 0.8f };
+        project.tracks[2].trackSends[0] = { 3, 0.5f };
+        sls::prepareConvolvers (project.tracks, project.masterSlots, project.console.aux, kSr);
+        sls::Player player;
+        player.prepare (kSr);
+        for (int i = 0; i < 4; ++i) // the vocoder's memory comes from the pool
+        {
+            auto memory = std::make_unique<sls::EffectMemory>();
+            memory->prepare (kSr);
+            player.offerEffectMemory (std::move (memory));
+        }
+        std::vector<float> l (256), r (256);
+        float* ch[2] = { l.data(), r.data() };
+        player.render (project, 120.0, true, ch, 2, 256);
+        gAllocs = 0;
+        gCounting = true;
+        float loudest = 0.0f;
+        for (int i = 0; i < 600; ++i)
+        {
+            std::fill (l.begin(), l.end(), 0.0f);
+            std::fill (r.begin(), r.end(), 0.0f);
+            player.render (project, 120.0, true, ch, 2, 256);
+            loudest = std::max (loudest, peakOf (l.data(), 0, 256));
+        }
+        gCounting = false;
+        check (gAllocs.load() == 0 && loudest > 0.01f, "no allocation in Player::render with routing, delay compensation, a peak controller, a convolver and a vocoder (counted: "
+                                                         + std::to_string (gAllocs.load()) + ")");
+    }
+}
+
 void testMusicTheory()
 {
     namespace th = sls::theory;
@@ -12190,6 +12624,7 @@ int main()
     testMusicTheory();
     testFlParity061();
     testFlParity062();
+    testMixer062();
     testOneShot();
     testAutomation();
     testMidiImport();

@@ -85,6 +85,7 @@ set_target_properties(SunLoopsLibraryData PROPERTIES POSITION_INDEPENDENT_CODE O
 set(SLS_CORE_SOURCES
     src/audio/Player.cpp
     src/audio/Effects.cpp
+    src/audio/Convolver.cpp
     src/audio/BuiltinSamples.cpp
     src/audio/SoundLibrary.cpp
     src/audio/DrumSynth.cpp

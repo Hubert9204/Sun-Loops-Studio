@@ -54,12 +54,14 @@ public:
     std::function<void (int, int)> onSlotClicked;      // (track, slot): select the slot in the effects panel
     std::function<void (int, int)> onSlotMenu;        // (track, slot): right click
     std::function<void (const AutomationTarget&)> onAutomate; // right click on the fader / balance
+    std::function<void (int, juce::Component&)> onRouteMenu;  // 0.62.0: the routing button was clicked (track, the button)
 
     void paint (juce::Graphics&) override;
     void resized() override;
     void mouseDown (const juce::MouseEvent&) override;
 
     static juce::String volumeToText (float volume);
+    static juce::String routingText (const MixerTrack& track); // "> M", "> 3", "> M+2": where the track goes
     static juce::String panToText (float pan);
 
     static constexpr int kWidth = 72;
@@ -85,6 +87,7 @@ private:
     juce::TextButton phaseButton { juce::String::fromUTF8 ("\xc3\x98") };          // "Ø"
     juce::TextButton swapButton { juce::String::fromUTF8 ("\xe2\x87\x84") };       // "⇄"
     juce::Slider separationSlider { juce::Slider::LinearHorizontal, juce::Slider::NoTextBox };
+    juce::TextButton routeButton;                                                  // 0.62.0: where the track goes
     std::array<juce::TextButton, kVcaGroups> vcaButtons;
     AutomatableSlider panSlider { juce::Slider::LinearHorizontal, juce::Slider::NoTextBox };
     juce::Label panLabel;
@@ -196,6 +199,7 @@ public:
     // The name of mixer track `index` (0-based), for the compressor's sidechain choice (0.45.0).
     std::function<juce::String (int)> trackNameOf;
     std::function<int()> trackCount; // how many mixer tracks there are, for that choice
+    std::function<const MixerTrack* (int)> trackAt; // 0.62.0: another track, for the Peak Controller's "what it drives" line
     // Effect-chain presets (0.45.0): the Chain button's menu (save the slots, load a chain, clear them); MainComponent does the files.
     std::function<void (juce::Component& button, MixerTrack& track, int trackIndex)> onChainMenu;
 
@@ -224,6 +228,11 @@ private:
     int timeShaperShortfall = 0;
     juce::TextButton presetButton { "Presets..." }; // the built-in effect's ready-made settings (0.21.0)
     juce::TextButton chainButton { "Chain..." };    // the whole chain of slots saved and loaded (0.45.0)
+    juce::TextButton irButton { "Load IR..." };     // 0.62.0, the Convolver: an audio file as the impulse response
+    juce::Label hintLabel;                          // 0.62.0: what a Peak Controller drives, which file a Convolver uses
+    std::unique_ptr<juce::FileChooser> irChooser;
+    void updateHint();
+    void chooseImpulseResponse();
     struct ParamRow
     {
         juce::Label name;
@@ -291,6 +300,7 @@ private:
 
     void layoutInner();
     void addStrip (size_t index);
+    void showRouteMenu (int index, juce::Component& button); // 0.62.0
     void showAddTrackMenu();
     void selectMaster();
     void selectAux (int aux);

@@ -312,6 +312,37 @@ private:
     std::array<EffectUnit, kSlotsPerTrack> masterEffects; // on the master bus
     size_t tracksInUse = 0; // the project's track count at the last block (units of tracks beyond it give their memory back)
 
+    // 0.62.0. Free routing: the order the tracks are processed in (a track before the tracks it feeds), each track's place in it,
+    // which tracks are fed by another, and which have been processed in this chunk.
+    std::vector<int> routeOrder, routePlace;
+    std::vector<char> routeFed, routeDone;
+    // Peak Controllers: what each said after the last chunk, written into the parameter it drives at the start of the next.
+    struct PeakMod
+    {
+        int track = 0, slot = 0, param = 0;
+        float value = 0.0f;
+    };
+    static constexpr int kMaxPeakMods = 32;
+    std::array<PeakMod, kMaxPeakMods> peakMods {};
+    int numPeakMods = 0;
+    // Plugin delay compensation: a track whose effects delay the sound less than the slowest path is delayed by the difference,
+    // after its effects. The delay lines are cut from one arena as they are needed (their length follows the largest latency), so
+    // 500 tracks cost nothing while no effect has any latency.
+    static constexpr int kPdcArena = 1 << 21;   // floats (8 MB)
+    static constexpr int kMaxLatency = 1 << 16; // samples; a path slower than this is compensated up to here
+    std::vector<float> pdcArena;
+    std::vector<int> pdcLine, pdcDelay, pdcTail, pdcOwn, pdcLatency, pdcDue;
+    int pdcLength = 0, pdcNext = 0, pdcWrite = 0;
+    std::atomic<int> outputLatency { 0 }, pdcMissing { 0 };
+
+public:
+    // Samples by which delay compensation and the master's own effects delay the whole mix (an export drops as many from its
+    // start), and how many sounding tracks got no delay line (the arena was full). Any thread.
+    int outputLatencySamples() const noexcept { return outputLatency.load (std::memory_order_relaxed); }
+    int delayCompensationShortfall() const noexcept { return pdcMissing.load (std::memory_order_relaxed); }
+
+private:
+
     // The effect memory pool (see effectMemoryShortfall).
     std::vector<std::unique_ptr<EffectMemory>> memoryStore; // owns every memory; capacity kMaxEffectMemories (grows without reallocating)
     std::vector<EffectMemory*> freeMemory;                   // not lent; capacity kMaxEffectMemories

@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "audio/Biquad.h"
+#include "audio/Convolver.h"
 #include "audio/HostedPlugin.h"
 
 namespace sls
@@ -31,10 +32,15 @@ enum class EffectType : std::uint8_t
     Squeeze,        // Fruity Squeeze: bit reduction, downsampling and a puncher
     Vibrato,        // Fruity Vibrator: a pitch vibrato
     ParametricEq2,  // Fruity Parametric EQ 2: seven bands
-    MultibandComp   // Maximus (three bands of compression)
+    MultibandComp,  // Maximus (three bands of compression)
+    // 0.62.0
+    WaveShaper,     // Fruity WaveShaper: a choice of curves
+    Vocoder,        // Fruity Vocoder / Vocodex: a voice shapes a carrier
+    PeakController, // Fruity Peak Controller: the level of this track (and an LFO) drives a parameter of another effect
+    Convolver       // Fruity Convolver: a convolution reverb
 };
 
-constexpr int kEffectTypeCount = 24;
+constexpr int kEffectTypeCount = 28;
 constexpr int kMaxEffectParams = 24; // 0.61.0: 24 (the 7-band EQ has 22); 8 before
 constexpr int kSlotsPerTrack = 10; // insert effects per mixer track, aux bus and master (0.45.0: 10, as in FL Studio; 4 before)
 
@@ -49,12 +55,14 @@ inline constexpr EffectMenuEntry kEffectMenu[] = {
     { EffectType::Filter, nullptr },            { EffectType::BassBoost, nullptr },
     { EffectType::Compressor, "Dynamics" },     { EffectType::MultibandComp, nullptr }, { EffectType::Maximizer, nullptr },
     { EffectType::Gate, nullptr },              { EffectType::Transient, nullptr },
-    { EffectType::Overdrive, "Drive" },         { EffectType::Squeeze, nullptr },
+    { EffectType::Overdrive, "Drive" },         { EffectType::WaveShaper, nullptr },     { EffectType::Squeeze, nullptr },
     { EffectType::Chorus, "Modulation" },       { EffectType::Flanger, nullptr },        { EffectType::Phaser, nullptr },
     { EffectType::Vibrato, nullptr },
-    { EffectType::Reverb, "Space and time" },   { EffectType::Delay, nullptr },          { EffectType::TimeShaper, nullptr },
-    { EffectType::PitchCorrector, "Pitch" },
+    { EffectType::Reverb, "Space and time" },   { EffectType::Convolver, nullptr },      { EffectType::Delay, nullptr },
+    { EffectType::TimeShaper, nullptr },
+    { EffectType::PitchCorrector, "Pitch and voice" }, { EffectType::Vocoder, nullptr },
     { EffectType::Imager, "Stereo" },           { EffectType::Panomatic, nullptr },
+    { EffectType::PeakController, "Controllers" },
 };
 
 struct EffectParamInfo
@@ -92,6 +100,10 @@ inline const char* effectName (EffectType t) noexcept
         case EffectType::Vibrato:      return "Vibrato";
         case EffectType::ParametricEq2: return "Parametric EQ 2";
         case EffectType::MultibandComp: return "Multiband Compressor";
+        case EffectType::WaveShaper:   return "WaveShaper";
+        case EffectType::Vocoder:      return "Vocoder";
+        case EffectType::PeakController: return "Peak Controller";
+        case EffectType::Convolver:    return "Convolver";
         case EffectType::None:         break;
     }
     return "Empty";
@@ -260,6 +272,42 @@ inline constexpr EffectParamInfo mbcomp[] = { { "Low split", "Hz", 40.0f, 1000.0
                                               { "Mid gain", "dB", -12.0f, 12.0f, 0.0f },
                                               { "High gain", "dB", -12.0f, 12.0f, 0.0f } };
 
+// 0.62.0
+inline constexpr EffectParamInfo waveshaper[] = { { "Pre gain", "dB", -12.0f, 36.0f, 6.0f },
+                                                  { "Curve", "", 0.0f, 5.0f, 0.0f, "Soft clip|Hard clip|Fold|Sine|Rectify|Tube" },
+                                                  { "Amount", "", 0.0f, 1.0f, 1.0f }, // 0: a straight line, 1: the whole curve
+                                                  { "Bias", "", -1.0f, 1.0f, 0.0f },
+                                                  { "Post gain", "dB", -36.0f, 12.0f, -3.0f },
+                                                  { "Mix", "", 0.0f, 1.0f, 1.0f } };
+// The modulator (the voice) is another mixer track's sound and the carrier this track's; with no track chosen the left input is
+// the modulator and the right one the carrier, as Fruity Vocoder takes them.
+inline constexpr EffectParamInfo vocoder[] = { { "Modulator", "track", 0.0f, 500.0f, 0.0f },
+                                               { "Bands", "", 0.0f, 2.0f, 2.0f, "8|12|16" },
+                                               { "Attack", "ms", 0.5f, 50.0f, 3.0f },
+                                               { "Release", "ms", 5.0f, 500.0f, 40.0f },
+                                               { "Width", "", 0.25f, 2.0f, 1.0f },    // of each band (1: the bands just touch)
+                                               { "Formant", "st", -12.0f, 12.0f, 0.0f }, // the carrier's bands against the voice's
+                                               { "Output", "dB", -24.0f, 24.0f, 6.0f },
+                                               { "Mix", "", 0.0f, 1.0f, 1.0f } };
+// value = Base + Volume x the track's peak level + LFO; it sets parameter `Target param` of the effect in slot `Target slot` of
+// `Target track` (0: this track) between its minimum (0 %) and its maximum (100 %).
+inline constexpr EffectParamInfo peakctl[] = { { "Base", "%", 0.0f, 100.0f, 0.0f },
+                                               { "Volume", "%", -200.0f, 200.0f, 100.0f },
+                                               { "Decay", "ms", 1.0f, 2000.0f, 150.0f },
+                                               { "LFO amount", "%", -100.0f, 100.0f, 0.0f },
+                                               { "LFO rate", "Hz", 0.05f, 20.0f, 2.0f },
+                                               { "Target track", "track", 0.0f, 500.0f, 0.0f },
+                                               { "Target slot", "", 1.0f, 10.0f, 2.0f },
+                                               { "Target param", "", 1.0f, 24.0f, 1.0f },
+                                               { "Mute", "", 0.0f, 1.0f, 0.0f, "Off|On" } }; // On: the track's sound only drives the controller
+constexpr int kPeakTargetTrack = 5, kPeakTargetSlot = 6, kPeakTargetParam = 7;
+inline constexpr EffectParamInfo convolver[] = { { "Space", "", 0.0f, 5.0f, 1.0f, "Room|Hall|Plate|Spring|Cathedral|File" },
+                                                 { "Length", "s", 0.1f, 4.0f, 1.5f },
+                                                 { "Brightness", "", 0.0f, 1.0f, 0.6f },
+                                                 { "Pre-delay", "ms", 0.0f, 200.0f, 0.0f },
+                                                 { "Mix", "", 0.0f, 1.0f, 0.3f },
+                                                 { "Output", "dB", -24.0f, 12.0f, 0.0f } };
+
 // The scales' notes as bit masks (bit n: n semitones above the key), in the order of the Scale choice; equal to theory::scales().
 inline constexpr std::uint16_t kPitchScaleMasks[] = { 0x0fff, 0x0ab5, 0x05ad, 0x09ad, 0x0aad, 0x06ad, 0x05ab, 0x0ad5, 0x06b5, 0x056b, 0x0295, 0x04a9, 0x04e9 };
 
@@ -294,6 +342,10 @@ inline int effectParamCount (EffectType t) noexcept
         case EffectType::Vibrato:      return count (vibrato);
         case EffectType::ParametricEq2: return count (peq2);
         case EffectType::MultibandComp: return count (mbcomp);
+        case EffectType::WaveShaper:   return count (waveshaper);
+        case EffectType::Vocoder:      return count (vocoder);
+        case EffectType::PeakController: return count (peakctl);
+        case EffectType::Convolver:    return count (convolver);
         case EffectType::Plugin:
         case EffectType::None:         break;
     }
@@ -331,6 +383,10 @@ inline EffectParamInfo effectParamInfo (EffectType t, int index) noexcept
         case EffectType::Vibrato:      return vibrato[i];
         case EffectType::ParametricEq2: return peq2[i];
         case EffectType::MultibandComp: return mbcomp[i];
+        case EffectType::WaveShaper:   return waveshaper[i];
+        case EffectType::Vocoder:      return vocoder[i];
+        case EffectType::PeakController: return peakctl[i];
+        case EffectType::Convolver:    return convolver[i];
         case EffectType::Plugin:
         case EffectType::None:         break;
     }
@@ -351,6 +407,7 @@ struct EffectSlot
     bool bypass = false;
     std::array<float, kMaxEffectParams> params {};
     std::shared_ptr<HostedPlugin> plugin; // EffectType::Plugin only (its parameters live in the plugin)
+    std::shared_ptr<Convolver> convolver; // EffectType::Convolver only (0.62.0): its impulse response, see prepareConvolver
 
     static EffectSlot make (EffectType t) noexcept
     {
@@ -370,6 +427,8 @@ struct EffectSlot
         EffectSlot s = *this;
         if (type != EffectType::Plugin)
             s.plugin = nullptr;
+        if (type != EffectType::Convolver)
+            s.convolver = nullptr;
         for (int i = 0; i < kMaxEffectParams; ++i)
         {
             auto& v = s.params[static_cast<size_t> (i)];
@@ -388,9 +447,20 @@ struct EffectSlot
 
     bool operator== (const EffectSlot& o) const noexcept
     {
-        return type == o.type && bypass == o.bypass && params == o.params && plugin == o.plugin;
+        return type == o.type && bypass == o.bypass && params == o.params && plugin == o.plugin && convolver == o.convolver;
     }
 };
+
+// The parameter that names the mixer track an effect listens to (a compressor's or gate's sidechain, a vocoder's modulator), or -1.
+inline int effectSidechainParam (EffectType t) noexcept
+{
+    return t == EffectType::Compressor || t == EffectType::Gate ? 5 : (t == EffectType::Vocoder ? 0 : -1);
+}
+
+// Message thread (0.62.0): gives a Convolver slot the impulse response its settings ask for at this sample rate; a new one (which
+// starts silent) when they changed, when there was none, or when `fresh` (an export must not share the live engine's). The File
+// space keeps the file of the convolver it replaces. Slots of other types are left alone.
+void prepareConvolver (EffectSlot& slot, double sampleRate, bool fresh = false);
 
 // Ready-made settings of a built-in effect (the effects panel's Preset menu): every parameter of the effect, in order.
 struct EffectPreset
@@ -451,6 +521,12 @@ struct EffectMemory
     std::array<std::vector<float>, 2> delayLine;           // the delay's, the chorus's and the Pitch Corrector's recordings
     std::array<float, kPitchDecimated> pcDecim {}, pcScratch {}, pcDiff {};
 
+    // 0.62.0, the vocoder: two band-passes in series per band for the modulator (mono) and for the carrier, and each band's level
+    static constexpr int kVocoderBands = 16;
+    std::array<std::array<Biquad<1>, kVocoderBands>, 2> vocMod;
+    std::array<std::array<Biquad<2>, kVocoderBands>, 2> vocCar;
+    std::array<float, kVocoderBands> vocEnv {};
+
 private:
     double rate = 0.0;
 };
@@ -459,7 +535,8 @@ private:
 inline bool effectNeedsMemory (EffectType t) noexcept
 {
     return t == EffectType::Reverb || t == EffectType::Delay || t == EffectType::Chorus || t == EffectType::PitchCorrector
-        || t == EffectType::Flanger || t == EffectType::Vibrato; // 0.61.0
+        || t == EffectType::Flanger || t == EffectType::Vibrato // 0.61.0
+        || t == EffectType::Vocoder; // 0.62.0
 }
 
 // The DSP behind one slot. All memory is allocated in prepare() (or lent: attachMemory, attachTimeBuffer); process() never
@@ -486,6 +563,9 @@ public:
 
     // Samples by which the effect delays the sound (the Maximizer looks ahead); 0 for the others.
     int latencySamples (EffectType t) const noexcept { return t == EffectType::Maximizer ? lookahead : 0; }
+
+    // The Peak Controller's value after the last block, 0..1 (0.62.0); the Player writes it into the parameter it drives.
+    float controlValue() const noexcept { return control; }
 
 private:
     using Biquad = sls::Biquad<2>;
@@ -521,6 +601,11 @@ private:
     void runVibrato (const EffectSlot&, float*, float*, int) noexcept;
     void runParametricEq2 (const EffectSlot&, float*, float*, int) noexcept;
     void runMultibandComp (const EffectSlot&, float*, float*, int) noexcept;
+    // 0.62.0
+    void runWaveShaper (const EffectSlot&, float*, float*, int) noexcept;
+    void runVocoder (const EffectSlot&, float*, float*, int, const EffectTransport&) noexcept;
+    void runPeakController (const EffectSlot&, float*, float*, int) noexcept;
+    void runConvolver (const EffectSlot&, float*, float*, int) noexcept;
     void setReverbType (int type) noexcept;
 
     double sampleRate = 48000.0;
@@ -582,6 +667,11 @@ private:
     std::array<float, 2> sqHold {};
     int sqCount = 0;
     double panPhase = 0.0;
+
+    // 0.62.0: the Peak Controller's value, the vocoder's settings its filters were last designed for, the convolver last seen
+    float control = 0.0f;
+    std::array<float, 4> vocCached { -1.0f, -1.0f, -1.0f, -1.0f };
+    const Convolver* convolverSeen = nullptr;
 
     // time shaper
     float* timeL = nullptr;

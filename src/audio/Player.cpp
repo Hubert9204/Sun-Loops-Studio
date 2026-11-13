@@ -1,6 +1,7 @@
 #include "audio/Player.h"
 
 #include <algorithm>
+#include <limits>
 #include <climits>
 #include <cmath>
 
@@ -46,7 +47,12 @@ Player::Player()
       keyL (static_cast<size_t> (kMaxTracks)), keyR (static_cast<size_t> (kMaxTracks)),
       keyPtrL (static_cast<size_t> (kMaxTracks), nullptr), keyPtrR (static_cast<size_t> (kMaxTracks), nullptr),
       keyWanted (static_cast<size_t> (kMaxTracks), 0), effects (static_cast<size_t> (kMaxTracks)),
-      slotsNow (static_cast<size_t> (kMaxTracks))
+      slotsNow (static_cast<size_t> (kMaxTracks)),
+      routeOrder (static_cast<size_t> (kMaxTracks), 0), routePlace (static_cast<size_t> (kMaxTracks), 0),
+      routeFed (static_cast<size_t> (kMaxTracks), 0), routeDone (static_cast<size_t> (kMaxTracks), 0),
+      pdcLine (static_cast<size_t> (kMaxTracks), -1), pdcDelay (static_cast<size_t> (kMaxTracks), 0),
+      pdcTail (static_cast<size_t> (kMaxTracks), 0), pdcOwn (static_cast<size_t> (kMaxTracks), 0),
+      pdcLatency (static_cast<size_t> (kMaxTracks), 0), pdcDue (static_cast<size_t> (kMaxTracks), 0)
 {
     memoryStore.reserve (static_cast<size_t> (kMaxEffectMemories));
     freeMemory.reserve (static_cast<size_t> (kMaxEffectMemories));
@@ -100,6 +106,12 @@ void Player::prepare (double newSampleRate) noexcept
     for (auto& v : clipVoices)
         v = ClipVoice {};
     nextClip = 0;
+
+    pdcArena.assign (static_cast<size_t> (kPdcArena), 0.0f); // 0.62.0
+    std::fill (pdcLine.begin(), pdcLine.end(), -1);
+    std::fill (pdcTail.begin(), pdcTail.end(), 0);
+    pdcLength = pdcNext = pdcWrite = 0;
+    numPeakMods = 0;
 
     nextEvent.fill (0);
     lastClickBeat = -1;
@@ -1728,16 +1740,133 @@ void Player::render (const Project& project, double bpm, bool playing,
         }
     };
 
-    // Automation (Song mode): effect parameters are changed in copies of the slots, so the project itself is never touched.
+    // 0.62.0: what the mixer is asked for beyond the plain "every track to the master": Peak Controllers, sends between tracks,
+    // effects that delay the sound.
+    const auto feeds = [numTracks] (size_t from, const TrackSend& send) noexcept
+    {
+        return send.target >= 0 && send.target < static_cast<int> (numTracks) && send.target != static_cast<int> (from) && send.level > 0.0f;
+    };
+    const auto slotLatency = [] (const EffectUnit& unit, const EffectSlot& slot) noexcept
+    {
+        if (slot.bypass)
+            return 0;
+        if (slot.type == EffectType::Plugin)
+            return slot.plugin != nullptr ? std::clamp (slot.plugin->latencySamples(), 0, kMaxLatency) : 0;
+        return unit.latencySamples (slot.type);
+    };
+    bool anyPeak = false, anyRoute = false, anyLatency = false;
+    for (size_t t = 0; t < numTracks; ++t)
+    {
+        const auto& tr = trackAt (t);
+        int own = 0;
+        for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
+        {
+            if (tr.slots[s].type == EffectType::None)
+                continue;
+            anyPeak = anyPeak || (tr.slots[s].type == EffectType::PeakController && ! tr.slots[s].bypass);
+            own += slotLatency (effects[t][s], tr.slots[s]);
+        }
+        pdcOwn[t] = std::min (own, kMaxLatency);
+        anyLatency = anyLatency || own > 0;
+        for (const auto& send : tr.trackSends)
+            anyRoute = anyRoute || feeds (t, send);
+    }
+    if (anyRoute)
+    {
+        // Sources first (Kahn's ordering). Tracks left over are in a loop: they follow in their own order, and the send that
+        // closes the loop finds its target already processed and is dropped (see routeDone).
+        std::fill_n (routePlace.begin(), numTracks, 0); // (used as the count of incoming sends until the order is known)
+        for (size_t t = 0; t < numTracks; ++t)
+            for (const auto& send : trackAt (t).trackSends)
+                if (feeds (t, send))
+                    ++routePlace[static_cast<size_t> (send.target)];
+        size_t count = 0;
+        for (size_t t = 0; t < numTracks; ++t)
+        {
+            routeFed[t] = routePlace[t] > 0 ? 1 : 0;
+            if (routePlace[t] == 0)
+                routeOrder[count++] = static_cast<int> (t);
+        }
+        for (size_t head = 0; head < count; ++head)
+        {
+            const auto t = static_cast<size_t> (routeOrder[head]);
+            for (const auto& send : trackAt (t).trackSends)
+                if (feeds (t, send) && --routePlace[static_cast<size_t> (send.target)] == 0)
+                    routeOrder[count++] = send.target;
+        }
+        for (size_t t = 0; t < numTracks && count < numTracks; ++t)
+            if (routePlace[t] > 0)
+                routeOrder[count++] = static_cast<int> (t);
+        for (size_t k = 0; k < numTracks; ++k)
+            routePlace[static_cast<size_t> (routeOrder[k])] = static_cast<int> (k);
+    }
+    const auto trackInOrder = [&] (size_t k) noexcept { return anyRoute ? static_cast<size_t> (routeOrder[k]) : k; };
+    const auto placeOf = [&] (size_t t) noexcept { return anyRoute ? routePlace[t] : static_cast<int> (t); };
+
+    // Delay compensation: the latency of each track's output (its own effects after the slowest track that feeds it), the time by
+    // which that output is due (the slowest path into the master, or what the tracks it feeds expect), and the delay that makes up
+    // the difference.
+    int pathLatency = 0;
+    if (anyLatency)
+    {
+        std::fill_n (pdcLatency.begin(), numTracks, 0); // (first: when the sound arrives at the track)
+        for (size_t k = 0; k < numTracks; ++k)
+        {
+            const size_t t = trackInOrder (k);
+            const auto& tr = trackAt (t);
+            pdcLatency[t] += pdcOwn[t];
+            if (tr.toMaster)
+                pathLatency = std::max (pathLatency, pdcLatency[t]);
+            for (const auto& send : tr.trackSends)
+                if (feeds (t, send) && placeOf (static_cast<size_t> (send.target)) > static_cast<int> (k))
+                    pdcLatency[static_cast<size_t> (send.target)] = std::max (pdcLatency[static_cast<size_t> (send.target)], pdcLatency[t]);
+        }
+        pathLatency = std::min (pathLatency, kMaxLatency);
+        for (size_t k = numTracks; k-- > 0;)
+        {
+            const size_t t = trackInOrder (k);
+            const auto& tr = trackAt (t);
+            int due = tr.toMaster ? pathLatency : std::numeric_limits<int>::max();
+            for (const auto& send : tr.trackSends)
+                if (feeds (t, send) && placeOf (static_cast<size_t> (send.target)) > static_cast<int> (k))
+                    due = std::min (due, pdcDue[static_cast<size_t> (send.target)] - pdcOwn[static_cast<size_t> (send.target)]);
+            pdcDue[t] = due == std::numeric_limits<int>::max() ? pdcLatency[t] : due; // (a track that goes nowhere needs no delay)
+            pdcDelay[t] = std::clamp (pdcDue[t] - pdcLatency[t], 0, kMaxLatency);
+        }
+    }
+    int wantedLength = 0;
+    if (pathLatency > 0)
+        for (wantedLength = 64; wantedLength < pathLatency + 1;)
+            wantedLength *= 2;
+    if (wantedLength != pdcLength)
+    {
+        // The lines are cut anew for this length (their sound is dropped: this happens when an effect with latency comes or goes).
+        std::fill_n (pdcArena.begin(), std::min (pdcArena.size(), static_cast<size_t> (pdcNext) * 2 * static_cast<size_t> (pdcLength)), 0.0f);
+        std::fill (pdcLine.begin(), pdcLine.end(), -1);
+        std::fill (pdcTail.begin(), pdcTail.end(), 0);
+        pdcLength = wantedLength;
+        pdcNext = pdcWrite = 0;
+    }
+    {
+        int masterLatency = 0;
+        for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
+            masterLatency += slotLatency (masterEffects[s], project.masterSlots[s]);
+        outputLatency.store (pathLatency + masterLatency, std::memory_order_relaxed);
+    }
+
+    // Automation (Song mode) and Peak Controllers: effect parameters are changed in copies of the slots, so the project itself is
+    // never touched.
     const bool automated = playing && ! project.automation.empty();
+    const bool slotCopies = automated || anyPeak;
     auto& trackSlotsNow = slotsNow;
     std::array<EffectSlot, kSlotsPerTrack> masterSlotsNow {};
-    if (automated)
-    {
+    if (slotCopies)
         for (size_t t = 0; t < numTracks; ++t)
             trackSlotsNow[t] = trackAt (t).slots;
+    if (automated)
         masterSlotsNow = project.masterSlots;
-    }
+    if (! anyPeak)
+        numPeakMods = 0;
 
     peaks.fill (0.0f);
     std::fill_n (trackPeaks.begin(), std::max (numTracks, tracksInUse), 0.0f);
@@ -1769,6 +1898,29 @@ void Player::render (const Project& project, double bpm, bool playing,
         if (automated)
             applyAutomation (project, tickPos, numMixerChannels, numTracks, setChannel, setTrack, setMix, channelVolume, channelPan, trackVolume, trackPan,
                              trackSlotsNow, masterSlotsNow);
+
+        // What the Peak Controllers said after the last chunk goes into the parameters they drive (0.62.0).
+        for (int m = 0; m < numPeakMods; ++m)
+        {
+            const auto& mod = peakMods[static_cast<size_t> (m)];
+            if (mod.track < 0 || mod.track >= static_cast<int> (numTracks) || mod.slot < 0 || mod.slot >= kSlotsPerTrack)
+                continue;
+            auto& target = trackSlotsNow[static_cast<size_t> (mod.track)][static_cast<size_t> (mod.slot)];
+            if (target.type == EffectType::Plugin)
+            {
+                if (target.plugin != nullptr && mod.param < target.plugin->parameterCount())
+                    target.plugin->setParameter (mod.param, mod.value);
+                continue;
+            }
+            if (target.type == EffectType::PeakController || mod.param >= effectParamCount (target.type))
+                continue;
+            const auto info = effectParamInfo (target.type, mod.param);
+            if (info.unit[0] == 't' && info.unit[1] == 'r') // "track": a choice of track is not something to sweep
+                continue;
+            const float v = info.min + mod.value * (info.max - info.min);
+            target.params[static_cast<size_t> (mod.param)] = info.choices != nullptr ? std::round (v) : v;
+        }
+        numPeakMods = 0;
 
         for (size_t t = 0; t < numTracks; ++t)
         {
@@ -2175,8 +2327,8 @@ void Player::render (const Project& project, double bpm, bool playing,
         const auto wantKeys = [&] (const std::array<EffectSlot, kSlotsPerTrack>& slots)
         {
             for (const auto& slot : slots)
-                if ((slot.type == EffectType::Compressor || slot.type == EffectType::Gate) && ! slot.bypass) // 0.61.0: the gate too
-                    if (const auto k = std::lround (slot.params[5]) - 1; k >= 0 && k < static_cast<long> (numTracks))
+                if (const int keyParam = effectSidechainParam (slot.type); keyParam >= 0 && ! slot.bypass) // 0.61.0: the gate, 0.62.0: the vocoder
+                    if (const auto k = std::lround (slot.params[static_cast<size_t> (keyParam)]) - 1; k >= 0 && k < static_cast<long> (numTracks))
                     {
                         keyWanted[static_cast<size_t> (k)] = 1;
                         anyKey = true;
@@ -2193,8 +2345,13 @@ void Player::render (const Project& project, double bpm, bool playing,
             keyPtrR[t] = nullptr;
             if (keyWanted[t] == 0)
                 continue;
-            std::copy_n (trackL[t].begin(), n, keyL[t].begin());
-            std::copy_n (trackR[t].begin(), n, keyR[t].begin());
+            // (0.62.0: a source that other tracks feed is copied when its turn comes, with their sound in it; a listener that is
+            // processed before it hears the copy of the chunk before)
+            if (! (anyRoute && routeFed[t] != 0))
+            {
+                std::copy_n (trackL[t].begin(), n, keyL[t].begin());
+                std::copy_n (trackR[t].begin(), n, keyR[t].begin());
+            }
             keyPtrL[t] = keyL[t].data();
             keyPtrR[t] = keyR[t].data();
         }
@@ -2206,11 +2363,23 @@ void Player::render (const Project& project, double bpm, bool playing,
             trackTransport.numKeys = static_cast<int> (numTracks);
         }
 
-        for (size_t t = 0; t < numTracks; ++t)
+        if (anyRoute)
+            std::fill_n (routeDone.begin(), numTracks, static_cast<char> (0));
+        for (size_t place = 0; place < numTracks; ++place)
         {
+            const size_t t = trackInOrder (place); // 0.62.0: a track comes after the tracks that feed it
             float* l = trackL[t].data();
             float* r = trackR[t].data();
             const auto& tr = trackAt (t);
+            if (anyRoute)
+            {
+                routeDone[t] = 1;
+                if (routeFed[t] != 0 && keyWanted[t] != 0) // a sidechain source fed by other tracks: its copy now holds their sound too
+                {
+                    std::copy_n (l, n, keyL[t].begin());
+                    std::copy_n (r, n, keyR[t].begin());
+                }
+            }
 
             bool hasEffect = false;
             for (const auto& slot : tr.slots)
@@ -2220,7 +2389,7 @@ void Player::render (const Project& project, double bpm, bool playing,
                 bool silent = true;
                 for (int i = 0; i < n && silent; ++i)
                     silent = ! (std::abs (l[i]) > 0.0f || std::abs (r[i]) > 0.0f);
-                if (silent)
+                if (silent && (pdcLength == 0 || pdcTail[t] <= 0)) // (a delay line that still holds sound has to play it out)
                 {
                     for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
                         effects[t][s].process (tr.slots[s], l, r, n, trackTransport); // only to let a removed effect forget its state
@@ -2235,7 +2404,44 @@ void Player::render (const Project& project, double bpm, bool playing,
             }
 
             for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
-                effects[t][s].process (automated ? trackSlotsNow[t][s] : tr.slots[s], l, r, n, trackTransport);
+            {
+                const auto& slot = slotCopies ? trackSlotsNow[t][s] : tr.slots[s];
+                effects[t][s].process (slot, l, r, n, trackTransport);
+                if (slot.type == EffectType::PeakController && ! slot.bypass && numPeakMods < kMaxPeakMods)
+                {
+                    using namespace effect_tables;
+                    const int targetTrack = static_cast<int> (std::lround (slot.params[kPeakTargetTrack]));
+                    peakMods[static_cast<size_t> (numPeakMods++)] = { targetTrack <= 0 ? static_cast<int> (t) : targetTrack - 1,
+                                                                      static_cast<int> (std::lround (slot.params[kPeakTargetSlot])) - 1,
+                                                                      static_cast<int> (std::lround (slot.params[kPeakTargetParam])) - 1,
+                                                                      effects[t][s].controlValue() };
+                }
+            }
+
+            // 0.62.0, delay compensation: the track waits for the slowest path (see pdcDelay).
+            if (pdcLength > 0)
+            {
+                if (pdcLine[t] < 0 && pdcDelay[t] > 0 && (static_cast<size_t> (pdcNext) + 1) * 2 * static_cast<size_t> (pdcLength) <= pdcArena.size())
+                    pdcLine[t] = pdcNext++;
+                if (pdcLine[t] >= 0)
+                {
+                    float* lineL = pdcArena.data() + static_cast<size_t> (pdcLine[t]) * 2 * static_cast<size_t> (pdcLength);
+                    float* lineR = lineL + pdcLength;
+                    const int mask = pdcLength - 1;
+                    const int delay = std::min (pdcDelay[t], mask);
+                    bool loud = false;
+                    for (int i = 0; i < n; ++i)
+                    {
+                        const int w = (pdcWrite + i) & mask;
+                        loud = loud || std::abs (l[i]) > 0.0f || std::abs (r[i]) > 0.0f;
+                        lineL[w] = l[i];
+                        lineR[w] = r[i];
+                        l[i] = lineL[(w - delay) & mask];
+                        r[i] = lineR[(w - delay) & mask];
+                    }
+                    pdcTail[t] = loud ? pdcLength : std::max (0, pdcTail[t] - n);
+                }
+            }
 
             // 0.61.0: the track's polarity, channel swap and stereo separation (as an FL Studio mixer track's), after its effects
             if (tr.invertPhase || tr.swapStereo || std::abs (tr.separation) > 0.0005f)
@@ -2272,12 +2478,35 @@ void Player::render (const Project& project, double bpm, bool playing,
                 trackPeaks[t] = std::max ({ trackPeaks[t], std::fabs (outL), std::fabs (outR) });
                 trackMeanSquare[t] += (0.5f * (outL * outL + outR * outR) - trackMeanSquare[t]) * rmsCoef;
 
-                mixL[static_cast<size_t> (i)] += outL;
-                mixR[static_cast<size_t> (i)] += outR;
+                if (tr.toMaster)
+                {
+                    mixL[static_cast<size_t> (i)] += outL;
+                    mixR[static_cast<size_t> (i)] += outR;
+                }
             }
             if (trackMeanSquare[t] < 1.0e-20f)
                 trackMeanSquare[t] = 0.0f;
+
+            // 0.62.0: what the track sends to other tracks (after its fader; a muted track sends nothing). A target that has
+            // already been processed in this chunk would close a loop: that send is dropped.
+            if (anyRoute)
+                for (const auto& send : tr.trackSends)
+                    if (feeds (t, send) && routeDone[static_cast<size_t> (send.target)] == 0)
+                    {
+                        float* toL = trackL[static_cast<size_t> (send.target)].data();
+                        float* toR = trackR[static_cast<size_t> (send.target)].data();
+                        const float level = std::min (send.level, 1.5f) * (trackAudible[t] ? 1.0f : 0.0f);
+                        // (the sound after the fader is what went to the master: recompute it from the gain reached)
+                        const float gl = trackGain[t] * balanceLeft[t] * level, gr = trackGain[t] * balanceRight[t] * level;
+                        for (int i = 0; i < n; ++i)
+                        {
+                            toL[i] += l[i] * gl;
+                            toR[i] += r[i] * gr;
+                        }
+                    }
         }
+        if (pdcLength > 0)
+            pdcWrite = (pdcWrite + n) & (pdcLength - 1);
 
         // 2b. Aux buses: effects, fader and balance, then the master bus.
         for (size_t a = 0; a < static_cast<size_t> (kAuxBuses); ++a)
@@ -2324,5 +2553,11 @@ void Player::render (const Project& project, double bpm, bool playing,
                     out[ch][done + i] += ((ch & 1) == 0 ? outL : outR) + clickSample;
         }
     }
+
+    int missing = 0;
+    if (pdcLength > 0)
+        for (size_t t = 0; t < numTracks; ++t)
+            missing += pdcDelay[t] > 0 && pdcLine[t] < 0 && trackPeaks[t] > 0.0f ? 1 : 0;
+    pdcMissing.store (missing, std::memory_order_relaxed);
 }
 } // namespace sls

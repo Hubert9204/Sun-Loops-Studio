@@ -2,6 +2,8 @@
 
 #include <cmath>
 
+#include "audio/AudioImport.h"
+
 namespace sls
 {
 namespace
@@ -38,6 +40,10 @@ juce::String shortEffectName (EffectType t)
         case EffectType::Vibrato:    return "Vibr";
         case EffectType::ParametricEq2: return "P-EQ2";
         case EffectType::MultibandComp: return "MB-Cmp";
+        case EffectType::WaveShaper:   return "Shaper";
+        case EffectType::Vocoder:      return "Vocod";
+        case EffectType::PeakController: return "PeakCt";
+        case EffectType::Convolver:    return "Convol";
         case EffectType::None:       break;
     }
     return juce::String::fromUTF8 ("\xe2\x80\x94");
@@ -205,11 +211,16 @@ MixerStrip::MixerStrip (MixerTrack& trackToControl, int trackIndex, bool isAuxBu
         track.separation = static_cast<float> (separationSlider.getValue());
         if (onChanged) onChanged (index);
     };
-    if (! isAux) // the aux buses have none of the three
+    // 0.62.0: free routing, as the cables at the bottom of FL Studio's mixer
+    routeButton.setTooltip ("Routing: where this track goes - the master, other mixer tracks (each with its own level), or both");
+    routeButton.setMouseClickGrabsKeyboardFocus (false);
+    routeButton.onClick = [this] { if (onRouteMenu) onRouteMenu (index, routeButton); };
+    if (! isAux) // the aux buses have none of these
     {
         addAndMakeVisible (phaseButton);
         addAndMakeVisible (swapButton);
         addAndMakeVisible (separationSlider);
+        addAndMakeVisible (routeButton);
     }
 
     for (size_t g = 0; g < vcaButtons.size(); ++g)
@@ -339,6 +350,8 @@ void MixerStrip::refreshFromTrack()
     phaseButton.setToggleState (track.invertPhase, juce::dontSendNotification);
     swapButton.setToggleState (track.swapStereo, juce::dontSendNotification);
     separationSlider.setValue (track.separation, juce::dontSendNotification);
+    routeButton.setButtonText (routingText (track));
+    routeButton.setColour (juce::TextButton::buttonColourId, track.toMaster && routingText (track) == "> M" ? juce::Colour (0xff2e323b) : juce::Colour (0xff5a4a2a));
     for (size_t g = 0; g < vcaButtons.size(); ++g)
         vcaButtons[g].setToggleState (((track.vcaMask >> g) & 1u) != 0, juce::dontSendNotification);
     panSlider.setValue (track.pan, juce::dontSendNotification);
@@ -428,6 +441,8 @@ void MixerStrip::resized()
         auto row = area.removeFromTop (16);
         phaseButton.setBounds (row.removeFromLeft (row.getWidth() / 2).reduced (2, 0));
         swapButton.setBounds (row.reduced (2, 0));
+        area.removeFromTop (2);
+        routeButton.setBounds (area.removeFromTop (16).reduced (2, 0)); // 0.62.0
     }
     area.removeFromTop (4);
 
@@ -442,6 +457,22 @@ void MixerStrip::resized()
     area.removeFromTop (4);
 
     layoutFaderColumn (area, dbLabel, meter, fader);
+}
+
+juce::String MixerStrip::routingText (const MixerTrack& track)
+{
+    int sends = 0, first = -1;
+    for (const auto& s : track.trackSends)
+        if (s.target >= 0 && s.level > 0.0f)
+        {
+            ++sends;
+            first = first < 0 ? s.target : first;
+        }
+    if (track.toMaster)
+        return sends == 0 ? juce::String ("> M") : "> M+" + juce::String (sends);
+    if (sends == 0)
+        return "> -";
+    return sends == 1 ? "> " + juce::String (first + 1) : "> " + juce::String (first + 1) + "+" + juce::String (sends - 1);
 }
 
 void MixerStrip::mouseDown (const juce::MouseEvent&)
@@ -637,6 +668,11 @@ FxPanel::FxPanel()
             onChainMenu (chainButton, *track, trackIndex);
     };
     addAndMakeVisible (chainButton);
+    addChildComponent (irButton); // 0.62.0
+    irButton.setTooltip ("Use an audio file as the impulse response (the Space becomes File)");
+    hintLabel.setFont (juce::Font (juce::FontOptions (12.0f)));
+    hintLabel.setColour (juce::Label::textColourId, juce::Colour (0xffe8b25a));
+    addChildComponent (hintLabel);
     addAndMakeVisible (effectLabel);
     addAndMakeVisible (notePlaceholder);
     addChildComponent (pluginButton);
@@ -799,7 +835,8 @@ void FxPanel::rebuildParameters()
             // A mixer track (0.45.0: the compressor's sidechain): "Off" or one of the project's tracks, by name.
             row.name.setText (info.name, juce::dontSendNotification);
             row.choice.clear (juce::dontSendNotification);
-            row.choice.addItem ("Off (its own sound)", 1);
+            row.choice.addItem (slot.type == EffectType::PeakController ? "This track"
+                                    : slot.type == EffectType::Vocoder ? "None (left = voice, right = carrier)" : "Off (its own sound)", 1);
             const int tracks = trackCount ? trackCount() : 8;
             for (int t = 0; t < tracks; ++t)
                 row.choice.addItem (trackNameOf ? trackNameOf (t) : "Track " + juce::String (t + 1), t + 2);
@@ -809,13 +846,18 @@ void FxPanel::rebuildParameters()
             row.choice.setSelectedId (current + 1, juce::dontSendNotification);
             row.choice.setTooltip (slot.type == EffectType::Gate
                                        ? "The gate opens when the chosen track plays (its sound before its own effects and fader)"
-                                       : "The compressor turns this track down when the chosen track plays (its sound before its own effects and fader)");
+                                       : slot.type == EffectType::Vocoder
+                                             ? "The voice: the level of each band of the chosen track's sound sets the level of the same band of this track"
+                                             : slot.type == EffectType::PeakController
+                                                   ? "The mixer track whose effect this controller drives"
+                                                   : "The compressor turns this track down when the chosen track plays (its sound before its own effects and fader)");
             row.choice.onChange = [this, i]
             {
                 if (track == nullptr)
                     return;
                 track->slots[static_cast<size_t> (selectedSlot)].params[static_cast<size_t> (i)]
                     = static_cast<float> (std::max (0, params[static_cast<size_t> (i)].choice.getSelectedId() - 1));
+                updateHint();
                 if (onChanged)
                     onChanged (trackIndex);
             };
@@ -869,11 +911,100 @@ void FxPanel::rebuildParameters()
                 return;
             track->slots[static_cast<size_t> (selectedSlot)].params[static_cast<size_t> (i)]
                 = static_cast<float> (params[static_cast<size_t> (i)].slider.getValue());
+            updateHint();
             if (onChanged)
                 onChanged (trackIndex);
         };
     }
+    irButton.setVisible (slot.type == EffectType::Convolver);
+    irButton.onClick = [this] { chooseImpulseResponse(); };
+    updateHint();
     resized();
+}
+
+// 0.62.0: one line under the effect's name - what a Peak Controller drives, which file a Convolver's File space uses.
+void FxPanel::updateHint()
+{
+    juce::String text;
+    if (track != nullptr)
+    {
+        const auto& slot = track->slots[static_cast<size_t> (selectedSlot)];
+        if (slot.type == EffectType::PeakController)
+        {
+            using namespace effect_tables;
+            const int targetTrack = juce::roundToInt (slot.params[kPeakTargetTrack]);
+            const int targetSlot = juce::roundToInt (slot.params[kPeakTargetSlot]) - 1;
+            const int targetParam = juce::roundToInt (slot.params[kPeakTargetParam]) - 1;
+            const MixerTrack* target = targetTrack <= 0 ? track : (trackAt ? trackAt (targetTrack - 1) : nullptr);
+            const auto where = targetTrack <= 0 ? juce::String ("this track") : "track " + juce::String (targetTrack);
+            if (target == nullptr || targetSlot < 0 || targetSlot >= kSlotsPerTrack)
+                text = "Drives: nothing (" + where + " is not in the mixer)";
+            else
+            {
+                const auto& driven = target->slots[static_cast<size_t> (targetSlot)];
+                if (driven.type == EffectType::None)
+                    text = "Drives: nothing yet (slot " + juce::String (targetSlot + 1) + " of " + where + " is empty)";
+                else if (driven.type == EffectType::Plugin && driven.plugin != nullptr)
+                    text = "Drives: " + juce::String (driven.plugin->displayName()) + " > "
+                         + (targetParam < driven.plugin->parameterCount() ? juce::String (driven.plugin->parameterName (targetParam)) : juce::String ("(no such parameter)"))
+                         + "  (" + where + ", slot " + juce::String (targetSlot + 1) + ")";
+                else if (driven.type == EffectType::PeakController || targetParam >= effectParamCount (driven.type)
+                         || juce::String (effectParamInfo (driven.type, targetParam).unit) == "track")
+                    text = "Drives: nothing (" + juce::String (effectName (driven.type)) + " has no such parameter to sweep)";
+                else
+                    text = "Drives: " + juce::String (effectName (driven.type)) + " > " + effectParamInfo (driven.type, targetParam).name
+                         + "  (" + where + ", slot " + juce::String (targetSlot + 1) + ")";
+            }
+        }
+        else if (slot.type == EffectType::Convolver)
+        {
+            const bool fileSpace = effectChoice (EffectType::Convolver, 0, slot.params[0]) == Convolver::File;
+            const auto file = slot.convolver != nullptr ? slot.convolver->file() : nullptr;
+            if (file != nullptr)
+                text = (fileSpace ? "Impulse response: " : "File (not in use): ") + juce::File (file->source).getFileName();
+            else if (fileSpace)
+                text = "No impulse response yet: Load IR... picks an audio file";
+        }
+    }
+    hintLabel.setText (text, juce::dontSendNotification);
+    hintLabel.setVisible (text.isNotEmpty());
+}
+
+void FxPanel::chooseImpulseResponse()
+{
+    if (track == nullptr)
+        return;
+    irChooser = std::make_unique<juce::FileChooser> ("Impulse response (an audio file: the recording of a space, a spring, a cabinet...)",
+                                                     juce::File::getSpecialLocation (juce::File::userMusicDirectory), "*.wav;*.aif;*.aiff;*.flac;*.ogg;*.mp3");
+    irChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+                            [safe = juce::Component::SafePointer<FxPanel> (this), slotIndex = selectedSlot] (const juce::FileChooser& chooser)
+                            {
+                                const auto file = chooser.getResult();
+                                if (safe == nullptr || safe->track == nullptr || ! file.existsAsFile())
+                                    return;
+                                auto& slot = safe->track->slots[static_cast<size_t> (slotIndex)];
+                                if (slot.type != EffectType::Convolver)
+                                    return;
+                                const auto loaded = importAudioFile (file);
+                                if (loaded.data == nullptr)
+                                {
+                                    safe->hintLabel.setText ("Not loaded: " + loaded.error, juce::dontSendNotification);
+                                    safe->hintLabel.setVisible (true);
+                                    return;
+                                }
+                                // The File space, with a length that takes the whole file (up to the convolver's limit); the response
+                                // itself is made when the project is published (prepareConvolver sees there is none for these settings).
+                                Convolver::Settings none;
+                                none.sampleRate = 0.0;
+                                none.seconds = 0.05f;
+                                none.space = Convolver::Room;
+                                slot.convolver = Convolver::make (none, loaded.data);
+                                slot.params[0] = static_cast<float> (Convolver::File);
+                                slot.params[1] = std::clamp (static_cast<float> (loaded.data->numFrames() / loaded.data->sampleRate), 0.1f, Convolver::kMaxSeconds);
+                                safe->rebuildParameters();
+                                if (safe->onChanged)
+                                    safe->onChanged (safe->trackIndex);
+                            });
 }
 
 void FxPanel::showPresetMenu()
@@ -1018,8 +1149,15 @@ void FxPanel::resized()
         head.removeFromRight (4);
         if (presetButton.isVisible())
             presetButton.setBounds (head.removeFromRight (82));
+        if (irButton.isVisible())
+        {
+            head.removeFromRight (4);
+            irButton.setBounds (head.removeFromRight (78));
+        }
         effectLabel.setBounds (head);
     }
+    if (hintLabel.isVisible())
+        hintLabel.setBounds (area.removeFromTop (18));
     area.removeFromTop (4);
     timeShaperNotice.setBounds (area.removeFromBottom (60));
     notePlaceholder.setBounds (area);
@@ -1067,6 +1205,10 @@ MixerPanel::MixerPanel()
     masterStrip.onVolumeChanged = [this] (double v) { if (onMasterVolumeChanged) onMasterVolumeChanged (v); };
     fxPanel.onChanged = [this] (int track) { if (onTrackChanged) onTrackChanged (track); };
     fxPanel.trackCount = [this] { return trackData != nullptr ? static_cast<int> (trackData->size()) : 8; };
+    fxPanel.trackAt = [this] (int t) -> const MixerTrack*
+    {
+        return trackData != nullptr && t >= 0 && t < static_cast<int> (trackData->size()) ? &(*trackData)[static_cast<size_t> (t)] : nullptr;
+    };
     fxPanel.trackNameOf = [this] (int t)
     {
         const auto number = "Track " + juce::String (t + 1);
@@ -1292,6 +1434,7 @@ void MixerPanel::addStrip (size_t i)
         strip->onSelect = [this] (int idx) { setSelectedTrack (idx); };
         strip->onChanged = [this] (int idx) { updateVcaMembers(); if (onTrackChanged) onTrackChanged (idx); };
         strip->onAutomate = [this] (const AutomationTarget& t) { if (onAutomate) onAutomate (t); };
+        strip->onRouteMenu = [this] (int idx, juce::Component& button) { showRouteMenu (idx, button); };
         strip->onSlotClicked = [this] (int idx, int slot)
         {
             setSelectedTrack (idx);
@@ -1310,6 +1453,111 @@ void MixerPanel::addStrip (size_t i)
         inner.addAndMakeVisible (*strip);
         strips.push_back (std::move (strip));
     }
+}
+
+// 0.62.0: where a track goes. FL Studio draws cables from the selected track to the others; here it is a menu on the track.
+void MixerPanel::showRouteMenu (int index, juce::Component& button)
+{
+    if (trackData == nullptr || index < 0 || index >= static_cast<int> (trackData->size()))
+        return;
+    const auto& track = (*trackData)[static_cast<size_t> (index)];
+    const int count = static_cast<int> (trackData->size());
+    const auto nameOf = [this] (int t)
+    {
+        const auto number = "Track " + juce::String (t + 1);
+        const auto& name = (*trackData)[static_cast<size_t> (t)].name;
+        return name.empty() || juce::String (name) == number ? number : number + ": " + juce::String (name);
+    };
+    juce::PopupMenu menu;
+    menu.addSectionHeader ("Track " + juce::String (index + 1) + " goes to");
+    menu.addItem (1, "The master", true, track.toMaster);
+    juce::PopupMenu sendTo, onlyTo;
+    int used = 0;
+    for (const auto& s : track.trackSends)
+        used += s.target >= 0 ? 1 : 0;
+    for (int t = 0; t < count; ++t)
+    {
+        if (t == index)
+            continue;
+        const bool sending = track.sendsTo (t);
+        sendTo.addItem (1000 + t, nameOf (t), sending || used < kTrackSends, sending);
+        onlyTo.addItem (3000 + t, nameOf (t));
+    }
+    menu.addSubMenu ("Also send to", sendTo);
+    menu.addSubMenu ("Route to this track only", onlyTo);
+    static constexpr int kLevels[] = { 25, 50, 75, 100, 125, 150 };
+    bool header = false;
+    for (size_t s = 0; s < track.trackSends.size(); ++s)
+    {
+        const auto& send = track.trackSends[s];
+        if (send.target < 0 || send.target >= count)
+            continue;
+        if (! header)
+            menu.addSeparator();
+        header = true;
+        juce::PopupMenu levels;
+        for (size_t l = 0; l < std::size (kLevels); ++l)
+            levels.addItem (5000 + static_cast<int> (s) * 10 + static_cast<int> (l), juce::String (kLevels[l]) + " %", true,
+                            juce::roundToInt (send.level * 100.0f) == kLevels[l]);
+        levels.addSeparator();
+        levels.addItem (5000 + static_cast<int> (s) * 10 + 9, "Remove this send");
+        menu.addSubMenu ("Level to " + nameOf (send.target) + "  (" + juce::String (juce::roundToInt (send.level * 100.0f)) + " %)", levels);
+    }
+    menu.addSeparator();
+    menu.addItem (2, "Reset (the master only)", ! track.toMaster || used > 0);
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&button),
+                        [safe = juce::Component::SafePointer<MixerPanel> (this), index] (int result)
+                        {
+                            if (safe == nullptr || result == 0 || safe->trackData == nullptr || index >= static_cast<int> (safe->trackData->size()))
+                                return;
+                            auto& t = (*safe->trackData)[static_cast<size_t> (index)];
+                            const auto freeSend = [&t] () -> TrackSend*
+                            {
+                                for (auto& s : t.trackSends)
+                                    if (s.target < 0)
+                                        return &s;
+                                return nullptr;
+                            };
+                            if (result == 1)
+                                t.toMaster = ! t.toMaster;
+                            else if (result == 2)
+                            {
+                                t.toMaster = true;
+                                t.trackSends = {};
+                            }
+                            else if (result >= 5000)
+                            {
+                                auto& send = t.trackSends[static_cast<size_t> ((result - 5000) / 10) % t.trackSends.size()];
+                                const int choice = (result - 5000) % 10;
+                                if (choice == 9)
+                                    send = {};
+                                else
+                                    send.level = static_cast<float> (kLevels[static_cast<size_t> (choice) % std::size (kLevels)]) / 100.0f;
+                            }
+                            else if (result >= 3000)
+                            {
+                                t.toMaster = false;
+                                t.trackSends = {};
+                                t.trackSends[0] = { result - 3000, 1.0f };
+                            }
+                            else if (result >= 1000)
+                            {
+                                const int target = result - 1000;
+                                bool removed = false;
+                                for (auto& s : t.trackSends)
+                                    if (s.target == target)
+                                    {
+                                        s = {};
+                                        removed = true;
+                                    }
+                                if (! removed)
+                                    if (auto* s = freeSend())
+                                        *s = { target, 1.0f };
+                            }
+                            safe->strips[static_cast<size_t> (index)]->refreshFromTrack();
+                            if (safe->onTrackChanged)
+                                safe->onTrackChanged (index);
+                        });
 }
 
 void MixerPanel::refreshTrack (int index)

@@ -2,13 +2,18 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 #include "audio/Player.h"
 
 namespace sls
 {
-juce::AudioBuffer<float> renderToBuffer (const Project& project, const RenderOptions& options)
+juce::AudioBuffer<float> renderToBuffer (const Project& published, const RenderOptions& options)
 {
+    // 0.62.0: the render has its own convolution reverbs, made for its sample rate (those of the project belong to the live engine).
+    Project project = published;
+    prepareConvolvers (project.tracks, project.masterSlots, project.console.aux, options.sampleRate, true);
+
     const double bpm = std::clamp (options.bpm, 20.0, 400.0);
     const double secondsPerTick = 60.0 / (bpm * kTicksPerBeat);
 
@@ -42,7 +47,15 @@ juce::AudioBuffer<float> renderToBuffer (const Project& project, const RenderOpt
     };
 
     renderRange (loopSamples, true);
-    renderRange (total, false);
+    // 0.62.0: effects that look ahead (and the delay compensation that lines the other tracks up with them) make the whole mix
+    // late by a known number of samples: that many more are rendered and as many dropped from the start.
+    const int latency = std::clamp (player.outputLatencySamples(), 0, static_cast<int> (options.sampleRate));
+    if (latency > 0)
+        buffer.setSize (2, total + latency, true, true);
+    renderRange (total + latency, false);
+    if (latency > 0)
+        for (int ch = 0; ch < 2; ++ch)
+            std::memmove (buffer.getWritePointer (ch), buffer.getReadPointer (ch) + latency, sizeof (float) * static_cast<size_t> (total));
 
     buffer.setSize (2, total, true);
     return buffer;
