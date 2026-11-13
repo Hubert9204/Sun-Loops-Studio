@@ -117,6 +117,10 @@ bool isSignalMachinery (const Frame& f)
     if (f.symbol.find ("sls::crash::") != std::string::npos || startsWith (f.symbol, "__cxxabiv1::"))
         return true;
     const auto module = baseName (f.module);
+    // macOS (0.63.0): the system libraries only export some of their functions, so their frames carry the name of the nearest
+    // exported one (__cxa_get_exception_ptr for the code that throws): every frame of them counts, named or not.
+    if (startsWith (module, "libsystem_") || startsWith (module, "libc++abi.dylib"))
+        return true;
     // Unnamed frames of libc, the C++ runtime and the unwinder right after the signal are part of its machinery too.
     return f.symbol.empty()
            && (startsWith (module, "libc.so") || startsWith (module, "libpthread") || startsWith (module, "linux-vdso")

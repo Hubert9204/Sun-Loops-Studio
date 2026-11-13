@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <cstdio>
 #include <iostream>
 #include <mutex>
 #include <stdexcept>
@@ -160,6 +161,8 @@ private:
 // Runs `crash` in a child process with the handler installed; returns the signal that ended the child (0 if none).
 int crashInChild (const fs::path& dir, const std::function<void()>& crash)
 {
+    std::cout.flush(); // or the child flushes the parent's buffered output a second time when it exits
+    std::fflush (nullptr);
     const pid_t child = ::fork();
     if (child == 0)
     {
@@ -332,7 +335,15 @@ void testSemVerAndUpdates()
                    && request.find ("User-Agent: SunLoopsStudio/0.42.0") != std::string::npos
                    && request.find ("Accept: application/vnd.github+json") != std::string::npos && request.find ("Authorization") == std::string::npos,
                "GET /repos/{owner}/{repo}/releases/latest with a User-Agent and GitHub's Accept header, no token");
-        supportCheck (delivered && got.status == sls::updates::Status::UpdateAvailable && got.info.version == "0.43.0" && got.info.url == "https://x/amd64"
+        // the download this computer gets: the test release has only AppImages, so on a Mac it is the release page (0.63.0)
+#if defined(__APPLE__)
+        const std::string expectedUrl = "https://github.com/o/r/releases/tag/v0.43.0";
+#elif defined(__aarch64__)
+        const std::string expectedUrl = "https://x/arm";
+#else
+        const std::string expectedUrl = "https://x/amd64";
+#endif
+        supportCheck (delivered && got.status == sls::updates::Status::UpdateAvailable && got.info.version == "0.43.0" && got.info.url == expectedUrl
                    && callbackThread == callerThread,
                "the result (0.43.0 available) arrives through the dispatcher, on the calling (main) thread");
     }
@@ -409,7 +420,14 @@ void testCrashReports()
         supportCheck (report && report->signalName == "SIGSEGV" && report->signal == SIGSEGV && report->version == "9.8.7" && report->address == "0x10"
                    && report->thread == "main" && report->time > 1700000000,
                "crash_last_session.log: signal, faulting address 0x10, version, thread and time");
-        supportCheck (report && report->where() == "sls::crashtest::writeThroughNull", "the stack trace names the function that crashed (after the handler and libc's frames)");
+        const bool named = report && report->where() == "sls::crashtest::writeThroughNull";
+        if (! named && report) // the frames differ between systems: show them
+        {
+            std::cout << "    crash frame " << report->crashFrame << ", where " << report->where() << "\n";
+            for (const auto& f : report->frames)
+                std::cout << "    | " << f.raw << "  =>  " << f.symbol << " " << f.offset << "\n";
+        }
+        supportCheck (named, "the stack trace names the function that crashed (after the handler and libc's frames)");
         supportCheck (report && report->field ("audio_device") == "Test Card" && report->field ("sample_rate") == "48000" && report->field ("arch") != "unknown"
                    && report->field ("os") != "unknown",
                "the audio settings set beforehand and the system (OS, architecture) are in it");

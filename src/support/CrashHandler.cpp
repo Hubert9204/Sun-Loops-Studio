@@ -23,6 +23,7 @@
 #elif defined(__APPLE__)
  #include <cstdlib> // getprogname
  #include <sys/sysctl.h>
+ #include <sys/ucontext.h>
 #endif
 
 namespace sls::crash
@@ -176,11 +177,12 @@ const char* signalName (int sig) noexcept
 // Not in the anonymous namespace: their names are exported, so a trace shows (and the report skips) the handler's own frames.
 namespace detail
 {
-void onSignal (int sig, siginfo_t* info, void* /*context*/);
+void onSignal (int sig, siginfo_t* info, void* context);
 [[noreturn]] void onTerminate();
 
-void onSignal (int sig, siginfo_t* info, void* /*context*/)
+void onSignal (int sig, siginfo_t* info, void* context)
 {
+    static_cast<void> (context);
     if (handling.exchange (true))
     {
         // Another thread is already writing the report; it will end the process.
@@ -220,8 +222,32 @@ void onSignal (int sig, siginfo_t* info, void* /*context*/)
         w.text (systemText);
         w.text (contextText[contextIndex.load (std::memory_order_acquire)]);
         w.text ("frames:\n");
-        void* frames[64];
-        const int n = ::backtrace (frames, 64);
+        void* frames[65];
+        int n = ::backtrace (frames, 64);
+#if defined(__APPLE__)
+        // macOS follows the frame pointers, and a function that calls nothing (often the one that crashed) has none of its own:
+        // the trace jumps from _sigtramp to its caller. The crashing instruction is in the saved registers; it goes in after
+        // _sigtramp (frame 1) when the trace does not have it already (0.63.0).
+        if (context != nullptr && n >= 2 && (sig == SIGSEGV || sig == SIGBUS || sig == SIGILL || sig == SIGFPE))
+        {
+            const auto* uc = static_cast<const ucontext_t*> (context);
+ #if defined(__arm64__) || defined(__aarch64__)
+  #if defined(__darwin_arm_thread_state64_get_pc)
+            void* pc = reinterpret_cast<void*> (__darwin_arm_thread_state64_get_pc (uc->uc_mcontext->__ss));
+  #else
+            void* pc = reinterpret_cast<void*> (uc->uc_mcontext->__ss.__pc);
+  #endif
+ #else
+            void* pc = reinterpret_cast<void*> (uc->uc_mcontext->__ss.__rip);
+ #endif
+            if (pc != nullptr && std::find (frames, frames + n, pc) == frames + n)
+            {
+                std::memmove (frames + 3, frames + 2, static_cast<size_t> (n - 2) * sizeof (void*));
+                frames[2] = pc;
+                ++n;
+            }
+        }
+#endif
         ::backtrace_symbols_fd (frames, n, fd);
         w.text ("end\n");
         ::fsync (fd);
