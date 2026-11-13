@@ -67,6 +67,26 @@ aggiornamento e report erano in *File > Updates and crash reports*.
 
 La riga di stato mostra il dispositivo audio (frequenza, buffer, latenza dichiarata) e l'ultimo messaggio.
 
+## Su un Mac (0.63.0)
+
+Sun Loops Studio funziona su macOS 11 o successivo (Apple silicon e Intel) come su Linux, con queste differenze:
+
+- **Scorciatoie**: dove questa guida dice **Ctrl** (Ctrl+Z, Ctrl+C, Ctrl+S...), su un Mac si preme **⌘ Cmd**. I tasti funzione
+  (F1 Helios, F5 - F9 le finestre) possono richiedere il tasto **fn**, secondo le impostazioni della tastiera.
+- **Il primo avvio**: l'app non è firmata con un certificato Apple Developer, quindi la prima volta macOS rifiuta di aprirla:
+  tasto destro sull'app > **Apri** > **Apri** (oppure *Impostazioni di Sistema > Privacy e sicurezza > Apri comunque*). Dopo si
+  apre normalmente. **Record** chiede una volta il permesso per il microfono (*Impostazioni di Sistema > Privacy e sicurezza >
+  Microfono* cambia la risposta).
+- **Audio**: i dispositivi sono quelli di Core Audio (le schede integrate, USB e Thunderbolt); non ci sono ALSA né JACK.
+- **Plugin**: VST3 (`/Library/Audio/Plug-Ins/VST3`, `~/Library/Audio/Plug-Ins/VST3`), **Audio Unit** (il formato proprio del
+  Mac: tutti gli strumenti e gli effetti installati per GarageBand o Logic) e LV2; i plugin LADSPA esistono solo su Linux.
+  SunBurst e HexForge sono dentro l'app.
+- **File**: progetti, campioni, kit e preset stanno in `~/Music/Sun Loops Studio` come su Linux; il log della sessione e i
+  report dei crash in `~/Library/Application Support/SunLoopsStudio` (*Help > Show the session log folder*). Un doppio clic su
+  un file `.slp` nel Finder lo apre.
+- **Limiti attuali**: i report dei crash nominano le funzioni solo quanto lo fa la traccia dello stack di macOS. Il programma è
+  stato compilato e i suoi test automatici eseguiti su un Mac di GitHub; non è ancora stato provato a mano su un Mac vero.
+
 ## Progetti
 
 **Il brano dimostrativo (0.52.0).** Al primo avvio il programma si apre con "Sunrise Drive" (dalla 0.53.0 solo allora; gli avvii

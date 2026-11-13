@@ -8,7 +8,7 @@
 - Development files for ALSA, JACK, FreeType, Fontconfig, X11, OpenGL and **libcurl** (since 0.43.0: the update check and crash reports).
 - Optional, at run time: **ffmpeg** (`sudo dnf install ffmpeg` on Nobara / Fedora) for exporting MP3 and AAC and for
   importing AAC and the sound of video files. Everything else works without it.
-- Network access the first time you configure: CMake downloads JUCE 8.0.4 and spdlog 1.14.1 from GitHub (shallow clones, pinned
+- Network access the first time you configure: CMake downloads JUCE 8.0.4 and spdlog 1.15.3 from GitHub (shallow clones, pinned
   tags) and nlohmann/json 3.11.3 (release archive, checked by SHA-256).
 
 ### Nobara / Fedora
@@ -30,6 +30,25 @@ JACK headers come from `pipewire-jack-audio-connection-kit-devel`; do not also i
 Install the equivalents yourself. On Debian / Ubuntu the usual names are `build-essential cmake ninja-build git
 libasound2-dev libjack-jackd2-dev libfreetype-dev libfontconfig1-dev libx11-dev libxext-dev libxinerama-dev
 libxrandr-dev libxcursor-dev libxrender-dev libxcomposite-dev libgl1-mesa-dev libcurl4-openssl-dev`. This path has not been tested.
+
+### macOS (0.63.0)
+
+macOS 11 or newer, on Apple silicon or Intel. Install the Xcode command line tools (`xcode-select --install`) and, with
+[Homebrew](https://brew.sh), `brew install cmake ninja` (`brew install ffmpeg` for MP3 / AAC export, optional). libcurl and every
+other library come with macOS. Then:
+
+```bash
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+open "build/SunLoopsStudio_artefacts/Release/Sun Loops Studio.app"
+./build/SunLoopsStudioTests_artefacts/Release/SunLoopsStudioTests
+```
+
+`scripts/build_macos.sh` makes the disk image `dist/Sun-Loops-Studio-<version>-macOS.dmg`: a universal app (arm64 and x86_64;
+`ARCHS=arm64` for Apple silicon only, faster), with SunBurst and HexForge inside it (`Contents/PlugIns/VST3`), signed *ad hoc*
+(no Apple Developer certificate: see the README for opening it the first time). LADSPA plugins are a Linux format and are not
+hosted on macOS; VST3, LV2 and **Audio Units** are. The continuous integration builds and tests every push on Fedora and on
+macOS, and keeps the `.dmg` of each run as an artifact (*Actions* > the run > *Artifacts*).
 
 ## Build
 
@@ -138,6 +157,8 @@ tag `v<version>` on that commit and attaches the AppImage and `SHA256SUMS.txt` t
 CHANGELOG section (`scripts/release_notes.py 0.51.0` prints it). Pushing a tag (`git push origin v0.51.0`) does the same, after
 checking that the tag matches `CMakeLists.txt`; *Run workflow* with an existing tag publishes it again, replacing its files.
 From then on every copy of the program from 0.43.0 on finds the release through its update check and offers the AppImage.
+Since 0.63.0 a second job builds the macOS disk image on a GitHub Mac and adds it (with `SHA256SUMS-macOS.txt`) to the same
+release; the program on a Mac offers that `.dmg` as its update.
 
 ## Crash reports and the update check (0.43.0)
 

@@ -19,8 +19,15 @@ holds your sounds; every other tool lives in a floating panel that you can move,
 
 ## Download
 
-Get the latest **AppImage** from the [Releases page](https://github.com/Hubert9204/Sun-Loops-Studio/releases/latest)
-(`Sun-Loops-Studio-<version>-x86_64.AppImage`, one file with the program, its sounds and the SunBurst and HexForge synthesizers):
+From the [Releases page](https://github.com/Hubert9204/Sun-Loops-Studio/releases/latest):
+
+- **Linux**: `Sun-Loops-Studio-<version>-x86_64.AppImage` (see below);
+- **macOS** (since 0.63.0): `Sun-Loops-Studio-<version>-macOS.dmg`, one app for Apple silicon and Intel Macs, macOS 11 or newer.
+  Open the disk image and drag **Sun Loops Studio** onto **Applications**. The app is not signed with an Apple Developer
+  certificate, so the first time macOS refuses to open it: right-click (or Control-click) the app > **Open** > **Open**, or
+  *System Settings > Privacy & Security > Open Anyway*. Recording asks once for the microphone.
+
+Both contain the program, its sounds and the SunBurst and HexForge synthesizers. On Linux:
 
 ```bash
 chmod +x Sun-Loops-Studio-*-x86_64.AppImage
@@ -39,7 +46,7 @@ Sun Loops Studio is inspired by the workflow of loop-based DAWs such as FL Studi
 that uses no code, names, graphics or assets from other products, and it is not affiliated with or endorsed by
 their makers.
 
-**Status: alpha (0.62.1).** It builds, more than 1,800 automated checks pass and every feature has been exercised in a virtual
+**Status: alpha (0.63.0).** It builds, more than 1,800 automated checks pass and every feature has been exercised in a virtual
 display. The AppImage runs on Nobara; playback was first confirmed on a real Nobara machine with version 0.3. Most of what came
 later (recording, MIDI hardware, plugins, the synthesizers' sound) was tested headless and in a virtual display with a silent audio
 device, and is now being tried on real hardware. **Plugins (VST3, LV2, LADSPA)** work as instruments and as mixer effects since 0.17.0;
