@@ -20,12 +20,20 @@ std::filesystem::path file;
 std::filesystem::path stateDirectory()
 {
     std::filesystem::path base;
+#if defined(__APPLE__)
+    // macOS (0.63.0): where programs keep their own files, ~/Library/Application Support.
+    if (const char* home = std::getenv ("HOME"); home != nullptr && *home != '\0')
+        base = std::filesystem::path (home) / "Library" / "Application Support";
+    else
+        base = std::filesystem::temp_directory_path();
+#else
     if (const char* xdg = std::getenv ("XDG_STATE_HOME"); xdg != nullptr && *xdg == '/')
         base = xdg;
     else if (const char* home = std::getenv ("HOME"); home != nullptr && *home != '\0')
         base = std::filesystem::path (home) / ".local" / "state";
     else
         base = std::filesystem::temp_directory_path();
+#endif
     auto dir = base / "SunLoopsStudio";
     std::error_code ignored;
     std::filesystem::create_directories (dir, ignored);

@@ -11,9 +11,13 @@
 #include <sstream>
 
 #include <cxxabi.h>
-#include <elf.h>
 #include <pwd.h>
 #include <unistd.h>
+#if defined(__linux__)
+ #include <elf.h>
+#elif defined(__APPLE__)
+ #include <mach-o/dyld.h> // _NSGetExecutablePath
+#endif
 
 namespace sls::crash
 {
@@ -35,10 +39,46 @@ std::string baseName (const std::string& path)
 bool startsWith (std::string_view s, std::string_view prefix) noexcept { return s.substr (0, prefix.size()) == prefix; }
 
 // "module(symbol+0x1a) [0x55d0...]", "module(+0x42520) [0x7f...]", "[0x7f...]" (glibc's backtrace_symbols_fd).
+// macOS (0.63.0): "3   SunLoopsStudio   0x0000000104f2c8e4 _ZN3sls9crashtest16writeThroughNullEm + 16".
+bool parseMacFrame (std::string_view line, Frame& f)
+{
+    std::size_t i = 0;
+    while (i < line.size() && line[i] >= '0' && line[i] <= '9')
+        ++i;
+    if (i == 0 || i >= line.size() || line[i] != ' ')
+        return false;
+    const auto address = line.find (" 0x", i);
+    if (address == std::string_view::npos)
+        return false;
+    f.module = std::string (trimView (line.substr (i, address - i)));
+    while (! f.module.empty() && f.module.front() == ' ')
+        f.module.erase (0, 1);
+    auto rest = line.substr (address + 1);
+    const auto space = rest.find (' ');
+    f.address = std::string (rest.substr (0, space));
+    if (space == std::string_view::npos)
+        return ! f.module.empty();
+    rest = trimView (rest.substr (space + 1));
+    const auto plus = rest.rfind (" + ");
+    const auto name = plus == std::string_view::npos ? rest : rest.substr (0, plus);
+    if (! name.empty() && name.substr (0, 2) != "0x")
+        f.symbol = demangle (std::string (name.substr (0, 3) == "__Z" ? name.substr (1) : name));
+    if (plus != std::string_view::npos)
+    {
+        // The offset in decimal: written as glibc writes it, in hex.
+        char text[32];
+        std::snprintf (text, sizeof (text), "+0x%llx", std::strtoull (std::string (rest.substr (plus + 3)).c_str(), nullptr, 10));
+        f.offset = text;
+    }
+    return ! f.module.empty();
+}
+
 Frame parseFrame (std::string_view line)
 {
     Frame f;
     f.raw = std::string (line);
+    if (parseMacFrame (line, f))
+        return f;
     auto rest = line;
     if (! rest.empty() && rest.back() == ']')
         if (const auto open = rest.rfind ('['); open != std::string_view::npos)
@@ -65,7 +105,9 @@ Frame parseFrame (std::string_view line)
 
 bool isSignalMachinery (const Frame& f)
 {
-    static const char* const names[] = { "__restore_rt", "raise", "gsignal", "abort", "pthread_kill", "__pthread_kill_implementation",
+    static const char* const names[] = { "_sigtramp", "__pthread_kill", "__abort", "abort_message", "demangling_terminate_handler()",
+                                         "std::__terminate(void (*)())", "__cxa_throw", "_objc_terminate()", "std::terminate()",
+                                         "__restore_rt", "raise", "gsignal", "abort", "pthread_kill", "__pthread_kill_implementation",
                                          "__pthread_kill_internal", "killpg", "__GI_raise", "__GI_abort", "std::terminate()",
                                          "__gnu_cxx::__verbose_terminate_handler()", "__cxa_throw", "__cxa_rethrow", "std::unexpected()",
                                          "_Unwind_Resume", "_Unwind_RaiseException", "__assert_fail", "__assert_fail_base" };
@@ -78,7 +120,8 @@ bool isSignalMachinery (const Frame& f)
     // Unnamed frames of libc, the C++ runtime and the unwinder right after the signal are part of its machinery too.
     return f.symbol.empty()
            && (startsWith (module, "libc.so") || startsWith (module, "libpthread") || startsWith (module, "linux-vdso")
-               || startsWith (module, "libstdc++") || startsWith (module, "libgcc_s"));
+               || startsWith (module, "libstdc++") || startsWith (module, "libgcc_s") || startsWith (module, "libsystem_")
+               || startsWith (module, "libc++abi"));
 }
 
 void findCrashFrame (Report& r)
@@ -156,6 +199,7 @@ struct ElfFunction
 
 // The function symbols of a 64-bit little-endian ELF file (x86_64, aarch64): .symtab when the file has one, else .dynsym.
 // `fixedAddress` is set for a non-PIE executable (ET_EXEC), whose trace shows absolute addresses and no offsets.
+#if defined(__linux__)
 std::vector<ElfFunction> readElfFunctions (const std::filesystem::path& file, bool& fixedAddress)
 {
     std::vector<ElfFunction> functions;
@@ -205,6 +249,14 @@ std::vector<ElfFunction> readElfFunctions (const std::filesystem::path& file, bo
     std::sort (functions.begin(), functions.end(), [] (const ElfFunction& a, const ElfFunction& b) { return a.start < b.start; });
     return functions;
 }
+#else
+// Not an ELF system (0.63.0): the stack traces there carry their names already.
+std::vector<ElfFunction> readElfFunctions (const std::filesystem::path&, bool& fixedAddress)
+{
+    fixedAddress = false;
+    return {};
+}
+#endif
 
 const ElfFunction* functionAt (const std::vector<ElfFunction>& functions, std::uint64_t address)
 {
@@ -215,6 +267,20 @@ const ElfFunction* functionAt (const std::vector<ElfFunction>& functions, std::u
     return address < it->start + it->size ? &*it : nullptr;
 }
 } // namespace
+
+std::filesystem::path executablePath()
+{
+    std::error_code error;
+#if defined(__APPLE__)
+    char buffer[4096] {};
+    std::uint32_t size = sizeof (buffer);
+    if (::_NSGetExecutablePath (buffer, &size) == 0)
+        return std::filesystem::weakly_canonical (buffer, error);
+    return {};
+#else
+    return std::filesystem::read_symlink ("/proc/self/exe", error);
+#endif
+}
 
 int symbolize (Report& report, const std::filesystem::path& executable)
 {

@@ -57,6 +57,15 @@ public:
         }
     }
 
+    // macOS (0.63.0): a project double-clicked in the Finder, or dropped on the Dock icon, arrives here (also at start-up).
+    void anotherInstanceStarted (const juce::String& commandLine) override
+    {
+        const juce::File file (commandLine.unquoted());
+        if (mainWindow != nullptr && file.existsAsFile() && sls::hasProjectExtension (file))
+            if (auto* main = mainWindow->getMainComponent())
+                main->openProjectFile (file);
+    }
+
     void shutdown() override
     {
         mainWindow = nullptr;

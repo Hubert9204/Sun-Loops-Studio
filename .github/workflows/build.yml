@@ -1,4 +1,5 @@
-# Builds Sun Loops Studio on Fedora (the base of Nobara) and runs the headless tests on every push and pull request.
+# Builds Sun Loops Studio on Fedora (the base of Nobara) and on macOS (0.63.0) and runs the headless tests on every push and pull
+# request. The macOS job also packs the .dmg, kept as an artifact of the run.
 name: Build and test
 
 on:
@@ -24,3 +25,25 @@ jobs:
         run: cmake --build build
       - name: Run the tests
         run: ./build/SunLoopsStudioTests_artefacts/Release/SunLoopsStudioTests
+
+  macos:
+    runs-on: macos-14 # Apple silicon
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the build tools
+        run: brew install ninja
+      - name: Configure (Apple silicon only: the universal build is made for releases)
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64
+      - name: Build (warnings are reported in the log)
+        run: cmake --build build
+      - name: Run the tests
+        run: ./build/SunLoopsStudioTests_artefacts/Release/SunLoopsStudioTests
+      - name: Pack the app (universal .dmg)
+        if: always()
+        run: BUILD_DIR="$PWD/build-dmg" scripts/build_macos.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sun-loops-studio-macos
+          path: dist/*.dmg
+          if-no-files-found: ignore

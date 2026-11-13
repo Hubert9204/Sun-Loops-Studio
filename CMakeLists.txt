@@ -1,4 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
+# macOS (0.63.0): the oldest system the program runs on. Must be set before project(). A universal build (Apple silicon and
+# Intel) is configured with -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" (scripts/build_macos.sh does).
+set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Oldest macOS the program runs on")
 project(SunLoopsStudio VERSION 0.62.1 LANGUAGES C CXX ASM)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -115,6 +118,7 @@ set(SLS_CORE_SOURCES
     src/support/Logging.cpp
     src/support/CrashHandler.cpp
     src/support/CrashReport.cpp
+    src/support/ProcessMemory.cpp
     src/support/Http.cpp
     src/support/GitHub.cpp
     src/support/UpdateChecker.cpp
@@ -136,7 +140,8 @@ set(SLS_COMMON_DEFINITIONS
     JUCE_USE_MP3AUDIOFORMAT=1
     JUCE_PLUGINHOST_VST3=1
     JUCE_PLUGINHOST_LV2=1
-    JUCE_PLUGINHOST_LADSPA=${SLS_LADSPA})
+    JUCE_PLUGINHOST_LADSPA=${SLS_LADSPA}
+    $<$<PLATFORM_ID:Darwin>:JUCE_PLUGINHOST_AU=1>)
 
 # The user guides, built into the program for Helios (0.40.0), the offline help.
 juce_add_binary_data(SunLoopsHelp HEADER_NAME HelpData.h NAMESPACE HelpData
@@ -149,7 +154,11 @@ juce_add_gui_app(SunLoopsStudio
     COMPANY_NAME "Sun Loops"
     BUNDLE_ID "com.sunloops.sunloopsstudio"
     ICON_BIG   "${CMAKE_CURRENT_SOURCE_DIR}/resources/icons/app_icon_256.png"
-    ICON_SMALL "${CMAKE_CURRENT_SOURCE_DIR}/resources/icons/app_icon_16.png")
+    ICON_SMALL "${CMAKE_CURRENT_SOURCE_DIR}/resources/icons/app_icon_16.png"
+    # macOS (0.63.0): recording asks for the microphone; the text is what the system's question shows.
+    MICROPHONE_PERMISSION_ENABLED TRUE
+    MICROPHONE_PERMISSION_TEXT "Sun Loops Studio records audio from your microphone or audio interface when you press Record."
+    DOCUMENT_EXTENSIONS slp)
 
 target_sources(SunLoopsStudio PRIVATE
     src/main.cpp
@@ -221,7 +230,10 @@ target_compile_definitions(SunLoopsStudio PRIVATE
     SLS_GITHUB_REPO="${SLS_GITHUB_REPO}"
     SLS_CRASH_REPORT_TOKEN="${SLS_CRASH_REPORT_TOKEN}")
 # Function names in crash stack traces (they survive stripping): the program's own and JUCE's symbols are exported.
-target_link_options(SunLoopsStudio PRIVATE "LINKER:--export-dynamic-symbol=_ZN3sls*" "LINKER:--export-dynamic-symbol=_ZN4juce*")
+# (GNU ld only; macOS keeps the names of an executable's functions by itself.)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_link_options(SunLoopsStudio PRIVATE "LINKER:--export-dynamic-symbol=_ZN3sls*" "LINKER:--export-dynamic-symbol=_ZN4juce*")
+endif()
 
 target_link_libraries(SunLoopsStudio PRIVATE
     spdlog::spdlog
@@ -237,6 +249,7 @@ target_link_libraries(SunLoopsStudio PRIVATE
     juce::juce_recommended_warning_flags)
 
 # --- Installation (cmake --install build --prefix ~/.local) -------------------
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux") # (macOS: the .app made by scripts/build_macos.sh)
 include(GNUInstallDirs)
 # The product name contains spaces, so the installed command is called sun-loops-studio.
 install(PROGRAMS "$<TARGET_FILE:SunLoopsStudio>"
@@ -252,6 +265,7 @@ install(FILES resources/icons/app_icon_256.png
 install(FILES resources/icons/app_icon_16.png
         DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/16x16/apps
         RENAME sun-loops-studio.png)
+endif()
 
 # --- SunBurst: the synthesizer plugin (0.48.0), VST3 and Standalone --------------------------------------------
 set(SUNBURST_SOURCES
@@ -345,7 +359,9 @@ target_sources(SunLoopsStudioTests PRIVATE
 target_include_directories(SunLoopsStudioTests PRIVATE src)
 target_include_directories(SunLoopsStudioTests SYSTEM PRIVATE third_party/signalsmith third_party/tinysoundfont)
 target_compile_definitions(SunLoopsStudioTests PRIVATE ${SLS_COMMON_DEFINITIONS} SLS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
-target_link_options(SunLoopsStudioTests PRIVATE "LINKER:--export-dynamic-symbol=_ZN3sls*")
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_link_options(SunLoopsStudioTests PRIVATE "LINKER:--export-dynamic-symbol=_ZN3sls*")
+endif()
 
 target_link_libraries(SunLoopsStudioTests PRIVATE
     spdlog::spdlog
