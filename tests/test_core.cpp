@@ -5674,7 +5674,7 @@ void testHeliosManual062()
     check (top ("route a track to another track bus", "Routing between tracks", "en"), "Helios: routing between tracks");
     check (top ("instradamento tra tracce bus", "Instradamento tra tracce", "it"), "Helios: instradamento tra tracce");
     check (top ("pdc plugin latency", "delay compensation", "en"), "Helios: FL Studio's PDC means delay compensation");
-    check (top ("vocodex", "Effects", "en") || top ("vocodex", "Effect", "en"), "Helios: Vocodex finds the effects");
+    check (top ("vocodex", "Effects added in 0.62.0", "en") && top ("vocodex", "Effetti aggiunti", "it"), "Helios: Vocodex finds the vocoder");
     check (top ("convolution reverb impulse response", "Effect", "en") || top ("convolution reverb impulse response", "Mixer", "en"), "Helios: the convolution reverb");
     check (top ("layer channel", "Layer channel", "en") && top ("canale layer", "canale Layer", "it"), "Helios: the Layer channel in both languages");
     check (top ("marker actions loop skip pause", "arker", "en") && top ("azioni dei marcatori", "arcatori", "it"), "Helios: marker actions");

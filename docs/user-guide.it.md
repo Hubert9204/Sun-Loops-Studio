@@ -1389,16 +1389,23 @@ quasi tutti gli effetti, **Presets...** con impostazioni pronte.
 | Flanger (0.61.0) | Come Fruity Flanger: Delay (0,1-20 ms), Depth, Rate, Phase (lo sfasamento dell'LFO del canale destro, 0-360 gradi), Feedback (negativo lo inverte), Shape (seno, triangolo), Mix | Classic jet, Slow sweep, Metallic |
 | Vibrato (0.61.0) | Come Fruity Vibrator: il pitch sale e scende di Depth (0-100 cent) a velocità Rate; Shape (seno, triangolo), Stereo (sfasa l'LFO del canale destro) | |
 | Panomatic (0.61.0) | Come Fruity Panomatic / Fruity Balance: Volume (da -48 a +12 dB), Pan, e un LFO sul pan (auto-pan) o sul volume (tremolo): bersaglio, velocità (libera in Hz) o sync (1/8, 1/4, 1/2, 1 battuta, 2 battute del brano), profondità, forma (seno, triangolo, quadra, dente di sega) | Auto-pan 1 bar, Tremolo 1/8, Helicopter |
-| WaveShaper (0.62.0) | Come Fruity WaveShaper: Pre gain, Curve (Soft clip, Hard clip, Fold, Sine, Rectify - un'ottava sopra -, Tube), Amount (0 = una linea retta), Bias (rende la curva asimmetrica), Post gain, Mix. Sovracampionato 4x. | Warm tube, Hard clip, Wave folder, Octave up |
-| Convolver (0.62.0) | Un riverbero a convoluzione, come Fruity Convolver: Space (Room, Hall, Plate, Spring, Cathedral, oppure **File**: *Load IR...* prende un qualsiasi file audio come risposta all'impulso), Length (0,1-4 s), Brightness, Pre-delay, Mix, Output. Nessuna latenza. Il percorso del file si salva col progetto. | Small room, Concert hall, Vocal plate, Guitar spring, Cathedral |
-| Vocoder (0.62.0) | Come Fruity Vocoder / Vocodex: **Modulator** (la traccia del mixer con la voce; *None*: l'ingresso sinistro è la voce e il destro la portante), Bands (8, 12, 16), Attack, Release, Width, Formant (sposta le bande della portante), Output, Mix. Mettilo sulla traccia di un suono ricco e tenuto (un accordo di dente di sega) e scegli la traccia della voce. | Robot, Old vocoder, Whisper |
-| Peak Controller (0.62.0) | Come Fruity Peak Controller: valore = Base + Volume x il livello di picco della traccia + un LFO (LFO amount, LFO rate), che ricade secondo Decay. Il valore imposta il parametro **Target param** dell'effetto nello slot **Target slot** della traccia **Target track** (*This track* o un'altra) tra il suo minimo e il suo massimo; la riga sotto il nome dell'effetto dice cosa sta pilotando. Funziona anche sui parametri dei plugin. **Mute**: il suono della traccia serve solo a pilotare il controller (una cassa fantasma che abbassa un basso). | Follow the level, Duck, Slow LFO, Level and wobble |
 
 I progetti fatti prima della 0.21.0 suonano uguali: i loro riverberi sono Hall senza pre-delay e i delay sono Stereo. I file con i
 nuovi effetti non si possono leggere con le versioni precedenti (lì lo slot torna vuoto).
 
 Sono effetti propri di Sun Loops Studio. Il menu dello slot ha anche **Plugin effects** (i plugin effetto trovati dall'ultima
 scansione, vedi *Plugin*) e **Open plugin window** per uno slot con un plugin; i parametri di un plugin sono nella sua finestra, non nel pannello effetti.
+
+### Effetti aggiunti nella 0.62.0: WaveShaper, Convolver, Vocoder, Peak Controller
+
+Nello stesso menu dello slot degli altri (*Drive*, *Space and time*, *Pitch and voice*, *Controllers*):
+
+| Effetto | Parametri | Preset |
+| --- | --- | --- |
+| WaveShaper (0.62.0) | Come Fruity WaveShaper: Pre gain, Curve (Soft clip, Hard clip, Fold, Sine, Rectify - un'ottava sopra -, Tube), Amount (0 = una linea retta), Bias (rende la curva asimmetrica), Post gain, Mix. Sovracampionato 4x. | Warm tube, Hard clip, Wave folder, Octave up |
+| Convolver (0.62.0) | Un riverbero a convoluzione, come Fruity Convolver: Space (Room, Hall, Plate, Spring, Cathedral, oppure **File**: *Load IR...* prende un qualsiasi file audio come risposta all'impulso), Length (0,1-4 s), Brightness, Pre-delay, Mix, Output. Nessuna latenza. Il percorso del file si salva col progetto. | Small room, Concert hall, Vocal plate, Guitar spring, Cathedral |
+| Vocoder (0.62.0) | Come Fruity Vocoder / Vocodex: **Modulator** (la traccia del mixer con la voce; *None*: l'ingresso sinistro è la voce e il destro la portante), Bands (8, 12, 16), Attack, Release, Width, Formant (sposta le bande della portante), Output, Mix. Mettilo sulla traccia di un suono ricco e tenuto (un accordo di dente di sega) e scegli la traccia della voce. | Robot, Old vocoder, Whisper |
+| Peak Controller (0.62.0) | Come Fruity Peak Controller: valore = Base + Volume x il livello di picco della traccia + un LFO (LFO amount, LFO rate), che ricade secondo Decay. Il valore imposta il parametro **Target param** dell'effetto nello slot **Target slot** della traccia **Target track** (*This track* o un'altra) tra il suo minimo e il suo massimo; la riga sotto il nome dell'effetto dice cosa sta pilotando. Funziona anche sui parametri dei plugin. **Mute**: il suono della traccia serve solo a pilotare il controller (una cassa fantasma che abbassa un basso). | Follow the level, Duck, Slow LFO, Level and wobble |
 
 ### Effetti sul master
 

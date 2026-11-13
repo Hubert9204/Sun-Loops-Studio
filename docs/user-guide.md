@@ -1327,20 +1327,22 @@ ready-made settings.
 | Vibrato (0.61.0) | As Fruity Vibrator: the pitch moves up and down by Depth (0-100 cents) at Rate; Shape (sine, triangle), Stereo (offsets the right channel's LFO) | |
 | Panomatic (0.61.0) | As Fruity Panomatic / Fruity Balance: Volume (-48 to +12 dB), Pan, and an LFO on the pan (auto-pan) or the volume (tremolo): LFO target, rate (free, in Hz) or sync (1/8, 1/4, 1/2, 1 bar, 2 bars of the song), depth, shape (sine, triangle, square, saw) | Auto-pan 1 bar, Tremolo 1/8, Helicopter |
 
-**New in 0.62.0:**
-
-| Effect | Parameters | Presets |
-| --- | --- | --- |
-| WaveShaper | As Fruity WaveShaper: Pre gain, Curve (Soft clip, Hard clip, Fold, Sine, Rectify - an octave up -, Tube), Amount (0 = a straight line), Bias (makes the curve asymmetric), Post gain, Mix. 4x oversampled. | Warm tube, Hard clip, Wave folder, Octave up |
-| Convolver | A convolution reverb, as Fruity Convolver: Space (Room, Hall, Plate, Spring, Cathedral, or **File**: *Load IR...* takes any audio file as the impulse response), Length (0.1-4 s), Brightness, Pre-delay, Mix, Output. No latency. The file's path is saved with the project. | Small room, Concert hall, Vocal plate, Guitar spring, Cathedral |
-| Vocoder | As Fruity Vocoder: **Modulator** (the mixer track with the voice; *None*: the left input is the voice and the right one the carrier), Bands (8, 12, 16), Attack, Release, Width, Formant (moves the carrier's bands), Output, Mix. Put it on the track of a rich sustained sound (a saw chord) and choose the voice's track. | Robot, Old vocoder, Whisper |
-| Peak Controller | As Fruity Peak Controller: value = Base + Volume x the track's peak level + an LFO (LFO amount, LFO rate), falling back by Decay. The value sets parameter **Target param** of the effect in **Target slot** of **Target track** (*This track* or another) between its minimum and maximum; the line under the effect's name says what it drives. Works on plugins' parameters too. **Mute**: the track's sound only drives the controller (a ghost kick that ducks a bass). | Follow the level, Duck, Slow LFO, Level and wobble |
-
 Projects made before 0.21.0 sound the same: their reverbs are Halls without pre-delay and their delays are Stereo.
 Files with the new effects cannot be read by older versions (the slot comes back empty there).
 
 These are Sun Loops Studio's own effects. The slot menu also has **Plugin effects** (the effect plugins found by the last
 scan, see *Plugins*) and **Open plugin window** for a plugin slot; a plugin's parameters are in its own window, not in the effects panel.
+
+### Effects added in 0.62.0: WaveShaper, Convolver, Vocoder, Peak Controller
+
+In the same slot menu as the others (*Drive*, *Space and time*, *Pitch and voice*, *Controllers*):
+
+| Effect | Parameters | Presets |
+| --- | --- | --- |
+| WaveShaper | As Fruity WaveShaper: Pre gain, Curve (Soft clip, Hard clip, Fold, Sine, Rectify - an octave up -, Tube), Amount (0 = a straight line), Bias (makes the curve asymmetric), Post gain, Mix. 4x oversampled. | Warm tube, Hard clip, Wave folder, Octave up |
+| Convolver | A convolution reverb, as Fruity Convolver: Space (Room, Hall, Plate, Spring, Cathedral, or **File**: *Load IR...* takes any audio file as the impulse response), Length (0.1-4 s), Brightness, Pre-delay, Mix, Output. No latency. The file's path is saved with the project. | Small room, Concert hall, Vocal plate, Guitar spring, Cathedral |
+| Vocoder | As Fruity Vocoder / Vocodex: **Modulator** (the mixer track with the voice; *None*: the left input is the voice and the right one the carrier), Bands (8, 12, 16), Attack, Release, Width, Formant (moves the carrier's bands), Output, Mix. Put it on the track of a rich sustained sound (a saw chord) and choose the voice's track. | Robot, Old vocoder, Whisper |
+| Peak Controller | As Fruity Peak Controller: value = Base + Volume x the track's peak level + an LFO (LFO amount, LFO rate), falling back by Decay. The value sets parameter **Target param** of the effect in **Target slot** of **Target track** (*This track* or another) between its minimum and maximum; the line under the effect's name says what it drives. Works on plugins' parameters too. **Mute**: the track's sound only drives the controller (a ghost kick that ducks a bass). | Follow the level, Duck, Slow LFO, Level and wobble |
 
 ### Master effects
 
