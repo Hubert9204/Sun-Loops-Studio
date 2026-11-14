@@ -27,7 +27,8 @@ From the [Releases page](https://github.com/Hubert9204/Sun-Loops-Studio/releases
   certificate, so the first time macOS refuses to open it: right-click (or Control-click) the app > **Open** > **Open**, or
   *System Settings > Privacy & Security > Open Anyway*. Recording asks once for the microphone.
 
-Both contain the program, its sounds and the SunBurst and HexForge synthesizers. On Linux:
+Both contain the program, its sounds and its four instruments: the SunBurst and HexForge synthesizers, the SunRiff guitar and the
+SunSymphony orchestral sampler (its orchestra is downloaded from inside it). On Linux:
 
 ```bash
 chmod +x Sun-Loops-Studio-*-x86_64.AppImage
@@ -50,7 +51,7 @@ their makers.
 display. The AppImage runs on Nobara; playback was first confirmed on a real Nobara machine with version 0.3. Most of what came
 later (recording, MIDI hardware, plugins, the synthesizers' sound) was tested headless and in a virtual display with a silent audio
 device, and is now being tried on real hardware. **Plugins (VST3, LV2, LADSPA)** work as instruments and as mixer effects since 0.17.0;
-they were tried with small test plugins, the LADSPA examples and the program's own SunBurst and HexForge, not yet with commercial
+they were tried with small test plugins, the LADSPA examples and the program's own SunBurst, HexForge, SunSymphony and SunRiff, not yet with commercial
 plugins. See [docs/roadmap.md](docs/roadmap.md) for exactly what is and is not verified and what is missing.
 
 ## Features
@@ -211,11 +212,11 @@ Press **Space** to play, **F5 / F6 / F7 / F9** to show panels and **F8** for the
 ./build/SunLoopsStudioTests_artefacts/Release/SunLoopsStudioTests
 ```
 
-Headless (no audio device or display needed), 1724 checks at 0.58.0. They cover, among other things, synth pitch and
+Headless (no audio device or display needed), 1989 checks at 0.68.0. They cover, among other things, synth pitch and
 sample-exact timing, every instrument and effect, that `Player::render` never allocates (effects included), a concurrent stress test of
 the UI-to-audio hand-over, the project file (round trip, damaged and hostile files, missing samples, atomic writing), FL Studio and MIDI
 import, export to every format, recording, automation, tempo changes, the plugin host, SunBurst and HexForge (presets, voices,
-filters, effects, saved state) and the update check. GitHub Actions builds the program on Fedora and runs them on every push.
+filters, effects, saved state), SunSymphony (engine, library catalog and downloads), SunRiff (tuning, playing modes, amp and effects) and the update check. GitHub Actions builds the program on Fedora and runs them on every push.
 
 ## License
 

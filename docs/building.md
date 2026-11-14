@@ -46,7 +46,7 @@ open "build/SunLoopsStudio_artefacts/Release/Sun Loops Studio.app"
 ```
 
 `scripts/build_macos.sh` makes the disk image `dist/Sun-Loops-Studio-<version>-macOS.dmg`: a universal app (arm64 and x86_64;
-`ARCHS=arm64` for Apple silicon only, faster), with SunBurst and HexForge inside it (`Contents/PlugIns/VST3`), signed *ad hoc*
+`ARCHS=arm64` for Apple silicon only, faster), with SunBurst, HexForge, SunSymphony and SunRiff inside it (`Contents/PlugIns/VST3`), signed *ad hoc*
 (no Apple Developer certificate: see the README for opening it the first time). LADSPA plugins are a Linux format and are not
 hosted on macOS; VST3, LV2 and **Audio Units** are. The continuous integration builds and tests every push on Fedora and on
 macOS, and keeps the `.dmg` of each run as an artifact (*Actions* > the run > *Artifacts*).
@@ -106,6 +106,11 @@ What is inside and what is not: the program and the few libraries that are not e
 Like every AppImage it relies on the system for glibc, ALSA, FreeType, Fontconfig, X11 and OpenGL, which any desktop
 Linux, Nobara included, provides. Because glibc is not bundled, **build on the oldest system you want to support**; an
 AppImage built on Ubuntu 24.04 (glibc 2.39) runs on newer systems, not on older ones.
+
+The AppImage holds the four bundled plugins too (`usr/lib/vst3`: SunBurst, HexForge, SunSymphony, SunRiff), found by the
+program wherever the image is mounted. appimagetool checks the `.desktop` file with `desktop-file-validate` when it is installed;
+on a build machine without it the packing can stop, so install it first (`sudo dnf install desktop-file-utils`, or
+`sudo apt install desktop-file-utils`).
 
 AppImages normally mount themselves through FUSE 2. Fedora and Nobara may not have it installed: either
 `sudo dnf install fuse-libs`, or run with `--appimage-extract-and-run` (slower start, no FUSE needed).

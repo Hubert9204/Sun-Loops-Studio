@@ -80,7 +80,7 @@ Sun Loops Studio funziona su macOS 10.15 Catalina o successivo, sui Mac Apple si
 - **Audio**: i dispositivi sono quelli di Core Audio (le schede integrate, USB e Thunderbolt); non ci sono ALSA né JACK.
 - **Plugin**: VST3 (`/Library/Audio/Plug-Ins/VST3`, `~/Library/Audio/Plug-Ins/VST3`), **Audio Unit** (il formato proprio del
   Mac: tutti gli strumenti e gli effetti installati per GarageBand o Logic) e LV2; i plugin LADSPA esistono solo su Linux.
-  SunBurst e HexForge sono dentro l'app.
+  SunBurst, HexForge, SunSymphony e SunRiff sono dentro l'app.
 - **File**: progetti, campioni, kit e preset stanno in `~/Music/Sun Loops Studio` come su Linux; il log della sessione e i
   report dei crash in `~/Library/Application Support/SunLoopsStudio` (*Help > Show the session log folder*). Un doppio clic su
   un file `.slp` nel Finder lo apre.

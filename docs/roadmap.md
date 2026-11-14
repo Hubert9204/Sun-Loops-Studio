@@ -1,6 +1,6 @@
 # Status and roadmap
 
-Version 0.59.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
+Version 0.68.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
 what is missing. If something here disagrees with the program, the program is right: please fix the page.
 
 ## What has been verified, and how
@@ -82,6 +82,12 @@ what is missing. If something here disagrees with the program, the program is ri
 | In the app (0.58.0): a note clicked into the spare quarter of a 4-quarter pattern, the pattern then 5 quarters (20 steps) in the rack and a new spare quarter after it; the wheel scrolling pitch, Ctrl+wheel zooming, Shift+wheel scrolling time to the end; the demo song in Song mode with the Beat pattern open: the playhead line in the Piano Roll while a Beat clip plays, none while other patterns play | Manual, in a virtual display | Worked |
 | In the app (0.57.0), on the demo song: a selection rectangle from an empty place selecting 6 pattern clips (no clip placed), one of them dragged moving all six 4 bars and one track, Ctrl+Z, the six deleted with Delete, Ctrl+Z; a right-button stroke deleting two pattern clips, a third and two automation clips, all of them back with one Ctrl+Z; a right click without moving opening the clip's menu; a click on empty space placing a clip; Ctrl+A (46 clips); three selected clips duplicated with Ctrl+D right after them | Manual, in a virtual display | Worked |
 | Each pattern's own length (0.56.0): one pattern made longer leaving the others and their clips alone, a new pattern at 4 quarters, Pattern and Song mode playing each pattern over its own length, a split counting in its clip's pattern, the timeline following the longest pattern, the time signature lengthening only the short patterns, the project file per pattern and older files with one length | Automated headless tests (1711 checks in total) | All pass |
+| SunRiff (0.68.0): every string type in tune within 5 cents (E2-E5), Damping, Hold and the sustain pedal, the coarse and fine bends of both Glissando settings, Powerchords / Autochords / Strumming (down then up) / SoloFixed / SoloDynamic, every amp, cabinet and effect with full drive and feedback finite and bounded, the 34 presets, no allocation; loaded and played inside Sun Loops Studio | Automated headless tests | All pass |
+| In the app (0.68.0): SunRiff Standalone's window (the guitar with its pickup, radio buttons, panels, the preset menu by category); the AppImage listing SunRiff among the bundled plugins | Manual, in a virtual display | Worked; eight preset demos rendered and measured (levels, spectra), not judged by ear |
+| SunSymphony library (0.67.0): the built-in catalog (29 instruments, every file with size, SHA-256 and a fixed GitHub address, every SFZ naming only files it downloads), a damaged file refused and the instrument left uninstalled, a verified download installing samples, SFZ and credits, Remove; round robins, unpitched and one-shot zones in the engine | Automated headless tests (the downloads against a local server) | All pass |
+| In the app (0.67.0): the Library page opening by itself, *Essentials* ticked, the 15 instruments (1.7 GB) downloaded from GitHub in about 100 seconds, the parts' *Orchestra* menu, part 1 given the violins; violins, cellos, double bass, flute, oboe, clarinet, bassoon, trumpet, horn, trombone, tuba and harp rendered and measured in tune at the right octave | Manual, in a virtual display, and a render of the downloaded files | Worked (not heard) |
+| SunSymphony engine (0.66.0): every key within half a cent (Hermite, 44.1 kHz samples at 48 kHz), SFZ zones and velocity layers, loops and one-shots, 200 notes as 128 voices, 16 parts on the MIDI channels, CC7 / CC10 / CC64, no allocation, replaced instruments freed off the audio thread; loaded and played inside Sun Loops Studio | Automated headless tests | All pass |
+| Demo projects (0.65.0): the Demo Projects and My Projects folders, the three demos opening as new projects, the project icon; White Line and Ryo rendered at -12.6 and -14.4 LUFS | Automated tests, and manual in a virtual display | Worked |
 | In the app (0.56.0): Pattern 1 made 8 quarters with + (32 steps), *New empty pattern* at 4 quarters (16 steps), back to Pattern 1 still 8 quarters with its step; clips placed on the playlist 2 bars and 1 bar long; Pattern 2 made 6 quarters, its clip following and Pattern 1's staying 2 bars | Manual, in a virtual display | Worked |
 | In the app (0.55.0): the Help button on the toolbar's second row (also at a 1025-pixel-wide window), its menu, the About window with its GitHub and Discord buttons | Manual, in a virtual display (the browser links were not followed: no browser there) | Worked |
 | In the app (0.54.0): the velocity lane's top edge dragged from 70 to 246 px (the notes area shrinking), a double click back to 70, the height remembered after a restart | Manual, in a virtual display | Worked |
@@ -132,6 +138,13 @@ what is missing. If something here disagrees with the program, the program is ri
 | A use-after-free when clicking an item that rebuilds the browser tree (crash on *Scan for VST3 plugins...*) | Found in that manual session | Fixed (item actions are deferred); the same click was repeated afterwards |
 
 ## What has not been verified
+
+- **SunRiff by ear (0.68.0).** Its strings, amp and presets were measured, not listened to; the VST3 in other programs, CPU use
+  with twelve strings and feedback on a real machine, and its playing modes with a real MIDI keyboard were not tried.
+
+- **SunSymphony with real hosts and by ear (0.66.0 - 0.67.0).** The downloaded instruments were measured, not listened to;
+  sustains have no loops yet (a note lasts as long as its sample), percussion is one stroke per key, and the VST3 in other
+  programs was not tried.
 
 - **HexForge by ear (0.50.0).** Its presets were measured, not listened to; CPU use with 8 unison voices of six operators at
   twice the sample rate on a real machine, and the VST3 in other programs, were not tried.
@@ -327,6 +340,8 @@ what is missing. If something here disagrees with the program, the program is ri
 | Sampler | 0.16.0: envelope (ADSR), forward loop, low / high / band-pass filter, multi-sample zones and SoundFont 2 presets. Since 0.37.0 the Slicer cuts a loop into slices with their own pitch, level, pan and direction. Missing: a filter envelope, LFOs, round-robin, crossfaded loops, ping-pong loops, editing zones by hand, GIG / GUS files (SFZ since 0.41.0, without its filters, envelopes and round robin), streaming long samples from disk, more than four zones per note. Since 0.22.0 channel presets keep the sampler settings and a built-in instrument (not a SoundFont or slices). **0.62.0:** an LFO (pitch, cutoff, pan or volume), a pitch envelope, envelope to cutoff, ping-pong and crossfade loops; still one LFO, no envelope of its own per target and no modulation of the resonance. |
 | Export options | Since 0.45.0: sample rate 44.1 / 48 / 88.2 / 96 kHz, 16-bit (dithered), 24-bit or 32-bit float, MP3 / AAC / Ogg at 96 - 320 kbit/s, title and artist (not in FLAC or AIFF), stems per mixer track. Missing: other tags (album, cover), loudness normalisation on export, a region export. |
 | Packaging | An AppImage can be built (`scripts/build_appimage.sh`, not yet tested on a real Nobara machine); no Flatpak or RPM; install can also be `cmake --install`. |
+| SunSymphony | 0.66.0 - 0.67.0: the engine (16 parts, 128 voices, zones, layers, round robins, loops) and 29 downloadable CC0 instruments. Missing (the plan's later milestones): loops on the sustains, the CC1 crossfade between dynamics, legato, keyswitches, filters and the modulation matrix, effects, disk streaming, the zone and sample editors, solo viola / cello and the instruments no free source has (cor anglais, bass clarinet, contrabassoon, bass trombone, celesta, crotales). |
+| SunRiff | 0.68.0: FL Slayer's controls. Its chord modes answer 12 ms after the keys (to know which keys are played together); no strum patterns or per-string articulation beyond what FL Slayer had. |
 
 ## Proposed order of work
 

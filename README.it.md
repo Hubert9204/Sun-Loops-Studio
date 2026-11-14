@@ -19,7 +19,7 @@ strumento sta in un pannello mobile che puoi spostare, ridimensionare, sovrappor
 ## Download
 
 Scarica l'ultima **AppImage** dalla [pagina delle release](https://github.com/Hubert9204/Sun-Loops-Studio/releases/latest)
-(`Sun-Loops-Studio-<versione>-x86_64.AppImage`, un solo file con il programma, i suoi suoni e i sintetizzatori SunBurst e HexForge):
+(`Sun-Loops-Studio-<versione>-x86_64.AppImage`, un solo file con il programma, i suoi suoni e i suoi quattro strumenti: i sintetizzatori SunBurst e HexForge, la chitarra SunRiff e il campionatore orchestrale SunSymphony, la cui orchestra si scarica dall'interno):
 
 ```bash
 chmod +x Sun-Loops-Studio-*-x86_64.AppImage
@@ -42,7 +42,7 @@ virtuale. L'AppImage gira su Nobara; la riproduzione è stata confermata la prim
 parte di quello che è arrivato dopo (registrazione, hardware MIDI, plugin, il suono dei sintetizzatori) è stato provato con test
 automatici e in un display virtuale con un dispositivo audio muto, e ora lo si sta provando su hardware vero. **I plugin (VST3, LV2,
 LADSPA)** funzionano come strumenti e come effetti del mixer dalla 0.17.0; sono stati provati con piccoli plugin di prova, con gli esempi
-LADSPA e con SunBurst e HexForge del programma, non ancora con plugin commerciali. Vedi [docs/roadmap.md](docs/roadmap.md) per sapere
+LADSPA e con SunBurst, HexForge, SunSymphony e SunRiff del programma, non ancora con plugin commerciali. Vedi [docs/roadmap.md](docs/roadmap.md) per sapere
 con precisione cosa è verificato, cosa no e cosa manca.
 
 ## Funzioni
@@ -206,11 +206,11 @@ applicazioni: `cmake --install build --prefix ~/.local`. Per creare un'unica **A
 ./build/SunLoopsStudioTests_artefacts/Release/SunLoopsStudioTests
 ```
 
-Non servono dispositivo audio né display; 1724 controlli alla 0.58.0. Coprono, tra l'altro, intonazione del synth e tempi esatti al
+Non servono dispositivo audio né display; 1989 controlli alla 0.68.0. Coprono, tra l'altro, intonazione del synth e tempi esatti al
 campione, ogni strumento ed effetto, che `Player::render` non allochi mai memoria (effetti compresi), uno stress test concorrente del
 passaggio dati interfaccia→audio, il file di progetto (andata e ritorno, file danneggiati o ostili, sample mancanti, scrittura atomica),
 l'importazione da FL Studio e MIDI, l'esportazione in ogni formato, la registrazione, l'automazione, i cambi di tempo, l'host dei plugin,
-SunBurst e HexForge (preset, voci, filtri, effetti, stato salvato) e il controllo degli aggiornamenti. GitHub Actions compila il programma
+SunSymphony (motore, catalogo e download della libreria), SunRiff (intonazione, modi di esecuzione, ampli ed effetti), SunBurst e HexForge (preset, voci, filtri, effetti, stato salvato) e il controllo degli aggiornamenti. GitHub Actions compila il programma
 su Fedora e li esegue a ogni push.
 
 ## Licenza

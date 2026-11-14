@@ -58,8 +58,8 @@ Sun Loops Studio runs on macOS 10.15 Catalina or newer, on Apple silicon and on 
   normally. **Record** asks once for the microphone (*System Settings > Privacy & Security > Microphone* changes the answer).
 - **Audio**: the devices are Core Audio's (every built-in, USB and Thunderbolt interface); there is no ALSA or JACK.
 - **Plugins**: VST3 (`/Library/Audio/Plug-Ins/VST3`, `~/Library/Audio/Plug-Ins/VST3`), **Audio Units** (the Mac's own format:
-  every instrument and effect installed for GarageBand or Logic) and LV2; LADSPA plugins exist only on Linux. SunBurst and
-  HexForge are inside the app.
+  every instrument and effect installed for GarageBand or Logic) and LV2; LADSPA plugins exist only on Linux. SunBurst,
+  HexForge, SunSymphony and SunRiff are inside the app.
 - **Files**: projects, samples, kits and presets are in `~/Music/Sun Loops Studio` as on Linux; the session log and crash
   reports are in `~/Library/Application Support/SunLoopsStudio` (*Help > Show the session log folder*). A double-click on a
   `.slp` file in the Finder opens it.

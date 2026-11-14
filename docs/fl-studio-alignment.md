@@ -101,6 +101,8 @@ Browser / Plugin picker ──drag──▶ Channel Rack (instruments, one row p
 | Fruity Slicer, Slicex | Slicer | ◐ |
 | FLEX, FL Keys, BooBass | Factory presets, Grand Piano, Electric Bass | ◐ |
 | Wavetable / supersaw synths (Sawer, Poizone, Toxic…) | SunBurst plugin (wavetable, unison, arpeggiator) | ◐ |
+| FL Slayer (electric guitar) | SunRiff plugin (0.68): the same string types, coils, playing modes, glissando, amp, cabinets and effects unit | ✔ |
+| Orchestral libraries (FLEX packs, DirectWave) | SunSymphony plugin (0.66 - 0.67): 16 parts, 29 free orchestral instruments downloaded from inside it | ◐ no loops on sustains, no dynamic crossfade yet |
 | Speech synth, Granulizer, Wave Traveller | – | ✘ |
 
 ## 6. Piano Roll
@@ -234,7 +236,7 @@ Every point of the "still open" list of 0.61.0, in its order:
 
 ## 13. Still narrower than FL Studio's, or missing
 
-What the tables above mark ◐ or ✘ after 0.62.0, the larger ones first:
+What the tables above mark ◐ or ✘ after 0.62.0, the larger ones first (0.68.0 added FL Slayer's counterpart, SunRiff):
 
 1. **Performance mode** is driven by the mouse: there is no mapping of a MIDI controller's pads to the cells, no per-clip trigger
    and position-sync modes, and audio clips cannot be launched.
