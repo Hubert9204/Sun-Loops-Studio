@@ -107,7 +107,26 @@ modalità Song: premi **Spazio** per ascoltarlo. È fatto per mostrare il progra
 Ogni canale ha la sua traccia del mixer con effetti in insert (EQ, compressore, transient, chorus, phaser, delay, overdrive, filtro,
 stereo imager, Time Shaper); l'aux A è un riverbero hall e l'aux B un delay ping-pong; il master ha un filtro, un EQ e il maximizer;
 due gruppi VCA raccolgono i synth e batteria e basso. Senza SunBurst e HexForge (una build senza di loro) i loro quattro canali suonano
-synth incorporati. *File > Open the demo song* lo riapre in qualsiasi momento; non viene salvato da nessuna parte finché non lo salvi tu.
+synth incorporati. *File > Open a demo project > Sunrise Drive* lo riapre in qualsiasi momento; non viene salvato da nessuna parte finché non lo salvi tu.
+
+**Progetti di esempio (0.65.0).** La prima cartella del browser, **Demo Projects**, contiene tre brani finiti che vengono con il
+programma: **doppio clic** su uno (oppure clic destro > *Open*, oppure *File > Open a demo project*) per aprirlo. Un progetto di
+esempio si apre come progetto nuovo con il suo nome: **Save** scrive `<nome>.slp` nella cartella Projects e l'esempio non cambia mai,
+quindi puoi smontarlo liberamente. Tieni il mouse fermo su un esempio per leggere che cos'è.
+
+| Esempio | Stile | Cosa ascoltare e guardare |
+| --- | --- | --- |
+| **Sunrise Drive** | synthwave, 110 BPM, La minore, 44 battute | il brano dimostrativo qui sopra, come file di progetto |
+| **White Line** | melodic techno, 129 BPM, Do minore, 96 battute | un basso "rolling" di SunBurst e un pad che si abbassano sotto la cassa (compressori con la traccia della cassa come sidechain), stab in levare di HexForge, una melodia di HexForge prima a note lunghe e poi con ritmo 3-3-2, arpeggi in sedicesimi che seguono Dom - Sib - Lab - Sib; una pausa (battute 49-64) con i filtri del pad e dell'arpeggio che si aprono (automazione dei plugin), un rullo di clap, un riser di rumore e uno sweep passa-alto sul master; piatti al contrario (clip audio); synth e batteria che sfumano con i loro due gruppi VCA. I marcatori di tempo danno il nome alle sezioni. |
+| **Ryo** | lo-fi hip hop, 92 BPM, Do minore, 64 battute | batteria acustica con hi-hat in swing, tutta instradata su una traccia **Drum Bus** (routing libero) che la filtra passa-basso nell'intro, la "sporca" un po' (Squeeze) e la ferma come un nastro alla fine della strofa (automazione del Time Shaper); un piano elettrico di SunBurst con chorus, vibrato e riduzione di bit su Dom9 - Mibmaj9 - Labmaj9 - Fam9; il basso elettrico campionato che si abbassa sotto la cassa; un hook di kalimba con un delay a nastro; una controlinea di HexForge; arpeggi di vibrafono nel bridge; fruscio di nastro e crepitio di vinile; un tape stop sul master nell'ultima battuta. |
+
+White Line e Ryo sono nati da due bozze - le loro melodie, linee di basso e groove - completate con parti nuove, una forma, un mix e
+le automazioni da `tools/demos` (vedi il suo README).
+
+La seconda cartella del browser, **My Projects**, elenca i file `.slp` di `~/Music/Sun Loops Studio/Projects` (dove *Save* mette un
+progetto senza nome), sottocartelle comprese; doppio clic su uno per aprirlo (clic destro > *Show in the file manager* per trovare il
+file). I file di progetto hanno l'icona del programma, nel browser e nel file manager (Linux: l'icona del tipo `.slp` viene installata
+con il programma; macOS: il Finder mostra l'icona dell'app sui file `.slp`).
 
 Tutto il brano è salvato in un unico file `.slp`: canali (strumento, sample, volume, pan, pitch, swing, traccia
 del mixer), tutti i pattern con le loro note, la playlist, il mixer (fader, bilanciamento, mute/solo, catene di
@@ -320,6 +339,8 @@ La barra laterale a sinistra elenca i tuoi suoni come un albero. Clic sulla frec
 
 | Cartella | Contenuto |
 | --- | --- |
+| Demo Projects | I tre brani di esempio (0.65.0, vedi *Progetti*): doppio clic su uno per aprirlo. |
+| My Projects | I tuoi progetti, da `~/Music/Sun Loops Studio/Projects` (0.65.0): doppio clic su uno per aprirlo. |
 | Samples | I suoni incorporati (cassa, rullante, hi-hat), poi i file audio (WAV, FLAC, OGG, AIFF) trovati in `~/Music/Sun Loops Studio/Samples` e nelle sue sottocartelle. |
 | Drum Kits | Un kit incorporato, poi una voce per ogni sottocartella di `~/Music/Sun Loops Studio/Drum Kits`. |
 | Instruments | *Synth* e *Sampler*. |
@@ -736,6 +757,20 @@ Le voci girano a frequenza doppia e vengono filtrate al ritorno, così l'FM spin
 fabbrica** in otto categorie - Neuro, Reese, Dubstep, DnB, Cyberpunk, Dark Synth, Industrial, FX & Metal - con volumi
 pareggiati; in tutti la mod wheel aggiunge FM, Macro 1 = cutoff, Macro 2 = profondità FM, Macro 3 = distorsione, Macro 4 =
 larghezza dell'unison. I tuoi preset vanno in `~/.config/HexForge/Presets`.
+
+## SunSymphony, il campionatore orchestrale (0.66.0, anteprima)
+
+SunSymphony è il campionatore orchestrale che arriva con il programma (VST3 e Standalone): Browser > Instruments >
+*SunSymphony (orchestral sampler, preview)*. Questa prima versione è il motore, ancora senza la sua libreria:
+
+- **16 parti**, una per canale MIDI (la parte 1 ascolta il canale 1...). Doppio clic (o clic destro) su una parte per sceglierne
+  lo strumento: *Test Tone* (incorporato), *Load an SFZ file...* o *Empty*. La parte 1 suona il tono di prova finché non scegli altro.
+- **128 voci**; quando ne servono di più, le più vecchie si fermano con una breve dissolvenza.
+- Ogni parte segue **CC7** (volume), **CC10** (pan), **CC11** (espressione) e **CC64** (pedale di risonanza).
+- La tastiera in basso suona la parte 1; *Master* regola il livello generale; gli strumenti delle parti si salvano con il progetto.
+
+La libreria orchestrale gratuita (archi, legni, ottoni, percussioni, arpa, celesta, pianoforte) si scaricherà dall'interno del
+plugin in `~/Music/Sun Loops Studio/Orchestral`, nelle prossime versioni.
 
 ## Piano Roll
 

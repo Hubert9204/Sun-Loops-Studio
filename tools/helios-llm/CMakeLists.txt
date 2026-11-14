@@ -4,7 +4,7 @@
 #
 # By hand (for trying it): cmake -S tools/helios-llm -B build-helios -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build-helios
 cmake_minimum_required(VERSION 3.22)
-set(SLS_VERSION "0.64.0" CACHE STRING "The program's version (the main build passes its own)")
+set(SLS_VERSION "0.66.0" CACHE STRING "The program's version (the main build passes its own)")
 project(SunLoopsHelios VERSION ${SLS_VERSION} LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)

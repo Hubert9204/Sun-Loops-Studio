@@ -31,7 +31,9 @@ bool isAudioFileName (const juce::String& fileName); // wav, flac, ogg, oga, aif
 BrowserNode scanDirectory (const juce::File& directory, NodeKind leafKind, const juce::String& wildcardOrExtension,
                            int maxDepth, int& nodeBudget);
 
-// The whole browser tree: Samples, Drum Kits, Instruments, Presets, Plugin.
+// The whole browser tree: Demo Projects, My Projects (0.65.0), Samples, Drum Kits, Instruments, Presets, Plugin.
+constexpr const char* kDemoProjectsFolder = "Demo Projects";
+constexpr const char* kMyProjectsFolder = "My Projects";
 BrowserNode buildBrowserTree (const LibraryPaths& paths, const std::vector<PluginInfo>& plugins, PluginScanState scanState);
 
 constexpr int kMaxBrowserNodes = 5000;

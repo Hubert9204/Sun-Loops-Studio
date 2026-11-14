@@ -32,7 +32,7 @@ cp -R "$app_built" "$app"
 
 # The bundled plugins go inside the app (Contents/PlugIns/VST3), where the program looks for them.
 mkdir -p "$app/Contents/PlugIns/VST3"
-for plugin in SunBurst HexForge; do
+for plugin in SunBurst HexForge SunSymphony; do
     bundle="$build/${plugin}_artefacts/Release/VST3/$plugin.vst3"
     if [ -d "$bundle" ]; then
         cp -R "$bundle" "$app/Contents/PlugIns/VST3/"

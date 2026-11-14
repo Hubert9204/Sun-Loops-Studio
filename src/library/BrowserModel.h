@@ -17,7 +17,8 @@ enum class NodeKind
     Preset,        // payload: absolute path of the .slspreset file, or "builtin:<id>"
     Plugin,        // payload: "instrument|<identifier>" or "effect|<identifier>" (JUCE's PluginDescription identifier string)
     Action,        // payload: the action name (e.g. "scan-plugins"); activated by a click
-    Note           // an explanatory line, nothing happens
+    Note,          // an explanatory line, nothing happens
+    Project        // 0.65.0: a project to open with a double-click; payload: absolute path of the .slp file, or "demo:<id>"
 };
 
 struct BrowserNode

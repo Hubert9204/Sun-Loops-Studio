@@ -1,5 +1,8 @@
 #include "ui/FileBrowser.h"
 
+#include "IconData.h"
+#include "library/DemoProjects.h"
+
 namespace sls
 {
 namespace
@@ -20,7 +23,8 @@ juce::String kindName (NodeKind k)
         case NodeKind::Plugin:        return "plugin";
         case NodeKind::Folder:
         case NodeKind::Action:
-        case NodeKind::Note:          break;
+        case NodeKind::Note:
+        case NodeKind::Project:       break;
     }
     return {};
 }
@@ -36,9 +40,21 @@ juce::Colour dotColour (NodeKind k)
         case NodeKind::Plugin:        return juce::Colour (0xffb38cf0);
         case NodeKind::Folder:
         case NodeKind::Action:
-        case NodeKind::Note:          break;
+        case NodeKind::Note:
+        case NodeKind::Project:       break;
     }
     return juce::Colours::transparentBlack;
+}
+
+// 0.65.0: project files carry the program's own icon (made small once, at twice the drawn size for sharp high-DPI screens).
+const juce::Image& projectIcon()
+{
+    static const juce::Image icon = []
+    {
+        const auto full = juce::ImageCache::getFromMemory (IconData::app_icon_256_png, IconData::app_icon_256_pngSize);
+        return full.isValid() ? full.rescaled (32, 32, juce::Graphics::highResamplingQuality) : full;
+    }();
+    return icon;
 }
 } // namespace
 
@@ -54,6 +70,17 @@ public:
     juce::String getUniqueName() const override { return path; }
     int getItemHeight() const override { return 22; }
     bool canBeSelected() const override { return node.kind != NodeKind::Note; }
+
+    juce::String getTooltip() override
+    {
+        if (node.kind != NodeKind::Project)
+            return {};
+        const juce::String payload (node.payload);
+        if (payload.startsWith (kDemoProjectPrefix))
+            if (const auto* demo = findDemoProject (payload.fromFirstOccurrenceOf (kDemoProjectPrefix, false, false).toStdString()))
+                return juce::String (demo->description) + "\nDouble-click to open it (as a new project: the demo itself is never changed)";
+        return payload + "\nDouble-click to open it";
+    }
 
     void itemOpennessChanged (bool isNowOpen) override
     {
@@ -73,6 +100,13 @@ public:
         }
 
         auto area = juce::Rectangle<int> (0, 0, width, height).reduced (4, 0);
+
+        if (node.kind == NodeKind::Project)
+        {
+            if (const auto& icon = projectIcon(); icon.isValid())
+                g.drawImage (icon, juce::Rectangle<int> (area.getX() - 2, height / 2 - 8, 16, 16).toFloat(), juce::RectanglePlacement::centred);
+            area.removeFromLeft (18);
+        }
 
         const auto dot = dotColour (node.kind);
         if (! dot.isTransparent())
@@ -100,6 +134,25 @@ public:
     // this item is still handling the mouse event: they are posted to the message loop instead.
     void itemClicked (const juce::MouseEvent& e) override
     {
+        if (e.mods.isPopupMenu() && node.kind == NodeKind::Project)
+        {
+            // 0.65.0: a project's menu
+            juce::PopupMenu menu;
+            menu.addItem (1, "Open");
+            const bool file = ! juce::String (node.payload).startsWith (kDemoProjectPrefix);
+            if (file)
+                menu.addItem (2, "Show in the file manager");
+            menu.showMenuAsync (juce::PopupMenu::Options(), [safe = juce::Component::SafePointer<FileBrowser> (&owner), payload = juce::String (node.payload)] (int result)
+                                {
+                                    if (safe == nullptr)
+                                        return;
+                                    if (result == 1 && safe->onProjectOpen)
+                                        safe->onProjectOpen (payload);
+                                    else if (result == 2)
+                                        juce::File (payload).revealToUser();
+                                });
+            return;
+        }
         if (e.mods.isPopupMenu())
         {
             // 0.62.0: the favourites, from a right click on anything that can be dragged
@@ -136,6 +189,12 @@ public:
         if (node.kind == NodeKind::Folder)
         {
             setOpen (! isOpen());
+            return;
+        }
+        if (node.kind == NodeKind::Project) // 0.65.0 (posted, like the others: opening a project rebuilds the tree)
+        {
+            juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<FileBrowser> (&owner), payload = juce::String (node.payload)]
+                                             { if (safe != nullptr && safe->onProjectOpen) safe->onProjectOpen (payload); });
             return;
         }
         if (! node.isDraggable())

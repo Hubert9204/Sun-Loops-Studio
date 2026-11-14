@@ -127,6 +127,9 @@ plugins. See [docs/roadmap.md](docs/roadmap.md) for exactly what is and is not v
   six operators with 32 band-limited waves and two drawable / loadable spectral waves, a 6 x 6 FM matrix in one panel, a
   Moog-style ladder filter with its own envelope and LFO, unison, pitch drop, effects and 40 presets (neuro, reese, dubstep,
   DnB, cyberpunk, dark synth, industrial, metal FX). Browser > Instruments > HexForge.
+- **SunSymphony** (0.66.0, preview) - the orchestral sampler plugin (VST3 and Standalone) in the making: 16 parts on the 16 MIDI
+  channels, 128 voices, SFZ instruments (zones, velocity layers, loops), Hermite interpolation; until its free orchestral library
+  can be downloaded from inside it, part 1 plays a built-in test tone. Browser > Instruments > SunSymphony.
 - **Plugins** - VST3, LV2 and LADSPA instruments and effects: scan them from the browser, double-click or drag an instrument for a channel,
   pick an effect in a mixer slot, open the plugin's own window; their settings are saved in the project, and a missing plugin keeps them.
 - **Automation** - right-click a volume, pan, fader or effect parameter > *Create automation clip*; clips live on four lanes under the
@@ -145,6 +148,8 @@ plugins. See [docs/roadmap.md](docs/roadmap.md) for exactly what is and is not v
 - **Helios** (0.40.0) - F1: ask how to do something in English or Italian; it searches the built-in manual and runs commands, offline.
 - **Helios LLM mode** (0.64.0) - tick *LLM mode* and Helios becomes a chat: a language model (Google's Gemma 4, downloaded once,
   2.8 or 4.6 GB) that runs on your computer, answers from the manual in your language and never touches the project.
+- **Demo projects** (0.65.0) - three finished songs in the browser's *Demo Projects* folder (synthwave, melodic techno, lo-fi hip hop),
+  each a complete arrangement with its mix, effects and automation to take apart; project files show the program's icon.
 - **Crash reports and updates** (0.43.0) - a session log (spdlog, rotated at 5 MB); after a crash (SIGSEGV, SIGABRT, SIGFPE...) the next start
   offers to send an anonymous report with the stack trace and system to GitHub as an issue (or to show it first, or to delete it); a
   background check for a newer release (Semantic Versioning), which can be switched off. Nothing is sent without a click.

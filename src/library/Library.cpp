@@ -5,6 +5,8 @@
 #include "audio/BuiltinSamples.h"
 #include "library/DrumKitFile.h"
 #include "library/ChannelPreset.h"
+#include "library/DemoProjects.h"
+#include "library/ProjectFile.h"
 
 namespace sls
 {
@@ -20,8 +22,8 @@ bool matches (const juce::String& fileName, NodeKind kind, const juce::String& e
 
 std::string displayName (const juce::File& file, NodeKind kind)
 {
-    // Presets show without their extension; audio keeps its extension so the format is visible.
-    return (kind == NodeKind::Preset ? file.getFileNameWithoutExtension() : file.getFileName()).toStdString();
+    // Presets and projects show without their extension; audio keeps its extension so the format is visible.
+    return (kind == NodeKind::Preset || kind == NodeKind::Project ? file.getFileNameWithoutExtension() : file.getFileName()).toStdString();
 }
 
 BrowserNode folder (std::string name)
@@ -167,6 +169,20 @@ BrowserNode buildBrowserTree (const LibraryPaths& paths, const std::vector<Plugi
     int budget = kMaxBrowserNodes;
     auto root = folder ("Browser");
 
+    // 0.65.0: the demo projects that come with the program, then the user's own projects (the Projects folder, where Save puts
+    // them). A double-click opens one.
+    {
+        auto demos = folder (kDemoProjectsFolder);
+        for (const auto& d : demoProjects())
+            demos.children.push_back (leaf (d.title, NodeKind::Project, kDemoProjectPrefix + d.id));
+        root.children.push_back (std::move (demos));
+
+        auto own = userContent (kMyProjectsFolder, paths.projects, NodeKind::Project, kProjectExtension, budget);
+        if (own.children.empty())
+            own.children.push_back (leaf ("Projects you save appear here", NodeKind::Note, {}));
+        root.children.push_back (std::move (own));
+    }
+
     // Samples: the built-in sounds, then whatever is in the user's Samples folder.
     {
         auto samples = folder ("Samples");
@@ -199,9 +215,10 @@ BrowserNode buildBrowserTree (const LibraryPaths& paths, const std::vector<Plugi
         instruments.children.push_back (leaf ("Synth", NodeKind::Instrument, "synth"));
         instruments.children.push_back (leaf ("Sampler", NodeKind::Instrument, "sampler"));
         instruments.children.push_back (leaf ("Drum machine", NodeKind::Instrument, "drums"));
-        // The synthesizer plugins that come with the program, when they have been found: SunBurst (0.48.0), HexForge (0.50.0).
+        // The plugins that come with the program, when they have been found: SunBurst (0.48.0), HexForge (0.50.0), SunSymphony (0.66.0).
         for (const auto& [name, label] : { std::pair<const char*, const char*> { "SunBurst", "SunBurst (synthesizer)" },
-                                           std::pair<const char*, const char*> { "HexForge", "HexForge (FM synthesizer)" } })
+                                           std::pair<const char*, const char*> { "HexForge", "HexForge (FM synthesizer)" },
+                                           std::pair<const char*, const char*> { "SunSymphony", "SunSymphony (orchestral sampler, preview)" } })
             for (const auto& p : plugins)
                 if (p.isInstrument && p.name == name && p.format == "VST3")
                 {

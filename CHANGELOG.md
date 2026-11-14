@@ -2,6 +2,59 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.66.0 - 2026-11-14
+
+SunSymphony, the orchestral sampler: Milestone 0 (a first, playable skeleton; the plan is in the project's
+`claude/orchestral-sampler-plan.md`).
+
+### Added
+- **SunSymphony** (preview), a multitimbral sampler plugin (VST3 and Standalone), bundled like SunBurst and HexForge
+  (Browser > Instruments > *SunSymphony (orchestral sampler, preview)*):
+  - 16 parts on the 16 MIDI channels, 128 voices (the oldest are stolen with a 5 ms fade; 16 spare slots for the fades);
+  - zones with key and velocity ranges, root key, tuning, volume and pan; forward loops; 4-point Hermite interpolation
+    (every key within half a cent of its pitch, at any output rate);
+  - per part: volume (CC7), pan (CC10), expression (CC11), sustain pedal (CC64), all sound / notes off;
+  - instruments from SFZ files (the zones, velocity layers and loops it understands) or the built-in *Test Tone*, which part 1
+    plays until the orchestral library exists; the parts' instruments are saved in the host's project;
+  - nothing is allocated or freed on the audio thread: a new instrument is swapped in without a lock wait, the old one is freed
+    later on the message thread.
+- `tools/orchestra/inventory.py` and its report `tools/orchestra/coverage.md` / `.json`: what the free, redistributable sources
+  (VSCO 2 CE and VCSL, CC0; No Budget Orchestra's SFZ files; University of Iowa MIS) cover of the planned instruments and
+  articulations, with their ranges, dynamic layers, round robins, formats and octave convention (most VSCO files sound an octave
+  above their name).
+
+### Fixed
+- SFZ: a `key=` on a region now replaces a group's `lokey` / `hikey` / `pitch_keycenter` (before, the group's range won and the
+  region played on the wrong keys).
+
+## 0.65.0 - 2026-11-14
+
+Demo projects.
+
+### Added
+- **Demo Projects**, the browser's first folder: three finished songs to open with a double-click (or right-click > *Open*, or
+  *File > Open a demo project*), each opening as a new project named after it (Save writes a copy into the Projects folder; the demo
+  never changes); the mouse resting on one shows what it is.
+  - **Sunrise Drive** - the song the program opens with, now also a project file.
+  - **White Line** - melodic techno, 129 BPM, C minor, 96 bars: made from a sketch (its melody, rolling bass, stabs and pad) with
+    a form (intro, groove, theme, breakdown and build, drop, outro), new parts (arpeggios, ride, rim, crash, noise riser, impacts,
+    reversed cymbals), a mix with sidechain ducking from the kick, reverb and delay buses, a mastering chain, and automation (filters
+    opening, a high-pass sweep, sends, a riser, two VCA fades).
+  - **Ryo** - lo-fi hip hop, 92 BPM, C minor, 64 bars: made from a sketch (its boom-bap groove, hook, bass and bells) with jazz
+    chords (Cm9 - Ebmaj9 - Abmaj9 - Fm9 and a bridge), acoustic drums on a Drum Bus (free routing) with a low-pass intro, bit
+    reduction and a tape stop, an electric piano with chorus and vibrato, the sampled bass, a kalimba hook through a tape delay,
+    vibraphone arpeggios, tape hiss and vinyl crackle, and a tape stop on the master at the end.
+- **My Projects**, the browser's second folder: the `.slp` files of `~/Music/Sun Loops Studio/Projects` (sub-folders too), opened
+  with a double-click; right-click > *Show in the file manager*. A project saved there appears at once.
+- **The program's icon on project files**: in the browser, and in Linux file managers (the `.slp` MIME type's icon is installed as
+  `application-x-sun-loops-studio-project`); the Finder already showed it on a Mac.
+- `tools/demos`: `DemoTool` (`-DSLS_BUILD_DEMO_TOOL=ON`; renders a project headless with its loudness and true peak, lists the
+  plugins' presets and the effects' parameters) and the Python scripts that write the demos (`make_demos.sh`).
+
+### Changed
+- *File > Open the demo song* became *File > Open a demo project*, a sub-menu with the three demos.
+- An opened demo is saved under its own name (`Projects/<title>.slp`) by *Save*, and *Save As* suggests it.
+
 ## 0.64.0 - 2026-11-14
 
 Helios learns to talk.

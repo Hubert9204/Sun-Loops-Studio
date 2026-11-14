@@ -33,6 +33,7 @@
 #include "audio/Slicer.h"
 #include "audio/PitchTrack.h"
 #include "audio/StemSplit.h"
+#include "library/DemoProjects.h"
 #include "library/HelpIndex.h"
 #include "library/Sfz.h"
 #include "audio/Loudness.h"
@@ -1994,7 +1995,29 @@ void testLibraryScan()
     std::vector<std::string> roots;
     for (const auto& c : tree.children)
         roots.push_back (c.name);
-    check (roots == std::vector<std::string> { "Samples", "Drum Kits", "Instruments", "Presets", "Plugin" }, "the five top-level folders, in order");
+    check (roots == std::vector<std::string> { "Demo Projects", "My Projects", "Samples", "Drum Kits", "Instruments", "Presets", "Plugin" },
+           "the seven top-level folders, in order");
+    {   // 0.65.0: the projects
+        const auto* demos = findChild (tree, "Demo Projects");
+        bool allDemos = demos != nullptr && demos->children.size() == sls::demoProjects().size();
+        for (size_t i = 0; allDemos && i < demos->children.size(); ++i)
+            allDemos = demos->children[i].kind == NodeKind::Project && ! demos->children[i].isDraggable()
+                    && demos->children[i].payload == "demo:" + sls::demoProjects()[i].id && demos->children[i].name == sls::demoProjects()[i].title;
+        check (allDemos, "Demo Projects lists every demo as a project to open (payload demo:<id>)");
+        const auto* own = findChild (tree, "My Projects");
+        check (own != nullptr && own->children.size() == 1 && own->children[0].kind == NodeKind::Note, "My Projects says where saved projects appear when there are none");
+        paths.projects.getChildFile ("Song A.slp").replaceWithText ("{}");
+        paths.projects.getChildFile ("Song A.slp.bak").replaceWithText ("{}");
+        paths.projects.getChildFile ("Live").createDirectory();
+        paths.projects.getChildFile ("Live/Set 1.slp").replaceWithText ("{}");
+        const auto withProjects = sls::buildBrowserTree (paths, {}, sls::PluginScanState::NotScanned);
+        const auto* listed = findChild (withProjects, "My Projects");
+        const auto* songA = listed != nullptr ? findChild (*listed, "Song A") : nullptr;
+        const auto* live = listed != nullptr ? findChild (*listed, "Live") : nullptr;
+        check (songA != nullptr && songA->kind == NodeKind::Project && songA->payload == paths.projects.getChildFile ("Song A.slp").getFullPathName().toStdString()
+                   && live != nullptr && findChild (*live, "Set 1") != nullptr && listed->children.size() == 2,
+               "My Projects lists the saved .slp files (sub-folders too, without the extension, backups left out)");
+    }
 
     const auto* kits = findChild (tree, "Drum Kits");
     check (kits != nullptr && findChild (*kits, "Sun Loops Basic Kit") != nullptr && findChild (*kits, "My Kit") != nullptr,
@@ -12096,6 +12119,24 @@ void testSunBurstInHost()
     for (const float v : hexOut)
         hexFinite = hexFinite && std::isfinite (v);
     check (hexFinite && rmsWindow (hexOut, 0.05, 0.4) > 0.01f, "a chord plays through HexForge in the Player");
+
+    // SunSymphony (0.66.0), the orchestral sampler: bundled the same way; with no library its part 1 plays the test tone.
+    const auto* orchestral = findPlugin (host, "SunSymphony", "VST3");
+    check (orchestral != nullptr && orchestral->isInstrument, "SunSymphony is listed next to them as a VST3 instrument");
+    if (orchestral == nullptr)
+        return;
+    auto sampler = host.create (*orchestral, kSr, sls::Player::kChunk, error);
+    check (sampler != nullptr && sampler->isLoaded(), "SunSymphony loads");
+    if (sampler == nullptr)
+        return;
+    c.plugin = sampler;
+    sls::Player r;
+    r.prepare (kSr);
+    const auto symOut = renderBlocks (r, sls::Project::make ({ c }, 16 * kBeat), true, 1.0);
+    bool symFinite = true;
+    for (const float v : symOut)
+        symFinite = symFinite && std::isfinite (v);
+    check (symFinite && rmsWindow (symOut, 0.05, 0.4) > 0.01f, "a chord plays through SunSymphony (the built-in test tone) in the Player");
 }
 
 void testPluginHosting()
@@ -12440,6 +12481,9 @@ void testPluginHosting()
 
 // tests/test_support.cpp (0.43.0)
 void supportCheck (bool ok, const char* name) { check (ok, name); }
+// 0.66.0: the allocations the calling thread makes while counting is on (tests/test_orchestra.cpp).
+void supportCountAllocations (bool on) { tAllocs = 0; tCounting = on; }
+long supportAllocations() { return tAllocs; }
 // The demo song (0.52.0): a valid project that uses the program's features, SunBurst and HexForge with their presets, and that
 // renders loud enough without clipping.
 // 0.56.0: every pattern has its own length; changing one leaves the others (and their clips) alone, a new one is 4 quarters.
@@ -12587,6 +12631,62 @@ void testPianoRollSpareQuarter()
     check (a.patternTickAt (0, 7 * bar) == 2 * kBeat && a.patternTickAt (0, 7 * bar + 4 * kBeat) == 0,
            "a clip that starts inside its pattern starts there");
     check (a.patternTickAt (0, 5 * bar) == -1 && a.patternTickAt (0, -1) == -1, "no clip of it there: nothing");
+}
+
+// 0.65.0: the demo projects built into the program
+void testDemoProjects()
+{
+    std::cout << "The demo projects (0.65.0)\n";
+    check (sls::demoProjects().size() == 3 && sls::demoProjects()[0].id == "sunrise-drive", "three demo projects, Sunrise Drive first");
+    for (const auto& info : sls::demoProjects())
+    {
+        const auto parsed = sls::readDemoProject (info.id);
+        for (const auto& w : parsed.warnings)
+            std::cout << "    " << info.id << ": " << w << "\n";
+        check (parsed.document.has_value() && parsed.warnings.empty(), info.title + " reads without warnings");
+        if (! parsed.document.has_value())
+            continue;
+        const auto& d = *parsed.document;
+        const auto& a = d.arrangement;
+        int notes = 0;
+        for (const auto& p : a.patterns)
+            for (const auto& n : p.notes)
+                notes += static_cast<int> (n.size());
+        bool placed = true;
+        for (const auto& c : a.clips)
+            placed = placed && c.pattern >= 0 && c.pattern < static_cast<int> (a.patterns.size()) && c.track >= 0 && c.track < a.trackCount()
+                  && c.endTick() <= a.timelineTicks();
+        bool pluginsKnown = ! d.pluginSpecs.empty();
+        for (const auto& spec : d.pluginSpecs)
+        {
+            juce::PluginDescription desc;
+            pluginsKnown = pluginsKnown && sls::PluginHost::descriptionFromText (juce::String (spec.description), desc)
+                        && (desc.name == "SunBurst" || desc.name == "HexForge") && ! spec.state.empty();
+        }
+        int effects = 0;
+        for (const auto& t : d.tracks)
+            for (const auto& slot : t.slots)
+                effects += slot.type != sls::EffectType::None ? 1 : 0;
+        check (d.songMode && notes > 300 && placed && a.clips.size() > 30 && ! a.automationClips.empty() && effects >= 10,
+               info.title + ": a whole song (Song mode, notes, clips that fit, automation, mixer effects)");
+        check (pluginsKnown, info.title + ": its plugin channels are SunBurst and HexForge, with their settings");
+    }
+    check (! sls::readDemoProject ("nope").document.has_value(), "an unknown demo is an error, not a crash");
+
+    // Sunrise Drive's file is the song the program opens with.
+    const auto sunrise = sls::readDemoProject ("sunrise-drive");
+    const auto built = sls::makeDemoSong();
+    if (sunrise.document.has_value())
+    {
+        const auto& d = *sunrise.document;
+        bool same = d.channels.size() == built.document.channels.size() && d.arrangement.patterns.size() == built.document.arrangement.patterns.size()
+                 && d.arrangement.clips.size() == built.document.arrangement.clips.size()
+                 && std::abs (d.bpm - built.document.bpm) < 1.0e-9;
+        for (size_t p = 0; same && p < d.arrangement.patterns.size(); ++p)
+            for (size_t c = 0; same && c < d.channels.size(); ++c)
+                same = d.arrangement.patterns[p].notes[c].size() == built.document.arrangement.patterns[p].notes[c].size();
+        check (same, "the Sunrise Drive file holds the built-in demo song");
+    }
 }
 
 void testDemoSong()
@@ -12784,6 +12884,7 @@ void testDemoSong()
 void testSemVerAndUpdates();
 void testSunBurst();
 void testHexForge();
+void testOrchestra();     // tests/test_orchestra.cpp
 void testCrashReports();
 void testSessionLog();
 void testHeliosChat();     // tests/test_helios.cpp
@@ -12858,7 +12959,9 @@ int main()
     testSunBurst();
     testSunBurstInHost();
     testDemoSong();
+    testDemoProjects();
     testHexForge();
+    testOrchestra();
     testSemVerAndUpdates();
     testCrashReports();
     testHeliosDownload();

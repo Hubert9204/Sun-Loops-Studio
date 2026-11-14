@@ -1,0 +1,6626 @@
+{
+  "format": "sun-loops-studio-project",
+  "version": 1,
+  "bpm": 110.0,
+  "masterVolume": 0.800000011920929,
+  "songMode": true,
+  "currentPattern": 1,
+  "channels": [
+    {
+      "name": "Drums",
+      "instrument": "drums",
+      "kit": {
+        "name": "Electronic Punch",
+        "pads": [
+          {
+            "name": "Kick",
+            "layers": [
+              {
+                "sample": "builtin:gen:punch/kick/1",
+                "minVelocity": 1
+              },
+              {
+                "sample": "builtin:gen:punch/kick/2",
+                "minVelocity": 45
+              },
+              {
+                "sample": "builtin:gen:punch/kick/3",
+                "minVelocity": 80
+              },
+              {
+                "sample": "builtin:gen:punch/kick/4",
+                "minVelocity": 110
+              }
+            ],
+            "volume": 1.0,
+            "pan": 0.0,
+            "pitch": 0.0,
+            "swing": 0.0,
+            "choke": 0,
+            "mute": false,
+            "solo": false
+          },
+          {
+            "name": "Rim",
+            "layers": [
+              {
+                "sample": "builtin:gen:punch/rim/1",
+                "minVelocity": 1
+              },
+              {
+                "sample": "builtin:gen:punch/rim/2",
+                "minVelocity": 45
+              },
+              {
+                "sample": "builtin:gen:punch/rim/3",
+                "minVelocity": 80
+              },
+              {
+                "sample": "builtin:gen:punch/rim/4",
+                "minVelocity": 110
+              }
+            ],
+            "volume": 1.0,
+            "pan": 0.0,
+            "pitch": 0.0,
+            "swing": 0.0,
+            "choke": 0,
+            "mute": false,
+            "solo": false
+          },
+          {
+            "name": "Snare",
+            "layers": [
+              {
+                "sample": "builtin:gen:punch/snare/1",
+                "minVelocity": 1
+              },
+              {
+                "sample": "builtin:gen:punch/snare/2",
+                "minVelocity": 45
+              },
+              {
+                "sample": "builtin:gen:punch/snare/3",
+                "minVelocity": 80
+              },
+              {
+                "sample": "builtin:gen:punch/snare/4",
+                "minVelocity": 110
+              }
+            ],
+            "volume": 1.0,
+            "pan": 0.0,
+            "pitch": 0.0,
+            "swing": 0.0,
+            "choke": 0,
+            "mute": false,
+            "solo": false
+          },
+          {
+            "name": "Clap",
+            "layers": [
+              {
+                "sample": "builtin:gen:punch/clap/1",
+                "minVelocity": 1
+              },
+              {
+                "sample": "builtin:gen:punch/clap/2",
+                "minVelocity": 45
+              },
+              {
+                "sample": "builtin:gen:punch/clap/3",
+                "minVelocity": 80
+              },
+              {
+                "sample": "builtin:gen:punch/clap/4",
+                "minVelocity": 110
+              }
+            ],
+            "volume": 1.0,
+            "pan": 0.0,
+            "pitch": 0.0,
+            "swing": 0.0,
+            "choke": 0,
+            "mute": false,
+            "solo": false
+          },
+          {
+            "name": "Snare 2",
+            "layers": [
+              {
+                "sample": "builtin:gen:punch/snare-2/1",
+                "minVelocity": 1
+              },
+              {
+                "sample": "builtin:gen:punch/snare-2/2",
+                "minVelocity": 45
+              },
+              {
+                "sample": "builtin:gen:punch/snare-2/3",
+                "minVelocity": 80
+              },
+              {
+                "sample": "builtin:gen:punch/snare-2/4",
+                "minVelocity": 110
+              }
+            ],
+            "volume": 1.0,
+            "pan": 0.0,
+            "pitch": 0.0,
+            "swing": 0.0,
+            "choke": 0,
+            "mute": false,
+            "solo": false
+          },
+          {
+            "name": "Low Tom",
+            "layers": [
+              {
+                "sample": "builtin:gen:punch/tom-1/1",
+                "minVelocity": 1
+              },
+              {
+                "sample": "builtin:gen:punch/tom-1/2",
+                "minVelocity": 45
+              },
+              {
+                "sample": "builtin:gen:punch/tom-1/3",
+                "minVelocity": 80
+              },
+              {
+                "sample": "builtin:gen:punch/tom-1/4",
+                "minVelocity": 110
+              }
+            ],
+            "volume": 1.0,
+            "pan": -0.300000011920929,
+            "pitch": 0.0,
+            "swing": 0.0,
+            "choke": 0,
+            "mute": false,
+            "solo": false
+          },
+          {
+            "name": "Closed Hat",
+            "layers": [
+              {
+                "sample": "builtin:gen:punch/closed-hat/1",
+                "minVelocity": 1
+              },
+              {
+                "sample": "builtin:gen:punch/closed-hat/2",
+                "minVelocity": 45
+              },
+              {
+                "sample": "builtin:gen:punch/closed-hat/3",
+                "minVelocity": 80
+              },
+              {
+                "sample": "builtin:gen:punch/closed-hat/4",
+                "minVelocity": 110
+              }
+            ],
+            "volume": 1.0,
+            "pan": -0.25,
+            "pitch": 0.0,
+            "swing": 0.0,
+            "choke": 1,
+            "mute": false,
+            "solo": false
+          },
+          {
+            "name": "Low-mid Tom",
+            "layers": [
+              {
+                "sample": "builtin:gen:punch/tom-2/1",
+                "minVelocity": 1
+              },
+              {
+                "sample": "builtin:gen:punch/tom-2/2",
+                "minVelocity": 45
+              },
+              {
+                "sample": "builtin:gen:punch/tom-2/3",
+                "minVelocity": 80
+              },
+              {
+                "sample": "builtin:gen:punch/tom-2/4",
+                "minVelocity": 110
+              }
+            ],
+            "volume": 1.0,
+            "pan": 0.0,
+            "pitch": 0.0,
+            "swing": 0.0,
+            "choke": 0,
+            "mute": false,
+            "solo": false
+          },
+          {
+            "name": "Pedal Hat",
+            "layers": [
+              {
+                "sample": "builtin:gen:punch/pedal-hat/1",
+                "minVelocity": 1
+              },
+              {
+                "sample": "builtin:gen:punch/pedal-hat/2",
+                "minVelocity": 45
+              },
+              {
+                "sample": "builtin:gen:punch/pedal-hat/3",
+                "minVelocity": 80
+              },
+              {
+                "sample": "builtin:gen:punch/pedal-hat/4",
+                "minVelocity": 110
+              }
+            ],
+            "volume": 1.0,
+            "pan": -0.25,
+            "pitch": 0.0,
+            "swing": 0.0,
+            "choke": 1,
+            "mute": false,
+            "solo": false
+          },
+          {
+            "name": "Mid Tom",
+            "layers": [
+              {
+                "sample": "builtin:gen:punch/tom-3/1",
+                "minVelocity": 1
+              },
+              {
+                "sample": "builtin:gen:punch/tom-3/2",
+                "minVelocity": 45
+              },
+              {
+                "sample": "builtin:gen:punch/tom-3/3",
+                "minVelocity": 80
+              },
+              {
+                "sample": "builtin:gen:punch/tom-3/4",
+                "minVelocity": 110
+              }
+            ],
+            "volume": 1.0,
+            "pan": 0.0,
+            "pitch": 0.0,
+            "swing": 0.0,
+            "choke": 0,
+            "mute": false,
+            "solo": false
+          },
+          {
+            "name": "Open Hat",
+            "layers": [
+              {
+                "sample": "builtin:gen:punch/open-hat/1",
+                "minVelocity": 1
+              },
+              {
+                "sample": "builtin:gen:punch/open-hat/2",
+                "minVelocity": 45
+              },
+              {
+                "sample": "builtin:gen:punch/open-hat/3",
+                "minVelocity": 80
+              },
+              {
+                "sample": "builtin:gen:punch/open-hat/4",
+                "minVelocity": 110
+              }
+            ],
+            "volume": 1.0,
+            "pan": -0.25,
+            "pitch": 0.0,
+            "swing": 0.0,
+            "choke": 1,
+            "mute": false,
+            "solo": false
+          },
+          {
+            "name": "High-mid Tom",
+            "layers": [
+              {
+                "sample": "builtin:gen:punch/tom-4/1",
+                "minVelocity": 1
+              },
+              {
+                "sample": "builtin:gen:punch/tom-4/2",
+                "minVelocity": 45
+              },
+              {
+                "sample": "builtin:gen:punch/tom-4/3",
+                "minVelocity": 80
+              },
+              {
+                "sample": "builtin:gen:punch/tom-4/4",
+                "minVelocity": 110
+              }
+            ],
+            "volume": 1.0,
+            "pan": 0.0,
+            "pitch": 0.0,
+            "swing": 0.0,
+            "choke": 0,
+            "mute": false,
+            "solo": false
+          },
+          {
+            "name": "High Tom",
+            "layers": [
+              {
+                "sample": "builtin:gen:punch/tom-5/1",
+                "minVelocity": 1
+              },
+              {
+                "sample": "builtin:gen:punch/tom-5/2",
+                "minVelocity": 45
+              },
+              {
+                "sample": "builtin:gen:punch/tom-5/3",
+                "minVelocity": 80
+              },
+              {
+                "sample": "builtin:gen:punch/tom-5/4",
+                "minVelocity": 110
+              }
+            ],
+            "volume": 1.0,
+            "pan": 0.300000011920929,
+            "pitch": 0.0,
+            "swing": 0.0,
+            "choke": 0,
+            "mute": false,
+            "solo": false
+          },
+          {
+            "name": "Crash",
+            "layers": [
+              {
+                "sample": "builtin:gen:punch/crash/1",
+                "minVelocity": 1
+              },
+              {
+                "sample": "builtin:gen:punch/crash/2",
+                "minVelocity": 45
+              },
+              {
+                "sample": "builtin:gen:punch/crash/3",
+                "minVelocity": 80
+              },
+              {
+                "sample": "builtin:gen:punch/crash/4",
+                "minVelocity": 110
+              }
+            ],
+            "volume": 1.0,
+            "pan": 0.300000011920929,
+            "pitch": 0.0,
+            "swing": 0.0,
+            "choke": 0,
+            "mute": false,
+            "solo": false
+          },
+          {
+            "name": "Highest Tom",
+            "layers": [
+              {
+                "sample": "builtin:gen:punch/tom-6/1",
+                "minVelocity": 1
+              },
+              {
+                "sample": "builtin:gen:punch/tom-6/2",
+                "minVelocity": 45
+              },
+              {
+                "sample": "builtin:gen:punch/tom-6/3",
+                "minVelocity": 80
+              },
+              {
+                "sample": "builtin:gen:punch/tom-6/4",
+                "minVelocity": 110
+              }
+            ],
+            "volume": 1.0,
+            "pan": 0.0,
+            "pitch": 0.0,
+            "swing": 0.0,
+            "choke": 0,
+            "mute": false,
+            "solo": false
+          },
+          {
+            "name": "Ride",
+            "layers": [
+              {
+                "sample": "builtin:gen:punch/ride/1",
+                "minVelocity": 1
+              },
+              {
+                "sample": "builtin:gen:punch/ride/2",
+                "minVelocity": 45
+              },
+              {
+                "sample": "builtin:gen:punch/ride/3",
+                "minVelocity": 80
+              },
+              {
+                "sample": "builtin:gen:punch/ride/4",
+                "minVelocity": 110
+              }
+            ],
+            "volume": 1.0,
+            "pan": 0.0,
+            "pitch": 0.0,
+            "swing": 0.0,
+            "choke": 0,
+            "mute": false,
+            "solo": false
+          }
+        ]
+      },
+      "sample": "",
+      "rootPitch": 60,
+      "volume": 0.819999992847443,
+      "pan": 0.0,
+      "mute": false,
+      "solo": false,
+      "pitch": 0.0,
+      "swing": 0.0,
+      "mixerTrack": 1
+    },
+    {
+      "name": "Bass",
+      "instrument": "sampler",
+      "sample": "",
+      "sampler": {
+        "envelope": true,
+        "attack": 0.0,
+        "decay": 1.0,
+        "sustain": 1.0,
+        "release": 0.119999997317791,
+        "loop": "off",
+        "loopStart": 0.0,
+        "loopEnd": 1.0,
+        "filter": "off",
+        "cutoff": 1.0,
+        "resonance": 0.0
+      },
+      "program": {
+        "kind": "builtin",
+        "file": "builtin:program:electric-bass"
+      },
+      "rootPitch": 60,
+      "volume": 1.25,
+      "pan": 0.0,
+      "mute": false,
+      "solo": false,
+      "pitch": 0.0,
+      "swing": 0.0,
+      "mixerTrack": 2
+    },
+    {
+      "name": "Piano",
+      "instrument": "sampler",
+      "sample": "",
+      "sampler": {
+        "envelope": true,
+        "attack": 0.0,
+        "decay": 1.0,
+        "sustain": 1.0,
+        "release": 0.349999994039536,
+        "loop": "off",
+        "loopStart": 0.0,
+        "loopEnd": 1.0,
+        "filter": "off",
+        "cutoff": 1.0,
+        "resonance": 0.0
+      },
+      "program": {
+        "kind": "builtin",
+        "file": "builtin:program:grand-piano"
+      },
+      "rootPitch": 60,
+      "volume": 1.100000023841858,
+      "pan": 0.0,
+      "mute": false,
+      "solo": false,
+      "pitch": 0.0,
+      "swing": 0.0,
+      "mixerTrack": 3
+    },
+    {
+      "name": "Marimba",
+      "instrument": "synth",
+      "synth": {
+        "engine": "physical",
+        "oscillators": [
+          {
+            "wave": "saw",
+            "level": 1.0,
+            "octave": 0,
+            "semitones": 0,
+            "fine": 0.0,
+            "pulseWidth": 0.5
+          },
+          {
+            "wave": "square",
+            "level": 0.0,
+            "octave": 0,
+            "semitones": 0,
+            "fine": 7.0,
+            "pulseWidth": 0.5
+          }
+        ],
+        "noise": 0.0,
+        "filter": "lowpass",
+        "steep": false,
+        "cutoff": 0.75,
+        "resonance": 0.200000002980232,
+        "envAmount": 0.300000011920929,
+        "keyTrack": 0.5,
+        "amp": {
+          "attack": 0.001000000047497,
+          "decay": 0.0,
+          "sustain": 1.0,
+          "release": 0.600000023841858
+        },
+        "filterEnvelope": {
+          "attack": 0.004999999888241,
+          "decay": 0.400000005960464,
+          "sustain": 0.200000002980232,
+          "release": 0.300000011920929
+        },
+        "lfoWave": "sine",
+        "lfoRate": 5.0,
+        "lfoTarget": "off",
+        "lfoDepth": 0.300000011920929,
+        "gain": 0.800000011920929,
+        "operators": [
+          {
+            "ratio": 1.0,
+            "level": 1.0,
+            "envelope": {
+              "attack": 0.002000000094995,
+              "decay": 0.600000023841858,
+              "sustain": 0.699999988079071,
+              "release": 0.300000011920929
+            }
+          },
+          {
+            "ratio": 1.0,
+            "level": 0.800000011920929,
+            "envelope": {
+              "attack": 0.002000000094995,
+              "decay": 0.400000005960464,
+              "sustain": 0.300000011920929,
+              "release": 0.300000011920929
+            }
+          },
+          {
+            "ratio": 2.0,
+            "level": 0.0,
+            "envelope": {
+              "attack": 0.002000000094995,
+              "decay": 0.600000023841858,
+              "sustain": 0.699999988079071,
+              "release": 0.300000011920929
+            }
+          },
+          {
+            "ratio": 3.0,
+            "level": 0.0,
+            "envelope": {
+              "attack": 0.002000000094995,
+              "decay": 0.600000023841858,
+              "sustain": 0.699999988079071,
+              "release": 0.300000011920929
+            }
+          }
+        ],
+        "fmMatrix": [
+          [
+            0.0,
+            0.5,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "fmOutputs": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "timbreA": {
+          "partials": 48,
+          "brightness": 0.600000023841858,
+          "evenLevel": 1.0,
+          "stretch": 0.0,
+          "formant": 0.0,
+          "formantFreq": 0.449999988079071,
+          "formantWidth": 0.349999994039536
+        },
+        "timbreB": {
+          "partials": 64,
+          "brightness": 0.25,
+          "evenLevel": 0.150000005960464,
+          "stretch": 0.0,
+          "formant": 0.600000023841858,
+          "formantFreq": 0.349999994039536,
+          "formantWidth": 0.25
+        },
+        "morph": 0.0,
+        "morphEnvAmount": 0.0,
+        "morphEnvelope": {
+          "attack": 0.5,
+          "decay": 1.0,
+          "sustain": 0.5,
+          "release": 0.5
+        },
+        "physical": {
+          "model": "marimba",
+          "hardness": 0.449999988079071,
+          "position": 0.300000011920929,
+          "decay": 0.349999994039536,
+          "damping": 0.600000023841858,
+          "stiffness": 0.0,
+          "body": 0.0,
+          "releaseDamp": 0.300000011920929
+        }
+      },
+      "sample": "",
+      "rootPitch": 60,
+      "volume": 1.399999976158142,
+      "pan": 0.0,
+      "mute": false,
+      "solo": false,
+      "pitch": 0.0,
+      "swing": 0.0,
+      "mixerTrack": 4
+    },
+    {
+      "name": "SunBurst Lead",
+      "instrument": "plugin",
+      "plugin": {
+        "description": "<PLUGIN name=\"SunBurst\" format=\"VST3\" category=\"Instrument|Synth\" manufacturer=\"Sun Loops Studio\" version=\"0.64.0\" file=\"/usr/lib/vst3/SunBurst.vst3\" uniqueId=\"bd02e412\" isInstrument=\"1\" fileTime=\"1a1da3ebc78\" infoUpdateTime=\"1a1da7e1614\" numInputs=\"0\" numOutputs=\"0\" isShell=\"0\" hasARAExtension=\"0\" uid=\"3dc034c6\"/>",
+        "state": "9473.VMjLgfOI...O+fWarAhckI2bo8la8HRLt.iHfTlai8FYo41Y8HRUTYTK3HxO9.BOVMEUy.Ea0cVZtMEcgQWY9vSRC8Vav8lak4Fc9bCLx.iKV0jZLclX3YjKt3xSqX1UgIWPnM1ZIIiXugCaggCRRwDctjFRlQEagkFNFk0azDSV3fjTUQUVTszLHg2S43hPOMUUsElPU0lX4E0QHYWRWkUdUYzXNUjUgsFLogzTU0VXlYGUYcVTrgjYtzlXq0zUYoWSTgkdUESV0kzUjgCRBM0ZEYTVnMyPOAUQpQUPvPDRuEkUOgFQVElc3r1XqcGaHYFVWgkbUcUV3fjPLQGUogTcyLzSPUjZTEDLDgzaQY0SnQDahYGNvj0YQcUVn4BZic1cVM1ZvjFR1MCZMYmKCwjctLDS3wzPNoGQC4DLhMkSncCZOciKUAkTEQ0TlolQYgCRRgEdAIyUygiQYsVRBgTLEYTXvTkUOglKosjcHg2R4X2PTETRUAUSAIkVpASZHcVRGIVY3DCV5kjPHESQFEFLUY0SnQTZKYGR3sTN1MDUAkTUP0TPRokZvjFRmkzQhUFNrEFZtf1XmcmUisFLogjcyHDSncCZOciKUAkTEQ0TlolQYgCRRgEdAIyU3UjQisVRBgTLEYTXvTkUOgFSosjcHg2R4X2PTETRUAUSAIkVpASZHgVUrElZIIDRwTjQgASUV8DZHk1R1gDdKkicCQUPIUETMEjTZoFLogTZmESXkEkUYYWTGoEZtf1XmcmUisFLogjcyHUSncCZOciKUAkTEQ0TlolQYgCR3gka3DyUyslQjglKnM1Y2Y0XqASZHY2L3wjdpMkSzn1TNQCTCwTdpMUS4Q0TMg1Mn8zMtTETRUDUSYlZFkENHgGVtgSLWUGMrgjYXcEVxU0UYgCRBwDctjFR0MyPOAUQpQUPvPDRuEkUOgFSFoUc3rlXmE0UYglKnM1Y2Y0XqASZHY2Ln0jctLDS14xPLMCSC0jdXMUS1gTdMg1Mn8zMtTETRUDUSYlZFkENHITVu0zQiUVTrI1aYcUVn4BZic1cVM1ZvjFR1MCdLYmKCwjctLDS2QzTNgmKS4DdpkFR0MyPOAUQpQUPvPDRuEkUOgFTVoUdQIyUyslQjglKnM1Y2Y0XqASZHc2LBwDZ2f1S23RUPIUQTMkYpYTV3fjPY8VSGMVY3vVXn4BZic1cVM1ZvjFR1MiPLg1Mn8zMtTETRUDUSYlZFkENHITVu0zQiUVTWQlcUwFRlg0UXIWUWkENHIDSz4RZHU2LC8DTEoFUAACQH8VTV8DZPYTXzfSQY8VVsgjYXcEVxU0UYgCRB4DctjFR0MyPOAUQpQUPvPDRuEkUOgFTFEFM3rVVnkjPHESQFEFLUY0Sn4RZKkGTS4DMpMkSzn1PMYGSS4DLLMUSvfDdKkicCQUPIUETMEjTZoFLogjZ2YEYkAiUZMSRBgTLEYTXvTkUOglKosDdtLDS14xPLYmKowDMlMDS3wTZLgGR3sTN1MDUAkTUP0TPRokZvjFRpcmUjUFNrEFZtf1XmcmUisFLogzcyHDSncCZOciKUAkTEQ0TlolQYgCRBkkbqIyU1ETaHYFVWgkbUcUV3fjTLQmKogTcyLzSPUjZTEDLDgzaQY0SnAkQgQCNvHFMzDCVn4BZic1cVM1ZvjFR2MiPLg1Mn8zMtTETRUDUSYlZFkENHITVxslLWo2ZVE1ZIIDRwTjQgASUV8DZLkWS5MiTNQiZS4TLpMTSyfzPMgGQS4DZ2f1S23RUPIUQTMkYpYTV3fjPYI2Zxbkd3vVXqkjPHESQFEFLUY0Sn4RZKEiKCwjctLDS1gTdLMCTSwzLTkWSzfDdKkicCQUPIUETMEjTZoFLogzZzv1X2cSUXglKnM1Y2Y0XqASZHY2LBwjcHMkSzn1TNQiYSwTLLMTS4QzPNMCSogTcyLzSPUjZTEDLDgzaQY0SnQEagESQ4ckZIIDRwTjQgASUV8DZtj1R44xPLYmKCwjcDMESzfzPLQCRS4DZ2f1S23RUPIUQTMkYpYTV3fjTYQWVWwTYI0FRlg0UXIWUWkENHIDSzgzPMQiZS4DMpkFSv.0TNoGQS4jdHg2R4X2PTETRUAUSAIkVpASZHsFMrM1c2.iXn4BZic1cVM1ZvjFR1MiPNAiKCwjctLDS3wzPNoGQC4DLhMkSncCZOciKUAkTEQ0TlolQYgCRRkEcY0FSkUDaHYFVWgkbUcUV3fjPLQmKCwDdpMkSzn1TNMCQo0TdPkGS2Y1PNkGR3sTN1MDUAkTUP0TPRokZvjFRqQCaig2MEkEZtf1XmcmUisFLogjcyHUSncCZOciKUAkTEQ0TlolQYgCRRkEcY0FSkkTaHYFVWgkbUcUV3fjPLQGSCwjctLDS14xTLcmZowjcpkFSzfDdKkicCQUPIUETMEjTZoFLogzZzv1X3cCLhglKnM1Y2Y0XqASZHY2LB0jctLDS14xPLYGUS4TLtLTSw.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.0TLMCU40DMHg2R4X2PTETRUAUSAIkVpASZHIWVwDVd2rlXqEUah81XrgjYXcEVxU0UYgCRRwDctjFR0MyPOAUQpQUPvPDRuEkUOglcrkUcMk2U4clUXYWUrgjYXcEVxU0UYgCRBwDctjFR0MyPOAUQpQUPvPDRuEkUOglcrkUcMk2U4sVagkVRBgTLEYTXvTkUOglKosjcHg2R4X2PTETRUAUSAIkVpASZHIWVwDVd2T0XzsFaHYFVWgkbUcUV3fjPLQmKogTcyLzSPUjZTEDLDgzaQY0SnomUXkVRxD1cHIDRwTjQgASUV8DZtj1R1gDdKkicCQUPIUETMEjTZoFLogzbEECV3gCaLglKnM1Y2Y0XqASZHY2LBwDZ2f1S23RUPIUQTMkYpYTV3fjTgcVSrIVcMkFRlg0UXIWUWkENHIDSz4RZHU2LC8DTEoFUAACQH8VTV8DZ5YEVokjLgoGRBgTLEYTXvTkUOglKosjcHg2R4X2PTETRUAUSAIkVpASZHMWQwHldUwlXn4BZic1cVM1ZvjFRyAUZKYmZS4DMpMjS5I1PMcGRSwjcpMTSncCZOciKUAkTEQ0TlolQYgCRREVcQYUVn4BZic1cVM1ZvjFR3MiPLg1Mn8zMtTETRUDUSYlZFkENHIUXyTzPLUVQVEldIIDRwTjQgASUV8DZtj1R1gDdKkicCQUPIUETMEjTZoFLogzbmcES1cSQYkWTsgjYXcEVxU0UYgCRBwDctjFR0MyPOAUQpQUPvPDRuEkUOgldFQ1ctj2U4kjLXglKnM1Y2Y0XqASZHY2LBwDZ2f1S23RUPIUQTMkYpYTV3fjTgMSQSwTYEYUX5kjPHESQFEFLUY0Sn4RZKYGR3sTN1MDUAkTUP0TPRokZvjFRyc1ULc2MEkUdQ0FRlg0UXIWUWkENHIDSz4RZHU2LC8DTEoFUAACQH8VTV8DZ5YDY2QTdWkWRxfEZtf1XmcmUisFLogjcyHDSncCZOciKUAkTEQ0TlolQYgCRRE1LEkFSkUjUgoWRBgTLEYTXvTkUOglKosTdTMDS14xPLYGR4wzLPMESyPUdMQCR3sTN1MDUAkTUP0TPRokZvjFRyc1ULg2MEkUdQ0FRlg0UXIWUWkENHgFS3MiPLg1Mn8zMtTETRUDUSYlZFkENHIUXyTTZLUVSsIVZIIDRwTjQgASUV8DZhk1R1gDdKkicCQUPIUETMEjTZoFLogzbmcES4cSUXMWTsgjYXcEVxU0UYgCRBwDcXMDS14xPLYmKowTdlMTS2Y1TMIiZogTcyLzSPUjZTEDLDgzaQY0SnomQjcGS4ckZMczXn4BZic1cVM1ZvjFR3gTZKYGR3sTN1MDUAkTUP0TPRokZvjFRyc1ULk2MvHFdMwFRlg0UXIWUWkENHIES3MiPLg1Mn8zMtTETRUDUSYlZFkENHIUXyTzPMUVQVEldIIDRwTjQgASUV8DZtj1RvfDdKkicCQUPIUETMEjTZoFLogzbmcES5cSQYkWTsgjYXcEVxU0UYgCR3wjdyHDSncCZOciKUAkTEQ0TlolQYgCRRE1LEMTSk0TahkVRBgTLEYTXvTkUOgFQ4wDctjFR0MyPOAUQpQUPvPDRuEkUOgldFQ1cTk2UmAiQiglKnM1Y2Y0XqASZHY2Ln0jctLDS14xPLgGSC4jdDMjSvH1TNg1Mn8zMtTETRUDUSYlZFkENHIUXyTzTMUVTwHldIIDRwTjQgASUV8DZTk1R1gDdKkicCQUPIUETMEjTZoFLogzbmcESvbCLhgWSrgjYXcEVxU0UYgCRRwjdyHDSncCZOciKUAkTEQ0TlolQYgCRRE1LEkVSkUjUgoWRBgTLEYTXvTkUOglKosjLpMkSzn1TNQCUowTdDkVS3Y1PMgGR3sTN1MDUAkTUP0TPRokZvjFRyc1ULEyMEkUdQ0FRlg0UXIWUWkENHgFS5MiPLg1Mn8zMtTETRUDUSYlZFkENHIUXyTTZMUVSsIVZIIDRwTjQgASUV8DZDMUSz4RZHU2LC8DTEoFUAACQH8VTV8DZ5YDY2cSUXMWTsgjYXcEVxU0UYgCRBwDctLES2o1TNQiZo0jdhMES54xTMYGRS4DZ2f1S23RUPIUQTMkYpYTV3fjTgMSQ4ckZMczXn4BZic1cVM1ZvjFR2oVZKYGR3sTN1MDUAkTUP0TPRokZvjFRyc1ULUVSsIVZIIDRwTjQgASUV8DZDk1R1gDdKkicCQUPIUETMEjTZoFLogzbm0FSkUjUgoWRBgTLEYTXvTkUOglKosjcHg2R4X2PTETRUAUSAIkVpASZHM2YswTYQEiX5kjPHESQFEFLUY0Sn4RZKYGR3sTN1MDUAkTUP0TPRokZvjFRycVaLUVSsIVZIIDRwTjQgASUV8DZtj1R1gDdKkicCQUPIUETMEjTZoFLogzbmICSkUjUgoWRBgTLEYTXvTkUOglKosjcHg2R4X2PTETRUAUSAIkVpASZHM2YxvTYQEiX5kjPHESQFEFLUY0Sn4RZKYGR3sTN1MDUAkTUP0TPRokZvjFRyclLLUVSsIVZIIDRwTjQgASUV8DZtj1R1gDdKkicCQUPIUETMEjTZoFLogzbmcTSkUjUgoWRBgTLEYTXvTkUOglKosjcHg2R4X2PTETRUAUSAIkVpASZHM2YG0TYQEiX5kjPHESQFEFLUY0Sn4RZKYGR3sTN1MDUAkTUP0TPRokZvjFRyc1QMUVSsIVZIIDRwTjQgASUV8DZtj1R1gDdKkicCQUPIUETMEjTZoFLogzbmcUSkUjUgoWRBgTLEYTXvTkUOglKosjcHg2R4X2PTETRUAUSAIkVpASZHM2YW0TYQEiX5kjPHESQFEFLUY0Sn4RZKYGR3sTN1MDUAkTUP0TPRokZvjFRyc1UMUVSsIVZIIDRwTjQgASUV8DZtj1R1gDdKkicCQUPIUETMEjTZoFLogzbm0VSkUjUgoWRBgTLEYTXvTkUOglKosjcHg2R4X2PTETRUAUSAIkVpASZHM2Ys0TYQEiX5kjPHESQFEFLUY0Sn4RZKYGR3sTN1MDUAkTUP0TPRokZvjFRycVaMUVSsIVZIIDRwTjQgASUV8DZtj1R1gDdKkicCQUPIUETMEjTZoFLogzbmISSkUjUgoWRBgTLEYTXvTkUOglKosjcHg2R4X2PTETRUAUSAIkVpASZHM2YxzTYQEiX5kjPHESQFEFLUY0Sn4RZKYGR3sTN1MDUAkTUP0TPRokZvjFRyclLMUVSsIVZIIDRwTjQgASUV8DZtj1R1gDdKkicCQUPIUETMEjTZoFLogzbmcjSkUjUgoWRBgTLEYTXvTkUOglKosjcHg2R4X2PTETRUAUSAIkVpASZHM2YG4TYQEiX5kjPHESQFEFLUY0Sn4RZKYGR3sTN1MDUAkTUP0TPRokZvjFRyc1QNUVSsIVZIIDRwTjQgASUV8DZtj1R1gDdKkicCQUPIUETMEjTZoFLogzbmckSkUjUgoWRBgTLEYTXvTkUOglKosjcHg2R4X2PTETRUAUSAIkVpASZHM2YW4TYQEiX5kjPHESQFEFLUY0Sn4RZKYGR3sTN1MDUAkTUP0TPRokZvjFRyc1UNUVSsIVZIIDRwTjQgASUV8DZtj1R1gDdKkicCQUPIUETMEjTZoFLogDc3XkV4UULWkFNFEVcU0lXn4BZic1cVM1ZvjFR1MiPLg1Mn8zMtTETRUDUSYlZFkENHgVX0sVLhsFNEE1ZYcUVxkjPHESQFEFLUY0Sn4RZKYGR3sTN1MDUAkTUP0TPRokZvjFR0UTdWg1cVkEcQwFRlg0UXIWUWkENHIDSzQUZHU2LC8DTEoFUAACQH8VTV8DZ2XESkEkUYoWUsE1ZIIDRwTjQgASUV8DZtj1R44xPLYmKCwjcDMESzfzPLQCRS4DZ2f1S23RUPIUQTMkYpYTV3fDdgc2Mqk0azXUVn4BZic1cVM1ZvjFR1MiPLg1Mn8zMtTETRUDUSYlZFkENHgWX2cSQgsVVWkkbIIDRwTjQgASUV8DZtj1Ry3xPLYmKCwjcDMESzfzPLQCRS4DZ2f1S23RUPIUQTMkYpYTV3fDdgc2MvDVZQ0FRlg0UXIWUWkENHIDSz4RZHU2LC8DTEoFUAACQH8VTV8DZ2XESkgCagglKnM1Y2Y0XqASZHc2LBwDZ2f1S23RUPIUQTMkYpYTV3fDdgc2MEI1YzvFRlg0UXIWUWkENHIDSz4RZHU2LC8DTEoFUAACQH8VTV8DZ2XESkEjLgkWRBgTLEYTXvTkUOglKosjcHg2R4X2PTETRUAUSAIkVpASZHUWQ4ckci0FRlg0UXIWUWkENHIDSzQUZHU2LC8DTEoFUAACQH8VTV8DZ2XESkkzQh4VQwH1ZIIDRwTjQgASUV8DZDk1R1gDdKkicCQUPIUETMEjTZoFLogTcEk2U4UkUg8VRBgTLEYTXvTkUOglKosjcHg2R4X2PTETRUAUSAIkVpASZHUWQ4cUdA0lXqUjQYglKnM1Y2Y0XqASZHY2Ln0DMpMkSzn1TNMiYCwjLpMDSxPTZHU2LC8DTEoFUAACQH8VTV8DZ2XESkE0UXg1cVkEZtf1XmcmUisFLogjcyHDSncCZOciKUAkTEQ0TlolQYgCR3E1c2r1X0sVLXsVSsgjYXcEVxU0UYgCRR0DctjFR0MyPOAUQpQUPvPDRuEkUOg1MVwTYicEVwTEaHYFVWgkbUcUV3fDZLQmKogTcyLzSPUjZTEDLDgzaQY0SncCaLUVRFE1ZzXTVn4BZic1cVM1ZvjFR1MiTMg1Mn8zMtTETRUDUSYlZFkENHgWX3cSQYsVTWMFcUwFRlg0UXIWUWkENHIDSzgzTMg1Mn8zMtTETRUDUSYlZFkENHgWX3cyZY8FMVkEZtf1XmcmUisFLogjcyHDSncCZOciKUAkTEQ0TlolQYgCR3EFd2TTXqk0UYIWRBgTLEYTXvTkUOglKosTdPMkSzn1TNQiZC0jcLMkSvvzTMACR3sTN1MDUAkTUP0TPRokZvjFR0kTdWUWSFMFZtf1XmcmUisFLogzcyHDSncCZOciKUAkTEQ0TlolQYgCR3EFd2.SXzkjPHESQFEFLUY0SnQTZKYGR3sTN1MDUAkTUP0TPRokZvjFR0kTdWYWQrEFZtf1XmcmUisFLogjcyHDSncCZOciKUAkTEQ0TlolQYgCR3EFd2TjX00TaHYFVWgkbUcUV3fjPLQmKogTcyLzSPUjZTEDLDgzaQY0SncCaLUVPxLFZtf1XmcmUisFLogjcyHUSncCZOciKUAkTEQ0TlolQYgCR3EFd2rlX1clUXkWUrgjYXcEVxU0UYgCRRwDctjFR0MyPOAUQpQUPvPDRuEkUOg1MrwTYMcUVysFaHYFVWgkbUcUV3fjPLQmKogTcyLzSPUjZTEDLDgzaQY0SncCaLUVSGIFdUYEVpkjPHESQFEFLUY0Sn4RZKEiZS4DMpMkSzX1PNYmXS4jchMESncCZOciKUAkTEQ0TlolQYgCR3EFd2TzXmkjQgsVRBgTLEYTXvTkUOglKosjcHg2R4X2PTETRUAUSAIkVpASZHUWR4cUL3XkVoUULhglKnM1Y2Y0XqASZHc2LBwDZ2f1S23RUPIUQTMkYpYTV3fDdgg2MvL1YYcUVn4BZic1cVM1ZvjFR4MiPLg1Mn8zMtTETRUDUSYlZFkENHgWX4cyZXIWUrElZIIDRwTjQgASUV8DZtj1RvfDdKkicCQUPIUETMEjTZoFLogTcMk2UpUkQiACMVkEZtf1XmcmUisFLogjcyfFSvfDdKkicCQUPIUETMEjTZoFLogTcMk2UrsFagsVRBgTLEYTXvTkUOglKosjcHg2R4X2PTETRUAUSAIkVpASZHUWS4ckbUw1XqcGaHYFVWgkbUcUV3fjPLQmYCwjctLDS14xTLcmZowjcpkFSzfDdKkicCQUPIUETMEjTZoFLogTcMk2U00jQiglKnM1Y2Y0XqASZHY2LBwDZ2f1S23RUPIUQTMkYpYTV3fDdgk2MvDFcIIDRwTjQgASUV8DZtj1R1gDdKkicCQUPIUETMEjTZoFLogTcMk2U1UDagglKnM1Y2Y0XqASZHY2LBwDZ2f1S23RUPIUQTMkYpYTV3fDdgk2MEIVcM0FRlg0UXIWUWkENHIDSz4RZHU2LC8DTEoFUAACQH8VTV8DZ2DCSkEjLiglKnM1Y2Y0XqASZHY2LR0DZ2f1S23RUPIUQTMkYpYTV3fDdgk2MqIlcmYEV4UEaHYFVWgkbUcUV3fjTLQmKogTcyLzSPUjZTEDLDgzaQY0SncSLLUVSWk0bqwFRlg0UXIWUWkENHIDSz4RZHU2LC8DTEoFUAACQH8VTV8DZ2DCSk0zQhgWUVgkZIIDRwTjQgASUV8DZtj1Rwn1TNQiZS4DMlMjS1I1TNYmXSwDZ2f1S23RUPIUQTMkYpYTV3fDdgk2MEM1YIYTXqkjPHESQFEFLUY0Sn4RZKYGR3sTN1MDUAkTUP0TPRokZvjFR00TdWECNVoUZUEiXn4BZic1cVM1ZvjFR2MiPLg1Mn8zMtTETRUDUSYlZFkENHgWX4cCLicVVWkEZtf1XmcmUisFLogDdyHDSncCZOciKUAkTEQ0TlolQYgCRBI1aQICVtgSUYQWVsgjYXcEVxU0UYgCRBwDctjFR0MyPOAUQpQUPvPDRuEkUOgFRWkUL3TTVmAiQhglKnM1Y2Y0XqASZHY2LB0jctLDS14xPLYGUS4TLtLTSw.0TMg1Mn8zMtTETRUDUSYlZFkENHglXqkkLWM2ZFQFZtf1XmcmUisFLogjcyfFS14xPLYmKCwjcHMkSy3RZLkGRowDZ2f1S23RUPIUQTMkYpYTV3fDZhsVVxbUczvFRlg0UXIWUWkENHIESz4RZHU2LC8DTEoFUAACQH8VTV8DZHcUVwfSQhgWUrgjYXcEVxU0UYgCRRwjcyHDSncCZOciKUAkTEQ0TlolQYgCRnI1ZYIyU4sFajsVRBgTLEYTXvTkUOglKosDLHg2R4X2PTETRUAUSAIkVpASZHgWUrMVYickVpE0QZglKnM1Y2Y0XqASZHc2LBwDZ2f1S23RUPIUQTMkYpYTV3fDdhASRwbkbUw1XqcGaHYFVWgkbUcUV3fjPLQmKogTcyLzSPUjZTEDLDgzaQY0SnwzUigFNvDVZQ0FRlg0UXIWUWkENHIDSz4RZHU2LC8DTEoFUAACQH8VTV8DZLc0XngCLicVVWkEZtf1XmcmUisFLogjcyHDSncCZOciKUAkTEQ0TlolQYgCRnMVcqECVq0TaHYFVWgkbUcUV3fjTLg2LBwDZ2f1S2bCdTACMrAELIIiX5QyPt3hKt3hKt3hKt3hYRUUSTEETIckVwTjQisVTTgkdEYjKAQjYPQSPWgUdMcjKAQjct3hdA4hKt3hKt3hKtnTUv.UQAslXuk0UXoWUFE0YQcEV77RRC8Vav8lak4Fc9vyKVMEUy.Ea0cVZtMEcgQWY9.."
+      },
+      "sample": "",
+      "rootPitch": 60,
+      "volume": 0.699999988079071,
+      "pan": 0.0,
+      "mute": false,
+      "solo": false,
+      "pitch": 0.0,
+      "swing": 0.0,
+      "mixerTrack": 5
+    },
+    {
+      "name": "SunBurst Pad",
+      "instrument": "plugin",
+      "plugin": {
+        "description": "<PLUGIN name=\"SunBurst\" format=\"VST3\" category=\"Instrument|Synth\" manufacturer=\"Sun Loops Studio\" version=\"0.64.0\" file=\"/usr/lib/vst3/SunBurst.vst3\" uniqueId=\"bd02e412\" isInstrument=\"1\" fileTime=\"1a1da3ebc78\" infoUpdateTime=\"1a1da7e1614\" numInputs=\"0\" numOutputs=\"0\" isShell=\"0\" hasARAExtension=\"0\" uid=\"3dc034c6\"/>",
+        "state": "9459.VMjLgnNI...O+fWarAhckI2bo8la8HRLt.iHfTlai8FYo41Y8HRUTYTK3HxO9.BOVMEUy.Ea0cVZtMEcgQWY9vSRC8Vav8lak4Fc9bCLvjiKV0jZLclc2YjKt3xSqX1UgIWPnM1ZIIiXugCaggCRRwDctjFRlQEagkFNFk0azDSV3fjTUQUVTszLHg2S43hPOMUUsElPU0lX4E0QHYWRWkUdUYzXNUjUgsFLogzUEwlXyEjPTcVTrgjYtzlXq0zUYoWSTgkdUESV0kzUjgCRBQ0YQwFR4X2PTETRUAUSAIkVpASZHcFLFIVYYcUVxkjPHESQFEFLUY0Sn4RZKACR3sTN1MDUAkTUP0TPRokZvjFRmkzQhU1XVgkdUwFRlg0UXIWUWkENHIDSzg0PLYmKCwjctjFS4Y1PMcmYS0jLpkFR0MyPOAUQpQUPvPDRuEkUOgFQrIlc3TUX0EkUYglKnM1Y2Y0XqASZHY2LBwDZ2f1S23RUPIUQTMkYpYTV3fjTXgWPxbUcMYzXn4BZic1cVM1ZvjFR2MiPLg1Mn8zMtTETRUDUSYlZFkENHIEV3EjLWUGMrgjYXcEVxU0UYgCRBwDctjFR0MyPOAUQpQUPvPDRuEkUOgFQrIlc3rlXmE0UYglKnM1Y2Y0XqASZHk2LBwDZ2f1S23RUPIUQTMkYpYTV3fDZXsFMFkEZtf1XmcmUisFLogDdyHDSncCZOciKUAkTEQ0TlolQYgCR3gka3DyUpUkQho2YrgjYXcEVxU0UYgCRBwDcXMDS14xPLYmKowTdlMTS2Y1TMIiZogTcyLzSPUjZTEDLDgzaQY0SnwjQZUGNUE1am0FRlg0UXIWUWkENHIDSzA0PLYmKCwjctLDSvnVZMYGTo0jdTkFR0MyPOAUQpQUPvPDRuEkUOgFSFoUc3.SXzkjPHESQFEFLUY0SnQTZKYGR3sTN1MDUAkTUP0TPRokZvjFRocVLgUVRWgkdUwFRlg0UXIWUWkENHIDSzA0TNQiZS4DMpkWS1QzTNICV40jLXkFR0MyPOAUQpQUPvPDRuEkUOgFTVoUdQIyUpkzUZESUrgjYXcEVxU0UYgCRBwDcLMDS14xPLYmKSwzcpkFS1oVZLQCR3sTN1MDUAkTUP0TPRokZvjFRpsVLhoGNUE1am0FRlg0UXIWUWkENHIESz4RZHU2LC8DTEoFUAACQH8VTV8DZPYkV4EkLWUGMrgjYXcEVxU0UYgCRBwDctjFR0MyPOAUQpQUPvPDRuEkUOgFTVoUdQIyU5s1QhsVRBgTLEYTXvTkUOglKosjcHg2R4X2PTETRUAUSAIkVpASZHo1cVQVYQYkVwjjPHESQFEFLUY0SnYVZKYGR3sTN1MDUAkTUP0TPRokZvjFRpcmUjUVVrgEZtf1XmcmUisFLogjcyfGS5o1TNQiZS4DMPMDS4o1TMkGUS0DZ2f1S23RUPIUQTMkYpYTV3fjPYI2Zxb0bqYDYn4BZic1cVM1ZvjFR1MCZLACR3sTN1MDUAkTUP0TPRokZvjFRpcmUjUFNrEFZtf1XmcmUisFLogjcyHDSncCZOciKUAkTEQ0TlolQYgCRBkkbqIyU1ETaHYFVWgkbUcUV3fjTLQmKogTcyLzSPUjZTEDLDgzaQY0SnAkQgQCNvHFMzDCVn4BZic1cVM1ZvjFR2MiPLg1Mn8zMtTETRUDUSYlZFkENHITVxslLWo2ZVE1ZIIDRwTjQgASUV8DZLkWS5MiTNQiZS4TLpMTSyfzPMgGQS4DZ2f1S23RUPIUQTMkYpYTV3fjPYI2Zxbkd3vVXqkjPHESQFEFLUY0Sn4RZKEiKCwjctLDS1gTdLMCTSwzLTkWSzfDdKkicCQUPIUETMEjTZoFLogzZzv1X2cSUXglKnM1Y2Y0XqASZHc2LRwDMpMkSzn1TNgmYC0jLPMTS3gUZHU2LC8DTEoFUAACQH8VTV8DZTwVXwTTdWoVRBgTLEYTXvTkUOglKosDMpMkSzn1TNECTowTdhkFS2wzTLkGR3sTN1MDUAkTUP0TPRokZvjFRqQCaic2MqIFZtf1XmcmUisFLogDdyHTSzn1TNQiZ40TLDMUSyPzPMgGQogTcyLzSPUjZTEDLDgzaQY0SnQEagESQ4cUdIIDRwTjQgASUV8DZtj1RyP0PLYmKCwjcHkGSy.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.0TLMCU40DMHg2R4X2PTETRUAUSAIkVpASZHM2YWwTd2TTV4EUaHYFVWgkbUcUV3fDZLg2LBwDZ2f1S23RUPIUQTMkYpYTV3fjTgMSQ4wTYM0lXokjPHESQFEFLUY0SnQTZLQmKogTcyLzSPUjZTEDLDgzaQY0SnomQjcGT4c0YvXzXn4BZic1cVM1ZvjFR1MiTMg1Mn8zMtTETRUDUSYlZFkENHIUXyTzPMUVTwHldIIDRwTjQgASUV8DZLMTSz4RZHU2LC8DTEoFUAACQH8VTV8DZ5YDY2AUdWkWRxfEZtf1XmcmUisFLogzcLk1R1gDdKkicCQUPIUETMEjTZoFLogzbmcESvbSUXMWTsgjYXcEVxU0UYgCRBwDcXMDS14xPLYmKowTdlMTS2Y1TMIiZogTcyLzSPUjZTEDLDgzaQY0SnomQjcGU4ckZMczXn4BZic1cVM1ZvjFRvLiPLg1Mn8zMtTETRUDUSYlZFkENHIUXyTzTMUVSsIVZIIDRwTjQgASUV8DZDMTSz4RZHU2LC8DTEoFUAACQH8VTV8DZ5YDY2gUdWcFLFMFZtf1XmcmUisFLogjcyfWSzn1TNQiZS4DLHkGS2gUZLMCTowDZ2f1S23RUPIUQTMkYpYTV3fjTgMSQo0TYQEiX5kjPHESQFEFLUY0SngzPMQmKogTcyLzSPUjZTEDLDgzaQY0SnomQjcGV4cUdIICVn4BZic1cVM1ZvjFR2QUZKYGR3sTN1MDUAkTUP0TPRokZvjFRyc1ULUVQVEldIIDRwTjQgASUV8DZtj1R2gzPLYmKCwjctLTSxf0PNkmXSwTLHg2R4X2PTETRUAUSAIkVpASZHM2YWwTYQEiX5kjPHESQFEFLUY0SngTZLQmKogTcyLzSPUjZTEDLDgzaQY0SnomQjc2MvHFdMwFRlg0UXIWUWkENHIESz4RZHU2LC8DTEoFUAACQH8VTV8DZ5YDY3cSUXMWTsgjYXcEVxU0UYgCRBwDctjFR0MyPOAUQpQUPvPDRuEkUOgldFQFd2TTV4EUaHYFVWgkbUcUV3fjPLQmKogTcyLzSPUjZTEDLDgzaQY0SnomQjg2MvHFdMwFRlg0UXIWUWkENHIDSz4RZHU2LC8DTEoFUAACQH8VTV8DZ5YDY4cSUXMWTsgjYXcEVxU0UYgCRBwDctjFR0MyPOAUQpQUPvPDRuEkUOgldFQVd2TTV4EUaHYFVWgkbUcUV3fjPLQmKogTcyLzSPUjZTEDLDgzaQY0SnomQjk2MvHFdMwFRlg0UXIWUWkENHIDSz4RZHU2LC8DTEoFUAACQH8VTV8DZ5YDY5cSUXMWTsgjYXcEVxU0UYgCRBwDctjFR0MyPOAUQpQUPvPDRuEkUOgldFQld2TTV4EUaHYFVWgkbUcUV3fjPLQmKogTcyLzSPUjZTEDLDgzaQY0SnomQjo2MvHFdMwFRlg0UXIWUWkENHIDSz4RZHU2LC8DTEoFUAACQH8VTV8DZ5YDYvbSUXMWTsgjYXcEVxU0UYgCRBwDctjFR0MyPOAUQpQUPvPDRuEkUOgldFQFL2TTV4EUaHYFVWgkbUcUV3fjPLQmKogTcyLzSPUjZTEDLDgzaQY0SnomQjAyMvHFdMwFRlg0UXIWUWkENHIDSz4RZHU2LC8DTEoFUAACQH8VTV8DZ5YDYwbSUXMWTsgjYXcEVxU0UYgCRBwDctjFR0MyPOAUQpQUPvPDRuEkUOgldFQVL2TTV4EUaHYFVWgkbUcUV3fjPLQmKogTcyLzSPUjZTEDLDgzaQY0SnomQjEyMvHFdMwFRlg0UXIWUWkENHIDSz4RZHU2LC8DTEoFUAACQH8VTV8DZ5YDYxbSUXMWTsgjYXcEVxU0UYgCRBwDctjFR0MyPOAUQpQUPvPDRuEkUOgldFQlL2TTV4EUaHYFVWgkbUcUV3fjPLQmKogTcyLzSPUjZTEDLDgzaQY0SnomQjIyMvHFdMwFRlg0UXIWUWkENHIDSz4RZHU2LC8DTEoFUAACQH8VTV8DZ5YDYybSUXMWTsgjYXcEVxU0UYgCRBwDctjFR0MyPOAUQpQUPvPDRuEkUOgldFQ1L2TTV4EUaHYFVWgkbUcUV3fjPLQmKogTcyLzSPUjZTEDLDgzaQY0SnomQjMyMvHFdMwFRlg0UXIWUWkENHIDSz4RZHU2LC8DTEoFUAACQH8VTV8DZ5YDYzbSUXMWTsgjYXcEVxU0UYgCRBwDctjFR0MyPOAUQpQUPvPDRuEkUOgldFQFM2TTV4EUaHYFVWgkbUcUV3fjPLQmKogTcyLzSPUjZTEDLDgzaQY0SnomQjQyMvHFdMwFRlg0UXIWUWkENHIDSz4RZHU2LC8DTEoFUAACQH8VTV8DZyDSXu0zUYUVSwDlb3X0X3kjPHESQFEFLUY0Sn4RZKYGR3sTN1MDUAkTUP0TPRokZvjFRzgiUZkWUwbkbUw1XqcGaHYFVWgkbUcUV3fjPLQmKogTcyLzSPUjZTEDLDgzaQY0SnciULUVRFE1ZzXTVn4BZic1cVM1ZvjFR1MiTMg1Mn8zMtTETRUDUSYlZFkENHgWX2cSQYsVTWMFcUwFRlg0UXIWUWkENHIDSzwzPLYmKCwjctLES2oVZLYmZowDMHg2R4X2PTETRUAUSAIkVpASZHUWQ4cEaqwVXqkjPHESQFEFLUY0Sn4RZKYGR3sTN1MDUAkTUP0TPRokZvjFR0UTdWIWUrM1Z2wFRlg0UXIWUWkENHIDSzg0TNQiZS4DMpMjSy3RdMQiK40zcHg2R4X2PTETRUAUSAIkVpASZHUWQ4cUcMYzXn4BZic1cVM1ZvjFR1MiPLg1Mn8zMtTETRUDUSYlZFkENHgWX2cCLgQWRBgTLEYTXvTkUOgFQosjcHg2R4X2PTETRUAUSAIkVpASZHUWQ4ckcEwVXn4BZic1cVM1ZvjFR1MiPLg1Mn8zMtTETRUDUSYlZFkENHgWX2cSQhUWSsgjYXcEVxU0UYgCRBwDctjFR0MyPOAUQpQUPvPDRuEkUOg1MVwTYAIyXn4BZic1cVM1ZvjFR1MiTMg1Mn8zMtTETRUDUSYlZFkENHgWX2cyZhY2YVgUdUwFRlg0UXIWUWkENHIESz4RZHU2LC8DTEoFUAACQH8VTV8DZ2XESk0zUYM2ZrgjYXcEVxU0UYgCRBwDctjFR0MyPOAUQpQUPvPDRuEkUOg1MVwTYMcjX3UkUXoVRBgTLEYTXvTkUOglKosTLpMkSzn1TNQiYC4jchMkS1I1TLg1Mn8zMtTETRUDUSYlZFkENHgWX2cSQicVRFE1ZIIDRwTjQgASUV8DZtj1R1gDdKkicCQUPIUETMEjTZoFLogTcEk2UwfiUZkVUwHFZtf1XmcmUisFLogjLyHDSncCZOciKUAkTEQ0TlolQYgCR3E1c2.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.SXzkjPHESQFEFLUY0SnQTZKYGR3sTN1MDUAkTUP0TPRokZvjFR3UEaiUVPsI1ZIIDRwTjQgASUV8DZDMDSz4RZHU2LC8DTEoFUAACQH8VTV8DZHcUVwfCLh81aWkEZtf1XmcmUisFLogjcyHjS14xPLYmKCwzcDMkS34xTNgmZogTcyLzSPUjZTEDLDgzaQY0SngzUYECNvL1aQYzXtkjPHESQFEFLUY0SnQTZKYGR3sTN1MDUAkTUP0TPRokZvjFR4UUaXU1cVkULUYTXn4BZic1cVM1ZvjFR1MiPLg1Mn8zMtTETRUDUSYlZFkENHgmXvjTLWUWSFMFZtf1XmcmUisFLogjcyHDSncCZOciKUAkTEQ0TlolQYgCR3IFLIEyUxTDaisVRBgTLEYTXvTkUOglKosjcHg2R4X2PTETRUAUSAIkVpASZHECNVoUZUEiXn4BZic1cVM1ZvjFR2gTZKYGR3sTN1k2RSUUagITUsIVdQ01St3hKt3hKt3hKt3hKJUELPUTPqI1aYcEV5UkQQcVTWgkKDAkKBs1QhcVSxHlKDAkKC4BTG4hKt3hKt3hKt3FUUMTUDQEdqw1XmE0UYQTQFM1YAwyKIMzasA2atUlaz4COuX0TTMCTrU2Yo41TzEFck4C."
+      },
+      "sample": "",
+      "rootPitch": 60,
+      "volume": 0.230000004172325,
+      "pan": 0.0,
+      "mute": false,
+      "solo": false,
+      "pitch": 0.0,
+      "swing": 0.0,
+      "mixerTrack": 6
+    },
+    {
+      "name": "HexForge Bass",
+      "instrument": "plugin",
+      "plugin": {
+        "description": "<PLUGIN name=\"HexForge\" format=\"VST3\" category=\"Instrument|Synth\" manufacturer=\"Sun Loops Studio\" version=\"0.64.0\" file=\"/usr/lib/vst3/HexForge.vst3\" uniqueId=\"b218d705\" isInstrument=\"1\" fileTime=\"1a1da3ebc78\" infoUpdateTime=\"1a1da7e1614\" numInputs=\"0\" numOutputs=\"0\" isShell=\"0\" hasARAExtension=\"0\" uid=\"3dbb85a7\"/>",
+        "state": "12152.VMjLg71K...O+fWarAhckI2bo8la8HRLt.iHfTlai8FYo41Y8HRUTYTK3HxO9.BOVMEUy.Ea0cVZtMEcgQWY9vSRC8Vav8lak4Fc9jCLxjiKV0jZLclK1gjKt3xSqX1UgIWPnM1ZIIiXugCaggCRRwDctjFRlQEagkFNFk0azDSV3fjTUQUVTszLHg2S43hPOgTUFQlQ3vlXsUkQHkWPWkUZQ0lXmcmUPgCRRwDctLDS14RZNY2LBwjctLDSl4RZKIiK40zctMDSz4xPLYmKCgjcyHUSxH1PMUiKosjctLDS14hPLQGUCwjctjlS1MiPLYmKCwjYtj1R5AUdMgmaCwDctLDS14xPHY2LB0jclkFS03RZKYmKCwjctHDSzwTdMMiKo4jcyHDS14xPLYlKosTdTkGSw31PLQmKCwjctLDR1MCdLkGS4wTMtj1R14xPLYmKBwDcLMESwfTZNY2LBwjctLDSl4RZKkmKSwDLtMDSz4xPLYmKCgjcyfFSyXVdMUiKosjctLDS14hPLQGR40jLPklS1MiPLYmKCwjYtj1R3gUdMkmaCwDctLDS14xPHY2LnwDLlkFS03RZKYmKCwjctHDSzgzTMYmKo4jcyHDS14xPLYlKosDdPkFSv31PLQmKCwjctLDR1MCZLkGU40TMtj1R14xPLYmKBwDcHkFSz.UZNY2LBwjctLDSl4RZKgGR4wTLtMDSz4xPLYmKCgjcyfFS2YVZLUiKosjctLDS14hPLQGRSwTdHklS1MiPLYmKCwjYtj1R34xPNAiaCwDctLDS14xPHY2LnwjcPMES03RZKYmKCwjctHDSzgzPLYmKo4jcyHDS14xPLYlKoszcpkVS241PLQmKCwjctLDR1MiTLQCRS0TMtj1R14xPLYmKBwDcDMjSz3RZNY2LBwjctLDSl4RZKcmYS0jLtMDSz4xPLYmKCgjcyHESyfTZMUiKosjctLDS14hPLQGQ40DMXklS1MiPLYmKCwjYtj1R2IVZMMiaCwDctLDS14xPHY2LRwjLPMES03RZKYmKCwjctHDSzQTdMcGUo4jcyHDS14xPLYlKoszcXMkS141PLQmKCwjctLDR1MiTLECV40TMtj1R14xPLYmKBwDcDkVS5AUZNY2LBwjctLDSl4RZKcGVowDdtMDSz4xPLYmKCgjcyHESw3xTLUiKosjctLDS14hPLQGQS0zLDklS1MiPLYmKCwjYtj1R2QUZMgmaCwDctLDS14xPHY2LRwDLPkGS03RZKYmKCwjctHDSzQzTMgGUo4jcyHDS14xPLYlKoszcTMDSy31PLQmKCwjctLDR1MiTLomZSwTMtj1R14xPLYmKBwDcDMTSx.UZNY2LBwjctLDSl4RZKcGTS0DMtMDSz4xPLYmKCgjcyHES5AUdLUiKosjctLDS14hPLQGQC0DdpklS1MiPLYmKCwjYtj1R2A0TLomaCwDctLDS14xPHY2LRwjdtLDS03RZKYmKCwjctHDSzQTdLMiXo4jcyHDS14xPLYlKoszcLkWS541PLQmKCwjctLDR1MiTLkGVSwTMtj1R14xPLYmKBwDcDkGS5YVZNY2LBwjctLDSl4RZKcGS4wTLtMDSz4xPLYmKCgjcyHES4gzTMUiKosjctLDS14hPLQGQ4wzcLklS1MiPLYmKCwjYtj1R2wzPLgmaCwDctLDS14xPHY2LRwDdpMES03RZKYmKCwjctHDSzQTZLMiKo4jcyHDS14xPLYlKoszcHkWS141PLQmKCwjctLDR1MiTLgGVCwTMtj1R14xPLYmKBwDcDkFSv3RZNY2LBwjctLDSn4BdhYWUwfkdIcEVxkDUOgFQosjctLDS141PLQGSC4jctLDR1MiPLYmKCwTMtj1RyvzPMkmKBwDctLDS14RZNY2LRwTLHMkSl4RZKYmKCwjctMDSzgUZMYGTCgjcyHDS14xPLUiKosjcpkGS44hPLQmKCwjctjlS1MCdMQCVS0jYtj1Rz3RdMQiaCwDcDkGSvf0PHY2LBwjctLDS03RZKIiZo0DLtHDSz4xPLYmKo4jcyfVSy3xTLYlKosjctLDS141PLQGUo0jLDMDR1MiPLYmKCwTMtj1RzH1TMomKBwDctLDS14RZNY2LR0DLtjFSl4RZKYmKCwjctMDSzgTdLYmZCgjcyHDS14xPLUiKosjdtLDSz3hPLQmKCwjctjlS1MiPMYmXo0jYtj1R14xPLYmaCwDcTkVS4o1PHY2LBwjctLDS03RZKYmYS0zctHDSzwTZLECRo4jcyfFSy.UdLYlKosjctLDS141PLQmZowDdLMDR1MiPLYmKCwTMtj1R5gzTNomKBwDctLDS14RZNY2Ln0zLpMkSl4RZKMiZS4jLtMDSzg0PNYmXCgjcyHTSx3xPLUiKosDLtLESw3hPLQmKCwjctjlS1MiPNcGTowjYtj1R14xPLYmaCwDcXMTS4Y1PHY2LBwjctLDS03RZKAiKowzLtHDSz4xPLYmKo4jcyfVSvfUdLYlKosjctLDS141PLQGR40zLTMDR1MCdMECUS0TMtj1RwH1PNQiKBwDctLDS14RZNY2LRwTLLkVSl4RZKoGT40DMtMDSzgUZMACTCgjcyHDS14xPLUiKosDdLMTSx3hPLQGSC4DMPklS1MiPMcGSCwjYtj1R14xPLYmaCwDcDMESxPzPHY2LBwjctLDS03RZKYGUo0DLtHDSzQ0PLcmYo4jcyfVSvP0PNYlKosjctLDS141PLQmZCwTLDMDR1MiPLYmKCwTMtj1R3o1TNMiKBwDcXkWS2IVZNY2LB4jdDMUSl4RZKYmKCwjctMDSzgUdMomXCgjcyHTSxn1TNUiKosjdlMjSw3hPLQmKCwjctjlS1MCZLECTS0jYtj1R14xPLYmaCwDcpkFSxf0PHY2LBwjctLDS03RZKcmZ40TLtHDSz4xPLYmKo4jcyHUS3I1PMYlKosjctLDS141PLQGSowTdLMDR1MiPLYmKCwTMtj1RwPzPMQiKBwDctLDS14RZNY2L3wDMhMESl4RZKYmKCwjctMDSzIVdLYGUCgjcyfWS5A0TLUiKoszLtLESy3hPLQmKCwjctjlS1MCZMkGVSwjYtj1R14xPLYmaCwDcXMTS4g0PHY2LBwjctLDS03RZKACRSwzctHDSz4xPLYmKo4jcyHTS54xTMYlKosjctLDS141PLQGTo0zcTMDR1MiTNACU4wTMtj1Ryn1TMomKBwDctLDS14RZNY2L3wTdpkVSl4RZKYmKCwjctMDSzY1PMACVCgjcyHUS54xPNUiKosjcHkGS54hPLQmKCwjctjlS1MiPLYmYo0jYtj1R4AUdMAiaCwDcLMjSvvzPHY2LBwjctLDS03RZKgGUCwjctHDSz4xPLYmKo4jcyHjS3g0PNYlKosjctLDS141PLQmKowjLXkFRl4RahsVSWkkdzPEVyUkUOgFSDoEd3XUXqEDZPcVSxHFZtHjX3UULhsVTx.0YQcUVsgCahQCLogzPq0FVqkzQhACMwnEZyLzSPUjZTEDLDgzaQY0SnQjUYQWVxb0YIIDRwTjQgASUV8DZtj1R14xTLQiZS4DMpMjSwn1PNYGQSwjcPMESncCZOciKUAkTEQ0TlolQYgCRRg0Zzv1XkEEaHYFVWgkbUcUV3fjPLQGSCwjctLDS14xTLcmZowjcpkFSzfDdKkicCQUPIUETMEjTZoFLogzYUwVXwfyZhglKnM1Y2Y0XqASZHY2LRwDLtLDS14xTLgGUSwTLpkWSv.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.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.yXmk0UYglKnM1Y2Y0XqASZHY2LBwDZ2f1S23RUPIUQTMkYpYTV3fDZhsVVxbkZEYUX1kjPHESQFEFLUY0Sn4RZKACR3sTN1MDUAkTUP0TPRokZvjFR3UEaiUFLVo0LIIDRwTjQgASUV8DZtj1R34xPLYmKCwjctjFSzX1PLgGSowDdHg2R4X2PTETRUAUSAIkVpASZHgWUrMVY3vVXn4BZic1cVM1ZvjFR1MiPLg1Mn8zMtTETRUDUSYlZFkENHglXqkkLWk2ZrQ1ZIIDRwTjQgASUV8DZtj1RvfDdKkicCQUPIUETMEjTZoFLogDLzXkVkEkUYoWUsE1ZIIDRwTjQgASUV8DZtj1R34xPLYmKCwjctjFSzX1PLgGSowDdHg2R4X2PTETRUAUSAIkVpASZHACMVoUYMcjX3UkUXoVRBgTLEYTXvTkUOglKosTLpMkSzn1TNQiYC4jchMkS1I1TLg1Mn8zMtTETRUDUSYlZFkENHI0XzsVLWECNVoUZUEiXn4BZic1cVM1ZvjFR2MiPLg1Mn8zMtTETRUDUSYlZFkENHg1X0sVLXsVSsgjYXcEVxU0UYgCRB4DctjFR0MyPOUmYTk0LYoWX3MlUYkiKt3hKt3hKt3hKt3haTU0PUQDU3sFaicVTWkEQEYzXmEDTtDDRTQlcEEiX4EDTtDDSt3xXt3hKt3hKt3hKlIUUMQUTPkzUZESQFM1ZQQEV5UjQ77RRC8Vav8lak4Fc9vyKVMEUy.Ea0cVZtMEcgQWY9.."
+      },
+      "sample": "",
+      "rootPitch": 60,
+      "volume": 0.550000011920929,
+      "pan": 0.0,
+      "mute": false,
+      "solo": false,
+      "pitch": 0.0,
+      "swing": 0.0,
+      "mixerTrack": 7
+    },
+    {
+      "name": "FM Bells",
+      "instrument": "synth",
+      "synth": {
+        "engine": "fm",
+        "oscillators": [
+          {
+            "wave": "saw",
+            "level": 1.0,
+            "octave": 0,
+            "semitones": 0,
+            "fine": 0.0,
+            "pulseWidth": 0.5
+          },
+          {
+            "wave": "square",
+            "level": 0.0,
+            "octave": 0,
+            "semitones": 0,
+            "fine": 7.0,
+            "pulseWidth": 0.5
+          }
+        ],
+        "noise": 0.0,
+        "filter": "lowpass",
+        "steep": false,
+        "cutoff": 0.75,
+        "resonance": 0.200000002980232,
+        "envAmount": 0.300000011920929,
+        "keyTrack": 0.5,
+        "amp": {
+          "attack": 0.001000000047497,
+          "decay": 0.100000001490116,
+          "sustain": 1.0,
+          "release": 1.5
+        },
+        "filterEnvelope": {
+          "attack": 0.004999999888241,
+          "decay": 0.400000005960464,
+          "sustain": 0.200000002980232,
+          "release": 0.300000011920929
+        },
+        "lfoWave": "sine",
+        "lfoRate": 5.0,
+        "lfoTarget": "off",
+        "lfoDepth": 0.300000011920929,
+        "gain": 0.800000011920929,
+        "operators": [
+          {
+            "ratio": 1.0,
+            "level": 1.0,
+            "envelope": {
+              "attack": 0.001000000047497,
+              "decay": 3.0,
+              "sustain": 0.0,
+              "release": 1.5
+            }
+          },
+          {
+            "ratio": 3.5,
+            "level": 0.800000011920929,
+            "envelope": {
+              "attack": 0.001000000047497,
+              "decay": 2.0,
+              "sustain": 0.0,
+              "release": 1.5
+            }
+          },
+          {
+            "ratio": 2.0,
+            "level": 0.0,
+            "envelope": {
+              "attack": 0.002000000094995,
+              "decay": 0.600000023841858,
+              "sustain": 0.699999988079071,
+              "release": 0.300000011920929
+            }
+          },
+          {
+            "ratio": 3.0,
+            "level": 0.0,
+            "envelope": {
+              "attack": 0.002000000094995,
+              "decay": 0.600000023841858,
+              "sustain": 0.699999988079071,
+              "release": 0.300000011920929
+            }
+          }
+        ],
+        "fmMatrix": [
+          [
+            0.0,
+            0.600000023841858,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "fmOutputs": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "timbreA": {
+          "partials": 48,
+          "brightness": 0.600000023841858,
+          "evenLevel": 1.0,
+          "stretch": 0.0,
+          "formant": 0.0,
+          "formantFreq": 0.449999988079071,
+          "formantWidth": 0.349999994039536
+        },
+        "timbreB": {
+          "partials": 64,
+          "brightness": 0.25,
+          "evenLevel": 0.150000005960464,
+          "stretch": 0.0,
+          "formant": 0.600000023841858,
+          "formantFreq": 0.349999994039536,
+          "formantWidth": 0.25
+        },
+        "morph": 0.0,
+        "morphEnvAmount": 0.0,
+        "morphEnvelope": {
+          "attack": 0.5,
+          "decay": 1.0,
+          "sustain": 0.5,
+          "release": 0.5
+        },
+        "physical": {
+          "model": "string",
+          "hardness": 0.600000023841858,
+          "position": 0.200000002980232,
+          "decay": 0.5,
+          "damping": 0.400000005960464,
+          "stiffness": 0.0,
+          "body": 0.300000011920929,
+          "releaseDamp": 0.699999988079071
+        }
+      },
+      "sample": "",
+      "rootPitch": 60,
+      "volume": 0.319999992847443,
+      "pan": 0.150000005960464,
+      "mute": false,
+      "solo": false,
+      "pitch": 0.0,
+      "swing": 0.0,
+      "mixerTrack": 8
+    },
+    {
+      "name": "Choir",
+      "instrument": "synth",
+      "synth": {
+        "engine": "additive",
+        "oscillators": [
+          {
+            "wave": "saw",
+            "level": 1.0,
+            "octave": 0,
+            "semitones": 0,
+            "fine": 0.0,
+            "pulseWidth": 0.5
+          },
+          {
+            "wave": "square",
+            "level": 0.0,
+            "octave": 0,
+            "semitones": 0,
+            "fine": 7.0,
+            "pulseWidth": 0.5
+          }
+        ],
+        "noise": 0.0,
+        "filter": "off",
+        "steep": false,
+        "cutoff": 0.75,
+        "resonance": 0.200000002980232,
+        "envAmount": 0.0,
+        "keyTrack": 0.5,
+        "amp": {
+          "attack": 0.400000005960464,
+          "decay": 1.0,
+          "sustain": 0.899999976158142,
+          "release": 0.800000011920929
+        },
+        "filterEnvelope": {
+          "attack": 0.004999999888241,
+          "decay": 0.400000005960464,
+          "sustain": 0.200000002980232,
+          "release": 0.300000011920929
+        },
+        "lfoWave": "sine",
+        "lfoRate": 0.150000005960464,
+        "lfoTarget": "morph",
+        "lfoDepth": 0.5,
+        "gain": 0.75,
+        "operators": [
+          {
+            "ratio": 1.0,
+            "level": 1.0,
+            "envelope": {
+              "attack": 0.002000000094995,
+              "decay": 0.600000023841858,
+              "sustain": 0.699999988079071,
+              "release": 0.300000011920929
+            }
+          },
+          {
+            "ratio": 1.0,
+            "level": 0.800000011920929,
+            "envelope": {
+              "attack": 0.002000000094995,
+              "decay": 0.400000005960464,
+              "sustain": 0.300000011920929,
+              "release": 0.300000011920929
+            }
+          },
+          {
+            "ratio": 2.0,
+            "level": 0.0,
+            "envelope": {
+              "attack": 0.002000000094995,
+              "decay": 0.600000023841858,
+              "sustain": 0.699999988079071,
+              "release": 0.300000011920929
+            }
+          },
+          {
+            "ratio": 3.0,
+            "level": 0.0,
+            "envelope": {
+              "attack": 0.002000000094995,
+              "decay": 0.600000023841858,
+              "sustain": 0.699999988079071,
+              "release": 0.300000011920929
+            }
+          }
+        ],
+        "fmMatrix": [
+          [
+            0.0,
+            0.5,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "fmOutputs": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "timbreA": {
+          "partials": 48,
+          "brightness": 0.550000011920929,
+          "evenLevel": 1.0,
+          "stretch": 0.0,
+          "formant": 0.850000023841858,
+          "formantFreq": 0.435999989509583,
+          "formantWidth": 0.300000011920929
+        },
+        "timbreB": {
+          "partials": 48,
+          "brightness": 0.550000011920929,
+          "evenLevel": 1.0,
+          "stretch": 0.0,
+          "formant": 0.850000023841858,
+          "formantFreq": 0.740000009536743,
+          "formantWidth": 0.25
+        },
+        "morph": 0.300000011920929,
+        "morphEnvAmount": 0.0,
+        "morphEnvelope": {
+          "attack": 0.5,
+          "decay": 1.0,
+          "sustain": 0.5,
+          "release": 0.5
+        },
+        "physical": {
+          "model": "string",
+          "hardness": 0.600000023841858,
+          "position": 0.200000002980232,
+          "decay": 0.5,
+          "damping": 0.400000005960464,
+          "stiffness": 0.0,
+          "body": 0.300000011920929,
+          "releaseDamp": 0.699999988079071
+        }
+      },
+      "sample": "",
+      "rootPitch": 60,
+      "volume": 0.5,
+      "pan": -0.100000001490116,
+      "mute": false,
+      "solo": false,
+      "pitch": 0.0,
+      "swing": 0.0,
+      "mixerTrack": 9
+    },
+    {
+      "name": "Strings",
+      "instrument": "synth",
+      "synth": {
+        "engine": "subtractive",
+        "oscillators": [
+          {
+            "wave": "square",
+            "level": 1.0,
+            "octave": 0,
+            "semitones": 0,
+            "fine": 0.0,
+            "pulseWidth": 0.5
+          },
+          {
+            "wave": "square",
+            "level": 0.0,
+            "octave": 0,
+            "semitones": 0,
+            "fine": 7.0,
+            "pulseWidth": 0.5
+          }
+        ],
+        "noise": 0.0,
+        "filter": "lowpass",
+        "steep": false,
+        "cutoff": 0.649999976158142,
+        "resonance": 0.200000002980232,
+        "envAmount": 0.100000001490116,
+        "keyTrack": 0.5,
+        "amp": {
+          "attack": 0.019999999552965,
+          "decay": 0.400000005960464,
+          "sustain": 0.800000011920929,
+          "release": 0.400000005960464
+        },
+        "filterEnvelope": {
+          "attack": 0.004999999888241,
+          "decay": 0.400000005960464,
+          "sustain": 0.200000002980232,
+          "release": 0.300000011920929
+        },
+        "lfoWave": "sine",
+        "lfoRate": 0.800000011920929,
+        "lfoTarget": "pulsewidth",
+        "lfoDepth": 0.800000011920929,
+        "gain": 0.800000011920929,
+        "operators": [
+          {
+            "ratio": 1.0,
+            "level": 1.0,
+            "envelope": {
+              "attack": 0.002000000094995,
+              "decay": 0.600000023841858,
+              "sustain": 0.699999988079071,
+              "release": 0.300000011920929
+            }
+          },
+          {
+            "ratio": 1.0,
+            "level": 0.800000011920929,
+            "envelope": {
+              "attack": 0.002000000094995,
+              "decay": 0.400000005960464,
+              "sustain": 0.300000011920929,
+              "release": 0.300000011920929
+            }
+          },
+          {
+            "ratio": 2.0,
+            "level": 0.0,
+            "envelope": {
+              "attack": 0.002000000094995,
+              "decay": 0.600000023841858,
+              "sustain": 0.699999988079071,
+              "release": 0.300000011920929
+            }
+          },
+          {
+            "ratio": 3.0,
+            "level": 0.0,
+            "envelope": {
+              "attack": 0.002000000094995,
+              "decay": 0.600000023841858,
+              "sustain": 0.699999988079071,
+              "release": 0.300000011920929
+            }
+          }
+        ],
+        "fmMatrix": [
+          [
+            0.0,
+            0.5,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "fmOutputs": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "timbreA": {
+          "partials": 48,
+          "brightness": 0.600000023841858,
+          "evenLevel": 1.0,
+          "stretch": 0.0,
+          "formant": 0.0,
+          "formantFreq": 0.449999988079071,
+          "formantWidth": 0.349999994039536
+        },
+        "timbreB": {
+          "partials": 64,
+          "brightness": 0.25,
+          "evenLevel": 0.150000005960464,
+          "stretch": 0.0,
+          "formant": 0.600000023841858,
+          "formantFreq": 0.349999994039536,
+          "formantWidth": 0.25
+        },
+        "morph": 0.0,
+        "morphEnvAmount": 0.0,
+        "morphEnvelope": {
+          "attack": 0.5,
+          "decay": 1.0,
+          "sustain": 0.5,
+          "release": 0.5
+        },
+        "physical": {
+          "model": "string",
+          "hardness": 0.600000023841858,
+          "position": 0.200000002980232,
+          "decay": 0.5,
+          "damping": 0.400000005960464,
+          "stiffness": 0.0,
+          "body": 0.300000011920929,
+          "releaseDamp": 0.699999988079071
+        }
+      },
+      "sample": "",
+      "rootPitch": 60,
+      "volume": 0.379999995231628,
+      "pan": 0.100000001490116,
+      "mute": false,
+      "solo": false,
+      "pitch": 0.0,
+      "swing": 0.0,
+      "mixerTrack": 10
+    },
+    {
+      "name": "HexForge Arp",
+      "instrument": "plugin",
+      "plugin": {
+        "description": "<PLUGIN name=\"HexForge\" format=\"VST3\" category=\"Instrument|Synth\" manufacturer=\"Sun Loops Studio\" version=\"0.64.0\" file=\"/usr/lib/vst3/HexForge.vst3\" uniqueId=\"b218d705\" isInstrument=\"1\" fileTime=\"1a1da3ebc78\" infoUpdateTime=\"1a1da7e1614\" numInputs=\"0\" numOutputs=\"0\" isShell=\"0\" hasARAExtension=\"0\" uid=\"3dbb85a7\"/>",
+        "state": "12107.VMjLgHzK...O+fWarAhckI2bo8la8HRLt.iHfTlai8FYo41Y8HRUTYTK3HxO9.BOVMEUy.Ea0cVZtMEcgQWY9vSRC8Vav8lak4Fc9fSN4TiKV0jZLc1LygjKt3xSqX1UgIWPnM1ZIIiXugCaggCRRwDctjFRlQEagkFNFk0azDSV3fjTUQUVTszLHg2S43hPOgTUFQlQ3vlXsUkQHkWPWkUZQ0lXmcmUPgCRRwDctLDS14RZNY2LBwjctLDSl4RZKIiK40zctMDSz4xPLYmKCgjcyHUSxH1PMUiKosjctLDS14hPLQGUCwjctjlS1MiPLYmKCwjYtj1R5AUdMgmaCwDctLDS14xPHY2LB0jclkFS03RZKYmKCwjctHDSzwTdMMiKo4jcyHDS14xPLYlKosTdTkGSw31PLQmKCwjctLDR1MCdLkGS4wTMtj1R14xPLYmKBwDcLMESwfTZNY2LBwjctLDSl4RZKkmKSwDLtMDSz4xPLYmKCgjcyfFSyXVdMUiKosjctLDS14hPLQGR40jLPklS1MiPLYmKCwjYtj1R3gUdMkmaCwDctLDS14xPHY2LnwDLlkFS03RZKYmKCwjctHDSzgzTMYmKo4jcyHDS14xPLYlKosDdPkFSv31PLQmKCwjctLDR1MCZLkGU40TMtj1R14xPLYmKBwDcHkFSz.UZNY2LBwjctLDSl4RZKgGR4wTLtMDSz4xPLYmKCgjcyfFS2YVZLUiKosjctLDS14hPLQGRSwTdHklS1MiPLYmKCwjYtj1R34xPNAiaCwDctLDS14xPHY2LnwjcPMES03RZKYmKCwjctHDSzgzPLYmKo4jcyHDS14xPLYlKoszcpkVS241PLQmKCwjctLDR1MiTLQCRS0TMtj1R14xPLYmKBwDcDMjSz3RZNY2LBwjctLDSl4RZKcmYS0jLtMDSz4xPLYmKCgjcyHESyfTZMUiKosjctLDS14hPLQGQ40DMXklS1MiPLYmKCwjYtj1R2IVZMMiaCwDctLDS14xPHY2LRwjLPMES03RZKYmKCwjctHDSzQTdMcGUo4jcyHDS14xPLYlKoszcXMkS141PLQmKCwjctLDR1MiTLECV40TMtj1R14xPLYmKBwDcDkVS5AUZNY2LBwjctLDSl4RZKcGVowDdtMDSz4xPLYmKCgjcyHESw3xTLUiKosjctLDS14hPLQGQS0zLDklS1MiPLYmKCwjYtj1R2QUZMgmaCwDctLDS14xPHY2LRwDLPkGS03RZKYmKCwjctHDSzQzTMgGUo4jcyHDS14xPLYlKoszcTMDSy31PLQmKCwjctLDR1MiTLomZSwTMtj1R14xPLYmKBwDcDMTSx.UZNY2LBwjctLDSl4RZKcGTS0DMtMDSz4xPLYmKCgjcyHES5AUdLUiKosjctLDS14hPLQGQC0DdpklS1MiPLYmKCwjYtj1R2A0TLomaCwDctLDS14xPHY2LRwjdtLDS03RZKYmKCwjctHDSzQTdLMiXo4jcyHDS14xPLYlKoszcLkWS541PLQmKCwjctLDR1MiTLkGVSwTMtj1R14xPLYmKBwDcDkGS5YVZNY2LBwjctLDSl4RZKcGS4wTLtMDSz4xPLYmKCgjcyHES4gzTMUiKosjctLDS14hPLQGQ4wzcLklS1MiPLYmKCwjYtj1R2wzPLgmaCwDctLDS14xPHY2LRwDdpMES03RZKYmKCwjctHDSzQTZLMiKo4jcyHDS14xPLYlKoszcHkWS141PLQmKCwjctLDR1MiTLgGVCwTMtj1R14xPLYmKBwDcDkFSv3RZNY2LBwjctLDSn4BdhYWUwfkdIcEVxkDUOgFQosjctLDS141PLQGSC4jctLDR1MiPLYmKCwTMtj1RyvzPMkmKBwDctLDS14RZNY2LRwTLHMkSl4RZKYmKCwjctMDSzgUZMYGTCgjcyHDS14xPLUiKosjcpkGS44hPLQmKCwjctjlS1MCdMQCVS0jYtj1Rz3RdMQiaCwDcDkGSvf0PHY2LBwjctLDS03RZKIiZo0DLtHDSz4xPLYmKo4jcyfVSy3xTLYlKosjctLDS141PLQGUo0jLDMDR1MiPLYmKCwTMtj1RzH1TMomKBwDctLDS14RZNY2LR0DLtjFSl4RZKYmKCwjctMDSzgTdLYmZCgjcyHDS14xPLUiKosjdtLDSz3hPLQmKCwjctjlS1MiPMYmXo0jYtj1R14xPLYmaCwDcTkVS4o1PHY2LBwjctLDS03RZKYmYS0zctHDSzwTZLECRo4jcyfFSy.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.CSn4BZic1cVM1ZvjFR1MiPLg1Mn8zMtTETRUDUSYlZFkENHgVVy0TdWoGRBgTLEYTXvTkUOglKosjcHg2R4X2PTETRUAUSAIkVpASZHwFLwvTYUkFRlg0UXIWUWkENHIDSz4RZHU2LC8DTEoFUAACQH8VTV8DZXYUX4cyZMglKnM1Y2Y0XqASZHY2LBwDZ2f1S23RUPIUQTMkYpYTV3fDZYMWT4c0cHIDRwTjQgASUV8DZtj1R1gDdKkicCQUPIUETMEjTZoFLogDavXTSkkTZHYFVWgkbUcUV3fjPLQmKogTcyLzSPUjZTEDLDgzaQY0SngkUgo2MvvDZtf1XmcmUisFLogjcyHDSncCZOciKUAkTEQ0TlolQYgCRnk0bQk2U5gjPHESQFEFLUY0Sn4RZKYGR3sTN1MDUAkTUP0TPRokZvjFRrAiQMUVUogjYXcEVxU0UYgCRBwDctjFR0MyPOAUQpQUPvPDRuEkUOgFVVEld2rVSn4BZic1cVM1ZvjFR1MiPLg1Mn8zMtTETRUDUSYlZFkENHgVVyUUdWcGRBgTLEYTXvTkUOglKosjcHg2R4X2PTETRUAUSAIkVpASZHwFLV0TYIkFRlg0UXIWUWkENHIDSz4RZHU2LC8DTEoFUAACQH8VTV8DZXYUXvbCLLglKnM1Y2Y0XqASZHY2LBwDZ2f1S23RUPIUQTMkYpYTV3fDZYMWU4ckdHIDRwTjQgASUV8DZtj1R1gDdKkicCQUPIUETMEjTZoFLogDavXUSkUUZHYFVWgkbUcUV3fjPLQmKogTcyLzSPUjZTEDLDgzaQY0SngkUgAyMq0DZtf1XmcmUisFLogjcyHDSncCZOciKUAkTEQ0TlolQYgCRnk0bYk2U2gjPHESQFEFLUY0Sn4RZKYGR3sTN1MDUAkTUP0TPRokZvjFRrACaMUVRogjYXcEVxU0UYgCRBwDctjFR0MyPOAUQpQUPvPDRuEkUOgFVVEVL2.CSn4BZic1cVM1ZvjFR1MiPLg1Mn8zMtTETRUDUSYlZFkENHgVVykUdWoGRBgTLEYTXvTkUOglKosjcHg2R4X2PTETRUAUSAIkVpASZHwFLr0TYUkFRlg0UXIWUWkENHIDSz4RZHU2LC8DTEoFUAACQH8VTV8DZXYUXwbyZMglKnM1Y2Y0XqASZHY2LBwDZ2f1S23RUPIUQTMkYpYTV3fDZYMGNEk0ZAczXtkjPHESQFEFLUY0SnQTZKYGR3sTN1MDUAkTUP0TPRokZvjFRscmUZoVUrgjYXcEVxU0UYgCRBwDctjFR0MyPOAUQpQUPvPDRuEkUOglcrkUcIk2UpsFaiglKnM1Y2Y0XqASZHEyLBwDZ2f1S23RUPIUQTMkYpYTV3fjPgwFNrwTYIcEV5UEaHYFVWgkbUcUV3fjPMQmZS4DMpMkSzPUZLkGQo0DdlMTS3gDdKkicCQUPIUETMEjTZoFLogjbYESX3cCLh4VQFI1ZIIDRwTjQgASUV8DZtj1R1gDdKkicCQUPIUETMEjTZoFLogjbYESX3cCLhQCMwfEZtf1XmcmUisFLogjcyHDSncCZOciKUAkTEQ0TlolQYgCRRE1YMwlX0UTZHYFVWgkbUcUV3fjPLQmKogTcyLzSPUjZTEDLDgzaQY0SnomUXkVRxDFdHIDRwTjQgASUV8DZtj1R1gDdKkicCQUPIUETMEjTZoFLogzbEECV3gSLLglKnM1Y2Y0XqASZHY2LBwDZ2f1S23RUPIUQTMkYpYTV3fjTgcVSrIVcQkFRlg0UXIWUWkENHIDSz4RZHU2LC8DTEoFUAACQH8VTV8DZ5YEV4E0UYgWRBgTLEYTXvTkUOgFQosDdtLDS14xPLICVowDMLMkS5QUdLg1Mn8zMtTETRUDUSYlZFkENHIUX0EkUYglKnM1Y2Y0XqASZHY2LBwDZ2f1S23RUPIUQTMkYpYTV3fjTgMSQ4c0YvXzXn4BZic1cVM1ZvjFR1MiPLg1Mn8zMtTETRUDUSYlZFkENHIUXyTTdWoVSGMFZtf1XmcmUisFLogjcyHDSncCZOciKUAkTEQ0TlolQYgCRRE1LEk2U4kjLXglKnM1Y2Y0XqASZHY2LBwDZ2f1S23RUPIUQTMkYpYTV3fjTgMSR4c0YvXzXn4BZic1cVM1ZvjFR1MiPLg1Mn8zMtTETRUDUSYlZFkENHIUXyjTdWoVSGMFZtf1XmcmUisFLogjcyHDSncCZOciKUAkTEQ0TlolQYgCRRE1LIk2U4kjLXglKnM1Y2Y0XqASZHY2LBwDZ2f1S23RUPIUQTMkYpYTV3fjTgMSS4c0YvXzXn4BZic1cVM1ZvjFR1MiPLg1Mn8zMtTETRUDUSYlZFkENHIUXyzTdWoVSGMFZtf1XmcmUisFLogjcyHDSncCZOciKUAkTEQ0TlolQYgCRRE1LMk2U4kjLXglKnM1Y2Y0XqASZHY2LBwDZ2f1S23RUPIUQTMkYpYTV3fjTgMST4c0YvXzXn4BZic1cVM1ZvjFR1MCZMYmKCwjctLDS3wzPNoGQC4DLhMkSncCZOciKUAkTEQ0TlolQYgCRRE1LQk2Up0zQiglKnM1Y2Y0XqASZHIyLBwDZ2f1S23RUPIUQTMkYpYTV3fjTgMST4cUdIICVn4BZic1cVM1ZvjFRvLiPLg1Mn8zMtTETRUDUSYlZFkENHIUXyTUdWcFLFMFZtf1XmcmUisFLogjcyfVS14xPLYmKCwDdLMjS5QzPNAiXS4DZ2f1S23RUPIUQTMkYpYTV3fjTgMSU4ckZMczXn4BZic1cVM1ZvjFRzLiPLg1Mn8zMtTETRUDUSYlZFkENHIUXyTUdWkWRxfEZtf1XmcmUisFLogDMyHDSncCZOciKUAkTEQ0TlolQYgCRRE1LYk2UmAiQiglKnM1Y2Y0XqASZHY2L30DMpMkSzn1TNACR4wzcXkFSy.UZLg1Mn8zMtTETRUDUSYlZFkENHIUXyjUdWoVSGMFZtf1XmcmUisFLogjLyHDSncCZOciKUAkTEQ0TlolQYgCRRE1LYk2U4kjLXglKnM1Y2Y0XqASZHcmKosjcHg2R4X2PTETRUAUSAIkVpASZHM2YxzTYEYUX5kjPHESQFEFLUY0Sn4RZKEiKCwjctLDS1gTdLMCTSwzLTkWSzfDdKkicCQUPIUETMEjTZoFLogzbmISSkEULhoWRBgTLEYTXvTkUOgFQS0DctjFR0MyPOAUQpQUPvPDRuEkUOgldFQlL2.iX30DaHYFVWgkbUcUV3fjTLc2LBwDZ2f1S23RUPIUQTMkYpYTV3fjTgMyY4c0YvXzXn4BZic1cVM1ZvjFR1MCZMYmKCwjctLDS3wzPNoGQC4DLhMkSncCZOciKUAkTEQ0TlolQYgCRRE1Lmk2Up0zQiglKnM1Y2Y0XqASZHcGRosjcHg2R4X2PTETRUAUSAIkVpASZHM2YG4TYM0lXokjPHESQFEFLUY0SnQTZLQmKogTcyLzSPUjZTEDLDgzaQY0SncSLXoWQrM1ZIIDRwTjQgASUV8DZtj1R1gDdKkicCQUPIUETMEjTZoFLogTcAcESkUEagECNUgEZtf1XmcmUisFLogjcyHDS1QzTNQiZS4DMlkVSzX1PLcGQCwjdDkFR0MyPOAUQpQUPvPDRuEkUOg1MFI1c2TUVzkkLWoVRBgTLEYTXvTkUOglKosDLHg2R4X2PTETRUAUSAIkVpASZHUWPWwTYUwVXwfyZhglKnM1Y2Y0XqASZHY2L3wjctLDS14xPLcGQS4DdtLkS3oVZHU2LC8DTEoFUAACQH8VTV8DZ2XjX2cSUYQWVxbUdIIDRwTjQgASUV8DZDk1R1gDdKkicCQUPIUETMEjTZoFLogTcAcESkkkUZQWUrgjYXcEVxU0UYgCRBwDctjFR0MyPOAUQpQUPvPDRuEkUOg1MFI1c2TTXqk0UYIWRBgTLEYTXvTkUOgFQosjcHg2R4X2PTETRUAUSAIkVpASZHUWPWwTY3X0X5kjPHESQFEFLUY0Sn4RZKEiZS4DMpMkSzX1PNYmXS4jchMESncCZOciKUAkTEQ0TlolQYgCR3ElcEk2U1UDagglKnM1Y2Y0XqASZHY2LBwDZ2f1S23RUPIUQTMkYpYTV3fDdgYWQ4cEdEYzXugCaHYFVWgkbUcUV3fDZLQmKogTcyLzSPUjZTEDLDgzaQY0SnciQhc2MqM1Z2wFRlg0UXIWUWkENHIDSzwzPLYmKCwjctLES2oVZLYmZowDMHg2R4X2PTETRUAUSAIkVpASZHUWPWwTYicEVwTEaHYFVWgkbUcUV3fjTMQmKogTcyLzSPUjZTEDLDgzaQY0SnciQhg2MUkEcYIyUmkjPHESQFEFLUY0Sn4RZKYGR3sTN1MDUAkTUP0TPRokZvjFR0ETaLUVUrEVL3TTVn4BZic1cVM1ZvjFR1MiTLomZS4DMpMkSzPzPLAiZ4wjcLkGSncCZOciKUAkTEQ0TlolQYgCR3ElcIk2UqQCaiUVRsgjYXcEVxU0UYgCRBwDcDMDS14xPLYmKCwzLpMTS1g0TNEiXogTcyLzSPUjZTEDLDgzaQY0SnciQhg2MUkEcYIyU4kjPHESQFEFLUY0Sn4RZKYGR3sTN1MDUAkTUP0TPRokZvjFR0ETaLUVVVoEcUwFRlg0UXIWUWkENHIDSz4RZHU2LC8DTEoFUAACQH8VTV8DZ2XjX3cSQgsVVWkkbIIDRwTjQgASUV8DZDk1R1gDdKkicCQUPIUETMEjTZoFLogTcA0FSkgiUioWRBgTLEYTXvTkUOglKosjcHg2R4X2PTETRUAUSAIkVpASZHUWPswTYAcEVzkjPHESQFEFLUY0Sn4RZKYGR3sTN1MDUAkTUP0TPRokZvjFR0ETaLUVRWgkdqESXn4BZic1cVM1ZvjFRvLiPLg1Mn8zMtTETRUDUSYlZFkENHgWX1kTdWESUFEFZtf1XmcmUisFLogjcyfGS14xPLYmKCwzcDMkS34xTNgmZogTcyLzSPUjZTEDLDgzaQY0SnciQhg2MvL1YYcUVn4BZic1cVM1ZvjFR1MiPLg1Mn8zMtTETRUDUSYlZFkENHgWX10TdWsFMrMVYEwFRlg0UXIWUWkENHIDSz4xPLcmZS4DMpMkSyf0TNMiKSwzctLTS2gDdKkicCQUPIUETMEjTZoFLogTcAICSkUEagECNEkEZtf1XmcmUisFLogjcyHUSncCZOciKUAkTEQ0TlolQYgCR3ElcMk2UqQCaiUVRsgjYXcEVxU0UYgCRBwDcLMDS14xPLYmKSwzcpkFS1oVZLQCR3sTN1MDUAkTUP0TPRokZvjFR0EjLLUVUrEVL3.iXn4BZic1cVM1ZvjFR2MiPLg1Mn8zMtTETRUDUSYlZFkENHgWX10TdWw1ZrE1ZIIDRwTjQgASUV8DZtj1R1gDdKkicCQUPIUETMEjTZoFLogTcAICSkcmUYESUFEFZtf1XmcmUisFLogzcyHDSncCZOciKUAkTEQ0TlolQYgCR3ElcMk2U0U0QiglKnM1Y2Y0XqASZHY2LBwDZ2f1S23RUPIUQTMkYpYTV3fDdgYWS4ckcEwVXn4BZic1cVM1ZvjFR1MiPLg1Mn8zMtTETRUDUSYlZFkENHgWX10TdWgWQFM1a3vFRlg0UXIWUWkENHgFSz4RZHU2LC8DTEoFUAACQH8VTV8DZ2XjX4cyZis1crgjYXcEVxU0UYgCRBwDcLMDS14xPLYmKSwzcpkFS1oVZLQCR3sTN1MDUAkTUP0TPRokZvjFR0EjLLU1XWgULUwFRlg0UXIWUWkENHIDSz4RZHU2LC8DTEoFUAACQH8VTV8DZ2XjX5cSUYQWVxb0YIIDRwTjQgASUV8DZtj1R14xTLQiZS4DMpMjSwn1PNYGQSwjcPMESncCZOciKUAkTEQ0TlolQYgCR3ElcQk2UqQCaiUVTrgjYXcEVxU0UYgCRBwDcTkFR0MyPOAUQpQUPvPDRuEkUOg1MFIld2TUVzkkLWgWRBgTLEYTXvTkUOglKosTdtLDS14xPLYGQSwDMHMDSzfzTNg1Mn8zMtTETRUDUSYlZFkENHgWX1EUdWsFMrMVYM0FRlg0UXIWUWkENHIESz4RZHU2LC8DTEoFUAACQH8VTV8DZ2XjX5cyZY8FMVkEZtf1XmcmUisFLogjcyHDSncCZOciKUAkTEQ0TlolQYgCR3ElcQk2UxUEais1crgjYXcEVxU0UYgCRRwDctjFR0MyPOAUQpQUPvPDRuEkUOg1MFIld2.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.0Qt3hKt3hKt3hKtQUUCUEQTg2ZrM1YQcUVDUjQicVP77RRC8Vav8lak4Fc9vyKVMEUy.Ea0cVZtMEcgQWY9.."
+      },
+      "sample": "",
+      "rootPitch": 60,
+      "volume": 0.839999973773956,
+      "pan": -0.150000005960464,
+      "mute": false,
+      "solo": false,
+      "pitch": 0.0,
+      "swing": 0.0,
+      "mixerTrack": 11
+    }
+  ],
+  "tracks": [
+    {
+      "name": "Audio FX",
+      "volume": 1.0,
+      "pan": 0.0,
+      "mute": false,
+      "solo": false,
+      "effects": [
+        {
+          "type": "parametric-eq",
+          "bypass": false,
+          "params": [
+            200.0,
+            -6.0,
+            1000.0,
+            0.0,
+            1.0,
+            8000.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        }
+      ],
+      "sends": [
+        0.449999988079071,
+        0.0
+      ],
+      "sendsPreFader": false,
+      "vca": 0
+    },
+    {
+      "name": "Drums",
+      "volume": 1.0,
+      "pan": 0.0,
+      "mute": false,
+      "solo": false,
+      "effects": [
+        {
+          "type": "transient",
+          "bypass": false,
+          "params": [
+            4.0,
+            -2.0,
+            0.300000011920929,
+            0.0,
+            1.0,
+            0.0
+          ]
+        },
+        {
+          "type": "compressor",
+          "bypass": false,
+          "params": [
+            -16.0,
+            3.0,
+            8.0,
+            120.0,
+            2.0,
+            0.0
+          ]
+        },
+        {
+          "type": "time-shaper",
+          "bypass": false,
+          "params": [
+            3.0,
+            0.0,
+            1.0,
+            100.0,
+            3.0,
+            0.0
+          ]
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        }
+      ],
+      "sends": [
+        0.079999998211861,
+        0.0
+      ],
+      "sendsPreFader": false,
+      "vca": 2
+    },
+    {
+      "name": "Bass",
+      "volume": 1.0,
+      "pan": 0.0,
+      "mute": false,
+      "solo": false,
+      "effects": [
+        {
+          "type": "parametric-eq",
+          "bypass": false,
+          "params": [
+            80.0,
+            3.0,
+            400.0,
+            -3.0,
+            1.0,
+            8000.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "type": "compressor",
+          "bypass": false,
+          "params": [
+            -12.0,
+            3.0,
+            2.0,
+            140.0,
+            0.0,
+            2.0
+          ]
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        }
+      ],
+      "sends": [
+        0.0,
+        0.0
+      ],
+      "sendsPreFader": false,
+      "vca": 2
+    },
+    {
+      "name": "Piano",
+      "volume": 1.0,
+      "pan": 0.0,
+      "mute": false,
+      "solo": false,
+      "effects": [
+        {
+          "type": "parametric-eq",
+          "bypass": false,
+          "params": [
+            120.0,
+            -4.0,
+            1000.0,
+            0.0,
+            1.0,
+            9000.0,
+            2.0,
+            0.0
+          ]
+        },
+        {
+          "type": "chorus",
+          "bypass": false,
+          "params": [
+            0.400000005960464,
+            2.0,
+            15.0,
+            0.0,
+            2.0,
+            1.0,
+            0.180000007152557
+          ]
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        }
+      ],
+      "sends": [
+        0.25,
+        0.0
+      ],
+      "sendsPreFader": false,
+      "vca": 0
+    },
+    {
+      "name": "Marimba",
+      "volume": 1.0,
+      "pan": 0.0,
+      "mute": false,
+      "solo": false,
+      "effects": [
+        {
+          "type": "phaser",
+          "bypass": false,
+          "params": [
+            0.300000011920929,
+            0.800000011920929,
+            800.0,
+            0.5,
+            1.0,
+            0.5,
+            0.300000011920929
+          ]
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        }
+      ],
+      "sends": [
+        0.200000002980232,
+        0.25
+      ],
+      "sendsPreFader": false,
+      "vca": 0
+    },
+    {
+      "name": "Lead",
+      "volume": 1.0,
+      "pan": 0.0,
+      "mute": false,
+      "solo": false,
+      "effects": [
+        {
+          "type": "delay",
+          "bypass": false,
+          "params": [
+            409.0,
+            0.349999994039536,
+            0.699999988079071,
+            0.219999998807907,
+            1.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        }
+      ],
+      "sends": [
+        0.300000011920929,
+        0.0
+      ],
+      "sendsPreFader": false,
+      "vca": 1
+    },
+    {
+      "name": "Pad",
+      "volume": 1.0,
+      "pan": 0.0,
+      "mute": false,
+      "solo": false,
+      "effects": [
+        {
+          "type": "imager",
+          "bypass": false,
+          "params": [
+            130.0,
+            0.0,
+            0.0,
+            150.0,
+            0.0
+          ]
+        },
+        {
+          "type": "compressor",
+          "bypass": false,
+          "params": [
+            -30.0,
+            6.0,
+            1.0,
+            180.0,
+            0.0,
+            2.0
+          ]
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        }
+      ],
+      "sends": [
+        0.349999994039536,
+        0.0
+      ],
+      "sendsPreFader": false,
+      "vca": 1
+    },
+    {
+      "name": "Growl",
+      "volume": 1.0,
+      "pan": 0.0,
+      "mute": false,
+      "solo": false,
+      "effects": [
+        {
+          "type": "overdrive",
+          "bypass": false,
+          "params": [
+            0.300000011920929,
+            0.0,
+            0.5,
+            0.600000023841858,
+            0.200000002980232,
+            0.349999994039536,
+            -4.0
+          ]
+        },
+        {
+          "type": "parametric-eq",
+          "bypass": false,
+          "params": [
+            60.0,
+            2.0,
+            1000.0,
+            0.0,
+            1.0,
+            7000.0,
+            -3.0,
+            0.0
+          ]
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        }
+      ],
+      "sends": [
+        0.0,
+        0.0
+      ],
+      "sendsPreFader": false,
+      "vca": 1
+    },
+    {
+      "name": "Bells",
+      "volume": 1.0,
+      "pan": 0.0,
+      "mute": false,
+      "solo": false,
+      "effects": [
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        }
+      ],
+      "sends": [
+        0.349999994039536,
+        0.400000005960464
+      ],
+      "sendsPreFader": false,
+      "vca": 0
+    },
+    {
+      "name": "Choir",
+      "volume": 1.0,
+      "pan": 0.0,
+      "mute": false,
+      "solo": false,
+      "effects": [
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        }
+      ],
+      "sends": [
+        0.5,
+        0.0
+      ],
+      "sendsPreFader": false,
+      "vca": 0
+    },
+    {
+      "name": "Strings",
+      "volume": 1.0,
+      "pan": 0.0,
+      "mute": false,
+      "solo": false,
+      "effects": [
+        {
+          "type": "filter",
+          "bypass": false,
+          "params": [
+            0.0,
+            5000.0,
+            0.200000002980232,
+            0.0,
+            0.0,
+            0.0,
+            0.5,
+            1.0
+          ]
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        }
+      ],
+      "sends": [
+        0.449999988079071,
+        0.0
+      ],
+      "sendsPreFader": false,
+      "vca": 0
+    },
+    {
+      "name": "Arp",
+      "volume": 1.0,
+      "pan": 0.0,
+      "mute": false,
+      "solo": false,
+      "effects": [
+        {
+          "type": "delay",
+          "bypass": false,
+          "params": [
+            273.0,
+            0.300000011920929,
+            0.699999988079071,
+            0.200000002980232,
+            1.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        }
+      ],
+      "sends": [
+        0.150000005960464,
+        0.300000011920929
+      ],
+      "sendsPreFader": false,
+      "vca": 1
+    },
+    {
+      "name": "Track 13",
+      "volume": 1.0,
+      "pan": 0.0,
+      "mute": false,
+      "solo": false,
+      "effects": [
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        }
+      ],
+      "sends": [
+        0.0,
+        0.0
+      ],
+      "sendsPreFader": false,
+      "vca": 0
+    },
+    {
+      "name": "Track 14",
+      "volume": 1.0,
+      "pan": 0.0,
+      "mute": false,
+      "solo": false,
+      "effects": [
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        }
+      ],
+      "sends": [
+        0.0,
+        0.0
+      ],
+      "sendsPreFader": false,
+      "vca": 0
+    },
+    {
+      "name": "Track 15",
+      "volume": 1.0,
+      "pan": 0.0,
+      "mute": false,
+      "solo": false,
+      "effects": [
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        }
+      ],
+      "sends": [
+        0.0,
+        0.0
+      ],
+      "sendsPreFader": false,
+      "vca": 0
+    },
+    {
+      "name": "Track 16",
+      "volume": 1.0,
+      "pan": 0.0,
+      "mute": false,
+      "solo": false,
+      "effects": [
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        },
+        {
+          "type": "none",
+          "bypass": false,
+          "params": []
+        }
+      ],
+      "sends": [
+        0.0,
+        0.0
+      ],
+      "sendsPreFader": false,
+      "vca": 0
+    }
+  ],
+  "console": {
+    "aux": [
+      {
+        "name": "Reverb",
+        "volume": 0.800000011920929,
+        "pan": 0.0,
+        "mute": false,
+        "effects": [
+          {
+            "type": "reverb",
+            "bypass": false,
+            "params": [
+              0.819999992847443,
+              0.449999988079071,
+              1.0,
+              1.0,
+              0.0,
+              30.0
+            ]
+          },
+          {
+            "type": "parametric-eq",
+            "bypass": false,
+            "params": [
+              250.0,
+              -6.0,
+              1000.0,
+              0.0,
+              1.0,
+              8000.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "type": "none",
+            "bypass": false,
+            "params": []
+          },
+          {
+            "type": "none",
+            "bypass": false,
+            "params": []
+          },
+          {
+            "type": "none",
+            "bypass": false,
+            "params": []
+          },
+          {
+            "type": "none",
+            "bypass": false,
+            "params": []
+          },
+          {
+            "type": "none",
+            "bypass": false,
+            "params": []
+          },
+          {
+            "type": "none",
+            "bypass": false,
+            "params": []
+          },
+          {
+            "type": "none",
+            "bypass": false,
+            "params": []
+          },
+          {
+            "type": "none",
+            "bypass": false,
+            "params": []
+          }
+        ]
+      },
+      {
+        "name": "Delay",
+        "volume": 0.699999988079071,
+        "pan": 0.0,
+        "mute": false,
+        "effects": [
+          {
+            "type": "delay",
+            "bypass": false,
+            "params": [
+              545.0,
+              0.449999988079071,
+              0.5,
+              1.0,
+              1.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "type": "none",
+            "bypass": false,
+            "params": []
+          },
+          {
+            "type": "none",
+            "bypass": false,
+            "params": []
+          },
+          {
+            "type": "none",
+            "bypass": false,
+            "params": []
+          },
+          {
+            "type": "none",
+            "bypass": false,
+            "params": []
+          },
+          {
+            "type": "none",
+            "bypass": false,
+            "params": []
+          },
+          {
+            "type": "none",
+            "bypass": false,
+            "params": []
+          },
+          {
+            "type": "none",
+            "bypass": false,
+            "params": []
+          },
+          {
+            "type": "none",
+            "bypass": false,
+            "params": []
+          },
+          {
+            "type": "none",
+            "bypass": false,
+            "params": []
+          }
+        ]
+      }
+    ],
+    "vca": [
+      {
+        "level": 1.0,
+        "mute": false
+      },
+      {
+        "level": 1.0,
+        "mute": false
+      }
+    ]
+  },
+  "master": {
+    "effects": [
+      {
+        "type": "filter",
+        "bypass": false,
+        "params": [
+          0.0,
+          20000.0,
+          0.150000005960464,
+          0.0,
+          0.0,
+          0.0,
+          0.5,
+          1.0
+        ]
+      },
+      {
+        "type": "parametric-eq",
+        "bypass": false,
+        "params": [
+          70.0,
+          1.5,
+          1000.0,
+          0.0,
+          1.0,
+          11000.0,
+          1.5,
+          0.0
+        ]
+      },
+      {
+        "type": "maximizer",
+        "bypass": false,
+        "params": [
+          3.0,
+          -1.0,
+          100.0,
+          0.300000011920929,
+          0.0
+        ]
+      },
+      {
+        "type": "none",
+        "bypass": false,
+        "params": []
+      },
+      {
+        "type": "none",
+        "bypass": false,
+        "params": []
+      },
+      {
+        "type": "none",
+        "bypass": false,
+        "params": []
+      },
+      {
+        "type": "none",
+        "bypass": false,
+        "params": []
+      },
+      {
+        "type": "none",
+        "bypass": false,
+        "params": []
+      },
+      {
+        "type": "none",
+        "bypass": false,
+        "params": []
+      },
+      {
+        "type": "none",
+        "bypass": false,
+        "params": []
+      }
+    ]
+  },
+  "patterns": [
+    {
+      "name": "Piano",
+      "notes": [
+        [],
+        [],
+        [
+          [
+            57,
+            0,
+            700,
+            0.699999988079071
+          ],
+          [
+            57,
+            720,
+            220,
+            0.519999980926514
+          ],
+          [
+            57,
+            1200,
+            700,
+            0.600000023841858
+          ],
+          [
+            60,
+            0,
+            700,
+            0.699999988079071
+          ],
+          [
+            60,
+            720,
+            220,
+            0.519999980926514
+          ],
+          [
+            60,
+            1200,
+            700,
+            0.600000023841858
+          ],
+          [
+            64,
+            0,
+            700,
+            0.699999988079071
+          ],
+          [
+            64,
+            720,
+            220,
+            0.519999980926514
+          ],
+          [
+            64,
+            1200,
+            700,
+            0.600000023841858
+          ],
+          [
+            67,
+            0,
+            700,
+            0.699999988079071
+          ],
+          [
+            67,
+            720,
+            220,
+            0.519999980926514
+          ],
+          [
+            67,
+            1200,
+            700,
+            0.600000023841858
+          ],
+          [
+            71,
+            0,
+            700,
+            0.699999988079071
+          ],
+          [
+            71,
+            720,
+            220,
+            0.519999980926514
+          ],
+          [
+            71,
+            1200,
+            700,
+            0.600000023841858
+          ],
+          [
+            53,
+            1920,
+            700,
+            0.699999988079071
+          ],
+          [
+            53,
+            2640,
+            220,
+            0.519999980926514
+          ],
+          [
+            53,
+            3120,
+            700,
+            0.600000023841858
+          ],
+          [
+            57,
+            1920,
+            700,
+            0.699999988079071
+          ],
+          [
+            57,
+            2640,
+            220,
+            0.519999980926514
+          ],
+          [
+            57,
+            3120,
+            700,
+            0.600000023841858
+          ],
+          [
+            60,
+            1920,
+            700,
+            0.699999988079071
+          ],
+          [
+            60,
+            2640,
+            220,
+            0.519999980926514
+          ],
+          [
+            60,
+            3120,
+            700,
+            0.600000023841858
+          ],
+          [
+            64,
+            1920,
+            700,
+            0.699999988079071
+          ],
+          [
+            64,
+            2640,
+            220,
+            0.519999980926514
+          ],
+          [
+            64,
+            3120,
+            700,
+            0.600000023841858
+          ],
+          [
+            55,
+            3840,
+            700,
+            0.699999988079071
+          ],
+          [
+            55,
+            4560,
+            220,
+            0.519999980926514
+          ],
+          [
+            55,
+            5040,
+            700,
+            0.600000023841858
+          ],
+          [
+            60,
+            3840,
+            700,
+            0.699999988079071
+          ],
+          [
+            60,
+            4560,
+            220,
+            0.519999980926514
+          ],
+          [
+            60,
+            5040,
+            700,
+            0.600000023841858
+          ],
+          [
+            64,
+            3840,
+            700,
+            0.699999988079071
+          ],
+          [
+            64,
+            4560,
+            220,
+            0.519999980926514
+          ],
+          [
+            64,
+            5040,
+            700,
+            0.600000023841858
+          ],
+          [
+            67,
+            3840,
+            700,
+            0.699999988079071
+          ],
+          [
+            67,
+            4560,
+            220,
+            0.519999980926514
+          ],
+          [
+            67,
+            5040,
+            700,
+            0.600000023841858
+          ],
+          [
+            55,
+            5760,
+            700,
+            0.699999988079071
+          ],
+          [
+            55,
+            6480,
+            220,
+            0.519999980926514
+          ],
+          [
+            55,
+            6960,
+            700,
+            0.600000023841858
+          ],
+          [
+            59,
+            5760,
+            700,
+            0.699999988079071
+          ],
+          [
+            59,
+            6480,
+            220,
+            0.519999980926514
+          ],
+          [
+            59,
+            6960,
+            700,
+            0.600000023841858
+          ],
+          [
+            62,
+            5760,
+            700,
+            0.699999988079071
+          ],
+          [
+            62,
+            6480,
+            220,
+            0.519999980926514
+          ],
+          [
+            62,
+            6960,
+            700,
+            0.600000023841858
+          ],
+          [
+            67,
+            5760,
+            700,
+            0.699999988079071
+          ],
+          [
+            67,
+            6480,
+            220,
+            0.519999980926514
+          ],
+          [
+            67,
+            6960,
+            700,
+            0.600000023841858
+          ]
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "beats": 16
+    },
+    {
+      "name": "Beat",
+      "notes": [
+        [
+          [
+            36,
+            0,
+            120,
+            1.0
+          ],
+          [
+            36,
+            480,
+            120,
+            0.920000016689301
+          ],
+          [
+            36,
+            960,
+            120,
+            0.920000016689301
+          ],
+          [
+            36,
+            1440,
+            120,
+            0.920000016689301
+          ],
+          [
+            39,
+            480,
+            120,
+            0.879999995231628
+          ],
+          [
+            39,
+            1440,
+            120,
+            0.920000016689301
+          ],
+          [
+            42,
+            0,
+            120,
+            0.550000011920929
+          ],
+          [
+            42,
+            120,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            240,
+            120,
+            0.800000011920929
+          ],
+          [
+            42,
+            360,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            480,
+            120,
+            0.550000011920929
+          ],
+          [
+            42,
+            600,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            720,
+            120,
+            0.800000011920929
+          ],
+          [
+            42,
+            840,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            960,
+            120,
+            0.550000011920929
+          ],
+          [
+            42,
+            1080,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            1200,
+            120,
+            0.800000011920929
+          ],
+          [
+            42,
+            1320,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            1440,
+            120,
+            0.550000011920929
+          ],
+          [
+            42,
+            1560,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            1680,
+            120,
+            0.800000011920929
+          ],
+          [
+            42,
+            1800,
+            120,
+            0.349999994039536
+          ],
+          [
+            38,
+            1320,
+            120,
+            0.280000001192093
+          ],
+          [
+            37,
+            1800,
+            120,
+            0.449999988079071
+          ],
+          [
+            36,
+            1920,
+            120,
+            1.0
+          ],
+          [
+            36,
+            2400,
+            120,
+            0.920000016689301
+          ],
+          [
+            36,
+            2880,
+            120,
+            0.920000016689301
+          ],
+          [
+            36,
+            3360,
+            120,
+            0.920000016689301
+          ],
+          [
+            39,
+            2400,
+            120,
+            0.879999995231628
+          ],
+          [
+            39,
+            3360,
+            120,
+            0.920000016689301
+          ],
+          [
+            42,
+            1920,
+            120,
+            0.550000011920929
+          ],
+          [
+            42,
+            2040,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            2160,
+            120,
+            0.800000011920929
+          ],
+          [
+            42,
+            2280,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            2400,
+            120,
+            0.550000011920929
+          ],
+          [
+            42,
+            2520,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            2640,
+            120,
+            0.800000011920929
+          ],
+          [
+            42,
+            2760,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            2880,
+            120,
+            0.550000011920929
+          ],
+          [
+            42,
+            3000,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            3120,
+            120,
+            0.800000011920929
+          ],
+          [
+            42,
+            3240,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            3360,
+            120,
+            0.550000011920929
+          ],
+          [
+            42,
+            3480,
+            120,
+            0.349999994039536
+          ],
+          [
+            46,
+            3600,
+            240,
+            0.699999988079071
+          ],
+          [
+            38,
+            3240,
+            120,
+            0.280000001192093
+          ],
+          [
+            37,
+            3720,
+            120,
+            0.449999988079071
+          ],
+          [
+            36,
+            3840,
+            120,
+            1.0
+          ],
+          [
+            36,
+            4320,
+            120,
+            0.920000016689301
+          ],
+          [
+            36,
+            4800,
+            120,
+            0.920000016689301
+          ],
+          [
+            36,
+            5280,
+            120,
+            0.920000016689301
+          ],
+          [
+            39,
+            4320,
+            120,
+            0.879999995231628
+          ],
+          [
+            39,
+            5280,
+            120,
+            0.920000016689301
+          ],
+          [
+            42,
+            3840,
+            120,
+            0.550000011920929
+          ],
+          [
+            42,
+            3960,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            4080,
+            120,
+            0.800000011920929
+          ],
+          [
+            42,
+            4200,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            4320,
+            120,
+            0.550000011920929
+          ],
+          [
+            42,
+            4440,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            4560,
+            120,
+            0.800000011920929
+          ],
+          [
+            42,
+            4680,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            4800,
+            120,
+            0.550000011920929
+          ],
+          [
+            42,
+            4920,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            5040,
+            120,
+            0.800000011920929
+          ],
+          [
+            42,
+            5160,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            5280,
+            120,
+            0.550000011920929
+          ],
+          [
+            42,
+            5400,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            5520,
+            120,
+            0.800000011920929
+          ],
+          [
+            42,
+            5640,
+            120,
+            0.349999994039536
+          ],
+          [
+            38,
+            5160,
+            120,
+            0.280000001192093
+          ],
+          [
+            37,
+            5640,
+            120,
+            0.449999988079071
+          ],
+          [
+            36,
+            5760,
+            120,
+            1.0
+          ],
+          [
+            36,
+            6240,
+            120,
+            0.920000016689301
+          ],
+          [
+            36,
+            6720,
+            120,
+            0.920000016689301
+          ],
+          [
+            36,
+            7200,
+            120,
+            0.920000016689301
+          ],
+          [
+            39,
+            6240,
+            120,
+            0.879999995231628
+          ],
+          [
+            39,
+            7200,
+            120,
+            0.920000016689301
+          ],
+          [
+            42,
+            5760,
+            120,
+            0.550000011920929
+          ],
+          [
+            42,
+            5880,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            6000,
+            120,
+            0.800000011920929
+          ],
+          [
+            42,
+            6120,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            6240,
+            120,
+            0.550000011920929
+          ],
+          [
+            42,
+            6360,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            6480,
+            120,
+            0.800000011920929
+          ],
+          [
+            42,
+            6600,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            6720,
+            120,
+            0.550000011920929
+          ],
+          [
+            42,
+            6840,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            6960,
+            120,
+            0.800000011920929
+          ],
+          [
+            42,
+            7080,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            7200,
+            120,
+            0.550000011920929
+          ],
+          [
+            42,
+            7320,
+            120,
+            0.349999994039536
+          ],
+          [
+            46,
+            7440,
+            240,
+            0.699999988079071
+          ],
+          [
+            38,
+            7080,
+            120,
+            0.280000001192093
+          ],
+          [
+            37,
+            7560,
+            120,
+            0.449999988079071
+          ],
+          [
+            49,
+            0,
+            960,
+            0.850000023841858
+          ],
+          [
+            48,
+            7200,
+            120,
+            0.699999988079071
+          ],
+          [
+            45,
+            7320,
+            120,
+            0.699999988079071
+          ],
+          [
+            41,
+            7440,
+            240,
+            0.800000011920929
+          ]
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "beats": 16
+    },
+    {
+      "name": "Build",
+      "notes": [
+        [
+          [
+            36,
+            0,
+            120,
+            0.850000023841858
+          ],
+          [
+            36,
+            480,
+            120,
+            0.850000023841858
+          ],
+          [
+            36,
+            960,
+            120,
+            0.850000023841858
+          ],
+          [
+            36,
+            1440,
+            120,
+            0.850000023841858
+          ],
+          [
+            38,
+            480,
+            120,
+            0.293749988079071
+          ],
+          [
+            38,
+            960,
+            120,
+            0.337500005960464
+          ],
+          [
+            38,
+            1440,
+            120,
+            0.381249994039536
+          ],
+          [
+            42,
+            0,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            240,
+            120,
+            0.600000023841858
+          ],
+          [
+            42,
+            480,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            720,
+            120,
+            0.600000023841858
+          ],
+          [
+            42,
+            960,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            1200,
+            120,
+            0.600000023841858
+          ],
+          [
+            42,
+            1440,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            1680,
+            120,
+            0.600000023841858
+          ],
+          [
+            36,
+            1920,
+            120,
+            0.89000004529953
+          ],
+          [
+            36,
+            2400,
+            120,
+            0.89000004529953
+          ],
+          [
+            36,
+            2880,
+            120,
+            0.89000004529953
+          ],
+          [
+            36,
+            3360,
+            120,
+            0.89000004529953
+          ],
+          [
+            38,
+            1920,
+            120,
+            0.425000011920929
+          ],
+          [
+            38,
+            2160,
+            120,
+            0.446874976158142
+          ],
+          [
+            38,
+            2400,
+            120,
+            0.46875
+          ],
+          [
+            38,
+            2640,
+            120,
+            0.490624994039536
+          ],
+          [
+            38,
+            2880,
+            120,
+            0.512499988079071
+          ],
+          [
+            38,
+            3120,
+            120,
+            0.534374952316284
+          ],
+          [
+            38,
+            3360,
+            120,
+            0.556249976158142
+          ],
+          [
+            38,
+            3600,
+            120,
+            0.578125
+          ],
+          [
+            42,
+            1920,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            2160,
+            120,
+            0.600000023841858
+          ],
+          [
+            42,
+            2400,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            2640,
+            120,
+            0.600000023841858
+          ],
+          [
+            42,
+            2880,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            3120,
+            120,
+            0.600000023841858
+          ],
+          [
+            42,
+            3360,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            3600,
+            120,
+            0.600000023841858
+          ],
+          [
+            36,
+            3840,
+            120,
+            0.930000007152557
+          ],
+          [
+            36,
+            4080,
+            120,
+            0.930000007152557
+          ],
+          [
+            36,
+            4320,
+            120,
+            0.930000007152557
+          ],
+          [
+            36,
+            4560,
+            120,
+            0.930000007152557
+          ],
+          [
+            36,
+            4800,
+            120,
+            0.930000007152557
+          ],
+          [
+            36,
+            5040,
+            120,
+            0.930000007152557
+          ],
+          [
+            36,
+            5280,
+            120,
+            0.930000007152557
+          ],
+          [
+            36,
+            5520,
+            120,
+            0.930000007152557
+          ],
+          [
+            38,
+            3840,
+            120,
+            0.600000023841858
+          ],
+          [
+            38,
+            3960,
+            120,
+            0.610937476158142
+          ],
+          [
+            38,
+            4080,
+            120,
+            0.621874988079071
+          ],
+          [
+            38,
+            4200,
+            120,
+            0.6328125
+          ],
+          [
+            38,
+            4320,
+            120,
+            0.643749952316284
+          ],
+          [
+            38,
+            4440,
+            120,
+            0.654687523841858
+          ],
+          [
+            38,
+            4560,
+            120,
+            0.665624976158142
+          ],
+          [
+            38,
+            4680,
+            120,
+            0.676562488079071
+          ],
+          [
+            38,
+            4800,
+            120,
+            0.6875
+          ],
+          [
+            38,
+            4920,
+            120,
+            0.698437452316284
+          ],
+          [
+            38,
+            5040,
+            120,
+            0.709375023841858
+          ],
+          [
+            38,
+            5160,
+            120,
+            0.720312476158142
+          ],
+          [
+            38,
+            5280,
+            120,
+            0.731249988079071
+          ],
+          [
+            38,
+            5400,
+            120,
+            0.7421875
+          ],
+          [
+            38,
+            5520,
+            120,
+            0.753125011920929
+          ],
+          [
+            38,
+            5640,
+            120,
+            0.764062464237213
+          ],
+          [
+            42,
+            3840,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            4080,
+            120,
+            0.600000023841858
+          ],
+          [
+            42,
+            4320,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            4560,
+            120,
+            0.600000023841858
+          ],
+          [
+            42,
+            4800,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            5040,
+            120,
+            0.600000023841858
+          ],
+          [
+            42,
+            5280,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            5520,
+            120,
+            0.600000023841858
+          ],
+          [
+            36,
+            5760,
+            120,
+            0.970000028610229
+          ],
+          [
+            36,
+            6000,
+            120,
+            0.970000028610229
+          ],
+          [
+            36,
+            6240,
+            120,
+            0.970000028610229
+          ],
+          [
+            36,
+            6480,
+            120,
+            0.970000028610229
+          ],
+          [
+            36,
+            6720,
+            120,
+            0.970000028610229
+          ],
+          [
+            36,
+            6960,
+            120,
+            0.970000028610229
+          ],
+          [
+            36,
+            7200,
+            120,
+            0.970000028610229
+          ],
+          [
+            36,
+            7440,
+            120,
+            0.970000028610229
+          ],
+          [
+            38,
+            5760,
+            120,
+            0.774999976158142
+          ],
+          [
+            38,
+            5880,
+            120,
+            0.785937488079071
+          ],
+          [
+            38,
+            6000,
+            120,
+            0.796875
+          ],
+          [
+            38,
+            6120,
+            120,
+            0.807812511920929
+          ],
+          [
+            38,
+            6240,
+            120,
+            0.818749964237213
+          ],
+          [
+            38,
+            6360,
+            120,
+            0.829687476158142
+          ],
+          [
+            38,
+            6480,
+            120,
+            0.840624988079071
+          ],
+          [
+            38,
+            6600,
+            120,
+            0.8515625
+          ],
+          [
+            38,
+            6720,
+            120,
+            0.862500011920929
+          ],
+          [
+            38,
+            6840,
+            120,
+            0.873437464237213
+          ],
+          [
+            38,
+            6960,
+            120,
+            0.884374976158142
+          ],
+          [
+            38,
+            7080,
+            120,
+            0.895312488079071
+          ],
+          [
+            38,
+            7200,
+            120,
+            0.90625
+          ],
+          [
+            38,
+            7320,
+            120,
+            0.917187511920929
+          ],
+          [
+            38,
+            7440,
+            120,
+            0.928124964237213
+          ],
+          [
+            38,
+            7560,
+            120,
+            0.939062476158142
+          ],
+          [
+            42,
+            5760,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            6000,
+            120,
+            0.600000023841858
+          ],
+          [
+            42,
+            6240,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            6480,
+            120,
+            0.600000023841858
+          ],
+          [
+            42,
+            6720,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            6960,
+            120,
+            0.600000023841858
+          ],
+          [
+            42,
+            7200,
+            120,
+            0.349999994039536
+          ],
+          [
+            42,
+            7440,
+            120,
+            0.600000023841858
+          ]
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "beats": 16
+    },
+    {
+      "name": "Bass",
+      "notes": [
+        [],
+        [
+          [
+            33,
+            0,
+            420,
+            1.0
+          ],
+          [
+            33,
+            720,
+            200,
+            0.720000028610229
+          ],
+          [
+            45,
+            960,
+            200,
+            0.819999992847443
+          ],
+          [
+            40,
+            1200,
+            200,
+            0.779999971389771
+          ],
+          [
+            33,
+            1440,
+            200,
+            0.879999995231628
+          ],
+          [
+            45,
+            1680,
+            200,
+            0.800000011920929
+          ],
+          [
+            29,
+            1920,
+            420,
+            1.0
+          ],
+          [
+            29,
+            2640,
+            200,
+            0.720000028610229
+          ],
+          [
+            41,
+            2880,
+            200,
+            0.819999992847443
+          ],
+          [
+            36,
+            3120,
+            200,
+            0.779999971389771
+          ],
+          [
+            29,
+            3360,
+            200,
+            0.879999995231628
+          ],
+          [
+            41,
+            3600,
+            200,
+            0.800000011920929
+          ],
+          [
+            36,
+            3840,
+            420,
+            1.0
+          ],
+          [
+            36,
+            4560,
+            200,
+            0.720000028610229
+          ],
+          [
+            48,
+            4800,
+            200,
+            0.819999992847443
+          ],
+          [
+            43,
+            5040,
+            200,
+            0.779999971389771
+          ],
+          [
+            36,
+            5280,
+            200,
+            0.879999995231628
+          ],
+          [
+            48,
+            5520,
+            200,
+            0.800000011920929
+          ],
+          [
+            31,
+            5760,
+            420,
+            1.0
+          ],
+          [
+            31,
+            6480,
+            200,
+            0.720000028610229
+          ],
+          [
+            43,
+            6720,
+            200,
+            0.819999992847443
+          ],
+          [
+            38,
+            6960,
+            200,
+            0.779999971389771
+          ],
+          [
+            31,
+            7200,
+            200,
+            0.879999995231628
+          ],
+          [
+            33,
+            7440,
+            200,
+            0.800000011920929
+          ]
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "beats": 16
+    },
+    {
+      "name": "Marimba",
+      "notes": [
+        [],
+        [],
+        [],
+        [
+          [
+            69,
+            0,
+            210,
+            0.720000028610229
+          ],
+          [
+            76,
+            240,
+            210,
+            0.5
+          ],
+          [
+            72,
+            480,
+            210,
+            0.720000028610229
+          ],
+          [
+            81,
+            720,
+            210,
+            0.5
+          ],
+          [
+            76,
+            960,
+            210,
+            0.720000028610229
+          ],
+          [
+            72,
+            1200,
+            210,
+            0.5
+          ],
+          [
+            81,
+            1440,
+            210,
+            0.720000028610229
+          ],
+          [
+            76,
+            1680,
+            210,
+            0.5
+          ],
+          [
+            65,
+            1920,
+            210,
+            0.720000028610229
+          ],
+          [
+            72,
+            2160,
+            210,
+            0.5
+          ],
+          [
+            69,
+            2400,
+            210,
+            0.720000028610229
+          ],
+          [
+            77,
+            2640,
+            210,
+            0.5
+          ],
+          [
+            72,
+            2880,
+            210,
+            0.720000028610229
+          ],
+          [
+            69,
+            3120,
+            210,
+            0.5
+          ],
+          [
+            77,
+            3360,
+            210,
+            0.720000028610229
+          ],
+          [
+            72,
+            3600,
+            210,
+            0.5
+          ],
+          [
+            67,
+            3840,
+            210,
+            0.720000028610229
+          ],
+          [
+            76,
+            4080,
+            210,
+            0.5
+          ],
+          [
+            72,
+            4320,
+            210,
+            0.720000028610229
+          ],
+          [
+            79,
+            4560,
+            210,
+            0.5
+          ],
+          [
+            76,
+            4800,
+            210,
+            0.720000028610229
+          ],
+          [
+            72,
+            5040,
+            210,
+            0.5
+          ],
+          [
+            79,
+            5280,
+            210,
+            0.720000028610229
+          ],
+          [
+            76,
+            5520,
+            210,
+            0.5
+          ],
+          [
+            67,
+            5760,
+            210,
+            0.720000028610229
+          ],
+          [
+            74,
+            6000,
+            210,
+            0.5
+          ],
+          [
+            71,
+            6240,
+            210,
+            0.720000028610229
+          ],
+          [
+            79,
+            6480,
+            210,
+            0.5
+          ],
+          [
+            74,
+            6720,
+            210,
+            0.720000028610229
+          ],
+          [
+            71,
+            6960,
+            210,
+            0.5
+          ],
+          [
+            79,
+            7200,
+            210,
+            0.720000028610229
+          ],
+          [
+            74,
+            7440,
+            210,
+            0.5
+          ]
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "beats": 16
+    },
+    {
+      "name": "Lead",
+      "notes": [
+        [],
+        [],
+        [],
+        [],
+        [
+          [
+            76,
+            0,
+            695,
+            0.899999976158142
+          ],
+          [
+            74,
+            720,
+            215,
+            0.75
+          ],
+          [
+            72,
+            960,
+            455,
+            0.899999976158142
+          ],
+          [
+            76,
+            1440,
+            455,
+            0.75
+          ],
+          [
+            81,
+            1920,
+            695,
+            0.899999976158142
+          ],
+          [
+            79,
+            2640,
+            215,
+            0.75
+          ],
+          [
+            77,
+            2880,
+            455,
+            0.899999976158142
+          ],
+          [
+            76,
+            3360,
+            455,
+            0.75
+          ],
+          [
+            79,
+            3840,
+            695,
+            0.899999976158142
+          ],
+          [
+            76,
+            4560,
+            215,
+            0.75
+          ],
+          [
+            72,
+            4800,
+            455,
+            0.899999976158142
+          ],
+          [
+            74,
+            5280,
+            455,
+            0.75
+          ],
+          [
+            71,
+            5760,
+            455,
+            0.899999976158142
+          ],
+          [
+            74,
+            6240,
+            455,
+            0.75
+          ],
+          [
+            76,
+            6720,
+            935,
+            0.899999976158142
+          ]
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "beats": 16
+    },
+    {
+      "name": "Pad",
+      "notes": [
+        [],
+        [],
+        [],
+        [],
+        [],
+        [
+          [
+            57,
+            0,
+            1910,
+            0.699999988079071
+          ],
+          [
+            60,
+            0,
+            1910,
+            0.699999988079071
+          ],
+          [
+            64,
+            0,
+            1910,
+            0.699999988079071
+          ],
+          [
+            69,
+            0,
+            1910,
+            0.699999988079071
+          ],
+          [
+            53,
+            1920,
+            1910,
+            0.699999988079071
+          ],
+          [
+            57,
+            1920,
+            1910,
+            0.699999988079071
+          ],
+          [
+            60,
+            1920,
+            1910,
+            0.699999988079071
+          ],
+          [
+            65,
+            1920,
+            1910,
+            0.699999988079071
+          ],
+          [
+            55,
+            3840,
+            1910,
+            0.699999988079071
+          ],
+          [
+            60,
+            3840,
+            1910,
+            0.699999988079071
+          ],
+          [
+            64,
+            3840,
+            1910,
+            0.699999988079071
+          ],
+          [
+            67,
+            3840,
+            1910,
+            0.699999988079071
+          ],
+          [
+            55,
+            5760,
+            1910,
+            0.699999988079071
+          ],
+          [
+            59,
+            5760,
+            1910,
+            0.699999988079071
+          ],
+          [
+            62,
+            5760,
+            1910,
+            0.699999988079071
+          ],
+          [
+            67,
+            5760,
+            1910,
+            0.699999988079071
+          ]
+        ],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "beats": 16
+    },
+    {
+      "name": "Growl",
+      "notes": [
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [
+          [
+            45,
+            0,
+            210,
+            0.949999988079071
+          ],
+          [
+            45,
+            240,
+            210,
+            0.75
+          ],
+          [
+            45,
+            480,
+            210,
+            0.949999988079071
+          ],
+          [
+            57,
+            720,
+            210,
+            0.75
+          ],
+          [
+            45,
+            960,
+            210,
+            0.949999988079071
+          ],
+          [
+            45,
+            1200,
+            210,
+            0.75
+          ],
+          [
+            45,
+            1440,
+            210,
+            0.949999988079071
+          ],
+          [
+            57,
+            1680,
+            210,
+            0.75
+          ],
+          [
+            41,
+            1920,
+            210,
+            0.949999988079071
+          ],
+          [
+            41,
+            2160,
+            210,
+            0.75
+          ],
+          [
+            41,
+            2400,
+            210,
+            0.949999988079071
+          ],
+          [
+            53,
+            2640,
+            210,
+            0.75
+          ],
+          [
+            41,
+            2880,
+            210,
+            0.949999988079071
+          ],
+          [
+            41,
+            3120,
+            210,
+            0.75
+          ],
+          [
+            41,
+            3360,
+            210,
+            0.949999988079071
+          ],
+          [
+            53,
+            3600,
+            210,
+            0.75
+          ],
+          [
+            48,
+            3840,
+            210,
+            0.949999988079071
+          ],
+          [
+            48,
+            4080,
+            210,
+            0.75
+          ],
+          [
+            48,
+            4320,
+            210,
+            0.949999988079071
+          ],
+          [
+            60,
+            4560,
+            210,
+            0.75
+          ],
+          [
+            48,
+            4800,
+            210,
+            0.949999988079071
+          ],
+          [
+            48,
+            5040,
+            210,
+            0.75
+          ],
+          [
+            48,
+            5280,
+            210,
+            0.949999988079071
+          ],
+          [
+            60,
+            5520,
+            210,
+            0.75
+          ],
+          [
+            43,
+            5760,
+            210,
+            0.949999988079071
+          ],
+          [
+            43,
+            6000,
+            210,
+            0.75
+          ],
+          [
+            43,
+            6240,
+            210,
+            0.949999988079071
+          ],
+          [
+            55,
+            6480,
+            210,
+            0.75
+          ],
+          [
+            43,
+            6720,
+            210,
+            0.949999988079071
+          ],
+          [
+            43,
+            6960,
+            210,
+            0.75
+          ],
+          [
+            43,
+            7200,
+            210,
+            0.949999988079071
+          ],
+          [
+            55,
+            7440,
+            210,
+            0.75
+          ]
+        ],
+        [],
+        [],
+        [],
+        []
+      ],
+      "beats": 16
+    },
+    {
+      "name": "Bells",
+      "notes": [
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [
+          [
+            76,
+            0,
+            960,
+            0.5
+          ],
+          [
+            64,
+            1200,
+            480,
+            0.349999994039536
+          ],
+          [
+            72,
+            1920,
+            960,
+            0.5
+          ],
+          [
+            60,
+            3120,
+            480,
+            0.349999994039536
+          ],
+          [
+            76,
+            3840,
+            960,
+            0.5
+          ],
+          [
+            64,
+            5040,
+            480,
+            0.349999994039536
+          ],
+          [
+            74,
+            5760,
+            960,
+            0.5
+          ],
+          [
+            62,
+            6960,
+            480,
+            0.349999994039536
+          ]
+        ],
+        [],
+        [],
+        []
+      ],
+      "beats": 16
+    },
+    {
+      "name": "Choir",
+      "notes": [
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [
+          [
+            57,
+            0,
+            1910,
+            0.600000023841858
+          ],
+          [
+            64,
+            0,
+            1910,
+            0.550000011920929
+          ],
+          [
+            53,
+            1920,
+            1910,
+            0.600000023841858
+          ],
+          [
+            60,
+            1920,
+            1910,
+            0.550000011920929
+          ],
+          [
+            55,
+            3840,
+            1910,
+            0.600000023841858
+          ],
+          [
+            64,
+            3840,
+            1910,
+            0.550000011920929
+          ],
+          [
+            55,
+            5760,
+            1910,
+            0.600000023841858
+          ],
+          [
+            62,
+            5760,
+            1910,
+            0.550000011920929
+          ]
+        ],
+        [
+          [
+            45,
+            0,
+            1910,
+            0.550000011920929
+          ],
+          [
+            48,
+            0,
+            1910,
+            0.550000011920929
+          ],
+          [
+            52,
+            0,
+            1910,
+            0.550000011920929
+          ],
+          [
+            41,
+            1920,
+            1910,
+            0.550000011920929
+          ],
+          [
+            45,
+            1920,
+            1910,
+            0.550000011920929
+          ],
+          [
+            48,
+            1920,
+            1910,
+            0.550000011920929
+          ],
+          [
+            52,
+            1920,
+            1910,
+            0.550000011920929
+          ],
+          [
+            43,
+            3840,
+            1910,
+            0.550000011920929
+          ],
+          [
+            48,
+            3840,
+            1910,
+            0.550000011920929
+          ],
+          [
+            52,
+            3840,
+            1910,
+            0.550000011920929
+          ],
+          [
+            43,
+            5760,
+            1910,
+            0.550000011920929
+          ],
+          [
+            47,
+            5760,
+            1910,
+            0.550000011920929
+          ],
+          [
+            50,
+            5760,
+            1910,
+            0.550000011920929
+          ]
+        ],
+        []
+      ],
+      "beats": 16
+    },
+    {
+      "name": "Arp",
+      "notes": [
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [
+          [
+            69,
+            0,
+            105,
+            0.800000011920929
+          ],
+          [
+            72,
+            120,
+            105,
+            0.600000023841858
+          ],
+          [
+            76,
+            240,
+            105,
+            0.600000023841858
+          ],
+          [
+            81,
+            360,
+            105,
+            0.600000023841858
+          ],
+          [
+            76,
+            480,
+            105,
+            0.800000011920929
+          ],
+          [
+            72,
+            600,
+            105,
+            0.600000023841858
+          ],
+          [
+            69,
+            720,
+            105,
+            0.600000023841858
+          ],
+          [
+            72,
+            840,
+            105,
+            0.600000023841858
+          ],
+          [
+            76,
+            960,
+            105,
+            0.800000011920929
+          ],
+          [
+            81,
+            1080,
+            105,
+            0.600000023841858
+          ],
+          [
+            76,
+            1200,
+            105,
+            0.600000023841858
+          ],
+          [
+            72,
+            1320,
+            105,
+            0.600000023841858
+          ],
+          [
+            69,
+            1440,
+            105,
+            0.800000011920929
+          ],
+          [
+            72,
+            1560,
+            105,
+            0.600000023841858
+          ],
+          [
+            76,
+            1680,
+            105,
+            0.600000023841858
+          ],
+          [
+            81,
+            1800,
+            105,
+            0.600000023841858
+          ],
+          [
+            65,
+            1920,
+            105,
+            0.800000011920929
+          ],
+          [
+            69,
+            2040,
+            105,
+            0.600000023841858
+          ],
+          [
+            72,
+            2160,
+            105,
+            0.600000023841858
+          ],
+          [
+            77,
+            2280,
+            105,
+            0.600000023841858
+          ],
+          [
+            72,
+            2400,
+            105,
+            0.800000011920929
+          ],
+          [
+            69,
+            2520,
+            105,
+            0.600000023841858
+          ],
+          [
+            65,
+            2640,
+            105,
+            0.600000023841858
+          ],
+          [
+            69,
+            2760,
+            105,
+            0.600000023841858
+          ],
+          [
+            72,
+            2880,
+            105,
+            0.800000011920929
+          ],
+          [
+            77,
+            3000,
+            105,
+            0.600000023841858
+          ],
+          [
+            72,
+            3120,
+            105,
+            0.600000023841858
+          ],
+          [
+            69,
+            3240,
+            105,
+            0.600000023841858
+          ],
+          [
+            65,
+            3360,
+            105,
+            0.800000011920929
+          ],
+          [
+            69,
+            3480,
+            105,
+            0.600000023841858
+          ],
+          [
+            72,
+            3600,
+            105,
+            0.600000023841858
+          ],
+          [
+            77,
+            3720,
+            105,
+            0.600000023841858
+          ],
+          [
+            67,
+            3840,
+            105,
+            0.800000011920929
+          ],
+          [
+            72,
+            3960,
+            105,
+            0.600000023841858
+          ],
+          [
+            76,
+            4080,
+            105,
+            0.600000023841858
+          ],
+          [
+            79,
+            4200,
+            105,
+            0.600000023841858
+          ],
+          [
+            76,
+            4320,
+            105,
+            0.800000011920929
+          ],
+          [
+            72,
+            4440,
+            105,
+            0.600000023841858
+          ],
+          [
+            67,
+            4560,
+            105,
+            0.600000023841858
+          ],
+          [
+            72,
+            4680,
+            105,
+            0.600000023841858
+          ],
+          [
+            76,
+            4800,
+            105,
+            0.800000011920929
+          ],
+          [
+            79,
+            4920,
+            105,
+            0.600000023841858
+          ],
+          [
+            76,
+            5040,
+            105,
+            0.600000023841858
+          ],
+          [
+            72,
+            5160,
+            105,
+            0.600000023841858
+          ],
+          [
+            67,
+            5280,
+            105,
+            0.800000011920929
+          ],
+          [
+            72,
+            5400,
+            105,
+            0.600000023841858
+          ],
+          [
+            76,
+            5520,
+            105,
+            0.600000023841858
+          ],
+          [
+            79,
+            5640,
+            105,
+            0.600000023841858
+          ],
+          [
+            67,
+            5760,
+            105,
+            0.800000011920929
+          ],
+          [
+            71,
+            5880,
+            105,
+            0.600000023841858
+          ],
+          [
+            74,
+            6000,
+            105,
+            0.600000023841858
+          ],
+          [
+            79,
+            6120,
+            105,
+            0.600000023841858
+          ],
+          [
+            74,
+            6240,
+            105,
+            0.800000011920929
+          ],
+          [
+            71,
+            6360,
+            105,
+            0.600000023841858
+          ],
+          [
+            67,
+            6480,
+            105,
+            0.600000023841858
+          ],
+          [
+            71,
+            6600,
+            105,
+            0.600000023841858
+          ],
+          [
+            74,
+            6720,
+            105,
+            0.800000011920929
+          ],
+          [
+            79,
+            6840,
+            105,
+            0.600000023841858
+          ],
+          [
+            74,
+            6960,
+            105,
+            0.600000023841858
+          ],
+          [
+            71,
+            7080,
+            105,
+            0.600000023841858
+          ],
+          [
+            67,
+            7200,
+            105,
+            0.800000011920929
+          ],
+          [
+            71,
+            7320,
+            105,
+            0.600000023841858
+          ],
+          [
+            74,
+            7440,
+            105,
+            0.600000023841858
+          ],
+          [
+            79,
+            7560,
+            105,
+            0.600000023841858
+          ]
+        ]
+      ],
+      "beats": 16
+    },
+    {
+      "name": "Outro",
+      "notes": [
+        [],
+        [
+          [
+            33,
+            5760,
+            1910,
+            0.850000023841858
+          ]
+        ],
+        [
+          [
+            57,
+            0,
+            1890,
+            0.550000011920929
+          ],
+          [
+            60,
+            0,
+            1890,
+            0.550000011920929
+          ],
+          [
+            64,
+            0,
+            1890,
+            0.550000011920929
+          ],
+          [
+            67,
+            0,
+            1890,
+            0.550000011920929
+          ],
+          [
+            71,
+            0,
+            1890,
+            0.550000011920929
+          ],
+          [
+            53,
+            1920,
+            1890,
+            0.550000011920929
+          ],
+          [
+            57,
+            1920,
+            1890,
+            0.550000011920929
+          ],
+          [
+            60,
+            1920,
+            1890,
+            0.550000011920929
+          ],
+          [
+            64,
+            1920,
+            1890,
+            0.550000011920929
+          ],
+          [
+            55,
+            3840,
+            1890,
+            0.550000011920929
+          ],
+          [
+            59,
+            3840,
+            1890,
+            0.550000011920929
+          ],
+          [
+            62,
+            3840,
+            1890,
+            0.550000011920929
+          ],
+          [
+            67,
+            3840,
+            1890,
+            0.550000011920929
+          ],
+          [
+            45,
+            5760,
+            1910,
+            0.620000004768372
+          ],
+          [
+            57,
+            5760,
+            1910,
+            0.620000004768372
+          ],
+          [
+            60,
+            5760,
+            1910,
+            0.620000004768372
+          ],
+          [
+            64,
+            5760,
+            1910,
+            0.620000004768372
+          ],
+          [
+            69,
+            5760,
+            1910,
+            0.620000004768372
+          ],
+          [
+            71,
+            5760,
+            1910,
+            0.620000004768372
+          ]
+        ],
+        [],
+        [],
+        [
+          [
+            57,
+            0,
+            1910,
+            0.600000023841858
+          ],
+          [
+            60,
+            0,
+            1910,
+            0.600000023841858
+          ],
+          [
+            64,
+            0,
+            1910,
+            0.600000023841858
+          ],
+          [
+            69,
+            0,
+            1910,
+            0.600000023841858
+          ],
+          [
+            53,
+            1920,
+            1910,
+            0.600000023841858
+          ],
+          [
+            57,
+            1920,
+            1910,
+            0.600000023841858
+          ],
+          [
+            60,
+            1920,
+            1910,
+            0.600000023841858
+          ],
+          [
+            65,
+            1920,
+            1910,
+            0.600000023841858
+          ],
+          [
+            55,
+            3840,
+            1910,
+            0.600000023841858
+          ],
+          [
+            59,
+            3840,
+            1910,
+            0.600000023841858
+          ],
+          [
+            62,
+            3840,
+            1910,
+            0.600000023841858
+          ],
+          [
+            67,
+            3840,
+            1910,
+            0.600000023841858
+          ],
+          [
+            57,
+            5760,
+            1910,
+            0.600000023841858
+          ],
+          [
+            60,
+            5760,
+            1910,
+            0.600000023841858
+          ],
+          [
+            64,
+            5760,
+            1910,
+            0.600000023841858
+          ],
+          [
+            69,
+            5760,
+            1910,
+            0.600000023841858
+          ]
+        ],
+        [],
+        [
+          [
+            76,
+            5760,
+            960,
+            0.449999988079071
+          ]
+        ],
+        [],
+        [],
+        []
+      ],
+      "beats": 16
+    }
+  ],
+  "patternBeats": 16,
+  "patternBars": 4,
+  "clips": [
+    {
+      "pattern": 0,
+      "track": 4,
+      "startTick": 0,
+      "lengthTicks": 7680
+    },
+    {
+      "pattern": 6,
+      "track": 10,
+      "startTick": 0,
+      "lengthTicks": 7680
+    },
+    {
+      "pattern": 1,
+      "track": 5,
+      "startTick": 7680,
+      "lengthTicks": 15360
+    },
+    {
+      "pattern": 3,
+      "track": 7,
+      "startTick": 7680,
+      "lengthTicks": 15360
+    },
+    {
+      "pattern": 0,
+      "track": 4,
+      "startTick": 7680,
+      "lengthTicks": 15360
+    },
+    {
+      "pattern": 4,
+      "track": 8,
+      "startTick": 7680,
+      "lengthTicks": 15360
+    },
+    {
+      "pattern": 8,
+      "track": 12,
+      "startTick": 15360,
+      "lengthTicks": 7680
+    },
+    {
+      "pattern": 2,
+      "track": 6,
+      "startTick": 23040,
+      "lengthTicks": 7680
+    },
+    {
+      "pattern": 3,
+      "track": 7,
+      "startTick": 23040,
+      "lengthTicks": 7680
+    },
+    {
+      "pattern": 6,
+      "track": 10,
+      "startTick": 23040,
+      "lengthTicks": 7680
+    },
+    {
+      "pattern": 0,
+      "track": 4,
+      "startTick": 23040,
+      "lengthTicks": 7680
+    },
+    {
+      "pattern": 1,
+      "track": 5,
+      "startTick": 30720,
+      "lengthTicks": 15360
+    },
+    {
+      "pattern": 7,
+      "track": 11,
+      "startTick": 30720,
+      "lengthTicks": 15360
+    },
+    {
+      "pattern": 5,
+      "track": 9,
+      "startTick": 30720,
+      "lengthTicks": 15360
+    },
+    {
+      "pattern": 6,
+      "track": 10,
+      "startTick": 30720,
+      "lengthTicks": 15360
+    },
+    {
+      "pattern": 8,
+      "track": 12,
+      "startTick": 30720,
+      "lengthTicks": 15360
+    },
+    {
+      "pattern": 9,
+      "track": 13,
+      "startTick": 46080,
+      "lengthTicks": 7680
+    },
+    {
+      "pattern": 0,
+      "track": 4,
+      "startTick": 46080,
+      "lengthTicks": 7680
+    },
+    {
+      "pattern": 6,
+      "track": 10,
+      "startTick": 46080,
+      "lengthTicks": 7680
+    },
+    {
+      "pattern": 2,
+      "track": 6,
+      "startTick": 53760,
+      "lengthTicks": 7680
+    },
+    {
+      "pattern": 4,
+      "track": 8,
+      "startTick": 53760,
+      "lengthTicks": 7680
+    },
+    {
+      "pattern": 3,
+      "track": 7,
+      "startTick": 53760,
+      "lengthTicks": 7680
+    },
+    {
+      "pattern": 6,
+      "track": 10,
+      "startTick": 53760,
+      "lengthTicks": 7680
+    },
+    {
+      "pattern": 1,
+      "track": 5,
+      "startTick": 61440,
+      "lengthTicks": 15360
+    },
+    {
+      "pattern": 7,
+      "track": 11,
+      "startTick": 61440,
+      "lengthTicks": 15360
+    },
+    {
+      "pattern": 5,
+      "track": 9,
+      "startTick": 61440,
+      "lengthTicks": 15360
+    },
+    {
+      "pattern": 6,
+      "track": 10,
+      "startTick": 61440,
+      "lengthTicks": 15360
+    },
+    {
+      "pattern": 10,
+      "track": 14,
+      "startTick": 61440,
+      "lengthTicks": 15360
+    },
+    {
+      "pattern": 8,
+      "track": 12,
+      "startTick": 61440,
+      "lengthTicks": 15360
+    },
+    {
+      "pattern": 4,
+      "track": 8,
+      "startTick": 69120,
+      "lengthTicks": 7680
+    },
+    {
+      "pattern": 11,
+      "track": 15,
+      "startTick": 76800,
+      "lengthTicks": 7680
+    }
+  ],
+  "trackCount": 16,
+  "playlistTracks": [
+    {
+      "track": 0,
+      "name": "Audio"
+    },
+    {
+      "track": 4,
+      "pattern": 0
+    },
+    {
+      "track": 5,
+      "pattern": 1
+    },
+    {
+      "track": 6,
+      "pattern": 2
+    },
+    {
+      "track": 7,
+      "pattern": 3
+    },
+    {
+      "track": 8,
+      "pattern": 4
+    },
+    {
+      "track": 9,
+      "pattern": 5
+    },
+    {
+      "track": 10,
+      "pattern": 6
+    },
+    {
+      "track": 11,
+      "pattern": 7
+    },
+    {
+      "track": 12,
+      "pattern": 8
+    },
+    {
+      "track": 13,
+      "pattern": 9
+    },
+    {
+      "track": 14,
+      "pattern": 10
+    },
+    {
+      "track": 15,
+      "pattern": 11
+    }
+  ],
+  "audioClips": [
+    {
+      "source": "builtin:intro",
+      "name": "Intro sound",
+      "track": 0,
+      "startTick": 0,
+      "lengthTicks": 4400,
+      "gain": 0.550000011920929,
+      "offsetSeconds": 0.0
+    },
+    {
+      "source": "builtin:lib:kits/studio/crashl-4",
+      "name": "Reverse cymbal",
+      "track": 0,
+      "startTick": 27200,
+      "lengthTicks": 3520,
+      "gain": 0.699999988079071,
+      "offsetSeconds": 0.0,
+      "pan": -0.200000002980232,
+      "reverse": true,
+      "fadeIn": 0.8
+    },
+    {
+      "source": "builtin:lib:kits/studio/crashl-4",
+      "name": "Reverse cymbal (pitched)",
+      "track": 0,
+      "startTick": 57920,
+      "lengthTicks": 3520,
+      "gain": 0.699999988079071,
+      "offsetSeconds": 0.0,
+      "pan": 0.200000002980232,
+      "reverse": true,
+      "fadeIn": 0.8,
+      "stretch": {
+        "lengthRatio": 1.0,
+        "semitones": -3.0,
+        "keepTimbre": false
+      }
+    }
+  ],
+  "automation": [
+    {
+      "kind": "channelPlugin",
+      "index": 5,
+      "slot": 0,
+      "param": 52,
+      "lane": 0,
+      "startTick": 0,
+      "lengthTicks": 7680,
+      "points": [
+        [
+          0.0,
+          0.280000001192093,
+          2
+        ],
+        [
+          7680.0,
+          0.720000028610229,
+          2
+        ]
+      ]
+    },
+    {
+      "kind": "channelPlugin",
+      "index": 5,
+      "slot": 0,
+      "param": 52,
+      "lane": 0,
+      "startTick": 46080,
+      "lengthTicks": 7680,
+      "points": [
+        [
+          0.0,
+          0.319999992847443,
+          2
+        ],
+        [
+          7680.0,
+          0.720000028610229,
+          2
+        ]
+      ]
+    },
+    {
+      "kind": "channelPan",
+      "index": 3,
+      "slot": 0,
+      "param": 0,
+      "lane": 1,
+      "startTick": 7680,
+      "lengthTicks": 15360,
+      "points": [
+        [
+          0.0,
+          -0.449999988079071,
+          2
+        ],
+        [
+          1920.0,
+          0.449999988079071,
+          2
+        ],
+        [
+          3840.0,
+          -0.449999988079071,
+          2
+        ],
+        [
+          5760.0,
+          0.449999988079071,
+          2
+        ],
+        [
+          7680.0,
+          -0.449999988079071,
+          2
+        ],
+        [
+          9600.0,
+          0.449999988079071,
+          2
+        ],
+        [
+          11520.0,
+          -0.449999988079071,
+          2
+        ],
+        [
+          13440.0,
+          0.449999988079071,
+          2
+        ],
+        [
+          15360.0,
+          -0.449999988079071,
+          2
+        ]
+      ]
+    },
+    {
+      "kind": "channelPlugin",
+      "index": 6,
+      "slot": 0,
+      "param": 111,
+      "lane": 1,
+      "startTick": 30720,
+      "lengthTicks": 15360,
+      "points": [
+        [
+          0.0,
+          0.46000000834465,
+          2
+        ],
+        [
+          960.0,
+          0.639999985694885,
+          2
+        ],
+        [
+          1920.0,
+          0.46000000834465,
+          2
+        ],
+        [
+          2880.0,
+          0.639999985694885,
+          2
+        ],
+        [
+          3840.0,
+          0.46000000834465,
+          2
+        ],
+        [
+          4800.0,
+          0.639999985694885,
+          2
+        ],
+        [
+          5760.0,
+          0.46000000834465,
+          2
+        ],
+        [
+          6720.0,
+          0.639999985694885,
+          2
+        ],
+        [
+          7680.0,
+          0.46000000834465,
+          2
+        ],
+        [
+          8640.0,
+          0.639999985694885,
+          2
+        ],
+        [
+          9600.0,
+          0.46000000834465,
+          2
+        ],
+        [
+          10560.0,
+          0.639999985694885,
+          2
+        ],
+        [
+          11520.0,
+          0.46000000834465,
+          2
+        ],
+        [
+          12480.0,
+          0.639999985694885,
+          2
+        ],
+        [
+          13440.0,
+          0.46000000834465,
+          2
+        ],
+        [
+          14400.0,
+          0.639999985694885,
+          2
+        ],
+        [
+          15360.0,
+          0.46000000834465,
+          2
+        ]
+      ]
+    },
+    {
+      "kind": "channelPlugin",
+      "index": 6,
+      "slot": 0,
+      "param": 111,
+      "lane": 1,
+      "startTick": 61440,
+      "lengthTicks": 15360,
+      "points": [
+        [
+          0.0,
+          0.46000000834465,
+          2
+        ],
+        [
+          960.0,
+          0.639999985694885,
+          2
+        ],
+        [
+          1920.0,
+          0.46000000834465,
+          2
+        ],
+        [
+          2880.0,
+          0.639999985694885,
+          2
+        ],
+        [
+          3840.0,
+          0.46000000834465,
+          2
+        ],
+        [
+          4800.0,
+          0.639999985694885,
+          2
+        ],
+        [
+          5760.0,
+          0.46000000834465,
+          2
+        ],
+        [
+          6720.0,
+          0.639999985694885,
+          2
+        ],
+        [
+          7680.0,
+          0.46000000834465,
+          2
+        ],
+        [
+          8640.0,
+          0.639999985694885,
+          2
+        ],
+        [
+          9600.0,
+          0.46000000834465,
+          2
+        ],
+        [
+          10560.0,
+          0.639999985694885,
+          2
+        ],
+        [
+          11520.0,
+          0.46000000834465,
+          2
+        ],
+        [
+          12480.0,
+          0.639999985694885,
+          2
+        ],
+        [
+          13440.0,
+          0.46000000834465,
+          2
+        ],
+        [
+          14400.0,
+          0.639999985694885,
+          2
+        ],
+        [
+          15360.0,
+          0.46000000834465,
+          2
+        ]
+      ]
+    },
+    {
+      "kind": "masterEffect",
+      "index": 0,
+      "slot": 0,
+      "param": 1,
+      "lane": 2,
+      "startTick": 46080,
+      "lengthTicks": 7680,
+      "points": [
+        [
+          0.0,
+          350.0,
+          2
+        ],
+        [
+          5760.0,
+          4000.0,
+          2
+        ],
+        [
+          7680.0,
+          20000.0,
+          2
+        ]
+      ]
+    },
+    {
+      "kind": "auxVolume",
+      "index": 0,
+      "slot": 1,
+      "param": 0,
+      "lane": 2,
+      "startTick": 61440,
+      "lengthTicks": 15360,
+      "points": [
+        [
+          0.0,
+          0.5,
+          2
+        ],
+        [
+          15360.0,
+          0.949999988079071,
+          2
+        ]
+      ]
+    },
+    {
+      "kind": "trackSend",
+      "index": 3,
+      "slot": 0,
+      "param": 0,
+      "lane": 3,
+      "startTick": 46080,
+      "lengthTicks": 9600,
+      "points": [
+        [
+          0.0,
+          0.25,
+          2
+        ],
+        [
+          7680.0,
+          0.800000011920929,
+          2
+        ],
+        [
+          8160.0,
+          0.25,
+          1
+        ]
+      ]
+    },
+    {
+      "kind": "trackEffect",
+      "index": 1,
+      "slot": 2,
+      "param": 5,
+      "lane": 3,
+      "startTick": 28800,
+      "lengthTicks": 1920,
+      "points": [
+        [
+          0.0,
+          0.0,
+          1
+        ],
+        [
+          960.0,
+          100.0,
+          1
+        ],
+        [
+          1919.0,
+          0.0,
+          1
+        ]
+      ]
+    },
+    {
+      "kind": "trackEffect",
+      "index": 1,
+      "slot": 2,
+      "param": 5,
+      "lane": 3,
+      "startTick": 59520,
+      "lengthTicks": 1920,
+      "points": [
+        [
+          0.0,
+          0.0,
+          1
+        ],
+        [
+          960.0,
+          100.0,
+          1
+        ],
+        [
+          1919.0,
+          0.0,
+          1
+        ]
+      ]
+    },
+    {
+      "kind": "vcaLevel",
+      "index": 0,
+      "slot": 0,
+      "param": 0,
+      "lane": 3,
+      "startTick": 76800,
+      "lengthTicks": 7680,
+      "points": [
+        [
+          0.0,
+          1.0,
+          2
+        ],
+        [
+          3840.0,
+          0.899999976158142,
+          2
+        ],
+        [
+          7680.0,
+          0.0,
+          2
+        ]
+      ]
+    }
+  ],
+  "tempoChanges": [
+    [
+      80640,
+      104.0
+    ],
+    [
+      81600,
+      98.0
+    ],
+    [
+      82560,
+      90.0
+    ],
+    [
+      83520,
+      80.0
+    ]
+  ]
+}

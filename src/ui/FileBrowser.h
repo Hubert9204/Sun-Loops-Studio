@@ -12,7 +12,7 @@
 
 namespace sls
 {
-// The left sidebar: a search box above a tree (Samples, Drum Kits, Instruments, Presets, Plugin).
+// The left sidebar: a search box above a tree (Demo Projects, My Projects, Samples, Drum Kits, Instruments, Presets, Plugin).
 // Audio files, built-in samples, instruments and presets can be dragged out of it onto channels; a double-click
 // sends the item to the selected channel. The MainComponent (a DragAndDropContainer) carries the drag.
 class FileBrowser : public juce::Component
@@ -26,6 +26,7 @@ public:
 
     std::function<void (const drag::Item&)> onItemActivated; // double-click on a draggable item
     std::function<void (const juce::String&)> onAction;      // click on an action ("scan-plugins")
+    std::function<void (const juce::String&)> onProjectOpen; // 0.65.0: double-click on a project: its file's path, or "demo:<id>"
     std::function<void (const drag::Item&)> onItemPreview;   // left click on a sound (an audio file or a built-in sample): listen to it (0.31.0)
     // 0.62.0: the tabs (All, the current project, the plugins, the favourites) and the favourites themselves (leaves the user
     // starred from an item's right-click menu; the owner keeps them between sessions)

@@ -414,6 +414,7 @@ MainComponent::MainComponent()
     };
     browser.onItemPreview = [this] (const drag::Item& item) { previewBrowserItem (item); };
     browser.onAction = [this] (const juce::String& action) { browserAction (action); };
+    browser.onProjectOpen = [this] (const juce::String& payload) { openBrowserProject (payload); }; // 0.65.0
     // 0.62.0: the favourites live in the settings (one per line: kind, payload, name)
     if (settings != nullptr)
     {

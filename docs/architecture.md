@@ -48,6 +48,7 @@ src/library/                    No JUCE GUI; JUCE core only (files, JSON)
   SoundFont.*                   SoundFont 2 presets to SamplerPrograms (parsed with third_party/tinysoundfont), ProgramSpec (what the project file stores), sampler settings as JSON
   JsonRead.h                    readNumber / readInt / readBool / readName / number: the range-clamping JSON helpers shared by the project, preset and kit files
   Library.*                     ~/Music/Sun Loops Studio folders, directory scan, building the browser tree
+  DemoProjects.*                The demo projects (0.65.0): resources/demos/*.slp built in (target SunLoopsDemos), listed and read
   ProjectFile.*                 The .slp project file: ProjectDocument <-> JSON, safe read and write
 
 src/plugins/PluginScanner.*     A plain VST3 file finder (older; kept for its tests). The browser uses PluginHost's scan since 0.17.0
@@ -631,6 +632,24 @@ expose their factory presets as programs) and resolves the parameters; `MainComp
 then calls `applyDocument()`, the same path as opening a file, so kits, sampled programs and audio clips (`builtin:` sources) load
 as they do for a project. It runs after `initPlugins()` at start-up, before `startSession()` (a recovered project replaces it).
 
+### The demo projects (0.65.0)
+
+`resources/demos/{sunrise-drive,white-line,ryo}.slp` are ordinary project files, linked in as binary data (`SunLoopsDemos`,
+`DemoData.h`); `src/library/DemoProjects.cpp` lists them (id, title, one-line description) and reads one with
+`ProjectDocument::fromJson`. The browser's **Demo Projects** folder has a `NodeKind::Project` leaf per demo (payload `demo:<id>`), and
+**My Projects** scans `LibraryPaths::projects` for `.slp` files (payload: the path); `FileBrowser` draws the program's icon (binary data
+`SunLoopsIcons`, `IconData.h`, scaled once to 32 px) on project leaves, shows a demo's description as the tooltip and calls
+`onProjectOpen` on a double-click (or *Open* in the right-click menu). `MainComponent::openBrowserProject` asks about unsaved changes
+first, then `openProjectFile` or `openDemoProject`: `applyDocument` with no file, the plugins' change flags cleared, and
+`untitledName` set to the demo's title (the window title; *Save* writes `Projects/<title>.slp` when that name is free, *Save As*
+suggests it). Saving into the Projects folder rebuilds the browser so the new file appears under My Projects.
+
+The files are made by `tools/demos` (see its README): `DemoTool` (`-DSLS_BUILD_DEMO_TOOL=ON`) writes a catalog of what a project can use
+- the SunBurst and HexForge presets as saved plugin states, their parameter names, the effects' parameter tables, the synth patches,
+kits and sampler instruments - writes Sunrise Drive from `makeDemoSong()` with the bundled plugins' states, and renders a project
+headless (the export's renderer) with its loudness (BS.1770), true peak and a band balance; `slp.py` writes a project from Python;
+`white_line.py` and `ryo.py` are the two songs.
+
 ### Shared code after the 0.51.0 review
 
 - `src/synthkit/`: what SunBurst and HexForge share. `SynthProcessor` (a `juce::AudioProcessor` with the parameter tree, the
@@ -648,6 +667,19 @@ as they do for a project. It runs after `initPlugins()` at start-up, before `sta
   Shapers' recordings.
 - Undo: `recordHistory()` only notes an edit made with a mouse button down (`historyPending`); `timerCallback` calls
   `flushHistory()`, which captures and compares the project once the button is up. Undo and redo flush a waiting edit first.
+
+### SunSymphony, the orchestral sampler plugin (0.66.0, Milestone 0)
+
+- `src/orchestra/` (plain C++, built into the plugin and the tests): `Instrument` (immutable once playing: `Region`s that share
+  `SampleBuffer`s, `pick` by key and velocity, `fromSfz` through `sls::sfz`, the built-in `makeTestTone`), `Engine` (16 `Part`s,
+  128 + 16 `Voice`s with 4-point Hermite interpolation, attack / exponential release, stealing the oldest with a 5 ms fade).
+  Instruments reach the audio thread through a spin flag the audio thread only ever try-locks; a replaced one waits in `retired`
+  until `collectRetired()` frees it on the message thread. `tests/test_orchestra.cpp` checks pitch, zones, loops, voices, parts,
+  controllers and that the audio thread does not allocate.
+- `plugins/sunsymphony/`: `SunSymphonyProcessor` (MIDI split at its sample positions, master level, the parts' sources saved as a
+  `ValueTree`), the editor (parts list, master, voice count, keyboard on part 1) and the entry point. CMake: `SunSymphony_VST3`,
+  `SunSymphony_Standalone` (`-DSLS_BUILD_SUNSYMPHONY=OFF` leaves it out); installed to `lib/vst3`.
+- `tools/orchestra/inventory.py`: the coverage report of the free sources (Milestone 0).
 
 ### HexForge, the FM synthesizer plugin (0.50.0)
 
@@ -893,7 +925,8 @@ and the routing text, selects the track in the mixer and publishes the project (
 ### Browser and drag and drop
 
 `MainComponent` is a `juce::DragAndDropContainer`. `FileBrowser` shows a `juce::TreeView` built from a `BrowserNode`
-tree (`library/BrowserModel.h`, plain C++ so it can be tested). `buildBrowserTree` produces Samples (built-in sounds
+tree (`library/BrowserModel.h`, plain C++ so it can be tested). `buildBrowserTree` produces Demo Projects and My Projects (0.65.0),
+Samples (built-in sounds
 plus a scan of the user's folder), Drum Kits, Instruments, Presets (factory plus the user's `.slspreset` files) and
 Plugin (the result of the on-demand scan). A directory scan skips hidden entries, leaves out folders with nothing
 usable, goes at most 6 levels deep and creates at most 5000 nodes; a note appears in the tree if the budget runs out.

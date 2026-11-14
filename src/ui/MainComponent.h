@@ -84,6 +84,7 @@ public:
     void newProject();
     void openProject();                          // asks for a file
     bool openProjectFile (const juce::File& file); // returns false (after telling the user) if it cannot be opened
+    bool openDemoProject (const std::string& id);  // 0.65.0: a demo project, as a new untitled project named after it
 
     // Runs `proceed` straight away if there is nothing to lose; otherwise asks "Save / Don't save / Cancel" first.
     void confirmDiscardChanges (std::function<void()> proceed);
@@ -221,6 +222,7 @@ private:
     void exportFlpProject(); // File > Export as FL Studio project
     void applyDocument (ProjectDocument document, const juce::File& file, juce::StringArray& problems);
     void loadDemoSong(); // 0.52.0: "Sunrise Drive" with SunBurst and HexForge (MainComponentProject.cpp)
+    void openBrowserProject (const juce::String& payload); // 0.65.0: a project double-clicked in the browser (a file or "demo:<id>")
     bool saveProjectTo (const juce::File& file);
     void showFileMenu();
     void markDirty();
@@ -412,6 +414,7 @@ private:
     bool songMode = false;
 
     juce::File currentProjectFile;  // empty while the project is untitled
+    juce::String untitledName;      // 0.65.0: the name an untitled project goes by (an opened demo's title); empty: "Untitled"
     bool projectDirty = false;      // changed since it was last saved or opened
     bool ignoreDirty = false;       // set while loading, and for view-only changes such as picking a pattern
     bool discardDialogOpen = false;

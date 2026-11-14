@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.22)
 # 10.15 Catalina (0.63.0): the newest macOS of Intel Macs from 2012 (Mac mini, iMac, MacBook Pro). The Apple silicon half of the
 # app needs macOS 11 in any case (the first macOS for those Macs); the compiler refuses any call that Catalina does not have.
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Oldest macOS the program runs on")
-project(SunLoopsStudio VERSION 0.64.0 LANGUAGES C CXX ASM)
+project(SunLoopsStudio VERSION 0.66.0 LANGUAGES C CXX ASM)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -111,6 +111,7 @@ set(SLS_CORE_SOURCES
     src/library/Library.cpp
     src/library/ProjectFile.cpp
     src/library/DemoSong.cpp
+    src/library/DemoProjects.cpp
     src/library/FlpFile.cpp
     src/library/FlpProject.cpp
     src/library/HelpIndex.cpp
@@ -150,6 +151,15 @@ set(SLS_COMMON_DEFINITIONS
 juce_add_binary_data(SunLoopsHelp HEADER_NAME HelpData.h NAMESPACE HelpData
     SOURCES docs/user-guide.md docs/user-guide.it.md)
 set_target_properties(SunLoopsHelp PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+# The demo projects (0.65.0): ordinary project files, built into the program (src/library/DemoProjects.cpp lists them).
+juce_add_binary_data(SunLoopsDemos HEADER_NAME DemoData.h NAMESPACE DemoData
+    SOURCES resources/demos/sunrise-drive.slp resources/demos/white-line.slp resources/demos/ryo.slp)
+set_target_properties(SunLoopsDemos PROPERTIES POSITION_INDEPENDENT_CODE ON)
+# The program's icon for its own windows: the browser draws it next to project files (0.65.0).
+juce_add_binary_data(SunLoopsIcons HEADER_NAME IconData.h NAMESPACE IconData
+    SOURCES resources/icons/app_icon_256.png)
+set_target_properties(SunLoopsIcons PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # --- Application -------------------------------------------------------------
 juce_add_gui_app(SunLoopsStudio
@@ -246,6 +256,8 @@ target_link_libraries(SunLoopsStudio PRIVATE
     SunLoopsSounds
     SunLoopsLibraryData
     SunLoopsHelp
+    SunLoopsDemos
+    SunLoopsIcons
     juce::juce_audio_utils
     juce::juce_audio_processors
     juce::juce_gui_extra
@@ -351,6 +363,14 @@ install(FILES resources/icons/app_icon_256.png
 install(FILES resources/icons/app_icon_16.png
         DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/16x16/apps
         RENAME sun-loops-studio.png)
+# 0.65.0: project files (.slp) show the program's icon in file managers (the MIME type's own icon name, for desktops that do not
+# read the <icon> element of resources/linux/sun-loops-studio.xml).
+install(FILES resources/icons/app_icon_256.png
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/256x256/mimetypes
+        RENAME application-x-sun-loops-studio-project.png)
+install(FILES resources/icons/app_icon_16.png
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/16x16/mimetypes
+        RENAME application-x-sun-loops-studio-project.png)
 endif()
 
 # --- SunBurst: the synthesizer plugin (0.48.0), VST3 and Standalone --------------------------------------------
@@ -428,6 +448,39 @@ if(SLS_BUILD_HEXFORGE)
     add_dependencies(SunLoopsStudio HexForge_VST3)
 endif()
 
+# --- SunSymphony: the orchestral sampler plugin (0.66.0, Milestone 0), VST3 and Standalone ---------------------------
+# The engine (src/orchestra) is plain C++, also built into the tests. The plan: claude/orchestral-sampler-plan.md.
+set(ORCHESTRA_SOURCES
+    src/orchestra/Instrument.cpp
+    src/orchestra/Engine.cpp)
+
+option(SLS_BUILD_SUNSYMPHONY "Build the SunSymphony orchestral sampler plugin (VST3 and Standalone)" ON)
+if(SLS_BUILD_SUNSYMPHONY)
+    juce_add_plugin(SunSymphony
+        COMPANY_NAME "Sun Loops Studio"
+        PRODUCT_NAME "SunSymphony"
+        VERSION ${PROJECT_VERSION}
+        PLUGIN_MANUFACTURER_CODE Sunl
+        PLUGIN_CODE Ssym
+        IS_SYNTH TRUE
+        NEEDS_MIDI_INPUT TRUE
+        FORMATS VST3 Standalone
+        VST3_CATEGORIES Instrument Sampler
+        COPY_PLUGIN_AFTER_BUILD FALSE)
+    target_sources(SunSymphony PRIVATE ${ORCHESTRA_SOURCES} src/library/Sfz.cpp
+                   plugins/sunsymphony/SunSymphonyProcessor.cpp plugins/sunsymphony/SunSymphonyEditor.cpp plugins/sunsymphony/PluginMain.cpp)
+    target_include_directories(SunSymphony PRIVATE src plugins)
+    target_compile_definitions(SunSymphony PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
+    target_link_libraries(SunSymphony PRIVATE
+        juce::juce_audio_utils
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_warning_flags)
+    install(DIRECTORY "${CMAKE_BINARY_DIR}/SunSymphony_artefacts/$<CONFIG>/VST3/SunSymphony.vst3"
+            DESTINATION lib/vst3
+            USE_SOURCE_PERMISSIONS)
+    add_dependencies(SunLoopsStudio SunSymphony_VST3)
+endif()
+
 # --- Headless tests ----------------------------------------------------------
 juce_add_console_app(SunLoopsStudioTests
     PRODUCT_NAME "SunLoopsStudioTests")
@@ -438,10 +491,12 @@ target_sources(SunLoopsStudioTests PRIVATE
     tests/test_sunburst.cpp
     tests/test_hexforge.cpp
     tests/test_helios.cpp
+    tests/test_orchestra.cpp
     src/ui/PianoRoll.cpp # 0.58.0: the spare quarter is tested through its public functions
     ${SLS_CORE_SOURCES}
     ${SUNBURST_SOURCES}
-    ${HEXFORGE_SOURCES})
+    ${HEXFORGE_SOURCES}
+    ${ORCHESTRA_SOURCES})
 
 target_include_directories(SunLoopsStudioTests PRIVATE src)
 target_include_directories(SunLoopsStudioTests SYSTEM PRIVATE third_party/signalsmith third_party/tinysoundfont)
@@ -459,6 +514,7 @@ target_link_libraries(SunLoopsStudioTests PRIVATE
     CURL::libcurl
     SunLoopsSounds
     SunLoopsLibraryData
+    SunLoopsDemos
     juce::juce_audio_formats
     juce::juce_audio_processors
     juce::juce_dsp
@@ -503,6 +559,25 @@ endif()
 if(SLS_BUILD_HEXFORGE)
     add_dependencies(SunLoopsStudioTests HexForge_VST3)
 endif()
+if(SLS_BUILD_SUNSYMPHONY)
+    add_dependencies(SunLoopsStudioTests SunSymphony_VST3)
+endif()
 
 enable_testing()
 add_test(NAME core COMMAND SunLoopsStudioTests)
+
+# The demo projects' helper (0.65.0, tools/demos): renders a project file headless and lists what a demo can use. Only for making the
+# demos (-DSLS_BUILD_DEMO_TOOL=ON); the program does not need it.
+option(SLS_BUILD_DEMO_TOOL "Build tools/demos/DemoTool (renders .slp files headless, for making the demo projects)" OFF)
+if(SLS_BUILD_DEMO_TOOL)
+    juce_add_console_app(SunLoopsDemoTool PRODUCT_NAME "SunLoopsDemoTool")
+    target_sources(SunLoopsDemoTool PRIVATE tools/demos/DemoTool.cpp ${SLS_CORE_SOURCES})
+    target_include_directories(SunLoopsDemoTool PRIVATE src)
+    target_include_directories(SunLoopsDemoTool SYSTEM PRIVATE third_party/signalsmith third_party/tinysoundfont)
+    target_compile_definitions(SunLoopsDemoTool PRIVATE ${SLS_COMMON_DEFINITIONS})
+    target_link_libraries(SunLoopsDemoTool PRIVATE
+        spdlog::spdlog nlohmann_json::nlohmann_json CURL::libcurl SunLoopsSounds SunLoopsLibraryData SunLoopsDemos
+        juce::juce_audio_formats juce::juce_audio_processors juce::juce_dsp
+        juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+    add_dependencies(SunLoopsDemoTool SunBurst_VST3 HexForge_VST3)
+endif()

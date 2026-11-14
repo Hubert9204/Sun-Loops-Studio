@@ -3,6 +3,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include "library/DemoProjects.h"
 #include "library/DemoSong.h"
 #include "library/FlpProject.h"
 
@@ -38,7 +39,9 @@ constexpr const char* kRecentKey = "recent.projects";
 
 juce::String MainComponent::projectName() const
 {
-    return currentProjectFile == juce::File() ? juce::String ("Untitled") : currentProjectFile.getFileNameWithoutExtension();
+    if (currentProjectFile == juce::File())
+        return untitledName.isNotEmpty() ? untitledName : juce::String ("Untitled");
+    return currentProjectFile.getFileNameWithoutExtension();
 }
 
 void MainComponent::markDirty()
@@ -232,6 +235,7 @@ void MainComponent::applyDocument (ProjectDocument doc, const juce::File& file, 
     publishProject();
 
     currentProjectFile = file;
+    untitledName = {};
     projectDirty = false;
     updateWindowTitle();
 }
@@ -259,11 +263,55 @@ void MainComponent::loadDemoSong()
     // Choosing the presets told the project that the plugins changed: the demo is still untouched (no "*" in the title).
     for (const auto& p : pluginHost->livePlugins())
         p->takeChanged();
+    untitledName = kDemoSongName; // 0.65.0: the window says which song this is, and Save names the file after it
     projectDirty = false;
     updateWindowTitle();
     for (const auto& p : loadProblems)
         spdlog::warn ("Demo song: {}", p.toStdString());
     statusLabel.setText (juce::String ("Demo song \"") + kDemoSongName + "\": press Space to play it", juce::dontSendNotification);
+}
+
+// 0.65.0: the demo projects, built into the program as project files. One opens as a new project with the demo's name: Save puts a copy
+// in the Projects folder, the demo itself never changes.
+bool MainComponent::openDemoProject (const std::string& id)
+{
+    const auto* info = findDemoProject (id);
+    auto parsed = readDemoProject (id);
+    if (info == nullptr || ! parsed.document.has_value())
+    {
+        statusLabel.setText ("Could not open the demo project", juce::dontSendNotification);
+        juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Could not open the demo project", juce::String (parsed.error));
+        return false;
+    }
+    juce::StringArray problems;
+    for (const auto& w : parsed.warnings)
+        problems.add (juce::String (w));
+    applyDocument (std::move (*parsed.document), {}, problems);
+    // Setting the plugins' states told the project that they changed: the demo is still untouched (no "*" in the title).
+    for (const auto& p : pluginHost->livePlugins())
+        p->takeChanged();
+    untitledName = juce::String (info->title);
+    projectDirty = false;
+    updateWindowTitle();
+    for (const auto& p : problems)
+        spdlog::warn ("Demo project {}: {}", id, p.toStdString());
+    statusLabel.setText ("Demo project \"" + untitledName + "\": press Space to play it"
+                             + (problems.isEmpty() ? juce::String() : " (" + problems[0] + ")"),
+                         juce::dontSendNotification);
+    return true;
+}
+
+void MainComponent::openBrowserProject (const juce::String& payload)
+{
+    confirmDiscardChanges ([safe = juce::Component::SafePointer<MainComponent> (this), payload]
+    {
+        if (safe == nullptr)
+            return;
+        if (payload.startsWith (kDemoProjectPrefix))
+            safe->openDemoProject (payload.fromFirstOccurrenceOf (kDemoProjectPrefix, false, false).toStdString());
+        else
+            safe->openProjectFile (juce::File (payload));
+    });
 }
 
 bool MainComponent::saveProjectTo (const juce::File& file)
@@ -279,11 +327,15 @@ bool MainComponent::saveProjectTo (const juce::File& file)
         return false;
     }
 
+    const bool listed = file.isAChildOf (library.projects) && ! (currentProjectFile == file);
     currentProjectFile = file;
+    untitledName = {};
     projectDirty = false;
     addRecentProject (file);
     updateWindowTitle();
     statusLabel.setText ("Saved " + file.getFileName(), juce::dontSendNotification);
+    if (listed)
+        rebuildBrowser(); // 0.65.0: a new file in the Projects folder appears under My Projects
     return true;
 }
 
@@ -292,8 +344,12 @@ bool MainComponent::saveProject()
     if (currentProjectFile != juce::File())
         return saveProjectTo (currentProjectFile);
 
-    // Untitled: save at once under an automatic name, so a quick Ctrl+S never loses work or interrupts the music.
+    // Untitled: save at once under an automatic name, so a quick Ctrl+S never loses work or interrupts the music. An opened demo
+    // (0.65.0) is saved under its own name when that is still free.
     library.ensureExists();
+    if (untitledName.isNotEmpty())
+        if (const auto named = library.projects.getChildFile (juce::File::createLegalFileName (untitledName) + kProjectExtension); ! named.exists())
+            return saveProjectTo (named);
     return saveProjectTo (automaticProjectFile (library.projects, juce::Time::getCurrentTime()));
 }
 
@@ -301,7 +357,9 @@ void MainComponent::saveProjectAs (std::function<void (bool)> whenDone)
 {
     library.ensureExists();
     const auto suggested = currentProjectFile != juce::File() ? currentProjectFile
-                                                              : library.projects.getChildFile ("My Project" + juce::String (kProjectExtension));
+                                                              : library.projects.getChildFile ((untitledName.isNotEmpty() ? juce::File::createLegalFileName (untitledName)
+                                                                                                                          : juce::String ("My Project"))
+                                                                                               + kProjectExtension);
 
     fileChooser = std::make_unique<juce::FileChooser> ("Save project as", suggested, juce::String ("*") + kProjectExtension);
     fileChooser->launchAsync (juce::FileBrowserComponent::saveMode
@@ -438,7 +496,12 @@ void MainComponent::showFileMenu()
 
     menu.addItem (item (1, "New project", "Ctrl+N"));
     menu.addItem (item (2, "Open...", "Ctrl+O"));
-    menu.addItem (item (14, juce::String ("Open the demo song (") + kDemoSongName + ")", ""));
+    {   // 0.65.0: the demo projects (the browser lists them too)
+        juce::PopupMenu demos;
+        for (size_t i = 0; i < demoProjects().size(); ++i)
+            demos.addItem (300 + static_cast<int> (i), juce::String (demoProjects()[i].title));
+        menu.addSubMenu ("Open a demo project", demos);
+    }
 
     juce::PopupMenu recent;
     auto recentList = recentProjects();
@@ -499,13 +562,6 @@ void MainComponent::showFileMenu()
                                 case 11: safe->exportProjectFolder(); break;
                                 case 12: safe->openFlpProject(); break;
                                 case 13: safe->exportFlpProject(); break;
-                                case 14:
-                                    safe->confirmDiscardChanges ([safe]
-                                    {
-                                        if (safe != nullptr)
-                                            safe->loadDemoSong();
-                                    });
-                                    break;
                                 case 10: safe->redoEdit(); break;
                                 case 7:
                                     if (safe->settings != nullptr)
@@ -515,6 +571,11 @@ void MainComponent::showFileMenu()
                                     }
                                     break;
                                 default:
+                                    if (result >= 300 && result - 300 < static_cast<int> (demoProjects().size()))
+                                    {
+                                        safe->openBrowserProject (kDemoProjectPrefix + juce::String (demoProjects()[static_cast<size_t> (result - 300)].id));
+                                        break;
+                                    }
                                     if (result >= 200 && result - 200 < static_cast<int> (exportFormats().size()))
                                     {
                                         safe->exportAs (exportFormats()[static_cast<size_t> (result - 200)].format);

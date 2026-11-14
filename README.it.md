@@ -115,6 +115,9 @@ con precisione cosa è verificato, cosa no e cosa manca.
   operatori con 32 onde a banda limitata e due onde spettrali da disegnare o caricare, una matrice FM 6 x 6 in un solo pannello,
   un filtro ladder in stile Moog con inviluppo e LFO dedicati, unison, pitch drop, effetti e 40 preset (neuro, reese, dubstep,
   DnB, cyberpunk, dark synth, industrial, FX metallici). Browser > Instruments > HexForge.
+- **SunSymphony** (0.66.0, anteprima) - il campionatore orchestrale (VST3 e Standalone) in costruzione: 16 parti sui 16 canali MIDI,
+  128 voci, strumenti SFZ (zone, strati di velocity, loop), interpolazione Hermite; finché la sua libreria orchestrale gratuita non si
+  potrà scaricare dall'interno, la parte 1 suona un tono di prova incorporato. Browser > Instruments > SunSymphony.
 - **Plugin** - strumenti ed effetti VST3, LV2 e LADSPA: si cercano dal browser, doppio clic o trascinamento di uno strumento per un canale,
   un effetto si sceglie in uno slot del mixer, ognuno ha la sua finestra; le impostazioni si salvano nel progetto, anche se il plugin manca.
 - **Mixer** (`F9`) - 8 tracce verticali all'inizio e fino a **500** (0.29.0: il **+** dopo l'ultima traccia ne aggiunge altre), ognuna con fader e dB, bilanciamento stereo, mute, solo, indicatore
@@ -140,6 +143,8 @@ con precisione cosa è verificato, cosa no e cosa manca.
   rete.
 - **Helios LLM mode** (0.64.0) - con la spunta *LLM mode* Helios diventa una chat: un modello linguistico (Gemma 4 di Google,
   scaricato una volta, 2,8 o 4,6 GB) che gira sul tuo computer, risponde dal manuale nella tua lingua e non tocca mai il progetto.
+- **Progetti di esempio** (0.65.0) - tre brani finiti nella cartella *Demo Projects* del browser (synthwave, melodic techno, lo-fi hip
+  hop), ognuno con arrangiamento, mix, effetti e automazioni da smontare; i file di progetto mostrano l'icona del programma.
 - **Report dei crash e aggiornamenti** (0.43.0) - un log di sessione (spdlog, ruotato a 5 MB); dopo un crash (SIGSEGV, SIGABRT, SIGFPE...)
   il successivo avvio propone di inviare a GitHub, come issue, un report anonimo con stack trace e sistema (o di mostrarlo prima, o di
   eliminarlo); un controllo in background di una release più recente (Semantic Versioning), disattivabile. Nulla viene inviato senza un clic.

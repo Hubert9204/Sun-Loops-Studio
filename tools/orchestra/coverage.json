@@ -1,0 +1,6130 @@
+{
+ "sources": {
+  "vsco2ce": {
+   "name": "VSCO 2 Community Edition",
+   "git": "https://github.com/sgossner/VSCO-2-CE",
+   "license": "CC0-1.0",
+   "tier": "A",
+   "commit": "440300901dfe9275fd84e0b7763af1f8443ae62e",
+   "files": 3187
+  },
+  "vcsl": {
+   "name": "Versilian Community Sample Library",
+   "git": "https://github.com/sgossner/VCSL",
+   "license": "CC0-1.0",
+   "tier": "A",
+   "commit": "c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e",
+   "files": 4282
+  },
+  "nbo": {
+   "name": "No Budget Orchestra (SFZ)",
+   "git": "https://github.com/ssj71/No-Budget-Orchestra",
+   "license": "per instrument (license.txt)",
+   "tier": "B",
+   "samples": "http://www.bandshed.net/sounds/sfz/nbo_2.zip",
+   "commit": "78b43bcc44d6523f6bb117d8f7bf6bc46b970073",
+   "files": 366,
+   "licenses": {
+    "CelloSect": [
+     "Created by Jeff Glatt",
+     "License: http://creativecommons.org/licenses/by-sa/4.0"
+    ],
+    "Chimes": [
+     "This sfz contains sounds by Samulis. You can find the original waveforms online at: http://www.freesound.org/people/Samulis/packs/12231/",
+     "",
+     "",
+     "License details"
+    ],
+    "JgViolins": [
+     "Created by Jeff Glatt",
+     "License: http://creativecommons.org/licenses/by-sa/4.0"
+    ],
+    "OrchBassDrum": [
+     "MUSIC SAMPLE LIBRARY PROJECT SAMPLES (OR: MSLP) WHERE CREATED BY ERICK KVIST WITH HELP FROM THE PERFORMING MUSICIANS ",
+     "AND IT'S AN ONGOING PROJECT. IF YOU WANT TO PARTICIPATE ",
+     "OR HAVE ANY QUESTIONS PLEASE CONTACT: INFO@MUSICSAMPLELIBRARY.COM ",
+     ""
+    ],
+    "OrchCym": [
+     "Created by Jeff Glatt",
+     "License: http://creativecommons.org/licenses/by-sa/4.0"
+    ],
+    "SoloBass": [
+     "This sfz uses samples from Meatbass, a sample library by Drogomir Smolken and Ludwik Zamenhof. You can find the original samples online at:",
+     "",
+     "http://www.karoryfer.com/karoryfer-samples/wydawnictwa/meatbass",
+     ""
+    ],
+    "SoloCello": [
+     "This sfz contains sounds by bwv662. These sounds were extensively modified/looped by Jeff Glatt, who created this sfz version. You can find the original waveforms online at:",
+     "",
+     "http://www.freesound.org/people/bwv662/packs/15266",
+     ""
+    ],
+    "SoloClarinet": [
+     "This sfz contains sounds by clarinet_pablo_proj.",
+     "",
+     "You can find the original waveforms at: http://www.freesound.org/people/clarinet_pablo_proj/packs/15292/",
+     ""
+    ],
+    "SoloFlute": [
+     "This sfz contains sounds by almudenagonzalezflute_8. These sounds were extensively modified/looped by Jeff Glatt, who created this sfz version. You can find the original waveforms online at:",
+     "",
+     "http://www.freesound.org/people/almudenagonzalezflute_8/packs/15262",
+     ""
+    ],
+    "SoloTrumpet": [
+     "Created by Jeff Glatt",
+     "License: http://creativecommons.org/licenses/by-sa/4.0"
+    ],
+    "SoloTuba": [
+     "Created by Jeff Glatt",
+     "License: http://creativecommons.org/licenses/by-sa/4.0"
+    ],
+    "SoloViolin": [
+     "This sfz contains sounds by ldk1609. These sounds were extensively modified/looped by Jeff Glatt, who created this sfz version. You can find the original waveforms online at:",
+     "",
+     "http://www.freesound.org/people/ldk1609/packs/3560/",
+     ""
+    ],
+    "SoloViolin2": [
+     "This sfz contains sounds by kake85. These sounds were extensively modified/looped by Jeff Glatt, who created this sfz version. You can find the original waveforms online at:",
+     "",
+     "http://www.freesound.org/people/kake85/packs/15269",
+     ""
+    ],
+    "Triangle": [
+     "Created by Jeff Glatt",
+     "License: http://creativecommons.org/licenses/by-sa/4.0"
+    ],
+    "TromboneSect": [
+     "Created by Jeff Glatt",
+     "License: http://creativecommons.org/licenses/by-sa/4.0"
+    ],
+    "TrumpetSect": [
+     "Created by Jeff Glatt",
+     "License: http://creativecommons.org/licenses/by-sa/4.0"
+    ],
+    "glock": [
+     "This sfz contains sounds by angstrom. You can find the original waveforms at: http://www.freesound.org/people/angstrom/packs/583/",
+     "",
+     "",
+     "License details"
+    ],
+    "(top-level license.txt)": [
+     "Original waveforms by Mihai Sorohan.",
+     "",
+     "By downloading the provided files you accept the following terms:",
+     "",
+     "",
+     "1.You may not use it for commercial sample libraries (put it on a CD and sell it, sell it online, etc)"
+    ]
+   },
+   "samples_reachable": false
+  },
+  "iowa": {
+   "name": "University of Iowa MIS",
+   "web": "https://theremin.music.uiowa.edu/MIS.html",
+   "license": "free for any project, without restrictions",
+   "tier": "A",
+   "reachable": false
+  }
+ },
+ "instruments": {
+  "violins": {
+   "name": "Violins (section)",
+   "family": "Strings",
+   "range": [
+    55,
+    105
+   ],
+   "articulations": {
+    "sustain": [
+     {
+      "source": "vsco2ce",
+      "samples": 22,
+      "notes": 11,
+      "named_range": [
+       43,
+       74
+      ],
+      "layers": [
+       "v1",
+       "v2"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u26a0 partial range",
+      "measured": [
+       {
+        "path": "Strings/Violin Section/susVib/VlnEns_susVib_G2_v1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 13.27,
+        "peak_db": -28.7,
+        "pitch": 55.0
+       },
+       {
+        "path": "Strings/Violin Section/susVib/VlnEns_susVib_D3_v2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 13.93,
+        "peak_db": -20.3,
+        "pitch": 62.03
+       },
+       {
+        "path": "Strings/Violin Section/susVib/VlnEns_susVib_E4_v1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 13.13,
+        "peak_db": -26.0,
+        "pitch": 75.99
+       },
+       {
+        "path": "Strings/Violin Section/susVib/VlnEns_susVib_D5_v2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 11.2,
+        "peak_db": -15.5,
+        "pitch": 86.0
+       }
+      ]
+     },
+     {
+      "source": "nbo",
+      "samples": 1,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ],
+    "staccato": [],
+    "spiccato": [
+     {
+      "source": "vsco2ce",
+      "samples": 44,
+      "notes": 11,
+      "named_range": [
+       43,
+       74
+      ],
+      "layers": [
+       "v1",
+       "v2"
+      ],
+      "round_robins": 2,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u26a0 partial range",
+      "measured": [
+       {
+        "path": "Strings/Violin Section/Spic/VlnEns_Spic_G2_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 3.09,
+        "peak_db": -22.3,
+        "pitch": 54.99
+       },
+       {
+        "path": "Strings/Violin Section/Spic/VlnEns_Spic_D3_v2_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.77,
+        "peak_db": -13.4,
+        "pitch": 62.0
+       },
+       {
+        "path": "Strings/Violin Section/Spic/VlnEns_Spic_E4_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 0.5,
+        "peak_db": -24.4,
+        "pitch": 76.0
+       },
+       {
+        "path": "Strings/Violin Section/Spic/VlnEns_Spic_D5_v2_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 0.77,
+        "peak_db": -11.7,
+        "pitch": 86.03
+       }
+      ]
+     }
+    ],
+    "pizzicato": [
+     {
+      "source": "vsco2ce",
+      "samples": 44,
+      "notes": 11,
+      "named_range": [
+       43,
+       74
+      ],
+      "layers": [
+       "v1",
+       "v2"
+      ],
+      "round_robins": 2,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u26a0 partial range",
+      "measured": [
+       {
+        "path": "Strings/Violin Section/Pizz/VlnEns_Pizz_G2_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 2.32,
+        "peak_db": -40.3,
+        "pitch": 55.03
+       },
+       {
+        "path": "Strings/Violin Section/Pizz/VlnEns_Pizz_D3_v2_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 2.22,
+        "peak_db": -19.5,
+        "pitch": 61.88
+       },
+       {
+        "path": "Strings/Violin Section/Pizz/VlnEns_Pizz_E4_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 0.62,
+        "peak_db": -24.5,
+        "pitch": 75.86
+       },
+       {
+        "path": "Strings/Violin Section/Pizz/VlnEns_Pizz_D5_v2_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 0.64,
+        "peak_db": -12.5,
+        "pitch": null
+       }
+      ]
+     }
+    ],
+    "tremolo": [
+     {
+      "source": "vsco2ce",
+      "samples": 21,
+      "notes": 11,
+      "named_range": [
+       43,
+       74
+      ],
+      "layers": [
+       "v1",
+       "v2"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u26a0 partial range",
+      "measured": [
+       {
+        "path": "Strings/Violin Section/Trem/VlnEns_Trem_G2_v1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 10.98,
+        "peak_db": -31.1,
+        "pitch": 54.94
+       },
+       {
+        "path": "Strings/Violin Section/Trem/VlnEns_Trem_D3_v2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 10.22,
+        "peak_db": -9.1,
+        "pitch": 62.02
+       },
+       {
+        "path": "Strings/Violin Section/Trem/VlnEns_Trem_E4_v2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 7.94,
+        "peak_db": -12.4,
+        "pitch": 76.0
+       },
+       {
+        "path": "Strings/Violin Section/Trem/VlnEns_Trem_D5_v2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 9.36,
+        "peak_db": -8.7,
+        "pitch": 85.99
+       }
+      ]
+     }
+    ],
+    "legato": []
+   }
+  },
+  "violas": {
+   "name": "Violas (section)",
+   "family": "Strings",
+   "range": [
+    48,
+    88
+   ],
+   "articulations": {
+    "sustain": [
+     {
+      "source": "vsco2ce",
+      "samples": 26,
+      "notes": 13,
+      "named_range": [
+       36,
+       74
+      ],
+      "layers": [
+       "v1",
+       "v2"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+12",
+      "format": "44k/24/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Strings/Viola Section/susvib/ViolaEns_susvib_C2_v1_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 9.99,
+        "peak_db": -27.9,
+        "pitch": 48.02
+       },
+       {
+        "path": "Strings/Viola Section/susvib/ViolaEns_susvib_B2_v1_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 10.81,
+        "peak_db": -28.8,
+        "pitch": 58.96
+       },
+       {
+        "path": "Strings/Viola Section/susvib/ViolaEns_susvib_C4_v1_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 8.65,
+        "peak_db": -25.5,
+        "pitch": 72.03
+       },
+       {
+        "path": "Strings/Viola Section/susvib/ViolaEns_susvib_D5_v1_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 7.89,
+        "peak_db": -27.7,
+        "pitch": 86.01
+       }
+      ]
+     }
+    ],
+    "staccato": [],
+    "spiccato": [
+     {
+      "source": "vsco2ce",
+      "samples": 48,
+      "notes": 12,
+      "named_range": [
+       36,
+       74
+      ],
+      "layers": [
+       "v1",
+       "v2"
+      ],
+      "round_robins": 2,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Strings/Viola Section/spic/Violas_spic_C2_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 2.72,
+        "peak_db": -20.3,
+        "pitch": 48.08
+       },
+       {
+        "path": "Strings/Viola Section/spic/Violas_spic_D3_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.05,
+        "peak_db": -28.9,
+        "pitch": 62.02
+       },
+       {
+        "path": "Strings/Viola Section/spic/Violas_spic_E4_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 0.84,
+        "peak_db": -28.2,
+        "pitch": 76.05
+       },
+       {
+        "path": "Strings/Viola Section/spic/Violas_spic_D5_v2_rr2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 0.6,
+        "peak_db": -11.4,
+        "pitch": 85.98
+       }
+      ]
+     }
+    ],
+    "pizzicato": [
+     {
+      "source": "vsco2ce",
+      "samples": 46,
+      "notes": 12,
+      "named_range": [
+       36,
+       74
+      ],
+      "layers": [
+       "v1",
+       "v2"
+      ],
+      "round_robins": 2,
+      "octave_offset": "+12",
+      "format": "44k/24/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Strings/Viola Section/pizz/ViolaEns_pizz_C2_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 2.27,
+        "peak_db": -31.2,
+        "pitch": 48.13
+       },
+       {
+        "path": "Strings/Viola Section/pizz/ViolaEns_pizz_B2_v2_rr2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 2.15,
+        "peak_db": -13.7,
+        "pitch": 58.91
+       },
+       {
+        "path": "Strings/Viola Section/pizz/ViolaEns_pizz_C4_v2_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 0.85,
+        "peak_db": -11.1,
+        "pitch": 71.88
+       },
+       {
+        "path": "Strings/Viola Section/pizz/ViolaEns_pizz_D5_v1_rr2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 0.42,
+        "peak_db": -15.3,
+        "pitch": null
+       }
+      ]
+     }
+    ],
+    "tremolo": [
+     {
+      "source": "vsco2ce",
+      "samples": 24,
+      "notes": 12,
+      "named_range": [
+       36,
+       74
+      ],
+      "layers": [
+       "v1",
+       "v2"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Strings/Viola Section/trem/Violas_trem_C2_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 10.52,
+        "peak_db": -33.5,
+        "pitch": null
+       },
+       {
+        "path": "Strings/Viola Section/trem/Violas_trem_D3_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 15.2,
+        "peak_db": -36.5,
+        "pitch": 62.01
+       },
+       {
+        "path": "Strings/Viola Section/trem/Violas_trem_E4_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 12.4,
+        "peak_db": -30.9,
+        "pitch": 76.0
+       },
+       {
+        "path": "Strings/Viola Section/trem/Violas_trem_D5_v2_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 7.37,
+        "peak_db": -6.0,
+        "pitch": 85.97
+       }
+      ]
+     }
+    ],
+    "legato": []
+   }
+  },
+  "cellos": {
+   "name": "Cellos (section)",
+   "family": "Strings",
+   "range": [
+    36,
+    81
+   ],
+   "articulations": {
+    "sustain": [
+     {
+      "source": "vsco2ce",
+      "samples": 27,
+      "notes": 13,
+      "named_range": [
+       24,
+       65
+      ],
+      "layers": [
+       "v1",
+       "v3"
+      ],
+      "round_robins": 2,
+      "octave_offset": "+12",
+      "format": "44k/24/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Strings/Cello Section/susvib/susvib_C1_v1_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 8.87,
+        "peak_db": -18.1,
+        "pitch": 36.01
+       },
+       {
+        "path": "Strings/Cello Section/susvib/susvib_D2_v1_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 9.64,
+        "peak_db": -20.4,
+        "pitch": 50.04
+       },
+       {
+        "path": "Strings/Cello Section/susvib/susvib_E3_v3_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 12.39,
+        "peak_db": -5.9,
+        "pitch": 64.02
+       },
+       {
+        "path": "Strings/Cello Section/susvib/susvib_F4_v3_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 10.3,
+        "peak_db": -12.2,
+        "pitch": 76.95
+       }
+      ]
+     },
+     {
+      "source": "nbo",
+      "samples": 2,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ],
+    "staccato": [],
+    "spiccato": [
+     {
+      "source": "vsco2ce",
+      "samples": 52,
+      "notes": 13,
+      "named_range": [
+       24,
+       65
+      ],
+      "layers": [
+       "v1",
+       "v2"
+      ],
+      "round_robins": 2,
+      "octave_offset": "+12",
+      "format": "44k/24/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Strings/Cello Section/spic/spic_C1_v1_RR1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 3.12,
+        "peak_db": -24.3,
+        "pitch": 36.06
+       },
+       {
+        "path": "Strings/Cello Section/spic/spic_D2_v1_RR2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 1.41,
+        "peak_db": -24.3,
+        "pitch": 49.97
+       },
+       {
+        "path": "Strings/Cello Section/spic/spic_E3_v2_RR1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 1.81,
+        "peak_db": -11.6,
+        "pitch": 64.03
+       },
+       {
+        "path": "Strings/Cello Section/spic/spic_F4_v2_RR2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 1.35,
+        "peak_db": -13.6,
+        "pitch": 77.08
+       }
+      ]
+     }
+    ],
+    "pizzicato": [
+     {
+      "source": "vsco2ce",
+      "samples": 52,
+      "notes": 13,
+      "named_range": [
+       24,
+       65
+      ],
+      "layers": [
+       "v1",
+       "v2"
+      ],
+      "round_robins": 2,
+      "octave_offset": "+12",
+      "format": "44k/24/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Strings/Cello Section/pizzT/pizzT_C1_v1_RR1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 3.14,
+        "peak_db": -24.0,
+        "pitch": 36.04
+       },
+       {
+        "path": "Strings/Cello Section/pizzT/pizzT_D2_v1_RR2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 2.91,
+        "peak_db": -20.2,
+        "pitch": null
+       },
+       {
+        "path": "Strings/Cello Section/pizzT/pizzT_E3_v2_RR1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 2.32,
+        "peak_db": -12.7,
+        "pitch": null
+       },
+       {
+        "path": "Strings/Cello Section/pizzT/pizzT_F4_v2_RR2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 1.31,
+        "peak_db": -12.1,
+        "pitch": null
+       }
+      ]
+     },
+     {
+      "source": "nbo",
+      "samples": 1,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ],
+    "tremolo": [
+     {
+      "source": "vsco2ce",
+      "samples": 25,
+      "notes": 14,
+      "named_range": [
+       24,
+       65
+      ],
+      "layers": [
+       "v1",
+       "v2"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+12",
+      "format": "44k/24/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Strings/Cello Section/trem/trem_C1_v2_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 10.47,
+        "peak_db": -1.2,
+        "pitch": 35.94
+       },
+       {
+        "path": "Strings/Cello Section/trem/trem_F2_v1_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 7.02,
+        "peak_db": -32.6,
+        "pitch": 52.97
+       },
+       {
+        "path": "Strings/Cello Section/trem/trem_E3_v2_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 8.05,
+        "peak_db": -3.6,
+        "pitch": 63.92
+       },
+       {
+        "path": "Strings/Cello Section/trem/trem_F4_v2_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 7.27,
+        "peak_db": -7.4,
+        "pitch": 76.89
+       }
+      ]
+     },
+     {
+      "source": "nbo",
+      "samples": 1,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ],
+    "legato": [
+     {
+      "source": "nbo",
+      "samples": 3,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ]
+   }
+  },
+  "basses": {
+   "name": "Basses (section)",
+   "family": "Strings",
+   "range": [
+    28,
+    67
+   ],
+   "articulations": {
+    "sustain": [
+     {
+      "source": "nbo",
+      "samples": 1,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ],
+    "staccato": [],
+    "spiccato": [],
+    "pizzicato": [
+     {
+      "source": "nbo",
+      "samples": 1,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ],
+    "tremolo": [],
+    "legato": []
+   }
+  },
+  "violin-solo": {
+   "name": "Solo Violin",
+   "family": "Strings",
+   "range": [
+    55,
+    105
+   ],
+   "articulations": {
+    "sustain": [
+     {
+      "source": "vsco2ce",
+      "samples": 30,
+      "notes": 15,
+      "named_range": [
+       55,
+       96
+      ],
+      "layers": [
+       "f",
+       "p"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+0",
+      "format": "44k/16/st",
+      "status": "\u26a0 partial range",
+      "measured": [
+       {
+        "path": "Strings/Solo Violin/Arco Vib/LLVln_ArcoVib_G3_f.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 16.65,
+        "peak_db": -16.0,
+        "pitch": 55.0
+       },
+       {
+        "path": "Strings/Solo Violin/Arco Vib/LLVln_ArcoVib_A4_f.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 14.11,
+        "peak_db": -14.5,
+        "pitch": 69.11
+       },
+       {
+        "path": "Strings/Solo Violin/Arco Vib/LLVln_ArcoVib_C6_f.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 12.26,
+        "peak_db": -13.9,
+        "pitch": 83.99
+       },
+       {
+        "path": "Strings/Solo Violin/Arco Vib/LLVln_ArcoVib_C7_p.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 12.89,
+        "peak_db": -32.2,
+        "pitch": 96.05
+       }
+      ]
+     },
+     {
+      "source": "nbo",
+      "samples": 17,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ],
+    "staccato": [],
+    "spiccato": [
+     {
+      "source": "vsco2ce",
+      "samples": 60,
+      "notes": 15,
+      "named_range": [
+       43,
+       84
+      ],
+      "layers": [
+       "v1",
+       "v2"
+      ],
+      "round_robins": 2,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u26a0 partial range",
+      "measured": [
+       {
+        "path": "Strings/Solo Violin/spic/LLVln_spic_G2_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 0.91,
+        "peak_db": -29.0,
+        "pitch": 55.0
+       },
+       {
+        "path": "Strings/Solo Violin/spic/LLVln_spic_A3_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.03,
+        "peak_db": -32.2,
+        "pitch": 68.96
+       },
+       {
+        "path": "Strings/Solo Violin/spic/LLVln_spic_C5_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.26,
+        "peak_db": -18.1,
+        "pitch": 84.0
+       },
+       {
+        "path": "Strings/Solo Violin/spic/LLVln_spic_C6_v2_rr2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.17,
+        "peak_db": -27.6,
+        "pitch": 96.02
+       }
+      ]
+     }
+    ],
+    "pizzicato": [
+     {
+      "source": "vsco2ce",
+      "samples": 44,
+      "notes": 13,
+      "named_range": [
+       55,
+       96
+      ],
+      "layers": [
+       "f",
+       "p"
+      ],
+      "round_robins": 2,
+      "octave_offset": "+0",
+      "format": "44k/16/st",
+      "status": "\u26a0 partial range",
+      "measured": [
+       {
+        "path": "Strings/Solo Violin/Pizz/LLVln_Pizz_G3_f_RR1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 4.02,
+        "peak_db": -28.7,
+        "pitch": 54.88
+       },
+       {
+        "path": "Strings/Solo Violin/Pizz/LLVln_Pizz_E4_p_RR2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.39,
+        "peak_db": -40.6,
+        "pitch": 63.91
+       },
+       {
+        "path": "Strings/Solo Violin/Pizz/LLVln_Pizz_E5_f_RR2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 3.33,
+        "peak_db": -15.1,
+        "pitch": 76.07
+       },
+       {
+        "path": "Strings/Solo Violin/Pizz/LLVln_Pizz_A6_f_RR2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 0.97,
+        "peak_db": -14.1,
+        "pitch": null
+       }
+      ]
+     },
+     {
+      "source": "nbo",
+      "samples": 2,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ],
+    "tremolo": [
+     {
+      "source": "vsco2ce",
+      "samples": 27,
+      "notes": 14,
+      "named_range": [
+       43,
+       84
+      ],
+      "layers": [
+       "v1",
+       "v2"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u26a0 partial range",
+      "measured": [
+       {
+        "path": "Strings/Solo Violin/Trem/LLVln_trem_G2_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 6.62,
+        "peak_db": -20.1,
+        "pitch": 54.96
+       },
+       {
+        "path": "Strings/Solo Violin/Trem/LLVln_trem_G3_v2_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 7.99,
+        "peak_db": -14.8,
+        "pitch": 67.02
+       },
+       {
+        "path": "Strings/Solo Violin/Trem/LLVln_trem_A4_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 7.6,
+        "peak_db": -18.5,
+        "pitch": 81.01
+       },
+       {
+        "path": "Strings/Solo Violin/Trem/LLVln_trem_C6_v2_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 9.45,
+        "peak_db": -15.2,
+        "pitch": 96.08
+       }
+      ]
+     },
+     {
+      "source": "nbo",
+      "samples": 2,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ],
+    "legato": [
+     {
+      "source": "nbo",
+      "samples": 12,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ]
+   }
+  },
+  "viola-solo": {
+   "name": "Solo Viola",
+   "family": "Strings",
+   "range": [
+    48,
+    88
+   ],
+   "articulations": {
+    "sustain": [
+     {
+      "source": "nbo",
+      "samples": 15,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ],
+    "staccato": [],
+    "spiccato": [],
+    "pizzicato": [
+     {
+      "source": "nbo",
+      "samples": 1,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ],
+    "tremolo": [],
+    "legato": [
+     {
+      "source": "nbo",
+      "samples": 6,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ]
+   }
+  },
+  "cello-solo": {
+   "name": "Solo Cello",
+   "family": "Strings",
+   "range": [
+    36,
+    81
+   ],
+   "articulations": {
+    "sustain": [
+     {
+      "source": "nbo",
+      "samples": 5,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ],
+    "staccato": [],
+    "spiccato": [],
+    "pizzicato": [
+     {
+      "source": "nbo",
+      "samples": 1,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ],
+    "tremolo": [],
+    "legato": [
+     {
+      "source": "nbo",
+      "samples": 6,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ]
+   }
+  },
+  "bass-solo": {
+   "name": "Solo Bass",
+   "family": "Strings",
+   "range": [
+    28,
+    67
+   ],
+   "articulations": {
+    "sustain": [
+     {
+      "source": "vsco2ce",
+      "samples": 26,
+      "notes": 13,
+      "named_range": [
+       18,
+       47
+      ],
+      "layers": [
+       "v1",
+       "v3"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u26a0 partial range",
+      "measured": [
+       {
+        "path": "Strings/Solo Contrabass/SusVib/BKCtbss_SusVib_F#0_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 9.05,
+        "peak_db": -35.6,
+        "pitch": 29.96
+       },
+       {
+        "path": "Strings/Solo Contrabass/SusVib/BKCtbss_SusVib_D1_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 17.33,
+        "peak_db": -33.4,
+        "pitch": 37.97
+       },
+       {
+        "path": "Strings/Solo Contrabass/SusVib/BKCtbss_SusVib_A1_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 12.08,
+        "peak_db": -21.0,
+        "pitch": 45.02
+       },
+       {
+        "path": "Strings/Solo Contrabass/SusVib/BKCtbss_SusVib_B2_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 7.06,
+        "peak_db": -27.0,
+        "pitch": 58.96
+       }
+      ]
+     },
+     {
+      "source": "nbo",
+      "samples": 5,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ],
+    "staccato": [],
+    "spiccato": [
+     {
+      "source": "vsco2ce",
+      "samples": 42,
+      "notes": 14,
+      "named_range": [
+       16,
+       47
+      ],
+      "layers": [
+       "v1",
+       "v3"
+      ],
+      "round_robins": 2,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u26a0 partial range",
+      "measured": [
+       {
+        "path": "Strings/Solo Contrabass/Spic/BKCtbss_Spic_E0_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.85,
+        "peak_db": -36.8,
+        "pitch": 27.93
+       },
+       {
+        "path": "Strings/Solo Contrabass/Spic/BKCtbss_Spic_A#0_v3_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.48,
+        "peak_db": -16.6,
+        "pitch": 34.09
+       },
+       {
+        "path": "Strings/Solo Contrabass/Spic/BKCtbss_Spic_F#1_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.48,
+        "peak_db": -29.1,
+        "pitch": 42.06
+       },
+       {
+        "path": "Strings/Solo Contrabass/Spic/BKCtbss_Spic_B2_v1_rr2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.49,
+        "peak_db": -25.2,
+        "pitch": 59.03
+       }
+      ]
+     }
+    ],
+    "pizzicato": [
+     {
+      "source": "vsco2ce",
+      "samples": 40,
+      "notes": 14,
+      "named_range": [
+       16,
+       47
+      ],
+      "layers": [
+       "v1",
+       "v3"
+      ],
+      "round_robins": 2,
+      "octave_offset": "+12 (1/2)",
+      "format": "44k/16/st",
+      "status": "\u26a0 partial range",
+      "measured": [
+       {
+        "path": "Strings/Solo Contrabass/Pizz/BKCtbss_Pizz_E0_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 2.4,
+        "peak_db": -41.7,
+        "pitch": null
+       },
+       {
+        "path": "Strings/Solo Contrabass/Pizz/BKCtbss_Pizz_A#0_v1_rr2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.85,
+        "peak_db": -29.2,
+        "pitch": 34.05
+       },
+       {
+        "path": "Strings/Solo Contrabass/Pizz/BKCtbss_Pizz_F#1_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 4.92,
+        "peak_db": -32.7,
+        "pitch": 22.43
+       },
+       {
+        "path": "Strings/Solo Contrabass/Pizz/BKCtbss_Pizz_B2_v1_rr2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.88,
+        "peak_db": -35.2,
+        "pitch": null
+       }
+      ]
+     },
+     {
+      "source": "nbo",
+      "samples": 1,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ],
+    "tremolo": [
+     {
+      "source": "vsco2ce",
+      "samples": 16,
+      "notes": 8,
+      "named_range": [
+       16,
+       47
+      ],
+      "layers": [
+       "v1",
+       "v2"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u26a0 partial range",
+      "measured": [
+       {
+        "path": "Strings/Solo Contrabass/Trem/BKCtbss_Trem_E0_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 10.64,
+        "peak_db": -25.3,
+        "pitch": null
+       },
+       {
+        "path": "Strings/Solo Contrabass/Trem/BKCtbss_Trem_C1_v2_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 8.74,
+        "peak_db": -17.0,
+        "pitch": null
+       },
+       {
+        "path": "Strings/Solo Contrabass/Trem/BKCtbss_Trem_E2_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 7.09,
+        "peak_db": -32.3,
+        "pitch": null
+       },
+       {
+        "path": "Strings/Solo Contrabass/Trem/BKCtbss_Trem_B2_v2_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 7.34,
+        "peak_db": -11.6,
+        "pitch": 59.07
+       }
+      ]
+     }
+    ],
+    "legato": [
+     {
+      "source": "nbo",
+      "samples": 3,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ],
+    "sustain (non vibrato)": [
+     {
+      "source": "vsco2ce",
+      "samples": 28,
+      "notes": 14,
+      "named_range": [
+       16,
+       47
+      ],
+      "layers": [
+       "v1",
+       "v3"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u26a0 partial range",
+      "measured": [
+       {
+        "path": "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_E0_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 16.17,
+        "peak_db": -39.7,
+        "pitch": 28.0
+       },
+       {
+        "path": "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_C1_v3_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 10.45,
+        "peak_db": -20.7,
+        "pitch": 36.02
+       },
+       {
+        "path": "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_A1_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 7.08,
+        "peak_db": -20.2,
+        "pitch": 45.0
+       },
+       {
+        "path": "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_B2_v3_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 7.79,
+        "peak_db": -18.9,
+        "pitch": 58.97
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "piccolo": {
+   "name": "Piccolo",
+   "family": "Woodwinds",
+   "range": [
+    74,
+    108
+   ],
+   "articulations": {
+    "sustain": [
+     {
+      "source": "vsco2ce",
+      "samples": 5,
+      "notes": 5,
+      "named_range": [
+       67,
+       91
+      ],
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "+12",
+      "format": "44k/24/st",
+      "status": "\u26a0 partial range",
+      "measured": [
+       {
+        "path": "Woodwinds/Piccolo/Sus/piccolo_G4_sustain1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 7.37,
+        "peak_db": -25.0,
+        "pitch": 78.95
+       },
+       {
+        "path": "Woodwinds/Piccolo/Sus/piccolo_C5_sustain1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 8.39,
+        "peak_db": -22.5,
+        "pitch": 83.98
+       },
+       {
+        "path": "Woodwinds/Piccolo/Sus/piccolo_G5_sustain1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 8.49,
+        "peak_db": -21.8,
+        "pitch": 90.89
+       },
+       {
+        "path": "Woodwinds/Piccolo/Sus/piccolo_C6_sustain1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 12.51,
+        "peak_db": -15.4,
+        "pitch": 95.98
+       }
+      ]
+     }
+    ],
+    "staccato": [
+     {
+      "source": "vsco2ce",
+      "samples": 5,
+      "notes": 5,
+      "named_range": [
+       70,
+       94
+      ],
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "+12",
+      "format": "44k/24/st",
+      "status": "\u26a0 partial range",
+      "measured": [
+       {
+        "path": "Woodwinds/Piccolo/Stac/piccolo_A#4_staccato1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 0.44,
+        "peak_db": -22.5,
+        "pitch": 81.73
+       },
+       {
+        "path": "Woodwinds/Piccolo/Stac/piccolo_G5_staccato1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 0.45,
+        "peak_db": -22.8,
+        "pitch": 91.01
+       },
+       {
+        "path": "Woodwinds/Piccolo/Stac/piccolo_A#5_staccato1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 0.43,
+        "peak_db": -14.0,
+        "pitch": 93.99
+       },
+       {
+        "path": "Woodwinds/Piccolo/Stac/piccolo_G6_staccato1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 0.44,
+        "peak_db": -14.9,
+        "pitch": 103.04
+       }
+      ]
+     }
+    ],
+    "legato": []
+   }
+  },
+  "flute": {
+   "name": "Flute",
+   "family": "Woodwinds",
+   "range": [
+    60,
+    98
+   ],
+   "articulations": {
+    "sustain": [
+     {
+      "source": "vsco2ce",
+      "samples": 13,
+      "notes": 10,
+      "named_range": [
+       48,
+       84
+      ],
+      "layers": [
+       "v1"
+      ],
+      "round_robins": 2,
+      "octave_offset": "+12",
+      "format": "44k/24/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Woodwinds/Flute/susvib/LDFlute_susvib_C3_v1_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 7.89,
+        "peak_db": -25.8,
+        "pitch": 59.94
+       },
+       {
+        "path": "Woodwinds/Flute/susvib/LDFlute_susvib_C4_v1_2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 8.09,
+        "peak_db": -22.3,
+        "pitch": 72.03
+       },
+       {
+        "path": "Woodwinds/Flute/susvib/LDFlute_susvib_C5_v1_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 7.3,
+        "peak_db": -13.5,
+        "pitch": 83.96
+       },
+       {
+        "path": "Woodwinds/Flute/susvib/LDFlute_susvib_C6_v1_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 4.76,
+        "peak_db": -7.3,
+        "pitch": 96.03
+       }
+      ]
+     },
+     {
+      "source": "nbo",
+      "samples": 4,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ],
+    "staccato": [
+     {
+      "source": "vsco2ce",
+      "samples": 48,
+      "notes": 8,
+      "named_range": [
+       57,
+       84
+      ],
+      "layers": [
+       "v1",
+       "v2",
+       "v3",
+       "v4"
+      ],
+      "round_robins": 2,
+      "octave_offset": "+12",
+      "format": "44k/24/st",
+      "status": "\u26a0 partial range",
+      "measured": [
+       {
+        "path": "Woodwinds/Flute/stac/LDFlute_stac_A3_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 0.64,
+        "peak_db": -33.4,
+        "pitch": 68.95
+       },
+       {
+        "path": "Woodwinds/Flute/stac/LDFlute_stac_E4_v2_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 0.95,
+        "peak_db": -27.0,
+        "pitch": 75.94
+       },
+       {
+        "path": "Woodwinds/Flute/stac/LDFlute_stac_E5_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 0.78,
+        "peak_db": -26.1,
+        "pitch": 87.97
+       },
+       {
+        "path": "Woodwinds/Flute/stac/LDFlute_stac_C6_v2_rr2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 0.84,
+        "peak_db": -10.3,
+        "pitch": 96.06
+       }
+      ]
+     }
+    ],
+    "legato": [
+     {
+      "source": "nbo",
+      "samples": 6,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ],
+    "sustain (expressive)": [
+     {
+      "source": "vsco2ce",
+      "samples": 14,
+      "notes": 10,
+      "named_range": [
+       48,
+       84
+      ],
+      "layers": [
+       "v1"
+      ],
+      "round_robins": 2,
+      "octave_offset": "+12",
+      "format": "44k/24/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Woodwinds/Flute/expvib/LDFlute_expvib_C3_v1_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 9.98,
+        "peak_db": -36.1,
+        "pitch": 59.94
+       },
+       {
+        "path": "Woodwinds/Flute/expvib/LDFlute_expvib_C4_v1_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 11.87,
+        "peak_db": -22.7,
+        "pitch": 71.97
+       },
+       {
+        "path": "Woodwinds/Flute/expvib/LDFlute_expvib_C5_v1_2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 12.4,
+        "peak_db": -15.0,
+        "pitch": 84.0
+       },
+       {
+        "path": "Woodwinds/Flute/expvib/LDFlute_expvib_C6_v1_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 4.12,
+        "peak_db": -8.4,
+        "pitch": 96.02
+       }
+      ]
+     }
+    ],
+    "sustain (non vibrato)": [
+     {
+      "source": "vsco2ce",
+      "samples": 19,
+      "notes": 10,
+      "named_range": [
+       48,
+       84
+      ],
+      "layers": [
+       "v1",
+       "v2",
+       "v3"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+12",
+      "format": "44k/24/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Woodwinds/Flute/susNV/LDFlute_susNV_C3_v1_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 9.98,
+        "peak_db": -46.3,
+        "pitch": 60.0
+       },
+       {
+        "path": "Woodwinds/Flute/susNV/LDFlute_susNV_C4_v1_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 10.28,
+        "peak_db": -25.7,
+        "pitch": 72.0
+       },
+       {
+        "path": "Woodwinds/Flute/susNV/LDFlute_susNV_C5_v1_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 9.41,
+        "peak_db": -22.2,
+        "pitch": 84.0
+       },
+       {
+        "path": "Woodwinds/Flute/susNV/LDFlute_susNV_C6_v1_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 6.11,
+        "peak_db": -7.5,
+        "pitch": 96.01
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "oboe": {
+   "name": "Oboe",
+   "family": "Woodwinds",
+   "range": [
+    58,
+    93
+   ],
+   "articulations": {
+    "sustain": [
+     {
+      "source": "vsco2ce",
+      "samples": 18,
+      "notes": 9,
+      "named_range": [
+       46,
+       77
+      ],
+      "layers": [
+       "v1",
+       "v3"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Woodwinds/Oboe/Vib/Oboe_Vib_A#2_v1_Main.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 11.13,
+        "peak_db": -22.2,
+        "pitch": 58.05
+       },
+       {
+        "path": "Woodwinds/Oboe/Vib/Oboe_Vib_A#3_v1_Main.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 6.75,
+        "peak_db": -26.7,
+        "pitch": 69.94
+       },
+       {
+        "path": "Woodwinds/Oboe/Vib/Oboe_Vib_A#4_v1_Main.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 7.02,
+        "peak_db": -24.8,
+        "pitch": 82.0
+       },
+       {
+        "path": "Woodwinds/Oboe/Vib/Oboe_Vib_F5_v3_Main.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 6.92,
+        "peak_db": -20.2,
+        "pitch": 88.95
+       }
+      ]
+     }
+    ],
+    "staccato": [
+     {
+      "source": "vsco2ce",
+      "samples": 51,
+      "notes": 9,
+      "named_range": [
+       46,
+       77
+      ],
+      "layers": [
+       "v1",
+       "v2",
+       "v3"
+      ],
+      "round_robins": 2,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Woodwinds/Oboe/Stacc/Oboe_Stacc_A#2_v1_rr1_Main.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.02,
+        "peak_db": -23.3,
+        "pitch": 57.99
+       },
+       {
+        "path": "Woodwinds/Oboe/Stacc/Oboe_Stacc_F3_v3_rr2_Main.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 0.8,
+        "peak_db": -19.5,
+        "pitch": 64.96
+       },
+       {
+        "path": "Woodwinds/Oboe/Stacc/Oboe_Stacc_F4_v3_rr1_Main.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 0.69,
+        "peak_db": -20.0,
+        "pitch": 76.96
+       },
+       {
+        "path": "Woodwinds/Oboe/Stacc/Oboe_Stacc_F5_v3_rr2_Main.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 0.59,
+        "peak_db": -20.8,
+        "pitch": 88.95
+       }
+      ]
+     }
+    ],
+    "legato": [],
+    "sustain (non vibrato)": [
+     {
+      "source": "vsco2ce",
+      "samples": 18,
+      "notes": 9,
+      "named_range": [
+       46,
+       77
+      ],
+      "layers": [
+       "v1",
+       "v3"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Woodwinds/Oboe/Sus/Oboe_Sus_A#2_v1_Main.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 27.11,
+        "peak_db": -23.1,
+        "pitch": 57.99
+       },
+       {
+        "path": "Woodwinds/Oboe/Sus/Oboe_Sus_A#3_v1_Main.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 10.77,
+        "peak_db": -30.0,
+        "pitch": 69.99
+       },
+       {
+        "path": "Woodwinds/Oboe/Sus/Oboe_Sus_A#4_v1_Main.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 10.52,
+        "peak_db": -31.6,
+        "pitch": 82.0
+       },
+       {
+        "path": "Woodwinds/Oboe/Sus/Oboe_Sus_F5_v3_Main.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 9.77,
+        "peak_db": -22.8,
+        "pitch": 88.98
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "cor-anglais": {
+   "name": "Cor Anglais",
+   "family": "Woodwinds",
+   "range": [
+    52,
+    84
+   ],
+   "articulations": {
+    "sustain": [],
+    "staccato": [],
+    "legato": []
+   }
+  },
+  "clarinet": {
+   "name": "Clarinet in Bb",
+   "family": "Woodwinds",
+   "range": [
+    50,
+    94
+   ],
+   "articulations": {
+    "sustain": [
+     {
+      "source": "vsco2ce",
+      "samples": 33,
+      "notes": 11,
+      "named_range": [
+       38,
+       78
+      ],
+      "layers": [
+       "v1",
+       "v2",
+       "v3"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Woodwinds/Clarinet/susLong/DCClar_susLong_D2_v1_rr1_sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 4.57,
+        "peak_db": -26.8,
+        "pitch": 50.01
+       },
+       {
+        "path": "Woodwinds/Clarinet/susLong/DCClar_susLong_D3_v3_rr1_sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 10.52,
+        "peak_db": -14.6,
+        "pitch": 61.98
+       },
+       {
+        "path": "Woodwinds/Clarinet/susLong/DCClar_susLong_F4_v2_rr1_sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 12.15,
+        "peak_db": -20.9,
+        "pitch": 77.03
+       },
+       {
+        "path": "Woodwinds/Clarinet/susLong/DCClar_susLong_F#5_v3_rr1_sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 8.99,
+        "peak_db": -9.7,
+        "pitch": 89.0
+       }
+      ]
+     },
+     {
+      "source": "nbo",
+      "samples": 2,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ],
+    "staccato": [
+     {
+      "source": "vsco2ce",
+      "samples": 64,
+      "notes": 11,
+      "named_range": [
+       38,
+       77
+      ],
+      "layers": [
+       "v1",
+       "v2",
+       "v3"
+      ],
+      "round_robins": 2,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u26a0 partial range",
+      "measured": [
+       {
+        "path": "Woodwinds/Clarinet/stac/DCClar_stac_D2_v1_rr1_sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 0.53,
+        "peak_db": -19.9,
+        "pitch": 49.64
+       },
+       {
+        "path": "Woodwinds/Clarinet/stac/DCClar_stac_D3_v2_rr2_sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 0.58,
+        "peak_db": -17.0,
+        "pitch": 61.86
+       },
+       {
+        "path": "Woodwinds/Clarinet/stac/DCClar_stac_F4_v1_rr1_sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 0.7,
+        "peak_db": -21.0,
+        "pitch": 76.88
+       },
+       {
+        "path": "Woodwinds/Clarinet/stac/DCClar_stac_F5_v3_rr2_sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 0.67,
+        "peak_db": -8.8,
+        "pitch": 88.96
+       }
+      ]
+     }
+    ],
+    "legato": []
+   }
+  },
+  "bass-clarinet": {
+   "name": "Bass Clarinet",
+   "family": "Woodwinds",
+   "range": [
+    34,
+    77
+   ],
+   "articulations": {
+    "sustain": [],
+    "staccato": [],
+    "legato": []
+   }
+  },
+  "bassoon": {
+   "name": "Bassoon",
+   "family": "Woodwinds",
+   "range": [
+    34,
+    76
+   ],
+   "articulations": {
+    "sustain": [
+     {
+      "source": "vsco2ce",
+      "samples": 21,
+      "notes": 10,
+      "named_range": [
+       31,
+       60
+      ],
+      "layers": [
+       "v1",
+       "v2"
+      ],
+      "round_robins": 2,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u26a0 partial range",
+      "measured": [
+       {
+        "path": "Woodwinds/Bassoon/vib/PSBassoon_G1_v1_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 7.07,
+        "peak_db": -18.6,
+        "pitch": 43.03
+       },
+       {
+        "path": "Woodwinds/Bassoon/vib/PSBassoon_G2_v2_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 8.59,
+        "peak_db": -16.3,
+        "pitch": 55.0
+       },
+       {
+        "path": "Woodwinds/Bassoon/vib/PSBassoon_E3_v2_2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 5.48,
+        "peak_db": -10.4,
+        "pitch": 63.98
+       },
+       {
+        "path": "Woodwinds/Bassoon/vib/PSBassoon_C4_v2_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 8.14,
+        "peak_db": -11.8,
+        "pitch": 72.0
+       }
+      ]
+     },
+     {
+      "source": "nbo",
+      "samples": 2,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ],
+    "staccato": [
+     {
+      "source": "vsco2ce",
+      "samples": 46,
+      "notes": 13,
+      "named_range": [
+       22,
+       60
+      ],
+      "layers": [
+       "v1",
+       "v2"
+      ],
+      "round_robins": 2,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Woodwinds/Bassoon/stac/PSBassoon_A#0_v2_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 0.69,
+        "peak_db": -13.1,
+        "pitch": 34.01
+       },
+       {
+        "path": "Woodwinds/Bassoon/stac/PSBassoon_C2_v2_rr2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 0.74,
+        "peak_db": -13.2,
+        "pitch": 48.0
+       },
+       {
+        "path": "Woodwinds/Bassoon/stac/PSBassoon_C3_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 0.66,
+        "peak_db": -13.3,
+        "pitch": 59.99
+       },
+       {
+        "path": "Woodwinds/Bassoon/stac/PSBassoon_C4_v2_rr2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 0.7,
+        "peak_db": -12.3,
+        "pitch": 72.0
+       }
+      ]
+     }
+    ],
+    "legato": [],
+    "sustain (non vibrato)": [
+     {
+      "source": "vsco2ce",
+      "samples": 25,
+      "notes": 13,
+      "named_range": [
+       22,
+       63
+      ],
+      "layers": [
+       "v1",
+       "v2"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+12 (3/4)",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Woodwinds/Bassoon/sus/PSBassoon_A#0_v1_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 9.09,
+        "peak_db": -18.5,
+        "pitch": 34.01
+       },
+       {
+        "path": "Woodwinds/Bassoon/sus/PSBassoon_A#1_v1_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 7.4,
+        "peak_db": -18.2,
+        "pitch": 46.0
+       },
+       {
+        "path": "Woodwinds/Bassoon/sus/PSBassoon_D#3_v1_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 8.64,
+        "peak_db": -13.3,
+        "pitch": 75.03
+       },
+       {
+        "path": "Woodwinds/Bassoon/sus/PSBassoon_D#4_v2_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 7.4,
+        "peak_db": -7.0,
+        "pitch": 75.01
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "contrabassoon": {
+   "name": "Contrabassoon",
+   "family": "Woodwinds",
+   "range": [
+    22,
+    53
+   ],
+   "articulations": {
+    "sustain": [],
+    "staccato": [],
+    "legato": []
+   }
+  },
+  "trumpet": {
+   "name": "Trumpet",
+   "family": "Brass",
+   "range": [
+    54,
+    86
+   ],
+   "articulations": {
+    "sustain": [
+     {
+      "source": "vsco2ce",
+      "samples": 22,
+      "notes": 11,
+      "named_range": [
+       41,
+       72
+      ],
+      "layers": [
+       "v1",
+       "v2"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Brass/Trumpet/susvib/Sum_SHTrumpet_susvib_F2_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 4.29,
+        "peak_db": -25.4,
+        "pitch": 52.92
+       },
+       {
+        "path": "Brass/Trumpet/susvib/Sum_SHTrumpet_susvib_D#3_v2_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 4.96,
+        "peak_db": -20.7,
+        "pitch": 62.96
+       },
+       {
+        "path": "Brass/Trumpet/susvib/Sum_SHTrumpet_susvib_D4_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 5.64,
+        "peak_db": -27.1,
+        "pitch": 73.81
+       },
+       {
+        "path": "Brass/Trumpet/susvib/Sum_SHTrumpet_susvib_C5_v2_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 7.41,
+        "peak_db": -16.1,
+        "pitch": 83.96
+       }
+      ]
+     },
+     {
+      "source": "nbo",
+      "samples": 10,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ],
+    "staccato": [
+     {
+      "source": "vsco2ce",
+      "samples": 66,
+      "notes": 11,
+      "named_range": [
+       41,
+       72
+      ],
+      "layers": [
+       "v1",
+       "v2",
+       "v3"
+      ],
+      "round_robins": 2,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Brass/Trumpet/stac/Sum_SHTrumpet_stac_F2_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 0.87,
+        "peak_db": -41.7,
+        "pitch": 53.06
+       },
+       {
+        "path": "Brass/Trumpet/stac/Sum_SHTrumpet_stac_D#3_v3_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.46,
+        "peak_db": -15.7,
+        "pitch": 63.03
+       },
+       {
+        "path": "Brass/Trumpet/stac/Sum_SHTrumpet_stac_D4_v2_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.34,
+        "peak_db": -18.8,
+        "pitch": 74.0
+       },
+       {
+        "path": "Brass/Trumpet/stac/Sum_SHTrumpet_stac_C5_v3_rr2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.7,
+        "peak_db": -10.2,
+        "pitch": 84.03
+       }
+      ]
+     }
+    ],
+    "legato": [
+     {
+      "source": "nbo",
+      "samples": 6,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ],
+    "muted": [
+     {
+      "source": "vsco2ce",
+      "samples": 16,
+      "notes": 8,
+      "named_range": [
+       46,
+       69
+      ],
+      "layers": [
+       "v1",
+       "v3"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u26a0 partial range",
+      "measured": [
+       {
+        "path": "Brass/Trumpet/straightM-sus/Sum_SHTrumpet_straightM-sus_A#2_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 9.06,
+        "peak_db": -36.2,
+        "pitch": 57.99
+       },
+       {
+        "path": "Brass/Trumpet/straightM-sus/Sum_SHTrumpet_straightM-sus_D3_v3_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 9.63,
+        "peak_db": -22.8,
+        "pitch": 62.01
+       },
+       {
+        "path": "Brass/Trumpet/straightM-sus/Sum_SHTrumpet_straightM-sus_D4_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 9.18,
+        "peak_db": -21.2,
+        "pitch": 73.96
+       },
+       {
+        "path": "Brass/Trumpet/straightM-sus/Sum_SHTrumpet_straightM-sus_A4_v3_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 7.34,
+        "peak_db": -12.7,
+        "pitch": 80.98
+       }
+      ]
+     },
+     {
+      "source": "nbo",
+      "samples": 2,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ],
+    "muted (harmon)": [
+     {
+      "source": "vsco2ce",
+      "samples": 16,
+      "notes": 8,
+      "named_range": [
+       46,
+       69
+      ],
+      "layers": [
+       "v1",
+       "v3"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u26a0 partial range",
+      "measured": [
+       {
+        "path": "Brass/Trumpet/harmonM-sus/Sum_SHTrumpet_harmonM-sus_A#2_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 5.35,
+        "peak_db": -39.8,
+        "pitch": 57.98
+       },
+       {
+        "path": "Brass/Trumpet/harmonM-sus/Sum_SHTrumpet_harmonM-sus_D#3_v3_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 5.35,
+        "peak_db": -26.7,
+        "pitch": 63.02
+       },
+       {
+        "path": "Brass/Trumpet/harmonM-sus/Sum_SHTrumpet_harmonM-sus_D4_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 9.12,
+        "peak_db": -33.9,
+        "pitch": 73.93
+       },
+       {
+        "path": "Brass/Trumpet/harmonM-sus/Sum_SHTrumpet_harmonM-sus_A4_v3_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 5.08,
+        "peak_db": -13.2,
+        "pitch": 81.03
+       }
+      ]
+     }
+    ],
+    "sustain (non vibrato)": [
+     {
+      "source": "vsco2ce",
+      "samples": 20,
+      "notes": 10,
+      "named_range": [
+       41,
+       72
+      ],
+      "layers": [
+       "v1",
+       "v3"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Brass/Trumpet/sus/Sum_SHTrumpet_sus_F2_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 12.5,
+        "peak_db": -27.3,
+        "pitch": 53.09
+       },
+       {
+        "path": "Brass/Trumpet/sus/Sum_SHTrumpet_sus_D#3_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 15.63,
+        "peak_db": -25.3,
+        "pitch": 63.05
+       },
+       {
+        "path": "Brass/Trumpet/sus/Sum_SHTrumpet_sus_D4_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 16.32,
+        "peak_db": -12.8,
+        "pitch": 73.97
+       },
+       {
+        "path": "Brass/Trumpet/sus/Sum_SHTrumpet_sus_C5_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 14.56,
+        "peak_db": -10.1,
+        "pitch": 84.03
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "horn": {
+   "name": "French Horn",
+   "family": "Brass",
+   "range": [
+    35,
+    77
+   ],
+   "articulations": {
+    "sustain": [
+     {
+      "source": "vsco2ce",
+      "samples": 29,
+      "notes": 11,
+      "named_range": [
+       21,
+       65
+      ],
+      "layers": [
+       "v1",
+       "v2",
+       "v3",
+       "v4"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Brass/F Horn/sus/MOHorn_sus_A0_v1_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 5.37,
+        "peak_db": -22.7,
+        "pitch": 33.03
+       },
+       {
+        "path": "Brass/F Horn/sus/MOHorn_sus_G1_v3_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 5.34,
+        "peak_db": -15.2,
+        "pitch": 42.32
+       },
+       {
+        "path": "Brass/F Horn/sus/MOHorn_sus_F2_v2_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 14.5,
+        "peak_db": -26.5,
+        "pitch": 52.89
+       },
+       {
+        "path": "Brass/F Horn/sus/MOHorn_sus_D4_v1_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 8.19,
+        "peak_db": -11.9,
+        "pitch": 74.0
+       }
+      ]
+     }
+    ],
+    "staccato": [
+     {
+      "source": "vsco2ce",
+      "samples": 54,
+      "notes": 11,
+      "named_range": [
+       21,
+       65
+      ],
+      "layers": [
+       "v1",
+       "v2",
+       "v3"
+      ],
+      "round_robins": 2,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Brass/F Horn/stac/MOHorn_stac_A0_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.38,
+        "peak_db": -28.0,
+        "pitch": null
+       },
+       {
+        "path": "Brass/F Horn/stac/MOHorn_stac_A#1_v3_rr2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.16,
+        "peak_db": -22.9,
+        "pitch": 46.02
+       },
+       {
+        "path": "Brass/F Horn/stac/MOHorn_stac_A2_v3_rr2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.89,
+        "peak_db": -9.4,
+        "pitch": 56.98
+       },
+       {
+        "path": "Brass/F Horn/stac/MOHorn_stac_F4_v3_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.0,
+        "peak_db": 0.0,
+        "pitch": 77.0
+       }
+      ]
+     }
+    ],
+    "legato": [],
+    "muted": [
+     {
+      "source": "vsco2ce",
+      "samples": 17,
+      "notes": 9,
+      "named_range": [
+       34,
+       65
+      ],
+      "layers": [
+       "v1",
+       "v2",
+       "v3"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u26a0 partial range",
+      "measured": [
+       {
+        "path": "Brass/F Horn/mute/MOHorn_mute_A#1_v1_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 5.61,
+        "peak_db": -32.1,
+        "pitch": 45.97
+       },
+       {
+        "path": "Brass/F Horn/mute/MOHorn_mute_F2_v2_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 5.47,
+        "peak_db": -21.5,
+        "pitch": 53.01
+       },
+       {
+        "path": "Brass/F Horn/mute/MOHorn_mute_D#3_v2_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 5.15,
+        "peak_db": -14.6,
+        "pitch": 63.01
+       },
+       {
+        "path": "Brass/F Horn/mute/MOHorn_mute_D4_v1_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 4.01,
+        "peak_db": -17.0,
+        "pitch": 74.01
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "trombone": {
+   "name": "Tenor Trombone",
+   "family": "Brass",
+   "range": [
+    40,
+    77
+   ],
+   "articulations": {
+    "sustain": [
+     {
+      "source": "vsco2ce",
+      "samples": 31,
+      "notes": 11,
+      "named_range": [
+       22,
+       53
+      ],
+      "layers": [
+       "v1",
+       "v2",
+       "v3"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u26a0 partial range",
+      "measured": [
+       {
+        "path": "Brass/Tenor Trombone/sus/tenortbn_sus_A#0_v1_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 4.8,
+        "peak_db": -35.4,
+        "pitch": 34.01
+       },
+       {
+        "path": "Brass/Tenor Trombone/sus/tenortbn_sus_A#1_v1_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 17.88,
+        "peak_db": -42.5,
+        "pitch": 46.0
+       },
+       {
+        "path": "Brass/Tenor Trombone/sus/tenortbn_sus_C3_v2_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 9.14,
+        "peak_db": -29.3,
+        "pitch": 60.0
+       },
+       {
+        "path": "Brass/Tenor Trombone/sus/tenortbn_sus_F3_v3_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 7.37,
+        "peak_db": -18.4,
+        "pitch": 65.0
+       }
+      ]
+     },
+     {
+      "source": "nbo",
+      "samples": 7,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ],
+    "staccato": [
+     {
+      "source": "vsco2ce",
+      "samples": 56,
+      "notes": 7,
+      "named_range": [
+       22,
+       53
+      ],
+      "layers": [
+       "v1",
+       "v2",
+       "v3",
+       "v4"
+      ],
+      "round_robins": 2,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u26a0 partial range",
+      "measured": [
+       {
+        "path": "Brass/Tenor Trombone/stac/tenortbn_stac_A#0_v1_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 0.97,
+        "peak_db": -35.0,
+        "pitch": 34.04
+       },
+       {
+        "path": "Brass/Tenor Trombone/stac/tenortbn_stac_A#1_v2_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.18,
+        "peak_db": -25.1,
+        "pitch": 45.99
+       },
+       {
+        "path": "Brass/Tenor Trombone/stac/tenortbn_stac_A#2_v3_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.72,
+        "peak_db": -16.9,
+        "pitch": 58.0
+       },
+       {
+        "path": "Brass/Tenor Trombone/stac/tenortbn_stac_F3_v4_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 2.01,
+        "peak_db": -7.5,
+        "pitch": 64.97
+       }
+      ]
+     }
+    ],
+    "legato": [
+     {
+      "source": "nbo",
+      "samples": 6,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ],
+    "sustain (vibrato)": [
+     {
+      "source": "vsco2ce",
+      "samples": 12,
+      "notes": 11,
+      "named_range": [
+       29,
+       51
+      ],
+      "layers": [
+       "v1"
+      ],
+      "round_robins": 2,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u26a0 partial range",
+      "measured": [
+       {
+        "path": "Brass/Tenor Trombone/vib/tenortbn_vib_F1_v1_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 5.09,
+        "peak_db": -30.0,
+        "pitch": 40.94
+       },
+       {
+        "path": "Brass/Tenor Trombone/vib/tenortbn_vib_D#2_v1_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 5.96,
+        "peak_db": -22.6,
+        "pitch": 50.97
+       },
+       {
+        "path": "Brass/Tenor Trombone/vib/tenortbn_vib_A#2_v1_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 5.85,
+        "peak_db": -16.7,
+        "pitch": 57.92
+       },
+       {
+        "path": "Brass/Tenor Trombone/vib/tenortbn_vib_D#3_v1_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 5.66,
+        "peak_db": -23.7,
+        "pitch": 62.95
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "bass-trombone": {
+   "name": "Bass Trombone",
+   "family": "Brass",
+   "range": [
+    22,
+    70
+   ],
+   "articulations": {
+    "sustain": [],
+    "staccato": [],
+    "legato": []
+   }
+  },
+  "tuba": {
+   "name": "Tuba",
+   "family": "Brass",
+   "range": [
+    26,
+    65
+   ],
+   "articulations": {
+    "sustain": [
+     {
+      "source": "vsco2ce",
+      "samples": 23,
+      "notes": 9,
+      "named_range": [
+       17,
+       50
+      ],
+      "layers": [
+       "v1",
+       "v2",
+       "v3"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u26a0 partial range",
+      "measured": [
+       {
+        "path": "Brass/Tuba/sus/Tuba3_sus_F0_v1_rr1_Mid.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 3.98,
+        "peak_db": -30.3,
+        "pitch": 28.68
+       },
+       {
+        "path": "Brass/Tuba/sus/Tuba3_sus_F1_v1_rr1_Mid.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 9.71,
+        "peak_db": -38.4,
+        "pitch": 40.89
+       },
+       {
+        "path": "Brass/Tuba/sus/Tuba3_sus_D2_v2_rr1_Mid.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 12.25,
+        "peak_db": -31.9,
+        "pitch": 49.96
+       },
+       {
+        "path": "Brass/Tuba/sus/Tuba3_sus_A#2_v3_rr1_Mid.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 5.52,
+        "peak_db": -16.4,
+        "pitch": 57.98
+       }
+      ]
+     },
+     {
+      "source": "nbo",
+      "samples": 5,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ],
+    "staccato": [
+     {
+      "source": "vsco2ce",
+      "samples": 64,
+      "notes": 8,
+      "named_range": [
+       22,
+       50
+      ],
+      "layers": [
+       "v1",
+       "v2"
+      ],
+      "round_robins": 4,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u26a0 partial range",
+      "measured": [
+       {
+        "path": "Brass/Tuba/stac/Tuba3_stac_A#0_v1_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 0.79,
+        "peak_db": -29.5,
+        "pitch": 34.06
+       },
+       {
+        "path": "Brass/Tuba/stac/Tuba3_stac_F1_v2_rr2_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 0.83,
+        "peak_db": -24.3,
+        "pitch": 41.01
+       },
+       {
+        "path": "Brass/Tuba/stac/Tuba3_stac_F2_v1_rr3_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 0.6,
+        "peak_db": -31.4,
+        "pitch": 52.89
+       },
+       {
+        "path": "Brass/Tuba/stac/Tuba3_stac_D3_v2_rr4_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 0.76,
+        "peak_db": -17.2,
+        "pitch": 61.89
+       }
+      ]
+     }
+    ],
+    "legato": [
+     {
+      "source": "nbo",
+      "samples": 3,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ]
+   }
+  },
+  "timpani": {
+   "name": "Timpani",
+   "family": "Percussion",
+   "range": [
+    38,
+    60
+   ],
+   "articulations": {
+    "hit": [
+     {
+      "source": "vsco2ce",
+      "samples": 28,
+      "notes": 0,
+      "named_range": null,
+      "layers": [
+       "v1",
+       "v3",
+       "v4"
+      ],
+      "round_robins": 2,
+      "octave_offset": "-",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Percussion/Timpani/Timpani1_Hit_v1_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 3.17,
+        "peak_db": -61.7,
+        "pitch": 41.89
+       },
+       {
+        "path": "Percussion/Timpani/Timpani2_Hit_v4_rr2_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 10.23,
+        "peak_db": -9.0,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/Timpani/Timpani4_Hit_v3_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 5.74,
+        "peak_db": -22.0,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/Timpani/Timpani5_Hit_v4_rr2_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 6.47,
+        "peak_db": -14.5,
+        "pitch": null
+       }
+      ]
+     },
+     {
+      "source": "vcsl",
+      "samples": 234,
+      "notes": 0,
+      "named_range": null,
+      "layers": [
+       "v2",
+       "v3",
+       "v4",
+       "v5"
+      ],
+      "round_robins": 4,
+      "octave_offset": "-",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Membranophones/Struck Membranophones/Timpani 1/Hit/Timpani1_Hit_v2_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 7.31,
+        "peak_db": -43.0,
+        "pitch": 29.92
+       },
+       {
+        "path": "Membranophones/Struck Membranophones/Timpani 2/Hit/Timpani3C_hit_v2_rr1_main.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 4.02,
+        "peak_db": -27.9,
+        "pitch": 37.94
+       },
+       {
+        "path": "Membranophones/Struck Membranophones/Timpani 2/Hit/Timpani6J_hit_v2_rr1_main.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 4.07,
+        "peak_db": -37.2,
+        "pitch": null
+       },
+       {
+        "path": "Membranophones/Struck Membranophones/Timpani 2/Hit/Timpani8E_hit_v5_rr2_main.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 2.41,
+        "peak_db": -12.2,
+        "pitch": null
+       }
+      ]
+     }
+    ],
+    "roll": [
+     {
+      "source": "vsco2ce",
+      "samples": 10,
+      "notes": 0,
+      "named_range": null,
+      "layers": [
+       "v3",
+       "v4",
+       "v5"
+      ],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Percussion/Timpani/Rolls/Timpani1_Roll_v3_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 29.46,
+        "peak_db": -30.8,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/Timpani/Rolls/Timpani2_Roll_v5_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 26.01,
+        "peak_db": -13.3,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/Timpani/Rolls/Timpani4_Roll_v3_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 17.37,
+        "peak_db": -24.5,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/Timpani/Rolls/Timpani5_Roll_v4_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 16.82,
+        "peak_db": -22.1,
+        "pitch": null
+       }
+      ]
+     },
+     {
+      "source": "vcsl",
+      "samples": 10,
+      "notes": 0,
+      "named_range": null,
+      "layers": [
+       "v2",
+       "v3",
+       "v4",
+       "v5"
+      ],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Membranophones/Struck Membranophones/Timpani 1/Roll/Timpani1_Roll_v3_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 29.46,
+        "peak_db": -30.8,
+        "pitch": null
+       },
+       {
+        "path": "Membranophones/Struck Membranophones/Timpani 1/Roll/Timpani2_Roll_v5_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 26.01,
+        "peak_db": -13.3,
+        "pitch": null
+       },
+       {
+        "path": "Membranophones/Struck Membranophones/Timpani 1/Roll/Timpani4_Roll_v3_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 17.37,
+        "peak_db": -24.5,
+        "pitch": null
+       },
+       {
+        "path": "Membranophones/Struck Membranophones/Timpani 1/Roll/Timpani5_Roll_v4_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 16.82,
+        "peak_db": -22.1,
+        "pitch": null
+       }
+      ]
+     }
+    ],
+    "sustain": [
+     {
+      "source": "nbo",
+      "samples": 1,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ]
+   }
+  },
+  "bass-drum": {
+   "name": "Concert Bass Drum",
+   "family": "Percussion",
+   "range": [
+    null,
+    null
+   ],
+   "articulations": {
+    "hit": [
+     {
+      "source": "vsco2ce",
+      "samples": 14,
+      "notes": 0,
+      "named_range": null,
+      "layers": [
+       "v1",
+       "v2",
+       "v3",
+       "v4",
+       "v5",
+       "v6",
+       "v7"
+      ],
+      "round_robins": 2,
+      "octave_offset": "-",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Percussion/BDrumNewhit_v1_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.5,
+        "peak_db": -36.6,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/BDrumNewhit_v3_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 2.08,
+        "peak_db": -17.1,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/BDrumNewhit_v5_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 3.33,
+        "peak_db": -10.3,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/BDrumNewhit_v7_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 6.26,
+        "peak_db": -4.7,
+        "pitch": null
+       }
+      ]
+     },
+     {
+      "source": "vcsl",
+      "samples": 20,
+      "notes": 0,
+      "named_range": null,
+      "layers": [
+       "f",
+       "ff",
+       "mf",
+       "mp",
+       "pp",
+       "v2",
+       "v3",
+       "v5",
+       "v7"
+      ],
+      "round_robins": 2,
+      "octave_offset": "-",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Membranophones/Struck Membranophones/Bass Drum 1/BDrumNew_hit_v2_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.6,
+        "peak_db": -22.3,
+        "pitch": null
+       },
+       {
+        "path": "Membranophones/Struck Membranophones/Bass Drum 1/BDrumNew_hit_v7_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 6.26,
+        "peak_db": -4.7,
+        "pitch": null
+       },
+       {
+        "path": "Membranophones/Struck Membranophones/Bass Drum 2/bassdrum_hit_mp1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 9.85,
+        "peak_db": -18.3,
+        "pitch": 28.4
+       },
+       {
+        "path": "Membranophones/Struck Membranophones/Bass Drum 2/bassdrum_rub2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 7.72,
+        "peak_db": -29.9,
+        "pitch": 39.96
+       }
+      ]
+     }
+    ],
+    "roll": [
+     {
+      "source": "vcsl",
+      "samples": 18,
+      "notes": 0,
+      "named_range": null,
+      "layers": [
+       "f",
+       "ff",
+       "mf",
+       "mp",
+       "pp"
+      ],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Membranophones/Struck Membranophones/Bass Drum 2/bassdrum_cresc_med.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 26.51,
+        "peak_db": -5.3,
+        "pitch": null
+       },
+       {
+        "path": "Membranophones/Struck Membranophones/Bass Drum 2/bassdrum_roll_fast_mp.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 10.78,
+        "peak_db": -15.1,
+        "pitch": null
+       },
+       {
+        "path": "Membranophones/Struck Membranophones/Bass Drum 2/bassdrum_roll_mf.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 12.59,
+        "peak_db": -10.5,
+        "pitch": null
+       },
+       {
+        "path": "Membranophones/Struck Membranophones/Bass Drum 2/bassdrum_roll_pp_rel.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 4.98,
+        "peak_db": -32.8,
+        "pitch": 27.86
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "cymbals": {
+   "name": "Clash Cymbals",
+   "family": "Percussion",
+   "range": [
+    null,
+    null
+   ],
+   "articulations": {
+    "hit": [
+     {
+      "source": "vsco2ce",
+      "samples": 9,
+      "notes": 0,
+      "named_range": null,
+      "layers": [
+       "ff",
+       "mf",
+       "mp",
+       "pp",
+       "v1"
+      ],
+      "round_robins": 2,
+      "octave_offset": "-",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Percussion/cymbal-crash1_ff_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 10.05,
+        "peak_db": -2.2,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/cymbal-crash1_mf_rr2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 9.66,
+        "peak_db": -5.0,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/cymbal-crash1_pp_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 9.33,
+        "peak_db": -20.6,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/cymbal-crashshort_v1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.9,
+        "peak_db": -5.7,
+        "pitch": null
+       }
+      ]
+     },
+     {
+      "source": "vcsl",
+      "samples": 15,
+      "notes": 0,
+      "named_range": null,
+      "layers": [
+       "f",
+       "ff",
+       "fff",
+       "mf",
+       "mp",
+       "pp"
+      ],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Idiophones/Struck Idiophones/Clash Cymbals 1/cymbal_crash1_ff2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 13.29,
+        "peak_db": -5.2,
+        "pitch": null
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Clash Cymbals 1/cymbal_crash1_mp2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 8.03,
+        "peak_db": -10.9,
+        "pitch": null
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Clash Cymbals 2/cymbal_crash2_f1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 13.57,
+        "peak_db": -8.9,
+        "pitch": null
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Clash Cymbals 2/cymbal_crash2_mp2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 12.9,
+        "peak_db": -13.8,
+        "pitch": null
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "suspended-cymbal": {
+   "name": "Suspended Cymbal",
+   "family": "Percussion",
+   "range": [
+    null,
+    null
+   ],
+   "articulations": {
+    "hit": [
+     {
+      "source": "vsco2ce",
+      "samples": 19,
+      "notes": 0,
+      "named_range": null,
+      "layers": [
+       "f",
+       "fff",
+       "mf",
+       "mp",
+       "pp"
+      ],
+      "round_robins": 2,
+      "octave_offset": "-",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Percussion/susCymb1-hit-bell_fff.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 4.25,
+        "peak_db": -6.8,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/susCymb1-hit_fff_rr2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 14.2,
+        "peak_db": -11.5,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/susCymb1-hitstick_f_rr2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 9.06,
+        "peak_db": -23.2,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/susCymb1-hitstick_pp_rr2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 6.38,
+        "peak_db": -35.2,
+        "pitch": null
+       }
+      ]
+     },
+     {
+      "source": "vcsl",
+      "samples": 29,
+      "notes": 0,
+      "named_range": null,
+      "layers": [
+       "f",
+       "fff",
+       "mf",
+       "mp",
+       "p",
+       "pp"
+      ],
+      "round_robins": 7,
+      "octave_offset": "-",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Idiophones/Struck Idiophones/Suspended Cymbal 1/susCymb1_bow_13.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 8.24,
+        "peak_db": -29.3,
+        "pitch": null
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Suspended Cymbal 1/susCymb1_hit_mp1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 11.23,
+        "peak_db": -25.2,
+        "pitch": null
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Suspended Cymbal 2/susCymb2_hit_bell_f1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 8.59,
+        "peak_db": -15.4,
+        "pitch": null
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Suspended Cymbal 2/susCymb2_hit_stick_pp1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 5.85,
+        "peak_db": -34.4,
+        "pitch": null
+       }
+      ]
+     }
+    ],
+    "roll": [
+     {
+      "source": "vsco2ce",
+      "samples": 3,
+      "notes": 0,
+      "named_range": null,
+      "layers": [
+       "v1"
+      ],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Percussion/susCymb1-cresc-Long_v1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 16.96,
+        "peak_db": -10.9,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/susCymb1-cresc-Median_v1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 12.99,
+        "peak_db": -12.5,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/susCymb1-cresc-Short_v1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 12.03,
+        "peak_db": -10.2,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/susCymb1-cresc-Short_v1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 12.03,
+        "peak_db": -10.2,
+        "pitch": null
+       }
+      ]
+     },
+     {
+      "source": "vcsl",
+      "samples": 19,
+      "notes": 0,
+      "named_range": null,
+      "layers": [
+       "f",
+       "ff",
+       "fff",
+       "mp",
+       "pp"
+      ],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Idiophones/Struck Idiophones/Suspended Cymbal 1/susCymb1_cresc_1.5s.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 11.44,
+        "peak_db": -9.7,
+        "pitch": null
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Suspended Cymbal 1/susCymb1_roll_ff2_nloop.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 25.51,
+        "peak_db": -10.9,
+        "pitch": null
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Suspended Cymbal 2/susCymb2_cresc_7s.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 17.39,
+        "peak_db": -10.6,
+        "pitch": null
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Suspended Cymbal 2/susCymb2_roll_pp1_rel.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 4.9,
+        "peak_db": -48.8,
+        "pitch": null
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "snare": {
+   "name": "Snare Drum",
+   "family": "Percussion",
+   "range": [
+    null,
+    null
+   ],
+   "articulations": {
+    "hit": [
+     {
+      "source": "vsco2ce",
+      "samples": 26,
+      "notes": 0,
+      "named_range": null,
+      "layers": [
+       "v1",
+       "v2",
+       "v3",
+       "v4",
+       "v5",
+       "v6",
+       "v7",
+       "v9"
+      ],
+      "round_robins": 2,
+      "octave_offset": "-",
+      "format": "44k/24/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Percussion/Snare2-HitNS_v1_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 0.9,
+        "peak_db": -35.9,
+        "pitch": 45.05
+       },
+       {
+        "path": "Percussion/Snare2-HitSN_v1_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 1.28,
+        "peak_db": -42.9,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/Snare2-HitSN_v9_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 1.67,
+        "peak_db": -1.5,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/Snare2-taps_v4_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 1.4,
+        "peak_db": -13.5,
+        "pitch": null
+       }
+      ]
+     },
+     {
+      "source": "vcsl",
+      "samples": 90,
+      "notes": 0,
+      "named_range": null,
+      "layers": [
+       "v1",
+       "v2",
+       "v3",
+       "v4",
+       "v5",
+       "v6",
+       "v7",
+       "v9",
+       "vl1",
+       "vl2",
+       "vl3",
+       "vl4"
+      ],
+      "round_robins": 4,
+      "octave_offset": "-",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Membranophones/Struck Membranophones/Snare Drum, Modern 1/Snare2_HitNS_v2_rr1_Mid.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 0.88,
+        "peak_db": -23.5,
+        "pitch": 56.98
+       },
+       {
+        "path": "Membranophones/Struck Membranophones/Snare Drum, Modern 2/Snare3M_HitSN_v3_rr1_Mid.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 0.95,
+        "peak_db": -20.5,
+        "pitch": null
+       },
+       {
+        "path": "Membranophones/Struck Membranophones/Snare Drum, Rope Tension/Hi/RopeSnare_hi_sn_Main_vl2_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 1.93,
+        "peak_db": -30.5,
+        "pitch": 20.57
+       },
+       {
+        "path": "Membranophones/Struck Membranophones/Snare Drum, Rope Tension/RopeSnare_stick_Main_vl1_rr2.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 1.02,
+        "peak_db": -26.5,
+        "pitch": null
+       }
+      ]
+     }
+    ],
+    "roll": [
+     {
+      "source": "vsco2ce",
+      "samples": 6,
+      "notes": 0,
+      "named_range": null,
+      "layers": [
+       "v1",
+       "v3",
+       "v5"
+      ],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "44k/24/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Percussion/Snare2-rollNS_v1_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 6.86,
+        "peak_db": -32.2,
+        "pitch": 56.92
+       },
+       {
+        "path": "Percussion/Snare2-rollNS_v5_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 6.98,
+        "peak_db": -4.7,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/Snare2-rollSN_v3_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 11.14,
+        "peak_db": -18.4,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/Snare2-rollSN_v5_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 9.51,
+        "peak_db": -9.9,
+        "pitch": null
+       }
+      ]
+     },
+     {
+      "source": "vcsl",
+      "samples": 14,
+      "notes": 0,
+      "named_range": null,
+      "layers": [
+       "v2",
+       "v3",
+       "v4",
+       "v5"
+      ],
+      "round_robins": 2,
+      "octave_offset": "-",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Membranophones/Struck Membranophones/Snare Drum, Modern 1/Snare2_rollNS_v2_rr1_Mid.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 6.92,
+        "peak_db": -25.4,
+        "pitch": 57.12
+       },
+       {
+        "path": "Membranophones/Struck Membranophones/Snare Drum, Modern 1/Snare2_rollSN_v2_rr1_Mid.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 9.17,
+        "peak_db": -24.1,
+        "pitch": null
+       },
+       {
+        "path": "Membranophones/Struck Membranophones/Snare Drum, Modern 2/Snare3M_rollNS_v4_rr1_Mid.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 6.6,
+        "peak_db": -23.0,
+        "pitch": null
+       },
+       {
+        "path": "Membranophones/Struck Membranophones/Snare Drum, Modern 3/Snare4_rollSN_v4_rr1_Mid.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 8.39,
+        "peak_db": -28.6,
+        "pitch": null
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "tam-tam": {
+   "name": "Tam-tam",
+   "family": "Percussion",
+   "range": [
+    null,
+    null
+   ],
+   "articulations": {
+    "hit": [
+     {
+      "source": "vsco2ce",
+      "samples": 4,
+      "notes": 0,
+      "named_range": null,
+      "layers": [
+       "f",
+       "fff",
+       "mf",
+       "p"
+      ],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Percussion/gongHit_f.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 30.8,
+        "peak_db": -9.8,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/gongHit_fff.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 27.34,
+        "peak_db": -7.0,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/gongHit_mf.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 34.0,
+        "peak_db": -15.2,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/gongHit_p.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 29.42,
+        "peak_db": -26.7,
+        "pitch": 49.79
+       }
+      ]
+     },
+     {
+      "source": "vcsl",
+      "samples": 7,
+      "notes": 0,
+      "named_range": null,
+      "layers": [
+       "f",
+       "fff",
+       "mf",
+       "mp",
+       "p"
+      ],
+      "round_robins": 2,
+      "octave_offset": "-",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Idiophones/Struck Idiophones/Gong 1/gong_2_f.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 23.43,
+        "peak_db": -20.1,
+        "pitch": null
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Gong 1/gong_f.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 30.8,
+        "peak_db": -9.8,
+        "pitch": null
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Gong 1/gong_mf.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 34.0,
+        "peak_db": -15.2,
+        "pitch": null
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Gong 1/gong_scrape_mf.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 9.57,
+        "peak_db": -28.2,
+        "pitch": null
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "triangle": {
+   "name": "Triangle",
+   "family": "Percussion",
+   "range": [
+    null,
+    null
+   ],
+   "articulations": {
+    "hit": [
+     {
+      "source": "vsco2ce",
+      "samples": 24,
+      "notes": 0,
+      "named_range": null,
+      "layers": [
+       "v1",
+       "v2"
+      ],
+      "round_robins": 2,
+      "octave_offset": "-",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Percussion/Triangle3-HitFM_v1_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 0.82,
+        "peak_db": -33.5,
+        "pitch": 103.89
+       },
+       {
+        "path": "Percussion/Triangle3-Hit_v1_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 8.4,
+        "peak_db": -35.3,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/Triangle6-HitM_v1_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.29,
+        "peak_db": -30.4,
+        "pitch": 30.26
+       },
+       {
+        "path": "Percussion/Triangle6-Hit_v2_rr2_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 2.13,
+        "peak_db": -22.0,
+        "pitch": null
+       }
+      ]
+     },
+     {
+      "source": "vcsl",
+      "samples": 34,
+      "notes": 0,
+      "named_range": null,
+      "layers": [
+       "v1",
+       "v2"
+      ],
+      "round_robins": 4,
+      "octave_offset": "-",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Idiophones/Struck Idiophones/Triangles/Triangle1_HitFM_v1_rr1_Mid.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.14,
+        "peak_db": -40.9,
+        "pitch": null
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Triangles/Triangle3_HitFM_v1_rr2_Mid.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 0.85,
+        "peak_db": -35.3,
+        "pitch": null
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Triangles/Triangle6_HitFM_v1_rr1_Mid.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.64,
+        "peak_db": -31.8,
+        "pitch": null
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Triangles/Triangle6_Hit_v2_rr2_Mid.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 2.13,
+        "peak_db": -25.2,
+        "pitch": null
+       }
+      ]
+     }
+    ],
+    "roll": [
+     {
+      "source": "vsco2ce",
+      "samples": 2,
+      "notes": 0,
+      "named_range": null,
+      "layers": [
+       "v2"
+      ],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Percussion/Triangle3-Roll_v2_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 39.38,
+        "peak_db": -26.3,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/Triangle6-Roll_v2_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 22.97,
+        "peak_db": -27.3,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/Triangle6-Roll_v2_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 22.97,
+        "peak_db": -27.3,
+        "pitch": null
+       }
+      ]
+     },
+     {
+      "source": "vcsl",
+      "samples": 3,
+      "notes": 0,
+      "named_range": null,
+      "layers": [
+       "v2"
+      ],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Idiophones/Struck Idiophones/Triangles/Triangle1_Roll_rr1_Mid.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 27.93,
+        "peak_db": -29.7,
+        "pitch": 21.13
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Triangles/Triangle3_Roll_v2_rr1_Mid.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 39.38,
+        "peak_db": -28.0,
+        "pitch": null
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Triangles/Triangle6_Roll_v2_rr1_Mid.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 22.97,
+        "peak_db": -28.1,
+        "pitch": null
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Triangles/Triangle6_Roll_v2_rr1_Mid.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 22.97,
+        "peak_db": -28.1,
+        "pitch": null
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "tambourine": {
+   "name": "Tambourine",
+   "family": "Percussion",
+   "range": [
+    null,
+    null
+   ],
+   "articulations": {
+    "hit": [
+     {
+      "source": "vsco2ce",
+      "samples": 6,
+      "notes": 0,
+      "named_range": null,
+      "layers": [
+       "v1",
+       "v2"
+      ],
+      "round_robins": 2,
+      "octave_offset": "-",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Percussion/Tamb1-Hit_v1_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.92,
+        "peak_db": -32.8,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/Tamb1-Hit_v2_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.66,
+        "peak_db": -21.9,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/Tamb1-Shake_v1_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.47,
+        "peak_db": -32.6,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/Tamb1-Shake_v1_rr2_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.35,
+        "peak_db": -29.8,
+        "pitch": null
+       }
+      ]
+     },
+     {
+      "source": "vcsl",
+      "samples": 8,
+      "notes": 0,
+      "named_range": null,
+      "layers": [
+       "v1",
+       "v2"
+      ],
+      "round_robins": 4,
+      "octave_offset": "-",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Idiophones/Struck Idiophones/Tambourine 1/Tamb1_Hit_v1_rr1_Mid.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.92,
+        "peak_db": -34.0,
+        "pitch": null
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Tambourine 1/Tamb1_Shake_rr1_Mid.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.47,
+        "peak_db": -28.7,
+        "pitch": null
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Tambourine 2/Tamb2_Hit_v1_rr1_Mid.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.17,
+        "peak_db": -30.2,
+        "pitch": null
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Tambourine 2/Tamb2_Shake_rr3_Mid.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.06,
+        "peak_db": -27.2,
+        "pitch": null
+       }
+      ]
+     }
+    ],
+    "roll": [
+     {
+      "source": "vsco2ce",
+      "samples": 3,
+      "notes": 0,
+      "named_range": null,
+      "layers": [
+       "v1",
+       "v2",
+       "v3"
+      ],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Percussion/Tamb1-Roll_v1_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 10.49,
+        "peak_db": -39.6,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/Tamb1-Roll_v2_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 10.53,
+        "peak_db": -34.1,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/Tamb1-Roll_v3_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 9.7,
+        "peak_db": -25.6,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/Tamb1-Roll_v3_rr1_Sum.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 9.7,
+        "peak_db": -25.6,
+        "pitch": null
+       }
+      ]
+     },
+     {
+      "source": "vcsl",
+      "samples": 6,
+      "notes": 0,
+      "named_range": null,
+      "layers": [
+       "v1",
+       "v2",
+       "v3"
+      ],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Idiophones/Struck Idiophones/Tambourine 1/Tamb1_Roll_v1_rr1_Mid.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 10.49,
+        "peak_db": -35.2,
+        "pitch": null
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Tambourine 1/Tamb1_Roll_v3_rr1_Mid.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 9.7,
+        "peak_db": -22.0,
+        "pitch": null
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Tambourine 2/Tamb2_Roll_v2_rr1_Mid.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 10.11,
+        "peak_db": -27.5,
+        "pitch": null
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Tambourine 2/Tamb2_Roll_v3_rr1_Mid.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 9.6,
+        "peak_db": -20.2,
+        "pitch": null
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "glockenspiel": {
+   "name": "Glockenspiel",
+   "family": "Percussion",
+   "range": [
+    79,
+    108
+   ],
+   "articulations": {
+    "hit": [
+     {
+      "source": "vsco2ce",
+      "samples": 6,
+      "notes": 6,
+      "named_range": [
+       67,
+       96
+      ],
+      "layers": [
+       "medium"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+12 (2/4)",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Percussion/Glock/glock_medium_G4.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 7.21,
+        "peak_db": -28.4,
+        "pitch": 67.7
+       },
+       {
+        "path": "Percussion/Glock/glock_medium_G5.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 6.95,
+        "peak_db": -26.8,
+        "pitch": 60.36
+       },
+       {
+        "path": "Percussion/Glock/glock_medium_G6.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 4.78,
+        "peak_db": -28.1,
+        "pitch": 102.8
+       },
+       {
+        "path": "Percussion/Glock/glock_medium_C7.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 2.79,
+        "peak_db": -27.6,
+        "pitch": 107.84
+       }
+      ]
+     },
+     {
+      "source": "vcsl",
+      "samples": 18,
+      "notes": 7,
+      "named_range": [
+       67,
+       96
+      ],
+      "layers": [
+       "loud",
+       "medium",
+       "soft"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+12",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Idiophones/Struck Idiophones/Glockenspiel/glock_loud_G4_01.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 7.5,
+        "peak_db": -26.0,
+        "pitch": null
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Glockenspiel/glock_loud_G5_01.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 7.5,
+        "peak_db": -23.8,
+        "pitch": 89.36
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Glockenspiel/glock_medium_G6_01.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 4.78,
+        "peak_db": -28.1,
+        "pitch": 102.8
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Glockenspiel/glock_soft_C7_03.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 4.01,
+        "peak_db": -38.3,
+        "pitch": 108.3
+       }
+      ]
+     }
+    ],
+    "sustain": [
+     {
+      "source": "nbo",
+      "samples": 1,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ]
+   }
+  },
+  "xylophone": {
+   "name": "Xylophone",
+   "family": "Percussion",
+   "range": [
+    65,
+    108
+   ],
+   "articulations": {
+    "hit": [
+     {
+      "source": "vsco2ce",
+      "samples": 8,
+      "notes": 8,
+      "named_range": [
+       55,
+       96
+      ],
+      "layers": [
+       "ff"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+12 (3/4)",
+      "format": "44k/24/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Percussion/Xylo/Xylo_Medium_G3_ff_01_far.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 3.62,
+        "peak_db": -5.4,
+        "pitch": 54.94
+       },
+       {
+        "path": "Percussion/Xylo/Xylo_Medium_G4_ff_01_far.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 2.51,
+        "peak_db": -7.5,
+        "pitch": 79.22
+       },
+       {
+        "path": "Percussion/Xylo/Xylo_Medium_G5_ff_01_far.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 1.62,
+        "peak_db": -7.1,
+        "pitch": 90.53
+       },
+       {
+        "path": "Percussion/Xylo/Xylo_Medium_G6_ff_01_far.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 1.39,
+        "peak_db": -12.8,
+        "pitch": 103.2
+       }
+      ]
+     },
+     {
+      "source": "vcsl",
+      "samples": 48,
+      "notes": 8,
+      "named_range": [
+       55,
+       96
+      ],
+      "layers": [
+       "ff",
+       "pp"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+12",
+      "format": "44k/24/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Idiophones/Struck Idiophones/Xylophone/Hard Mallets/Xylo_Hard_G3_ff_01_far.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 6.02,
+        "peak_db": -7.1,
+        "pitch": 66.88
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Xylophone/Soft Mallets/Xylo_Soft_G4_ff_01_far.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 2.15,
+        "peak_db": -13.2,
+        "pitch": 79.26
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Xylophone/Medium Mallets/Xylo_Medium_C6_ff_01_far.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 1.47,
+        "peak_db": -11.6,
+        "pitch": 96.18
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Xylophone/Soft Mallets/Xylo_Soft_C7_pp_01_far.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 2.3,
+        "peak_db": -21.9,
+        "pitch": 108.21
+       }
+      ]
+     }
+    ],
+    "roll": []
+   }
+  },
+  "marimba": {
+   "name": "Marimba",
+   "family": "Percussion",
+   "range": [
+    36,
+    96
+   ],
+   "articulations": {
+    "hit": [
+     {
+      "source": "vsco2ce",
+      "samples": 10,
+      "notes": 10,
+      "named_range": [
+       29,
+       84
+      ],
+      "layers": [
+       "loud"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+12",
+      "format": "44k/24/st",
+      "status": "\u26a0 partial range",
+      "measured": [
+       {
+        "path": "Percussion/Marimba/Marimba_hit_Outrigger_F1_loud_01.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 3.67,
+        "peak_db": -31.3,
+        "pitch": 41.2
+       },
+       {
+        "path": "Percussion/Marimba/Marimba_hit_Outrigger_B2_loud_01.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 5.99,
+        "peak_db": -30.5,
+        "pitch": 59.05
+       },
+       {
+        "path": "Percussion/Marimba/Marimba_hit_Outrigger_G4_loud_01.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 3.02,
+        "peak_db": -23.4,
+        "pitch": 78.98
+       },
+       {
+        "path": "Percussion/Marimba/Marimba_hit_Outrigger_C6_loud_01.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 1.78,
+        "peak_db": -23.3,
+        "pitch": 96.04
+       }
+      ]
+     },
+     {
+      "source": "vcsl",
+      "samples": 30,
+      "notes": 10,
+      "named_range": [
+       29,
+       84
+      ],
+      "layers": [
+       "f",
+       "loud",
+       "soft"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+12",
+      "format": "44k/24/st",
+      "status": "\u26a0 partial range",
+      "measured": [
+       {
+        "path": "Idiophones/Struck Idiophones/Marimba/Marimba_hit_Outrigger_F1_loud_01.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 3.67,
+        "peak_db": -31.3,
+        "pitch": 41.2
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Marimba/Marimba_hit_Outrigger_B2_med_01.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 5.65,
+        "peak_db": -38.5,
+        "pitch": 59.05
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Marimba/Marimba_hit_Outrigger_G4_soft_01.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 3.25,
+        "peak_db": -44.4,
+        "pitch": 78.99
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Marimba/Marimba_hit_Outrigger_C6_soft_01.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 2.51,
+        "peak_db": -64.2,
+        "pitch": null
+       }
+      ]
+     }
+    ],
+    "roll": [],
+    "sustain": [
+     {
+      "source": "nbo",
+      "samples": 1,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ]
+   }
+  },
+  "vibraphone": {
+   "name": "Vibraphone",
+   "family": "Percussion",
+   "range": [
+    53,
+    89
+   ],
+   "articulations": {
+    "hit": [
+     {
+      "source": "vcsl",
+      "samples": 44,
+      "notes": 11,
+      "named_range": [
+       41,
+       76
+      ],
+      "layers": [
+       "v1",
+       "v2",
+       "v3"
+      ],
+      "round_robins": 2,
+      "octave_offset": "+12 (3/4)",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Idiophones/Struck Idiophones/Vibraphone/Hard Mallets/Vibes_hard_F2_v2_rr1_Main.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 3.98,
+        "peak_db": -18.4,
+        "pitch": 94.41
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Vibraphone/Soft Mallets/Vibes_soft_E3_v1_rr2_Main.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 11.8,
+        "peak_db": -29.6,
+        "pitch": 64.0
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Vibraphone/Hard Mallets/Vibes_hard_F4_v2_rr1_Main.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 9.68,
+        "peak_db": -24.7,
+        "pitch": 77.01
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Vibraphone/Soft Mallets/Vibes_soft_E5_v1_rr1_Main.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 5.78,
+        "peak_db": -39.3,
+        "pitch": 88.01
+       }
+      ]
+     }
+    ],
+    "sustain": [
+     {
+      "source": "nbo",
+      "samples": 1,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ]
+   }
+  },
+  "crotales": {
+   "name": "Crotales",
+   "family": "Percussion",
+   "range": [
+    84,
+    108
+   ],
+   "articulations": {
+    "hit": []
+   }
+  },
+  "tubular-bells": {
+   "name": "Tubular Bells",
+   "family": "Percussion",
+   "range": [
+    60,
+    77
+   ],
+   "articulations": {
+    "hit": [
+     {
+      "source": "vsco2ce",
+      "samples": 4,
+      "notes": 4,
+      "named_range": [
+       60,
+       77
+      ],
+      "layers": [
+       "v3",
+       "v4"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+0 (1/2)",
+      "format": "44k/16/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Percussion/TB_hit_C4_v4_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 19.14,
+        "peak_db": -12.9,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/TB_hit_G4_v4_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 16.29,
+        "peak_db": -6.9,
+        "pitch": null
+       },
+       {
+        "path": "Percussion/TB_hit_C5_v4_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 42.17,
+        "peak_db": -5.4,
+        "pitch": 72.26
+       },
+       {
+        "path": "Percussion/TB_hit_F5_v3_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 13.25,
+        "peak_db": -22.8,
+        "pitch": 29.63
+       }
+      ]
+     },
+     {
+      "source": "vcsl",
+      "samples": 40,
+      "notes": 17,
+      "named_range": [
+       48,
+       77
+      ],
+      "layers": [
+       "f",
+       "ff",
+       "fff",
+       "p",
+       "pp",
+       "v2",
+       "v4"
+      ],
+      "round_robins": 3,
+      "octave_offset": "-24 (2/4)",
+      "format": "44k/24/st",
+      "status": "\u26a0 partial range",
+      "measured": [
+       {
+        "path": "Idiophones/Struck Idiophones/Tubular Bells 1/chimes_C3_f_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 11.36,
+        "peak_db": -11.1,
+        "pitch": 27.96
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Tubular Bells 1/chimes_C4_p_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 19.83,
+        "peak_db": -25.5,
+        "pitch": 71.95
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Tubular Bells 2/TB_hit_G4_v2_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 12.41,
+        "peak_db": -17.5,
+        "pitch": 20.59
+       },
+       {
+        "path": "Idiophones/Struck Idiophones/Tubular Bells 2/TB_hit_F5_v4_1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 12.19,
+        "peak_db": -9.3,
+        "pitch": 49.83
+       }
+      ]
+     }
+    ],
+    "sustain": [
+     {
+      "source": "nbo",
+      "samples": 1,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ]
+   }
+  },
+  "harp": {
+   "name": "Concert Harp",
+   "family": "Keys & Harp",
+   "range": [
+    23,
+    104
+   ],
+   "articulations": {
+    "pluck": [
+     {
+      "source": "vsco2ce",
+      "samples": 23,
+      "notes": 23,
+      "named_range": [
+       28,
+       101
+      ],
+      "layers": [
+       "f",
+       "mf",
+       "mp"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+0",
+      "format": "44k/16/st",
+      "status": "\u26a0 partial range",
+      "measured": [
+       {
+        "path": "Strings/Harp/KSHarp_E1_f.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 22.68,
+        "peak_db": -33.3,
+        "pitch": 27.92
+       },
+       {
+        "path": "Strings/Harp/KSHarp_E3_mf.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 13.95,
+        "peak_db": -30.0,
+        "pitch": 52.0
+       },
+       {
+        "path": "Strings/Harp/KSHarp_E5_mf.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 6.64,
+        "peak_db": -22.3,
+        "pitch": 75.89
+       },
+       {
+        "path": "Strings/Harp/KSHarp_D7_f.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 2.25,
+        "peak_db": -18.6,
+        "pitch": 97.94
+       }
+      ]
+     },
+     {
+      "source": "vcsl",
+      "samples": 45,
+      "notes": 23,
+      "named_range": [
+       28,
+       101
+      ],
+      "layers": [
+       "f",
+       "mf",
+       "mp",
+       "p"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+0",
+      "format": "44k/16/st",
+      "status": "\u26a0 partial range",
+      "measured": [
+       {
+        "path": "Chordophones/Composite Chordophones/Concert Harp/KSHarp_E1_f1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 21.14,
+        "peak_db": -34.7,
+        "pitch": 27.85
+       },
+       {
+        "path": "Chordophones/Composite Chordophones/Concert Harp/KSHarp_G3_f1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 13.97,
+        "peak_db": -16.1,
+        "pitch": 55.03
+       },
+       {
+        "path": "Chordophones/Composite Chordophones/Concert Harp/KSHarp_G5_mf1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 5.95,
+        "peak_db": -26.9,
+        "pitch": 78.94
+       },
+       {
+        "path": "Chordophones/Composite Chordophones/Concert Harp/KSHarp_F7_p1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 16,
+        "seconds": 1.31,
+        "peak_db": -46.9,
+        "pitch": 100.99
+       }
+      ]
+     }
+    ],
+    "harmonics": [],
+    "sustain": [
+     {
+      "source": "nbo",
+      "samples": 1,
+      "notes": 0,
+      "named_range": null,
+      "layers": [],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "-",
+      "status": "SFZ only here (samples on bandshed.net); licence per folder",
+      "measured": []
+     }
+    ]
+   }
+  },
+  "celesta": {
+   "name": "Celesta",
+   "family": "Keys & Harp",
+   "range": [
+    60,
+    108
+   ],
+   "articulations": {
+    "hit": []
+   }
+  },
+  "piano": {
+   "name": "Concert Grand",
+   "family": "Keys & Harp",
+   "range": [
+    21,
+    108
+   ],
+   "articulations": {
+    "sustain": [
+     {
+      "source": "vcsl",
+      "samples": 252,
+      "notes": 42,
+      "named_range": [
+       22,
+       104
+      ],
+      "layers": [
+       "vl2",
+       "vl3",
+       "vl4"
+      ],
+      "round_robins": 1,
+      "octave_offset": "+0",
+      "format": "44k/24/st",
+      "status": "\u2713",
+      "measured": [
+       {
+        "path": "Chordophones/Zithers/Grand Piano, Steinway B/NoSus/JHPiano_NoSus_Close_A#0_vl2_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 18.71,
+        "peak_db": -9.2,
+        "pitch": 22.12
+       },
+       {
+        "path": "Chordophones/Zithers/Grand Piano, Steinway B/NoSus/JHPiano_NoSus_Close_D3_vl2_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 19.82,
+        "peak_db": -11.9,
+        "pitch": 50.01
+       },
+       {
+        "path": "Chordophones/Zithers/Grand Piano, Steinway B/NoSus/JHPiano_NoSus_Close_F#5_vl2_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 11.79,
+        "peak_db": -9.0,
+        "pitch": 77.99
+       },
+       {
+        "path": "Chordophones/Zithers/Grand Piano, Steinway B/Sus/JHPiano_Sus_Close_G#7_vl4_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 6.05,
+        "peak_db": -5.2,
+        "pitch": null
+       }
+      ]
+     }
+    ],
+    "release": [
+     {
+      "source": "vcsl",
+      "samples": 99,
+      "notes": 33,
+      "named_range": [
+       22,
+       86
+      ],
+      "layers": [
+       "vl2",
+       "vl3",
+       "vl4"
+      ],
+      "round_robins": 1,
+      "octave_offset": "-",
+      "format": "44k/24/st",
+      "status": "\u26a0 partial range",
+      "measured": [
+       {
+        "path": "Chordophones/Zithers/Grand Piano, Steinway B/Rel/JHPiano_NoSusRel_Close_A#0_vl2_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 0.88,
+        "peak_db": -55.6,
+        "pitch": null
+       },
+       {
+        "path": "Chordophones/Zithers/Grand Piano, Steinway B/Rel/JHPiano_NoSusRel_Close_G#2_vl2_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 0.78,
+        "peak_db": -46.3,
+        "pitch": null
+       },
+       {
+        "path": "Chordophones/Zithers/Grand Piano, Steinway B/Rel/JHPiano_NoSusRel_Close_F#4_vl2_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 0.62,
+        "peak_db": -56.2,
+        "pitch": null
+       },
+       {
+        "path": "Chordophones/Zithers/Grand Piano, Steinway B/Rel/JHPiano_NoSusRel_Close_D6_vl4_rr1.wav",
+        "rate": 44100,
+        "channels": 2,
+        "bits": 24,
+        "seconds": 0.74,
+        "peak_db": -54.6,
+        "pitch": null
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ "unmatched": {
+  "vcsl:Chordophones/Zithers": 1256,
+  "vsco2ce:Brass/OldTrombone": 388,
+  "vcsl:Aerophones/Edge-blown Aerophones": 360,
+  "vcsl:Idiophones/Struck Idiophones": 351,
+  "vcsl:Membranophones/Struck Membranophones": 332,
+  "vsco2ce:VSCO 1 Percussion/drums": 245,
+  "vcsl:Aerophones/Free Aerophones": 235,
+  "vcsl:Electrophones/TX81Z": 189,
+  "vsco2ce:VSCO 1 Percussion/varMetal": 150,
+  "vcsl:Aerophones/Reed Aerophones": 144,
+  "vcsl:Chordophones/Composite Chordophones": 115,
+  "vsco2ce:VSCO 1 Percussion/varWood": 112,
+  "vcsl:Idiophones/Plucked Idiophones": 109,
+  "vsco2ce:Miscellania Raw/Misc 1": 80,
+  "vsco2ce:Keys/Upright Nr1": 79,
+  "vsco2ce:Miscellania Raw/Misc 2": 78,
+  "vsco2ce:Keys/Upright Piano": 69,
+  "vsco2ce:Keys/Organ": 65,
+  "vcsl:Idiophones/Friction Idiophones": 16,
+  "vcsl:Aerophones/Lip Aerophones": 12,
+  "vcsl:Membranophones/Other Membranophones": 3,
+  "vsco2ce:Percussion/Anvil_Hit1_v1_Sum.wav": 1,
+  "vsco2ce:Percussion/Anvil_Hit1_v2_Sum.wav": 1,
+  "vsco2ce:Percussion/Anvil_Hit1_v3_Sum.wav": 1,
+  "vsco2ce:Percussion/BellTree_Stroke1_v1_Sum.wav": 1,
+  "vsco2ce:Percussion/BellTree_Stroke2_v1_Sum.wav": 1,
+  "vsco2ce:Percussion/BellTree_Stroke3_v1_Sum.wav": 1,
+  "vsco2ce:Percussion/BellTree_Stroke4_v1_Sum.wav": 1,
+  "vsco2ce:Percussion/BrakeDrum1_Hammer_v1_Sum.wav": 1,
+  "vsco2ce:Percussion/BrakeDrum1_Hammer_v2_Sum.wav": 1,
+  "vsco2ce:Percussion/BrakeDrum1_Hammer_v3_Sum.wav": 1,
+  "vsco2ce:Percussion/Claves1_Hit_v1_rr1_Sum.wav": 1,
+  "vsco2ce:Percussion/Claves1_Hit_v1_rr2_Sum.wav": 1,
+  "vsco2ce:Percussion/Claves1_Hit_v2_rr1_Sum.wav": 1,
+  "vsco2ce:Percussion/Claves1_Hit_v2_rr2_Sum.wav": 1,
+  "vsco2ce:Percussion/Claves1_Hit_v3_rr1_Sum.wav": 1,
+  "vsco2ce:Percussion/Claves1_Hit_v3_rr2_Sum.wav": 1,
+  "vsco2ce:Percussion/Conga-HitN_v1_rr1_Sum.wav": 1,
+  "vsco2ce:Percussion/Conga-HitN_v1_rr2_Sum.wav": 1,
+  "vsco2ce:Percussion/Conga-HitN_v2_rr1_Sum.wav": 1,
+  "vsco2ce:Percussion/Conga-HitN_v2_rr2_Sum.wav": 1,
+  "vsco2ce:Percussion/Conga-HitN_v3_rr1_Sum.wav": 1,
+  "vsco2ce:Percussion/Conga-HitN_v3_rr2_Sum.wav": 1,
+  "vsco2ce:Percussion/Conga-Tap1_v1_rr1_Sum.wav": 1,
+  "vsco2ce:Percussion/Conga-Tap1_v1_rr2_Sum.wav": 1,
+  "vsco2ce:Percussion/Cowbell1_Hit_v1_rr1_Sum.wav": 1,
+  "vsco2ce:Percussion/Cowbell1_Hit_v1_rr2_Sum.wav": 1,
+  "vsco2ce:Percussion/Cowbell1_Hit_v2_rr1_Sum.wav": 1,
+  "vsco2ce:Percussion/Cowbell1_Hit_v2_rr2_Sum.wav": 1,
+  "vsco2ce:Percussion/Cowbell1_Hit_v3_rr1_Sum.wav": 1,
+  "vsco2ce:Percussion/Cowbell1_Hit_v3_rr2_Sum.wav": 1,
+  "vsco2ce:Percussion/Cowbell1_Hit_v4_rr1_Sum.wav": 1,
+  "vsco2ce:Percussion/Cowbell1_Hit_v4_rr2_Sum.wav": 1,
+  "vsco2ce:Percussion/Guiro-Fast_v1_Sum.wav": 1,
+  "vsco2ce:Percussion/Guiro-Hit_v1_rr1_Sum.wav": 1,
+  "vsco2ce:Percussion/Guiro-Hit_v1_rr2_Sum.wav": 1,
+  "vsco2ce:Percussion/Guiro-M_v1_Sum.wav": 1,
+  "vsco2ce:Percussion/Guiro-Slow_v1_Sum.wav": 1,
+  "vsco2ce:Percussion/LogDrumHi_MedM_v1_rr1_Sum.wav": 1,
+  "vsco2ce:Percussion/LogDrumHi_MedM_v1_rr2_Sum.wav": 1,
+  "vsco2ce:Percussion/LogDrumHi_MedM_v2_rr1_Sum.wav": 1,
+  "vsco2ce:Percussion/LogDrumHi_MedM_v2_rr2_Sum.wav": 1,
+  "vsco2ce:Percussion/LogDrumHi_MedM_v3_rr1_Sum.wav": 1,
+  "vsco2ce:Percussion/LogDrumHi_MedM_v3_rr2_Sum.wav": 1,
+  "vsco2ce:Percussion/LogDrumLo_MedM_v1_rr1_Sum.wav": 1,
+  "vsco2ce:Percussion/LogDrumLo_MedM_v1_rr2_Sum.wav": 1,
+  "vsco2ce:Percussion/LogDrumLo_MedM_v2_rr1_Sum.wav": 1,
+  "vsco2ce:Percussion/LogDrumLo_MedM_v2_rr2_Sum.wav": 1,
+  "vsco2ce:Percussion/LogDrumLo_MedM_v3_rr1_Sum.wav": 1,
+  "vsco2ce:Percussion/LogDrumLo_MedM_v3_rr2_Sum.wav": 1,
+  "vsco2ce:Percussion/Quinto-HitN_v1_rr1_Sum.wav": 1,
+  "vsco2ce:Percussion/Quinto-HitN_v1_rr2_Sum.wav": 1,
+  "vsco2ce:Percussion/Quinto-HitN_v2_rr1_Sum.wav": 1,
+  "vsco2ce:Percussion/Quinto-HitN_v2_rr2_Sum.wav": 1,
+  "vsco2ce:Percussion/Quinto-HitN_v3_rr1_Sum.wav": 1,
+  "vsco2ce:Percussion/Quinto-HitN_v3_rr2_Sum.wav": 1,
+  "vsco2ce:Percussion/Quinto-Tap1_v1_rr1_Sum.wav": 1,
+  "vsco2ce:Percussion/Quinto-Tap1_v1_rr2_Sum.wav": 1,
+  "vsco2ce:Percussion/Ratchet1-Crank_v1_rr1_Sum.wav": 1,
+  "vsco2ce:Percussion/Ratchet1-Crank_v1_rr2_Sum.wav": 1,
+  "vsco2ce:Percussion/Ratchet1-Fast_v1_rr1_Sum.wav": 1,
+  "vsco2ce:Percussion/Ratchet1-Slow_v1_rr1_Sum.wav": 1,
+  "vsco2ce:Percussion/Sleighbells_Hit_v1_rr1_Mid.wav": 1,
+  "vsco2ce:Percussion/Sleighbells_Hit_v1_rr2_Mid.wav": 1,
+  "vsco2ce:Percussion/Tumba-HitN_v1_rr1_Sum.wav": 1,
+  "vsco2ce:Percussion/Tumba-HitN_v1_rr2_Sum.wav": 1,
+  "vsco2ce:Percussion/Tumba-HitN_v2_rr1_Sum.wav": 1,
+  "vsco2ce:Percussion/Tumba-HitN_v2_rr2_Sum.wav": 1,
+  "vsco2ce:Percussion/Tumba-HitN_v3_rr1_Sum.wav": 1,
+  "vsco2ce:Percussion/Tumba-HitN_v3_rr2_Sum.wav": 1,
+  "vsco2ce:Percussion/Tumba-Tap1_v1_rr1_Sum.wav": 1,
+  "vsco2ce:Percussion/Tumba-Tap1_v1_rr2_Sum.wav": 1,
+  "vsco2ce:Percussion/alien1_ff.wav": 1,
+  "vsco2ce:Percussion/alien1_pp.wav": 1,
+  "vsco2ce:Percussion/alien2_f.wav": 1,
+  "vsco2ce:Percussion/alien3_f.wav": 1,
+  "vsco2ce:Percussion/bassdrum_rub1_v1.wav": 1,
+  "vsco2ce:Percussion/bassdrum_rub2_v1.wav": 1,
+  "vsco2ce:Percussion/bassdrum_rub3_v1.wav": 1,
+  "vsco2ce:Percussion/bassdrum_rub4_v1.wav": 1,
+  "vsco2ce:Percussion/gongscrape_mf.wav": 1,
+  "vsco2ce:Percussion/gongscrape_pp.wav": 1,
+  "vsco2ce:Percussion/susCymb1-bow-1.wav": 1,
+  "vsco2ce:Percussion/susCymb1-bow-2.wav": 1,
+  "vsco2ce:Percussion/susCymb1-bow-3.wav": 1,
+  "vsco2ce:Percussion/susCymb1-bow-4.wav": 1,
+  "vsco2ce:Percussion/susCymb1-scrape1_v1.wav": 1,
+  "vsco2ce:Percussion/susCymb1-scrape2_v1.wav": 1,
+  "vsco2ce:Percussion/timp-snare_f.wav": 1,
+  "vsco2ce:Percussion/timpsnare_mf.wav": 1,
+  "vsco2ce:Percussion/timpsnare_pp.wav": 1,
+  "vsco2ce:Percussion/timpsnare_ppp.wav": 1,
+  "vsco2ce:Percussion/timpsnaretenor_f.wav": 1,
+  "vsco2ce:Percussion/timpsnaretenor_ff.wav": 1,
+  "vsco2ce:Percussion/timpsnaretenor_fff.wav": 1,
+  "vsco2ce:Percussion/vibraring_v1_rr1.wav": 1,
+  "vsco2ce:Percussion/vibraring_v1_rr2.wav": 1,
+  "vsco2ce:Percussion/zap1_v1.wav": 1,
+  "vsco2ce:Percussion/zap2_v1.wav": 1,
+  "vsco2ce:Percussion/zap3_v1.wav": 1,
+  "vsco2ce:Percussion/zap4_v1.wav": 1
+ }
+}

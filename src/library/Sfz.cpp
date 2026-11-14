@@ -107,12 +107,20 @@ Instrument parse (const std::string& textIn)
         if (header != Header::Region)
             return;
         Opcodes all = global;
-        for (const auto& [k, v] : master)
-            all[k] = v;
-        for (const auto& [k, v] : group)
-            all[k] = v;
-        for (const auto& [k, v] : region)
-            all[k] = v;
+        // 0.66.0: key= stands for lokey, hikey and pitch_keycenter together, so a key= on an inner level replaces an outer level's
+        // three (a <region> key=a5 inside a <group> lokey=c4 hikey=b4 plays a5 only).
+        const auto merge = [&all] (const Opcodes& level)
+        {
+            if (level.count ("key") != 0)
+                for (const char* k : { "lokey", "hikey", "pitch_keycenter" })
+                    if (level.count (k) == 0)
+                        all.erase (k);
+            for (const auto& [k, v] : level)
+                all[k] = v;
+        };
+        merge (master);
+        merge (group);
+        merge (region);
         Region r;
         const auto get = [&all] (std::initializer_list<const char*> names) -> const std::string*
         {

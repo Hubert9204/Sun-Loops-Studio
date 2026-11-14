@@ -86,7 +86,26 @@ with a new, empty project), 44 bars of synthwave in A minor at 110 BPM, in Song 
 Every channel has its own mixer track with insert effects (EQ, compressor, transient, chorus, phaser, delay, overdrive, filter,
 stereo imager, Time Shaper), aux A is a hall reverb and aux B a ping-pong delay, the master has a filter, an EQ and the maximizer, and
 two VCA groups hold the synths and the drums and bass. Without SunBurst and HexForge (a build without them) their four channels play
-built-in synths. *File > Open the demo song* brings it back at any time; it is not saved anywhere until you save it.
+built-in synths. *File > Open a demo project > Sunrise Drive* brings it back at any time; it is not saved anywhere until you save it.
+
+**Demo projects (0.65.0).** The browser's first folder, **Demo Projects**, holds three finished songs that come with the program;
+**double-click** one (or right-click > *Open*, or *File > Open a demo project*) to open it. A demo opens as a new project named after
+it: **Save** writes `<name>.slp` into your Projects folder and the demo itself never changes, so you can take it apart freely. Rest
+the mouse on a demo to read what it is.
+
+| Demo | Style | What to listen and look for |
+| --- | --- | --- |
+| **Sunrise Drive** | synthwave, 110 BPM, A minor, 44 bars | the demo song above, as a project file |
+| **White Line** | melodic techno, 129 BPM, C minor, 96 bars | a rolling SunBurst bass and a pad ducked by the kick (compressors with the kick's track as sidechain), offbeat HexForge stabs, a HexForge melody first in long notes and then in a 3-3-2 rhythm, sixteenth arpeggios that follow Cm - Bb - Ab - Bb; a breakdown (bars 49-64) with the pad's and the arp's filters opening (plugin automation), a clap roll, a noise riser and a high-pass sweep on the master; reversed cymbals (audio clips); the synths and the drums fading out on their two VCA groups. Time markers name the sections. |
+| **Ryo** | lo-fi hip hop, 92 BPM, C minor, 64 bars | acoustic drums with swung hats, all routed to a **Drum Bus** track (free routing) that low-passes them in the intro, crushes them a little (Squeeze) and stops like a tape at the end of the verse (Time Shaper automation); a SunBurst electric piano with chorus, vibrato and bit reduction on Cm9 - Ebmaj9 - Abmaj9 - Fm9; the sampled electric bass ducked by the kick; a kalimba hook through a tape delay; a HexForge counter-line; vibraphone arpeggios in the bridge; tape hiss and vinyl crackle; a tape stop on the master in the last bar. |
+
+White Line and Ryo were made from two sketches - their melodies, bass lines and grooves - finished with new parts, a form, a mix and
+automation by `tools/demos` (see its README).
+
+The browser's second folder, **My Projects**, lists the `.slp` files in `~/Music/Sun Loops Studio/Projects` (where *Save* puts an
+untitled project), sub-folders included; double-click one to open it (right-click > *Show in the file manager* to find the file).
+Project files carry the program's icon, in the browser and in the file manager (Linux: the `.slp` type's icon is installed with the
+program; macOS: the Finder shows the app's icon on `.slp` files).
 
 Everything in the song is saved in one `.slp` file: channels (instrument, sample, volume, pan, pitch, swing,
 mixer track), all patterns and their notes, the playlist, the mixer (faders, balance, mute/solo, effect chains and
@@ -289,6 +308,8 @@ The sidebar on the left lists your sounds as a tree. Click the arrow of a folder
 
 | Folder | Contents |
 | --- | --- |
+| Demo Projects | The three demo songs (0.65.0, see *Projects*): double-click one to open it. |
+| My Projects | Your projects, from `~/Music/Sun Loops Studio/Projects` (0.65.0): double-click one to open it. |
 | Samples | The built-in sounds (kick, snare, hat), then the audio files (WAV, FLAC, OGG, AIFF) found in `~/Music/Sun Loops Studio/Samples`, with its sub-folders. |
 | Drum Kits | A built-in kit, then one entry per sub-folder of `~/Music/Sun Loops Studio/Drum Kits`. |
 | Instruments | *Synth* and *Sampler*. |
@@ -692,6 +713,20 @@ The voices run at twice the sample rate and are filtered back down, so hard FM a
 presets** in eight categories - Neuro, Reese, Dubstep, DnB, Cyberpunk, Dark Synth, Industrial, FX & Metal - with levelled
 volumes; in each the mod wheel adds FM, Macro 1 = cutoff, Macro 2 = FM depth, Macro 3 = distortion, Macro 4 = unison width.
 Your presets go to `~/.config/HexForge/Presets`.
+
+## SunSymphony, the orchestral sampler (0.66.0, preview)
+
+SunSymphony is the orchestral sampler that comes with the program (VST3 and Standalone): Browser > Instruments >
+*SunSymphony (orchestral sampler, preview)*. This first version is the engine without its library yet:
+
+- **16 parts**, one per MIDI channel (part 1 listens to channel 1...). Double-click (or right-click) a part to choose its
+  instrument: *Test Tone* (built in), *Load an SFZ file...* or *Empty*. Part 1 plays the test tone until you choose otherwise.
+- **128 voices**; when more are needed, the oldest stop with a short fade.
+- Each part follows **CC7** (volume), **CC10** (pan), **CC11** (expression) and **CC64** (sustain pedal).
+- The keyboard at the bottom plays part 1; *Master* sets the overall level; the parts' instruments are saved with the project.
+
+The free orchestral library (strings, woodwinds, brass, percussion, harp, celesta, piano) will be downloaded from inside the plugin
+into `~/Music/Sun Loops Studio/Orchestral`, in the next versions.
 
 ## Piano Roll
 
