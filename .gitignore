@@ -9,3 +9,4 @@ compile_commands.json
 *.swo
 build-appimage/
 dist/
+__pycache__/
