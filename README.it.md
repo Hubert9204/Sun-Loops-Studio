@@ -116,8 +116,8 @@ con precisione cosa è verificato, cosa no e cosa manca.
   un filtro ladder in stile Moog con inviluppo e LFO dedicati, unison, pitch drop, effetti e 40 preset (neuro, reese, dubstep,
   DnB, cyberpunk, dark synth, industrial, FX metallici). Browser > Instruments > HexForge.
 - **SunSymphony** (0.66.0, anteprima) - il campionatore orchestrale (VST3 e Standalone) in costruzione: 16 parti sui 16 canali MIDI,
-  128 voci, strumenti SFZ (zone, strati di velocity, loop), interpolazione Hermite; finché la sua libreria orchestrale gratuita non si
-  potrà scaricare dall'interno, la parte 1 suona un tono di prova incorporato. Browser > Instruments > SunSymphony.
+  128 voci, strumenti SFZ (zone, strati di velocity, round robin, loop), interpolazione Hermite. La sua pagina Libreria (0.67.0)
+  scarica con un clic 29 strumenti orchestrali (3 GB, suoni gratuiti CC0 di Versilian Studios). Browser > Instruments > SunSymphony.
 - **Plugin** - strumenti ed effetti VST3, LV2 e LADSPA: si cercano dal browser, doppio clic o trascinamento di uno strumento per un canale,
   un effetto si sceglie in uno slot del mixer, ognuno ha la sua finestra; le impostazioni si salvano nel progetto, anche se il plugin manca.
 - **Mixer** (`F9`) - 8 tracce verticali all'inizio e fino a **500** (0.29.0: il **+** dopo l'ultima traccia ne aggiunge altre), ognuna con fader e dB, bilanciamento stereo, mute, solo, indicatore

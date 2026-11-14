@@ -725,8 +725,19 @@ SunSymphony is the orchestral sampler that comes with the program (VST3 and Stan
 - Each part follows **CC7** (volume), **CC10** (pan), **CC11** (expression) and **CC64** (sustain pedal).
 - The keyboard at the bottom plays part 1; *Master* sets the overall level; the parts' instruments are saved with the project.
 
-The free orchestral library (strings, woodwinds, brass, percussion, harp, celesta, piano) will be downloaded from inside the plugin
-into `~/Music/Sun Loops Studio/Orchestral`, in the next versions.
+### Downloading the orchestra (0.67.0)
+
+The gold **Library / Download sounds** button opens the Library page (it opens by itself while nothing is installed):
+
+1. Tick the instruments you want: **Essentials** ticks a first orchestra (string sections, woodwinds, brass, timpani, cymbals, harp;
+   1.7 GB), **All** everything (29 instruments, 3 GB). Each row shows the articulations and the size.
+2. Press **Download**. The bar shows the progress; you can keep playing meanwhile. **Stop** pauses: Download again continues
+   where it stopped. Every file is checked (SHA-256) before it is kept.
+3. Double-click a part > **Orchestra** > family > instrument > articulation. The first instrument that arrives goes to part 1.
+
+**Remove** deletes the ticked instruments from the disk; **Open folder** shows `~/Music/Sun Loops Studio/Orchestral`, which every
+SunSymphony shares. The sounds are VSCO 2 Community Edition and VCSL by Versilian Studios, CC0 (public domain): free for any use.
+Percussion is laid out one kind of stroke per key from C2 upwards (the *Notes* column of `tools/orchestra/catalog.md` lists them).
 
 ## Piano Roll
 

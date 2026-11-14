@@ -4,6 +4,7 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 
 #include "orchestra/Engine.h"
+#include "sunsymphony/LibraryManager.h"
 
 // SunSymphony (0.66.0, Milestone 0): the orchestral sampler plugin's processor. 16 parts on the 16 MIDI channels; each plays an
 // instrument: the built-in test tone (no library needed) or an SFZ file. The orchestral library, its download manager and the
@@ -44,6 +45,8 @@ public:
     // Where the orchestral library lives (Milestone 4 lets the user move it).
     static juce::File defaultLibraryFolder();
 
+    LibraryManager& library() noexcept { return *sharedLibrary; }
+
     int activeVoices() const noexcept { return engine.activeVoices(); }
     float masterGain() const noexcept { return master->get(); }
     juce::MidiKeyboardState& keyboardState() noexcept { return keyboard; }
@@ -51,7 +54,7 @@ public:
     static std::function<juce::AudioProcessorEditor* (SunSymphonyProcessor&)>& editorFactory();
 
 private:
-    void timerCallback() override { engine.collectRetired(); }
+    void timerCallback() override;
 
     orchestra::Engine engine;
     std::array<juce::String, orchestra::kParts> sources;
@@ -59,6 +62,8 @@ private:
     juce::MidiKeyboardState keyboard; // the editor's on-screen keyboard plays part 1
     juce::AudioFormatManager formats;
     float smoothedGain = 1.0f;
+    SharedLibrary sharedLibrary;   // the downloads (one manager for every SunSymphony in the process)
+    int libraryGeneration = -1;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SunSymphonyProcessor)
 };

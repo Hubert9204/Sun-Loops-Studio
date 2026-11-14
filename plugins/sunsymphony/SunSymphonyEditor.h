@@ -1,5 +1,6 @@
 #pragma once
 
+#include "sunsymphony/LibraryPanel.h"
 #include "sunsymphony/SunSymphonyProcessor.h"
 
 // SunSymphony's editor (Milestone 0): the 16 parts with their instruments, a master level, the voice count and an on-screen
@@ -19,6 +20,8 @@ private:
     void timerCallback() override;
     void refreshParts();
     void choose (int part);
+    void showLibrary (bool show);
+    void updateLibraryNote();
 
     SunSymphonyProcessor& processor;
     juce::ListBox parts;
@@ -29,5 +32,8 @@ private:
     juce::MidiKeyboardComponent keyboard;
     std::unique_ptr<juce::FileChooser> chooser;
     std::unique_ptr<juce::SliderParameterAttachment> masterAttachment;
+    juce::TextButton libraryButton { "Library / Download sounds" };
+    std::unique_ptr<LibraryPanel> libraryPanel;
+    int lastGeneration = -1;
 };
 } // namespace sunsymphony

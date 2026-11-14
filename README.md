@@ -128,8 +128,8 @@ plugins. See [docs/roadmap.md](docs/roadmap.md) for exactly what is and is not v
   Moog-style ladder filter with its own envelope and LFO, unison, pitch drop, effects and 40 presets (neuro, reese, dubstep,
   DnB, cyberpunk, dark synth, industrial, metal FX). Browser > Instruments > HexForge.
 - **SunSymphony** (0.66.0, preview) - the orchestral sampler plugin (VST3 and Standalone) in the making: 16 parts on the 16 MIDI
-  channels, 128 voices, SFZ instruments (zones, velocity layers, loops), Hermite interpolation; until its free orchestral library
-  can be downloaded from inside it, part 1 plays a built-in test tone. Browser > Instruments > SunSymphony.
+  channels, 128 voices, SFZ instruments (zones, velocity layers, round robins, loops), Hermite interpolation. Its Library page (0.67.0)
+  downloads 29 orchestral instruments (3 GB, free CC0 sounds from Versilian Studios) with one click. Browser > Instruments > SunSymphony.
 - **Plugins** - VST3, LV2 and LADSPA instruments and effects: scan them from the browser, double-click or drag an instrument for a channel,
   pick an effect in a mixer slot, open the plugin's own window; their settings are saved in the project, and a missing plugin keeps them.
 - **Automation** - right-click a volume, pan, fader or effect parameter > *Create automation clip*; clips live on four lanes under the

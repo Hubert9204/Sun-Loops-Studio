@@ -58,9 +58,10 @@ private:
         int part = 0, key = 0;
         bool held = false;       // the key is down
         bool pedalHeld = false;  // released while the sustain pedal was down
+        bool oneShot = false;    // plays to its end (or until stolen)
         std::uint64_t order = 0; // when it started (for stealing)
 
-        void release() noexcept { if (state == State::Playing) state = State::Releasing; }
+        void release() noexcept { if (state == State::Playing && ! oneShot) state = State::Releasing; }
         void kill (float sampleRate) noexcept
         {
             if (state == State::Idle)
@@ -76,6 +77,7 @@ private:
         std::shared_ptr<const Instrument> active;   // audio thread
         float volume = 1.0f, pan = 0.0f, expression = 1.0f;
         bool pedal = false;
+        unsigned roundRobin = 0; // notes played (round-robin zones take turns)
     };
 
     Voice* startVoice() noexcept;

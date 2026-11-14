@@ -41,10 +41,15 @@ struct Region
     float pan = 0.0f;        // -1..+1
     LoopMode loop = LoopMode::Off;
     int loopStart = 0, loopEnd = 0; // frames; loopEnd > loopStart when the region loops
+    int seqLength = 1, seqPosition = 1; // round robin: plays on the notes whose count (modulo seqLength) is seqPosition - 1
+    float keytrack = 100.0f;  // cents per key away from rootKey (0: unpitched, every key plays the sample as recorded)
+    bool oneShot = false;     // the key's release does not stop it: it plays to its end (percussion)
+    float releaseSeconds = -1.0f; // its own release time (-1: the instrument's)
 
-    bool answers (int key, int velocity) const noexcept
+    bool answers (int key, int velocity, unsigned roundRobin = 0) const noexcept
     {
-        return key >= loKey && key <= hiKey && velocity >= loVel && velocity <= hiVel && sample != nullptr && sample->frames() >= 4;
+        return key >= loKey && key <= hiKey && velocity >= loVel && velocity <= hiVel && sample != nullptr && sample->frames() >= 4
+               && (seqLength <= 1 || static_cast<int> (roundRobin % static_cast<unsigned> (seqLength)) == seqPosition - 1);
     }
     bool loops() const noexcept { return loop != LoopMode::Off && loopEnd > loopStart + 1 && sample != nullptr && loopEnd <= sample->frames(); }
 };
@@ -60,13 +65,14 @@ struct Instrument
     float releaseSeconds = 0.25f;
 
     // The zones a note plays (several when zones overlap, e.g. a left and a right channel). At most `max` are written to `out`.
-    int pick (int key, int velocity, const Region** out, int max) const noexcept
+    // `roundRobin` counts the notes played (the engine keeps one count per part); zones in a round-robin sequence take turns.
+    int pick (int key, int velocity, const Region** out, int max, unsigned roundRobin = 0) const noexcept
     {
         int n = 0;
         if (key < playableLo || key > playableHi)
             return 0;
         for (const auto& r : regions)
-            if (n < max && r.answers (key, velocity))
+            if (n < max && r.answers (key, velocity, roundRobin))
                 out[n++] = &r;
         return n;
     }

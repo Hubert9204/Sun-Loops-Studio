@@ -75,6 +75,11 @@ std::shared_ptr<const Instrument> Instrument::fromSfz (const std::string& sfzTex
         r.tuneCents = static_cast<float> (z.tuneCents);
         r.gainDb = static_cast<float> (z.volumeDb);
         r.pan = static_cast<float> (std::clamp (z.pan / 100.0, -1.0, 1.0));
+        r.seqLength = z.seqLength;
+        r.seqPosition = std::min (z.seqPosition, z.seqLength);
+        r.keytrack = static_cast<float> (z.keytrack);
+        r.oneShot = z.oneShot;
+        r.releaseSeconds = static_cast<float> (z.ampRelease);
         if (z.loop && z.loopEnd > z.loopStart && z.loopStart >= 0)
         {
             r.loop = LoopMode::Forward;

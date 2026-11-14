@@ -165,6 +165,16 @@ Instrument parse (const std::string& textIn)
             r.loopStart = static_cast<long long> (v);
         if (const auto* s = get ({ "loop_end", "loopend" }); s != nullptr && number (*s, v) && v >= 0.0)
             r.loopEnd = static_cast<long long> (v);
+        if (const auto* s = get ({ "seq_length" }); s != nullptr && number (*s, v))
+            r.seqLength = std::clamp (static_cast<int> (v), 1, 100);
+        if (const auto* s = get ({ "seq_position" }); s != nullptr && number (*s, v))
+            r.seqPosition = std::clamp (static_cast<int> (v), 1, 100);
+        if (const auto* s = get ({ "pitch_keytrack" }); s != nullptr && number (*s, v))
+            r.keytrack = std::clamp (v, -1200.0, 1200.0);
+        if (const auto* s = get ({ "loop_mode", "loopmode" }))
+            r.oneShot = lower (*s) == "one_shot";
+        if (const auto* s = get ({ "ampeg_release" }); s != nullptr && number (*s, v))
+            r.ampRelease = std::clamp (v, 0.0, 100.0);
         if (r.hiKey < r.loKey)
             std::swap (r.loKey, r.hiKey);
         if (r.hiVel < r.loVel)
@@ -174,6 +184,7 @@ Instrument parse (const std::string& textIn)
 
     static const char* known[] = { "sample", "key", "lokey", "hikey", "pitch_keycenter", "lovel", "hivel", "tune", "pitch", "transpose",
                                    "volume", "pan", "loop_mode", "loopmode", "loop_start", "loopstart", "loop_end", "loopend", "default_path" };
+    static const char* extra[] = { "seq_length", "seq_position", "pitch_keytrack", "ampeg_release" };
 
     size_t pos = 0;
     while (pos < text.size())
@@ -267,7 +278,9 @@ Instrument parse (const std::string& textIn)
         {
             if (header != Header::Other)
                 ++result.skippedOpcodes; // a <curve>'s or <effect>'s own opcodes are not missed
-            continue;
+            // 0.67.0: kept for SunSymphony all the same (the program's own sampler still counts them as left out).
+            if (std::find_if (std::begin (extra), std::end (extra), [&key] (const char* k) { return key == k; }) == std::end (extra))
+                continue;
         }
         switch (header)
         {

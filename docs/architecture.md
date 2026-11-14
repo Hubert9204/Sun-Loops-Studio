@@ -680,6 +680,13 @@ headless (the export's renderer) with its loudness (BS.1770), true peak and a ba
   `ValueTree`), the editor (parts list, master, voice count, keyboard on part 1) and the entry point. CMake: `SunSymphony_VST3`,
   `SunSymphony_Standalone` (`-DSLS_BUILD_SUNSYMPHONY=OFF` leaves it out); installed to `lib/vst3`.
 - `tools/orchestra/inventory.py`: the coverage report of the free sources (Milestone 0).
+- The Library manager (0.67.0): `plugins/sunsymphony/LibraryManager` reads the catalog built into the plugin
+  (`resources/orchestra/catalog.json` as `SunSymphonyData`, written by `tools/orchestra/catalog.py`): per instrument its SFZ texts and
+  its sample files (GitHub raw URL at a fixed commit, size, SHA-256). One manager per process (`juce::SharedResourcePointer`); a
+  worker thread downloads an instrument's files six at a time with `sls::http::download` (`.part` files, HTTP Range), each to
+  `<file>.unverified` and renamed only when its SHA-256 matches; the SFZ files, CREDITS.txt and the `.sunsymphony-installed` marker
+  are written last. `LibraryPanel` is the page; the processor polls the manager's `generation` to give part 1 the first instrument.
+  `tests/test_sunsymphony_library.cpp` checks the built-in catalog and installs from `file://` URLs.
 
 ### HexForge, the FM synthesizer plugin (0.50.0)
 

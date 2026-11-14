@@ -12885,6 +12885,7 @@ void testSemVerAndUpdates();
 void testSunBurst();
 void testHexForge();
 void testOrchestra();     // tests/test_orchestra.cpp
+void testSunSymphonyLibrary(); // tests/test_sunsymphony_library.cpp
 void testCrashReports();
 void testSessionLog();
 void testHeliosChat();     // tests/test_helios.cpp
@@ -12962,6 +12963,7 @@ int main()
     testDemoProjects();
     testHexForge();
     testOrchestra();
+    testSunSymphonyLibrary();
     testSemVerAndUpdates();
     testCrashReports();
     testHeliosDownload();

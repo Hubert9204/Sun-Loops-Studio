@@ -159,6 +159,42 @@ void testZonesFromSfz()
     supportCheck (after == 0.0f && e.activeVoices() == 0, "SunSymphony: a one-shot zone stops at the end of its sample; a release fades out");
 }
 
+void testRoundRobinAndPercussion()
+{
+    // Two round-robin takes on C4; an unpitched one-shot (a drum) on C2-C3 with its own release.
+    const std::string sfz = "<group> key=c4 seq_length=2\n"
+                            "<region> sample=a.wav seq_position=1\n"
+                            "<region> sample=b.wav seq_position=2\n"
+                            "<group>\n<region> sample=drum.wav lokey=c2 hikey=c3 pitch_keycenter=c2 pitch_keytrack=0 loop_mode=one_shot ampeg_release=0.5\n";
+    auto a = sine (261.6255653, 48000), b = sine (261.6255653, 48000), drum = sine (100.0, 24000);
+    std::string error;
+    const auto inst = Instrument::fromSfz (sfz, "rr", "RR", [&] (const std::string& path) -> std::shared_ptr<const SampleBuffer>
+    {
+        return path == "a.wav" ? a : path == "b.wav" ? b : path == "drum.wav" ? drum : nullptr;
+    }, error);
+    supportCheck (inst != nullptr && inst->regions.size() == 3, "SunSymphony: round robin and percussion zones are read from SFZ");
+    if (inst == nullptr)
+        return;
+    const Region* picked[4];
+    std::vector<const SampleBuffer*> order;
+    for (unsigned note = 0; note < 4; ++note)
+        order.push_back (inst->pick (60, 100, picked, 4, note) == 1 ? picked[0]->sample.get() : nullptr);
+    supportCheck (order[0] == a.get() && order[1] == b.get() && order[2] == a.get() && order[3] == b.get(),
+                  "SunSymphony: round-robin takes alternate, one at a time");
+
+    Engine e;
+    e.prepare (kRate);
+    e.setInstrument (0, inst);
+    e.noteOn (0, 48, 100); // C3: twelve keys above the drum's root, but pitch_keytrack=0
+    e.noteOff (0, 48);     // a one-shot ignores the release
+    const auto o = render (e, 12000);
+    const double f = frequency (o.left, 1200);
+    supportCheck (std::abs (cents (f, 100.0)) < 1.0 && e.activeVoices() == 1,
+                  "SunSymphony: an unpitched one-shot plays at its own pitch on any key, and to its end after the key is released");
+    render (e, 16000);
+    supportCheck (e.activeVoices() == 0, "SunSymphony: the one-shot stops at the end of its sample");
+}
+
 void testVoicesAndParts()
 {
     Engine e;
@@ -274,6 +310,7 @@ void testOrchestra()
     std::cout << "SunSymphony engine\n";
     testPitch();
     testZonesFromSfz();
+    testRoundRobinAndPercussion();
     testVoicesAndParts();
     testRealTime();
 }

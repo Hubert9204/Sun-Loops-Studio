@@ -769,8 +769,19 @@ SunSymphony è il campionatore orchestrale che arriva con il programma (VST3 e S
 - Ogni parte segue **CC7** (volume), **CC10** (pan), **CC11** (espressione) e **CC64** (pedale di risonanza).
 - La tastiera in basso suona la parte 1; *Master* regola il livello generale; gli strumenti delle parti si salvano con il progetto.
 
-La libreria orchestrale gratuita (archi, legni, ottoni, percussioni, arpa, celesta, pianoforte) si scaricherà dall'interno del
-plugin in `~/Music/Sun Loops Studio/Orchestral`, nelle prossime versioni.
+### Scaricare l'orchestra (0.67.0)
+
+Il pulsante dorato **Library / Download sounds** apre la pagina Libreria (si apre da sola finché non c'è nulla di installato):
+
+1. Spunta gli strumenti che vuoi: **Essentials** spunta una prima orchestra (sezioni d'archi, legni, ottoni, timpani, piatti, arpa;
+   1,7 GB), **All** tutto (29 strumenti, 3 GB). Ogni riga mostra le articolazioni e la dimensione.
+2. Premi **Download**. La barra mostra l'avanzamento; intanto puoi continuare a suonare. **Stop** mette in pausa: Download di nuovo
+   riprende da dove si era fermato. Ogni file viene controllato (SHA-256) prima di essere tenuto.
+3. Doppio clic su una parte > **Orchestra** > famiglia > strumento > articolazione. Il primo strumento che arriva va nella parte 1.
+
+**Remove** cancella dal disco gli strumenti spuntati; **Open folder** mostra `~/Music/Sun Loops Studio/Orchestral`, condivisa da
+tutti i SunSymphony. I suoni sono VSCO 2 Community Edition e VCSL di Versilian Studios, CC0 (pubblico dominio): liberi per qualsiasi
+uso. Le percussioni hanno un tipo di colpo per tasto a partire dal Do2 (la colonna *Notes* di `tools/orchestra/catalog.md` li elenca).
 
 ## Piano Roll
 

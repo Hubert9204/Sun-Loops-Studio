@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.22)
 # 10.15 Catalina (0.63.0): the newest macOS of Intel Macs from 2012 (Mac mini, iMac, MacBook Pro). The Apple silicon half of the
 # app needs macOS 11 in any case (the first macOS for those Macs); the compiler refuses any call that Catalina does not have.
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Oldest macOS the program runs on")
-project(SunLoopsStudio VERSION 0.66.0 LANGUAGES C CXX ASM)
+project(SunLoopsStudio VERSION 0.67.0 LANGUAGES C CXX ASM)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -453,6 +453,9 @@ endif()
 set(ORCHESTRA_SOURCES
     src/orchestra/Instrument.cpp
     src/orchestra/Engine.cpp)
+# 0.67.0: the catalog of downloadable instruments (tools/orchestra/catalog.py), built into the plugin.
+juce_add_binary_data(SunSymphonyData HEADER_NAME SunSymphonyData.h NAMESPACE SunSymphonyData
+    SOURCES resources/orchestra/catalog.json)
 
 option(SLS_BUILD_SUNSYMPHONY "Build the SunSymphony orchestral sampler plugin (VST3 and Standalone)" ON)
 if(SLS_BUILD_SUNSYMPHONY)
@@ -467,12 +470,16 @@ if(SLS_BUILD_SUNSYMPHONY)
         FORMATS VST3 Standalone
         VST3_CATEGORIES Instrument Sampler
         COPY_PLUGIN_AFTER_BUILD FALSE)
-    target_sources(SunSymphony PRIVATE ${ORCHESTRA_SOURCES} src/library/Sfz.cpp
+    target_sources(SunSymphony PRIVATE ${ORCHESTRA_SOURCES} src/library/Sfz.cpp src/support/Http.cpp
+                   plugins/sunsymphony/LibraryManager.cpp plugins/sunsymphony/LibraryPanel.cpp
                    plugins/sunsymphony/SunSymphonyProcessor.cpp plugins/sunsymphony/SunSymphonyEditor.cpp plugins/sunsymphony/PluginMain.cpp)
     target_include_directories(SunSymphony PRIVATE src plugins)
     target_compile_definitions(SunSymphony PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
     target_link_libraries(SunSymphony PRIVATE
+        SunSymphonyData
+        CURL::libcurl
         juce::juce_audio_utils
+        juce::juce_cryptography
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags)
     install(DIRECTORY "${CMAKE_BINARY_DIR}/SunSymphony_artefacts/$<CONFIG>/VST3/SunSymphony.vst3"
@@ -492,13 +499,15 @@ target_sources(SunLoopsStudioTests PRIVATE
     tests/test_hexforge.cpp
     tests/test_helios.cpp
     tests/test_orchestra.cpp
+    tests/test_sunsymphony_library.cpp
+    plugins/sunsymphony/LibraryManager.cpp
     src/ui/PianoRoll.cpp # 0.58.0: the spare quarter is tested through its public functions
     ${SLS_CORE_SOURCES}
     ${SUNBURST_SOURCES}
     ${HEXFORGE_SOURCES}
     ${ORCHESTRA_SOURCES})
 
-target_include_directories(SunLoopsStudioTests PRIVATE src)
+target_include_directories(SunLoopsStudioTests PRIVATE src plugins)
 target_include_directories(SunLoopsStudioTests SYSTEM PRIVATE third_party/signalsmith third_party/tinysoundfont)
 target_compile_definitions(SunLoopsStudioTests PRIVATE ${SLS_COMMON_DEFINITIONS} SLS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -515,8 +524,10 @@ target_link_libraries(SunLoopsStudioTests PRIVATE
     SunLoopsSounds
     SunLoopsLibraryData
     SunLoopsDemos
+    SunSymphonyData
     juce::juce_audio_formats
     juce::juce_audio_processors
+    juce::juce_cryptography
     juce::juce_dsp
     juce::juce_recommended_config_flags
     juce::juce_recommended_warning_flags)

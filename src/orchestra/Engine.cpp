@@ -165,7 +165,7 @@ void Engine::noteOn (int channel, int key, int velocity) noexcept
             v.release();
         }
     const Region* zones[kZonesPerNote];
-    const int n = part.active->pick (key, velocity, zones, kZonesPerNote);
+    const int n = part.active->pick (key, velocity, zones, kZonesPerNote, part.roundRobin++);
     const float level = velocityGain (velocity);
     for (int z = 0; z < n; ++z)
     {
@@ -176,11 +176,13 @@ void Engine::noteOn (int channel, int key, int velocity) noexcept
         v->region = &r;
         v->buffer = r.sample.get();
         v->pos = 0.0;
-        v->increment = std::pow (2.0, (key - r.rootKey + r.tuneCents / 100.0) / 12.0) * (r.sample->sampleRate / rate);
+        v->increment = std::pow (2.0, ((key - r.rootKey) * r.keytrack / 100.0 + r.tuneCents / 100.0) / 12.0) * (r.sample->sampleRate / rate);
         v->env = 0.0f;
         v->attackStep = 1.0f / std::max (1.0f, part.active->attackSeconds * static_cast<float> (rate));
         // Release: an exponential fall to -80 dB in the instrument's release time.
-        v->releaseCoef = static_cast<float> (std::exp (std::log (1.0e-4) / std::max (1.0, part.active->releaseSeconds * rate)));
+        const double releaseTime = r.releaseSeconds >= 0.0f ? r.releaseSeconds : part.active->releaseSeconds;
+        v->releaseCoef = static_cast<float> (std::exp (std::log (1.0e-4) / std::max (1.0, releaseTime * rate)));
+        v->oneShot = r.oneShot;
         const float gain = level * std::pow (10.0f, r.gainDb / 20.0f);
         const float pan = std::clamp (r.pan, -1.0f, 1.0f);
         const float angle = (pan + 1.0f) * 0.25f * 3.14159265f; // constant power

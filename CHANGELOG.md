@@ -2,6 +2,30 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.67.0 - 2026-11-14
+
+SunSymphony downloads its orchestra.
+
+### Added
+- **SunSymphony's Library page** (the gold *Library / Download sounds* button; it opens by itself while nothing is installed):
+  29 orchestral instruments to tick and download from inside the plugin, by family - strings (violin, viola and cello sections,
+  solo violin, solo bass), woodwinds (piccolo, flute, oboe, clarinet, bassoon), brass (trumpet, horn, trombone, tuba), percussion
+  (timpani, bass drum, snare, cymbals, suspended cymbal, tam-tam, triangle, tambourine, glockenspiel, xylophone, marimba,
+  vibraphone, tubular bells), harp and concert grand - with their articulations (sustain, staccato, spiccato, pizzicato,
+  tremolo, muted...), 3.0 GB in all. *Essentials* ticks a first orchestra (1.7 GB, ticked already on the first visit).
+  - The sounds come straight from their free sources, VSCO 2 Community Edition and VCSL by Versilian Studios (CC0, public domain),
+    on GitHub at a fixed version: every file is checked against its SHA-256 before it is kept; Stop, then Download again,
+    continues where it stopped; an instrument counts as installed only when all its files are there.
+  - Progress bar, *Stop*, *Remove* (frees the disk space), *Open folder*. The library is `~/Music/Sun Loops Studio/Orchestral`,
+    shared by every SunSymphony (in Sun Loops Studio, another host or the Standalone); two instances never download the same file.
+  - The installed instruments appear in each part's menu (*Orchestra > family > instrument > articulation*). When the first one
+    arrives, part 1 switches from the test tone to it.
+- `tools/orchestra/catalog.py` and its report `tools/orchestra/catalog.md`: builds the catalog built into the plugin. It measures
+  every sample's pitch, so the mapping fixes VSCO's octave naming (most files sound an octave above their name) and tunes each
+  sample within a few cents; dynamics become velocity layers, takes become round robins; percussion is laid out one stroke per key.
+- SunSymphony engine: round robins (`seq_length` / `seq_position`), unpitched zones (`pitch_keytrack=0`), one-shot zones that ring
+  on after the key is released (`loop_mode=one_shot`) and a release time per zone (`ampeg_release`).
+
 ## 0.66.0 - 2026-11-14
 
 SunSymphony, the orchestral sampler: Milestone 0 (a first, playable skeleton; the plan is in the project's

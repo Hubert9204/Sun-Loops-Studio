@@ -91,8 +91,15 @@ bool SunSymphonyProcessor::loadInstrument (int part, const juce::String& source,
         std::string message;
         auto& fmts = formats;
         const auto folder = file.getParentDirectory();
+        // A library instrument is shown as "Cellos (section) - pizzicato"; any other SFZ file by its file name.
+        auto name = file.getFileNameWithoutExtension();
+        for (const auto& item : library().items())
+            if (library().instrumentFolder (item) == folder)
+                for (const auto& a : item.articulations)
+                    if (library().sfzFile (item, a) == file)
+                        name = item.name + " - " + a.name;
         inst = orchestra::Instrument::fromSfz (file.loadFileAsString().toStdString(), file.getFileNameWithoutExtension().toStdString(),
-                                               file.getFileNameWithoutExtension().toStdString(),
+                                               name.toStdString(),
                                                [&fmts, &folder] (const std::string& path) { return readSample (fmts, folder.getChildFile (juce::String (path))); },
                                                message);
         error = juce::String (message);
@@ -102,6 +109,26 @@ bool SunSymphonyProcessor::loadInstrument (int part, const juce::String& source,
     engine.setInstrument (part, std::move (inst));
     sources[static_cast<size_t> (part)] = source;
     return true;
+}
+
+void SunSymphonyProcessor::timerCallback()
+{
+    engine.collectRetired();
+    // When the first instrument arrives and part 1 still plays the test tone, part 1 gets it (so a new user hears it at once).
+    const auto generation = library().progress().generation;
+    if (generation == libraryGeneration)
+        return;
+    const bool seenBefore = libraryGeneration >= 0;
+    libraryGeneration = generation;
+    if (! seenBefore || sources[0] != kTestTone)
+        return;
+    for (const auto& item : library().items())
+        if (library().isInstalled (item))
+        {
+            juce::String error;
+            loadInstrument (0, library().sfzFile (item, item.articulations.front()).getFullPathName(), error);
+            return;
+        }
 }
 
 juce::String SunSymphonyProcessor::partName (int part) const
