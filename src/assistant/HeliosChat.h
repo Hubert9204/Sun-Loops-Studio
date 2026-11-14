@@ -64,7 +64,8 @@ struct Turn
     std::string text; // as the model read it (a user turn with its excerpts) or wrote it
 };
 
-// The whole prompt in Gemma 4's chat format, the newest turn last and the model's turn opened (thinking off). The oldest turns
+// The whole prompt in Gemma 4's chat format, the newest turn last and the model's turn opened (thinking off, as in the E2B / E4B
+// template: no <|think|>, nothing after "<|turn>model\n"). The oldest turns
 // are left out until it fits in `maxCharacters`; the system text and the new turn always stay.
 std::string buildPrompt (const std::vector<Turn>& history, const std::string& newUserTurn,
                          std::size_t maxCharacters = static_cast<std::size_t> (kContextTokens - kAnswerTokens - 256) * 3);

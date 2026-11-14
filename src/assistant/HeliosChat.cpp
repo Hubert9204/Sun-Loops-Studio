@@ -113,6 +113,8 @@ std::string systemPrompt()
            "- Puoi dare consigli generali di produzione musicale, ma ricorda che il tuo compito principale è il programma.\n"
            "- Se ti chiedono che modello sei o su cosa sei basato: sei Helios, basato su Gemma 4 di Google, e giri in locale sul "
            "computer dell'utente, senza internet.\n"
+           "- Non mostrare il tuo ragionamento e non descrivere come costruisci la risposta: scrivi direttamente la risposta per "
+           "l'utente.\n"
            "- Non chiudere le risposte con slogan o frasi fatte, salvo quando una nota nel messaggio dell'utente te lo permette.";
 }
 
@@ -154,6 +156,7 @@ std::string userTurn (const std::string& question, const std::vector<Excerpt>& e
             s += "[" + std::to_string (i + 1) + "] " + excerpts[i].title + "\n" + excerpts[i].text + "\n\n";
     }
     s += "Domanda dell'utente:\n" + trim (sanitize (question));
+    s += "\n\n(Rispondi direttamente all'utente, nella stessa lingua in cui ha scritto la domanda.)";
     if (catchphrase)
         s += "\n\n(Nota per Helios: in questa risposta puoi concludere con la frase \"" + std::string (kCatchphrase)
              + "\", da sola sull'ultima riga, ma SOLO se l'utente non sembra frustrato o arrabbiato e la domanda non riguarda un "
@@ -178,7 +181,10 @@ std::string sanitize (std::string_view text)
 std::string buildPrompt (const std::vector<Turn>& history, const std::string& newUserTurn, std::size_t maxCharacters)
 {
     const auto head = "<bos><|turn>system\n" + trim (systemPrompt()) + "<turn|>\n";
-    const auto tail = "<|turn>user\n" + trim (newUserTurn) + "<turn|>\n<|turn>model\n<|channel>thought\n<channel|>";
+    // The model's turn opened as Gemma 4 E2B / E4B's own template does with thinking off: no <|think|> in the system turn and
+    // nothing after "<|turn>model\n" (an empty thought channel there, as the 31B template writes it, makes the small models
+    // write their reasoning into the answer).
+    const auto tail = "<|turn>user\n" + trim (newUserTurn) + "<turn|>\n<|turn>model\n";
     const auto turnText = [] (const Turn& t)
     {
         return std::string (t.fromUser ? "<|turn>user\n" : "<|turn>model\n") + trim (t.text) + "<turn|>\n";

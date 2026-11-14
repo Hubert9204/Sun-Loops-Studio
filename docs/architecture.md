@@ -589,12 +589,14 @@ once per session and a follow-up question costs only itself. Gemma 4 uses a slid
 cannot drop just the end, everything is read again.
 
 **The prompt** (`HeliosChat`, tested). Gemma 4's chat format, written by hand: `<bos><|turn>system\n...<turn|>\n`, then the turns
-(`<|turn>user` / `<|turn>model`), then `<|turn>model\n<|channel>thought\n<channel|>` (the model's turn opened with its thinking
-switched off). The system text is fixed (who Helios is, warm and sunny; answer in the user's language from the manual's
+(`<|turn>user` / `<|turn>model`), then `<|turn>model\n` (the model's turn opened with thinking off, as Gemma 4 E2B / E4B's own template
+does: no `<|think|>` mark; the empty thought channel of the 31B template made the small models write their reasoning into the
+answer). Should the model open a thought channel anyway, the helper does not pass on what is inside `<|channel>...<channel|>`. The system text is fixed (who Helios is, warm and sunny; answer in the user's language from the manual's
 passages and say so when they do not cover the question; it cannot act on the program; asked about its model, it says Gemma 4).
 For every question `excerptsFor` asks `HelpIndex` (the BM25 search of plain Helios) for the best sections of the user guide in
 the language of the best match, at most 3 and about 6000 characters, Markdown removed; they go into the user's turn, before the
-question ("retrieval-augmented generation"), so that the system text stays the same from turn to turn. The oldest turns are
+question ("retrieval-augmented generation"), so that the system text stays the same from turn to turn. Each turn ends with a reminder
+to answer the user directly, in the language of the question (small models drift to English). The oldest turns are
 left out when the conversation would no longer fit (about 21000 characters). Text that comes from the user or the manual is
 `sanitize`d: Gemma's control marks (`<|...`, `...|>`, `<bos>`) are broken up with a space, so a question cannot pose as a turn.
 

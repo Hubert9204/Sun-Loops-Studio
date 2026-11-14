@@ -62,7 +62,7 @@ void testHeliosChat()
     const auto withNote = userTurn ("come aggiungo un riverbero?", excerpts, true);
     const auto without = userTurn ("come aggiungo un riverbero?", excerpts, false);
     supportCheck (contains (without, "[1] Mixer > Effetti\nClicca uno slot vuoto") && contains (without, "[2] Mixer")
-                      && endsWith (without, "come aggiungo un riverbero?") && ! contains (without, kCatchphrase),
+                      && contains (without, "Domanda dell'utente:\ncome aggiungo un riverbero?") && ! contains (without, kCatchphrase),
                   "the user's turn: the excerpts, numbered, then the question (no catchphrase note)");
     supportCheck (contains (withNote, kCatchphrase) && contains (withNote, "frustrato") && contains (withNote, "crash")
                       && withNote.find (kCatchphrase) > withNote.find ("riverbero"),
@@ -84,8 +84,11 @@ void testHeliosChat()
     const auto prompt = buildPrompt (history, "domanda tre");
     const std::string head = "<bos><|turn>system\n" + system + "<turn|>\n";
     supportCheck (prompt.rfind (head, 0) == 0, "the prompt begins with <bos> and the system turn (always the same: read once)");
-    supportCheck (endsWith (prompt, "<|turn>user\ndomanda tre<turn|>\n<|turn>model\n<|channel>thought\n<channel|>"),
-                  "it ends with the new question and the model's turn opened, thinking off (Gemma 4 format)");
+    supportCheck (endsWith (prompt, "<|turn>user\ndomanda tre<turn|>\n<|turn>model\n") && ! contains (prompt, "<|channel>")
+                      && ! contains (prompt, "<|think|>"),
+                  "it ends with the new question and the model's turn opened, thinking off (Gemma 4 E2B / E4B format: no channel)");
+    supportCheck (contains (system, "Non mostrare il tuo ragionamento"), "the system text asks for the answer only, not the reasoning");
+    supportCheck (contains (userTurn ("ciao", {}, false), "nella stessa lingua"), "every question reminds the model to answer in its language");
     supportCheck (contains (prompt, "<|turn>user\ndomanda uno<turn|>\n<|turn>model\nrisposta uno<turn|>\n<|turn>user\ndomanda due"),
                   "the earlier turns in order, the model's as \"model\"");
     const auto tight = buildPrompt (history, "domanda tre", head.size() + 160);

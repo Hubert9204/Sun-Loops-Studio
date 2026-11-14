@@ -217,6 +217,7 @@ public:
         llama_sampler_chain_add (sampler, llama_sampler_init_dist (seed));
 
         std::string pending;
+        bool thinking = false; // inside <|channel>...<channel|>: the model's reasoning, not shown
         r.reason = "limit";
         for (int i = 0; i < maxTokens; ++i)
         {
@@ -232,7 +233,12 @@ public:
                 break;
             }
             char piece[256];
-            const int length = llama_token_to_piece (vocab, token, piece, sizeof (piece), 0, false);
+            const int marker = llama_token_to_piece (vocab, token, piece, sizeof (piece), 0, true);
+            const std::string_view special (piece, static_cast<size_t> (std::max (0, marker)));
+            const bool opens = special == "<|channel>", closes = special == "<channel|>";
+            if (opens || closes)
+                thinking = opens;
+            const int length = opens || closes || thinking ? 0 : llama_token_to_piece (vocab, token, piece, sizeof (piece), 0, false);
             if (length > 0)
             {
                 pending.append (piece, static_cast<size_t> (length));
