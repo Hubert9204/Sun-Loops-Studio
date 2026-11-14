@@ -107,8 +107,22 @@ HeliosAssistant::~HeliosAssistant()
 
 juce::File HeliosAssistant::helperFile()
 {
-    return juce::File::getSpecialLocation (juce::File::currentExecutableFile)
-        .getSiblingFile (juce::String ("sun-loops-helios") + (juce::SystemStats::getOperatingSystemType() & juce::SystemStats::Windows ? ".exe" : ""));
+    const juce::String name = juce::String ("sun-loops-helios") + (juce::SystemStats::getOperatingSystemType() & juce::SystemStats::Windows ? ".exe" : "");
+    // Next to the program. The program can be started through a link (the AppImage starts it as $APPDIR/AppRun, a link to
+    // usr/bin/sun-loops-studio): the folder of the real file counts, not the link's.
+    juce::Array<juce::File> candidates;
+    const auto exe = juce::File::getSpecialLocation (juce::File::currentExecutableFile);
+    candidates.add (exe.getSiblingFile (name));
+    candidates.add (exe.getLinkedTarget().getSiblingFile (name));
+#if JUCE_LINUX || JUCE_BSD
+    candidates.add (juce::File ("/proc/self/exe").getLinkedTarget().getSiblingFile (name));
+    if (const auto appDir = juce::SystemStats::getEnvironmentVariable ("APPDIR", {}); appDir.isNotEmpty() && juce::File::isAbsolutePath (appDir))
+        candidates.add (juce::File (appDir).getChildFile ("usr/bin").getChildFile (name));
+#endif
+    for (const auto& f : candidates)
+        if (f.existsAsFile())
+            return f;
+    return candidates.getFirst();
 }
 
 juce::File HeliosAssistant::modelFolder()

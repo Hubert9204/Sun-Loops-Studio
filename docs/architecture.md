@@ -570,7 +570,8 @@ the program and an unsaved project (the window then says so, the audio never not
 two processors at once, while the Mac app is universal. So `tools/helios-llm` is a CMake project of its own that the main
 `CMakeLists.txt` builds with `ExternalProject` once per architecture (`CMAKE_OSX_ARCHITECTURES`: `arm64` with Metal and a
 deployment target of 11.0, `x86_64` for 10.15), always in Release, and joins with `lipo` on a Mac; the result is copied next to
-the program (`Contents/MacOS` in the app bundle, `bin` when installed) where `HeliosAssistant::helperFile()` looks. Processor
+the program (`Contents/MacOS` in the app bundle, `bin` when installed) where `HeliosAssistant::helperFile()` looks: next to the
+program's real file, not next to a link to it (the AppImage starts the program as `$APPDIR/AppRun`, a link to `usr/bin`). Processor
 features are fixed rather than "this machine's" (`GGML_NATIVE` off): Intel Macs get AVX and F16C only (Ivy Bridge, 2012: no
 AVX2 / FMA, no Metal, no Accelerate), other x86-64 builds AVX2 / FMA (Haswell, 2013, and newer), Apple silicon Metal with its
 shaders built in. No OpenMP (ggml's own thread pool), no BLAS, everything linked statically. `-DSLS_HELIOS_LLM=OFF` builds
