@@ -143,6 +143,8 @@ plugins. See [docs/roadmap.md](docs/roadmap.md) for exactly what is and is not v
   or a scale, save the tuned audio, or turn the line into notes of a channel.
 - **Stems** (0.39.0) - a mix split into drums, bass and the rest by signal processing (no AI), the three adding up to the original.
 - **Helios** (0.40.0) - F1: ask how to do something in English or Italian; it searches the built-in manual and runs commands, offline.
+- **Helios LLM mode** (0.64.0) - tick *LLM mode* and Helios becomes a chat: a language model (Google's Gemma 4, downloaded once,
+  2.8 or 4.6 GB) that runs on your computer, answers from the manual in your language and never touches the project.
 - **Crash reports and updates** (0.43.0) - a session log (spdlog, rotated at 5 MB); after a crash (SIGSEGV, SIGABRT, SIGFPE...) the next start
   offers to send an anonymous report with the stack trace and system to GitHub as an issue (or to show it first, or to delete it); a
   background check for a newer release (Semantic Versioning), which can be switched off. Nothing is sent without a click.
@@ -220,6 +222,8 @@ license; it uses no FL Studio code or library, only the file layout as documente
 
 `third_party/signalsmith` holds Signalsmith Stretch and Signalsmith Linear, both MIT-licensed (their licences and the exact revisions are in that folder).
 `third_party/tinysoundfont` holds TinySoundFont's `tsf.h` (MIT), used only to read SoundFont files.
+Helios's helper `sun-loops-helios` is built with llama.cpp (MIT; its licence is in `third_party/llama.cpp` and goes with every copy of the
+helper). The Gemma 4 models (Google, Apache License 2.0) are not part of the program: LLM mode downloads them from Hugging Face when asked.
 The built-in recordings keep their own licenses: Salamander Grand Piano by Alexander Holm (CC BY 3.0), Growlybass by Karoryfer Lecolds
 (CC0), DrumGizmo MuldjordKit by Lars Muldjord and DRSKit by the DrumGizmo team (CC BY 4.0); see
 [resources/sounds/README.md](resources/sounds/README.md) and [tools/sounds](tools/sounds/README.md) for how they were prepared.

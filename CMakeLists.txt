@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.22)
 # 10.15 Catalina (0.63.0): the newest macOS of Intel Macs from 2012 (Mac mini, iMac, MacBook Pro). The Apple silicon half of the
 # app needs macOS 11 in any case (the first macOS for those Macs); the compiler refuses any call that Catalina does not have.
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Oldest macOS the program runs on")
-project(SunLoopsStudio VERSION 0.63.0 LANGUAGES C CXX ASM)
+project(SunLoopsStudio VERSION 0.64.0 LANGUAGES C CXX ASM)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -115,6 +115,7 @@ set(SLS_CORE_SOURCES
     src/library/FlpProject.cpp
     src/library/HelpIndex.cpp
     src/library/Sfz.cpp
+    src/assistant/HeliosChat.cpp
     src/plugins/PluginScanner.cpp
     src/plugins/PluginHost.cpp
     src/support/Logging.cpp
@@ -214,6 +215,7 @@ target_sources(SunLoopsStudio PRIVATE
     src/ui/MainComponentStems.cpp
     src/ui/HeliosWindow.cpp
     src/ui/MainComponentHelios.cpp
+    src/assistant/HeliosAssistant.cpp
     src/ui/MainComponentSupport.cpp
     src/ui/MainComponentChains.cpp
     src/ui/MainComponentTempo.cpp
@@ -249,6 +251,88 @@ target_link_libraries(SunLoopsStudio PRIVATE
     juce::juce_gui_extra
     juce::juce_recommended_config_flags
     juce::juce_recommended_warning_flags)
+
+# --- Helios LLM mode (0.64.0): sun-loops-helios, the helper that runs the language model ------------------------------
+# tools/helios-llm is built as a project of its own, once per processor (llama.cpp cannot be built for Apple silicon and Intel in
+# one configuration), always optimised (a model in a debug build is unusably slow); on a Mac the halves are joined with lipo.
+# The helper is put next to the program (on a Mac: Contents/MacOS), where Helios looks for it. With -DSLS_HELIOS_LLM=OFF the
+# program is built without it and Helios's "LLM mode" says so.
+option(SLS_HELIOS_LLM "Build sun-loops-helios, the helper that runs Helios's language model (llama.cpp)" ON)
+if(SLS_HELIOS_LLM)
+    include(ExternalProject)
+    if(APPLE AND CMAKE_OSX_ARCHITECTURES)
+        set(SLS_HELIOS_ARCHS ${CMAKE_OSX_ARCHITECTURES})
+    else()
+        set(SLS_HELIOS_ARCHS native)
+    endif()
+    set(SLS_HELIOS_EXE "sun-loops-helios${CMAKE_EXECUTABLE_SUFFIX}")
+    set(SLS_HELIOS_PARTS "")
+    set(SLS_HELIOS_TARGETS "")
+    set(generatorPlatform "")
+    if(CMAKE_GENERATOR_PLATFORM) # Visual Studio: x64 / ARM64
+        set(generatorPlatform CMAKE_GENERATOR_PLATFORM "${CMAKE_GENERATOR_PLATFORM}")
+    endif()
+    foreach(arch IN LISTS SLS_HELIOS_ARCHS)
+        set(args
+            -DCMAKE_BUILD_TYPE=Release
+            -DSLS_VERSION=${PROJECT_VERSION}
+            -DSLS_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+            -DFETCHCONTENT_SOURCE_DIR_JUCE=${juce_SOURCE_DIR}
+            -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+            -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER})
+        if(FETCHCONTENT_SOURCE_DIR_LLAMA) # a local llama.cpp checkout instead of downloading it
+            list(APPEND args -DFETCHCONTENT_SOURCE_DIR_LLAMA=${FETCHCONTENT_SOURCE_DIR_LLAMA})
+        endif()
+        if(APPLE AND NOT arch STREQUAL "native")
+            list(APPEND args -DCMAKE_OSX_ARCHITECTURES=${arch})
+            if(arch STREQUAL "arm64")
+                list(APPEND args -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0) # the first macOS of Apple silicon (Metal needs it)
+            else()
+                list(APPEND args -DCMAKE_OSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET})
+            endif()
+        endif()
+        set(part "${CMAKE_BINARY_DIR}/helios-${arch}/SunLoopsHelios_artefacts/Release/${SLS_HELIOS_EXE}")
+        ExternalProject_Add(SunLoopsHelios_${arch}
+            SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tools/helios-llm"
+            BINARY_DIR "${CMAKE_BINARY_DIR}/helios-${arch}"
+            CMAKE_GENERATOR "${CMAKE_GENERATOR}"
+            ${generatorPlatform}
+            CMAKE_ARGS ${args}
+            BUILD_COMMAND "${CMAKE_COMMAND}" --build <BINARY_DIR> --config Release --target SunLoopsHelios
+            INSTALL_COMMAND ""
+            BUILD_ALWAYS ON # (only what changed is rebuilt)
+            BUILD_BYPRODUCTS "${part}")
+        list(APPEND SLS_HELIOS_PARTS "${part}")
+        list(APPEND SLS_HELIOS_TARGETS SunLoopsHelios_${arch})
+    endforeach()
+
+    set(SLS_HELIOS_HELPER "${CMAKE_BINARY_DIR}/helios/${SLS_HELIOS_EXE}")
+    list(LENGTH SLS_HELIOS_PARTS partCount)
+    if(partCount GREATER 1)
+        set(joinCommand lipo -create ${SLS_HELIOS_PARTS} -output "${SLS_HELIOS_HELPER}")
+    else()
+        set(joinCommand "${CMAKE_COMMAND}" -E copy ${SLS_HELIOS_PARTS} "${SLS_HELIOS_HELPER}")
+    endif()
+    add_custom_command(OUTPUT "${SLS_HELIOS_HELPER}"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/helios"
+        COMMAND ${joinCommand}
+        DEPENDS ${SLS_HELIOS_TARGETS} ${SLS_HELIOS_PARTS}
+        COMMENT "Joining sun-loops-helios"
+        VERBATIM)
+    add_custom_target(SunLoopsHeliosHelper ALL DEPENDS "${SLS_HELIOS_HELPER}")
+    add_dependencies(SunLoopsStudio SunLoopsHeliosHelper)
+    add_custom_command(TARGET SunLoopsStudio POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E copy "${SLS_HELIOS_HELPER}" "$<TARGET_FILE_DIR:SunLoopsStudio>/${SLS_HELIOS_EXE}"
+        VERBATIM)
+    target_compile_definitions(SunLoopsStudio PRIVATE SLS_HELIOS_LLM=1)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        include(GNUInstallDirs)
+        install(PROGRAMS "${SLS_HELIOS_HELPER}" DESTINATION ${CMAKE_INSTALL_BINDIR})
+        install(FILES third_party/llama.cpp/LICENSE-llama.cpp.txt DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/sun-loops-studio)
+    endif()
+else()
+    target_compile_definitions(SunLoopsStudio PRIVATE SLS_HELIOS_LLM=0)
+endif()
 
 # --- Installation (cmake --install build --prefix ~/.local) -------------------
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux") # (macOS: the .app made by scripts/build_macos.sh)
@@ -353,6 +437,7 @@ target_sources(SunLoopsStudioTests PRIVATE
     tests/test_support.cpp
     tests/test_sunburst.cpp
     tests/test_hexforge.cpp
+    tests/test_helios.cpp
     src/ui/PianoRoll.cpp # 0.58.0: the spare quarter is tested through its public functions
     ${SLS_CORE_SOURCES}
     ${SUNBURST_SOURCES}

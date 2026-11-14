@@ -395,6 +395,7 @@ private:
     int samplerWindowChannel = -1;
     std::unique_ptr<SlicerWindow> slicerWindow;
     std::unique_ptr<PitchEditorWindow> pitchEditorWindow;
+    std::unique_ptr<HeliosAssistant> heliosAssistant; // 0.64.0: LLM mode (made with the first Helios window; outlives it)
     std::unique_ptr<HeliosWindow> heliosWindow;
     std::unique_ptr<updates::UpdateChecker> updateChecker; // made at the first check
     juce::String lastLoggedStatus;

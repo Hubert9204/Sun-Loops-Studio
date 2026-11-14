@@ -295,7 +295,9 @@ void MainComponent::showAbout()
                                           "Free software under the GNU Affero General Public License, version 3. Built with JUCE 8. "
                                           "SunBurst and HexForge are the program's own synthesizers. The built-in recordings keep "
                                           "their licenses: Salamander Grand Piano (CC BY 3.0), Growlybass (CC0), DrumGizmo kits "
-                                          "(CC BY 4.0).\n\n"
+                                          "(CC BY 4.0). Helios's LLM mode runs llama.cpp (MIT License, Copyright (c) 2023-2026 The ggml "
+                                          "authors) and Google's Gemma 4 models (Apache License 2.0), downloaded from Hugging Face "
+                                          "when asked.\n\n"
                                           "Join the community on Discord to ask questions, report problems and share your music.",
                                           juce::MessageBoxIconType::NoIcon, this);
     window->addButton ("GitHub page", 1);

@@ -458,7 +458,8 @@ MainComponent::MainComponent()
     helpButton.onClick = [this] { showHelpMenu(); };
     helpButton.setTooltip ("Help: Helios, the user guide, the Discord community, the GitHub page, updates, crash reports, About");
     heliosButton.onClick = [this] { openHelios(); };
-    heliosButton.setTooltip ("Helios (F1): ask how to do something; searches the manual on this computer (no AI, no internet)");
+    heliosButton.setTooltip ("Helios (F1): ask how to do something; searches the manual on this computer (no AI, no internet). "
+                             "Tick LLM mode in its window to chat with a language model that runs on this computer");
     heliosButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff5a3d1e));
     // 0.62.0: the master pitch (as FL Studio's main pitch knob) and step editing
     pitchLabel.setFont (juce::FontOptions (12.0f));

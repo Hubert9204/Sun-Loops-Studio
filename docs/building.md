@@ -9,7 +9,8 @@
 - Optional, at run time: **ffmpeg** (`sudo dnf install ffmpeg` on Nobara / Fedora) for exporting MP3 and AAC and for
   importing AAC and the sound of video files. Everything else works without it.
 - Network access the first time you configure: CMake downloads JUCE 8.0.4 and spdlog 1.15.3 from GitHub (shallow clones, pinned
-  tags) and nlohmann/json 3.11.3 (release archive, checked by SHA-256).
+  tags) and nlohmann/json 3.11.3 (release archive, checked by SHA-256); since 0.64.0 also llama.cpp (tag `b12377`) for Helios's
+  helper.
 
 ### Nobara / Fedora
 
@@ -111,6 +112,30 @@ AppImages normally mount themselves through FUSE 2. Fedora and Nobara may not ha
 The AppImage does not add a menu entry by itself; tools such as AppImageLauncher or Gear Lever do that, or use
 `cmake --install` instead.
 
+## Helios's helper: sun-loops-helios (0.64.0)
+
+Helios's LLM mode runs its language model in a separate program, `sun-loops-helios`, built from `tools/helios-llm` with
+llama.cpp. The main build does it by itself: `cmake --build build` builds the helper once per processor (on a Mac, the universal
+build makes an Apple silicon and an Intel copy and joins them with `lipo`) and copies it next to the program
+(`build/SunLoopsStudio_artefacts/Release/sun-loops-helios`, or `Contents/MacOS` in the app); `cmake --install` installs it next to
+`sun-loops-studio`. The first build takes several minutes longer (llama.cpp); later builds only check it.
+
+- `-DSLS_HELIOS_LLM=OFF`: the program without the helper (LLM mode then says it is not part of this build).
+- `-DFETCHCONTENT_SOURCE_DIR_LLAMA=/path/to/llama.cpp`: use a local llama.cpp checkout instead of downloading it.
+- The helper is always built optimised (Release), whatever the program's build type.
+
+Trying a model by hand, without the program (the GGUF files are in `~/.local/share/sun-loops-studio/helios` once LLM mode has
+downloaded them):
+
+```bash
+H=build/SunLoopsStudio_artefacts/Release/sun-loops-helios
+$H --version     # the processor features it was built with
+$H --run ~/.local/share/sun-loops-studio/helios/gemma-4-E2B-it-Q4_0.gguf \
+   $'<bos><|turn>user\nCiao! Chi sei?<turn|>\n<|turn>model\n<|channel>thought\n<channel|>'
+```
+
+It prints the answer and, at the end, how many tokens were read and written and how long it took.
+
 ## Tests
 
 ```bash
@@ -143,6 +168,9 @@ not part of the repository.
 | MP3 / AAC export is greyed out ("needs ffmpeg"), or importing a video or `.aac` fails | `ffmpeg` is not installed or not on the `PATH`. Install it, or set `SLS_FFMPEG=/path/to/ffmpeg`. |
 | Record says no audio input could be opened | No microphone or audio interface is available to the audio system. Plug one in and choose it in **Audio...** (on PipeWire check `wpctl status`). |
 | A MIDI keyboard is not listed in **Audio...** | ALSA exposes it through `/dev/snd/seq`; check `aconnect -l`. Tick it in the dialog. |
+| Helios's LLM mode says it is not part of this build | `sun-loops-helios` is not next to the program: build with `SLS_HELIOS_LLM` on (the default) and run the program from its build folder or install it. |
+| LLM mode: "the model stopped unexpectedly" | Not enough memory for the model. Choose **Light**, close other programs; the session log (Help > Show the session log folder) says more. |
+| LLM mode: the download stops | No connection to huggingface.co. Press **Download** again: it continues where it stopped. |
 
 JUCE has no native PipeWire backend: on Linux it uses ALSA and JACK, and PipeWire serves both through
 `pipewire-alsa` and `pipewire-jack`, which Nobara installs by default. JUCE draws through X11; on a Wayland session

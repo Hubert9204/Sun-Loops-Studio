@@ -68,7 +68,8 @@ src/ui/
   SlicerWindow.*                The Slicer (0.37.0): the loop with its markers, per-slice settings; MainComponentSlicer.cpp wires it
   PitchEditor.*                 The pitch editor (0.38.0) over src/audio/PitchTrack.*; MainComponentPitch.cpp wires it to audio clips
   HeliosWindow.*                Helios (0.40.0): search box, results (commands and manual sections), reader; MainComponentHelios.cpp
-                                builds the commands and the index of the built-in user guides
+                                builds the commands and the index of the built-in user guides. 0.64.0: the "LLM mode" tick box turns
+                                the same window into a chat (model menu, Download / Delete model, Send / Stop / New chat)
   PluginParameterPicker.*       The list a plugin parameter to automate is chosen from (0.35.0): filter, current values, last-touched preselected
   MetersView.*                  The Meters window: loudness read-outs, true peak, spectrum, goniometer, correlation
   SamplerPanel.*                The sampler settings window (MainComponentSampler.cpp opens and wires it, loads SoundFonts, makes slice channels)
@@ -90,6 +91,15 @@ src/ui/
   AssignTrackDialog.*           The "Assign free mixer track" window
   VuMeter.*                     Peak/RMS meter (mixer)
   AudioMeter.*                  Simple level meter (rack rows, toolbar)
+
+src/assistant/                  Helios's LLM mode (0.64.0)
+  HeliosChat.*                  What the model is told (no JUCE, tested): the models' list, the system text, the manual's excerpts
+                                for a question, Gemma 4's chat format, the "Lode al Sole" rule, the answer's tidying
+  HeliosAssistant.*             The program's side (message thread): the helper process, the model files and their download,
+                                the conversation; a ChangeBroadcaster the window listens to
+  HeliosProtocol.h              The JSON messages between the program and the helper
+
+tools/helios-llm/               sun-loops-helios, the helper process that runs the model with llama.cpp (a CMake project of its own)
 
 tests/test_core.cpp             Headless tests (no audio device, no display)
 ```
@@ -547,6 +557,67 @@ sections at `##` / `###`, folds accents and case, drops stop words, maps a few s
 and ranks with BM25 (k1 1.4, b 0.75) plus a title bonus, a bonus for sections holding every word and a small one for the
 question's language. The index is built the first time Helios opens. Commands are `HeliosCommand`s (name, keywords, a function)
 made by `MainComponent::heliosCommands`, matched by the share of the question's words they contain.
+
+### Helios's LLM mode (0.64.0)
+
+The chat runs a language model on the user's computer: Google's **Gemma 4** (E2B, 2.8 GB, or E4B, 4.6 GB, as 4-bit GGUF files from
+`huggingface.co/ggml-org`), with **llama.cpp** (pinned tag, MIT). Nothing goes over the network but the model's download.
+
+**A helper process.** The model does not run inside the program but in `sun-loops-helios` (`tools/helios-llm/HeliosWorker.cpp`),
+which the program starts with `juce::ChildProcessCoordinator` and which answers with `juce::ChildProcessWorker` over a pipe. Two
+reasons: a model that runs out of memory or crashes (2-6 GB on machines that may have 4) takes only the helper with it, never
+the program and an unsaved project (the window then says so, the audio never notices); and llama.cpp cannot be configured for
+two processors at once, while the Mac app is universal. So `tools/helios-llm` is a CMake project of its own that the main
+`CMakeLists.txt` builds with `ExternalProject` once per architecture (`CMAKE_OSX_ARCHITECTURES`: `arm64` with Metal and a
+deployment target of 11.0, `x86_64` for 10.15), always in Release, and joins with `lipo` on a Mac; the result is copied next to
+the program (`Contents/MacOS` in the app bundle, `bin` when installed) where `HeliosAssistant::helperFile()` looks. Processor
+features are fixed rather than "this machine's" (`GGML_NATIVE` off): Intel Macs get AVX and F16C only (Ivy Bridge, 2012: no
+AVX2 / FMA, no Metal, no Accelerate), other x86-64 builds AVX2 / FMA (Haswell, 2013, and newer), Apple silicon Metal with its
+shaders built in. No OpenMP (ggml's own thread pool), no BLAS, everything linked statically. `-DSLS_HELIOS_LLM=OFF` builds
+the program without the helper; the window then says LLM mode is not part of the build.
+
+**The protocol** (`src/assistant/HeliosProtocol.h`): one JSON object per message. `load` (path, context of 8192 tokens, threads:
+the physical cores less one for the audio, both on a 2-core machine), `generate` (id, the whole prompt as text, at most 768
+tokens, temperature 0.7, a seed), `cancel`; the helper answers `loaded`, `token` (pieces of the answer, always whole UTF-8
+characters) and `done` (end / limit / cancelled / error, with the numbers of tokens read, reused and written). Stopping a helper
+sends `quit` (JUCE's `killWorkerProcess` closes the pipe but does not end the child); a helper also ends by itself when the
+program is gone (it watches its parent process), so a crash of the program never leaves a model in memory. The helper runs the
+model on a thread of its own, so the pipe's ping keeps going while it thinks. It remembers what it has read (the model's
+memory, "KV cache") and, for the next prompt, reads only what comes after the part that is the same: the system text is read
+once per session and a follow-up question costs only itself. Gemma 4 uses a sliding window for some layers; when its memory
+cannot drop just the end, everything is read again.
+
+**The prompt** (`HeliosChat`, tested). Gemma 4's chat format, written by hand: `<bos><|turn>system\n...<turn|>\n`, then the turns
+(`<|turn>user` / `<|turn>model`), then `<|turn>model\n<|channel>thought\n<channel|>` (the model's turn opened with its thinking
+switched off). The system text is fixed (who Helios is, warm and sunny; answer in the user's language from the manual's
+passages and say so when they do not cover the question; it cannot act on the program; asked about its model, it says Gemma 4).
+For every question `excerptsFor` asks `HelpIndex` (the BM25 search of plain Helios) for the best sections of the user guide in
+the language of the best match, at most 3 and about 6000 characters, Markdown removed; they go into the user's turn, before the
+question ("retrieval-augmented generation"), so that the system text stays the same from turn to turn. The oldest turns are
+left out when the conversation would no longer fit (about 21000 characters). Text that comes from the user or the manual is
+`sanitize`d: Gemma's control marks (`<|...`, `...|>`, `<bos>`) are broken up with a space, so a question cannot pose as a turn.
+
+**"Lode al Sole".** About one answer in ten (`kCatchphraseChance`, drawn by the program, since a language model does not keep
+to "one time in ten") the user's turn ends with a note allowing the phrase on the last line, only if the user is not frustrated
+or angry and the question is not about a crash, lost work or an emergency: the model judges the mood, the program the frequency.
+Without the note the system text forbids closing slogans, and `tidyAnswer` removes the phrase if it comes anyway.
+
+**`HeliosAssistant`** (message thread) owns the helper, the conversation and the download. Its states: unavailable (no helper),
+no model, downloading, idle, loading, ready, answering, failed. The download (`http::download`, libcurl) writes to
+`<file>.part`, continues an interrupted one with an HTTP range, starts over when the server sends the whole file, checks the
+free space first and the `GGUF` mark at the end. Models live in `~/.local/share/sun-loops-studio/helios` (XDG_DATA_HOME),
+`~/Library/Application Support/Sun Loops Studio/Helios` or `%APPDATA%\Sun Loops Studio\Helios`. The assistant belongs to
+`MainComponent` and outlives the window: closing the window (or unticking LLM mode) stops the helper and gives its memory back,
+the conversation stays and is read again by the next helper. Messages from a helper that was stopped since are ignored (each
+helper has a number). The settings remember `helios.llmMode` and `helios.model`.
+
+Not covered by automated tests: the helper with a real model (the CI cannot download 3 GB). It was tried with a tiny random model
+(a 17 MB GGUF made with llama.cpp's `gguf-py`): the program's side started the helper, the model loaded, answers streamed, a
+follow-up reused what was read, Stop, New chat and stopping / restarting the helper worked, closing the window and killing
+the program both ended the helper; in the program itself (virtual display) the window, the tick box, the model menu, the download
+error, the streaming chat and its Stop button were checked; and Gemma 4's tokenizer
+(`models/ggml-vocab-gemma-4.gguf` in llama.cpp) read the prompt's control marks as single tokens, `<turn|>` as the end of a
+turn, and sanitized text as plain text.
 
 ### The demo song (0.52.0)
 

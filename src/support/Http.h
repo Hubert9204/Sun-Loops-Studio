@@ -2,6 +2,9 @@
 
 #include <atomic>
 #include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <functional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -40,6 +43,33 @@ Response perform (const Request& request);
 // The CA certificate bundle used (CURL_CA_BUNDLE or SSL_CERT_FILE when set, else the first that exists among the distributions'
 // usual places); empty means libcurl's own default.
 std::string caBundle();
+
+// A big file downloaded to disk (0.64.0: Helios's language models, a few GB). It is written to "<destination>.part" and renamed to
+// `destination` only when complete; a ".part" left by an interrupted download is continued where it stopped (HTTP Range), or
+// started again when the server cannot continue it. Blocking: call it from a worker thread.
+struct Download
+{
+    std::string url;
+    std::filesystem::path destination;
+    // Bytes so far and in all (0 when the server does not say), at most a few times a second, on the downloading thread.
+    std::function<void (std::uint64_t done, std::uint64_t total)> progress;
+    const std::atomic<bool>* cancel = nullptr; // set to true to stop (the .part file stays, for continuing later)
+    long connectTimeoutSeconds = 20;
+    long stallSeconds = 60; // gives up when less than 1 KB/s arrives for this long
+};
+
+struct DownloadResult
+{
+    long status = 0;          // the last HTTP status
+    std::string error;        // empty when the file is complete
+    bool offline = false;
+    bool cancelled = false;
+    std::uint64_t bytes = 0;  // the size of the file (or of the .part file)
+
+    bool ok() const noexcept { return error.empty(); }
+};
+
+DownloadResult download (const Download& request);
 
 // Percent-encoding for URL query values (RFC 3986 unreserved characters are kept).
 std::string urlEncode (std::string_view text);

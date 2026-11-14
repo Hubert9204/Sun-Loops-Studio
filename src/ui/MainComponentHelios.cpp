@@ -1,4 +1,5 @@
-// Part of MainComponent: Helios (0.40.0), the offline help: the manual searched on this computer, and commands it can run.
+// Part of MainComponent: Helios (0.40.0), the offline help: the manual searched on this computer, and commands it can run; and
+// (0.64.0) its LLM mode, a chat with a language model on this computer (HeliosAssistant).
 #include "ui/MainComponent.h"
 
 #include "HelpData.h"
@@ -70,10 +71,39 @@ void MainComponent::openHelios (const juce::String& question)
         heliosWindow = std::make_unique<HeliosWindow>();
         heliosWindow->onClose = [safe = juce::Component::SafePointer<MainComponent> (this)]
         {
-            juce::MessageManager::callAsync ([safe] { if (safe != nullptr) safe->heliosWindow.reset(); });
+            juce::MessageManager::callAsync ([safe]
+            {
+                if (safe == nullptr)
+                    return;
+                safe->heliosWindow.reset();
+                // LLM mode (0.64.0): the model's memory (2 to 6 GB) is given back when the window closes; the conversation stays.
+                if (safe->heliosAssistant != nullptr)
+                    safe->heliosAssistant->stop();
+            });
         };
-        heliosWindow->panel().setIndex (&helpIndex());
-        heliosWindow->panel().setCommands (heliosCommands());
+        auto& panel = heliosWindow->panel();
+        panel.setIndex (&helpIndex());
+        panel.setCommands (heliosCommands());
+        if (heliosAssistant == nullptr)
+        {
+            heliosAssistant = std::make_unique<HeliosAssistant> (helpIndex());
+            if (settings != nullptr)
+                heliosAssistant->chooseModel (settings->getValue ("helios.model", "light"));
+        }
+        panel.setAssistant (heliosAssistant.get());
+        panel.setLlmMode (settings != nullptr && settings->getBoolValue ("helios.llmMode", false));
+        panel.onLlmModeChanged = [this] (bool on)
+        {
+            if (settings != nullptr)
+                settings->setValue ("helios.llmMode", on);
+            if (! on && heliosAssistant != nullptr)
+                heliosAssistant->stop(); // the memory back while the plain search is used
+        };
+        panel.onModelChosen = [this] (const juce::String& id)
+        {
+            if (settings != nullptr)
+                settings->setValue ("helios.model", id);
+        };
     }
     heliosWindow->setVisible (true);
     heliosWindow->toFront (true);

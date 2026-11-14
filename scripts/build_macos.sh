@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Builds Sun-Loops-Studio-<version>-macOS.dmg (0.63.0): one universal app (Apple silicon and Intel) with the SunBurst and HexForge
-# plugins inside it, in a disk image with a link to Applications.
+# plugins inside it, in a disk image with a link to Applications. Since 0.64.0 the app also holds sun-loops-helios, Helios's
+# language-model helper (llama.cpp, built once per processor: the first build takes several minutes longer).
 #
 #   scripts/build_macos.sh               # configure + build in build-macos/, write the .dmg to dist/
 #
@@ -44,6 +45,16 @@ done
 for plugin in "$app/Contents/PlugIns/VST3/"*.vst3; do
     [ -d "$plugin" ] && codesign --force --sign - --timestamp=none "$plugin"
 done
+# Helios's helper (0.64.0, the language model's process; built for both processors and joined with lipo) is signed on its own.
+helper="$app/Contents/MacOS/sun-loops-helios"
+if [ -f "$helper" ]; then
+    mkdir -p "$app/Contents/Resources"
+    cp "$root/third_party/llama.cpp/LICENSE-llama.cpp.txt" "$app/Contents/Resources/"
+    codesign --force --sign - --timestamp=none "$helper"
+    echo "Helios helper: $(lipo -archs "$helper")"
+else
+    echo "warning: sun-loops-helios was not built (Helios's LLM mode will say so)" >&2
+fi
 codesign --force --sign - --timestamp=none "$app" # (the microphone question comes from Info.plist)
 codesign --verify --deep --strict "$app"
 echo "Architectures: $(lipo -archs "$app/Contents/MacOS/Sun Loops Studio")"

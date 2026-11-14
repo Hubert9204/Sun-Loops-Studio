@@ -233,7 +233,7 @@ state rinominate); **Reset**, o semplicemente spostare i pannelli, salva quelle 
 
 Premi **F1** o il pulsante **Helios** e scrivi cosa vuoi fare, in italiano o in inglese ("come aggiungo un riverbero?", "how do I
 record two microphones?"). Helios cerca in **questo manuale** e tra i **comandi** del programma, sul tuo computer: niente IA, niente
-internet, non viene inviato nulla.
+internet, non viene inviato nulla. Per parlarci come in una chat c'è la **LLM mode** (sotto).
 
 - I risultati con **Do:** sono comandi (aprire il Mixer, registrare, esportare, aprire un progetto FL Studio, tagliare un loop...):
   doppio clic, **Invio** o **Do it** e Helios lo fa.
@@ -244,6 +244,35 @@ Come trova le cose: cerca le parole della domanda (senza accenti, plurali e desi
 intonazione, VST = plugin, Vocodex = Vocoder, PDC = compensazione del ritardo, live = performance mode) e preferisce il manuale
 nella lingua della domanda. Tra i comandi ci sono anche *Plugin picker*, *Performance mode*, *Step edit* e *Typing keys*. Non capisce le frasi: se non esce nulla di utile, prova
 con meno parole o con altre.
+
+### LLM mode: parlare con Helios (0.64.0)
+
+In alto a destra nella finestra di Helios c'è la spunta **LLM mode**. Accesa, la finestra diventa una **chat**: scrivi la domanda
+come la diresti a una persona ("ho registrato la voce ma si sente in ritardo, cosa faccio?") e Helios risponde con frasi sue,
+partendo da **questo manuale**. Funziona con un **modello linguistico** (Gemma 4 di Google) che gira **sul tuo computer**: dopo il
+download non serve internet e non viene inviato nulla.
+
+- **Il modello si scarica una volta.** Scegli nel menu **Light** (Gemma 4 E2B, 2,8 GB: va su qualsiasi computer, anche vecchio,
+  ma lentamente) o **Better** (Gemma 4 E4B, 4,6 GB: risponde meglio, serve un computer con almeno 16 GB di memoria) e premi
+  **Download**. Il download si può interrompere (**Cancel download**) e riprende da dove si era fermato. **Delete model** lo
+  cancella dal computer. I modelli stanno in `~/.local/share/sun-loops-studio/helios` (Linux), `~/Library/Application
+  Support/Sun Loops Studio/Helios` (Mac) o `%APPDATA%\Sun Loops Studio\Helios` (Windows).
+- **Scrivi e premi Invio** (o **Send**). La prima risposta arriva dopo qualche secondo in più, perché il modello si carica; su un
+  computer vecchio anche qualche minuto. La risposta compare mentre viene scritta; **Stop** la interrompe, **New chat** ricomincia
+  da capo (Helios dimentica la conversazione).
+- **Helios spiega, non agisce**: in LLM mode non preme pulsanti e non tocca il progetto. I comandi (**Do:**) sono nella ricerca
+  normale: togli la spunta.
+- **La memoria**: il modello usa da 2 a 6 GB mentre la finestra di Helios è aperta; chiudendo la finestra (o togliendo la spunta)
+  la memoria torna libera, la conversazione resta. Se il modello si ferma per mancanza di memoria, la DAW e il progetto non ne
+  risentono: prova il modello Light o chiudi altri programmi.
+- **Dove lavora**: sui Mac con Apple silicon usa il chip grafico ed è veloce; sui Mac Intel e sui PC usa il processore.
+- **Può sbagliare.** Risponde partendo dai passi del manuale che trova per la tua domanda; se il manuale non dice una cosa,
+  dovrebbe dirtelo, ma un modello linguistico a volte inventa. Nel dubbio controlla la sezione del manuale con la ricerca normale.
+- Ogni tanto, quando è di buon umore e tu pure, Helios chiude una risposta con **"Lode al Sole"**.
+- La scelta (spunta e modello) viene ricordata. Su un computer senza il modello o senza abbastanza memoria lasciala spenta: la
+  ricerca normale funziona sempre.
+
+Se ti chiede che modello è, Helios lo dice: è basato su Gemma 4 (Google, licenza Apache 2.0) e gira con llama.cpp (licenza MIT).
 
 ## Tastiera
 

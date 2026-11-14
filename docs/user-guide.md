@@ -205,7 +205,7 @@ the panels saves the new ones.
 
 Press **F1** or the **Helios** button and type what you want to do, in English or Italian ("how do I record two microphones?",
 "come aggiungo un riverbero?"). Helios searches **this manual** and the program's **commands** on your computer: no AI, no internet,
-nothing is sent anywhere.
+nothing is sent anywhere. To talk to it as in a chat, there is **LLM mode** (below).
 
 - Results marked **Do:** are commands (open the Mixer, record, export, open an FL Studio project, slice a loop...): double-click one,
   press **Enter** or **Do it** and Helios does it.
@@ -216,6 +216,35 @@ How it finds things: it looks for the words of your question (without accents, p
 editor, VST = plugin, Vocodex = Vocoder, PDC = delay compensation, live = performance mode) and prefers the manual in the
 language of the question. It does not understand sentences: if nothing useful comes up, try fewer or other words. Among the
 commands are also *Plugin picker*, *Performance mode*, *Step edit* and *Typing keys* (0.62.0).
+
+### LLM mode: talking to Helios (0.64.0)
+
+At the top right of the Helios window is the **LLM mode** tick box. Ticked, the window becomes a **chat**: ask the way you would ask
+a person ("I recorded my voice but it sounds late, what do I do?") and Helios answers in its own words, from **this manual**. It
+works with a **language model** (Google's Gemma 4) that runs **on your computer**: after the download no internet is needed and
+nothing is sent anywhere.
+
+- **The model is downloaded once.** Choose **Light** (Gemma 4 E2B, 2.8 GB: runs on any computer, old ones too, slowly) or **Better**
+  (Gemma 4 E4B, 4.6 GB: better answers, for computers with 16 GB of memory or more) and press **Download**. The download can be
+  stopped (**Cancel download**) and goes on where it stopped. **Delete model** removes it from the computer. Models are kept in
+  `~/.local/share/sun-loops-studio/helios` (Linux), `~/Library/Application Support/Sun Loops Studio/Helios` (Mac) or
+  `%APPDATA%\Sun Loops Studio\Helios` (Windows).
+- **Type and press Enter** (or **Send**). The first answer takes a few seconds longer while the model loads; on an old computer, a
+  few minutes. The answer appears as it is written; **Stop** interrupts it, **New chat** starts again (Helios forgets the
+  conversation).
+- **Helios explains, it does not act**: in LLM mode it presses no buttons and does not touch the project. The commands (**Do:**)
+  are in the plain search: untick the box.
+- **Memory**: the model uses 2 to 6 GB while the Helios window is open; closing the window (or unticking the box) gives the memory
+  back, the conversation stays. If the model stops for lack of memory, the program and the project are not affected: try the
+  Light model or close other programs.
+- **Where it runs**: on Macs with Apple silicon it uses the graphics chip and is fast; on Intel Macs and on PCs it uses the processor.
+- **It can be wrong.** It answers from the sections of the manual it finds for your question; when the manual does not say
+  something it should tell you, but a language model sometimes makes things up. When in doubt, read the section with the plain search.
+- Now and then, when it is in a good mood and so are you, Helios ends an answer with **"Lode al Sole"**.
+- The choice (the box and the model) is remembered. On a computer without the model or without enough memory leave it off: the
+  plain search always works.
+
+Asked which model it is, Helios says so: it is based on Gemma 4 (Google, Apache License 2.0) and runs with llama.cpp (MIT License).
 
 ## Keyboard
 

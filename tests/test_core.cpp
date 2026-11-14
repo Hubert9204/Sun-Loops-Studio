@@ -12786,6 +12786,8 @@ void testSunBurst();
 void testHexForge();
 void testCrashReports();
 void testSessionLog();
+void testHeliosChat();     // tests/test_helios.cpp
+void testHeliosDownload(); // tests/test_support.cpp
 
 int main()
 {
@@ -12859,7 +12861,9 @@ int main()
     testHexForge();
     testSemVerAndUpdates();
     testCrashReports();
+    testHeliosDownload();
     testSessionLog();
+    testHeliosChat();
     testMidiNotes();
     testPlayerRewind();
     testClipEditing();

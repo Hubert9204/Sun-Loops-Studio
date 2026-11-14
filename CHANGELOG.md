@@ -2,6 +2,30 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.64.0 - 2026-11-14
+
+Helios learns to talk.
+
+### Added
+- **Helios: LLM mode.** A tick box in the Helios window (F1) turns it into a **chat with a language model that runs on this
+  computer**: Google's **Gemma 4** (*Light*: E2B, 2.8 GB, for any computer; *Better*: E4B, 4.6 GB, for 16 GB of memory or more),
+  downloaded once from Hugging Face when asked, then fully offline. For every question Helios finds the best sections of the
+  user guide (the same search as before) and answers from them, in the user's language; it says so when the manual does not
+  cover something, and says it is based on Gemma 4 when asked. It explains but does not act: the commands stay in the plain search.
+- Its character: **Helios**, sunny, warm and helpful; about one answer in ten may end with **"Lode al Sole"** - never when the
+  user is frustrated or angry, nor for a crash or an emergency.
+- **sun-loops-helios**, the helper program that runs the model with **llama.cpp** (tag b12377, MIT): a separate process, so a
+  model that runs out of memory cannot take the program or an unsaved project with it. On a Mac it is built for Apple silicon
+  (on the graphics chip, Metal) and for Intel (AVX, for Macs from 2012) and joined into one; on Linux it uses the processor.
+  `sun-loops-helios --run model.gguf "..."` tries a model without the program.
+- The model's download continues where it stopped, checks the free disk space first and the file at the end; **Delete model**
+  frees the space. Answers are written as they come; **Stop** and **New chat**. Closing the window gives the model's memory back.
+- A section *LLM mode* in the user guide (both languages), in *architecture.md* and in *building.md*; llama.cpp's licence in
+  `third_party/llama.cpp`, also installed with the AppImage and inside the Mac app; the About box names llama.cpp and Gemma 4.
+
+### Changed
+- `http::download` (libcurl) for big files, next to the small client of the update check.
+
 ## 0.63.0 - 2026-11-13
 
 ### Added

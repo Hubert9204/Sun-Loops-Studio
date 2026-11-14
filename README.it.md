@@ -138,6 +138,8 @@ con precisione cosa è verificato, cosa no e cosa manca.
   sommate danno l'originale.
 - **Helios** (0.40.0) - F1: chiedi come fare qualcosa in italiano o in inglese; cerca nel manuale integrato ed esegue comandi, senza
   rete.
+- **Helios LLM mode** (0.64.0) - con la spunta *LLM mode* Helios diventa una chat: un modello linguistico (Gemma 4 di Google,
+  scaricato una volta, 2,8 o 4,6 GB) che gira sul tuo computer, risponde dal manuale nella tua lingua e non tocca mai il progetto.
 - **Report dei crash e aggiornamenti** (0.43.0) - un log di sessione (spdlog, ruotato a 5 MB); dopo un crash (SIGSEGV, SIGABRT, SIGFPE...)
   il successivo avvio propone di inviare a GitHub, come issue, un report anonimo con stack trace e sistema (o di mostrarlo prima, o di
   eliminarlo); un controllo in background di una release più recente (Semantic Versioning), disattivabile. Nulla viene inviato senza un clic.
@@ -217,6 +219,8 @@ la sua AppImage si possono condividere purché siano accompagnati dal codice sor
 
 `third_party/signalsmith` contiene Signalsmith Stretch e Signalsmith Linear, entrambe con licenza MIT (le licenze e le revisioni esatte sono in quella cartella).
 `third_party/tinysoundfont` contiene `tsf.h` di TinySoundFont (MIT), usato solo per leggere i file SoundFont.
+L'helper di Helios `sun-loops-helios` è compilato con llama.cpp (MIT; la licenza è in `third_party/llama.cpp` e accompagna ogni copia
+dell'helper). I modelli Gemma 4 (Google, licenza Apache 2.0) non fanno parte del programma: la LLM mode li scarica da Hugging Face su richiesta.
 Le registrazioni incorporate mantengono le loro licenze: Salamander Grand Piano di Alexander Holm (CC BY 3.0), Growlybass di Karoryfer
 Lecolds (CC0), DrumGizmo MuldjordKit di Lars Muldjord e DRSKit del team DrumGizmo (CC BY 4.0); vedi
 [resources/sounds/README.md](resources/sounds/README.md) e [tools/sounds](tools/sounds/README.md) per come sono state preparate.

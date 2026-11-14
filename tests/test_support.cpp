@@ -617,6 +617,81 @@ void testCrashReports()
            "owner/repo is checked");
 }
 
+void testHeliosDownload()
+{
+    std::cout << "Downloads to a file, continued after an interruption (0.64.0, Helios's models)\n";
+    const auto dir = freshFolder ("download");
+    std::string model = "GGUF";
+    for (int i = 0; model.size() < 300000; ++i)
+        model += static_cast<char> ('a' + i % 26);
+    const auto raw = [] (int status, const std::string& reason, const std::string& body, const std::string& extra = {})
+    {
+        return "HTTP/1.1 " + std::to_string (status) + " " + reason + "\r\nContent-Type: application/octet-stream\r\nContent-Length: "
+               + std::to_string (body.size()) + "\r\n" + extra + "Connection: close\r\n\r\n" + body;
+    };
+
+    {
+        MiniServer server (raw (200, "OK", model));
+        std::uint64_t lastDone = 0, lastTotal = 0;
+        sls::http::Download d;
+        d.url = server.base() + "/model.gguf";
+        d.destination = dir / "models" / "model.gguf";
+        d.progress = [&] (std::uint64_t done, std::uint64_t total) { lastDone = done; lastTotal = total; };
+        const auto r = sls::http::download (d);
+        supportCheck (r.ok() && r.status == 200 && r.bytes == model.size() && readAll (d.destination) == model
+                          && ! fs::exists (dir / "models" / "model.gguf.part"),
+                      "a download: the whole file, in a folder made for it, no .part file left");
+        supportCheck (lastDone == model.size() && lastTotal == model.size(), "the progress ends at the file's size");
+    }
+    {
+        MiniServer server (raw (404, "Not Found", "no such file"));
+        sls::http::Download d;
+        d.url = server.base() + "/missing.gguf";
+        d.destination = dir / "missing.gguf";
+        const auto r = sls::http::download (d);
+        supportCheck (! r.ok() && r.status == 404 && r.error.find ("404") != std::string::npos && ! fs::exists (d.destination),
+                      "404: an error, no file (and the error page is not saved as the model)");
+        std::error_code ignored;
+        fs::remove (dir / "missing.gguf.part", ignored);
+    }
+    {
+        const auto part = dir / "resumed.gguf.part";
+        { std::ofstream (part, std::ios::binary) << model.substr (0, 1000); }
+        MiniServer server (raw (206, "Partial Content", model.substr (1000),
+                                "Content-Range: bytes 1000-" + std::to_string (model.size() - 1) + "/" + std::to_string (model.size()) + "\r\n"));
+        sls::http::Download d;
+        d.url = server.base() + "/model.gguf";
+        d.destination = dir / "resumed.gguf";
+        const auto r = sls::http::download (d);
+        supportCheck (server.received().find ("Range: bytes=1000-") != std::string::npos, "an interrupted download asks for the rest only");
+        supportCheck (r.ok() && readAll (d.destination) == model && ! fs::exists (part), "and the file is whole");
+    }
+    {
+        const auto part = dir / "restarted.gguf.part";
+        { std::ofstream (part, std::ios::binary) << "something else entirely"; }
+        MiniServer server (raw (200, "OK", model)); // a server that cannot continue sends everything
+        sls::http::Download d;
+        d.url = server.base() + "/model.gguf";
+        d.destination = dir / "restarted.gguf";
+        const auto r = sls::http::download (d);
+        supportCheck (r.ok() && readAll (d.destination) == model, "a server that sends the whole file again: the .part file is started over");
+    }
+    {
+        MiniServer server ("", true); // never answers
+        std::atomic<bool> cancel { false };
+        sls::http::Download d;
+        d.url = server.base() + "/slow.gguf";
+        d.destination = dir / "slow.gguf";
+        d.cancel = &cancel;
+        std::thread stopper ([&cancel] { std::this_thread::sleep_for (std::chrono::milliseconds (300)); cancel.store (true); });
+        const auto started = std::chrono::steady_clock::now();
+        const auto r = sls::http::download (d);
+        stopper.join();
+        supportCheck (r.cancelled && ! r.ok() && std::chrono::steady_clock::now() - started < std::chrono::seconds (5) && ! fs::exists (d.destination),
+                      "cancelled: it stops within a second or so, no file");
+    }
+}
+
 void testSessionLog()
 {
     std::cout << "Session log: spdlog, rotating files (0.43.0)\n";
