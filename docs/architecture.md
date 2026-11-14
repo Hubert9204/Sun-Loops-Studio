@@ -668,6 +668,20 @@ headless (the export's renderer) with its loudness (BS.1770), true peak and a ba
 - Undo: `recordHistory()` only notes an edit made with a mouse button down (`historyPending`); `timerCallback` calls
   `flushHistory()`, which captures and compares the project once the button is up. Undo and redo flush a waiting edit first.
 
+### SunRiff, the electric guitar plugin (0.68.0)
+
+- `src/sunriff/` (plain DSP plus the `RiffProcessor`, a `synthkit::SynthProcessor`; built into the plugin and the tests):
+  `RiffString` (a waveguide string: `DelayLine` with Lagrange reading, a two-tap loop filter, a first-order stiffness allpass, both
+  delays subtracted so the note is in tune, an excitation shaped by the pick and combed by its place, slap buzz, fret noise and a
+  pickup tap combing like a real one), `RiffPlayer` (the playing modes: chord recognition and voicings, strums with alternating
+  direction, the solo stack with fixed or distance-dependent slides; keys within 12 ms are a chord), `RiffAmp` (four amp types,
+  three ADAA tanh stages, the EQ, cabinets as filter chains), `RiffFx` (the 15 effects), `RiffParams`, `RiffPresets`. The
+  processor runs in 16-sample chunks: strings -> pickup resonance and body formants -> AMP effect -> amp and cabinet -> MST effect;
+  the amp's output of one chunk feeds back into the strings in the next.
+- `plugins/sunriff/`: `RiffEditor` (the guitar with its draggable pickup, radio buttons bound to the choice parameters, the
+  hwui panels) and the entry point. `tests/test_sunriff.cpp`: tuning of every string type, damping, Hold and the pedal, the two
+  bends, the playing modes, every amp/cabinet/effect with full drive and feedback, the presets, no allocation.
+
 ### SunSymphony, the orchestral sampler plugin (0.66.0, Milestone 0)
 
 - `src/orchestra/` (plain C++, built into the plugin and the tests): `Instrument` (immutable once playing: `Region`s that share

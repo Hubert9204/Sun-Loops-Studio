@@ -30,7 +30,7 @@ void MainComponent::initPlugins()
     else
     {
         const int added = pluginHost->addBundledPlugins();
-        for (const char* name : { "SunBurst", "HexForge", "SunSymphony" })
+        for (const char* name : { "SunBurst", "HexForge", "SunSymphony", "SunRiff" })
         {
             bool listed = false;
             for (const auto& t : pluginHost->known().getTypes())

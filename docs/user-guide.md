@@ -714,6 +714,29 @@ presets** in eight categories - Neuro, Reese, Dubstep, DnB, Cyberpunk, Dark Synt
 volumes; in each the mod wheel adds FM, Macro 1 = cutoff, Macro 2 = FM depth, Macro 3 = distortion, Macro 4 = unison width.
 Your presets go to `~/.config/HexForge/Presets`.
 
+## SunRiff, the electric guitar (0.68.0)
+
+SunRiff is an electric guitar plugin (VST3 and Standalone) with the controls of FL Studio's FL Slayer: Browser > Instruments >
+*SunRiff (electric guitar)*. The strings are physical models, not recordings, so every control changes how the string behaves.
+
+- **Pickup** (left): drag the pickup on the guitar towards the neck (round, warm) or the bridge (thin, bright). *Coil type*: None
+  (the string itself), Single (bright, clear), Double (a humbucker: fuller and darker).
+- **Play**: *Playing mode* - None (a synthesizer), Autochords (one key plays a six-string major chord; play the minor third or the
+  seventh with it for minor or seventh chords), Powerchords, Strumming (keys pressed together are strummed, alternately down and up),
+  SoloFixed and SoloDynamic (one string: a key pressed while another is held slides to it, in a fixed time or longer for longer
+  slides). *Speed* sets the strum or the slide. *Hold* lets the strings ring after the keys (the sustain pedal does the same).
+  *Glissando* picks which bend is coarse (+-12 semitones): PB1 the pitch wheel, PB2 the *Pitch Bend 2* knob; the other is fine (+-2).
+- **String**: Noise (the classic plucked algorithm), 6String1 (round), 6String2 (bright steel), 6String3 (warm, flat-wound), Slap,
+  EBass, Fretless.
+- **Guitar**: Tone (the body's resonances), Slap (the string hitting the frets, with velocity), Fret (finger and pick noise),
+  Harmonic (pickup brightness), Vel (how much velocity matters), Damping (how long the strings ring; high for palm-muted sounds) and
+  Damp Vel (how much velocity lengthens the ring).
+- **Amp**: Dry (EQ only, for unplugged sounds), Tube, EQ (the EQ before the distortion) and Bandpass (Presence sets the band);
+  Drive, Presence, Feedback (the amp's sound back into the strings, for singing, endless notes), Low (200 Hz), Mid (1 kHz),
+  High (2.5 kHz). *Cabinet*: Dry, British (aggressive), Combo (softer), StaX (heavy, bright).
+- **FX unit**: one effect, before the amp (Phaser, Tremolo, WahWah, WahWah LFO, Ringmod, Fuzz Box, Harmonizer, Talkbox) or after
+  it (Chorus, Flanger, Phaser, Leslie, Tremolo, DubDelay, Multitap). The two knobs show what they do for the chosen effect.
+
 ## SunSymphony, the orchestral sampler (0.66.0, preview)
 
 SunSymphony is the orchestral sampler that comes with the program (VST3 and Standalone): Browser > Instruments >

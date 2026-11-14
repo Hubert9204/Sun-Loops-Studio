@@ -2,6 +2,26 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.68.0 - 2026-11-14
+
+SunRiff, the electric guitar.
+
+### Added
+- **SunRiff**, an electric guitar plugin (VST3 and Standalone) with FL Slayer's controls, bundled like the other instruments
+  (Browser > Instruments > *SunRiff (electric guitar)*):
+  - **Strings** as physical models (digital waveguides: a fractional delay, frequency-dependent damping, stiffness, a pick shaped
+    by its hardness and the place it plucks): Noise (the classic Karplus-Strong), 6String1/2/3, Slap, EBass, Fretless.
+  - **Pickup**: None, Single or Double coil, dragged along the strings on the guitar (bridge to neck); Tone (the body's formants),
+    Slap, Fret noise, Harmonic (pickup brightness), Vel, Damping and Damping Vel.
+  - **Playing modes**: None, Autochords (a key, or the keys played with it, becomes a six-string chord), Powerchords, Strumming
+    (keys played together are strummed, down and up), SoloFixed and SoloDynamic (slides between held keys); Speed, Hold (also the
+    sustain pedal), Glissando (which bend is coarse, +-12, and which fine, +-2) and Pitch Bend 2.
+  - **Amp**: Dry, Tube, EQ, Bandpass, with Drive, Presence, Feedback (the amp's output back into the strings: endless sustain),
+    Low, Mid, High; **cabinets** Dry, British, Combo, StaX. The saturation is anti-aliased.
+  - **FX unit**: Phaser, Tremolo, WahWah, WahWah LFO, Ringmod, Fuzz Box, Harmonizer and Talkbox before the amp; Chorus, Flanger,
+    Phaser, Leslie, Tremolo, DubDelay and Multitap after it; two parameters each, named on the knobs.
+  - 34 factory presets (clean, crunch, lead, metal, bass, FX), the user's own presets, every control automatable.
+
 ## 0.67.0 - 2026-11-14
 
 SunSymphony downloads its orchestra.

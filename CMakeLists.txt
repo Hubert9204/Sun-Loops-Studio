@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.22)
 # 10.15 Catalina (0.63.0): the newest macOS of Intel Macs from 2012 (Mac mini, iMac, MacBook Pro). The Apple silicon half of the
 # app needs macOS 11 in any case (the first macOS for those Macs); the compiler refuses any call that Catalina does not have.
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Oldest macOS the program runs on")
-project(SunLoopsStudio VERSION 0.67.0 LANGUAGES C CXX ASM)
+project(SunLoopsStudio VERSION 0.68.0 LANGUAGES C CXX ASM)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -488,6 +488,44 @@ if(SLS_BUILD_SUNSYMPHONY)
     add_dependencies(SunLoopsStudio SunSymphony_VST3)
 endif()
 
+# --- SunRiff: the electric guitar plugin (0.68.0), after FL Slayer, VST3 and Standalone ---------------------------------
+set(SUNRIFF_SOURCES
+    src/sunriff/RiffString.cpp
+    src/sunriff/RiffAmp.cpp
+    src/sunriff/RiffFx.cpp
+    src/sunriff/RiffPlayer.cpp
+    src/sunriff/RiffParams.cpp
+    src/sunriff/RiffPresets.cpp
+    src/sunriff/RiffProcessor.cpp
+    src/synthkit/SynthProcessor.cpp)
+
+option(SLS_BUILD_SUNRIFF "Build the SunRiff guitar plugin (VST3 and Standalone)" ON)
+if(SLS_BUILD_SUNRIFF)
+    juce_add_plugin(SunRiff
+        COMPANY_NAME "Sun Loops Studio"
+        PRODUCT_NAME "SunRiff"
+        VERSION ${PROJECT_VERSION}
+        PLUGIN_MANUFACTURER_CODE Sunl
+        PLUGIN_CODE Srif
+        IS_SYNTH TRUE
+        NEEDS_MIDI_INPUT TRUE
+        FORMATS VST3 Standalone
+        VST3_CATEGORIES Instrument Synth
+        COPY_PLUGIN_AFTER_BUILD FALSE)
+    target_sources(SunRiff PRIVATE ${SUNRIFF_SOURCES} plugins/common/HardwareUi.cpp plugins/common/SynthUi.cpp
+                   plugins/sunriff/RiffEditor.cpp plugins/sunriff/PluginMain.cpp)
+    target_include_directories(SunRiff PRIVATE src plugins)
+    target_compile_definitions(SunRiff PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
+    target_link_libraries(SunRiff PRIVATE
+        juce::juce_audio_utils
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_warning_flags)
+    install(DIRECTORY "${CMAKE_BINARY_DIR}/SunRiff_artefacts/$<CONFIG>/VST3/SunRiff.vst3"
+            DESTINATION lib/vst3
+            USE_SOURCE_PERMISSIONS)
+    add_dependencies(SunLoopsStudio SunRiff_VST3)
+endif()
+
 # --- Headless tests ----------------------------------------------------------
 juce_add_console_app(SunLoopsStudioTests
     PRODUCT_NAME "SunLoopsStudioTests")
@@ -500,12 +538,14 @@ target_sources(SunLoopsStudioTests PRIVATE
     tests/test_helios.cpp
     tests/test_orchestra.cpp
     tests/test_sunsymphony_library.cpp
+    tests/test_sunriff.cpp
     plugins/sunsymphony/LibraryManager.cpp
     src/ui/PianoRoll.cpp # 0.58.0: the spare quarter is tested through its public functions
     ${SLS_CORE_SOURCES}
     ${SUNBURST_SOURCES}
     ${HEXFORGE_SOURCES}
-    ${ORCHESTRA_SOURCES})
+    ${ORCHESTRA_SOURCES}
+    ${SUNRIFF_SOURCES})
 
 target_include_directories(SunLoopsStudioTests PRIVATE src plugins)
 target_include_directories(SunLoopsStudioTests SYSTEM PRIVATE third_party/signalsmith third_party/tinysoundfont)
@@ -572,6 +612,9 @@ if(SLS_BUILD_HEXFORGE)
 endif()
 if(SLS_BUILD_SUNSYMPHONY)
     add_dependencies(SunLoopsStudioTests SunSymphony_VST3)
+endif()
+if(SLS_BUILD_SUNRIFF)
+    add_dependencies(SunLoopsStudioTests SunRiff_VST3)
 endif()
 
 enable_testing()

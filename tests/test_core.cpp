@@ -12137,6 +12137,24 @@ void testSunBurstInHost()
     for (const float v : symOut)
         symFinite = symFinite && std::isfinite (v);
     check (symFinite && rmsWindow (symOut, 0.05, 0.4) > 0.01f, "a chord plays through SunSymphony (the built-in test tone) in the Player");
+
+    // SunRiff (0.68.0), the electric guitar: bundled the same way.
+    const auto* riffType = findPlugin (host, "SunRiff", "VST3");
+    check (riffType != nullptr && riffType->isInstrument, "SunRiff is listed next to them as a VST3 instrument");
+    if (riffType == nullptr)
+        return;
+    auto riff = host.create (*riffType, kSr, sls::Player::kChunk, error);
+    check (riff != nullptr && riff->isLoaded() && riff->parameterCount() >= 27, "SunRiff loads, with its parameters for automation");
+    if (riff == nullptr)
+        return;
+    c.plugin = riff;
+    sls::Player q2;
+    q2.prepare (kSr);
+    const auto riffOut = renderBlocks (q2, sls::Project::make ({ c }, 16 * kBeat), true, 1.0);
+    bool riffFinite = true;
+    for (const float v : riffOut)
+        riffFinite = riffFinite && std::isfinite (v);
+    check (riffFinite && rmsWindow (riffOut, 0.05, 0.4) > 0.005f, "a chord plays through SunRiff in the Player");
 }
 
 void testPluginHosting()
@@ -12886,6 +12904,7 @@ void testSunBurst();
 void testHexForge();
 void testOrchestra();     // tests/test_orchestra.cpp
 void testSunSymphonyLibrary(); // tests/test_sunsymphony_library.cpp
+void testSunRiff();       // tests/test_sunriff.cpp
 void testCrashReports();
 void testSessionLog();
 void testHeliosChat();     // tests/test_helios.cpp
@@ -12964,6 +12983,7 @@ int main()
     testHexForge();
     testOrchestra();
     testSunSymphonyLibrary();
+    testSunRiff();
     testSemVerAndUpdates();
     testCrashReports();
     testHeliosDownload();

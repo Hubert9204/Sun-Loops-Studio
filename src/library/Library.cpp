@@ -215,10 +215,11 @@ BrowserNode buildBrowserTree (const LibraryPaths& paths, const std::vector<Plugi
         instruments.children.push_back (leaf ("Synth", NodeKind::Instrument, "synth"));
         instruments.children.push_back (leaf ("Sampler", NodeKind::Instrument, "sampler"));
         instruments.children.push_back (leaf ("Drum machine", NodeKind::Instrument, "drums"));
-        // The plugins that come with the program, when they have been found: SunBurst (0.48.0), HexForge (0.50.0), SunSymphony (0.66.0).
+        // The plugins that come with the program, when they have been found: SunBurst (0.48.0), HexForge (0.50.0), SunSymphony (0.66.0), SunRiff (0.68.0).
         for (const auto& [name, label] : { std::pair<const char*, const char*> { "SunBurst", "SunBurst (synthesizer)" },
                                            std::pair<const char*, const char*> { "HexForge", "HexForge (FM synthesizer)" },
-                                           std::pair<const char*, const char*> { "SunSymphony", "SunSymphony (orchestral sampler, preview)" } })
+                                           std::pair<const char*, const char*> { "SunSymphony", "SunSymphony (orchestral sampler, preview)" },
+                                           std::pair<const char*, const char*> { "SunRiff", "SunRiff (electric guitar)" } })
             for (const auto& p : plugins)
                 if (p.isInstrument && p.name == name && p.format == "VST3")
                 {

@@ -758,6 +758,30 @@ fabbrica** in otto categorie - Neuro, Reese, Dubstep, DnB, Cyberpunk, Dark Synth
 pareggiati; in tutti la mod wheel aggiunge FM, Macro 1 = cutoff, Macro 2 = profondità FM, Macro 3 = distorsione, Macro 4 =
 larghezza dell'unison. I tuoi preset vanno in `~/.config/HexForge/Presets`.
 
+## SunRiff, la chitarra elettrica (0.68.0)
+
+SunRiff è un plugin di chitarra elettrica (VST3 e Standalone) con i controlli di FL Slayer di FL Studio: Browser > Instruments >
+*SunRiff (electric guitar)*. Le corde sono modelli fisici, non registrazioni: ogni controllo cambia il comportamento della corda.
+
+- **Pickup** (a sinistra): trascina il pickup sulla chitarra verso il manico (suono tondo, caldo) o verso il ponte (sottile,
+  brillante). *Coil type*: None (la corda e basta), Single (brillante, definito), Double (un humbucker: più pieno e scuro).
+- **Play**: *Playing mode* - None (come un synth), Autochords (un tasto suona un accordo maggiore su sei corde; suona insieme la
+  terza minore o la settima per accordi minori o di settima), Powerchords, Strumming (i tasti premuti insieme vengono pennati,
+  alternando giù e su), SoloFixed e SoloDynamic (una corda sola: un tasto premuto mentre un altro è tenuto ci scivola sopra, in un
+  tempo fisso o più lungo per salti più ampi). *Speed* regola la pennata o il glissato. *Hold* lascia suonare le corde dopo aver
+  lasciato i tasti (lo fa anche il pedale di risonanza). *Glissando* sceglie quale bend è ampio (+-12 semitoni): PB1 la rotella del
+  pitch bend, PB2 la manopola *Pitch Bend 2*; l'altro è fine (+-2).
+- **String**: Noise (il classico algoritmo a pizzico), 6String1 (tondo), 6String2 (acciaio brillante), 6String3 (caldo,
+  flat-wound), Slap, EBass, Fretless.
+- **Guitar**: Tone (le risonanze del corpo), Slap (la corda che sbatte sui tasti, con la velocity), Fret (rumore di dita e
+  plettro), Harmonic (brillantezza del pickup), Vel (quanto conta la velocity), Damping (quanto suonano le corde; alto per il palm
+  mute) e Damp Vel (quanto la velocity allunga la durata).
+- **Amp**: Dry (solo EQ, per suoni acustici), Tube, EQ (l'EQ prima della distorsione) e Bandpass (Presence sceglie la banda);
+  Drive, Presence, Feedback (il suono dell'ampli torna nelle corde: note che cantano all'infinito), Low (200 Hz), Mid (1 kHz),
+  High (2,5 kHz). *Cabinet*: Dry, British (aggressiva), Combo (più morbida), StaX (pesante, brillante).
+- **FX unit**: un effetto, prima dell'ampli (Phaser, Tremolo, WahWah, WahWah LFO, Ringmod, Fuzz Box, Harmonizer, Talkbox) o dopo
+  (Chorus, Flanger, Phaser, Leslie, Tremolo, DubDelay, Multitap). Le due manopole mostrano cosa fanno per l'effetto scelto.
+
 ## SunSymphony, il campionatore orchestrale (0.66.0, anteprima)
 
 SunSymphony è il campionatore orchestrale che arriva con il programma (VST3 e Standalone): Browser > Instruments >

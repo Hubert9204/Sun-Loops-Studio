@@ -130,6 +130,9 @@ plugins. See [docs/roadmap.md](docs/roadmap.md) for exactly what is and is not v
 - **SunSymphony** (0.66.0, preview) - the orchestral sampler plugin (VST3 and Standalone) in the making: 16 parts on the 16 MIDI
   channels, 128 voices, SFZ instruments (zones, velocity layers, round robins, loops), Hermite interpolation. Its Library page (0.67.0)
   downloads 29 orchestral instruments (3 GB, free CC0 sounds from Versilian Studios) with one click. Browser > Instruments > SunSymphony.
+- **SunRiff** (0.68.0) - an electric guitar plugin (VST3 and Standalone) with FL Slayer's controls: physically modelled strings
+  (electric, slap, bass, fretless), a pickup you drag between bridge and neck, chord, strum, power-chord and solo-slide modes, a
+  tube amp with feedback into the strings, four cabinets, 15 effects and 34 presets. Browser > Instruments > SunRiff.
 - **Plugins** - VST3, LV2 and LADSPA instruments and effects: scan them from the browser, double-click or drag an instrument for a channel,
   pick an effect in a mixer slot, open the plugin's own window; their settings are saved in the project, and a missing plugin keeps them.
 - **Automation** - right-click a volume, pan, fader or effect parameter > *Create automation clip*; clips live on four lanes under the

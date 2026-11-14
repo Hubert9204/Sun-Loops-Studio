@@ -118,6 +118,9 @@ con precisione cosa è verificato, cosa no e cosa manca.
 - **SunSymphony** (0.66.0, anteprima) - il campionatore orchestrale (VST3 e Standalone) in costruzione: 16 parti sui 16 canali MIDI,
   128 voci, strumenti SFZ (zone, strati di velocity, round robin, loop), interpolazione Hermite. La sua pagina Libreria (0.67.0)
   scarica con un clic 29 strumenti orchestrali (3 GB, suoni gratuiti CC0 di Versilian Studios). Browser > Instruments > SunSymphony.
+- **SunRiff** (0.68.0) - un plugin di chitarra elettrica (VST3 e Standalone) con i controlli di FL Slayer: corde a modelli fisici
+  (elettrica, slap, basso, fretless), un pickup da trascinare tra ponte e manico, modi accordi, strumming, power chord e assoli con
+  glissato, un ampli valvolare con feedback sulle corde, quattro casse, 15 effetti e 34 preset. Browser > Instruments > SunRiff.
 - **Plugin** - strumenti ed effetti VST3, LV2 e LADSPA: si cercano dal browser, doppio clic o trascinamento di uno strumento per un canale,
   un effetto si sceglie in uno slot del mixer, ognuno ha la sua finestra; le impostazioni si salvano nel progetto, anche se il plugin manca.
 - **Mixer** (`F9`) - 8 tracce verticali all'inizio e fino a **500** (0.29.0: il **+** dopo l'ultima traccia ne aggiunge altre), ognuna con fader e dB, bilanciamento stereo, mute, solo, indicatore
