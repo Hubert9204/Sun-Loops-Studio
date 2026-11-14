@@ -12909,6 +12909,7 @@ void testCrashReports();
 void testSessionLog();
 void testHeliosChat();     // tests/test_helios.cpp
 void testHeliosDownload(); // tests/test_support.cpp
+void testDesktopIntegration(); // tests/test_support.cpp
 
 int main()
 {
@@ -12987,6 +12988,7 @@ int main()
     testSemVerAndUpdates();
     testCrashReports();
     testHeliosDownload();
+    testDesktopIntegration();
     testSessionLog();
     testHeliosChat();
     testMidiNotes();

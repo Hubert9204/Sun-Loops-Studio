@@ -2,6 +2,16 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.68.1 - 2026-11-14
+
+### Fixed
+- **Project files show the Sun Loops Studio icon on Linux also with the AppImage** (before, file managers showed a generic
+  document: only `cmake --install` registered the `.slp` type). At its first start the program writes the `.slp` file type, its
+  icon (8 sizes) and a menu entry that starts the AppImage from where it is into `~/.local/share`, refreshes the desktop's caches
+  (update-mime-database, update-desktop-database, gtk-update-icon-cache, kbuildsycoca) and, if no program was chosen for `.slp`
+  files yet, makes itself the one that opens them on a double-click. Later starts write only what changed (a moved or newer
+  AppImage updates the menu entry); a menu entry made by the user is left alone; an installed copy does nothing.
+
 ## 0.68.0 - 2026-11-14
 
 SunRiff, the electric guitar.

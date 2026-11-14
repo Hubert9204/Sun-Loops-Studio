@@ -114,7 +114,9 @@ on a build machine without it the packing can stop, so install it first (`sudo d
 
 AppImages normally mount themselves through FUSE 2. Fedora and Nobara may not have it installed: either
 `sudo dnf install fuse-libs`, or run with `--appimage-extract-and-run` (slower start, no FUSE needed).
-The AppImage does not add a menu entry by itself; tools such as AppImageLauncher or Gear Lever do that, or use
+Since 0.68.1 the program, started from the AppImage, registers itself for the user at its first start: the `.slp` file type and
+its icon, and a menu entry that starts the AppImage from where it is (`~/.local/share/mime`, `icons/hicolor`, `applications`;
+see `src/support/DesktopIntegration.cpp`). Before 0.68.1 the AppImage added no menu entry by itself; tools such as AppImageLauncher or Gear Lever do that, or use
 `cmake --install` instead.
 
 ## Helios's helper: sun-loops-helios (0.64.0)

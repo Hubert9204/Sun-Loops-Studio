@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.22)
 # 10.15 Catalina (0.63.0): the newest macOS of Intel Macs from 2012 (Mac mini, iMac, MacBook Pro). The Apple silicon half of the
 # app needs macOS 11 in any case (the first macOS for those Macs); the compiler refuses any call that Catalina does not have.
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Oldest macOS the program runs on")
-project(SunLoopsStudio VERSION 0.68.0 LANGUAGES C CXX ASM)
+project(SunLoopsStudio VERSION 0.68.1 LANGUAGES C CXX ASM)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -232,6 +232,7 @@ target_sources(SunLoopsStudio PRIVATE
     src/ui/CrashReportDialog.cpp
     src/ui/MetersView.cpp
     src/ui/SampleEditor.cpp
+    src/support/DesktopIntegration.cpp # 0.68.1: the .slp icon and file type, also from the AppImage
     ${SLS_CORE_SOURCES})
 
 target_include_directories(SunLoopsStudio PRIVATE src)
@@ -539,6 +540,7 @@ target_sources(SunLoopsStudioTests PRIVATE
     tests/test_orchestra.cpp
     tests/test_sunsymphony_library.cpp
     tests/test_sunriff.cpp
+    src/support/DesktopIntegration.cpp
     plugins/sunsymphony/LibraryManager.cpp
     src/ui/PianoRoll.cpp # 0.58.0: the spare quarter is tested through its public functions
     ${SLS_CORE_SOURCES}
@@ -565,6 +567,7 @@ target_link_libraries(SunLoopsStudioTests PRIVATE
     SunLoopsLibraryData
     SunLoopsDemos
     SunSymphonyData
+    SunLoopsIcons
     juce::juce_audio_formats
     juce::juce_audio_processors
     juce::juce_cryptography

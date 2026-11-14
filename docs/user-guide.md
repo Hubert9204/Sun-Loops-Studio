@@ -104,8 +104,13 @@ automation by `tools/demos` (see its README).
 
 The browser's second folder, **My Projects**, lists the `.slp` files in `~/Music/Sun Loops Studio/Projects` (where *Save* puts an
 untitled project), sub-folders included; double-click one to open it (right-click > *Show in the file manager* to find the file).
-Project files carry the program's icon, in the browser and in the file manager (Linux: the `.slp` type's icon is installed with the
-program; macOS: the Finder shows the app's icon on `.slp` files).
+Project files carry the program's icon, in the browser and in the file manager, and a double-click on one opens it (macOS: the
+Finder shows the app's icon on `.slp` files). On Linux (0.68.1) the program sets this up itself the first time it starts, also as an
+AppImage: it writes the `.slp` file type, its icon and a menu entry for the program into `~/.local/share` (`mime`, `icons`,
+`applications`), and keeps the menu entry pointing at the AppImage when you move it or download a newer one. Some file managers
+show the new icon only after they are closed and opened again (or after logging out and in). To undo it, delete
+`~/.local/share/mime/packages/sun-loops-studio.xml`, `~/.local/share/applications/sun-loops-studio.desktop` and the
+`sun-loops-studio` / `application-x-sun-loops-studio-project` icons.
 
 Everything in the song is saved in one `.slp` file: channels (instrument, sample, volume, pan, pitch, swing,
 mixer track), all patterns and their notes, the playlist, the mixer (faders, balance, mute/solo, effect chains and

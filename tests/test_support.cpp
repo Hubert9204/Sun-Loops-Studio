@@ -33,6 +33,10 @@
 
 #include "support/CrashHandler.h"
 #include "support/CrashReport.h"
+#include "support/DesktopIntegration.h"
+
+#include <juce_events/juce_events.h>
+#include <juce_graphics/juce_graphics.h>
 #include "support/GitHub.h"
 #include "support/Http.h"
 #include "support/Logging.h"
@@ -720,4 +724,43 @@ void testSessionLog()
     std::error_code ignored;
     if (std::getenv ("SLS_KEEP_TEST_FILES") == nullptr)
         fs::remove_all (fs::temp_directory_path() / ("sls-support-test-" + std::to_string (::getpid())), ignored);
+}
+
+// 0.68.1: the .slp file type, its icon and the menu entry, written into the user's data folder (also from the AppImage).
+void testDesktopIntegration()
+{
+    std::cout << "Desktop integration: the project files' icon and file type (0.68.1)\n";
+    const juce::ScopedJuceInitialiser_GUI juceInit; // images
+    const auto dir = freshFolder ("desktop");
+    sls::desktop::Setup setup { dir, "/home/me/Apps/Sun Loops \"Studio\".AppImage" };
+    const auto first = sls::desktop::install (setup);
+    const juce::File data (juce::String (dir.string()));
+    const auto mime = data.getChildFile ("mime/packages/sun-loops-studio.xml").loadFileAsString();
+    const auto entry = data.getChildFile ("applications/sun-loops-studio.desktop").loadFileAsString();
+    bool icons = true;
+    for (const int size : { 16, 22, 24, 32, 48, 64, 128, 256 })
+        for (const char* path : { "mimetypes/application-x-sun-loops-studio-project.png", "apps/sun-loops-studio.png" })
+        {
+            const auto file = data.getChildFile ("icons/hicolor/" + juce::String (size) + "x" + juce::String (size) + "/" + path);
+            const auto image = juce::ImageFileFormat::loadFrom (file);
+            icons = icons && image.isValid() && image.getWidth() == size && image.getHeight() == size;
+        }
+    supportCheck (first.changed && first.desktopFileCreated && first.error.isEmpty() && mime.contains ("*.slp")
+                      && mime.contains ("application/x-sun-loops-studio-project") && mime.contains ("<icon name=\"application-x-sun-loops-studio-project\"/>"),
+                  "the .slp file type is declared, with the program's icon");
+    supportCheck (icons, "the icon is written at every size, for the file type and the program");
+    supportCheck (entry.contains ("Exec=\"/home/me/Apps/Sun Loops \\\"Studio\\\".AppImage\" %f") && entry.contains ("MimeType=application/x-sun-loops-studio-project;")
+                      && entry.contains ("Icon=sun-loops-studio"),
+                  "the menu entry starts the AppImage where it is (quoted), for .slp files");
+    const auto again = sls::desktop::install (setup);
+    supportCheck (! again.changed && again.written.isEmpty(), "a second start writes nothing (nothing changed)");
+    setup.executable = "/home/me/Downloads/Sun-Loops-Studio-0.69.0-x86_64.AppImage";
+    const auto moved = sls::desktop::install (setup);
+    supportCheck (moved.changed && moved.written.size() == 1 && ! moved.desktopFileCreated
+                      && data.getChildFile ("applications/sun-loops-studio.desktop").loadFileAsString().contains ("0.69.0"),
+                  "a new or moved AppImage updates the menu entry only");
+    data.getChildFile ("applications/sun-loops-studio.desktop").replaceWithText ("[Desktop Entry]\nName=Mine\n");
+    const auto theirs = sls::desktop::install (setup);
+    supportCheck (! theirs.changed && data.getChildFile ("applications/sun-loops-studio.desktop").loadFileAsString().contains ("Mine"),
+                  "a menu entry the user made is left alone");
 }

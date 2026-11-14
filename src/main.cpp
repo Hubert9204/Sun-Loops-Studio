@@ -6,6 +6,7 @@
 
 #include "support/CrashHandler.h"
 #include "support/CrashReport.h"
+#include "support/DesktopIntegration.h"
 #include "support/Logging.h"
 #include "ui/MainComponent.h"
 
@@ -42,6 +43,8 @@ public:
             return;
         }
        #endif
+        // 0.68.1: project files get the program's icon and open it on a double-click (also from the AppImage).
+        sls::desktop::integrateInBackground();
         mainWindow = std::make_unique<MainWindow> (getApplicationName());
 
         // "sun-loops-studio song.slp" (or a double-click on a project file) opens that project.
