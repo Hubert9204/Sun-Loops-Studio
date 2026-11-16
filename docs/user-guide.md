@@ -944,15 +944,23 @@ at a glance; on tall tracks the name sits in a title bar above the notes, on sho
   adds its own track at the end and the playlist scrolls to it: with 4 patterns there are 4 pattern tracks + the 4 free ones = 8.
 - A click on an empty place of a pattern's track puts **that pattern** there; on a free track it puts the pattern chosen in the
   pattern box. Clips can still be moved to any track.
-- The **-** and **+** buttons in the top-left corner, above the track names, remove the **last** track and add a free track at
-  the end. To remove a particular track, right-click its name > *Delete this track* (the menu also has *Add a track at the
-  end*). A track that holds clips is removed only after a question, and its clips go with it; **Ctrl+Z** brings everything back.
-  At least one track stays; at most 128.
+- **Three sections** (0.69.0), one above the other, each with a bar that carries its name, how many rows it has and its own
+  **-** and **+** buttons: **Audio** (the free tracks: recordings, audio files), **Patterns** (the patterns' own tracks) and
+  **Automation** (the automation lanes, *Auto 1*, *Auto 2*...). **+** adds a track (a lane) at the **end of its section**: a new
+  audio track goes under the last audio track, and the pattern tracks below move down with their clips. **-** removes the
+  **last empty** track (lane) of its section; when every one holds clips it removes the last one, after a question, with its
+  clips. Each section keeps at least one track (lane); there are at most 128 tracks and 32 lanes. To remove a particular track,
+  right-click its name > *Delete this track* (the menu also has *Add an audio track* / *Add a pattern track*). **Ctrl+Z**
+  brings everything back.
+- The **borders between the sections** can be dragged up and down (the pointer becomes a vertical double arrow over them, and
+  the border lights up): the two sections beside it share their height anew, the track names and the clips together, and no
+  section gets lower than one row. A group of tracks (*Group with the track above*) stays inside its section.
 - Deleting a pattern removes its track too when nothing else is on it; a track that still holds clips (a recording, say) stays,
   as a free track with the pattern's old name.
-- Up to 8 tracks share the height of the panel; with more, they scroll: the scroll bar on the right, the **mouse wheel over the
-  track names**, or **Alt + wheel** anywhere.
-- Projects saved before 0.44.0 open with their 8 tracks as they were.
+- Each section scrolls on its own when its rows do not fit: its scroll bar on the right, the **mouse wheel over the names** of
+  the section, or **Alt + wheel** anywhere over it.
+- Projects saved before 0.44.0 open with their 8 tracks as they were. Projects saved before 0.69.0 open with the tracks above
+  the first pattern's own track in the Audio section and the others in the Patterns section (nothing moves), and 4 lanes.
 
 The timeline is at least 32 lengths of the longest pattern and at least 64 bars long. The zoom counts in bars of 4/4. The ruler shows bar
 numbers. The orange vertical line marks the end of the song: in Song mode playback loops there (or at the loop region, below).
@@ -1331,7 +1339,7 @@ automation never changes them). Touching a control while it moves sets its own v
 the tempo (use tempo changes, 0.46.0) and anything else.
 
 **Create a clip.** Right-click the control and choose *Create automation clip*. A clip one pattern long appears on one of the four
-**automation lanes** (*Auto 1-4*, under the tracks of the Playlist) and its editor opens. The clip is a flat line at the
+**automation lanes** (*Auto 1*, *Auto 2*..., the Playlist's Automation section; 4 in a new project, more with its **+**) and its editor opens. The clip is a flat line at the
 control's current value. It starts at the pattern under the playhead if the song is playing in Song mode, otherwise at the start of the song. If all four
 lanes are already occupied there (or 64 clips exist), nothing is created and the status line says so; move or delete a clip and try again.
 
@@ -1622,7 +1630,7 @@ a heavier song or a plugin-heavy mixer can still need a bigger size.
 ## Limits
 
 - Up to 32 channels, up to 500 mixer tracks (8 to start with) with 10 effect slots each, 2 aux buses (10 slots each), 2 VCA groups, 64 patterns, 1 to 128 playlist tracks, a timeline of
-  at least 32 patterns and 64 bars, 4 automation lanes, 64 automation clips of up to 256 points each, 32 simultaneous voices.
+  at least 32 patterns and 64 bars, 4 automation lanes (up to 32 since 0.69.0), 64 automation clips of up to 256 points each, 32 simultaneous voices.
 - The effects use about 15 MB of memory at 48 kHz to start with, plus about 0.8 MB for every reverb, delay, chorus and Pitch Corrector beyond
   the sixteenth (more at higher sample rates). Memory made for them stays until the audio device restarts.
 - Patterns are 4 to 64 quarters long (each its own; 2 or 3 in a short time signature); one time signature for the whole song; up to 256 tempo changes, in steps, played in Song mode only; audio clips do not follow them.

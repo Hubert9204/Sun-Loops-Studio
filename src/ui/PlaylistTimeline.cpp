@@ -37,6 +37,8 @@ const juce::Colour kAutomationColour { 0xff9b6bd1 };
 const juce::Colour kLaneA { 0xff262a38 };
 const juce::Colour kLaneB { 0xff232634 };
 const juce::Colour kLoop { 0xff5fb0ff };
+const juce::Colour kSectionBar { 0xff1d2026 }; // 0.69.0: the sections' bars and the borders between them
+const juce::Colour kSplitter { 0xff15171b };
 
 constexpr int kMaxUndo = 64;
 
@@ -50,19 +52,32 @@ PlaylistTimeline::PlaylistTimeline (Arrangement& arrangementToEdit) : arrangemen
     scrollBar.addListener (this);
     scrollBar.setAutoHide (false);
     addAndMakeVisible (scrollBar);
-    trackScrollBar.addListener (this);
-    trackScrollBar.setAutoHide (false);
-    addChildComponent (trackScrollBar);
-    // The tracks' - and + (0.44.0), in the corner above the track names.
-    removeTrackButton.setTooltip ("Remove the last playlist track (right-click a track's name to delete that one)");
-    addTrackButton.setTooltip ("Add a playlist track at the end");
-    removeTrackButton.onClick = [this] { removeTrack (arrangement.trackCount() - 1); };
-    addTrackButton.onClick = [this] { addTrack(); };
-    for (auto* b : { &removeTrackButton, &addTrackButton })
+    // 0.69.0: each section scrolls on its own and has its own - / + in its bar.
+    for (int s = 0; s < kSectionCount; ++s)
     {
-        b->setMouseClickGrabsKeyboardFocus (false);
-        b->setWantsKeyboardFocus (false);
-        addAndMakeVisible (b);
+        auto& bar = sectionScrollBar (s);
+        bar.addListener (this);
+        bar.setAutoHide (false);
+        addChildComponent (bar);
+    }
+    static const char* const what[] = { "audio track", "pattern track", "automation lane" };
+    for (int s = 0; s < kSectionCount; ++s)
+    {
+        auto& remove = removeButtons[static_cast<size_t> (s)];
+        auto& add = addButtons[static_cast<size_t> (s)];
+        remove.setButtonText ("-");
+        add.setButtonText ("+");
+        remove.setTooltip (juce::String ("Remove the last empty ") + what[s] + " of this section (when every one holds clips, the last one, after asking)");
+        add.setTooltip (juce::String (s == kPatternSection ? "Add a " : "Add an ") + what[s] + " at the end of this section");
+        remove.onClick = [this, s] { removeFromSection (s); };
+        add.onClick = [this, s] { addToSection (s); };
+        for (auto* b : { &remove, &add })
+        {
+            b->setMouseClickGrabsKeyboardFocus (false);
+            b->setWantsKeyboardFocus (false);
+            b->setConnectedEdges (b == &remove ? juce::Button::ConnectedOnRight : juce::Button::ConnectedOnLeft);
+            addAndMakeVisible (b);
+        }
     }
     unitWidth = 120.0;
 }
@@ -70,7 +85,8 @@ PlaylistTimeline::PlaylistTimeline (Arrangement& arrangementToEdit) : arrangemen
 PlaylistTimeline::~PlaylistTimeline()
 {
     scrollBar.removeListener (this);
-    trackScrollBar.removeListener (this);
+    for (int s = 0; s < kSectionCount; ++s)
+        sectionScrollBar (s).removeListener (this);
 }
 
 juce::Colour PlaylistTimeline::colourForPattern (int patternIndex)
@@ -101,38 +117,120 @@ double PlaylistTimeline::getPixelsPerTick() const noexcept
     return unitWidth / kPlaylistUnitTicks;
 }
 
-namespace
-{
-int availableTrackHeight (int componentHeight) noexcept
-{
-    return componentHeight - 38 - 14 - kAutomationLanes * 22 - 4; // ruler, scroll bar, automation lanes, gap
-}
-} // namespace
+// ------------------------------------------------------------------------- the three sections (0.69.0)
 
-// Up to kMaxVisibleTracks tracks share the height; more keep that size and scroll (0.44.0).
-int PlaylistTimeline::trackHeight() const noexcept
+juce::ScrollBar& PlaylistTimeline::sectionScrollBar (int section) noexcept
 {
-    return std::clamp (availableTrackHeight (getHeight()) / std::clamp (visibleRows(), 1, kMaxVisibleTracks), 18, 56);
+    return section == kAudioSection ? audioScrollBar : section == kPatternSection ? patternScrollBar : laneScrollBar;
 }
 
-// 0.62.0: rows and tracks differ once a group is folded.
+// The bodies' heights: the room left by the ruler, the bars, the borders and the scroll bar, shared in the proportions of
+// sectionShares; none is lower than kMinSectionBody while there is room for that.
+std::array<int, 3> PlaylistTimeline::bodyHeights() const noexcept
+{
+    const int total = std::max (0, getHeight() - kRulerHeight - kScrollBarHeight - kSectionCount * kSectionBarHeight - (kSectionCount - 1) * kSplitterHeight);
+    std::array<int, 3> h {};
+    double shares = 0.0;
+    for (const double share : sectionShares)
+        shares += std::max (0.0, share);
+    if (shares <= 0.0)
+        shares = 1.0;
+    h[0] = static_cast<int> (std::lround (total * std::max (0.0, sectionShares[0]) / shares));
+    h[1] = static_cast<int> (std::lround (total * std::max (0.0, sectionShares[1]) / shares));
+    h[0] = std::clamp (h[0], 0, total);
+    h[1] = std::clamp (h[1], 0, total - h[0]);
+    h[2] = total - h[0] - h[1];
+    const int minimum = std::min (kMinSectionBody, total / kSectionCount);
+    for (size_t i = 0; i < h.size(); ++i)
+    {
+        int need = minimum - h[i];
+        while (need > 0)
+        {
+            size_t richest = i == 0 ? 1 : 0;
+            for (size_t j = 0; j < h.size(); ++j)
+                if (j != i && h[j] > h[richest])
+                    richest = j;
+            const int take = std::min (need, h[richest] - minimum);
+            if (take <= 0)
+                break;
+            h[richest] -= take;
+            h[i] += take;
+            need -= take;
+        }
+    }
+    return h;
+}
+
+PlaylistTimeline::SectionArea PlaylistTimeline::sectionArea (int section) const noexcept
+{
+    const auto h = bodyHeights();
+    int y = kRulerHeight;
+    for (int s = 0; s < section; ++s)
+        y += kSectionBarHeight + h[static_cast<size_t> (s)] + kSplitterHeight;
+    SectionArea a;
+    a.barTop = y;
+    a.bodyTop = y + kSectionBarHeight;
+    a.bodyHeight = h[static_cast<size_t> (std::clamp (section, 0, kSectionCount - 1))];
+    return a;
+}
+
+juce::Rectangle<int> PlaylistTimeline::sectionBody (int section, bool timelineOnly) const noexcept
+{
+    const auto a = sectionArea (section);
+    const int x = timelineOnly ? kNameWidth : 0;
+    return { x, a.bodyTop, std::max (0, getWidth() - x), a.bodyHeight };
+}
+
+int PlaylistTimeline::splitterTop (int splitter) const noexcept
+{
+    return sectionArea (splitter).bodyBottom();
+}
+
+int PlaylistTimeline::splitterAt (int y) const noexcept
+{
+    for (int k = 0; k < kSectionCount - 1; ++k)
+    {
+        const int top = splitterTop (k);
+        if (y >= top - 1 && y < top + kSplitterHeight + 1) // a pixel of slack on both sides
+            return k;
+    }
+    return -1;
+}
+
+int PlaylistTimeline::sectionAt (int y) const noexcept
+{
+    for (int s = 0; s < kSectionCount; ++s)
+    {
+        const auto a = sectionArea (s);
+        if (y >= a.bodyTop && y < a.bodyBottom())
+            return s;
+    }
+    return -1;
+}
+
+int PlaylistTimeline::sectionRows (int section) const noexcept
+{
+    if (section == kAutomationSection)
+        return arrangement.automationLanes;
+    int rows = 0;
+    for (int t = sectionFirstTrack (section); t < sectionEndTrack (section); ++t)
+        rows += arrangement.trackHidden (t) ? 0 : 1;
+    return rows;
+}
+
+// 0.62.0: rows and tracks differ once a group is folded. 0.69.0: rows count inside the track's own section.
 int PlaylistTimeline::rowOf (int track) const noexcept
 {
     int row = 0;
-    for (int t = 0; t < track && t < arrangement.trackCount(); ++t)
+    for (int t = sectionFirstTrack (sectionOfTrack (track)); t < track && t < arrangement.trackCount(); ++t)
         row += arrangement.trackHidden (t) ? 0 : 1;
     return row;
 }
 
-int PlaylistTimeline::visibleRows() const noexcept
+int PlaylistTimeline::trackAtRow (int section, int row) const noexcept
 {
-    return std::max (1, rowOf (arrangement.trackCount()));
-}
-
-int PlaylistTimeline::trackAtRow (int row) const noexcept
-{
-    int last = 0;
-    for (int t = 0; t < arrangement.trackCount(); ++t)
+    int last = -1;
+    for (int t = sectionFirstTrack (section); t < sectionEndTrack (section); ++t)
     {
         if (arrangement.trackHidden (t))
             continue;
@@ -141,6 +239,41 @@ int PlaylistTimeline::trackAtRow (int row) const noexcept
             return t;
     }
     return last;
+}
+
+int PlaylistTimeline::trackTop (int track) const noexcept
+{
+    constexpr int offScreen = -100000;
+    if (track < 0 || track >= arrangement.trackCount() || arrangement.trackHidden (track))
+        return offScreen;
+    const int section = sectionOfTrack (track);
+    const auto a = sectionArea (section);
+    const int y = a.bodyTop + rowOf (track) * kRowHeight - sectionScroll[static_cast<size_t> (section)];
+    return y + kRowHeight <= a.bodyTop || y >= a.bodyBottom() ? offScreen : y;
+}
+
+bool PlaylistTimeline::inTracks (int y) const noexcept
+{
+    const int section = sectionAt (y);
+    if (section != kAudioSection && section != kPatternSection)
+        return false;
+    const auto a = sectionArea (section);
+    return (y - a.bodyTop + sectionScroll[static_cast<size_t> (section)]) / kRowHeight < sectionRows (section);
+}
+
+bool PlaylistTimeline::inLanes (int y) const noexcept
+{
+    if (sectionAt (y) != kAutomationSection)
+        return false;
+    const auto a = sectionArea (kAutomationSection);
+    return (y - a.bodyTop + sectionScroll[kAutomationSection]) / kLaneHeight < arrangement.automationLanes;
+}
+
+int PlaylistTimeline::yToLane (int y) const noexcept
+{
+    const auto a = sectionArea (kAutomationSection);
+    const int inside = std::clamp (y, a.bodyTop, std::max (a.bodyTop, a.bodyBottom() - 1));
+    return std::clamp ((inside - a.bodyTop + sectionScroll[kAutomationSection]) / kLaneHeight, 0, std::max (0, arrangement.automationLanes - 1));
 }
 
 juce::Rectangle<int> PlaylistTimeline::foldRect (int track) const noexcept
@@ -156,7 +289,7 @@ void PlaylistTimeline::toggleTrackFlag (int track, int which)
     auto& t = arrangement.playlistTracks[static_cast<size_t> (track)];
     if (which == 0)
         t.locked = ! t.locked;
-    else if (which == 1 && track > 0)
+    else if (which == 1 && track > 0 && sectionOfTrack (track - 1) == sectionOfTrack (track)) // 0.69.0: inside a section
         t.grouped = ! t.grouped;
     else if (which == 2)
         t.collapsed = ! t.collapsed;
@@ -167,40 +300,82 @@ void PlaylistTimeline::toggleTrackFlag (int track, int which)
     repaint();
 }
 
-int PlaylistTimeline::tracksViewHeight() const noexcept
-{
-    const int th = trackHeight();
-    return std::max (th, std::min (visibleRows() * th, availableTrackHeight (getHeight())));
-}
-
 int PlaylistTimeline::lanesTop() const noexcept
 {
-    return kRulerHeight + tracksViewHeight() + kLanesGap;
+    return sectionArea (kAutomationSection).bodyTop - sectionScroll[kAutomationSection];
 }
 
 void PlaylistTimeline::clampScrollY()
 {
-    scrollY = std::clamp (scrollY, 0, std::max (0, visibleRows() * trackHeight() - tracksViewHeight()));
+    for (int s = 0; s < kSectionCount; ++s)
+        sectionScroll[static_cast<size_t> (s)] = std::clamp (sectionScroll[static_cast<size_t> (s)], 0,
+                                                             std::max (0, sectionContentHeight (s) - sectionArea (s).bodyHeight));
 }
 
 void PlaylistTimeline::updateTrackScrollBar()
 {
-    const int content = visibleRows() * trackHeight();
-    const int view = tracksViewHeight();
-    trackScrollBar.setVisible (content > view);
-    trackScrollBar.setBounds (getWidth() - kTrackScrollWidth, kRulerHeight, kTrackScrollWidth, view);
-    trackScrollBar.setRangeLimits (0.0, std::max (content, view));
-    trackScrollBar.setCurrentRange (scrollY, view, juce::dontSendNotification);
+    for (int s = 0; s < kSectionCount; ++s)
+    {
+        const auto a = sectionArea (s);
+        const int content = sectionContentHeight (s);
+        auto& bar = sectionScrollBar (s);
+        bar.setVisible (content > a.bodyHeight && a.bodyHeight > 0);
+        bar.setBounds (getWidth() - kTrackScrollWidth, a.bodyTop, kTrackScrollWidth, a.bodyHeight);
+        bar.setRangeLimits (0.0, std::max (content, a.bodyHeight));
+        bar.setCurrentRange (sectionScroll[static_cast<size_t> (s)], a.bodyHeight, juce::dontSendNotification);
+    }
+}
+
+void PlaylistTimeline::layoutSections()
+{
+    for (int s = 0; s < kSectionCount; ++s)
+    {
+        const int y = sectionArea (s).barTop + 2;
+        removeButtons[static_cast<size_t> (s)].setBounds (4, y, 20, kSectionBarHeight - 4);
+        addButtons[static_cast<size_t> (s)].setBounds (24, y, 20, kSectionBarHeight - 4);
+    }
+    clampScrollY();
+    updateTrackScrollBar();
+}
+
+void PlaylistTimeline::updateSectionButtons()
+{
+    for (int s = 0; s < kSectionCount; ++s)
+    {
+        const bool lanes = s == kAutomationSection;
+        const int count = lanes ? arrangement.automationLanes : sectionEndTrack (s) - sectionFirstTrack (s);
+        removeButtons[static_cast<size_t> (s)].setEnabled (count > 1 && (lanes || arrangement.trackCount() > 1));
+        addButtons[static_cast<size_t> (s)].setEnabled (lanes ? arrangement.automationLanes < kMaxAutomationLanes
+                                                              : arrangement.trackCount() < kMaxPlaylistTracks);
+    }
 }
 
 void PlaylistTimeline::scrollToTrack (int track)
 {
-    const int th = trackHeight();
-    const int top = rowOf (track) * th;
-    if (top < scrollY)
-        scrollY = top;
-    else if (top + th > scrollY + tracksViewHeight())
-        scrollY = top + th - tracksViewHeight();
+    if (track < 0 || track >= arrangement.trackCount())
+        return;
+    const int section = sectionOfTrack (track);
+    auto& scroll = sectionScroll[static_cast<size_t> (section)];
+    const int view = sectionArea (section).bodyHeight;
+    const int top = rowOf (track) * kRowHeight;
+    if (top < scroll)
+        scroll = top;
+    else if (top + kRowHeight > scroll + view)
+        scroll = top + kRowHeight - view;
+    clampScrollY();
+    updateTrackScrollBar();
+    repaint();
+}
+
+void PlaylistTimeline::scrollToLane (int lane)
+{
+    auto& scroll = sectionScroll[kAutomationSection];
+    const int view = sectionArea (kAutomationSection).bodyHeight;
+    const int top = lane * kLaneHeight;
+    if (top < scroll)
+        scroll = top;
+    else if (top + kLaneHeight > scroll + view)
+        scroll = top + kLaneHeight - view;
     clampScrollY();
     updateTrackScrollBar();
     repaint();
@@ -209,8 +384,7 @@ void PlaylistTimeline::scrollToTrack (int track)
 void PlaylistTimeline::tracksChanged()
 {
     armedTrack = std::clamp (armedTrack, 0, trackCount() - 1);
-    removeTrackButton.setEnabled (arrangement.trackCount() > 1);
-    addTrackButton.setEnabled (arrangement.trackCount() < kMaxPlaylistTracks);
+    updateSectionButtons();
     clampScrollY();
     updateTrackScrollBar();
     repaint();
@@ -218,14 +392,107 @@ void PlaylistTimeline::tracksChanged()
 
 void PlaylistTimeline::addTrack()
 {
+    addToSection (kAudioSection);
+}
+
+void PlaylistTimeline::addToSection (int section)
+{
+    if (section == kAutomationSection)
+    {
+        beginEdit();
+        if (! arrangement.addAutomationLane())
+        {
+            pendingUndoValid = false;
+            return;
+        }
+        commitPendingUndo();
+        tracksChanged();
+        scrollToLane (arrangement.automationLanes - 1);
+        notifyChanged();
+        return;
+    }
     if (arrangement.trackCount() >= kMaxPlaylistTracks)
         return;
     beginEdit();
-    arrangement.addTrack();
+    const int track = arrangement.insertTrack (trackSectionOf (section));
+    if (track < 0)
+    {
+        pendingUndoValid = false;
+        return;
+    }
     commitPendingUndo();
+    // the clips' indices did not change, only their tracks: the selection stays; the selected track follows its track
+    if (armedTrack >= track && armedTrack + 1 < arrangement.trackCount())
+        ++armedTrack;
+    for (int t = kMaxPlaylistTracks - 1; t > track; --t)
+        recordArms[static_cast<size_t> (t)] = recordArms[static_cast<size_t> (t - 1)];
+    recordArms[static_cast<size_t> (track)] = false;
     tracksChanged();
-    scrollToTrack (arrangement.trackCount() - 1);
+    scrollToTrack (track);
+    if (onTrackInserted)
+        onTrackInserted (track);
     notifyChanged();
+}
+
+void PlaylistTimeline::removeFromSection (int section)
+{
+    if (section == kAutomationSection)
+    {
+        if (arrangement.automationLanes <= 1)
+            return;
+        int lane = arrangement.automationLanes - 1;
+        for (int l = arrangement.automationLanes - 1; l >= 0; --l)
+            if (arrangement.clipsOnLane (l) == 0)
+            {
+                lane = l;
+                break;
+            }
+        removeLane (lane);
+        return;
+    }
+    const int first = sectionFirstTrack (section), end = sectionEndTrack (section);
+    if (end - first <= 1 || arrangement.trackCount() <= 1)
+        return;
+    int track = end - 1;
+    for (int t = end - 1; t >= first; --t)
+        if (arrangement.clipsOnTrack (t) == 0)
+        {
+            track = t;
+            break;
+        }
+    removeTrack (track);
+}
+
+void PlaylistTimeline::removeLane (int lane)
+{
+    if (lane < 0 || lane >= arrangement.automationLanes || arrangement.automationLanes <= 1)
+        return;
+    const auto doRemove = [safe = juce::Component::SafePointer<PlaylistTimeline> (this), lane]
+    {
+        if (safe == nullptr)
+            return;
+        safe->beginEdit();
+        if (! safe->arrangement.removeAutomationLane (lane))
+        {
+            safe->pendingUndoValid = false;
+            return;
+        }
+        safe->commitPendingUndo();
+        safe->clearSelection(); // the automation clips' indices changed
+        safe->tracksChanged();
+        safe->notifyChanged();
+    };
+    const int clipsThere = arrangement.clipsOnLane (lane);
+    if (clipsThere == 0)
+    {
+        doRemove();
+        return;
+    }
+    juce::AlertWindow::showOkCancelBox (juce::MessageBoxIconType::QuestionIcon, "Delete automation lane " + juce::String (lane + 1) + "?",
+                                        "The lane holds " + juce::String (clipsThere) + (clipsThere == 1 ? " automation clip, which is" : " automation clips, which are")
+                                            + " deleted with it (Undo brings them back).",
+                                        "Delete the lane", "Cancel", this,
+                                        juce::ModalCallbackFunction::create ([doRemove] (int result) { if (result != 0) doRemove(); }));
 }
 
 void PlaylistTimeline::removeTrack (int track)
@@ -269,9 +536,20 @@ juce::Rectangle<int> PlaylistTimeline::automationClipRect (const AutomationClip&
     return { x0, lanesTop() + c.lane * kLaneHeight, std::max (2, x1 - x0), kLaneHeight };
 }
 
+// Clamped to the tracks: y in a track section's body picks the row there; elsewhere the nearer track section's nearest row.
 int PlaylistTimeline::yToTrack (int y) const noexcept
 {
-    return std::clamp (trackAtRow ((y - kRulerHeight + scrollY) / trackHeight()), 0, trackCount() - 1);
+    const auto audio = sectionArea (kAudioSection), patterns = sectionArea (kPatternSection);
+    int section = y < (audio.bodyBottom() + patterns.bodyTop) / 2 ? kAudioSection : kPatternSection;
+    if (sectionRows (section) == 0)
+        section = section == kAudioSection ? kPatternSection : kAudioSection;
+    const int rows = sectionRows (section);
+    if (rows == 0)
+        return 0;
+    const auto a = sectionArea (section);
+    const int inside = std::clamp (y, a.bodyTop, std::max (a.bodyTop, a.bodyBottom() - 1));
+    const int row = std::clamp ((inside - a.bodyTop + sectionScroll[static_cast<size_t> (section)]) / kRowHeight, 0, rows - 1);
+    return std::clamp (trackAtRow (section, row), 0, trackCount() - 1);
 }
 
 juce::Rectangle<int> PlaylistTimeline::clipRect (const Clip& c) const noexcept
@@ -333,13 +611,14 @@ void PlaylistTimeline::updateScrollBar()
 
 void PlaylistTimeline::scrollBarMoved (juce::ScrollBar* bar, double newRangeStart)
 {
-    if (bar == &trackScrollBar)
-    {
-        scrollY = static_cast<int> (std::lround (newRangeStart));
-        clampScrollY();
-        repaint();
-        return;
-    }
+    for (int section = 0; section < kSectionCount; ++section)
+        if (bar == &sectionScrollBar (section))
+        {
+            sectionScroll[static_cast<size_t> (section)] = static_cast<int> (std::lround (newRangeStart));
+            clampScrollY();
+            repaint();
+            return;
+        }
     scrollX = newRangeStart;
     clampScroll();
     repaint();
@@ -392,21 +671,27 @@ void PlaylistTimeline::zoomToTicks (int fromTick, int toTick)
     repaint();
 }
 
+juce::MouseCursor PlaylistTimeline::toolCursor() const
+{
+    switch (tool)
+    {
+        case PlaylistTool::Draw:   return juce::MouseCursor::NormalCursor;
+        case PlaylistTool::Split:  return juce::MouseCursor::IBeamCursor;
+        case PlaylistTool::Cut:    return juce::MouseCursor::CrosshairCursor;
+        case PlaylistTool::Erase:  return juce::MouseCursor::PointingHandCursor;
+        case PlaylistTool::Zoom:   return juce::MouseCursor::CrosshairCursor;
+        case PlaylistTool::Select: return juce::MouseCursor::CrosshairCursor;
+        case PlaylistTool::Mute:   return juce::MouseCursor::PointingHandCursor;
+        case PlaylistTool::Slip:   return juce::MouseCursor::LeftRightResizeCursor;
+        case PlaylistTool::Paint:  return juce::MouseCursor::CrosshairCursor;
+    }
+    return juce::MouseCursor::NormalCursor;
+}
+
 void PlaylistTimeline::setTool (PlaylistTool newTool)
 {
     tool = newTool;
-    switch (tool)
-    {
-        case PlaylistTool::Draw: setMouseCursor (juce::MouseCursor::NormalCursor); break;
-        case PlaylistTool::Split:  setMouseCursor (juce::MouseCursor::IBeamCursor); break;
-        case PlaylistTool::Cut:    setMouseCursor (juce::MouseCursor::CrosshairCursor); break;
-        case PlaylistTool::Erase:  setMouseCursor (juce::MouseCursor::PointingHandCursor); break;
-        case PlaylistTool::Zoom:   setMouseCursor (juce::MouseCursor::CrosshairCursor); break;
-        case PlaylistTool::Select: setMouseCursor (juce::MouseCursor::CrosshairCursor); break;
-        case PlaylistTool::Mute:   setMouseCursor (juce::MouseCursor::PointingHandCursor); break;
-        case PlaylistTool::Slip:   setMouseCursor (juce::MouseCursor::LeftRightResizeCursor); break;
-        case PlaylistTool::Paint:  setMouseCursor (juce::MouseCursor::CrosshairCursor); break;
-    }
+    setMouseCursor (toolCursor());
     repaint();
 }
 
@@ -647,16 +932,14 @@ void PlaylistTimeline::resized()
     scrollBar.setBounds (kNameWidth, getHeight() - kScrollBarHeight, std::max (1, getWidth() - kNameWidth), kScrollBarHeight);
     clampScroll();
     updateScrollBar();
-    removeTrackButton.setBounds (6, 8, 38, kRulerHeight - 16);
-    addTrackButton.setBounds (50, 8, 38, kRulerHeight - 16);
-    clampScrollY();
-    updateTrackScrollBar();
+    layoutSections();
+    updateSectionButtons();
 }
 
 void PlaylistTimeline::paintGrid (juce::Graphics& g)
 {
     const int top = kRulerHeight;
-    const int bottom = lanesBottom();
+    const int bottom = getHeight() - kScrollBarHeight; // 0.69.0: down the three sections (their bars are drawn over it)
     const double ppt = getPixelsPerTick();
     const int firstTick = std::max (0, static_cast<int> (std::floor (scrollX / ppt)) - 1);
     const int lastTick = std::min (arrangement.timelineTicks(), static_cast<int> (std::ceil ((scrollX + getWidth()) / ppt)) + 1);
@@ -1038,10 +1321,11 @@ void PlaylistTimeline::paintLoopRegion (juce::Graphics& g)
     g.fillRect (b - 2, 0, 2, kRulerHeight);
     // a faint band down the tracks, so the region can be seen against the clips
     g.setColour (kLoop.withAlpha (0.07f));
-    g.fillRect (a, kRulerHeight, b - a, tracksViewHeight());
+    const int bottom = getHeight() - kScrollBarHeight; // 0.69.0: down the three sections
+    g.fillRect (a, kRulerHeight, b - a, bottom - kRulerHeight);
     g.setColour (kLoop.withAlpha (0.45f));
-    g.drawVerticalLine (a, static_cast<float> (kRulerHeight), static_cast<float> (kRulerHeight + tracksViewHeight()));
-    g.drawVerticalLine (b - 1, static_cast<float> (kRulerHeight), static_cast<float> (kRulerHeight + tracksViewHeight()));
+    g.drawVerticalLine (a, static_cast<float> (kRulerHeight), static_cast<float> (bottom));
+    g.drawVerticalLine (b - 1, static_cast<float> (kRulerHeight), static_cast<float> (bottom));
     if (b - a > 44)
     {
         g.setColour (juce::Colours::black.withAlpha (0.85f));
@@ -1061,25 +1345,31 @@ void PlaylistTimeline::paint (juce::Graphics& g)
         juce::Graphics::ScopedSaveState state (g);
         g.reduceClipRegion (kNameWidth, 0, getWidth() - kNameWidth, getHeight());
 
+        // The rows of each section (0.69.0), each kept inside its section's body.
+        for (const int section : { kAudioSection, kPatternSection })
         {
             juce::Graphics::ScopedSaveState rows (g);
-            g.reduceClipRegion (kNameWidth, kRulerHeight, getWidth() - kNameWidth, tracksViewHeight());
-            for (int t = 0; t < arrangement.trackCount(); ++t)
+            g.reduceClipRegion (sectionBody (section, true));
+            for (int t = sectionFirstTrack (section); t < sectionEndTrack (section); ++t)
             {
-                if (trackTop (t) + th < kRulerHeight || trackTop (t) > kRulerHeight + tracksViewHeight())
+                const int top = trackTop (t);
+                if (top < -th)
                     continue;
-                auto row = t % 2 == 0 ? kTrackA : kTrackB;
+                auto row = rowOf (t) % 2 == 0 ? kTrackA : kTrackB;
                 if (const auto colour = arrangement.playlistTracks[static_cast<size_t> (t)].colour; colour != 0)
                     row = row.interpolatedWith (juce::Colour (colour).withAlpha (1.0f), 0.14f); // a coloured track (0.33.0)
                 g.setColour (row);
-                g.fillRect (kNameWidth, trackTop (t), getWidth() - kNameWidth, th);
+                g.fillRect (kNameWidth, top, getWidth() - kNameWidth, th);
             }
         }
-
-        for (int lane = 0; lane < kAutomationLanes; ++lane)
         {
-            g.setColour (lane % 2 == 0 ? kLaneA : kLaneB);
-            g.fillRect (kNameWidth, lanesTop() + lane * kLaneHeight, getWidth() - kNameWidth, kLaneHeight);
+            juce::Graphics::ScopedSaveState lanes (g);
+            g.reduceClipRegion (sectionBody (kAutomationSection, true));
+            for (int lane = 0; lane < arrangement.automationLanes; ++lane)
+            {
+                g.setColour (lane % 2 == 0 ? kLaneA : kLaneB);
+                g.fillRect (kNameWidth, lanesTop() + lane * kLaneHeight, getWidth() - kNameWidth, kLaneHeight);
+            }
         }
 
         paintGrid (g);
@@ -1091,12 +1381,10 @@ void PlaylistTimeline::paint (juce::Graphics& g)
         if (songTicks > 0)
         {
             g.setColour (kPlayhead.withAlpha (0.35f));
-            g.drawVerticalLine (tickToX (songTicks), static_cast<float> (kRulerHeight), static_cast<float> (kRulerHeight + tracksViewHeight()));
+            g.drawVerticalLine (tickToX (songTicks), static_cast<float> (kRulerHeight), static_cast<float> (getHeight() - kScrollBarHeight));
         }
 
-        // The tracks' clips, kept inside the tracks' area when the tracks scroll (0.44.0).
-        g.saveState();
-        g.reduceClipRegion (kNameWidth, kRulerHeight, getWidth() - kNameWidth, tracksViewHeight());
+        // The tracks' clips, kept inside their section's body when the tracks scroll (0.44.0; 0.69.0: one section at a time).
         // The notes' pitch range of each pattern, for the previews below (0.49.0); only worked out for the patterns of the clips in
         // sight, once per paint (0.51.0).
         pitchRanges.assign (arrangement.patterns.size(), { 129, -2 }); // (129, -2: not worked out yet)
@@ -1116,177 +1404,192 @@ void PlaylistTimeline::paint (juce::Graphics& g)
             return range;
         };
 
-        const auto visibleClip = g.getClipBounds();
-        for (int i = 0; i < static_cast<int> (arrangement.clips.size()); ++i)
+        pruneWaveformCache();
+        for (const int section : { kAudioSection, kPatternSection })
         {
-            const auto& clip = arrangement.clips[static_cast<size_t> (i)];
-            const auto r = clipRect (clip).reduced (0, 2).withTrimmedRight (1);
-            if (! r.intersects (visibleClip))
-                continue;
-            const auto colour = colourForPattern (clip.pattern);
-            const bool known = clip.pattern >= 0 && clip.pattern < static_cast<int> (arrangement.patterns.size());
-
-            // 0.49.0: a see-through block with a title bar and a small piano roll of the pattern's notes, as in FL Studio.
-            g.setColour (colour.withAlpha (0.2f));
-            g.fillRoundedRectangle (r.toFloat(), 3.0f);
-            // Tall rows get a title bar above the notes; short ones show the notes across the whole block, the name over them.
-            const bool titleBar = r.getHeight() >= 30;
-            const int titleHeight = titleBar ? 13 : 0;
-            const auto title = titleBar ? r.withHeight (titleHeight) : r.withHeight (std::min (r.getHeight(), 14));
-            if (titleBar)
+            juce::Graphics::ScopedSaveState inSection (g);
+            g.reduceClipRegion (sectionBody (section, true));
+            const auto visibleClip = g.getClipBounds();
+            for (int i = 0; i < static_cast<int> (arrangement.clips.size()); ++i)
             {
-                g.setColour (colour.withAlpha (0.75f));
-                g.fillRoundedRectangle (title.toFloat(), 3.0f);
-                g.fillRect (title.withTrimmedTop (titleHeight / 2)); // square bottom corners where the notes begin
-            }
+                const auto& clip = arrangement.clips[static_cast<size_t> (i)];
+                if (sectionOfTrack (clip.track) != section)
+                    continue;
+                const auto r = clipRect (clip).reduced (0, 2).withTrimmedRight (1);
+                if (! r.intersects (visibleClip))
+                    continue;
+                const auto colour = colourForPattern (clip.pattern);
+                const bool known = clip.pattern >= 0 && clip.pattern < static_cast<int> (arrangement.patterns.size());
 
-            const auto notesArea = r.withTrimmedTop (titleHeight + 2).withTrimmedBottom (2).reduced (2, 0);
-            if (known && notesArea.getHeight() >= 5 && notesArea.getWidth() >= 6)
-            {
-                const auto& pattern = arrangement.patterns[static_cast<size_t> (clip.pattern)];
-                const auto [low, high] = pitchRangeOf (static_cast<size_t> (clip.pattern));
-                if (high >= low)
+                // 0.49.0: a see-through block with a title bar and a small piano roll of the pattern's notes, as in FL Studio.
+                g.setColour (colour.withAlpha (0.2f));
+                g.fillRoundedRectangle (r.toFloat(), 3.0f);
+                // Tall rows get a title bar above the notes; short ones show the notes across the whole block, the name over them.
+                const bool titleBar = r.getHeight() >= 30;
+                const int titleHeight = titleBar ? 13 : 0;
+                const auto title = titleBar ? r.withHeight (titleHeight) : r.withHeight (std::min (r.getHeight(), 14));
+                if (titleBar)
                 {
-                    juce::Graphics::ScopedSaveState inside (g);
-                    g.reduceClipRegion (notesArea);
-                    const int length = pattern.length();
-                    const int offset = ((clip.offsetTicks % length) + length) % length;
-                    const int rows = std::max (high - low + 1, 6); // a few notes do not fill the height with fat bars
-                    const float rowHeight = static_cast<float> (notesArea.getHeight()) / static_cast<float> (rows);
-                    const float barHeight = std::clamp (rowHeight * 0.8f, 1.5f, 5.0f);
-                    const int bottomPad = (rows - (high - low + 1)) / 2;
-                    g.setColour (colour.brighter (0.45f).withAlpha (0.95f));
-                    // Each repeat of the pattern inside the clip, only those in view.
-                    const int firstVisibleTick = std::max (clip.startTick, xToTick (visibleClip.getX()) - length);
-                    const int lastVisibleTick = std::min (clip.endTick(), xToTick (visibleClip.getRight()) + 1);
-                    for (int repeatStart = clip.startTick - offset; repeatStart < lastVisibleTick; repeatStart += length)
+                    g.setColour (colour.withAlpha (0.75f));
+                    g.fillRoundedRectangle (title.toFloat(), 3.0f);
+                    g.fillRect (title.withTrimmedTop (titleHeight / 2)); // square bottom corners where the notes begin
+                }
+
+                const auto notesArea = r.withTrimmedTop (titleHeight + 2).withTrimmedBottom (2).reduced (2, 0);
+                if (known && notesArea.getHeight() >= 5 && notesArea.getWidth() >= 6)
+                {
+                    const auto& pattern = arrangement.patterns[static_cast<size_t> (clip.pattern)];
+                    const auto [low, high] = pitchRangeOf (static_cast<size_t> (clip.pattern));
+                    if (high >= low)
                     {
-                        if (repeatStart + length <= firstVisibleTick)
-                            continue;
-                        for (const auto& channelNotes : pattern.notes)
-                            for (const auto& n : channelNotes)
-                            {
-                                const int from = std::max (repeatStart + n.startTick, clip.startTick);
-                                const int to = std::min ({ repeatStart + n.startTick + std::max (1, n.lengthTicks), repeatStart + length, clip.endTick() });
-                                if (to <= from || n.startTick >= length)
-                                    continue;
-                                const float x0 = static_cast<float> (tickToX (from)), x1 = static_cast<float> (tickToX (to));
-                                const float y = static_cast<float> (notesArea.getBottom())
-                                              - (static_cast<float> (n.pitch - low + bottomPad) + 0.5f) * rowHeight - barHeight * 0.5f;
-                                g.fillRect (x0, y, std::max (1.5f, x1 - x0 - 0.5f), barHeight);
-                            }
+                        juce::Graphics::ScopedSaveState inside (g);
+                        g.reduceClipRegion (notesArea);
+                        const int length = pattern.length();
+                        const int offset = ((clip.offsetTicks % length) + length) % length;
+                        const int rows = std::max (high - low + 1, 6); // a few notes do not fill the height with fat bars
+                        const float rowHeight = static_cast<float> (notesArea.getHeight()) / static_cast<float> (rows);
+                        const float barHeight = std::clamp (rowHeight * 0.8f, 1.5f, 5.0f);
+                        const int bottomPad = (rows - (high - low + 1)) / 2;
+                        g.setColour (colour.brighter (0.45f).withAlpha (0.95f));
+                        // Each repeat of the pattern inside the clip, only those in view.
+                        const int firstVisibleTick = std::max (clip.startTick, xToTick (visibleClip.getX()) - length);
+                        const int lastVisibleTick = std::min (clip.endTick(), xToTick (visibleClip.getRight()) + 1);
+                        for (int repeatStart = clip.startTick - offset; repeatStart < lastVisibleTick; repeatStart += length)
+                        {
+                            if (repeatStart + length <= firstVisibleTick)
+                                continue;
+                            for (const auto& channelNotes : pattern.notes)
+                                for (const auto& n : channelNotes)
+                                {
+                                    const int from = std::max (repeatStart + n.startTick, clip.startTick);
+                                    const int to = std::min ({ repeatStart + n.startTick + std::max (1, n.lengthTicks), repeatStart + length, clip.endTick() });
+                                    if (to <= from || n.startTick >= length)
+                                        continue;
+                                    const float x0 = static_cast<float> (tickToX (from)), x1 = static_cast<float> (tickToX (to));
+                                    const float y = static_cast<float> (notesArea.getBottom())
+                                                  - (static_cast<float> (n.pitch - low + bottomPad) + 0.5f) * rowHeight - barHeight * 0.5f;
+                                    g.fillRect (x0, y, std::max (1.5f, x1 - x0 - 0.5f), barHeight);
+                                }
+                        }
                     }
                 }
-            }
 
-            g.setColour (colour.withAlpha (0.9f)); // an outline, so clips laid over each other (0.33.0) stay apart
-            g.drawRoundedRectangle (r.toFloat().reduced (0.5f), 3.0f, 1.0f);
-
-            // A mark where each repeat of the pattern begins.
-            g.setColour (colour.withAlpha (0.6f));
-            {
-                const int length = arrangement.patternLength (clip.pattern);
-                const int offset = ((clip.offsetTicks % length) + length) % length;
-                for (int t = clip.startTick + (offset == 0 ? length : length - offset); t < clip.endTick(); t += length)
-                    g.drawVerticalLine (tickToX (t), static_cast<float> (r.getY() + titleHeight), static_cast<float> (r.getBottom() - 2));
-            }
-
-            if (known)
-            {
-                const juce::String name (arrangement.patterns[static_cast<size_t> (clip.pattern)].name);
-                g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
-                if (titleBar)
-                    g.setColour (juce::Colours::black.withAlpha (0.85f));
-                else
-                {
-                    // A small dark label behind the name, so it reads over the notes.
-                    const int w = std::min (title.getWidth() - 2, juce::GlyphArrangement::getStringWidthInt (juce::FontOptions (11.0f, juce::Font::bold), name) + 8);
-                    g.setColour (juce::Colours::black.withAlpha (0.45f));
-                    g.fillRoundedRectangle (title.withWidth (w).reduced (1).toFloat(), 2.0f);
-                    g.setColour (colour.brighter (0.7f));
-                }
-                g.drawText (name, title.reduced (5, 0), juce::Justification::centredLeft, true);
-            }
-
-            if (clip.muted || ! arrangement.trackPlays (clip.track)) // 0.60.0: a muted clip (or one on a silent track) is greyed
-            {
-                g.setColour (kTrackA.withAlpha (0.62f));
-                g.fillRoundedRectangle (r.toFloat(), 3.0f);
-                g.setColour (kText.withAlpha (0.55f));
+                g.setColour (colour.withAlpha (0.9f)); // an outline, so clips laid over each other (0.33.0) stay apart
                 g.drawRoundedRectangle (r.toFloat().reduced (0.5f), 3.0f, 1.0f);
-                if (clip.muted && r.getWidth() > 18 && r.getHeight() > 12)
+
+                // A mark where each repeat of the pattern begins.
+                g.setColour (colour.withAlpha (0.6f));
                 {
-                    g.setFont (juce::FontOptions (9.0f, juce::Font::bold));
-                    g.drawText ("M", r.withTrimmedLeft (r.getWidth() - 16).withHeight (12), juce::Justification::centred);
+                    const int length = arrangement.patternLength (clip.pattern);
+                    const int offset = ((clip.offsetTicks % length) + length) % length;
+                    for (int t = clip.startTick + (offset == 0 ? length : length - offset); t < clip.endTick(); t += length)
+                        g.drawVerticalLine (tickToX (t), static_cast<float> (r.getY() + titleHeight), static_cast<float> (r.getBottom() - 2));
+                }
+
+                if (known)
+                {
+                    const juce::String name (arrangement.patterns[static_cast<size_t> (clip.pattern)].name);
+                    g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
+                    if (titleBar)
+                        g.setColour (juce::Colours::black.withAlpha (0.85f));
+                    else
+                    {
+                        // A small dark label behind the name, so it reads over the notes.
+                        const int w = std::min (title.getWidth() - 2, juce::GlyphArrangement::getStringWidthInt (juce::FontOptions (11.0f, juce::Font::bold), name) + 8);
+                        g.setColour (juce::Colours::black.withAlpha (0.45f));
+                        g.fillRoundedRectangle (title.withWidth (w).reduced (1).toFloat(), 2.0f);
+                        g.setColour (colour.brighter (0.7f));
+                    }
+                    g.drawText (name, title.reduced (5, 0), juce::Justification::centredLeft, true);
+                }
+
+                if (clip.muted || ! arrangement.trackPlays (clip.track)) // 0.60.0: a muted clip (or one on a silent track) is greyed
+                {
+                    g.setColour (kTrackA.withAlpha (0.62f));
+                    g.fillRoundedRectangle (r.toFloat(), 3.0f);
+                    g.setColour (kText.withAlpha (0.55f));
+                    g.drawRoundedRectangle (r.toFloat().reduced (0.5f), 3.0f, 1.0f);
+                    if (clip.muted && r.getWidth() > 18 && r.getHeight() > 12)
+                    {
+                        g.setFont (juce::FontOptions (9.0f, juce::Font::bold));
+                        g.drawText ("M", r.withTrimmedLeft (r.getWidth() - 16).withHeight (12), juce::Justification::centred);
+                    }
+                }
+
+                if (isSelected (Kind::Pattern, i))
+                {
+                    g.setColour (kSelect);
+                    g.drawRoundedRectangle (r.toFloat().reduced (0.5f), 3.0f, 1.5f);
                 }
             }
 
-            if (isSelected (Kind::Pattern, i))
+            for (int i = 0; i < static_cast<int> (arrangement.audioClips.size()); ++i)
+                if (sectionOfTrack (arrangement.audioClips[static_cast<size_t> (i)].track) == section)
+                    paintAudioClip (g, arrangement.audioClips[static_cast<size_t> (i)], isSelected (Kind::Audio, i));
+
+            // Drop preview (files or sounds dragged over the timeline).
+            if (dropTrack >= 0 && sectionOfTrack (dropTrack) == section)
             {
-                g.setColour (kSelect);
-                g.drawRoundedRectangle (r.toFloat().reduced (0.5f), 3.0f, 1.5f);
+                const auto r = juce::Rectangle<int> (tickToX (dropTick), trackTop (dropTrack), std::max (6, tickToX (dropTick + 4 * kTicksPerBeat) - tickToX (dropTick)), th);
+                g.setColour (kAudio.withAlpha (0.35f));
+                g.fillRect (r);
+                g.setColour (kAudio);
+                g.drawRect (r, 2);
+            }
+
+            // Tool overlays.
+            if (tool == PlaylistTool::Split && hoverTrack >= 0 && drag == Drag::None && sectionOfTrack (hoverTrack) == section)
+            {
+                const bool onClip = arrangement.audioClipAt (hoverTrack, hoverTick) >= 0 || arrangement.clipAt (hoverTrack, hoverTick) >= 0;
+                if (onClip)
+                {
+                    const int tick = snapTick (hoverTick, false);
+                    g.setColour (kSelect);
+                    g.drawVerticalLine (tickToX (tick), static_cast<float> (trackTop (hoverTrack)), static_cast<float> (trackTop (hoverTrack) + th));
+                }
+            }
+            if (drag == Drag::CutRange && sectionOfTrack (dragTrack) == section)
+            {
+                const int from = std::min (dragStartTick, dragEndTick), to = std::max (dragStartTick, dragEndTick);
+                const auto r = juce::Rectangle<int> (tickToX (from), trackTop (dragTrack), std::max (2, tickToX (to) - tickToX (from)), th);
+                g.setColour (kCut.withAlpha (0.35f));
+                g.fillRect (r);
+                g.setColour (kCut);
+                g.drawRect (r, 2);
             }
         }
 
-        pruneWaveformCache();
-        for (int i = 0; i < static_cast<int> (arrangement.audioClips.size()); ++i)
-            paintAudioClip (g, arrangement.audioClips[static_cast<size_t> (i)], isSelected (Kind::Audio, i));
-
-        // Drop preview (files or sounds dragged over the timeline).
-        if (dropTrack >= 0)
-        {
-            const auto r = juce::Rectangle<int> (tickToX (dropTick), trackTop (dropTrack), std::max (6, tickToX (dropTick + 4 * kTicksPerBeat) - tickToX (dropTick)), th);
-            g.setColour (kAudio.withAlpha (0.35f));
-            g.fillRect (r);
-            g.setColour (kAudio);
-            g.drawRect (r, 2);
-        }
-
-        // Tool overlays.
-        if (tool == PlaylistTool::Split && hoverTrack >= 0 && drag == Drag::None)
-        {
-            const bool onClip = arrangement.audioClipAt (hoverTrack, hoverTick) >= 0 || arrangement.clipAt (hoverTrack, hoverTick) >= 0;
-            if (onClip)
-            {
-                const int tick = snapTick (hoverTick, false);
-                g.setColour (kSelect);
-                g.drawVerticalLine (tickToX (tick), static_cast<float> (trackTop (hoverTrack)), static_cast<float> (trackTop (hoverTrack) + th));
-            }
-        }
-        if (drag == Drag::CutRange)
-        {
-            const int from = std::min (dragStartTick, dragEndTick), to = std::max (dragStartTick, dragEndTick);
-            const auto r = juce::Rectangle<int> (tickToX (from), trackTop (dragTrack), std::max (2, tickToX (to) - tickToX (from)), th);
-            g.setColour (kCut.withAlpha (0.35f));
-            g.fillRect (r);
-            g.setColour (kCut);
-            g.drawRect (r, 2);
-        }
         if (drag == Drag::ZoomRange)
         {
-            const auto r = juce::Rectangle<int> (std::min (dragStartX, dragEndX), kRulerHeight, std::abs (dragEndX - dragStartX), tracksViewHeight());
+            const auto r = juce::Rectangle<int> (std::min (dragStartX, dragEndX), kRulerHeight, std::abs (dragEndX - dragStartX),
+                                                getHeight() - kScrollBarHeight - kRulerHeight);
             g.setColour (kSelect.withAlpha (0.12f));
             g.fillRect (r);
             g.setColour (kSelect.withAlpha (0.8f));
             g.drawRect (r, 1);
         }
 
-        g.restoreState(); // back to the whole timeline: the automation lanes and the playhead
 
-        for (int i = 0; i < static_cast<int> (arrangement.automationClips.size()); ++i)
-            paintAutomationClip (g, arrangement.automationClips[static_cast<size_t> (i)], isSelected (Kind::Automation, i));
+        {
+            juce::Graphics::ScopedSaveState lanes (g); // 0.69.0: inside the automation section's body
+            g.reduceClipRegion (sectionBody (kAutomationSection, true));
+            for (int i = 0; i < static_cast<int> (arrangement.automationClips.size()); ++i)
+                paintAutomationClip (g, arrangement.automationClips[static_cast<size_t> (i)], isSelected (Kind::Automation, i));
+        }
 
         // The selection rectangle (0.57.0), over the tracks and the automation lanes.
         if (drag == Drag::RubberBand && bandActive)
         {
             juce::Graphics::ScopedSaveState band (g);
-            g.reduceClipRegion (kNameWidth, kRulerHeight, getWidth() - kNameWidth, lanesBottom() - kRulerHeight);
+            g.reduceClipRegion (kNameWidth, kRulerHeight, getWidth() - kNameWidth, getHeight() - kScrollBarHeight - kRulerHeight);
             const auto r = bandRect();
             g.setColour (kSelect.withAlpha (0.14f));
             g.fillRect (r);
             g.setColour (kSelect.withAlpha (0.9f));
             g.drawRect (r, 1);
         }
+
+        paintSectionBars (g); // 0.69.0: the sections' bars and borders, over the grid
 
         if (playheadTick >= 0)
         {
@@ -1300,86 +1603,143 @@ void PlaylistTimeline::paint (juce::Graphics& g)
     g.fillRect (0, 0, kNameWidth, getHeight());
     g.setColour (kText);
     g.setFont (juce::FontOptions (12.0f));
-    g.saveState();
-    g.reduceClipRegion (0, kRulerHeight, kNameWidth, tracksViewHeight());
-    for (int t = 0; t < arrangement.trackCount(); ++t)
+    for (const int section : { kAudioSection, kPatternSection }) // 0.69.0: each section's headers inside its body
     {
-        if (trackTop (t) + th < kRulerHeight || trackTop (t) > kRulerHeight + tracksViewHeight())
-            continue;
+        juce::Graphics::ScopedSaveState inSection (g);
+        g.reduceClipRegion (sectionBody (section, false).withWidth (kNameWidth));
+        for (int t = sectionFirstTrack (section); t < sectionEndTrack (section); ++t)
         {
-            // 0.60.0: the mute and solo switches of the track, as in FL Studio's track headers (lit when on).
+            if (trackTop (t) < -th)
+                continue;
+            {
+                // 0.60.0: the mute and solo switches of the track, as in FL Studio's track headers (lit when on).
+                const auto& own = arrangement.playlistTracks[static_cast<size_t> (t)];
+                g.setFont (juce::FontOptions (9.0f, juce::Font::bold));
+                for (const bool solo : { false, true })
+                {
+                    const auto box = (solo ? soloSwitchRect (t) : muteSwitchRect (t)).toFloat();
+                    const bool on = solo ? own.solo : own.mute;
+                    g.setColour (on ? (solo ? juce::Colour (0xffe0b030) : juce::Colour (0xffd9534f)) : kText.withAlpha (0.12f));
+                    g.fillRoundedRectangle (box, 2.0f);
+                    g.setColour (on ? juce::Colours::black.withAlpha (0.85f) : kText.withAlpha (0.55f));
+                    g.drawText (solo ? "S" : "M", box, juce::Justification::centred);
+                }
+                g.setFont (juce::FontOptions (12.0f));
+            }
+            {
+                // the tracks Record writes to: a red dot; the others a faint ring, to show where to click
+                const juce::Rectangle<float> dot (static_cast<float> (kNameWidth - 14), static_cast<float> (trackTop (t)) + 0.5f * static_cast<float> (th) - 4.0f, 8.0f, 8.0f);
+                if (recordArms[static_cast<size_t> (t)])
+                {
+                    g.setColour (juce::Colour (0xffd9433b));
+                    g.fillEllipse (dot);
+                }
+                else
+                {
+                    g.setColour (kText.withAlpha (0.25f));
+                    g.drawEllipse (dot, 1.0f);
+                }
+            }
+            if (const auto colour = arrangement.playlistTracks[static_cast<size_t> (t)].colour; colour != 0)
+            {
+                g.setColour (juce::Colour (colour).withAlpha (1.0f)); // the track's colour (0.33.0)
+                g.fillRect (0, trackTop (t) + 1, 4, th - 2);
+            }
             const auto& own = arrangement.playlistTracks[static_cast<size_t> (t)];
-            g.setFont (juce::FontOptions (9.0f, juce::Font::bold));
-            for (const bool solo : { false, true })
+            if (own.pattern >= 0 && own.colour == 0)
             {
-                const auto box = (solo ? soloSwitchRect (t) : muteSwitchRect (t)).toFloat();
-                const bool on = solo ? own.solo : own.mute;
-                g.setColour (on ? (solo ? juce::Colour (0xffe0b030) : juce::Colour (0xffd9534f)) : kText.withAlpha (0.12f));
-                g.fillRoundedRectangle (box, 2.0f);
-                g.setColour (on ? juce::Colours::black.withAlpha (0.85f) : kText.withAlpha (0.55f));
-                g.drawText (solo ? "S" : "M", box, juce::Justification::centred);
+                g.setColour (colourForPattern (own.pattern).withAlpha (0.8f)); // a track dedicated to a pattern: its colour (0.44.0)
+                g.fillRect (0, trackTop (t) + 1, 4, th - 2);
             }
-            g.setFont (juce::FontOptions (12.0f));
-        }
-        {
-            // the tracks Record writes to: a red dot; the others a faint ring, to show where to click
-            const juce::Rectangle<float> dot (static_cast<float> (kNameWidth - 14), static_cast<float> (trackTop (t)) + 0.5f * static_cast<float> (th) - 4.0f, 8.0f, 8.0f);
-            if (recordArms[static_cast<size_t> (t)])
+            // 0.62.0: a group's head has a fold triangle, a grouped track is set in, a locked track says so
+            const bool head = ! own.grouped && t + 1 < arrangement.trackCount() && arrangement.playlistTracks[static_cast<size_t> (t) + 1].grouped;
+            int nameX = 8;
+            if (head)
             {
-                g.setColour (juce::Colour (0xffd9433b));
-                g.fillEllipse (dot);
+                const auto box = foldRect (t).toFloat();
+                juce::Path triangle;
+                if (own.collapsed)
+                    triangle.addTriangle (box.getX() + 3.0f, box.getY() + 2.0f, box.getX() + 3.0f, box.getBottom() - 2.0f, box.getRight() - 2.0f, box.getCentreY());
+                else
+                    triangle.addTriangle (box.getX() + 2.0f, box.getY() + 3.0f, box.getRight() - 2.0f, box.getY() + 3.0f, box.getCentreX(), box.getBottom() - 2.0f);
+                g.setColour (kText.withAlpha (0.85f));
+                g.fillPath (triangle);
+                nameX = 20;
             }
-            else
+            else if (own.grouped)
             {
-                g.setColour (kText.withAlpha (0.25f));
-                g.drawEllipse (dot, 1.0f);
+                g.setColour (kText.withAlpha (0.3f));
+                g.fillRect (9, trackTop (t), 2, th);
+                nameX = 18;
             }
+            g.setColour (! arrangement.trackPlays (t) ? kText.withAlpha (0.45f) : t == armedTrack ? juce::Colours::white : kText);
+            g.drawText ((own.locked ? juce::String::fromUTF8 ("\xf0\x9f\x94\x92 ") : juce::String()) + trackName (t)
+                            + (head && own.collapsed ? " +" + juce::String (arrangement.groupEnd (t) - t) : juce::String()),
+                        nameX, trackTop (t), kNameWidth - 14 - nameX - 2 * (kHeaderSwitch + 2), th, juce::Justification::centredLeft, true);
+            g.setColour (kText.withAlpha (0.08f));
+            g.drawHorizontalLine (trackTop (t) + th - 1, 0.0f, static_cast<float> (kNameWidth));
         }
-        if (const auto colour = arrangement.playlistTracks[static_cast<size_t> (t)].colour; colour != 0)
-        {
-            g.setColour (juce::Colour (colour).withAlpha (1.0f)); // the track's colour (0.33.0)
-            g.fillRect (0, trackTop (t) + 1, 4, th - 2);
-        }
-        const auto& own = arrangement.playlistTracks[static_cast<size_t> (t)];
-        if (own.pattern >= 0 && own.colour == 0)
-        {
-            g.setColour (colourForPattern (own.pattern).withAlpha (0.8f)); // a track dedicated to a pattern: its colour (0.44.0)
-            g.fillRect (0, trackTop (t) + 1, 4, th - 2);
-        }
-        // 0.62.0: a group's head has a fold triangle, a grouped track is set in, a locked track says so
-        const bool head = ! own.grouped && t + 1 < arrangement.trackCount() && arrangement.playlistTracks[static_cast<size_t> (t) + 1].grouped;
-        int nameX = 8;
-        if (head)
-        {
-            const auto box = foldRect (t).toFloat();
-            juce::Path triangle;
-            if (own.collapsed)
-                triangle.addTriangle (box.getX() + 3.0f, box.getY() + 2.0f, box.getX() + 3.0f, box.getBottom() - 2.0f, box.getRight() - 2.0f, box.getCentreY());
-            else
-                triangle.addTriangle (box.getX() + 2.0f, box.getY() + 3.0f, box.getRight() - 2.0f, box.getY() + 3.0f, box.getCentreX(), box.getBottom() - 2.0f);
-            g.setColour (kText.withAlpha (0.85f));
-            g.fillPath (triangle);
-            nameX = 20;
-        }
-        else if (own.grouped)
-        {
-            g.setColour (kText.withAlpha (0.3f));
-            g.fillRect (9, trackTop (t), 2, th);
-            nameX = 18;
-        }
-        g.setColour (! arrangement.trackPlays (t) ? kText.withAlpha (0.45f) : t == armedTrack ? juce::Colours::white : kText);
-        g.drawText ((own.locked ? juce::String::fromUTF8 ("\xf0\x9f\x94\x92 ") : juce::String()) + trackName (t)
-                        + (head && own.collapsed ? " +" + juce::String (arrangement.groupEnd (t) - t) : juce::String()),
-                    nameX, trackTop (t), kNameWidth - 14 - nameX - 2 * (kHeaderSwitch + 2), th, juce::Justification::centredLeft, true);
-        g.setColour (kText.withAlpha (0.08f));
-        g.drawHorizontalLine (trackTop (t) + th - 1, 0.0f, static_cast<float> (kNameWidth));
     }
-    g.restoreState();
+    {
+        juce::Graphics::ScopedSaveState inSection (g);
+        g.reduceClipRegion (sectionBody (kAutomationSection, false).withWidth (kNameWidth));
+        g.setFont (juce::FontOptions (12.0f));
+        for (int lane = 0; lane < arrangement.automationLanes; ++lane)
+        {
+            const int top = lanesTop() + lane * kLaneHeight;
+            g.setColour (kAutomationColour.withAlpha (0.8f));
+            g.fillRect (0, top + 1, 4, kLaneHeight - 2);
+            g.setColour (kAutomationColour.brighter (0.3f));
+            g.drawText ("Auto " + juce::String (lane + 1), 8, top, kNameWidth - 12, kLaneHeight, juce::Justification::centredLeft);
+            g.setColour (kText.withAlpha (0.08f));
+            g.drawHorizontalLine (top + kLaneHeight - 1, 0.0f, static_cast<float> (kNameWidth));
+        }
+    }
 
-    g.setColour (kAutomationColour.brighter (0.3f));
-    g.setFont (juce::FontOptions (11.0f));
-    for (int lane = 0; lane < kAutomationLanes; ++lane)
-        g.drawText ("Auto " + juce::String (lane + 1), 6, lanesTop() + lane * kLaneHeight, kNameWidth - 8, kLaneHeight, juce::Justification::centredLeft);
+    {
+        juce::Graphics::ScopedSaveState names (g);
+        g.reduceClipRegion (0, kRulerHeight, kNameWidth, getHeight() - kRulerHeight);
+        paintSectionBars (g);
+    }
+}
+
+// 0.69.0: each section's bar (its name in the name column, beside the - / + buttons; how many rows it has over the timeline)
+// and the borders between the sections, lit while the mouse is over one or drags it.
+void PlaylistTimeline::paintSectionBars (juce::Graphics& g)
+{
+    static const char* const titles[] = { "Audio", "Patterns", "Automation" };
+    static const char* const rows[] = { "track", "track", "lane" };
+    for (int s = 0; s < kSectionCount; ++s)
+    {
+        const auto a = sectionArea (s);
+        const juce::Rectangle<int> bar (0, a.barTop, getWidth(), kSectionBarHeight);
+        g.setColour (kSectionBar);
+        g.fillRect (bar);
+        g.setColour (juce::Colours::black.withAlpha (0.4f));
+        g.drawHorizontalLine (bar.getBottom() - 1, 0.0f, static_cast<float> (getWidth()));
+        g.setColour (s == kAutomationSection ? kAutomationColour.brighter (0.4f) : kText);
+        g.setFont (juce::FontOptions (11.5f, juce::Font::bold));
+        g.drawText (titles[s], 50, bar.getY(), kNameWidth - 52, kSectionBarHeight, juce::Justification::centredLeft, true);
+        const int count = s == kAutomationSection ? arrangement.automationLanes : sectionEndTrack (s) - sectionFirstTrack (s);
+        g.setColour (kTextDim);
+        g.setFont (juce::FontOptions (10.5f));
+        g.drawText (juce::String (count) + " " + rows[s] + (count == 1 ? "" : "s"), kNameWidth + 8, bar.getY(), 120, kSectionBarHeight,
+                    juce::Justification::centredLeft, false);
+    }
+    for (int k = 0; k < kSectionCount - 1; ++k)
+    {
+        const int top = splitterTop (k);
+        const bool hot = splitterDrag == k || splitterHover == k;
+        g.setColour (hot ? kLoop.withAlpha (0.6f) : kSplitter);
+        g.fillRect (0, top, getWidth(), kSplitterHeight);
+        g.setColour (hot ? kLoop : kText.withAlpha (0.1f));
+        g.drawHorizontalLine (top, 0.0f, static_cast<float> (getWidth()));
+        // a grip in the middle of the name column, so the border reads as something to drag
+        g.setColour (kText.withAlpha (hot ? 0.9f : 0.4f));
+        const float cy = static_cast<float> (top) + 0.5f * static_cast<float> (kSplitterHeight);
+        for (int i = -2; i <= 2; ++i)
+            g.fillEllipse (0.5f * static_cast<float> (kNameWidth) + 6.0f * static_cast<float> (i) - 1.0f, cy - 1.0f, 2.0f, 2.0f);
+    }
 }
 
 void PlaylistTimeline::paintAutomationClip (juce::Graphics& g, const AutomationClip& c, bool selected)
@@ -1489,7 +1849,7 @@ void PlaylistTimeline::showTrackMenu (int track)
         // 0.62.0: locking and grouping, as in FL Studio's track menu
         menu.addItem (9, "Lock (its clips cannot be changed)", true, t.locked);
         menu.addSeparator();
-        menu.addItem (10, "Group with the track above", track > 0, t.grouped);
+        menu.addItem (10, "Group with the track above", track > 0 && sectionOfTrack (track - 1) == sectionOfTrack (track), t.grouped);
         const bool head = ! t.grouped && track + 1 < arrangement.trackCount() && arrangement.playlistTracks[static_cast<size_t> (track) + 1].grouped;
         menu.addItem (11, t.collapsed ? "Unfold the group" : "Fold the group", head, false);
         menu.addSeparator();
@@ -1499,7 +1859,7 @@ void PlaylistTimeline::showTrackMenu (int track)
     menu.addItem (3, "Record on this track", onTrackArmToggled != nullptr, recordArms[static_cast<size_t> (track)]);
     menu.addItem (4, "Recording input...", onTrackInputMenu != nullptr);
     menu.addSeparator();
-    menu.addItem (5, "Add a track at the end", arrangement.trackCount() < kMaxPlaylistTracks);
+    menu.addItem (5, sectionOfTrack (track) == kPatternSection ? "Add a pattern track" : "Add an audio track", arrangement.trackCount() < kMaxPlaylistTracks);
     menu.addItem (6, "Delete this track", arrangement.trackCount() > 1);
     menu.showMenuAsync (juce::PopupMenu::Options().withMousePosition(),
                         [safe = juce::Component::SafePointer<PlaylistTimeline> (this), track] (int choice)
@@ -1513,7 +1873,7 @@ void PlaylistTimeline::showTrackMenu (int track)
                             else if (choice == 4 && safe->onTrackInputMenu)
                                 safe->onTrackInputMenu (track);
                             else if (choice == 5)
-                                safe->addTrack();
+                                safe->addToSection (safe->sectionOfTrack (track)); // 0.69.0: at the end of the track's section
                             else if (choice == 6)
                                 safe->removeTrack (track);
                             else if (choice >= 9 && choice <= 11)
@@ -1584,7 +1944,7 @@ void PlaylistTimeline::renameTrack (int track)
 
 PlaylistTimeline::Snapshot PlaylistTimeline::takeSnapshot() const
 {
-    return { arrangement.clips, arrangement.audioClips, arrangement.automationClips, arrangement.playlistTracks };
+    return { arrangement.clips, arrangement.audioClips, arrangement.automationClips, arrangement.playlistTracks, arrangement.automationLanes };
 }
 
 void PlaylistTimeline::restore (const Snapshot& s)
@@ -1593,6 +1953,7 @@ void PlaylistTimeline::restore (const Snapshot& s)
     arrangement.audioClips = s.audioClips;
     arrangement.automationClips = s.automationClips;
     arrangement.playlistTracks = s.tracks.empty() ? std::vector<PlaylistTrack> (1) : s.tracks;
+    arrangement.automationLanes = std::clamp (s.automationLanes, 1, kMaxAutomationLanes);
     tracksChanged();
 }
 
@@ -1720,16 +2081,22 @@ juce::Rectangle<int> PlaylistTimeline::bandRect() const noexcept
 PlaylistTimeline::Group PlaylistTimeline::groupInRect (juce::Rectangle<int> r) const
 {
     Group g;
-    const auto tracksArea = r.getIntersection ({ kNameWidth, kRulerHeight, std::max (0, getWidth() - kNameWidth), tracksViewHeight() });
-    const auto lanesArea = r.getIntersection ({ kNameWidth, lanesTop(), std::max (0, getWidth() - kNameWidth), kAutomationLanes * kLaneHeight });
-    if (! tracksArea.isEmpty())
+    // 0.69.0: each clip counts where the rectangle covers its own section's body
+    const auto audioArea = r.getIntersection (sectionBody (kAudioSection, true));
+    const auto patternArea = r.getIntersection (sectionBody (kPatternSection, true));
+    const auto lanesArea = r.getIntersection (sectionBody (kAutomationSection, true));
+    const auto areaOf = [&] (int track) -> const juce::Rectangle<int>& { return sectionOfTrack (track) == kPatternSection ? patternArea : audioArea; };
+    for (int i = 0; i < static_cast<int> (arrangement.clips.size()); ++i)
     {
-        for (int i = 0; i < static_cast<int> (arrangement.clips.size()); ++i)
-            if (clipRect (arrangement.clips[static_cast<size_t> (i)]).intersects (tracksArea))
-                g.patterns.push_back (i);
-        for (int i = 0; i < static_cast<int> (arrangement.audioClips.size()); ++i)
-            if (audioClipRect (arrangement.audioClips[static_cast<size_t> (i)]).intersects (tracksArea))
-                g.audio.push_back (i);
+        const auto& c = arrangement.clips[static_cast<size_t> (i)];
+        if (const auto& area = areaOf (c.track); ! area.isEmpty() && clipRect (c).intersects (area))
+            g.patterns.push_back (i);
+    }
+    for (int i = 0; i < static_cast<int> (arrangement.audioClips.size()); ++i)
+    {
+        const auto& c = arrangement.audioClips[static_cast<size_t> (i)];
+        if (const auto& area = areaOf (c.track); ! area.isEmpty() && audioClipRect (c).intersects (area))
+            g.audio.push_back (i);
     }
     if (! lanesArea.isEmpty())
         for (int i = 0; i < static_cast<int> (arrangement.automationClips.size()); ++i)
@@ -2811,6 +3178,31 @@ void PlaylistTimeline::mouseMove (const juce::MouseEvent& e)
     }
     updateReadout (e.x, e.y);
 
+    // 0.69.0: the borders between the sections can be dragged up and down; over the bars, the plain arrow.
+    if (const int splitter = splitterAt (e.y); splitter >= 0 || splitterHover >= 0)
+    {
+        if (splitter != splitterHover)
+        {
+            splitterHover = splitter;
+            repaint();
+        }
+        if (splitter >= 0)
+        {
+            setHover (-1, 0);
+            setMouseCursor (juce::MouseCursor::UpDownResizeCursor);
+            return;
+        }
+        setMouseCursor (toolCursor());
+    }
+    if (e.y >= kRulerHeight && sectionAt (e.y) < 0)
+    {
+        setHover (-1, 0);
+        setMouseCursor (juce::MouseCursor::NormalCursor);
+        return;
+    }
+    if (e.y >= kRulerHeight && tool != PlaylistTool::Draw)
+        setMouseCursor (toolCursor()); // back from a bar, a border or the ruler (the Draw tool sets its own below)
+
     if (e.x >= kNameWidth && e.y < kRulerHeight && tool != PlaylistTool::Zoom)
     {
         setHover (-1, 0);
@@ -2857,6 +3249,12 @@ void PlaylistTimeline::mouseMove (const juce::MouseEvent& e)
 
 void PlaylistTimeline::mouseExit (const juce::MouseEvent&)
 {
+    if (splitterHover >= 0 && splitterDrag < 0)
+    {
+        splitterHover = -1;
+        setMouseCursor (toolCursor());
+        repaint();
+    }
     setHover (-1, 0);
     updateReadout (-1, -1);
     if (tool == PlaylistTool::Split || tool == PlaylistTool::Cut)
@@ -2877,6 +3275,22 @@ void PlaylistTimeline::mouseDown (const juce::MouseEvent& e)
         endLoopMode (! e.mods.isPopupMenu()); // a left click places the region, a right click puts it back
         return;
     }
+
+    // 0.69.0: a border between two sections: dragging it gives one more height and the other less.
+    if (const int splitter = splitterAt (e.y); splitter >= 0 && e.y >= kRulerHeight)
+    {
+        if (! e.mods.isPopupMenu())
+        {
+            splitterDrag = splitter;
+            splitterGrabY = e.y;
+            splitterStartHeights = bodyHeights();
+            setMouseCursor (juce::MouseCursor::UpDownResizeCursor);
+            repaint();
+        }
+        return;
+    }
+    if (e.y >= kRulerHeight && sectionAt (e.y) < 0)
+        return; // a section's bar (its buttons are components of their own)
 
     // The ruler: left click moves the song position (while playing too), right button makes or edits the loop region.
     if (e.x >= kNameWidth && e.y < kRulerHeight && (tool != PlaylistTool::Zoom || e.mods.isPopupMenu()))
@@ -3294,6 +3708,24 @@ void PlaylistTimeline::mouseDrag (const juce::MouseEvent& e)
     lastMouseY = e.y;
     const bool noSnap = e.mods.isAltDown();
 
+    if (splitterDrag >= 0) // 0.69.0: the two sections beside the border share their heights anew
+    {
+        const auto upper = static_cast<size_t> (splitterDrag), lower = upper + 1;
+        const int both = splitterStartHeights[upper] + splitterStartHeights[lower];
+        const int minimum = std::min (kMinSectionBody, both / 2);
+        const int above = std::clamp (splitterStartHeights[upper] + e.y - splitterGrabY, minimum, both - minimum);
+        auto heights = splitterStartHeights;
+        heights[upper] = above;
+        heights[lower] = both - above;
+        const int total = heights[0] + heights[1] + heights[2];
+        if (total > 0)
+            for (size_t i = 0; i < heights.size(); ++i)
+                sectionShares[i] = static_cast<double> (heights[i]) / total;
+        layoutSections();
+        repaint();
+        return;
+    }
+
     if (drag == Drag::Seek)
     {
         const int tick = std::clamp (snapTick (xToTick (e.x), noSnap), 0, arrangement.timelineTicks() - 1);
@@ -3497,6 +3929,14 @@ void PlaylistTimeline::mouseDrag (const juce::MouseEvent& e)
 
 void PlaylistTimeline::mouseUp (const juce::MouseEvent& e)
 {
+    if (splitterDrag >= 0)
+    {
+        splitterDrag = -1;
+        splitterHover = splitterAt (e.y);
+        setMouseCursor (splitterHover >= 0 ? juce::MouseCursor (juce::MouseCursor::UpDownResizeCursor) : toolCursor());
+        repaint();
+        return;
+    }
     if (drag == Drag::RightPress)
     {
         drag = Drag::None;
@@ -3617,15 +4057,18 @@ void PlaylistTimeline::mouseDoubleClick (const juce::MouseEvent& e)
 
 void PlaylistTimeline::mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel)
 {
-    // Over the track names, or with Alt anywhere, the wheel scrolls the tracks up and down (0.44.0).
-    if ((e.x < kNameWidth && inTracks (e.y)) || e.mods.isAltDown())
+    // Over the track names, or with Alt anywhere, the wheel scrolls the tracks up and down (0.44.0); 0.69.0: the section under the
+    // mouse (the lanes too).
+    if (const int section = sectionAt (e.y); section >= 0 && (e.x < kNameWidth || e.mods.isAltDown()))
     {
-        scrollY -= static_cast<int> (std::lround (wheel.deltaY * 3.0f * static_cast<float> (trackHeight())));
+        sectionScroll[static_cast<size_t> (section)] -= static_cast<int> (std::lround (wheel.deltaY * 3.0f * static_cast<float> (kRowHeight)));
         clampScrollY();
         updateTrackScrollBar();
         repaint();
         return;
     }
+    if (e.y >= kRulerHeight && sectionAt (e.y) < 0)
+        return; // a bar or a border
     // The wheel zooms in (up) and out (down) around the mouse, anywhere on the playlist (0.20.0). Shift+wheel, or a sideways
     // wheel / touchpad swipe, scrolls along the song.
     const bool sideways = std::abs (wheel.deltaX) > std::abs (wheel.deltaY);

@@ -120,6 +120,7 @@ PlaylistView::PlaylistView (Arrangement& arrangementToEdit) : timeline (arrangem
     timeline.onTrackArmToggled = [this] (int track) { if (onTrackArmToggled) onTrackArmToggled (track); };
     timeline.onTrackInputMenu = [this] (int track) { if (onTrackInputMenu) onTrackInputMenu (track); };
     timeline.onTrackRemoved = [this] (int track) { if (onTrackRemoved) onTrackRemoved (track); };
+    timeline.onTrackInserted = [this] (int track) { if (onTrackInserted) onTrackInserted (track); };
     timeline.onEditSample = [this] (int index) { if (onEditSample) onEditSample (index); };
     timeline.onEditPitch = [this] (int index) { if (onEditPitch) onEditPitch (index); };
     timeline.onSplitStems = [this] (int index) { if (onSplitStems) onSplitStems (index); };

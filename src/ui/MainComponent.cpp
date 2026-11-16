@@ -244,6 +244,11 @@ MainComponent::MainComponent()
         recordSetup.removeTrack (track);
         applyRecordSetup();
     };
+    playlistView.onTrackInserted = [this] (int track) // 0.69.0: a section's + inserted a track there
+    {
+        recordSetup.insertTrack (track);
+        applyRecordSetup();
+    };
 
     // Rec notes: what a MIDI keyboard plays while the song runs is written into the selected channel's pattern.
     noteRecordButton.setClickingTogglesState (false);

@@ -442,7 +442,8 @@ FlpExportResult projectToFlp (const ProjectDocument& doc)
 
     for (int t = 0; t < arrangement.trackCount(); ++t)
     {
-        const auto& pt = arrangement.playlistTracks[static_cast<size_t> (t)];
+        auto pt = arrangement.playlistTracks[static_cast<size_t> (t)];
+        pt.section = TrackSection::Audio; // 0.69.0: FL Studio has no sections
         if (pt == PlaylistTrack {})
             continue;
         flp::Track out;

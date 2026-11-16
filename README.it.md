@@ -127,8 +127,8 @@ con precisione cosa è verificato, cosa no e cosa manca.
   Peak/RMS e 10 slot per effetti in serie (0.45.0; con preset di catene) (14 effetti interni con preset: Equalizer, Parametric EQ, Filter, Compressor, Maximizer, Transient, Overdrive, Chorus, Phaser, Reverb Hall/Room/Plate, Delay Stereo/Ping-pong/Tape, Time Shaper (tipo Gross Beat), Pitch Corrector (tipo Pitcher), Stereo Imager; con bypass), due **send** (pre o post fader)
   e due interruttori **VCA**. Accanto alle tracce ci sono due **bus aux** con effetti propri e due **gruppi VCA**. La strip master a destra
   ha gli stessi 10 slot, applicati a tutto il mix. Il Compressor ha un ingresso **sidechain** da qualsiasi traccia (0.45.0). Più canali possono usare la stessa traccia.
-- **Automazione** - tasto destro su volume, pan, fader o parametro di un effetto > *Create automation clip*; le clip stanno su quattro
-  corsie sotto le tracce della playlist e hanno un editor dei punti (linee lineari / a gradino / morbide). Solo in modalità Song.
+- **Automazione** - tasto destro su volume, pan, fader o parametro di un effetto > *Create automation clip*; le clip stanno sulle corsie
+  di automazione sotto le tracce della playlist (4 all'inizio, fino a 32 dalla 0.69.0) e hanno un editor dei punti (linee lineari / a gradino / morbide). Solo in modalità Song.
   **Dalla 0.35.0** anche i parametri dei plugin VST3 / LV2 / LADSPA, scelti da un elenco filtrabile con quello mosso per ultimo nella
   finestra del plugin già selezionato.
   **Dalla 0.47.0** anche send, bus aux e gruppi VCA, e i controlli si muovono con la loro automazione mentre il brano suona.

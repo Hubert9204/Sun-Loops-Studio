@@ -136,8 +136,8 @@ plugins. See [docs/roadmap.md](docs/roadmap.md) for exactly what is and is not v
   tube amp with feedback into the strings, four cabinets, 15 effects and 34 presets. Browser > Instruments > SunRiff.
 - **Plugins** - VST3, LV2 and LADSPA instruments and effects: scan them from the browser, double-click or drag an instrument for a channel,
   pick an effect in a mixer slot, open the plugin's own window; their settings are saved in the project, and a missing plugin keeps them.
-- **Automation** - right-click a volume, pan, fader or effect parameter > *Create automation clip*; clips live on four lanes under the
-  playlist tracks and have a point editor (linear / hold / smooth lines). Song mode only. **Since 0.35.0** also the parameters of
+- **Automation** - right-click a volume, pan, fader or effect parameter > *Create automation clip*; clips live on the automation lanes
+  under the playlist tracks (4 to start with, up to 32 since 0.69.0) and have a point editor (linear / hold / smooth lines). Song mode only. **Since 0.35.0** also the parameters of
   VST3 / LV2 / LADSPA plugins, chosen from a filterable list with the one last moved in the plugin's window already selected.
   **Since 0.47.0** also sends, aux buses and VCA groups, and the controls move with their automation while the song plays.
 - **Stretch and pitch** - right-click an audio clip: make it longer or shorter without changing its pitch, shift its pitch without changing its length,

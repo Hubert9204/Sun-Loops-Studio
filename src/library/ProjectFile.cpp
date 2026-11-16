@@ -490,10 +490,14 @@ juce::String ProjectDocument::toJson() const
             o->setProperty ("grouped", true);
         if (pt.collapsed)
             o->setProperty ("collapsed", true);
+        if (pt.section == TrackSection::Pattern) // 0.69.0: the playlist section it belongs to (audio when not given)
+            o->setProperty ("section", "pattern");
         playlistTrackList.add (juce::var (o));
     }
     if (! playlistTrackList.isEmpty())
         root->setProperty ("playlistTracks", playlistTrackList);
+    root->setProperty ("trackSections", true); // 0.69.0: files before have no sections (see the reading side)
+    root->setProperty ("automationLanes", arrangement.automationLanes); // 0.69.0 (4 before)
 
     // Recordings and imported audio: only the path of the file is stored, never the audio itself.
     juce::Array<juce::var> audioList;
@@ -909,7 +913,14 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
                 pt.locked = readBool (o->getProperty ("locked"), false); // 0.62.0
                 pt.grouped = t > 0 && readBool (o->getProperty ("grouped"), false);
                 pt.collapsed = readBool (o->getProperty ("collapsed"), false);
+                pt.section = o->getProperty ("section").toString() == "pattern" ? TrackSection::Pattern : TrackSection::Audio; // 0.69.0
             }
+    // 0.69.0: the playlist's sections. A file from before has none: the tracks from the first pattern's own track on go to the
+    // pattern section, the ones above it to the audio section (no track moves).
+    if (readBool (root->getProperty ("trackSections"), false))
+        d.arrangement.tidyTrackSections();
+    else
+        d.arrangement.assignTrackSectionsFromPatterns();
 
     // --- clips (each must fit, in order; the rest are dropped; since 0.33.0 they may overlap)
     int droppedClips = 0;
@@ -985,7 +996,8 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
     if (droppedAudio > 0)
         r.warnings.push_back (std::to_string (droppedAudio) + " audio clip(s) could not be placed and were left out.");
 
-    // --- automation clips (older files have none)
+    // --- automation clips (older files have none) on the automation lanes (0.69.0: as many as the file says; 4 before)
+    d.arrangement.automationLanes = readInt (root->getProperty ("automationLanes"), kAutomationLanes, 1, kMaxAutomationLanes);
     int droppedAutomation = 0;
     if (auto* automationList = root->getProperty ("automation").getArray())
         for (const auto& av : *automationList)

@@ -179,6 +179,15 @@ struct TimeMarker
 };
 constexpr int kMaxTimeMarkers = 128;
 
+// 0.69.0: the playlist shows its tracks in two sections, audio tracks (recordings, audio files) above pattern tracks; the
+// automation lanes are the third section, under them. The tracks of the audio section always come first in
+// Arrangement::playlistTracks (see Arrangement::tidyTrackSections).
+enum class TrackSection : std::uint8_t
+{
+    Audio,
+    Pattern
+};
+
 struct PlaylistTrack
 {
     std::string name;
@@ -194,6 +203,7 @@ struct PlaylistTrack
     bool locked = false;
     bool grouped = false;
     bool collapsed = false; // a group's head: the grouped tracks under it are hidden
+    TrackSection section = TrackSection::Audio; // 0.69.0
     bool operator== (const PlaylistTrack&) const = default;
 };
 
@@ -217,6 +227,59 @@ struct Arrangement
     std::vector<PlaylistTrack> playlistTracks = std::vector<PlaylistTrack> (kDefaultGenericTracks);
 
     int trackCount() const noexcept { return static_cast<int> (playlistTracks.size()); }
+    // 0.69.0: how many automation lanes the playlist has (kAutomationLanes in a new project, 1 to kMaxAutomationLanes).
+    int automationLanes = kAutomationLanes;
+
+    // 0.69.0: the playlist's sections. The first track of `section` (trackCount() when the pattern section is empty) and how
+    // many tracks it has; the audio section's tracks come first.
+    int sectionStart (TrackSection section) const noexcept
+    {
+        if (section == TrackSection::Audio)
+            return 0;
+        for (int t = 0; t < trackCount(); ++t)
+            if (playlistTracks[static_cast<size_t> (t)].section == TrackSection::Pattern)
+                return t;
+        return trackCount();
+    }
+    int sectionEnd (TrackSection section) const noexcept { return section == TrackSection::Audio ? sectionStart (TrackSection::Pattern) : trackCount(); }
+    int sectionTrackCount (TrackSection section) const noexcept { return sectionEnd (section) - sectionStart (section); }
+    TrackSection trackSection (int t) const noexcept
+    {
+        return t >= 0 && t < trackCount() ? playlistTracks[static_cast<size_t> (t)].section : TrackSection::Audio;
+    }
+
+    // Keeps the sections in order: once a pattern-section track is met, every track after it belongs to the pattern section
+    // too. A group never reaches across the border: the first track of a section is not grouped with the one above.
+    void tidyTrackSections() noexcept
+    {
+        bool pattern = false;
+        for (size_t t = 0; t < playlistTracks.size(); ++t)
+        {
+            auto& track = playlistTracks[t];
+            if (pattern)
+                track.section = TrackSection::Pattern;
+            if (track.section == TrackSection::Pattern && ! pattern)
+            {
+                pattern = true;
+                track.grouped = false;
+            }
+        }
+        if (! playlistTracks.empty())
+            playlistTracks.front().grouped = false;
+    }
+
+    // The sections of a project saved before 0.69.0: the tracks from the first pattern's own track on are pattern tracks, the
+    // ones above it audio tracks (nothing moves, so the clips stay where they are).
+    void assignTrackSectionsFromPatterns() noexcept
+    {
+        bool pattern = false;
+        for (auto& track : playlistTracks)
+        {
+            pattern = pattern || track.pattern >= 0;
+            track.section = pattern ? TrackSection::Pattern : TrackSection::Audio;
+        }
+        tidyTrackSections();
+    }
 
     // 0.61.0: the markers sorted by tick, one per tick (the last one given wins), inside the timeline, at most kMaxTimeMarkers.
     void tidyMarkers()
@@ -347,13 +410,61 @@ struct Arrangement
     }
 
     // Adds a track at the end (a free one unless `track.pattern` says otherwise). Returns its index, or -1 when there are
-    // kMaxPlaylistTracks already.
+    // kMaxPlaylistTracks already. 0.69.0: after a pattern-section track it belongs to the pattern section too (the sections
+    // stay in order, and no track moves).
     int addTrack (PlaylistTrack track = {})
     {
         if (trackCount() >= kMaxPlaylistTracks)
             return -1;
+        if (! playlistTracks.empty() && playlistTracks.back().section == TrackSection::Pattern)
+            track.section = TrackSection::Pattern;
         playlistTracks.push_back (std::move (track));
         return trackCount() - 1;
+    }
+
+    // 0.69.0: adds a track at the end of `section` (the playlist's + buttons). The tracks after it move down one place, their
+    // clips with them. Returns its index, or -1 when there are kMaxPlaylistTracks already.
+    int insertTrack (TrackSection section, PlaylistTrack track = {})
+    {
+        if (trackCount() >= kMaxPlaylistTracks)
+            return -1;
+        const int at = sectionEnd (section);
+        track.section = section;
+        track.grouped = false;
+        playlistTracks.insert (playlistTracks.begin() + at, std::move (track));
+        for (auto& c : clips)
+            if (c.track >= at)
+                ++c.track;
+        for (auto& c : audioClips)
+            if (c.track >= at)
+                ++c.track;
+        return at;
+    }
+
+    // 0.69.0: the automation lanes. Adds one at the end (false when there are kMaxAutomationLanes already); removes lane
+    // `lane` with every clip on it, the clips of the lanes under it moving up one lane (false for a bad lane or the only one).
+    bool addAutomationLane() noexcept
+    {
+        if (automationLanes >= kMaxAutomationLanes)
+            return false;
+        ++automationLanes;
+        return true;
+    }
+    bool removeAutomationLane (int lane)
+    {
+        if (lane < 0 || lane >= automationLanes || automationLanes <= 1)
+            return false;
+        automationClips.erase (std::remove_if (automationClips.begin(), automationClips.end(), [lane] (const AutomationClip& c) { return c.lane == lane; }),
+                               automationClips.end());
+        for (auto& c : automationClips)
+            if (c.lane > lane)
+                --c.lane;
+        --automationLanes;
+        return true;
+    }
+    int clipsOnLane (int lane) const noexcept
+    {
+        return static_cast<int> (std::count_if (automationClips.begin(), automationClips.end(), [lane] (const AutomationClip& c) { return c.lane == lane; }));
     }
 
     // The track for a new pattern: the one it already has, or a new one at the end (-1 when full).
@@ -363,6 +474,7 @@ struct Arrangement
             return t;
         PlaylistTrack track;
         track.pattern = pattern;
+        track.section = TrackSection::Pattern; // 0.69.0
         return addTrack (track);
     }
 
@@ -382,6 +494,7 @@ struct Arrangement
         for (auto& c : audioClips)
             if (c.track > t)
                 --c.track;
+        tidyTrackSections(); // 0.69.0: a group does not reach across a section's border
         return true;
     }
 
@@ -424,7 +537,7 @@ struct Arrangement
     // automation clips on its lane? `ignoreIndex` is the clip being moved or resized (or -1).
     bool canPlaceAutomation (const AutomationClip& c, int ignoreIndex = -1) const
     {
-        if (c.lane < 0 || c.lane >= kAutomationLanes || c.points.empty())
+        if (c.lane < 0 || c.lane >= automationLanes || c.points.empty())
             return false;
         if (c.startTick < 0 || c.lengthTicks < 1 || c.endTick() > timelineTicks())
             return false;
@@ -456,7 +569,7 @@ struct Arrangement
         probe.points = { AutomationPoint {} };
         probe.startTick = startTick;
         probe.lengthTicks = lengthTicks;
-        for (int lane = 0; lane < kAutomationLanes; ++lane)
+        for (int lane = 0; lane < automationLanes; ++lane)
         {
             probe.lane = lane;
             if (canPlaceAutomation (probe))

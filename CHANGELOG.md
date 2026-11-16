@@ -2,6 +2,30 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.69.0 - 2026-11-16
+
+The Playlist in three sections.
+
+### Changed
+- **The Playlist is split into three sections**, one above the other, each with a bar (its name, how many rows it has, its own
+  **-** and **+**) and its own vertical scrolling: **Audio** (recordings, audio files: the free tracks), **Patterns** (the
+  patterns' own tracks) and **Automation** (the automation lanes). **+** adds a track or a lane at the end of its section (an
+  audio track goes under the last audio track: the pattern tracks below move down with their clips, and so do the record arms
+  and inputs); **-** removes the section's last empty track or lane, or the last one after a question when all hold clips. A
+  section keeps at least one row. The - / + of the ruler's corner are gone; the track menu's *Add a track at the end* became
+  *Add an audio track* / *Add a pattern track*.
+- **The borders between the sections can be dragged** up and down (vertical resize pointer, the border lights up): the two
+  sections beside it share their height anew, names and clips together, down to one row each. Tracks and lanes have the same
+  height in every section.
+- **Automation lanes are no longer fixed at 4**: a new project has 4, the Automation section's + and - make 1 to 32. Removing a
+  lane removes its clips (after a question) and moves the clips of the lanes under it up one lane.
+- A group of tracks never reaches across a section's border.
+
+### Project files
+- Tracks of the Patterns section are saved with `"section": "pattern"`, and the file has `"trackSections"` and
+  `"automationLanes"`. A file from before 0.69.0 opens with the tracks above the first pattern's own track in the Audio section
+  and the rest in the Patterns section (no track moves) and with 4 lanes. Exporting to FL Studio ignores the sections.
+
 ## 0.68.1 - 2026-11-14
 
 ### Fixed

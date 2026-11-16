@@ -59,6 +59,19 @@ struct RecordSetup
             tracks[0].armed = true;
     }
 
+    // Track `t` was inserted into the playlist (0.69.0, a section's + button): the settings of the tracks from `t` on move down
+    // with them, and the new track starts unarmed with the default input.
+    void insertTrack (int t)
+    {
+        if (t < 0 || t >= kMaxPlaylistTracks)
+            return;
+        for (int i = kMaxPlaylistTracks - 1; i > t; --i)
+            tracks[static_cast<std::size_t> (i)] = tracks[static_cast<std::size_t> (i - 1)];
+        tracks[static_cast<std::size_t> (t)] = {};
+        if (armedTracks().empty())
+            tracks[0].armed = true;
+    }
+
     // Toggles one track. The last armed track cannot be disarmed: Record always has somewhere to write.
     void toggle (int track)
     {

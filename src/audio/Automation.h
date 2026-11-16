@@ -13,12 +13,14 @@ namespace sls
 {
 // Automation: a parameter that follows a drawn curve while the song plays. Everything here is free of JUCE and of the GUI.
 //
-// An automation clip lives on one of kAutomationLanes lanes under the tracks of the playlist, starts at a tick and
+// An automation clip lives on one of the playlist's automation lanes (Arrangement::automationLanes: kAutomationLanes in a new
+// project, 1 to kMaxAutomationLanes since 0.69.0) under the tracks of the playlist, starts at a tick and
 // lasts a number of ticks. It holds points (a position inside the clip, a value in the parameter's own unit, and the
 // shape of the line that leaves the point). Where clips of the same parameter follow each other, the later one takes
 // over at its start; after the last clip of a parameter its final value is held. Automation plays in Song mode only.
 
-constexpr int kAutomationLanes = 4;
+constexpr int kAutomationLanes = 4; // the lanes of a new project
+constexpr int kMaxAutomationLanes = 32;
 constexpr int kMaxAutomationClips = 64;
 constexpr int kMaxAutomationPoints = 256;
 

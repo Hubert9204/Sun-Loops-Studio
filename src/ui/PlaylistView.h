@@ -68,6 +68,7 @@ public:
     std::function<void (int)> onTrackArmToggled; // the record dot of a track, or its menu's "Record on this track"
     std::function<void (int)> onTrackInputMenu;  // the track menu's "Recording input..."
     std::function<void (int)> onTrackRemoved;    // the - button removed this track (0.44.0): what refers to tracks by number follows
+    std::function<void (int)> onTrackInserted;   // 0.69.0: a section's + inserted a track there (the ones from there on moved down)
     std::function<void (int)> onEditSample; // an audio clip's "Edit sample..." was chosen: its index
     std::function<void (int)> onEditPitch;  // ... "Edit pitch..."
     std::function<void (int)> onSplitStems; // ... "Split into stems..."

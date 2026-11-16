@@ -1001,15 +1001,23 @@ colpo d'occhio; sulle tracce alte il nome sta in una barra sopra le note, su que
   libere = 8.
 - Un clic in un punto vuoto della traccia di un pattern mette lì **quel pattern**; su una traccia libera mette il pattern scelto
   nel menu dei pattern. Le clip si possono comunque spostare su qualsiasi traccia.
-- I pulsanti **-** e **+** nell'angolo in alto a sinistra, sopra i nomi delle tracce, tolgono l'**ultima** traccia e aggiungono
-  una traccia libera in fondo. Per togliere una traccia precisa: tasto destro sul nome > *Delete this track* (nello stesso menu
-  c'è *Add a track at the end*). Una traccia che contiene clip viene tolta solo dopo una domanda, e le clip se ne vanno con lei;
-  **Ctrl+Z** riporta tutto. Resta almeno una traccia; al massimo 128.
+- **Tre sezioni** (0.69.0), una sopra l'altra, ognuna con una barra che porta il suo nome, quante righe ha e i suoi pulsanti
+  **-** e **+**: **Audio** (le tracce libere: registrazioni, file audio), **Patterns** (le tracce dei pattern) e **Automation**
+  (le corsie di automazione, *Auto 1*, *Auto 2*...). **+** aggiunge una traccia (una corsia) **in fondo alla sua sezione**: una
+  nuova traccia audio va sotto l'ultima traccia audio, e le tracce dei pattern più sotto scendono con le loro clip. **-** toglie
+  l'**ultima traccia vuota** (corsia) della sua sezione; se tutte contengono clip toglie l'ultima, dopo una domanda, con le sue
+  clip. Ogni sezione tiene almeno una traccia (corsia); al massimo 128 tracce e 32 corsie. Per togliere una traccia precisa:
+  tasto destro sul nome > *Delete this track* (nello stesso menu ci sono *Add an audio track* / *Add a pattern track*).
+  **Ctrl+Z** riporta tutto.
+- I **bordi tra le sezioni** si trascinano in su e in giù (sopra di loro il puntatore diventa una doppia freccia verticale e il
+  bordo si illumina): le due sezioni accanto si dividono di nuovo l'altezza, nomi delle tracce e clip insieme, e nessuna scende
+  sotto una riga. Un gruppo di tracce (*Group with the track above*) resta dentro la sua sezione.
 - Eliminando un pattern se ne va anche la sua traccia, se non contiene altro; una traccia che contiene ancora clip (una
   registrazione, per esempio) resta, come traccia libera con il vecchio nome del pattern.
-- Fino a 8 tracce si dividono l'altezza del pannello; se sono di più scorrono: la barra a destra, la **rotella sopra i nomi delle
-  tracce**, o **Alt + rotella** ovunque.
-- I progetti salvati prima della 0.44.0 si aprono con le loro 8 tracce com'erano.
+- Ogni sezione scorre per conto suo quando le sue righe non ci stanno: la sua barra a destra, la **rotella sopra i nomi** della
+  sezione, o **Alt + rotella** in qualsiasi punto sopra di lei.
+- I progetti salvati prima della 0.44.0 si aprono con le loro 8 tracce com'erano. Quelli salvati prima della 0.69.0 si aprono con
+  le tracce sopra la traccia del primo pattern nella sezione Audio e le altre nella sezione Patterns (nulla si sposta), e 4 corsie.
 
 La linea del tempo è lunga almeno 32 volte il pattern più lungo e almeno 64 battute. Lo zoom conta in battute di 4/4. Il righello mostra i
 numeri di battuta. La linea verticale arancione segna la fine del brano: in modalità Song la riproduzione ricomincia da lì (o dalla zona di
@@ -1395,7 +1403,7 @@ bilanciamento e send del Mixer, volume e pan del Channel Rack. Quando il brano s
 il tempo (usa i cambi di tempo, 0.46.0) e tutto il resto.
 
 **Creare una clip.** Tasto destro sul controllo e *Create automation clip*. Una clip lunga un pattern compare su una delle quattro
-**corsie di automazione** (*Auto 1-4*, sotto le tracce della Playlist) e si apre il suo editor. La clip è una linea piatta al
+**corsie di automazione** (*Auto 1*, *Auto 2*..., la sezione Automation della Playlist; 4 in un progetto nuovo, di più con il suo **+**) e si apre il suo editor. La clip è una linea piatta al
 valore attuale del controllo. Parte dal pattern sotto il cursore se il brano suona in modalità Song, altrimenti dall'inizio del brano. Se tutte e quattro le corsie sono
 già occupate in quel punto (o esistono 64 clip), non viene creato nulla e la barra di stato lo dice; sposta o elimina una clip e riprova.
 
@@ -1690,7 +1698,7 @@ occupato più tardi, un brano più pesante o un mixer pieno di effetti possono r
 ## Limiti
 
 - Fino a 32 canali, fino a 500 tracce del mixer (8 all'inizio) con 10 slot effetti ciascuna, 2 bus aux (10 slot ciascuno), 2 gruppi VCA, 64 pattern, da 1 a 128 tracce di playlist, una linea del
-  tempo di almeno 32 pattern e 64 battute, 4 corsie di automazione, 64 clip di automazione di al massimo 256 punti, 32 voci simultanee.
+  tempo di almeno 32 pattern e 64 battute, 4 corsie di automazione (fino a 32 dalla 0.69.0), 64 clip di automazione di al massimo 256 punti, 32 voci simultanee.
 - Gli effetti usano circa 15 MB di memoria a 48 kHz all'inizio, più circa 0,8 MB per ogni riverbero, delay, chorus e Pitch Corrector oltre
   il sedicesimo (di più a frequenze di campionamento maggiori). La memoria preparata resta finché il dispositivo audio non riparte.
 - I pattern durano da 4 a 64 quarti (ognuno la sua; 2 o 3 con un metro corto); un solo metro per tutto il brano; fino a 256 cambi di tempo, a gradino, suonati solo in modalità Song; le clip audio non li seguono.

@@ -4593,6 +4593,95 @@ void testPlaylistTracks()
     check (setup.armedTracks() == std::vector<int> { 0 }, "removing the only armed track arms the first one");
 }
 
+void testPlaylistSections069()
+{
+    std::cout << "Playlist sections: audio tracks, pattern tracks, automation lanes, each with - and + (0.69.0)\n";
+    auto doc = sls::ProjectDocument::blank();
+    auto& a = doc.arrangement;
+    a.patterns.resize (3);
+    a.addPatternTrack (1);
+    a.addPatternTrack (2);
+    check (a.sectionTrackCount (sls::TrackSection::Audio) == 4 && a.sectionStart (sls::TrackSection::Pattern) == 4
+               && a.sectionTrackCount (sls::TrackSection::Pattern) == 3 && a.trackSection (6) == sls::TrackSection::Pattern,
+           "a new project: the 4 free tracks are the audio section, the patterns' own tracks the pattern section");
+
+    // + in the audio section: a track at its end; the pattern tracks and their clips move down one place.
+    a.clips = { { 0, 4, 0, 1920, 0 }, { 2, 6, 0, 1920, 0 } };
+    sls::AudioClip take;
+    take.data = sls::makeMissingSample ("/take.wav");
+    take.track = 1;
+    take.lengthTicks = 960;
+    a.audioClips = { take };
+    const int added = a.insertTrack (sls::TrackSection::Audio);
+    check (added == 4 && a.trackCount() == 8 && a.trackSection (4) == sls::TrackSection::Audio && a.playlistTracks[4].pattern == -1
+               && a.clips[0].track == 5 && a.clips[1].track == 7 && a.audioClips[0].track == 1 && a.dedicatedTrack (0) == 5,
+           "+ (audio): a track at the end of the audio section, the pattern tracks and their clips move down");
+    const int pattern = a.insertTrack (sls::TrackSection::Pattern);
+    check (pattern == 8 && a.trackSection (8) == sls::TrackSection::Pattern && a.sectionTrackCount (sls::TrackSection::Pattern) == 4,
+           "+ (patterns): a track at the end of the pattern section");
+    check (a.addTrack() == 9 && a.trackSection (9) == sls::TrackSection::Pattern, "a track added at the very end joins the pattern section");
+
+    // Groups stay inside a section.
+    a.playlistTracks[5].grouped = true; // the first pattern track, "grouped" with the last audio track
+    a.tidyTrackSections();
+    check (! a.playlistTracks[5].grouped, "the first track of a section is never grouped with the one above");
+    a.playlistTracks[6].section = sls::TrackSection::Audio; // out of order
+    a.tidyTrackSections();
+    check (a.trackSection (6) == sls::TrackSection::Pattern, "the sections stay in order");
+
+    // Removing the first pattern track does not let the next one join the audio section's group.
+    a.playlistTracks[6].grouped = true;
+    check (a.removeTrack (5) && ! a.playlistTracks[5].grouped && a.sectionStart (sls::TrackSection::Pattern) == 5, "a track removed at a border");
+
+    // Automation lanes: 4 to start with, + adds one, - removes one with its clips (the lanes under it move up).
+    check (a.automationLanes == sls::kAutomationLanes, "4 automation lanes in a new project");
+    sls::AutomationClip flat;
+    flat.points = { sls::AutomationPoint {} };
+    flat.lengthTicks = 960;
+    flat.lane = 4;
+    check (! a.canPlaceAutomation (flat) && a.addAutomationLane() && a.automationLanes == 5 && a.canPlaceAutomation (flat),
+           "a fifth lane takes automation clips once it is added");
+    a.automationClips = { flat };
+    flat.lane = 1;
+    a.automationClips.push_back (flat);
+    check (a.clipsOnLane (4) == 1 && a.removeAutomationLane (1) && a.automationLanes == 4 && a.automationClips.size() == 1
+               && a.automationClips[0].lane == 3,
+           "- on a lane: its clips go, the lanes under it move up");
+    check (a.findFreeAutomationLane (0, 960) == 0, "a free lane is found among the lanes there are");
+    sls::Arrangement single;
+    single.automationLanes = 1;
+    check (! single.removeAutomationLane (0) && single.automationLanes == 1, "the last lane stays");
+    while (single.addAutomationLane()) {}
+    check (single.automationLanes == sls::kMaxAutomationLanes, "at most kMaxAutomationLanes lanes");
+
+    // Saved and read back; a file from before 0.69.0 gets its sections from the patterns' own tracks.
+    {
+        const auto back = sls::ProjectDocument::fromJson (doc.toJson());
+        check (back.document && back.document->arrangement.playlistTracks == a.playlistTracks && back.document->arrangement.automationLanes == 4
+                   && back.document->arrangement.automationClips.size() == 1 && back.document->arrangement.automationClips[0].lane == 3,
+               "the sections and the lanes are saved and read back");
+        auto v = juce::JSON::parse (doc.toJson());
+        v.getDynamicObject()->removeProperty ("trackSections");
+        v.getDynamicObject()->removeProperty ("automationLanes");
+        if (auto* list = v.getDynamicObject()->getProperty ("playlistTracks").getArray())
+            for (auto& t : *list)
+                t.getDynamicObject()->removeProperty ("section");
+        const auto old = sls::ProjectDocument::fromJson (juce::JSON::toString (v));
+        check (old.document && old.document->arrangement.automationLanes == sls::kAutomationLanes
+                   && old.document->arrangement.sectionStart (sls::TrackSection::Pattern) == old.document->arrangement.dedicatedTrack (1)
+                   && old.document->arrangement.trackSection (old.document->arrangement.trackCount() - 1) == sls::TrackSection::Pattern,
+               "an older file: the tracks from the first pattern's own track on are the pattern section, 4 lanes");
+    }
+
+    // Recording settings follow an inserted track.
+    sls::RecordSetup setup;
+    setup.armOnly (5);
+    setup.tracks[6] = { true, 4, true };
+    setup.insertTrack (4);
+    check (setup.armedTracks() == std::vector<int> ({ 6, 7 }) && setup.tracks[7].firstInput == 4 && ! setup.tracks[4].armed,
+           "the arms and inputs of the tracks below an inserted one move down with them");
+}
+
 void testFreePlaylist()
 {
     std::cout << "Playlist: pattern clips anywhere on the grid, the pattern length in quarters (0.42.0)\n";
@@ -12973,6 +13062,7 @@ int main()
     testPatternLengths056();
     testPianoRollSpareQuarter();
     testPlaylistTracks();
+    testPlaylistSections069();
     testMixerAndExport045();
     testTempoAndMeter046();
     testMixAutomation047();

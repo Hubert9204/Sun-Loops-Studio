@@ -39,8 +39,10 @@ enum class PlaylistTool { Draw, Split, Cut, Erase, Zoom, Select, Mute, Slip, Pai
 // Always: Ctrl+wheel zooms around the mouse, the wheel scrolls in time, Alt while dragging switches the grid off.
 // Delete removes the selected clip; Ctrl+C / Ctrl+X / Ctrl+V / Ctrl+D copy, cut, paste and duplicate it; Ctrl+Z / Ctrl+Y undo and redo.
 // Pattern clips and audio clips (recordings, imported files) sit on the grid chosen with Snap, down to a single tick (0.42.0);
-// audio is drawn with its waveform. Tracks (0.44.0): free ones and one per pattern (a click there places that pattern), - / +
-// in the top-left corner, scrolling when there are more than 8. Click on a track's name to choose the track
+// audio is drawn with its waveform. Tracks (0.44.0): free ones and one per pattern (a click there places that pattern).
+// 0.69.0: three sections one above the other, each with its own bar (its name and its - / + buttons) and its own vertical
+// scrolling: the audio tracks (recordings, audio files), the pattern tracks and the automation lanes. The two borders between
+// them can be dragged up and down. Click on a track's name to choose the track
 // that Record writes to. Audio and video files dragged in from the file manager, and sounds dragged from the browser,
 // become audio clips (the caller does the importing: see onFilesDropped / onItemDropped).
 // The arrangement is owned by the caller; this view edits it in place and reports through onChanged.
@@ -137,14 +139,19 @@ public:
     std::function<void (int)> onTrackArmToggled;
     std::function<void (int)> onTrackInputMenu;
 
-    // Tracks (0.44.0): the - and + buttons in the top-left corner, and the track menu's "Delete this track". Adding is one
-    // undo step; removing a track with clips on it asks first, then removes the clips with it (one undo step too).
-    void addTrack();
+    // Tracks (0.44.0): the - and + buttons of each section's bar (0.69.0), and the track menu's "Delete this track". Adding is
+    // one undo step; removing a track with clips on it asks first, then removes the clips with it (one undo step too).
+    void addTrack(); // a track at the end of the audio section
     void removeTrack (int track); // asks when the track holds clips
+    // 0.69.0: the sections' buttons. + adds a track (a lane) at the end of `section`; - removes the last empty one of the
+    // section, or, when every one holds clips, the last one (after asking). A section keeps at least one track (lane).
+    void addToSection (int section);
+    void removeFromSection (int section);
     // The arrangement's tracks changed from outside (a new pattern, an import, a project opened).
     void tracksChanged();
     void showTrack (int track) { tracksChanged(); scrollToTrack (track); } // scrolls the tracks so that `track` can be seen
     std::function<void (int)> onTrackRemoved; // the tracks after it moved up one place: what refers to tracks by number follows
+    std::function<void (int)> onTrackInserted; // 0.69.0: a track was inserted there; the ones from there on moved down one place
 
     // Tempo, to draw audio at its real length (an audio clip lasts a fixed time, not a fixed number of beats) and to
     // show times.
@@ -214,6 +221,7 @@ private:
         std::vector<AudioClip> audioClips;
         std::vector<AutomationClip> automationClips;
         std::vector<PlaylistTrack> tracks; // names, colours and the pattern each is dedicated to (0.33.0, 0.44.0)
+        int automationLanes = kAutomationLanes; // 0.69.0
     };
 
     struct Peaks
@@ -237,6 +245,7 @@ private:
     void followLoopMode (int x);
     void endLoopMode (bool keep);
     void paintGrid (juce::Graphics& g);
+    void paintSectionBars (juce::Graphics& g);
 
     static constexpr int kNameWidth = 124; // 0.44.0: wider, for the patterns' names on their own tracks; 0.60.0: room for M / S
     static constexpr int kHeaderSwitch = 14; // the M and S switches of a track header (0.60.0), and the record dot after them
@@ -247,33 +256,57 @@ private:
     static constexpr int kRulerHeight = 38;
     static constexpr int kScrollBarHeight = 14;
     static constexpr int kEdgeGrab = 7;
-    static constexpr int kLaneHeight = 22;
-    static constexpr int kLanesGap = 4;
-
     static constexpr int kTrackScrollWidth = 10;
-    static constexpr int kMaxVisibleTracks = 8; // more than this scroll (0.44.0)
+
+    // 0.69.0: the three sections, top to bottom, under the ruler. Each is a bar (its name, - and +) over a body that shows its
+    // rows (tracks or lanes) and scrolls on its own; a border that can be dragged up and down separates them. The bodies share
+    // the height left by the ruler, the bars, the borders and the scroll bar in the proportions of sectionShares.
+    static constexpr int kAudioSection = 0, kPatternSection = 1, kAutomationSection = 2, kSectionCount = 3;
+    static constexpr int kSectionBarHeight = 20;
+    static constexpr int kSplitterHeight = 6;
+    static constexpr int kMinSectionBody = 36; // a dragged border stops there (one row)
+    static constexpr int kRowHeight = 36;      // a track's or lane's height (0.69.0: the same in every section)
+    static constexpr int kLaneHeight = kRowHeight;
+    struct SectionArea
+    {
+        int barTop = 0, bodyTop = 0, bodyHeight = 0;
+        int bodyBottom() const noexcept { return bodyTop + bodyHeight; }
+    };
+    std::array<int, 3> bodyHeights() const noexcept;
+    SectionArea sectionArea (int section) const noexcept;
+    juce::Rectangle<int> sectionBody (int section, bool timelineOnly) const noexcept; // the body (with or without the names)
+    int splitterTop (int splitter) const noexcept; // y of border 0 (audio / patterns) or 1 (patterns / automation)
+    int splitterAt (int y) const noexcept;         // the border under y, or -1
+    int sectionAt (int y) const noexcept;          // the section whose body holds y, or -1
+    int sectionOfTrack (int track) const noexcept { return arrangement.trackSection (track) == TrackSection::Pattern ? kPatternSection : kAudioSection; }
+    static TrackSection trackSectionOf (int section) noexcept { return section == kPatternSection ? TrackSection::Pattern : TrackSection::Audio; }
+    int sectionFirstTrack (int section) const noexcept { return arrangement.sectionStart (trackSectionOf (section)); }
+    int sectionEndTrack (int section) const noexcept { return arrangement.sectionEnd (trackSectionOf (section)); }
+    int sectionRows (int section) const noexcept;  // the rows it shows: its tracks not folded away, or the lanes
+    int sectionContentHeight (int section) const noexcept { return sectionRows (section) * kRowHeight; }
+    void layoutSections();                         // the buttons and the scroll bars, after a resize or a dragged border
+    void updateSectionButtons();
+    juce::ScrollBar& sectionScrollBar (int section) noexcept;
+    void removeLane (int lane);                    // asks when the lane holds clips
 
     int trackCount() const noexcept { return std::max (1, arrangement.trackCount()); }
-    int trackHeight() const noexcept;
-    int tracksViewHeight() const noexcept;          // the visible height of the tracks (they scroll when there are more)
+    int trackHeight() const noexcept { return kRowHeight; }
     // 0.62.0: tracks folded away under their group's head take no row (and sit far off-screen, so nothing of theirs is drawn or hit)
-    int rowOf (int track) const noexcept;
-    int visibleRows() const noexcept;
-    int trackAtRow (int row) const noexcept;
-    int trackTop (int track) const noexcept
-    {
-        return arrangement.trackHidden (track) ? -100000 : kRulerHeight + rowOf (track) * trackHeight() - scrollY;
-    }
+    int rowOf (int track) const noexcept;          // its row inside its section
+    int trackAtRow (int section, int row) const noexcept;
+    // The y of a track's row; far off-screen for a track folded away or scrolled out of its section's sight.
+    int trackTop (int track) const noexcept;
     juce::Rectangle<int> foldRect (int track) const noexcept; // the fold triangle of a group's head
     void toggleTrackFlag (int track, int which);              // 0 lock, 1 grouped with the track above, 2 folded
-    bool inTracks (int y) const noexcept { return y >= kRulerHeight && y < kRulerHeight + tracksViewHeight(); }
+    bool inTracks (int y) const noexcept;          // over a track's row (in the audio or the pattern section)
     void clampScrollY();
     void updateTrackScrollBar();
     void scrollToTrack (int track);
-    int lanesTop() const noexcept;                  // y of the first automation lane
-    int lanesBottom() const noexcept { return lanesTop() + kAutomationLanes * kLaneHeight; }
-    bool inLanes (int y) const noexcept { return y >= lanesTop() && y < lanesBottom(); }
-    int yToLane (int y) const noexcept { return std::clamp ((y - lanesTop()) / kLaneHeight, 0, kAutomationLanes - 1); }
+    void scrollToLane (int lane);
+    int lanesTop() const noexcept;                  // y of the first automation lane (scrolled)
+    int lanesBottom() const noexcept { return lanesTop() + arrangement.automationLanes * kLaneHeight; }
+    bool inLanes (int y) const noexcept;
+    int yToLane (int y) const noexcept;
     juce::Rectangle<int> automationClipRect (const AutomationClip& c) const noexcept;
     void paintAutomationClip (juce::Graphics& g, const AutomationClip& c, bool selected);
     int floorToGrid (int tick) const noexcept; // the start of the grid square that holds `tick` (0.42.0)
@@ -355,9 +388,14 @@ private:
     std::vector<std::pair<int, int>> pitchRanges; // paint(): each pattern's lowest and highest note (kept to reuse its memory)
     double scrollX = 0.0;
     juce::ScrollBar scrollBar { false };
-    int scrollY = 0; // the tracks, in pixels (0.44.0)
-    juce::ScrollBar trackScrollBar { true };
-    juce::TextButton removeTrackButton { "-" }, addTrackButton { "+" };
+    // 0.69.0: each section's vertical scrolling (pixels), scroll bar, - / + buttons and share of the height; a dragged border.
+    std::array<int, 3> sectionScroll {};
+    juce::ScrollBar audioScrollBar { true }, patternScrollBar { true }, laneScrollBar { true };
+    std::array<juce::TextButton, 3> removeButtons, addButtons;
+    std::array<double, 3> sectionShares { 0.32, 0.46, 0.22 };
+    int splitterDrag = -1, splitterHover = -1, splitterGrabY = 0;
+    std::array<int, 3> splitterStartHeights {};
+    juce::MouseCursor toolCursor() const;
 
     PlaylistTool tool = PlaylistTool::Draw;
     int snapTicks = kTicksPerBeat;
