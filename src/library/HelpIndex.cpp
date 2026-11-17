@@ -101,6 +101,14 @@ const std::map<std::string, std::string>& synonyms()
         { "claw", "claw" }, { "chop", "chop" }, { "taglia", "chop" }, { "tagliare", "chop" }, { "pezzi", "chop" },
         { "pads", "pads" }, { "pad", "pads" }, { "prefader", "pre" }, { "rotate", "rotate" }, { "ruota", "rotate" },
         { "randomize", "randomize" }, { "casuale", "randomize" }, { "random", "randomize" },
+        // 0.71.0 - 0.74.0
+        { "drumaxx", "drum" }, { "fruit", "" }, { "cassa", "kick" }, { "rullante", "snare" }, { "speech", "speech" },
+        { "vocale", "speech" }, { "parla", "speech" }, { "parlare", "speech" }, { "talk", "speech" },
+        { "traveller", "traveller" }, { "traveler", "traveller" }, { "scratch", "scratcher" }, { "scratcher", "scratcher" },
+        { "patcher", "patcher" }, { "hyper", "hyper" }, { "punch", "punch" }, { "overdub", "blend" }, { "sovraincisione", "blend" },
+        { "icona", "icon" }, { "icone", "icon" }, { "icons", "icon" }, { "aggancio", "dock" }, { "docking", "dock" },
+        { "separatore", "separator" }, { "separatori", "separator" }, { "tag", "tags" }, { "etichette", "tags" },
+        { "etichetta", "tags" }, { "scrub", "playback" }, { "scrubbing", "playback" }, { "altezza", "height" },
     };
     return map;
 }

@@ -26,7 +26,25 @@ PerformancePanel::PerformancePanel()
                            "row: the first seven pads of a row launch its first seven clips, the eighth stops the row. Those notes then "
                            "do not play the selected instrument.");
     padsButton.onClick = [this] { if (onPads) onPads (! model.pads); };
-    for (auto* c : std::initializer_list<juce::Component*> { &onButton, &stopAllButton, &quantiseBox, &quantiseLabel, &padsButton })
+    padLayoutButton.setTooltip ("The pads' layout: the note of the first pad and how many pads make a row (0.71.0)");
+    padLayoutButton.onClick = [this]
+    {
+        juce::PopupMenu first, perRow, menu;
+        for (const int note : { 24, 36, 48, 60 })
+            first.addItem (100 + note, juce::MidiMessage::getMidiNoteName (note, true, true, 3) + " (" + juce::String (note) + ")", true, note == model.padFirst);
+        for (const int n : { 4, 8, 16 })
+            perRow.addItem (200 + n, juce::String (n) + " pads", true, n == model.padsPerRow);
+        menu.addSubMenu ("First pad", first);
+        menu.addSubMenu ("Pads per row (the last one stops the row)", perRow);
+        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&padLayoutButton), [this] (int result)
+        {
+            if (result >= 200 && onPadLayout)
+                onPadLayout (model.padFirst, result - 200);
+            else if (result >= 100 && onPadLayout)
+                onPadLayout (result - 100, model.padsPerRow);
+        });
+    };
+    for (auto* c : std::initializer_list<juce::Component*> { &onButton, &stopAllButton, &quantiseBox, &quantiseLabel, &padsButton, &padLayoutButton })
         addAndMakeVisible (c);
     startTimerHz (4);
 }
@@ -80,6 +98,8 @@ void PerformancePanel::resized()
     stopAllButton.setBounds (bar.removeFromLeft (80));
     bar.removeFromLeft (12);
     padsButton.setBounds (bar.removeFromLeft (90));
+    bar.removeFromLeft (4);
+    padLayoutButton.setBounds (bar.removeFromLeft (64));
 }
 
 void PerformancePanel::paint (juce::Graphics& g)
@@ -92,7 +112,7 @@ void PerformancePanel::paint (juce::Graphics& g)
     {
         g.setColour (juce::Colours::white.withAlpha (0.5f));
         g.setFont (juce::FontOptions (13.0f));
-        g.drawFittedText ("Nothing to launch yet: put pattern clips on the Playlist's tracks. Each track becomes a row here, each of its clips a cell.",
+        g.drawFittedText ("Nothing to launch yet: put pattern or audio clips on the Playlist's tracks. Each track becomes a row here, each of its clips a cell.",
                           getLocalBounds().withTrimmedTop (kHeader).reduced (30), juce::Justification::centred, 3);
         return;
     }
@@ -144,7 +164,24 @@ void PerformancePanel::paint (juce::Graphics& g)
             }
             g.setColour (playing ? juce::Colours::black : juce::Colours::white.withAlpha (0.9f));
             g.setFont (juce::FontOptions (12.0f, playing ? juce::Font::bold : juce::Font::plain));
-            g.drawText ((playing ? juce::String::fromUTF8 ("\xe2\x96\xb6 ") : juce::String()) + cell.name, box.reduced (6.0f, 0.0f), juce::Justification::centredLeft, true);
+            // 0.71.0: how it launches (1 one shot, H hold; ~ in sync) and whether it is audio, in the corner
+            juce::String marks;
+            if (cell.audio)
+                marks << juce::String::fromUTF8 ("\xe2\x99\xab");
+            if (cell.mode == 1)
+                marks << "1";
+            else if (cell.mode == 2)
+                marks << "H";
+            if (cell.sync)
+                marks << "~";
+            auto textBox = box.reduced (6.0f, 0.0f);
+            if (marks.isNotEmpty())
+            {
+                g.setFont (juce::FontOptions (10.0f, juce::Font::bold));
+                g.drawText (marks, textBox.removeFromRight (28.0f), juce::Justification::centredRight, false);
+            }
+            g.setFont (juce::FontOptions (12.0f, playing ? juce::Font::bold : juce::Font::plain));
+            g.drawText ((playing ? juce::String::fromUTF8 ("\xe2\x96\xb6 ") : juce::String()) + cell.name, textBox, juce::Justification::centredLeft, true);
         }
     }
 }
@@ -169,8 +206,39 @@ void PerformancePanel::mouseDown (const juce::MouseEvent& e)
         return;
     }
     const int column = (e.x - kNameWidth - kStopWidth) / kCellWidth;
-    if (e.x >= kNameWidth + kStopWidth && column >= 0 && column < static_cast<int> (row.cells.size()) && onLaunch)
-        onLaunch (row.cells[static_cast<size_t> (column)].clip);
+    if (e.x < kNameWidth + kStopWidth || column < 0 || column >= static_cast<int> (row.cells.size()))
+        return;
+    const auto cell = row.cells[static_cast<size_t> (column)];
+    if (e.mods.isPopupMenu()) // 0.71.0: how the cell launches
+    {
+        juce::PopupMenu menu;
+        menu.addSectionHeader (cell.name);
+        menu.addItem (1, "Loop (repeats until something else plays on the row)", true, cell.mode == 0);
+        menu.addItem (2, "One shot (plays once, then the row stops)", true, cell.mode == 1);
+        menu.addItem (3, "Hold (plays while the cell or its pad is held)", true, cell.mode == 2);
+        menu.addSeparator();
+        menu.addItem (4, "In sync (starts where it would be had it played from the first bar)", true, cell.sync);
+        menu.showMenuAsync (juce::PopupMenu::Options(), [this, cell] (int result)
+        {
+            if (result == 0 || ! onCellMode)
+                return;
+            if (result == 4)
+                onCellMode (cell.clip, cell.mode, ! cell.sync);
+            else
+                onCellMode (cell.clip, result - 1, cell.sync);
+        });
+        return;
+    }
+    heldCell = cell.clip;
+    if (onLaunch)
+        onLaunch (cell.clip);
+}
+
+void PerformancePanel::mouseUp (const juce::MouseEvent&)
+{
+    if (heldCell >= 0 && onRelease)
+        onRelease (heldCell);
+    heldCell = -1;
 }
 
 PerformanceWindow::PerformanceWindow()

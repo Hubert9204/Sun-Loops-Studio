@@ -116,13 +116,18 @@ plugins. See [docs/roadmap.md](docs/roadmap.md) for exactly what is and is not v
   right has the same 10 effect slots, applied to the whole mix. The Compressor has a **sidechain** input from any track (0.45.0). Several channels can share a track.
   **Since 0.70.0**: Frequency Shifter, Vintage Chorus, Vintage Phaser, Effector (ten effects on an X / Y pad), Grains (granular),
   the Envelope and Formula Controllers (beside the Peak Controller), a **mix knob on every slot**, pre-fader sends, eight sends per
-  track, a track delay, strip colours and delay compensation on the aux buses too.
+  track, a track delay, strip colours and delay compensation on the aux buses too. **Since 0.74.0**: Hyper Chorus, Scratcher,
+  **Patcher** (ten effects in one slot, in series or in parallel), a second target for every controller, strip icons, docking
+  and separators.
 - **Synth** - every synth channel can switch from the classic sine to a **subtractive synth**: two band-limited oscillators and noise, a 12 or
   24 dB filter with its own envelope, an amplitude envelope and an LFO, or to an **FM synth** with four operators and a modulation matrix
   (feedback, eight classic algorithms), to an **additive synth** (0.24.0: up to 64 harmonics, two timbres with formants and a morph
   between them, a filter acting on the harmonics so it never aliases) or to a **physical model** (0.24.0: a plucked string with damping,
-  stiffness and a wooden body; marimba, vibraphone, glass, bell, metal plate); 29 ready-made sounds, grouped by engine (also as browser
-  presets).
+  stiffness and a wooden body; marimba, vibraphone, glass, bell, metal plate) or (0.74.0) to a **drum synth** (kick, snare, tom,
+  clap, hi-hat, cymbal: pitch sweep, noise, click, drive, playable on the keys, as Fruit Kick / Drumaxx); 38 ready-made sounds,
+  grouped by engine (also as browser presets). The sampler (0.74.0) also plays its sample as **grains** (as the Granulizer) or
+  along a **travel curve** (as Wave Traveller), has an envelope for each of pan, cutoff, resonance and pitch, and a **speech
+  synthesizer** turns a typed text into its sample.
 - **SunBurst** (0.48.0) - a polyphonic synthesizer plugin (VST3 and Standalone) included with the program: three oscillators with
   band-limited wavetables and up to 16 unison voices ("fat saw"), sub and noise, a multimode filter, three envelopes, three LFOs,
   a 16-slot modulation matrix, four macros, distortion / EQ / filter / chorus / delay / reverb, an arpeggiator, a hardware-style
@@ -215,7 +220,7 @@ Press **Space** to play, **F5 / F6 / F7 / F9** to show panels and **F8** for the
 ./build/SunLoopsStudioTests_artefacts/Release/SunLoopsStudioTests
 ```
 
-Headless (no audio device or display needed), more than 2,100 checks at 0.70.0. They cover, among other things, synth pitch and
+Headless (no audio device or display needed), more than 2,100 checks at 0.74.0. They cover, among other things, synth pitch and
 sample-exact timing, every instrument and effect, that `Player::render` never allocates (effects included), a concurrent stress test of
 the UI-to-audio hand-over, the project file (round trip, damaged and hostile files, missing samples, atomic writing), FL Studio and MIDI
 import, export to every format, recording, automation, tempo changes, the plugin host, SunBurst and HexForge (presets, voices,

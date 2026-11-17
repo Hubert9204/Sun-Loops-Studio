@@ -84,6 +84,9 @@ const char* effectKey (EffectType t)
         case EffectType::Grains:       return "grains";
         case EffectType::EnvelopeController: return "envelope-controller";
         case EffectType::FormulaController: return "formula-controller";
+        case EffectType::HyperChorus:  return "hyper-chorus"; // 0.73.0
+        case EffectType::Scratcher:    return "scratcher";
+        case EffectType::Patcher:      return "patcher";
         case EffectType::None:       break;
     }
     return "none";
@@ -121,6 +124,12 @@ juce::var noteToVar (const Note& n)
             o->setProperty ("colour", static_cast<int> (n.colour));
         if (n.muted)
             o->setProperty ("muted", true);
+        if (std::abs (n.modX - 0.5f) > 0.0f) // 0.71.0
+            o->setProperty ("modX", number (static_cast<double> (n.modX)));
+        if (std::abs (n.modY - 0.5f) > 0.0f)
+            o->setProperty ("modY", number (static_cast<double> (n.modY)));
+        if (n.shift > 0.0f)
+            o->setProperty ("shift", number (static_cast<double> (n.shift)));
         a.add (juce::var (o));
     }
     return a;
@@ -156,6 +165,13 @@ juce::var slotToVar (const EffectSlot& slot, const PluginSpec* plugin)
         o->setProperty ("mix", number (static_cast<double> (s.mix)));
     if (s.type == EffectType::FormulaController && s.formula != nullptr)
         o->setProperty ("formula", juce::String::fromUTF8 (s.formula->text().c_str()));
+    if (s.type == EffectType::Patcher && s.patch != nullptr) // 0.73.0: its effects
+    {
+        juce::Array<juce::var> inner;
+        for (const auto& sub : *s.patch)
+            inner.add (slotToVar (sub, nullptr));
+        o->setProperty ("patch", inner);
+    }
     juce::Array<juce::var> params;
     for (int i = 0; i < effectParamCount (s.type); ++i)
         params.add (number (static_cast<double> (s.params[static_cast<size_t> (i)])));
@@ -230,6 +246,19 @@ EffectSlot readSlot (const juce::var& v, std::vector<PluginSpec>& plugins, Plugi
                 slot.convolver = Convolver::make (none, loaded.data);
             }
     }
+    if (slot.type == EffectType::Patcher) // 0.73.0: its effects (no plugins, controllers or Patchers inside)
+    {
+        std::vector<EffectSlot> inner (static_cast<size_t> (kPatcherSlots));
+        if (auto* list = o->getProperty ("patch").getArray())
+            for (int k = 0; k < std::min (list->size(), kPatcherSlots); ++k)
+                if (auto* sub = (*list)[k].getDynamicObject(); sub != nullptr && sub->getProperty ("type").toString() != "plugin")
+                {
+                    auto read = readSlot ((*list)[k], plugins, place, index, slotIndex);
+                    if (read.type != EffectType::Patcher && ! effectIsController (read.type))
+                        inner[static_cast<size_t> (k)] = std::move (read);
+                }
+        slot.patch = std::make_shared<const std::vector<EffectSlot>> (std::move (inner));
+    }
     return slot.sanitised();
 }
 
@@ -258,6 +287,9 @@ bool readNote (const juce::var& v, int patternTicks, Note& out)
         out.finePitch = static_cast<float> (readNumber (o->getProperty ("fine"), 0.0, -1200.0, 1200.0));
         out.colour = static_cast<std::uint8_t> (readInt (o->getProperty ("colour"), 0, 0, 15));
         out.muted = readBool (o->getProperty ("muted"), false);
+        out.modX = static_cast<float> (readNumber (o->getProperty ("modX"), 0.5, 0.0, 1.0)); // 0.71.0
+        out.modY = static_cast<float> (readNumber (o->getProperty ("modY"), 0.5, 0.0, 1.0));
+        out.shift = static_cast<float> (readNumber (o->getProperty ("shift"), 0.0, 0.0, 1.0));
     }
     return true;
 }
@@ -315,6 +347,8 @@ juce::String ProjectDocument::toJson() const
         }
         if (c.colour != 0)
             o->setProperty ("colour", juce::String::toHexString (static_cast<juce::int64> (c.colour)).paddedLeft ('0', 8));
+        if (c.icon != 0) // 0.72.0
+            o->setProperty ("icon", static_cast<int> (c.icon));
         if (! c.group.empty())
             o->setProperty ("group", juce::String (c.group));
         if (c.instrument == Instrument::Plugin)
@@ -400,6 +434,12 @@ juce::String ProjectDocument::toJson() const
             o->setProperty ("delayMs", number (static_cast<double> (t.delayMs)));
         if (t.colour != 0)
             o->setProperty ("colour", juce::String::toHexString (static_cast<juce::int64> (t.colour)).paddedLeft ('0', 8));
+        if (t.icon != 0) // 0.72.0
+            o->setProperty ("icon", static_cast<int> (t.icon));
+        if (t.dock != 0)
+            o->setProperty ("dock", t.dock == 1 ? "left" : "right");
+        if (t.separator)
+            o->setProperty ("separator", true);
         trackList.add (juce::var (o));
     }
     root->setProperty ("tracks", trackList);
@@ -484,6 +524,10 @@ juce::String ProjectDocument::toJson() const
             o->setProperty ("offsetTicks", c.offsetTicks);
         if (c.muted)
             o->setProperty ("muted", true); // 0.60.0
+        if (c.launchMode != 0) // 0.71.0
+            o->setProperty ("launchMode", static_cast<int> (c.launchMode));
+        if (c.launchSync)
+            o->setProperty ("launchSync", true);
         clipList.add (juce::var (o));
     }
     root->setProperty ("clips", clipList);
@@ -502,6 +546,10 @@ juce::String ProjectDocument::toJson() const
             o->setProperty ("name", juce::String (pt.name));
         if (pt.colour != 0)
             o->setProperty ("colour", juce::String::toHexString (static_cast<juce::int64> (pt.colour)).paddedLeft ('0', 8));
+        if (pt.icon != 0) // 0.72.0
+            o->setProperty ("icon", static_cast<int> (pt.icon));
+        if (pt.height != 1)
+            o->setProperty ("height", static_cast<int> (pt.height));
         if (pt.pattern >= 0)
             o->setProperty ("pattern", pt.pattern);
         if (pt.mute)
@@ -550,6 +598,10 @@ juce::String ProjectDocument::toJson() const
         }
         if (a.muted)
             o->setProperty ("muted", true); // 0.60.0
+        if (a.launchMode != 0) // 0.71.0
+            o->setProperty ("launchMode", static_cast<int> (a.launchMode));
+        if (a.launchSync)
+            o->setProperty ("launchSync", true);
         if (! a.stretch.isNeutral())
         {
             // Only the settings: the audio is stretched again when the project is opened.
@@ -612,7 +664,7 @@ juce::String ProjectDocument::toJson() const
         juce::Array<juce::var> list;
         for (const auto& m : arrangement.markers)
         {
-            static constexpr const char* kActions[] = { "", "loop", "skip", "pause", "start" };
+            static constexpr const char* kActions[] = { "", "loop", "skip", "pause", "start", "punch-in", "punch-out" };
             juce::Array<juce::var> entry { m.tick, juce::String (m.name) };
             if (m.action != MarkerAction::None) // 0.62.0 (a third value; older versions read the first two)
                 entry.add (juce::String (kActions[static_cast<int> (m.action)]));
@@ -679,6 +731,7 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
         // 0.62.0: the rack's colour and filter group, the Layer channel
         if (const auto hex = o->getProperty ("colour").toString().trim(); hex.length() == 8 && hex.containsOnly ("0123456789abcdefABCDEF"))
             c.colour = static_cast<std::uint32_t> (hex.getHexValue64()) | 0xff000000u;
+        c.icon = static_cast<std::uint8_t> (readInt (o->getProperty ("icon"), 0, 0, 16)); // 0.72.0
         c.group = o->getProperty ("group").toString().substring (0, 32).toStdString();
         if (instrument == "layer")
         {
@@ -783,6 +836,10 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
                     }
             t.delayMs = static_cast<float> (readNumber (o->getProperty ("delayMs"), 0.0, 0.0, static_cast<double> (kMaxTrackDelayMs)));
             t.colour = static_cast<std::uint32_t> (o->getProperty ("colour").toString().getHexValue64() & 0xffffffff);
+            t.icon = static_cast<std::uint8_t> (readInt (o->getProperty ("icon"), 0, 0, 16)); // 0.72.0
+            const auto dock = o->getProperty ("dock").toString();
+            t.dock = static_cast<std::uint8_t> (dock == "left" ? 1 : dock == "right" ? 2 : 0);
+            t.separator = readBool (o->getProperty ("separator"), false);
         }
     }
     for (auto& c : d.channels) // a channel on a track the file does not have goes to the last one
@@ -935,6 +992,8 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
                 const auto hex = o->getProperty ("colour").toString().trim();
                 if (hex.length() == 8 && hex.containsOnly ("0123456789abcdefABCDEF"))
                     pt.colour = static_cast<std::uint32_t> (hex.getHexValue64()) | 0xff000000u;
+                pt.icon = static_cast<std::uint8_t> (readInt (o->getProperty ("icon"), 0, 0, 16)); // 0.72.0
+                pt.height = static_cast<std::uint8_t> (readInt (o->getProperty ("height"), 1, 0, 3));
                 pt.mute = readBool (o->getProperty ("mute"), false); // 0.60.0
                 pt.solo = readBool (o->getProperty ("solo"), false);
                 pt.locked = readBool (o->getProperty ("locked"), false); // 0.62.0
@@ -973,6 +1032,8 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
                     clip.lengthTicks = readInt (o->getProperty ("length"), 0, 0, 100000) * sharedTicks;
                 }
                 clip.muted = readBool (o->getProperty ("muted"), false); // 0.60.0
+                clip.launchMode = static_cast<std::uint8_t> (readInt (o->getProperty ("launchMode"), 0, 0, 2)); // 0.71.0
+                clip.launchSync = readBool (o->getProperty ("launchSync"), false);
             }
             if (o != nullptr && d.arrangement.canPlace (clip))
                 d.arrangement.clips.push_back (clip);
@@ -1006,6 +1067,8 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
                 clip.takeFirstSeconds = readNumber (o->getProperty ("takeFirstSeconds"), 0.0, 0.0, 1.0e6); // 0.47.0
                 clip.takeSeconds = readNumber (o->getProperty ("takeSeconds"), 0.0, 0.0, 1.0e6);
                 clip.muted = readBool (o->getProperty ("muted"), false); // 0.60.0
+                clip.launchMode = static_cast<std::uint8_t> (readInt (o->getProperty ("launchMode"), 0, 0, 2)); // 0.71.0
+                clip.launchSync = readBool (o->getProperty ("launchSync"), false);
                 if (auto* st = o->getProperty ("stretch").getDynamicObject())
                 {
                     clip.stretch.lengthRatio = readNumber (st->getProperty ("lengthRatio"), 1.0, kMinStretchRatio, kMaxStretchRatio);
@@ -1098,7 +1161,8 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
                 TimeMarker marker { readInt ((*pair)[0], 0, 0, d.arrangement.timelineTicks()), (*pair)[1].toString().substring (0, 64).toStdString() };
                 const auto action = pair->size() > 2 ? (*pair)[2].toString() : juce::String(); // 0.62.0
                 marker.action = action == "loop" ? MarkerAction::Loop : action == "skip" ? MarkerAction::Skip
-                              : action == "pause" ? MarkerAction::Pause : action == "start" ? MarkerAction::Start : MarkerAction::None;
+                              : action == "pause" ? MarkerAction::Pause : action == "start" ? MarkerAction::Start
+                              : action == "punch-in" ? MarkerAction::PunchIn : action == "punch-out" ? MarkerAction::PunchOut : MarkerAction::None;
                 d.arrangement.markers.push_back (std::move (marker));
             }
         d.arrangement.tidyMarkers();

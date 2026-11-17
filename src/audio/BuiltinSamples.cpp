@@ -1,4 +1,5 @@
 #include "audio/BuiltinSamples.h"
+#include "audio/SpeechSynth.h"
 
 #include "audio/AudioImport.h"
 
@@ -111,6 +112,7 @@ std::shared_ptr<const SampleData> makeBuiltinSample (const std::string& id)
     if (id == "hat")   return makeHatSample();
     if (isLibraryId (id)) return makeLibrarySample (id);
     if (isGeneratedId (id)) return makeGeneratedSample (id);
+    if (isSpeechId (id)) return makeSpeechSample (id); // 0.74.0
     if (id == kStartupSampleId) return makeStartupSample();
     return nullptr;
 }

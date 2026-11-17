@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.22)
 # 10.15 Catalina (0.63.0): the newest macOS of Intel Macs from 2012 (Mac mini, iMac, MacBook Pro). The Apple silicon half of the
 # app needs macOS 11 in any case (the first macOS for those Macs); the compiler refuses any call that Catalina does not have.
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Oldest macOS the program runs on")
-project(SunLoopsStudio VERSION 0.70.0 LANGUAGES C CXX ASM)
+project(SunLoopsStudio VERSION 0.74.0 LANGUAGES C CXX ASM)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -95,6 +95,7 @@ set(SLS_CORE_SOURCES
     src/audio/BuiltinSamples.cpp
     src/audio/SoundLibrary.cpp
     src/audio/DrumSynth.cpp
+    src/audio/SpeechSynth.cpp
     src/audio/MusicTheory.cpp
     src/audio/LoopStarter.cpp
     src/audio/OfflineRenderer.cpp
@@ -191,6 +192,8 @@ target_sources(SunLoopsStudio PRIVATE
     src/ui/StepGraph.cpp
     src/ui/PanelWindow.cpp
     src/ui/MixerPanel.cpp
+    src/ui/Icons.cpp
+    src/ui/PatcherWindow.cpp
     src/ui/PlaylistTimeline.cpp
     src/ui/PlaylistView.cpp
     src/ui/PluginPicker.cpp

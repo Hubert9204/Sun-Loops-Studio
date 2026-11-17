@@ -57,6 +57,7 @@ struct Channel
     int cutBy = 0;                            // 0 = none (cutGroup == cutBy on one channel: it cuts itself)
     // 0.62.0, the Channel Rack's looks and the Layer channel:
     std::uint32_t colour = 0;                 // 0xAARRGGBB of the channel's button; 0 = the default look
+    std::uint8_t icon = 0;                    // 0.72.0: the icon on its button (see ui/Icons.h); 0 = none
     std::string group;                        // the rack's filter group this channel belongs to ("" = none: only shown under All)
     std::uint32_t layerMask = 0;              // Layer only: bit n = channel n plays this channel's notes
     int steps = 0;                            // step sequencer (0.31.0): the active length the user set in the current pattern, in
@@ -105,6 +106,11 @@ struct MixerTrack
     // the strip's colour in the mixer (0xAARRGGBB, 0 = the default look)
     float delayMs = 0.0f; // 0 .. kMaxTrackDelayMs
     std::uint32_t colour = 0;
+    // 0.72.0: the strip's icon; where the strip sits (FL Studio's docking: 0 with the others, 1 on the left, 2 on the right, before
+    // the master); a gap before the strip (a separator)
+    std::uint8_t icon = 0;
+    std::uint8_t dock = 0;
+    bool separator = false;
 
     bool sendsTo (int track) const noexcept
     {

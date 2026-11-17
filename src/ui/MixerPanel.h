@@ -184,10 +184,15 @@ private:
     float px = 0.5f, py = 0.5f;
 };
 
+class PatcherWindow; // 0.73.0
+
 class FxPanel : public juce::Component
 {
 public:
     FxPanel();
+    ~FxPanel() override;
+    // 0.73.0: the panel inside a Patcher's window: no plugins, controllers or Patchers in its slot menu
+    void setNested (bool isNested) noexcept { nested = isNested; }
 
     // `trackIndex` == kMasterIndex shows the master bus (its title and help text change).
     void setTrack (MixerTrack* track, int trackIndex);
@@ -243,6 +248,10 @@ private:
     juce::TextButton presetButton { "Presets..." }; // the built-in effect's ready-made settings (0.21.0)
     juce::TextButton chainButton { "Chain..." };    // the whole chain of slots saved and loaded (0.45.0)
     juce::TextButton irButton { "Load IR..." };     // 0.62.0, the Convolver: an audio file as the impulse response
+    juce::TextButton patchButton { "Edit..." };     // 0.73.0, the Patcher: its window
+    std::unique_ptr<PatcherWindow> patcherWindow;
+    bool nested = false;
+    void openPatcher();
     juce::Label hintLabel;                          // 0.62.0: what a Peak Controller drives, which file a Convolver uses
     std::unique_ptr<juce::FileChooser> irChooser;
     void updateHint();

@@ -16,6 +16,7 @@
 
 #include <juce_audio_formats/juce_audio_formats.h>
 
+#include "audio/SpeechSynth.h"
 #include "audio/Arrangement.h"
 #include "audio/TypingKeyboard.h"
 #include "audio/AudioExport.h"
@@ -2421,7 +2422,10 @@ void testManyTracks()
         renderBlocks (timed, far, true, 2.0);
         const double seconds = std::chrono::duration<double> (std::chrono::steady_clock::now() - start).count();
         std::cout << "    (500 tracks, 2 s of audio: " << static_cast<int> (seconds * 1000) << " ms)\n";
-        check (seconds < 0.5, "and 2 s of it render in under 0.5 s (silent tracks cost almost nothing)");
+        // (under emulation - the Intel build under Rosetta in CI - the limit is scaled by SLS_TIMING_SCALE)
+        const char* scaleText = std::getenv ("SLS_TIMING_SCALE");
+        const double limit = 0.5 * (scaleText != nullptr ? std::clamp (std::atof (scaleText), 1.0, 10.0) : 1.0);
+        check (seconds < limit, "and 2 s of it render in under 0.5 s (silent tracks cost almost nothing)");
     }
 
     // The pool: 16 memories at the start; a 20th reverb waits until memory is offered, then works; none of it allocates.
@@ -5807,6 +5811,20 @@ void testHeliosManual062()
     check (top ("make unique consolidate", "Make unique", "en"), "Helios: Make unique and Consolidate");
     check (top ("note pan release fine pitch lane", "event lanes", "en") && top ("corsie degli eventi pan release", "corsie degli eventi", "it"),
            "Helios: the Piano Roll's event lanes");
+    // 0.71.0 - 0.74.0
+    check (top ("drum synth kick 808 drumaxx", "Drum engine", "en") && top ("sintetizzatore di batteria cassa 808", "Motore batteria", "it"),
+           "Helios: the drum synth (0.74.0)");
+    check (top ("speech synthesizer text", "Speech synthesizer", "en") && top ("sintesi vocale testo", "Sintesi vocale", "it"), "Helios: speech (0.74.0)");
+    check (top ("wave traveller tape stop", "Play modes", "en") && top ("wave traveller tape stop", "Modi di riproduzione", "it"),
+           "Helios: the Granulizer and Wave Traveller play modes (0.74.0)");
+    check (top ("patcher hyper chorus scratcher", "0.73.0", "en") && top ("patcher hyper chorus scratcher", "0.73.0", "it"),
+           "Helios: Patcher, Hyper Chorus, Scratcher (0.73.0)");
+    check (top ("sampler envelope per target pan cutoff", "Envelopes per target", "en")
+               && top ("inviluppi per destinazione pan cutoff", "Inviluppi per destinazione", "it"),
+           "Helios: the sampler's envelopes per target (0.71.0)");
+    check (top ("browser tags folder colour", "Tags", "en") && top ("tag colori delle cartelle", "Tag e colori", "it"), "Helios: tags and folder colours (0.72.0)");
+    check (top ("mod x mod y lane playback tool", "Mod X", "en") && top ("corsie mod x mod y strumento playback", "Mod X", "it"),
+           "Helios: the Mod X / Y lanes and the Playback tool (0.71.0)");
 }
 
 double energyOf (const sls::SampleData& s, int from, int to)
@@ -8916,6 +8934,543 @@ void testFlParity070()
                    && seventh.column == 6 && stop.kind == sls::PadAction::Kind::StopRow && stop.row == 0 && next.row == 1 && next.column == 0
                    && sls::performancePad (35).kind == sls::PadAction::Kind::None && sls::performancePad (100).kind == sls::PadAction::Kind::None,
                "MIDI pads: from C1, eight to a row, the eighth stops the row");
+    }
+}
+
+// 0.71.0: the features 0.70.0 left narrower than FL Studio's: mod X / mod Y and the graph editor's shift, the sampler's envelopes
+// of pan / cutoff / resonance / pitch, the controllers' second target, punch markers, launch modes and the pads' layout.
+void testFlParity071()
+{
+    std::cout << "FL Studio parity (0.71.0)\n";
+    const auto leftOf = [] (const juce::AudioBuffer<float>& b) { return std::vector<float> (b.getReadPointer (0), b.getReadPointer (0) + b.getNumSamples()); };
+
+    // --- shift: the note starts later by its share of a 16th
+    {
+        auto plainNote = sls::Note { 69, 0, kBeat, 0.8f };
+        auto shifted = plainNote;
+        shifted.shift = 0.5f;
+        const auto a = leftOf (sls::renderToBuffer (oneBar ({ synthChannel ({ plainNote }) }), {}));
+        const auto b = leftOf (sls::renderToBuffer (oneBar ({ synthChannel ({ shifted }) }), {}));
+        const int onA = firstOnset (a.data(), static_cast<int> (a.size()), 0.01f), onB = firstOnset (b.data(), static_cast<int> (b.size()), 0.01f);
+        // half a 16th = 60 ticks = 1/8 of a beat at 120 BPM = 3000 samples
+        check (onA >= 0 && std::abs ((onB - onA) - 3000) < 8, "shift: half a 16th starts the note 3000 samples later (" + std::to_string (onB - onA) + ")");
+        const auto project = sls::Project::make ({ synthChannel ({ shifted }) }, 4 * kBeat);
+        check (project.channels[0].notes.size() == 1 && project.channels[0].notes[0].startTick == 60, "shift: the played note starts at tick 60");
+    }
+
+    // --- mod X / mod Y on a filtered sampler
+    {
+        auto channel = samplerChannel (sineSample (2000.0, 1.0, 48000.0), { sls::Note { 60, 0, kBeat, 1.0f } });
+        channel.sampler.filter = sls::SamplerFilter::LowPass;
+        channel.sampler.cutoff = 0.434f; // about 400 Hz
+        const auto level = [&] (float modX, float modY)
+        {
+            auto c = channel;
+            c.notes[0].modX = modX;
+            c.notes[0].modY = modY;
+            const auto out = leftOf (sls::renderToBuffer (oneBar ({ c }), {}));
+            return rmsOf (out, 4000, 20000);
+        };
+        const double closed = level (0.5f, 0.5f), opened = level (1.0f, 0.5f), shut = level (0.0f, 0.5f);
+        check (opened > 4.0 * closed && closed > 4.0 * shut, "mod X: the note's cutoff moves 2 octaves up and down");
+        auto resonant = channel;
+        resonant.sampler.cutoff = 0.6f; // about 1.25 kHz: the 2 kHz tone is near the peak of a resonance
+        resonant.sampler.resonance = 0.4f;
+        const auto res = [&] (float modY)
+        {
+            auto c = resonant;
+            c.notes[0].modY = modY;
+            c.notes[0].modX = 0.66f; // (the cutoff moved up near the tone)
+            return rmsOf (leftOf (sls::renderToBuffer (oneBar ({ c }), {})), 4000, 20000);
+        };
+        check (res (1.0f) > 1.3 * res (0.0f), "mod Y: the note's resonance raises the level at the cutoff");
+        sls::Note n;
+        n.modX = 0.75f;
+        n.modY = 0.2f;
+        n.shift = 0.25f;
+        auto doc = sls::ProjectDocument::blank();
+        doc.arrangement.patterns[0].notes.resize (1);
+        doc.arrangement.patterns[0].notes[0] = { n };
+        const auto parsed = sls::ProjectDocument::fromJson (doc.toJson());
+        bool kept = parsed.document.has_value() && ! parsed.document->arrangement.patterns.empty()
+                    && ! parsed.document->arrangement.patterns[0].notes.empty() && parsed.document->arrangement.patterns[0].notes[0].size() == 1;
+        if (kept)
+        {
+            const auto& back = parsed.document->arrangement.patterns[0].notes[0][0];
+            kept = std::abs (back.modX - 0.75f) < 1.0e-6f && std::abs (back.modY - 0.2f) < 1.0e-6f && std::abs (back.shift - 0.25f) < 1.0e-6f;
+        }
+        check (kept, "mod X, mod Y and shift survive a save and a load");
+    }
+
+    // --- the sampler's envelopes of pitch and pan
+    {
+        auto channel = samplerChannel (sineSample (500.0, 1.5, 48000.0), { sls::Note { 60, 0, 2 * kBeat, 1.0f } });
+        auto& pitch = channel.sampler.modEnvelopes[sls::SamplerSettings::EnvPitch];
+        pitch.on = true;
+        pitch.attack = 0.0f;
+        pitch.decay = 0.5f;
+        pitch.sustain = 0.0f;
+        pitch.amount = 0.5f; // 12 semitones at the top
+        const auto out = leftOf (sls::renderToBuffer (oneBar ({ channel }), {}));
+        check (toneEnergy (out.data(), 200, 2600, 1000.0) > 3.0 * toneEnergy (out.data(), 200, 2600, 500.0)
+                   && toneEnergy (out.data(), 36000, 46000, 500.0) > 3.0 * toneEnergy (out.data(), 36000, 46000, 1000.0),
+               "sampler: the pitch envelope starts the note an octave up and brings it down");
+        auto panned = samplerChannel (sineSample (500.0, 1.5, 48000.0), { sls::Note { 60, 0, 2 * kBeat, 1.0f } });
+        auto& pan = panned.sampler.modEnvelopes[sls::SamplerSettings::EnvPan];
+        pan.on = true;
+        pan.attack = 0.0f;
+        pan.decay = 10.0f;
+        pan.sustain = 1.0f;
+        pan.amount = -1.0f; // fully left
+        const auto stereo = sls::renderToBuffer (oneBar ({ panned }), {});
+        double left = 0.0, right = 0.0;
+        for (int i = 4000; i < 20000; ++i)
+        {
+            left += std::abs (stereo.getSample (0, i));
+            right += std::abs (stereo.getSample (1, i));
+        }
+        check (left > 20.0 * right, "sampler: the pan envelope moves the note to the left");
+        auto cutoff = samplerChannel (sineSample (500.0, 1.5, 48000.0), { sls::Note { 60, 0, 2 * kBeat, 1.0f } });
+        cutoff.sampler.modEnvelopes[sls::SamplerSettings::EnvCutoff].on = true; // no filter: it does nothing
+        const auto plainOut = leftOf (sls::renderToBuffer (oneBar ({ samplerChannel (sineSample (500.0, 1.5, 48000.0), { sls::Note { 60, 0, 2 * kBeat, 1.0f } }) }), {}));
+        check (leftOf (sls::renderToBuffer (oneBar ({ cutoff }), {})) == plainOut, "sampler: a cutoff envelope without a filter does nothing");
+
+        sls::SamplerSettings set;
+        set.modEnvelopes[sls::SamplerSettings::EnvResonance] = { true, 0.2f, 0.4f, 0.3f, 0.6f, -0.7f };
+        const auto back = sls::samplerSettingsFromVar (sls::samplerSettingsToVar (set));
+        const auto& e = back.modEnvelopes[sls::SamplerSettings::EnvResonance];
+        check (e.on && e.attack == 0.2f && e.decay == 0.4f && e.sustain == 0.3f && e.release == 0.6f && e.amount == -0.7f
+                   && ! back.modEnvelopes[sls::SamplerSettings::EnvPan].on,
+               "sampler: the envelopes survive a save and a load");
+    }
+
+    // --- a controller's second target, inverted
+    {
+        auto pad = samplerChannel (sineSample (1000.0, 1.5, 48000.0), { sls::Note { 60, 0, 2 * kBeat, 1.0f } });
+        pad.volume = 0.2f;
+        const auto render = [&] (float invert)
+        {
+            auto project = oneBar ({ pad });
+            auto controller = slotWith (sls::EffectType::FormulaController, { 0.0f, 0.0f, 0.0f, 0.0f, 9.0f, 1.0f, 0.0f, 2.0f, 1.0f, invert });
+            controller.formula = sls::Formula::compile ("1"); // first target: slot 9, empty; second: slot 2, the Panomatic's volume
+            project.tracks[0].slots[0] = controller;
+            project.tracks[0].slots[1] = sls::EffectSlot::make (sls::EffectType::Panomatic);
+            return rmsOf (leftOf (sls::renderToBuffer (project, {})), 12000, 36000);
+        };
+        check (render (1.0f) < 0.01 * render (0.0f) && render (0.0f) > 0.01, "controllers: the second target, and turned upside down");
+        check (sls::effectControllerTarget2 (sls::EffectType::PeakController) == 9 && sls::effectControllerTarget2 (sls::EffectType::EnvelopeController) == 11
+                   && sls::effectControllerTarget2 (sls::EffectType::FormulaController) == 6 && sls::effectControllerTarget2 (sls::EffectType::Delay) < 0
+                   && std::string (sls::effectParamInfo (sls::EffectType::PeakController, 9).name) == "Target 2 track",
+               "controllers: where the second target is kept");
+    }
+
+    // --- punch markers, launch modes, the pads' layout
+    {
+        sls::Arrangement a;
+        check (a.punchRange().first < 0, "punch: none without punch markers");
+        a.markers.push_back ({ 960, "in", sls::MarkerAction::PunchIn });
+        check (a.punchRange().first == 960 && a.punchRange().second == std::numeric_limits<int>::max(), "punch: a punch in alone keeps to the end");
+        a.markers.push_back ({ 480, "out early", sls::MarkerAction::PunchOut }); // before the punch in: ignored
+        a.markers.push_back ({ 3840, "out", sls::MarkerAction::PunchOut });
+        check (a.punchRange().first == 960 && a.punchRange().second == 3840, "punch: in and out, a punch out before the punch in ignored");
+
+        auto doc = sls::ProjectDocument::blank();
+        doc.arrangement.markers = a.markers;
+        doc.arrangement.clips.push_back ({ 0, std::max (0, doc.arrangement.dedicatedTrack (0)), 0, 4 * kBeat }); // (on the pattern's own track)
+        doc.arrangement.clips.back().launchMode = 2;
+        doc.arrangement.clips.back().launchSync = true;
+        const auto parsed = sls::ProjectDocument::fromJson (doc.toJson());
+        bool kept = parsed.document.has_value() && parsed.document->arrangement.markers.size() == 3 && ! parsed.document->arrangement.clips.empty();
+        if (! kept)
+            std::cout << "    (read back: " << (parsed.document.has_value() ? std::to_string (parsed.document->arrangement.markers.size()) + " markers, "
+                                                + std::to_string (parsed.document->arrangement.clips.size()) + " clips" : std::string ("nothing")) << ")\n";
+        if (kept)
+        {
+            const auto& d = *parsed.document;
+            kept = d.arrangement.punchRange().first == 960 && d.arrangement.punchRange().second == 3840 // (the markers come back in time order)
+                && d.arrangement.clips.back().launchMode == 2 && d.arrangement.clips.back().launchSync;
+        }
+        check (kept, "punch markers and a clip's launch mode survive a save and a load");
+
+        const auto first = sls::performancePad (48, 48, 4), stop = sls::performancePad (51, 48, 4), second = sls::performancePad (52, 48, 4);
+        check (first.kind == sls::PadAction::Kind::Launch && first.row == 0 && stop.kind == sls::PadAction::Kind::StopRow && second.row == 1
+                   && second.column == 0 && sls::performancePad (47, 48, 4).kind == sls::PadAction::Kind::None,
+               "pads: another first note and four pads to a row");
+    }
+}
+
+// 0.72.0: icons, track heights, docking, separators, browser tags.
+void testLooks072()
+{
+    std::cout << "Looks (0.72.0)\n";
+    auto doc = sls::ProjectDocument::blank();
+    doc.channels[0].icon = 5;
+    doc.tracks[3].icon = 11;
+    doc.tracks[3].dock = 1;
+    doc.tracks[4].dock = 2;
+    doc.tracks[4].separator = true;
+    doc.arrangement.playlistTracks[0].icon = 13;
+    doc.arrangement.playlistTracks[0].height = 3;
+    doc.arrangement.playlistTracks[1].height = 0;
+    const auto parsed = sls::ProjectDocument::fromJson (doc.toJson());
+    bool kept = parsed.document.has_value();
+    if (kept)
+    {
+        const auto& d = *parsed.document;
+        kept = d.channels[0].icon == 5 && d.tracks[3].icon == 11 && d.tracks[3].dock == 1 && d.tracks[4].dock == 2 && d.tracks[4].separator
+            && ! d.tracks[3].separator && d.tracks[0].dock == 0 && d.arrangement.playlistTracks[0].icon == 13
+            && d.arrangement.playlistTracks[0].height == 3 && d.arrangement.playlistTracks[1].height == 0 && d.arrangement.playlistTracks[2].height == 1;
+    }
+    check (kept, "icons, docking, separators and track heights survive a save and a load");
+
+    const auto tags = sls::parseTags ("Drums, dark kick ,#Lo-Fi,drums,, ");
+    check (tags == std::vector<std::string> { "drums", "dark kick", "lo-fi" }, "tags: trimmed, lower case, no repeats, no empty ones");
+
+    sls::BrowserNode root { "root", sls::NodeKind::Folder, {}, {} };
+    sls::BrowserNode samples { "Samples", sls::NodeKind::Folder, {}, {} };
+    samples.children.push_back ({ "Kick 01", sls::NodeKind::AudioFile, "/s/kick01.wav", {} });
+    samples.children.push_back ({ "Snare 02", sls::NodeKind::AudioFile, "/s/snare02.wav", {} });
+    samples.children.push_back ({ "Pad", sls::NodeKind::AudioFile, "/s/pad.wav", {} });
+    root.children.push_back (samples);
+    static std::map<std::string, std::vector<std::string>> tagMap;
+    tagMap[sls::tagKey (samples.children[2])] = { "dreamy", "lo-fi" };
+    tagMap[sls::tagKey (samples.children[1])] = { "lo-fi" };
+    const sls::TagLookup lookup = [] (const sls::BrowserNode& n, const void*) {
+        const auto found = tagMap.find (sls::tagKey (n));
+        return found != tagMap.end() ? found->second : std::vector<std::string> {};
+    };
+    check (sls::countLeaves (sls::filterTree (root, "dreamy", lookup, nullptr)) == 1, "tags: a word finds what is tagged with it");
+    check (sls::countLeaves (sls::filterTree (root, "#lo-fi", lookup, nullptr)) == 2 && sls::countLeaves (sls::filterTree (root, "#kick", lookup, nullptr)) == 0
+               && sls::countLeaves (sls::filterTree (root, "kick", lookup, nullptr)) == 1,
+           "tags: #word looks at the tags only, a plain word at names and tags");
+    check (sls::countLeaves (sls::filterTree (root, "lo-fi")) == 0, "tags: without the lookup only names count");
+}
+
+// 0.73.0: Hyper Chorus, Scratcher, Patcher.
+void testEffects073()
+{
+    std::cout << "Hyper Chorus, Scratcher, Patcher (0.73.0)\n";
+    const auto leftOf = [] (const juce::AudioBuffer<float>& b) { return std::vector<float> (b.getReadPointer (0), b.getReadPointer (0) + b.getNumSamples()); };
+    const auto bounded = [] (const std::vector<float>& x, float limit)
+    {
+        for (const float v : x)
+            if (! std::isfinite (v) || std::abs (v) > limit)
+                return false;
+        return true;
+    };
+    const auto sine = sineWave (440.0, 0.4, 48000);
+
+    // --- Hyper Chorus: the voices spread left and right
+    {
+        sls::EffectUnit unit;
+        unit.prepare (kSr);
+        sls::EffectMemory memory;
+        memory.prepare (kSr);
+        unit.attachMemory (&memory);
+        auto l = sine, r = sine;
+        const auto slot = slotWith (sls::EffectType::HyperChorus, { 8.0f, 20.0f, 6.0f, 1.0f, 1.0f, 0.7f, 1.0f });
+        for (size_t i = 0; i < l.size(); i += 64)
+            unit.process (slot, l.data() + i, r.data() + i, 64);
+        double diff = 0.0;
+        for (size_t i = 8000; i < l.size(); ++i)
+            diff += std::abs (l[i] - r[i]);
+        check (bounded (l, 4.0f) && bounded (r, 4.0f) && diff / static_cast<double> (l.size() - 8000) > 0.02 && rmsOf (l, 8000, 48000) > 0.1,
+               "hyper chorus: eight voices, different on the left and on the right");
+        auto dry = slotWith (sls::EffectType::HyperChorus, { 4.0f, 15.0f, 3.0f, 0.3f, 0.8f, 0.7f, 0.0f });
+        check (runEffect (dry, sine) == sine, "hyper chorus: mix 0 is bit-exact");
+    }
+
+    // --- Scratcher: by hand, Position 0 plays along; a jump of Position is a scratch (the record moves: the pitch bends)
+    {
+        auto still = slotWith (sls::EffectType::Scratcher, { 0.0f, 0.0f, 1.0f, 250.0f, 0.5f, 1.0f });
+        const auto along = runEffect (still, sine);
+        double error = 0.0;
+        for (size_t i = 100; i < along.size(); ++i)
+            error = std::max (error, static_cast<double> (std::abs (along[i] - sine[i])));
+        check (error < 1.0e-5, "scratcher: by hand at Position 0 the sound plays through");
+        sls::EffectUnit unit;
+        unit.prepare (kSr);
+        sls::EffectMemory memory;
+        memory.prepare (kSr);
+        unit.attachMemory (&memory);
+        auto l = sineWave (1000.0, 0.4, 48000), r = l;
+        auto moved = still;
+        for (size_t i = 0; i < l.size(); i += 64)
+        {
+            moved.params[1] = i < 24000 ? 0.0f : 1.0f; // the record pulled back 250 ms halfway
+            unit.process (moved, l.data() + i, r.data() + i, 64);
+        }
+        // while it is pulled back the record runs backwards for a moment: the 1 kHz tone is not 1 kHz then
+        check (toneEnergy (l.data(), 24000, 25200, 1000.0) < 0.5 * toneEnergy (l.data(), 10000, 11200, 1000.0)
+                   && toneEnergy (l.data(), 40000, 47000, 1000.0) > 0.5 * toneEnergy (l.data(), 10000, 11200, 1000.0),
+               "scratcher: moving the record bends the sound, and it plays on at its new place");
+        bool all = true;
+        for (float mode = 1.0f; mode <= 4.0f; mode += 1.0f)
+            all = all && bounded (runEffect (slotWith (sls::EffectType::Scratcher, { mode, 0.0f, 4.0f, 1000.0f, 0.0f, 1.0f }), sine), 4.0f);
+        check (all, "scratcher: the four patterns at their extremes stay bounded");
+    }
+
+    // --- Patcher: its effects in series and in parallel
+    {
+        auto patcher = sls::EffectSlot::make (sls::EffectType::Patcher);
+        std::vector<sls::EffectSlot> inner (static_cast<size_t> (sls::kPatcherSlots));
+        inner[0] = slotWith (sls::EffectType::Panomatic, { -6.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f }); // (its volume, -6 dB)
+        inner[3] = slotWith (sls::EffectType::Panomatic, { -6.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f });
+        patcher.patch = std::make_shared<const std::vector<sls::EffectSlot>> (inner);
+        sls::preparePatcher (patcher, kSr);
+        check (patcher.patcherState != nullptr && patcher.patcherState->types[0] == sls::EffectType::Panomatic
+                   && patcher.patcherState->types[1] == sls::EffectType::None,
+               "patcher: its state is made for its effects");
+        const auto serial = runEffect (patcher, sine);
+        check (std::abs (rmsOf (serial, 4000, 40000) / rmsOf (sine, 4000, 40000) - 0.25) < 0.02, "patcher: in series, two -6 dB make -12 dB");
+        patcher.params[0] = 1.0f; // parallel
+        const auto parallel = runEffect (patcher, sine);
+        check (std::abs (rmsOf (parallel, 4000, 40000) / rmsOf (sine, 4000, 40000) - 0.5) < 0.02, "patcher: in parallel, the two -6 dB averaged are -6 dB");
+        const auto before = patcher.patcherState;
+        sls::preparePatcher (patcher, kSr);
+        check (patcher.patcherState == before, "patcher: a state that still fits is kept");
+        auto changed = inner;
+        changed[1] = sls::EffectSlot::make (sls::EffectType::Delay);
+        patcher.patch = std::make_shared<const std::vector<sls::EffectSlot>> (changed);
+        sls::preparePatcher (patcher, kSr);
+        check (patcher.patcherState != before && patcher.patcherState->memories[1] != nullptr, "patcher: another effect gets a new state, with its memory");
+
+        auto doc = sls::ProjectDocument::blank();
+        doc.tracks[1].slots[2] = patcher;
+        const auto parsed = sls::ProjectDocument::fromJson (doc.toJson());
+        bool kept = parsed.document.has_value();
+        if (kept)
+        {
+            const auto& back = parsed.document->tracks[1].slots[2];
+            kept = back.type == sls::EffectType::Patcher && back.patch != nullptr && back.patch->size() == static_cast<size_t> (sls::kPatcherSlots)
+                && (*back.patch)[0].type == sls::EffectType::Panomatic && (*back.patch)[1].type == sls::EffectType::Delay && back.params[0] == 1.0f;
+        }
+        check (kept, "patcher: its effects survive a save and a load");
+
+        // in the mixer, with the Maximizer's look-ahead inside: the mix reports it
+        auto pad = samplerChannel (sineSample (1000.0, 1.5, 48000.0), { sls::Note { 60, 0, 2 * kBeat, 1.0f } });
+        pad.volume = 0.1f;
+        auto project = oneBar ({ pad });
+        auto latent = sls::EffectSlot::make (sls::EffectType::Patcher);
+        std::vector<sls::EffectSlot> withMax (static_cast<size_t> (sls::kPatcherSlots));
+        withMax[0] = slotWith (sls::EffectType::Maximizer, { 0.0f, -1.0f, 100.0f, 0.0f, 0.0f });
+        latent.patch = std::make_shared<const std::vector<sls::EffectSlot>> (withMax);
+        project.tracks[0].slots[0] = latent;
+        sls::prepareConvolvers (project.tracks, project.masterSlots, project.console.aux, kSr);
+        sls::Player player;
+        player.prepare (kSr);
+        renderBlocks (player, project, true, 0.2);
+        check (player.outputLatencySamples() > 16, "patcher: the latency of its effects is compensated (" + std::to_string (player.outputLatencySamples()) + " samples)");
+        check (bounded (leftOf (sls::renderToBuffer (project, {})), 4.0f), "patcher: renders in a project");
+    }
+}
+
+// 0.74.0: the drum synthesizer, the Granulizer and Wave Traveller play modes, the speech synthesizer.
+namespace
+{
+// The frequency of x[begin, end) from its rising zero crossings.
+double crossingHz (const float* x, int begin, int end)
+{
+    int first = -1, last = -1, count = 0;
+    for (int i = begin + 1; i < end; ++i)
+        if (x[i - 1] < 0.0f && x[i] >= 0.0f)
+        {
+            if (first < 0)
+                first = i;
+            last = i;
+            ++count;
+        }
+    return count >= 2 ? (count - 1) * kSr / (last - first) : 0.0;
+}
+} // namespace
+
+void testInstruments074()
+{
+    std::cout << "Drum synth, Granulizer, Wave Traveller, speech (0.74.0)\n";
+    const auto at = [] (double seconds) { return static_cast<int> (seconds * kSr); };
+
+    // --- the drum engine
+    const auto drumRender = [] (sls::DrumSettings d, int pitch, int lengthTicks)
+    {
+        auto c = synthChannel ({ sls::Note { pitch, 0, lengthTicks, 1.0f } });
+        c.synth.engine = sls::SynthEngine::Drum;
+        c.synth.drum = d;
+        sls::RenderOptions o;
+        o.tailSeconds = 2.0;
+        return sls::renderToBuffer (oneBar ({ c }), o);
+    };
+    {
+        sls::DrumSettings kick;
+        kick.decay = 0.75f;
+        kick.noise = 0.0f;
+        kick.click = 0.0f;
+        const auto b = drumRender (kick, 60, kBeat / 4);
+        const float* x = b.getReadPointer (0);
+        const double early = crossingHz (x, at (0.002), at (0.03)), late = crossingHz (x, at (0.25), at (0.45));
+        check (early > 1.5 * late && std::abs (late - 50.0) < 6.0,
+               "drum: a kick's pitch falls to its note (" + std::to_string (early) + " Hz -> " + std::to_string (late) + " Hz)");
+        check (peakOf (x, at (0.3), at (0.35)) > 0.05f * peakOf (x, 0, at (0.05)), "drum: it rings on after its (short) note has ended");
+        check (peakOf (x, at (1.5), at (2.5)) < 1.0e-4f, "drum: and stops by itself");
+        const auto up = drumRender (kick, 72, kBeat / 4);
+        check (std::abs (crossingHz (up.getReadPointer (0), at (0.25), at (0.45)) - 100.0) < 10.0, "drum: an octave up the keyboard is an octave up");
+        auto fixed = kick;
+        fixed.keyTrack = false;
+        const auto same = drumRender (fixed, 72, kBeat / 4);
+        check (std::abs (crossingHz (same.getReadPointer (0), at (0.25), at (0.45)) - 50.0) < 6.0, "drum: without key tracking every key is the same drum");
+    }
+    {
+        bool all = true;
+        double hatRate = 0.0, kickRate = 0.0;
+        for (int m = 0; m < sls::kDrumModels; ++m)
+        {
+            sls::DrumSettings d;
+            d.model = static_cast<sls::DrumModel> (m);
+            d.noise = 0.8f;
+            d.noiseDecay = 0.4f;
+            d.drive = m == 0 ? 1.0f : 0.0f;
+            const auto b = drumRender (d, 60, kBeat / 4);
+            const float* x = b.getReadPointer (0);
+            const float peak = peakOf (x, 0, b.getNumSamples());
+            bool finite = true;
+            for (int i = 0; i < b.getNumSamples(); ++i)
+                finite = finite && std::isfinite (x[i]);
+            all = all && finite && peak > 0.02f && peak < 2.0f;
+            int crossings = 0;
+            for (int i = 1; i < at (0.1); ++i)
+                crossings += (x[i - 1] < 0.0f) != (x[i] < 0.0f) ? 1 : 0;
+            if (d.model == sls::DrumModel::HiHat)
+                hatRate = crossings / 0.1;
+            if (d.model == sls::DrumModel::Kick)
+                kickRate = crossings / 0.1;
+        }
+        check (all, "drum: kick, snare, tom, clap, hi-hat and cymbal all sound, bounded");
+        check (hatRate > 10.0 * kickRate, "drum: a hi-hat is bright, a kick is deep");
+        sls::SynthPatch p;
+        p.engine = sls::SynthEngine::Drum;
+        p.drum = { sls::DrumModel::Clap, 0.3f, 0.2f, 0.7f, 0.1f, 0.9f, 0.25f, 0.6f, 0.05f, 0.45f, false };
+        check (sls::synthPatchFromVar (sls::synthPatchToVar (p)) == p, "drum: a patch survives a save and a load");
+        bool factory = false;
+        for (const auto& f : sls::synthFactoryPatches())
+            factory = factory || (f.name == "Kick 808" && f.patch.engine == sls::SynthEngine::Drum);
+        check (factory, "drum: ready-made drums in the synth's menu");
+    }
+
+    // --- the Granulizer: a frozen cloud of grains holds a short sample as long as the key; the key sets the pitch only
+    {
+        auto c = samplerChannel (sineSample (440.0, 0.25, kSr), { sls::Note { 72, 0, 2 * kBeat, 1.0f } });
+        c.sampler.playMode = sls::SamplerSettings::PlayMode::Granular;
+        c.sampler.grainSpeed = 0.0f;
+        c.sampler.grainPosition = 0.3f;
+        c.sampler.grainSpread = 0.0f;
+        c.sampler.grainDensity = 4.0f;
+        const auto b = sls::renderToBuffer (oneBar ({ c }), {});
+        const float* x = b.getReadPointer (0);
+        check (peakOf (x, at (0.7), at (0.9)) > 0.05f, "granular: a 0.25 s sample sounds for the whole 1 s note");
+        check (peakOf (x, at (1.2), at (1.9)) < 1.0e-3f, "granular: and stops with it");
+        check (std::abs (crossingHz (x, at (0.3), at (0.8)) - 880.0) < 30.0,
+               "granular: an octave up is 880 Hz (" + std::to_string (crossingHz (x, at (0.3), at (0.8))) + ")");
+        auto moving = c;
+        moving.sampler.grainSpeed = 1.0f;
+        moving.sampler.grainPan = 1.0f;
+        const auto m = sls::renderToBuffer (oneBar ({ moving }), {});
+        double diff = 0.0;
+        for (int i = at (0.1); i < at (0.9); ++i)
+            diff += std::abs (m.getReadPointer (0)[i] - m.getReadPointer (1)[i]);
+        check (diff > 1.0 && peakOf (m.getReadPointer (0), at (0.7), at (0.9)) > 0.02f, "granular: grains panned at random, the place moving round the sample");
+    }
+
+    // --- Wave Traveller: the curve sets the place in the sample
+    {
+        auto plain = samplerChannel (sineSample (440.0, 2.0, kSr), { sls::Note { 60, 0, kBeat, 1.0f } });
+        auto forward = plain;
+        forward.sampler.playMode = sls::SamplerSettings::PlayMode::Traveller;
+        forward.sampler.travelCurve = sls::SamplerSettings::TravelForward;
+        forward.sampler.travelTime = 0.3f;
+        const auto a = sls::renderToBuffer (oneBar ({ plain }), {});
+        const auto f = sls::renderToBuffer (oneBar ({ forward }), {});
+        float error = 0.0f;
+        for (int i = 0; i < at (1.5); ++i)
+            error = std::max (error, std::abs (a.getReadPointer (0)[i] - f.getReadPointer (0)[i]));
+        check (error < 1.0e-3f, "traveller: the forward curve is the sample as it is");
+        auto stop = forward;
+        stop.sampler.travelCurve = sls::SamplerSettings::TravelTapeStop;
+        stop.sampler.travelTime = 0.5f;
+        const auto t = sls::renderToBuffer (oneBar ({ stop }), {});
+        const float* x = t.getReadPointer (0);
+        const double start = crossingHz (x, at (0.0), at (0.08)), end = crossingHz (x, at (0.3), at (0.4));
+        check (start > 380.0 && start < 450.0 && end < 0.6 * start, "traveller: a tape stop slows down (" + std::to_string (start) + " -> " + std::to_string (end) + " Hz)");
+        check (peakOf (x, at (0.55), at (1.5)) < 1.0e-3f, "traveller: and the note ends when the tape has stopped");
+        auto spin = forward;
+        spin.sampler.travelCurve = sls::SamplerSettings::TravelSpinBack;
+        const auto sb = sls::renderToBuffer (oneBar ({ spin }), {});
+        check (peakOf (sb.getReadPointer (0), 0, at (1.0)) > 0.1f, "traveller: a spin back plays");
+
+        sls::SamplerSettings s;
+        s.playMode = sls::SamplerSettings::PlayMode::Granular;
+        s.grainMs = 120.0f;
+        s.grainSpeed = -0.5f;
+        s.grainPan = 0.4f;
+        const auto back = sls::samplerSettingsFromVar (sls::samplerSettingsToVar (s));
+        sls::SamplerSettings tr;
+        tr.playMode = sls::SamplerSettings::PlayMode::Traveller;
+        tr.travelCurve = sls::SamplerSettings::TravelScratch;
+        tr.travelTime = 2.5f;
+        const auto back2 = sls::samplerSettingsFromVar (sls::samplerSettingsToVar (tr));
+        check (back.playMode == s.playMode && std::abs (back.grainMs - 120.0f) < 1.0e-3f && std::abs (back.grainSpeed + 0.5f) < 1.0e-3f
+                   && std::abs (back.grainPan - 0.4f) < 1.0e-3f && back2.playMode == tr.playMode && back2.travelCurve == tr.travelCurve
+                   && std::abs (back2.travelTime - 2.5f) < 1.0e-3f,
+               "play modes: saved and loaded");
+    }
+
+    // --- the speech synthesizer
+    {
+        check (sls::speechPhonemes ("ciao") == "t S a' o", "speech: \"ciao\" is read t S a' o (" + sls::speechPhonemes ("ciao") + ")");
+        check (sls::speechPhonemes ("gnocchi") == "ny o' k: i", "speech: \"gnocchi\" is read ny o' k: i (" + sls::speechPhonemes ("gnocchi") + ")");
+        check (sls::speechPhonemes ("città") == "t S i t: a'", "speech: an accent moves the stress (" + sls::speechPhonemes ("città") + ")");
+        sls::SpeechSettings settings;
+        const auto said = sls::speak ("Ciao, come stai?", settings);
+        bool ok = said != nullptr;
+        if (ok)
+        {
+            const double seconds = said->numFrames() / said->sampleRate;
+            float peak = 0.0f;
+            for (const float v : said->left)
+                peak = std::max (peak, std::abs (v));
+            ok = seconds > 0.6 && seconds < 3.0 && std::abs (peak - 0.8f) < 0.01f;
+        }
+        check (ok, "speech: a sentence is a second or two of voice, normalised");
+        const auto again = sls::speak ("Ciao, come stai?", settings);
+        check (again != nullptr && said != nullptr && again->left == said->left, "speech: the same text makes the same sound every time");
+        sls::SpeechSettings fast = settings;
+        fast.speed = 2.0f;
+        const auto quick = sls::speak ("Ciao, come stai?", fast);
+        const double ratio = quick != nullptr && said != nullptr ? static_cast<double> (quick->numFrames()) / said->numFrames() : 0.0;
+        check (ratio > 0.45 && ratio < 0.7, "speech: twice the speed, about half the length (" + std::to_string (ratio) + ")");
+        bool voices = true;
+        for (int v = 1; v < sls::kSpeechVoices; ++v)
+        {
+            sls::SpeechSettings s = settings;
+            s.voice = static_cast<sls::SpeechVoice> (v);
+            const auto x = sls::speak ("uno due tre", s);
+            voices = voices && x != nullptr && x->numFrames() > 1000;
+            if (x != nullptr)
+                for (const float y : x->left)
+                    voices = voices && std::isfinite (y);
+        }
+        check (voices, "speech: female, child, robot and whisper voices");
+        settings.voice = sls::SpeechVoice::Female;
+        settings.pitch = 3.0f;
+        const auto id = sls::speechId ("Perché no? 42", settings);
+        std::string text;
+        sls::SpeechSettings parsed;
+        check (sls::parseSpeechId (id, text, parsed) && text == "Perché no? 42" && parsed.voice == sls::SpeechVoice::Female
+                   && std::abs (parsed.pitch - 3.0f) < 1.0e-3f,
+               "speech: the text and the voice are kept in the sample's id");
+        const auto made = sls::makeBuiltinSample (id);
+        const auto direct = sls::speak ("Perché no? 42", settings);
+        check (made != nullptr && direct != nullptr && made->left == direct->left && made->source == "builtin:" + id,
+               "speech: a project makes the voice again from the id");
+        check (sls::speak ("  ...  ", settings) == nullptr, "speech: nothing to say, no sample");
     }
 }
 
@@ -13570,6 +14125,10 @@ int main()
     testMixer062();
     testRackPlaylistToolbar062();
     testFlParity070();
+    testFlParity071();
+    testLooks072();
+    testEffects073();
+    testInstruments074();
     testOneShot();
     testAutomation();
     testMidiImport();

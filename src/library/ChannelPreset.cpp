@@ -165,6 +165,8 @@ LfoTarget targetFromKey (const juce::String& k)
 
 constexpr const char* kPhysicalModelKeys[] = { "string", "marimba", "vibraphone", "glass", "bell", "metal" };
 static_assert (std::size (kPhysicalModelKeys) == kPhysicalModels);
+constexpr const char* kDrumModelKeys[] = { "kick", "snare", "tom", "clap", "hihat", "cymbal" };
+static_assert (std::size (kDrumModelKeys) == kDrumModels);
 
 juce::var timbreToVar (const AdditiveTimbre& t)
 {
@@ -224,7 +226,8 @@ juce::var synthPatchToVar (const SynthPatch& patch)
     const auto p = patch.sanitised();
     auto* o = new juce::DynamicObject();
     o->setProperty ("engine", p.engine == SynthEngine::Subtractive ? "subtractive" : p.engine == SynthEngine::FM ? "fm"
-                              : p.engine == SynthEngine::Additive ? "additive" : p.engine == SynthEngine::Physical ? "physical" : "classic");
+                              : p.engine == SynthEngine::Additive ? "additive" : p.engine == SynthEngine::Physical ? "physical"
+                              : p.engine == SynthEngine::Drum ? "drum" : "classic");
     juce::Array<juce::var> oscs;
     for (const auto& osc : p.osc)
     {
@@ -288,6 +291,20 @@ juce::var synthPatchToVar (const SynthPatch& patch)
     ph->setProperty ("body", static_cast<double> (p.physical.body));
     ph->setProperty ("releaseDamp", static_cast<double> (p.physical.releaseDamp));
     o->setProperty ("physical", juce::var (ph));
+    // Drum (0.74.0)
+    auto* dr = new juce::DynamicObject();
+    dr->setProperty ("model", kDrumModelKeys[static_cast<size_t> (p.drum.model)]);
+    dr->setProperty ("tune", static_cast<double> (p.drum.tune));
+    dr->setProperty ("sweep", static_cast<double> (p.drum.sweep));
+    dr->setProperty ("sweepTime", static_cast<double> (p.drum.sweepTime));
+    dr->setProperty ("decay", static_cast<double> (p.drum.decay));
+    dr->setProperty ("noise", static_cast<double> (p.drum.noise));
+    dr->setProperty ("noiseTone", static_cast<double> (p.drum.noiseTone));
+    dr->setProperty ("noiseDecay", static_cast<double> (p.drum.noiseDecay));
+    dr->setProperty ("click", static_cast<double> (p.drum.click));
+    dr->setProperty ("drive", static_cast<double> (p.drum.drive));
+    dr->setProperty ("keyTrack", p.drum.keyTrack);
+    o->setProperty ("drum", juce::var (dr));
     return juce::var (o);
 }
 
@@ -300,7 +317,7 @@ SynthPatch synthPatchFromVar (const juce::var& v)
         return p;
     const auto engine = o->getProperty ("engine").toString();
     p.engine = engine == "subtractive" ? SynthEngine::Subtractive : engine == "fm" ? SynthEngine::FM : engine == "additive" ? SynthEngine::Additive
-             : engine == "physical" ? SynthEngine::Physical : SynthEngine::Classic;
+             : engine == "physical" ? SynthEngine::Physical : engine == "drum" ? SynthEngine::Drum : SynthEngine::Classic;
     if (auto* oscs = o->getProperty ("oscillators").getArray())
         for (int i = 0; i < std::min (oscs->size(), 2); ++i)
             if (auto* x = (*oscs)[i].getDynamicObject())
@@ -366,6 +383,25 @@ SynthPatch synthPatchFromVar (const juce::var& v)
         p.physical.stiffness = static_cast<float> (readNumber (ph->getProperty ("stiffness"), pd.stiffness, 0.0, 1.0));
         p.physical.body = static_cast<float> (readNumber (ph->getProperty ("body"), pd.body, 0.0, 1.0));
         p.physical.releaseDamp = static_cast<float> (readNumber (ph->getProperty ("releaseDamp"), pd.releaseDamp, 0.0, 1.0));
+    }
+    if (auto* dr = o->getProperty ("drum").getDynamicObject())
+    {
+        const auto model = dr->getProperty ("model").toString();
+        for (size_t i = 0; i < std::size (kDrumModelKeys); ++i)
+            if (model == kDrumModelKeys[i])
+                p.drum.model = static_cast<DrumModel> (i);
+        const auto& dd = d.drum;
+        const auto num = [dr] (const char* key, float def) { return static_cast<float> (readNumber (dr->getProperty (key), def, 0.0, 1.0)); };
+        p.drum.tune = num ("tune", dd.tune);
+        p.drum.sweep = num ("sweep", dd.sweep);
+        p.drum.sweepTime = num ("sweepTime", dd.sweepTime);
+        p.drum.decay = num ("decay", dd.decay);
+        p.drum.noise = num ("noise", dd.noise);
+        p.drum.noiseTone = num ("noiseTone", dd.noiseTone);
+        p.drum.noiseDecay = num ("noiseDecay", dd.noiseDecay);
+        p.drum.click = num ("click", dd.click);
+        p.drum.drive = num ("drive", dd.drive);
+        p.drum.keyTrack = dr->getProperty ("keyTrack").isVoid() ? dd.keyTrack : static_cast<bool> (dr->getProperty ("keyTrack"));
     }
     return p.sanitised();
 }

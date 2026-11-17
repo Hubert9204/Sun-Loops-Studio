@@ -257,6 +257,10 @@ void EffectUnit::reset() noexcept
     ctlStage = 0;
     ctlLevel = 0.0f;
     ctlTime = ctlBeat = 0.0;
+    for (size_t v = 0; v < hyperPhase.size(); ++v) // 0.73.0
+        hyperPhase[v] = static_cast<double> (v) / static_cast<double> (hyperPhase.size());
+    scratchDelay = scratchVelocity = 0.0;
+    scratchFader = 1.0f;
     if (timeL != nullptr)
     {
         std::fill_n (timeL, timeFrames, 0.0f);
@@ -392,6 +396,9 @@ void EffectUnit::runSlot (const EffectSlot& slot, float* left, float* right, int
         case EffectType::Grains:       runGrains (slot, left, right, numSamples); break;
         case EffectType::EnvelopeController: runEnvelopeController (slot, left, right, numSamples); break;
         case EffectType::FormulaController: runFormulaController (slot, left, right, numSamples, transport); break;
+        case EffectType::HyperChorus:  runHyperChorus (slot, left, right, numSamples); break;
+        case EffectType::Scratcher:    runScratcher (slot, left, right, numSamples, transport); break;
+        case EffectType::Patcher:      runPatcher (slot, left, right, numSamples, transport); break;
         case EffectType::Plugin:
         case EffectType::None:         break;
     }
@@ -1616,6 +1623,27 @@ const std::vector<EffectPreset>& effectPresets (EffectType t)
             };
             return list;
         }
+        case EffectType::HyperChorus: // 0.73.0
+        {
+            static const std::vector<EffectPreset> list {
+                make ("Wide double", { 2.0f, 12.0f, 1.5f, 0.2f, 1.0f, 0.8f, 0.5f }),
+                make ("Lush ensemble", { 6.0f, 18.0f, 4.0f, 0.35f, 0.9f, 0.6f, 0.55f }),
+                make ("Eight-voice swarm", { 8.0f, 25.0f, 8.0f, 0.8f, 1.0f, 0.5f, 0.6f }),
+            };
+            return list;
+        }
+        case EffectType::Scratcher:
+        {
+            static const std::vector<EffectPreset> list {
+                make ("Baby scratch", { 1.0f, 0.0f, 1.0f, 250.0f, 0.5f, 1.0f }),
+                make ("Forwards", { 2.0f, 0.0f, 2.0f, 200.0f, 0.4f, 1.0f }),
+                make ("Chirps", { 3.0f, 0.0f, 2.0f, 180.0f, 0.3f, 1.0f }),
+                make ("Transformer", { 4.0f, 0.0f, 4.0f, 250.0f, 0.2f, 1.0f }),
+                make ("By hand (automate Position)", { 0.0f, 0.0f, 1.0f, 500.0f, 0.6f, 1.0f }),
+            };
+            return list;
+        }
+        case EffectType::Patcher:
         case EffectType::FormulaController:
         case EffectType::Equalizer:
         case EffectType::BassBoost:
@@ -2254,8 +2282,231 @@ void EffectUnit::runFormulaController (const EffectSlot& s, float* l, float* r, 
     control = s.formula->evaluate (v);
 }
 
+// ------------------------------------------------------------------------- 0.73.0: hyper chorus, scratcher, patcher
+
+// Hyper chorus: up to eight taps of one delay line, each swept by its own slow sine (their phases spread evenly), panned across the
+// stereo field from left to right and darkened a little.
+void EffectUnit::runHyperChorus (const EffectSlot& s, float* l, float* r, int n) noexcept
+{
+    if (memory == nullptr)
+        return;
+    auto& delayLine = memory->delayLine;
+    const int size = static_cast<int> (delayLine[0].size());
+    const int voices = std::clamp (static_cast<int> (std::lround (s.params[0])), 2, 8);
+    const float base = static_cast<float> (s.params[1] * 0.001 * sampleRate);
+    const float swing = static_cast<float> (s.params[2] * 0.001 * sampleRate);
+    const double step = static_cast<double> (s.params[3]) / sampleRate;
+    const float spread = s.params[4];
+    const float tone = static_cast<float> (1.0 - std::exp (-2.0 * kPi * std::min (2500.0 * std::pow (6.0, static_cast<double> (s.params[5])), 0.45 * sampleRate) / sampleRate));
+    const float mix = s.params[6];
+    std::array<float, 8> panL {}, panR {};
+    for (int v = 0; v < voices; ++v)
+    {
+        const float place = voices > 1 ? (static_cast<float> (v) / static_cast<float> (voices - 1)) * 2.0f - 1.0f : 0.0f; // -1 .. 1
+        const float pan = place * spread;
+        panL[static_cast<size_t> (v)] = std::sqrt (0.5f * (1.0f - pan));
+        panR[static_cast<size_t> (v)] = std::sqrt (0.5f * (1.0f + pan));
+    }
+    const float norm = 1.4142135f / std::sqrt (static_cast<float> (voices));
+    for (int i = 0; i < n; ++i)
+    {
+        const float mono = 0.5f * (l[i] + r[i]);
+        delayLine[0][static_cast<size_t> (delayWrite)] = mono;
+        float wetL = 0.0f, wetR = 0.0f;
+        for (int v = 0; v < voices; ++v)
+        {
+            auto& phase = hyperPhase[static_cast<size_t> (v)];
+            phase += step * (1.0 + 0.13 * v); // (slightly different speeds: they never line up again)
+            if (phase >= 1.0)
+                phase -= 1.0;
+            const float d = std::clamp (base * (1.0f + 0.07f * static_cast<float> (v)) + swing * static_cast<float> (std::sin (2.0 * kPi * phase)), 1.0f, static_cast<float> (size - 2));
+            const float tap = readLine (delayLine[0], delayWrite, d);
+            wetL += tap * panL[static_cast<size_t> (v)];
+            wetR += tap * panR[static_cast<size_t> (v)];
+        }
+        delayTone[0] = flush (delayTone[0] + tone * (wetL * norm - delayTone[0]));
+        delayTone[1] = flush (delayTone[1] + tone * (wetR * norm - delayTone[1]));
+        l[i] = l[i] * (1.0f - mix) + delayTone[0] * mix;
+        r[i] = r[i] * (1.0f - mix) + delayTone[1] * mix;
+        if (++delayWrite >= size)
+            delayWrite = 0;
+    }
+}
+
+// Scratcher: the sound is recorded as it comes and played back from `scratchDelay` samples behind it, the record's place. By
+// hand, the place follows Position (0: playing along, 1: Depth back) through a smoothing that gives the moves a hand's inertia, so
+// automating Position scratches; the patterns move it themselves, Speed times a beat (or, while the song is stopped, at 120 BPM).
+void EffectUnit::runScratcher (const EffectSlot& s, float* l, float* r, int n, const EffectTransport& transport) noexcept
+{
+    if (memory == nullptr)
+        return;
+    auto& delayLine = memory->delayLine;
+    const int size = static_cast<int> (delayLine[0].size());
+    const int mode = effectChoice (EffectType::Scratcher, 0, s.params[0]);
+    const double depth = std::min (static_cast<double> (s.params[3]) * 0.001 * sampleRate, static_cast<double> (size - 4));
+    const double smoothing = std::exp (-1.0 / (std::max (0.0005, 0.04 * static_cast<double> (s.params[4])) * sampleRate));
+    const float mix = s.params[5];
+    const double beatsPerSample = transport.tick >= 0.0 && transport.ticksPerSample > 0.0 ? transport.ticksPerSample / 480.0 : 2.0 / sampleRate;
+    double beat = transport.tick >= 0.0 ? transport.tick / 480.0 : ctlBeat;
+    for (int i = 0; i < n; ++i)
+    {
+        beat += beatsPerSample;
+        const double phase = beat * static_cast<double> (s.params[2]) - std::floor (beat * static_cast<double> (s.params[2]));
+        double target = 0.0;
+        float fader = 1.0f;
+        switch (mode)
+        {
+            case 0: target = depth * static_cast<double> (s.params[1]); break;
+            case 1: target = depth * 0.5 * (1.0 - std::cos (2.0 * kPi * phase)); break; // back and forth
+            case 2: target = phase < 0.5 ? depth * (1.0 - 2.0 * phase) : 0.0; break;     // pulled back, pushed forward
+            case 3:
+                target = depth * 0.5 * (1.0 - std::cos (2.0 * kPi * phase));
+                fader = phase < 0.5 ? 1.0f : 0.0f; // the fader closes on the way back
+                break;
+            default: fader = std::fmod (phase * 4.0, 1.0) < 0.5 ? 1.0f : 0.0f; break; // transformer: the fader cuts the sound
+        }
+        scratchDelay = target + (scratchDelay - target) * smoothing;
+        scratchFader += (fader - scratchFader) * 0.02f; // (no clicks)
+        delayLine[0][static_cast<size_t> (delayWrite)] = l[i];
+        delayLine[1][static_cast<size_t> (delayWrite)] = r[i];
+        const float d = static_cast<float> (std::clamp (scratchDelay, 0.0, static_cast<double> (size - 4)));
+        const float wetL = (d < 1.0f ? l[i] : readLine (delayLine[0], delayWrite, d)) * scratchFader;
+        const float wetR = (d < 1.0f ? r[i] : readLine (delayLine[1], delayWrite, d)) * scratchFader;
+        l[i] = l[i] * (1.0f - mix) + wetL * mix;
+        r[i] = r[i] * (1.0f - mix) + wetR * mix;
+        if (++delayWrite >= size)
+            delayWrite = 0;
+    }
+    ctlBeat = beat;
+}
+
+// Patcher: its effects, one after the other (serial) or each on the slot's sound with the results averaged (parallel).
+void EffectUnit::runPatcher (const EffectSlot& s, float* l, float* r, int n, const EffectTransport& transport) noexcept
+{
+    auto* state = s.patcherState.get();
+    const auto* chain = s.patch.get();
+    if (state == nullptr || chain == nullptr)
+        return;
+    const bool parallel = effectChoice (EffectType::Patcher, 0, s.params[0]) == 1;
+    const float output = dbToGain (s.params[1]);
+    const size_t count = std::min (chain->size(), static_cast<size_t> (kPatcherSlots));
+    for (int done = 0; done < n; done += PatcherState::kChunk)
+    {
+        const int m = std::min (PatcherState::kChunk, n - done);
+        float* cl = l + done;
+        float* cr = r + done;
+        auto later = transport;
+        if (later.tick >= 0.0)
+            later.tick += done * later.ticksPerSample;
+        if (! parallel)
+        {
+            for (size_t k = 0; k < count; ++k)
+                if ((*chain)[k].type != EffectType::None && state->types[k] == (*chain)[k].type)
+                    state->units[k].process ((*chain)[k], cl, cr, m, later);
+        }
+        else
+        {
+            std::copy_n (cl, m, state->dryL.begin());
+            std::copy_n (cr, m, state->dryR.begin());
+            std::fill_n (state->accL.begin(), m, 0.0f);
+            std::fill_n (state->accR.begin(), m, 0.0f);
+            int branches = 0;
+            for (size_t k = 0; k < count; ++k)
+            {
+                const auto& sub = (*chain)[k];
+                if (sub.type == EffectType::None || sub.bypass || state->types[k] != sub.type)
+                    continue;
+                std::copy_n (state->dryL.begin(), m, cl);
+                std::copy_n (state->dryR.begin(), m, cr);
+                state->units[k].process (sub, cl, cr, m, later);
+                for (int i = 0; i < m; ++i)
+                {
+                    state->accL[static_cast<size_t> (i)] += cl[i];
+                    state->accR[static_cast<size_t> (i)] += cr[i];
+                }
+                ++branches;
+            }
+            if (branches == 0)
+            {
+                std::copy_n (state->dryL.begin(), m, cl);
+                std::copy_n (state->dryR.begin(), m, cr);
+            }
+            else
+            {
+                const float scale = 1.0f / static_cast<float> (branches);
+                for (int i = 0; i < m; ++i)
+                {
+                    cl[i] = state->accL[static_cast<size_t> (i)] * scale;
+                    cr[i] = state->accR[static_cast<size_t> (i)] * scale;
+                }
+            }
+        }
+        if (std::abs (output - 1.0f) > 1.0e-6f)
+            for (int i = 0; i < m; ++i)
+            {
+                cl[i] *= output;
+                cr[i] *= output;
+            }
+    }
+}
+
+void preparePatcher (EffectSlot& slot, double sampleRate, bool fresh)
+{
+    if (slot.type != EffectType::Patcher)
+        return;
+    // its own convolvers first (a new list when one of them changes: the old one may still be playing)
+    if (slot.patch != nullptr)
+    {
+        auto copy = *slot.patch;
+        bool changed = false;
+        for (auto& sub : copy)
+            if (sub.type == EffectType::Convolver)
+            {
+                const auto before = sub.convolver;
+                prepareConvolver (sub, sampleRate, fresh);
+                changed = changed || sub.convolver != before;
+            }
+        if (changed)
+            slot.patch = std::make_shared<const std::vector<EffectSlot>> (std::move (copy));
+    }
+    // a state whose units match the effects (a fresh one when they do not: the old one may still be playing)
+    const auto* state = slot.patcherState.get();
+    bool fits = ! fresh && state != nullptr && std::abs (state->sampleRate - sampleRate) < 0.5;
+    for (size_t k = 0; fits && k < static_cast<size_t> (kPatcherSlots); ++k)
+    {
+        const auto wanted = slot.patch != nullptr && k < slot.patch->size() ? (*slot.patch)[k].type : EffectType::None;
+        fits = state->types[k] == wanted;
+    }
+    if (fits)
+        return;
+    auto made = std::make_shared<PatcherState>();
+    made->sampleRate = sampleRate;
+    made->dryL.assign (PatcherState::kChunk, 0.0f);
+    made->dryR.assign (PatcherState::kChunk, 0.0f);
+    made->accL.assign (PatcherState::kChunk, 0.0f);
+    made->accR.assign (PatcherState::kChunk, 0.0f);
+    for (size_t k = 0; k < static_cast<size_t> (kPatcherSlots); ++k)
+    {
+        const auto type = slot.patch != nullptr && k < slot.patch->size() ? (*slot.patch)[k].type : EffectType::None;
+        made->types[k] = type;
+        made->units[k].prepare (sampleRate);
+        if (effectNeedsMemory (type))
+        {
+            made->memories[k] = std::make_unique<EffectMemory>();
+            made->memories[k]->prepare (sampleRate);
+            made->units[k].attachMemory (made->memories[k].get());
+        }
+    }
+    slot.patcherState = std::move (made);
+}
+
 void prepareConvolver (EffectSlot& slot, double sampleRate, bool fresh)
 {
+    if (slot.type == EffectType::Patcher) // 0.73.0: the convolvers' preparation is also the Patcher's
+    {
+        preparePatcher (slot, sampleRate, fresh);
+        return;
+    }
     if (slot.type != EffectType::Convolver)
         return;
     Convolver::Settings wanted;

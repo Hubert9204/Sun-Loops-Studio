@@ -60,9 +60,11 @@ PianoRollToolbar::PianoRollToolbar (PianoRoll& rollToEdit) : roll (rollToEdit)
     toolBox.addItem ("Paint", 2);
     toolBox.addItem ("Mute", 3);
     toolBox.addItem ("Slice", 4);
+    toolBox.addItem ("Playback", 5); // 0.71.0
     toolBox.setSelectedId (1, juce::dontSendNotification);
     toolBox.setTooltip ("Tool. Draw: click draws a note, drag moves it. Paint: drag over empty grid to draw a row of notes. "
-                        "Mute: click a note to mute or unmute it. Slice: click a note to cut it in two at the grid.");
+                        "Mute: click a note to mute or unmute it. Slice: click a note to cut it in two at the grid. "
+                        "Playback: hold the mouse on the grid to play from there, drag to move along (scrub).");
     toolBox.setWantsKeyboardFocus (false);
     toolBox.onChange = [this] { roll.setTool (static_cast<PianoRoll::Tool> (std::max (0, toolBox.getSelectedId() - 1))); };
     ghostToggle.setTooltip ("Ghost notes: show the other channels' notes of this pattern, faintly, behind this channel's");

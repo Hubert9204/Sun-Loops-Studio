@@ -4,6 +4,7 @@
 #include "ui/AudioSettings.h"
 
 #include <algorithm>
+#include <limits>
 #include <cmath>
 
 namespace sls
@@ -373,6 +374,9 @@ void MainComponent::showRecordProgress()
                                    : std::min (kMaxImportSeconds, tickToSeconds (tempos, bpm, arrangement.timelineTicks()) - startSeconds);
     if (seconds >= limit)
         finishRecording (loopTakes ? "The takes reached the longest recording kept in memory." : "The takes reached the end of the playlist.");
+    else if (const auto punch = arrangement.punchRange(); recordTarget == RecordTarget::PlaylistTrack && punch.second != std::numeric_limits<int>::max()
+             && punch.second > 0 && start >= 0.0 && engine.getPlayheadTick() >= punch.second && ! loopTakes) // 0.71.0
+        finishRecording ("Punch out: the take stopped at the Punch out marker.");
     else if (! loopTakes && start >= 0.0 && engine.getPlayheadTick() + kTicksPerBeat < secondsToTick (tempos, bpm, startSeconds + seconds))
     {
         punchedOut = recordLoopEnd > recordLoopStart;
@@ -468,6 +472,27 @@ void MainComponent::finishRecording (const juce::String& why)
             }
             else
                 clip.lengthTicks = std::min (clip.lengthTicks, recordLoopEnd - startTick);
+        }
+        // 0.71.0: Punch in / Punch out markers keep only what was recorded between them
+        if (const auto punch = arrangement.punchRange(); punch.first >= 0 && clip.takeSeconds <= 0.0)
+        {
+            const double bpm = bpmSlider.getValue();
+            const int from = std::max (clip.startTick, punch.first);
+            const int to = std::min (clip.endTick(), punch.second);
+            if (to <= from)
+                clip.lengthTicks = 0;
+            else
+            {
+                clip.offsetSeconds += tickToSeconds (arrangement.tempoMarkers, bpm, from) - tickToSeconds (arrangement.tempoMarkers, bpm, clip.startTick);
+                clip.startTick = from;
+                clip.lengthTicks = to - from;
+            }
+            if (clip.lengthTicks < 1)
+            {
+                problems.add ("the take of " + playlistView.trackName (track) + " lies outside the punch markers (saved as "
+                              + take.file.getFileName() + ")");
+                continue;
+            }
         }
         juce::String note;
         if (clip.lengthTicks >= 1 && arrangement.audioClips.size() < static_cast<size_t> (kMaxAudioClips))

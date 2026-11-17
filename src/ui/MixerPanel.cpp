@@ -1,4 +1,6 @@
 #include "ui/MixerPanel.h"
+#include "ui/Icons.h"
+#include "ui/PatcherWindow.h"
 
 #include <cmath>
 
@@ -51,6 +53,9 @@ juce::String shortEffectName (EffectType t)
         case EffectType::Grains:       return "Grains";
         case EffectType::EnvelopeController: return "EnvCt";
         case EffectType::FormulaController: return "FormCt";
+        case EffectType::HyperChorus:  return "HypCh"; // 0.73.0
+        case EffectType::Scratcher:    return "Scratch";
+        case EffectType::Patcher:      return "Patch";
         case EffectType::None:       break;
     }
     return juce::String::fromUTF8 ("\xe2\x80\x94");
@@ -414,6 +419,15 @@ void MixerStrip::paint (juce::Graphics& g)
         g.setColour (isAux ? juce::Colour (0xff7bc47f) : kAccent);
         g.fillRoundedRectangle (4.0f, 1.0f, static_cast<float> (getWidth()) - 8.0f, 3.0f, 1.5f);
     }
+    if (! isAux && track.icon != 0) // 0.72.0: the strip's icon, in the corner of its name
+        drawIcon (g, track.icon, juce::Rectangle<float> (4.0f, 6.0f, 14.0f, 14.0f),
+                  track.colour != 0 ? juce::Colour (0xff15171a) : juce::Colours::white.withAlpha (0.8f));
+    if (! isAux && track.dock != 0) // and a mark for a docked strip
+    {
+        g.setColour (juce::Colours::white.withAlpha (0.35f));
+        const float y = static_cast<float> (getHeight()) - 6.0f;
+        g.fillRect (track.dock == 1 ? 4.0f : static_cast<float> (getWidth()) - 14.0f, y, 10.0f, 2.0f);
+    }
 }
 
 void MixerStrip::resized()
@@ -726,6 +740,9 @@ FxPanel::FxPanel()
             onChainMenu (chainButton, *track, trackIndex);
     };
     addAndMakeVisible (chainButton);
+    addChildComponent (patchButton); // 0.73.0
+    patchButton.setTooltip ("Open the Patcher's window: its own ten slots, in series or in parallel (Routing)");
+    patchButton.onClick = [this] { openPatcher(); };
     addChildComponent (irButton); // 0.62.0
     irButton.setTooltip ("Use an audio file as the impulse response (the Space becomes File)");
     hintLabel.setFont (juce::Font (juce::FontOptions (12.0f)));
@@ -831,11 +848,49 @@ FxPanel::FxPanel()
     refresh();
 }
 
+FxPanel::~FxPanel() = default;
+
 void FxPanel::setTrack (MixerTrack* newTrack, int newIndex)
 {
+    if (newTrack != track || newIndex != trackIndex)
+        patcherWindow.reset(); // 0.73.0: a Patcher's window belongs to the slot shown
     track = newTrack;
     trackIndex = newIndex;
     refresh();
+}
+
+// 0.73.0: the window of the selected Patcher slot; what changes there goes back into the slot.
+void FxPanel::openPatcher()
+{
+    if (track == nullptr || track->slots[static_cast<size_t> (selectedSlot)].type != EffectType::Patcher)
+        return;
+    auto& slot = track->slots[static_cast<size_t> (selectedSlot)];
+    patcherWindow = std::make_unique<PatcherWindow> ("Patcher - " + (trackIndex == kMasterIndex ? juce::String ("Master") : "Track " + juce::String (trackIndex + 1))
+                                                     + ", slot " + juce::String (selectedSlot + 1));
+    for (size_t k = 0; k < static_cast<size_t> (kPatcherSlots); ++k)
+        patcherWindow->inner.slots[k] = slot.patch != nullptr && k < slot.patch->size() ? (*slot.patch)[k] : EffectSlot {};
+    auto& inner = patcherWindow->panel();
+    inner.trackNameOf = trackNameOf;
+    inner.trackCount = trackCount;
+    inner.trackAt = trackAt;
+    inner.refresh();
+    patcherWindow->onEdited = [this, slotIndex = selectedSlot, owner = trackIndex]
+    {
+        if (track == nullptr || trackIndex != owner || patcherWindow == nullptr)
+            return;
+        auto& outer = track->slots[static_cast<size_t> (slotIndex)];
+        if (outer.type != EffectType::Patcher)
+            return;
+        outer.patch = std::make_shared<const std::vector<EffectSlot>> (patcherWindow->inner.slots.begin(), patcherWindow->inner.slots.begin() + kPatcherSlots);
+        if (onChanged)
+            onChanged (trackIndex);
+    };
+    patcherWindow->onClose = [safe = juce::Component::SafePointer<FxPanel> (this)]
+    {
+        juce::MessageManager::callAsync ([safe] { if (safe != nullptr) safe->patcherWindow.reset(); });
+    };
+    patcherWindow->setVisible (true);
+    patcherWindow->toFront (true);
 }
 
 void FxPanel::setSelectedSlot (int slot)
@@ -984,8 +1039,9 @@ void FxPanel::rebuildParameters()
             row.slider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 64, 20);
             // (0.62.0: the Peak Controller's target slot and parameter are whole numbers)
             // (and 0.70.0 the other controllers')
-            const int controllerTarget = effectControllerTarget (slot.type);
-            const bool whole = controllerTarget >= 0 && (i == controllerTarget + 1 || i == controllerTarget + 2);
+            const int controllerTarget = effectControllerTarget (slot.type), controllerTarget2 = effectControllerTarget2 (slot.type);
+            const bool whole = controllerTarget >= 0 && (i == controllerTarget + 1 || i == controllerTarget + 2 || i == controllerTarget2 + 1
+                                                         || i == controllerTarget2 + 2);
             row.slider.setRange (info.min, info.max, whole ? 1.0 : 0.0);
             if ((unit == "Hz" || unit == "ms" || unit == ":1") && info.min > 0.0f)
                 row.slider.setSkewFactorFromMidPoint (std::sqrt (static_cast<double> (info.min) * static_cast<double> (info.max)));
@@ -1023,6 +1079,7 @@ void FxPanel::rebuildParameters()
         };
     }
     irButton.setVisible (slot.type == EffectType::Convolver);
+    patchButton.setVisible (slot.type == EffectType::Patcher); // 0.73.0
     irButton.onClick = [this] { chooseImpulseResponse(); };
     // 0.70.0
     const bool mixable = slot.type != EffectType::None && ! effectIsController (slot.type);
@@ -1053,30 +1110,33 @@ void FxPanel::updateHint()
         const auto& slot = track->slots[static_cast<size_t> (selectedSlot)];
         if (const int at = effectControllerTarget (slot.type); at >= 0) // 0.70.0: any of the three controllers
         {
-            const auto first = static_cast<size_t> (at);
-            const int targetTrack = juce::roundToInt (slot.params[first]);
-            const int targetSlot = juce::roundToInt (slot.params[first + 1]) - 1;
-            const int targetParam = juce::roundToInt (slot.params[first + 2]) - 1;
-            const MixerTrack* target = targetTrack <= 0 ? track : (trackAt ? trackAt (targetTrack - 1) : nullptr);
-            const auto where = targetTrack <= 0 ? juce::String ("this track") : "track " + juce::String (targetTrack);
-            const auto place = " (" + where + ", slot " + juce::String (targetSlot + 1) + ")";
-            if (target == nullptr || targetSlot < 0 || targetSlot >= kSlotsPerTrack)
-                text = "Drives nothing: no such track";
-            else
+            // what one of its targets is (0.71.0: the second one too)
+            const auto describe = [&] (size_t first) -> juce::String
             {
+                const int targetTrack = juce::roundToInt (slot.params[first]);
+                const int targetSlot = juce::roundToInt (slot.params[first + 1]) - 1;
+                const int targetParam = juce::roundToInt (slot.params[first + 2]) - 1;
+                const MixerTrack* target = targetTrack <= 0 ? track : (trackAt ? trackAt (targetTrack - 1) : nullptr);
+                const auto where = targetTrack <= 0 ? juce::String ("this track") : "track " + juce::String (targetTrack);
+                const auto place = " (" + where + ", slot " + juce::String (targetSlot + 1) + ")";
+                if (target == nullptr || targetSlot < 0 || targetSlot >= kSlotsPerTrack)
+                    return "nothing: no such track";
                 const auto& driven = target->slots[static_cast<size_t> (targetSlot)];
                 if (driven.type == EffectType::None)
-                    text = "Drives nothing yet: empty slot" + place;
-                else if (driven.type == EffectType::Plugin && driven.plugin != nullptr)
-                    text = "Drives: " + juce::String (driven.plugin->displayName()) + " > "
+                    return "nothing yet: empty slot" + place;
+                if (driven.type == EffectType::Plugin && driven.plugin != nullptr)
+                    return juce::String (driven.plugin->displayName()) + " > "
                          + (targetParam < driven.plugin->parameterCount() ? juce::String (driven.plugin->parameterName (targetParam)) : juce::String ("(no such parameter)"))
                          + place;
-                else if (effectIsController (driven.type) || targetParam >= effectParamCount (driven.type)
-                         || juce::String (effectParamInfo (driven.type, targetParam).unit) == "track")
-                    text = "Drives nothing: " + juce::String (effectName (driven.type)) + " has no parameter " + juce::String (targetParam + 1);
-                else
-                    text = "Drives: " + juce::String (effectName (driven.type)) + " > " + effectParamInfo (driven.type, targetParam).name + place;
-            }
+                if (effectIsController (driven.type) || targetParam >= effectParamCount (driven.type)
+                    || juce::String (effectParamInfo (driven.type, targetParam).unit) == "track")
+                    return "nothing: " + juce::String (effectName (driven.type)) + " has no parameter " + juce::String (targetParam + 1);
+                return juce::String (effectName (driven.type)) + " > " + effectParamInfo (driven.type, targetParam).name + place;
+            };
+            text = "Drives " + describe (static_cast<size_t> (at));
+            if (const int second = effectControllerTarget2 (slot.type); second >= 0 && juce::roundToInt (slot.params[static_cast<size_t> (second) + 1]) >= 1)
+                text += "; and " + describe (static_cast<size_t> (second))
+                      + (slot.params[static_cast<size_t> (second) + 3] > 0.5f ? juce::String (" (inverted)") : juce::String());
             if (slot.type == EffectType::FormulaController && formulaError.isNotEmpty())
                 text = "Formula not applied: " + formulaError;
         }
@@ -1219,20 +1279,24 @@ void FxPanel::showSlotMenu (int slot)
     menu.addSectionHeader ("Slot " + juce::String (slot + 1));
     for (const auto& entry : kEffectMenu)
     {
+        // (0.73.0: inside a Patcher, no controllers and no Patcher)
+        if (nested && (effectIsController (entry.type) || entry.type == EffectType::Patcher))
+            continue;
         if (entry.group != nullptr)
             menu.addSectionHeader (entry.group);
         menu.addItem (static_cast<int> (entry.type), effectName (entry.type), true, current.type == entry.type);
     }
     menu.addSeparator();
-    const auto plugins = listEffectPlugins ? listEffectPlugins() : std::vector<PluginChoice> {};
+    const auto plugins = listEffectPlugins && ! nested ? listEffectPlugins() : std::vector<PluginChoice> {};
     juce::PopupMenu pluginMenu;
     for (size_t i = 0; i < plugins.size(); ++i)
         pluginMenu.addItem (1000 + static_cast<int> (i), plugins[i].name);
-    if (plugins.empty())
+    if (! nested && plugins.empty())
         menu.addItem (100, "Plugin effects (scan the browser's Plugin folder first)", false);
-    else
+    else if (! nested)
         menu.addSubMenu ("Plugin effects", pluginMenu);
-    menu.addItem (103, "Open plugin window", current.type == EffectType::Plugin && current.plugin != nullptr);
+    if (! nested)
+        menu.addItem (103, "Open plugin window", current.type == EffectType::Plugin && current.plugin != nullptr);
     menu.addSeparator();
     menu.addItem (101, "Bypass", current.type != EffectType::None, current.bypass);
     menu.addItem (102, "Remove effect", current.type != EffectType::None);
@@ -1269,6 +1333,8 @@ void FxPanel::showSlotMenu (int slot)
                                     auto made = EffectSlot::make (type);
                                     if (const int at = effectControllerTarget (type); at >= 0) // 0.62.0: a controller drives the slot after its own to begin with
                                         made.params[static_cast<size_t> (at) + 1] = static_cast<float> (slot + 1 < kSlotsPerTrack ? slot + 2 : 1);
+                                    if (type == EffectType::Patcher) // 0.73.0: ten empty slots of its own
+                                        made.patch = std::make_shared<const std::vector<EffectSlot>> (static_cast<size_t> (kPatcherSlots));
                                     safe->applySlot (slot, made);
                                 }
                             }
@@ -1313,6 +1379,11 @@ void FxPanel::resized()
         head.removeFromRight (4);
         if (presetButton.isVisible())
             presetButton.setBounds (head.removeFromRight (82));
+        if (patchButton.isVisible()) // 0.73.0
+        {
+            head.removeFromRight (4);
+            patchButton.setBounds (head.removeFromRight (60));
+        }
         if (irButton.isVisible())
         {
             head.removeFromRight (4);
@@ -1738,6 +1809,15 @@ void MixerPanel::showRouteMenu (int index, juce::Component& button)
     for (size_t c = 0; c < std::size (kColours); ++c)
         colours.addItem (8001 + static_cast<int> (c), kColourNames[c], true, track.colour == kColours[c]);
     menu.addSubMenu ("Strip colour", colours);
+    // 0.72.0: its icon, where it is docked, a gap before it
+    juce::PopupMenu icons, docks;
+    addIconItems (icons, 9000, track.icon);
+    menu.addSubMenu ("Strip icon", icons);
+    docks.addItem (9100, "With the others", true, track.dock == 0);
+    docks.addItem (9101, "On the left", true, track.dock == 1);
+    docks.addItem (9102, "On the right (before the + button)", true, track.dock == 2);
+    menu.addSubMenu ("Dock", docks);
+    menu.addItem (9110, "Separator before this strip", true, track.separator);
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&button),
                         [safe = juce::Component::SafePointer<MixerPanel> (this), index] (int result)
                         {
@@ -1757,6 +1837,17 @@ void MixerPanel::showRouteMenu (int index, juce::Component& button)
                             {
                                 t.toMaster = true;
                                 t.trackSends = {};
+                            }
+                            else if (result >= 9000) // 0.72.0
+                            {
+                                if (result == 9110)
+                                    t.separator = ! t.separator;
+                                else if (result >= 9100)
+                                    t.dock = static_cast<std::uint8_t> (result - 9100);
+                                else
+                                    t.icon = static_cast<std::uint8_t> (std::clamp (result - 9000, 0, kIconCount));
+                                safe->layoutInner();
+                                safe->strips[static_cast<size_t> (index)]->repaint();
                             }
                             else if (result >= 8000) // 0.70.0
                                 t.colour = result == 8000 ? 0u : kColours[static_cast<size_t> (result - 8001) % std::size (kColours)];
@@ -1895,16 +1986,33 @@ void MixerPanel::layoutInner()
 {
     constexpr int kGap = 10; // between the tracks, the aux buses and the VCA groups
     const int count = static_cast<int> (strips.size() + auxStrips.size() + vcaStrips.size());
-    const int needed = count * MixerStrip::kWidth + kAddButtonWidth + (auxStrips.empty() ? 0 : kGap) + (vcaStrips.empty() ? 0 : kGap);
+    int separators = 0; // (0.72.0)
+    if (trackData != nullptr)
+        for (const auto& t : *trackData)
+            separators += t.separator ? 1 : 0;
+    const int needed = count * MixerStrip::kWidth + kAddButtonWidth + (auxStrips.empty() ? 0 : kGap) + (vcaStrips.empty() ? 0 : kGap) + separators * 8;
     const int height = std::max (1, viewport.getMaximumVisibleHeight());
     inner.setSize (std::max (needed, viewport.getMaximumVisibleWidth()), height);
 
+    // 0.72.0: the strips docked on the left first, then the others, then those docked on the right; a separator leaves a gap
+    constexpr int kSeparator = 8;
     int x = 0;
-    for (auto& s : strips)
+    const auto place = [&] (int dock)
     {
-        s->setBounds (x, 0, MixerStrip::kWidth, height);
-        x += MixerStrip::kWidth;
-    }
+        for (size_t i = 0; i < strips.size(); ++i)
+        {
+            const auto* data = trackData != nullptr && i < trackData->size() ? &(*trackData)[i] : nullptr;
+            if ((data != nullptr ? data->dock : 0) != dock)
+                continue;
+            if (data != nullptr && data->separator && x > 0)
+                x += kSeparator;
+            strips[i]->setBounds (x, 0, MixerStrip::kWidth, height);
+            x += MixerStrip::kWidth;
+        }
+    };
+    place (1);
+    place (0);
+    place (2);
     addTrackButton.setBounds (x + 2, 6, kAddButtonWidth - 4, 28);
     x += kAddButtonWidth;
     if (! auxStrips.empty())

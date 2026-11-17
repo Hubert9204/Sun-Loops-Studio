@@ -33,7 +33,9 @@ SamplerPanel::SamplerPanel()
         addAndMakeVisible (*l);
     }
 
-    for (auto* b : { &loadSampleButton, &loadFontButton, &clearProgramButton })
+    speechButton.setTooltip ("The speech synthesizer: type a text and this channel plays it, spoken (as FL Studio's Speech Synthesizer)");
+    speechButton.onClick = [this] { if (onSpeech) onSpeech(); };
+    for (auto* b : { &loadSampleButton, &loadFontButton, &clearProgramButton, &speechButton })
         addAndMakeVisible (*b);
     loadSampleButton.onClick = [this] { if (onLoadSample) onLoadSample(); };
     loadFontButton.onClick = [this] { if (onLoadSoundFont) onLoadSoundFont(); };
@@ -156,7 +158,83 @@ SamplerPanel::SamplerPanel()
     pitchEnvTimeSlider.setSkewFactorFromMidPoint (0.3);
     pitchEnvTimeSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.pitchEnvTime = static_cast<float> (pitchEnvTimeSlider.getValue()); }); };
 
-    setSize (600, 814);
+    // 0.71.0: the envelopes of pan, cutoff, resonance and pitch
+    for (auto* l : { &envLabel, &envALabel, &envDLabel, &envSLabel, &envRLabel, &envAmountLabel })
+    {
+        l->setColour (juce::Label::textColourId, kPanelText);
+        addAndMakeVisible (*l);
+    }
+    for (const char* name : { "Pan", "Cutoff", "Resonance", "Pitch" })
+        envTargetBox.addItem (name, envTargetBox.getNumItems() + 1);
+    envTargetBox.setSelectedId (1, juce::dontSendNotification);
+    envTargetBox.setTooltip ("Which envelope the controls on its right show: each of pan, cutoff, resonance and pitch has its own");
+    envTargetBox.onChange = [this] { envShown = std::clamp (envTargetBox.getSelectedId() - 1, 0, 3); refresh(); };
+    addAndMakeVisible (envTargetBox);
+    envOnToggle.setColour (juce::ToggleButton::textColourId, kPanelText);
+    envOnToggle.setTooltip ("Switch this envelope on: it moves its target from the start of each note (cutoff and resonance need the filter)");
+    envOnToggle.onClick = [this] { writeEnvelope ([this] (SamplerSettings::ModEnvelope& e) { e.on = envOnToggle.getToggleState(); }); };
+    addAndMakeVisible (envOnToggle);
+    slider (envAttackSlider, 0.0, 10.0, 0.001, " s").setSkewFactorFromMidPoint (0.3);
+    envAttackSlider.onValueChange = [this] { writeEnvelope ([this] (SamplerSettings::ModEnvelope& e) { e.attack = static_cast<float> (envAttackSlider.getValue()); }); };
+    slider (envDecaySlider, 0.0, 10.0, 0.001, " s").setSkewFactorFromMidPoint (0.5);
+    envDecaySlider.onValueChange = [this] { writeEnvelope ([this] (SamplerSettings::ModEnvelope& e) { e.decay = static_cast<float> (envDecaySlider.getValue()); }); };
+    slider (envSustainSlider, 0.0, 100.0, 1.0, " %");
+    envSustainSlider.onValueChange = [this] { writeEnvelope ([this] (SamplerSettings::ModEnvelope& e) { e.sustain = static_cast<float> (envSustainSlider.getValue() / 100.0); }); };
+    slider (envReleaseSlider, 0.0, 10.0, 0.001, " s").setSkewFactorFromMidPoint (0.5);
+    envReleaseSlider.onValueChange = [this] { writeEnvelope ([this] (SamplerSettings::ModEnvelope& e) { e.release = static_cast<float> (envReleaseSlider.getValue()); }); };
+    slider (envAmountSlider, -100.0, 100.0, 1.0, " %");
+    envAmountSlider.setTooltip ("How far the envelope moves its target: pan fully left / right, cutoff 5 octaves, resonance its whole range, "
+                                "pitch 2 octaves (negative: the other way)");
+    envAmountSlider.onValueChange = [this] { writeEnvelope ([this] (SamplerSettings::ModEnvelope& e) { e.amount = static_cast<float> (envAmountSlider.getValue() / 100.0); }); };
+
+    // 0.74.0: the play mode
+    for (auto* l : { &playModeLabel, &grainLabel, &densityLabel, &curveLabel, &travelTimeLabel, &grainPositionLabel, &grainSpeedLabel,
+                     &grainSpreadLabel, &grainPanLabel })
+    {
+        l->setColour (juce::Label::textColourId, kPanelText);
+        addAndMakeVisible (*l);
+    }
+    for (const char* name : { "Normal", "Granular (Granulizer)", "Travel curve (Wave Traveller)" })
+        playModeBox.addItem (name, playModeBox.getNumItems() + 1);
+    playModeBox.setTooltip ("Normal: the sample as it is. Granular: short overlapping grains read from a place that moves through the sample at "
+                            "its own speed; the key sets their pitch only. Travel curve: the place in the sample follows a curve (a tape stop, a "
+                            "spin back, a scratch...), then the sample plays on");
+    playModeBox.onChange = [this] { write ([this] (Channel& c) { c.sampler.playMode = static_cast<SamplerSettings::PlayMode> (std::clamp (playModeBox.getSelectedId() - 1, 0, 2)); }); };
+    addAndMakeVisible (playModeBox);
+    for (const char* name : { "Forward", "Backward", "Tape stop", "Spin back", "Scratch", "Stutter", "Wobble" })
+        curveBox.addItem (name, curveBox.getNumItems() + 1);
+    curveBox.onChange = [this] { write ([this] (Channel& c) { c.sampler.travelCurve = std::clamp (curveBox.getSelectedId() - 1, 0, SamplerSettings::kTravelCurves - 1); }); };
+    addAndMakeVisible (curveBox);
+    slider (grainSlider, 10.0, 500.0, 1.0, " ms").setSkewFactorFromMidPoint (80.0);
+    grainSlider.setTooltip ("The length of each grain");
+    grainSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.grainMs = static_cast<float> (grainSlider.getValue()); }); };
+    slider (densitySlider, 1.0, 8.0, 0.1, {});
+    densitySlider.setTooltip ("How many grains sound at once");
+    densitySlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.grainDensity = static_cast<float> (densitySlider.getValue()); }); };
+    slider (travelTimeSlider, 0.05, 10.0, 0.01, " s").setSkewFactorFromMidPoint (1.0);
+    travelTimeSlider.setTooltip ("How long the curve takes; then the sample plays on (a tape stop ends the note)");
+    travelTimeSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.travelTime = static_cast<float> (travelTimeSlider.getValue()); }); };
+    slider (grainPositionSlider, 0.0, 100.0, 0.1, " %");
+    grainPositionSlider.setTooltip ("Where in the sample the grains start reading");
+    grainPositionSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.grainPosition = static_cast<float> (grainPositionSlider.getValue() / 100.0); }); };
+    slider (grainSpeedSlider, -200.0, 200.0, 1.0, " %");
+    grainSpeedSlider.setTooltip ("How fast that place moves: 100 % the sample's own speed, 0 % frozen, negative backwards");
+    grainSpeedSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.grainSpeed = static_cast<float> (grainSpeedSlider.getValue() / 100.0); }); };
+    slider (grainSpreadSlider, 0.0, 100.0, 1.0, " %");
+    grainSpreadSlider.setTooltip ("Each grain starts up to 200 ms away from that place, at random");
+    grainSpreadSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.grainSpread = static_cast<float> (grainSpreadSlider.getValue() / 100.0); }); };
+    slider (grainPanSlider, 0.0, 100.0, 1.0, " %");
+    grainPanSlider.setTooltip ("Each grain's random pan");
+    grainPanSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.grainPan = static_cast<float> (grainPanSlider.getValue() / 100.0); }); };
+    for (auto* sl : { &grainPositionSlider, &grainSpeedSlider, &grainSpreadSlider, &grainPanSlider })
+        sl->setTextBoxStyle (juce::Slider::TextBoxRight, false, 60, 22);
+    // the one-letter labels of the envelopes' A D S R and the play mode's short names fit their narrow cells (no "...")
+    for (auto* l : { &envALabel, &envDLabel, &envSLabel, &envRLabel, &grainPositionLabel, &grainSpeedLabel, &grainSpreadLabel, &grainPanLabel })
+    {
+        l->setBorderSize (juce::BorderSize<int> (0, 2, 0, 2));
+        l->setMinimumHorizontalScale (0.7f);
+    }
+    setSize (600, 924);
 }
 
 juce::Slider& SamplerPanel::slider (juce::Slider& s, double lo, double hi, double step, const juce::String& suffix)
@@ -181,6 +259,12 @@ void SamplerPanel::write (const std::function<void (Channel&)>& change)
         if (onChanged)
             onChanged();
     }
+}
+
+void SamplerPanel::writeEnvelope (const std::function<void (SamplerSettings::ModEnvelope&)>& change)
+{
+    const auto shown = static_cast<size_t> (std::clamp (envShown, 0, 3));
+    write ([&] (Channel& c) { change (c.sampler.modEnvelopes[shown]); });
 }
 
 void SamplerPanel::refresh()
@@ -219,6 +303,30 @@ void SamplerPanel::refresh()
                              juce::dontSendNotification);
     }
     clearProgramButton.setEnabled (program);
+    {
+        // 0.74.0: the play mode (the channel's own sample only)
+        const auto& smp = c->sampler;
+        const bool granular = smp.playMode == SamplerSettings::PlayMode::Granular;
+        const bool travels = smp.playMode == SamplerSettings::PlayMode::Traveller;
+        playModeBox.setEnabled (! program);
+        playModeBox.setSelectedId (static_cast<int> (smp.playMode) + 1, juce::dontSendNotification);
+        for (juce::Component* x : { static_cast<juce::Component*> (&grainLabel), static_cast<juce::Component*> (&grainSlider),
+                                    static_cast<juce::Component*> (&densityLabel), static_cast<juce::Component*> (&densitySlider) })
+            x->setVisible (! travels);
+        for (juce::Component* x : { static_cast<juce::Component*> (&curveLabel), static_cast<juce::Component*> (&curveBox),
+                                    static_cast<juce::Component*> (&travelTimeLabel), static_cast<juce::Component*> (&travelTimeSlider) })
+            x->setVisible (travels);
+        for (auto* sl : { &grainSlider, &densitySlider, &grainPositionSlider, &grainSpeedSlider, &grainSpreadSlider, &grainPanSlider })
+            sl->setEnabled (granular && ! program);
+        curveBox.setSelectedId (smp.travelCurve + 1, juce::dontSendNotification);
+        travelTimeSlider.setValue (smp.travelTime, juce::dontSendNotification);
+        grainSlider.setValue (smp.grainMs, juce::dontSendNotification);
+        densitySlider.setValue (smp.grainDensity, juce::dontSendNotification);
+        grainPositionSlider.setValue (smp.grainPosition * 100.0, juce::dontSendNotification);
+        grainSpeedSlider.setValue (smp.grainSpeed * 100.0, juce::dontSendNotification);
+        grainSpreadSlider.setValue (smp.grainSpread * 100.0, juce::dontSendNotification);
+        grainPanSlider.setValue (smp.grainPan * 100.0, juce::dontSendNotification);
+    }
     rootSlider.setEnabled (! program);
     loopBox.setEnabled (! program);
     loopStartSlider.setEnabled (! program && c->sampler.loop != LoopMode::Off);
@@ -247,6 +355,18 @@ void SamplerPanel::refresh()
     delaySlider.setValue (s.delay, juce::dontSendNotification);
     holdSlider.setValue (s.hold, juce::dontSendNotification);
     lfo2Box.setSelectedId (static_cast<int> (s.lfo2Target) + 1, juce::dontSendNotification);
+    {
+        const auto& env = s.modEnvelopes[static_cast<size_t> (std::clamp (envShown, 0, 3))]; // 0.71.0
+        envTargetBox.setSelectedId (envShown + 1, juce::dontSendNotification);
+        envOnToggle.setToggleState (env.on, juce::dontSendNotification);
+        for (auto* sl : { &envAttackSlider, &envDecaySlider, &envSustainSlider, &envReleaseSlider, &envAmountSlider })
+            sl->setEnabled (env.on);
+        envAttackSlider.setValue (env.attack, juce::dontSendNotification);
+        envDecaySlider.setValue (env.decay, juce::dontSendNotification);
+        envSustainSlider.setValue (env.sustain * 100.0, juce::dontSendNotification);
+        envReleaseSlider.setValue (env.release, juce::dontSendNotification);
+        envAmountSlider.setValue (env.amount * 100.0, juce::dontSendNotification);
+    }
     lfo2RateSlider.setEnabled (s.lfo2Target != SamplerLfoTarget::Off);
     lfo2DepthSlider.setEnabled (s.lfo2Target != SamplerLfoTarget::Off);
     lfo2RateSlider.setValue (s.lfo2Rate, juce::dontSendNotification);
@@ -272,7 +392,7 @@ void SamplerPanel::paint (juce::Graphics& g)
     g.fillAll (kPanelBackground);
     g.setColour (kPanelDim);
     g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
-    const char* names[] = { "SOUND", "ENVELOPE", "LOOP", "FILTER", "MODULATION" };
+    const char* names[] = { "SOUND", "ENVELOPE", "LOOP", "FILTER", "MODULATION", "PLAY MODE" };
     for (size_t i = 0; i < headers.size(); ++i)
     {
         g.drawText (names[i], headers[i], juce::Justification::centredLeft);
@@ -294,6 +414,8 @@ void SamplerPanel::resized()
     loadFontButton.setBounds (buttons.removeFromLeft (190));
     buttons.removeFromLeft (8);
     clearProgramButton.setBounds (buttons.removeFromLeft (130));
+    buttons.removeFromLeft (8);
+    speechButton.setBounds (buttons); // 0.74.0
 
     const auto row = [&area] (juce::Label& label, juce::Component& c)
     {
@@ -404,12 +526,68 @@ void SamplerPanel::resized()
         lfo2DepthSlider.setBounds (r);
     }
     {
+        auto r = area.removeFromTop (26); // 0.71.0: the envelope chosen, on / off, its amount
+        area.removeFromTop (6);
+        envLabel.setBounds (r.removeFromLeft (100));
+        envTargetBox.setBounds (r.removeFromLeft (120));
+        r.removeFromLeft (8);
+        envOnToggle.setBounds (r.removeFromLeft (52));
+        envAmountLabel.setBounds (r.removeFromLeft (56));
+        envAmountSlider.setBounds (r);
+    }
+    {
+        auto r = area.removeFromTop (26); // its attack, decay, sustain and release
+        area.removeFromTop (6);
+        r.removeFromLeft (100);
+        const int w = r.getWidth() / 4;
+        for (auto [label, sl] : { std::pair { &envALabel, &envAttackSlider }, std::pair { &envDLabel, &envDecaySlider },
+                                  std::pair { &envSLabel, &envSustainSlider }, std::pair { &envRLabel, &envReleaseSlider } })
+        {
+            auto cell = r.removeFromLeft (w);
+            label->setBounds (cell.removeFromLeft (16));
+            sl->setBounds (cell.reduced (2, 0));
+        }
+    }
+    {
         auto r = area.removeFromTop (26);
         pitchEnvLabel.setBounds (r.removeFromLeft (100));
         pitchEnvSlider.setBounds (r.removeFromLeft (r.getWidth() / 2 - 4));
         r.removeFromLeft (8);
         pitchEnvTimeLabel.setBounds (r.removeFromLeft (70));
         pitchEnvTimeSlider.setBounds (r);
+    }
+    // 0.74.0: the play mode
+    area.removeFromTop (10);
+    headers[5] = area.removeFromTop (18);
+    area.removeFromTop (4);
+    {
+        auto r = area.removeFromTop (26);
+        area.removeFromTop (6);
+        playModeLabel.setBounds (r.removeFromLeft (100));
+        playModeBox.setBounds (r.removeFromLeft (150));
+        r.removeFromLeft (8);
+        auto first = r.removeFromLeft (r.getWidth() / 2 - 4);
+        r.removeFromLeft (8);
+        grainLabel.setBounds (first.removeFromLeft (40));
+        grainSlider.setBounds (first);
+        curveLabel.setBounds (grainLabel.getBounds());
+        curveBox.setBounds (first);
+        densityLabel.setBounds (r.removeFromLeft (52));
+        densitySlider.setBounds (r);
+        travelTimeLabel.setBounds (densityLabel.getBounds());
+        travelTimeSlider.setBounds (r);
+    }
+    {
+        auto r = area.removeFromTop (26);
+        r.removeFromLeft (100);
+        const int w = r.getWidth() / 4;
+        for (auto [label, sl] : { std::pair { &grainPositionLabel, &grainPositionSlider }, std::pair { &grainSpeedLabel, &grainSpeedSlider },
+                                  std::pair { &grainSpreadLabel, &grainSpreadSlider }, std::pair { &grainPanLabel, &grainPanSlider } })
+        {
+            auto cell = r.removeFromLeft (w);
+            label->setBounds (cell.removeFromLeft (label == &grainPositionLabel || label == &grainPanLabel ? 28 : 44));
+            sl->setBounds (cell.reduced (2, 0));
+        }
     }
 }
 

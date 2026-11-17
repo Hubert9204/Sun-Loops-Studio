@@ -64,6 +64,12 @@ public:
     // 0.70.0, performance mode's MIDI pads: while on, the notes from C1 up (see PerformancePads.h) do not play the instrument;
     // they wait here for the message thread, which takes them one by one (-1: none left).
     void setPerformancePads (bool on) noexcept { padsOn.store (on, std::memory_order_relaxed); }
+    // 0.71.0: the first pad's note and the pads per row; a pad let go arrives as 128 + its note (for the cells held to play)
+    void setPerformancePadLayout (int firstNote, int perRow) noexcept
+    {
+        padFirst.store (firstNote, std::memory_order_relaxed);
+        padPerRow.store (perRow, std::memory_order_relaxed);
+    }
     int takePadNote() noexcept
     {
         const unsigned written = padWrite.load (std::memory_order_acquire);
@@ -286,6 +292,7 @@ private:
     std::atomic<int> midiTarget { 0 };
     std::atomic<bool> midiActivity { false };
     std::atomic<bool> padsOn { false }; // 0.70.0
+    std::atomic<int> padFirst { 36 }, padPerRow { 8 }; // 0.71.0
     std::array<std::atomic<int>, 32> padNotes {};
     std::atomic<unsigned> padWrite { 0 };
     unsigned padRead = 0; // message thread

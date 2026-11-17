@@ -154,11 +154,16 @@ private:
         float smpLfoPhase = 0.0f, smpLfoStep = 0.0f, smpLfoDepth = 0.0f;
         float pitchEnv = 0.0f, pitchEnvMul = 1.0f; // semitones left, and their decay every kModStep samples
         float cutoffBase = 0.0f, cutoffEnv = 0.0f; // Hz, octaves
+        float noteOctaves = 0.0f, noteResonance = 0.0f; // 0.71.0: the note's mod X and mod Y (synths; the sampler applies them at the start)
         // 0.70.0: the envelope's delay and hold (samples left), the second LFO, the filter's resonance as set (for an LFO on it)
         int delayLeft = 0, holdLeft = 0;
         std::uint8_t smpLfo2Target = 0;
         float smpLfo2Phase = 0.0f, smpLfo2Step = 0.0f, smpLfo2Depth = 0.0f;
         float resonanceBase = 0.0f;
+        // 0.71.0: the envelopes of pan, cutoff, resonance and pitch (level, stage 0 attack / 1 decay-sustain / 2 release / 3 done,
+        // the steps per kModStep samples, the sustain and the amount; amount 0: off)
+        std::array<float, 4> menvLevel {}, menvAttack {}, menvDecay {}, menvRelease {}, menvSustain {}, menvAmount {};
+        std::array<std::uint8_t, 4> menvStage {};
         int modCount = 0;
         float modPitch = 1.0f, modLeft = 1.0f, modRight = 1.0f;
         float padGain = 1.0f;               // the pad's (or a sampler zone's) level and pan (1 / 1 / 1 for every other voice)
@@ -222,6 +227,25 @@ private:
         int strikeLeft = 0, strikeLength = 1;
         float strikeNorm = 1.0f;
         bool released = false;
+
+        // Sampler play modes (0.74.0): grains (up to eight at once) and the travel curve.
+        std::uint8_t playMode = 0;
+        int travelCurve = 0, travelLen = 1, travelAge = 0;
+        double travelOrigin = 0.0, travelSpan = 0.0, grainScan = 0.0;
+        int grainLen = 1, grainEvery = 1, grainNext = 0;
+        float grainJitter = 0.0f, grainPanAmount = 0.0f, grainNorm = 1.0f;
+        std::array<double, 8> grainPos {};
+        std::array<int, 8> grainAge {};
+        std::array<float, 8> grainL {}, grainR {};
+
+        // Drum voices (0.74.0): the body (`phase`, `increment` the note's rate), its falling pitch, the hiss, the click; every
+        // level is multiplied by its own factor each sample (exponential decays).
+        bool drum = false;
+        std::uint8_t drumModel = 0;
+        float drumBody = 0.0f, drumBodyMul = 1.0f, drumHiss = 0.0f, drumHissMul = 1.0f, drumClick = 0.0f, drumClickMul = 1.0f;
+        float drumSweep = 0.0f, drumSweepMul = 1.0f, drumSweepOctaves = 0.0f, drumDrive = 0.0f, drumDriveNorm = 1.0f;
+        int drumAge = 0, drumClapGap = 1;
+        std::array<double, 6> drumPhase {}, drumInc {};
     };
     static constexpr int kControlInterval = 16; // samples between two updates of a subtractive voice's modulation
     void subtractiveVoiceOn (Voice& v, const SynthPatch& patch, int pitch) noexcept;
@@ -235,6 +259,8 @@ private:
     void physicalVoiceOn (Voice& v, const SynthPatch& patch, size_t voiceIndex) noexcept;
     void updatePhysical (Voice& v, const SynthPatch& patch) noexcept;
     float renderPhysical (Voice& v, const SynthPatch& patch) noexcept;
+    void drumVoiceOn (Voice& v, const SynthPatch& patch, int pitch) noexcept;
+    float renderDrum (Voice& v, const SynthPatch& patch) noexcept;
     std::vector<float> stringLines; // kMaxVoices delay lines of stringLineLength samples (a power of two), made in prepare()
     int stringLineLength = 0;
     std::array<std::array<float, 5>, 3> bodyCoefs {}; // the body's band-pass filters (b0, b1, b2, a1, a2) at this sample rate

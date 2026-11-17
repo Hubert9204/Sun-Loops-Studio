@@ -451,6 +451,36 @@ juce::var samplerSettingsToVar (const SamplerSettings& s)
         o->setProperty ("delay", s.delay);
     if (s.hold > 0.0f)
         o->setProperty ("hold", s.hold);
+    if (s.playMode == SamplerSettings::PlayMode::Granular) // 0.74.0
+    {
+        auto* g = new juce::DynamicObject();
+        g->setProperty ("length", s.grainMs);
+        g->setProperty ("density", s.grainDensity);
+        g->setProperty ("position", s.grainPosition);
+        g->setProperty ("speed", s.grainSpeed);
+        g->setProperty ("spread", s.grainSpread);
+        g->setProperty ("pan", s.grainPan);
+        o->setProperty ("granular", juce::var (g));
+    }
+    else if (s.playMode == SamplerSettings::PlayMode::Traveller)
+    {
+        auto* t = new juce::DynamicObject();
+        t->setProperty ("curve", s.travelCurve);
+        t->setProperty ("time", s.travelTime);
+        o->setProperty ("traveller", juce::var (t));
+    }
+    static const char* const envelopeNames[] = { "panEnv", "cutoffEnv2", "resonanceEnv", "pitchEnv2" }; // 0.71.0
+    for (size_t e = 0; e < s.modEnvelopes.size(); ++e)
+        if (const auto& env = s.modEnvelopes[e]; env.on)
+        {
+            auto* d = new juce::DynamicObject();
+            d->setProperty ("attack", env.attack);
+            d->setProperty ("decay", env.decay);
+            d->setProperty ("sustain", env.sustain);
+            d->setProperty ("release", env.release);
+            d->setProperty ("amount", env.amount);
+            o->setProperty (envelopeNames[e], juce::var (d));
+        }
     if (std::abs (s.cutoffEnv) > 0.0f)
         o->setProperty ("cutoffEnv", s.cutoffEnv);
     if (std::abs (s.pitchEnv) > 0.0f)
@@ -495,6 +525,34 @@ SamplerSettings samplerSettingsFromVar (const juce::var& v)
     s.lfo2Depth = static_cast<float> (readNumber (o->getProperty ("lfo2Depth"), 0.5, 0.0, 1.0));
     s.delay = static_cast<float> (readNumber (o->getProperty ("delay"), 0.0, 0.0, 5.0));
     s.hold = static_cast<float> (readNumber (o->getProperty ("hold"), 0.0, 0.0, 5.0));
+    if (auto* g = o->getProperty ("granular").getDynamicObject()) // 0.74.0
+    {
+        s.playMode = SamplerSettings::PlayMode::Granular;
+        s.grainMs = static_cast<float> (readNumber (g->getProperty ("length"), 80.0, 10.0, 500.0));
+        s.grainDensity = static_cast<float> (readNumber (g->getProperty ("density"), 2.0, 1.0, 8.0));
+        s.grainPosition = static_cast<float> (readNumber (g->getProperty ("position"), 0.0, 0.0, 1.0));
+        s.grainSpeed = static_cast<float> (readNumber (g->getProperty ("speed"), 1.0, -2.0, 2.0));
+        s.grainSpread = static_cast<float> (readNumber (g->getProperty ("spread"), 0.1, 0.0, 1.0));
+        s.grainPan = static_cast<float> (readNumber (g->getProperty ("pan"), 0.0, 0.0, 1.0));
+    }
+    else if (auto* t = o->getProperty ("traveller").getDynamicObject())
+    {
+        s.playMode = SamplerSettings::PlayMode::Traveller;
+        s.travelCurve = readInt (t->getProperty ("curve"), SamplerSettings::TravelTapeStop, 0, SamplerSettings::kTravelCurves - 1);
+        s.travelTime = static_cast<float> (readNumber (t->getProperty ("time"), 1.0, 0.05, 10.0));
+    }
+    static const char* const envelopeNames[] = { "panEnv", "cutoffEnv2", "resonanceEnv", "pitchEnv2" }; // 0.71.0
+    for (size_t e = 0; e < s.modEnvelopes.size(); ++e)
+        if (auto* d = o->getProperty (envelopeNames[e]).getDynamicObject())
+        {
+            auto& env = s.modEnvelopes[e];
+            env.on = true;
+            env.attack = static_cast<float> (readNumber (d->getProperty ("attack"), 0.01, 0.0, 10.0));
+            env.decay = static_cast<float> (readNumber (d->getProperty ("decay"), 0.3, 0.0, 10.0));
+            env.sustain = static_cast<float> (readNumber (d->getProperty ("sustain"), 0.0, 0.0, 1.0));
+            env.release = static_cast<float> (readNumber (d->getProperty ("release"), 0.3, 0.0, 10.0));
+            env.amount = static_cast<float> (readNumber (d->getProperty ("amount"), 0.5, -1.0, 1.0));
+        }
     s.lfoRate = static_cast<float> (readNumber (o->getProperty ("lfoRate"), 5.0, 0.05, 20.0));
     s.lfoDepth = static_cast<float> (readNumber (o->getProperty ("lfoDepth"), 0.5, 0.0, 1.0));
     s.cutoffEnv = static_cast<float> (readNumber (o->getProperty ("cutoffEnv"), 0.0, -5.0, 5.0));

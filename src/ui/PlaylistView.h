@@ -82,6 +82,8 @@ public:
         return error;
     }
     std::function<void (int)> onSeek;       // the ruler was clicked: the song position (ticks)
+    std::function<void (int)> onPlaybackStart, onPlaybackMove; // 0.71.0: the Playback tool
+    std::function<void()> onPlaybackEnd;
     std::function<void()> onLoopChanged;    // the loop region was made, changed or deleted
     juce::String useEditedAudio (int index, const std::shared_ptr<const SampleData>& expected, std::shared_ptr<const SampleData> edited,
                                  const std::vector<double>& sliceSeconds)
@@ -120,6 +122,7 @@ private:
     juce::TextButton markerButton { "+ Marker" };
     juce::TextButton markerPrevButton { juce::String::fromUTF8 ("\xe2\x97\x82") }, markerNextButton { juce::String::fromUTF8 ("\xe2\x96\xb8") };
     juce::TextButton zoomTool { "Zoom" };
+    juce::TextButton playbackTool { "Play" }; // 0.71.0
     int mainSnapCode = kTicksPerBeat;         // 0.60.0: the toolbar's global snap
     juce::Label snapLabel { {}, "Grid" };
     juce::ComboBox snapBox;

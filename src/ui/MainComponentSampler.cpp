@@ -6,6 +6,7 @@
 #include "audio/SampleEdit.h"
 #include "audio/ClipEdit.h"
 #include "library/SoundFont.h"
+#include "audio/SpeechSynth.h"
 
 #include <map>
 
@@ -51,6 +52,11 @@ void MainComponent::openSamplerSettings (int channelIndex)
             if (safe != nullptr && safe->samplerWindowChannel >= 0)
                 safe->chooseSoundFontFor (safe->samplerWindowChannel);
         };
+        panel.onSpeech = [safe = juce::Component::SafePointer<MainComponent> (this)]
+        {
+            if (safe != nullptr && safe->samplerWindowChannel >= 0)
+                safe->openSpeechDialog (safe->samplerWindowChannel);
+        };
         panel.onClearProgram = [safe = juce::Component::SafePointer<MainComponent> (this)]
         {
             if (safe == nullptr)
@@ -69,6 +75,88 @@ void MainComponent::openSamplerSettings (int channelIndex)
     samplerWindow->panel().refresh();
     samplerWindow->setVisible (true);
     samplerWindow->toFront (true);
+}
+
+// The speech synthesizer (0.74.0): a text, a voice, its pitch, speed and intonation; the channel then plays the text, spoken. The
+// dialog opens with what the channel says already, when it is a spoken sample.
+void MainComponent::openSpeechDialog (int channelIndex)
+{
+    if (channelIndex < 0 || channelIndex >= static_cast<int> (channels.size()))
+        return;
+    std::string text = "Ciao, benvenuto in Sun Loops Studio!";
+    SpeechSettings spoken;
+    if (const auto& sample = channels[static_cast<size_t> (channelIndex)].sample; sample != nullptr && sample->source.rfind ("builtin:", 0) == 0)
+    {
+        std::string said;
+        if (SpeechSettings got; parseSpeechId (sample->source.substr (8), said, got))
+        {
+            text = said;
+            spoken = got;
+        }
+    }
+    auto* window = new juce::AlertWindow ("Speech synthesizer",
+                                          "Type what the channel should say. It is read the Italian way (every letter as written, the stress on "
+                                          "the second-last vowel unless an accent says otherwise; numbers as Italian words); a comma pauses, a "
+                                          "full stop ends a sentence, a question mark makes it rise.",
+                                          juce::MessageBoxIconType::NoIcon);
+    window->addTextEditor ("text", juce::String::fromUTF8 (text.c_str()), "Text");
+    juce::StringArray voices;
+    for (int v = 0; v < kSpeechVoices; ++v)
+        voices.add (speechVoiceName (static_cast<SpeechVoice> (v)));
+    window->addComboBox ("voice", voices, "Voice");
+    juce::StringArray pitches;
+    for (int st = -12; st <= 12; ++st)
+        pitches.add ((st > 0 ? "+" : "") + juce::String (st) + " semitones");
+    window->addComboBox ("pitch", pitches, "Pitch");
+    window->addComboBox ("speed", { "Very slow (50 %)", "Slow (75 %)", "Normal", "Fast (125 %)", "Faster (150 %)", "Very fast (200 %)" }, "Speed");
+    window->addComboBox ("intonation", { "Flat (a monotone)", "Calm", "Normal", "Lively" }, "Intonation");
+    window->getComboBoxComponent ("voice")->setSelectedItemIndex (static_cast<int> (spoken.voice), juce::dontSendNotification);
+    window->getComboBoxComponent ("pitch")->setSelectedItemIndex (juce::roundToInt (spoken.pitch) + 12, juce::dontSendNotification);
+    static constexpr float kSpeeds[] = { 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f };
+    static constexpr float kIntonations[] = { 0.0f, 0.3f, 0.5f, 0.85f };
+    int speed = 2, intonation = 2;
+    for (int i = 0; i < 6; ++i)
+        if (std::abs (kSpeeds[i] - spoken.speed) < std::abs (kSpeeds[speed] - spoken.speed))
+            speed = i;
+    for (int i = 0; i < 4; ++i)
+        if (std::abs (kIntonations[i] - spoken.intonation) < std::abs (kIntonations[intonation] - spoken.intonation))
+            intonation = i;
+    window->getComboBoxComponent ("speed")->setSelectedItemIndex (speed, juce::dontSendNotification);
+    window->getComboBoxComponent ("intonation")->setSelectedItemIndex (intonation, juce::dontSendNotification);
+    window->addButton ("Speak", 1, juce::KeyPress (juce::KeyPress::returnKey));
+    window->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+    window->enterModalState (true, juce::ModalCallbackFunction::create (
+                                       [safe = juce::Component::SafePointer<MainComponent> (this), window, channelIndex] (int result)
+                                       {
+                                           if (safe == nullptr || result != 1 || channelIndex >= static_cast<int> (safe->channels.size()))
+                                               return;
+                                           SpeechSettings s;
+                                           s.voice = static_cast<SpeechVoice> (std::max (0, window->getComboBoxComponent ("voice")->getSelectedItemIndex()));
+                                           s.pitch = static_cast<float> (std::max (0, window->getComboBoxComponent ("pitch")->getSelectedItemIndex()) - 12);
+                                           s.speed = kSpeeds[std::clamp (window->getComboBoxComponent ("speed")->getSelectedItemIndex(), 0, 5)];
+                                           s.intonation = kIntonations[std::clamp (window->getComboBoxComponent ("intonation")->getSelectedItemIndex(), 0, 3)];
+                                           const auto said = window->getTextEditorContents ("text").trim().substring (0, 600).toStdString();
+                                           auto sample = speak (said, s);
+                                           if (sample == nullptr)
+                                           {
+                                               safe->statusLabel.setText ("Nothing to say: type some words", juce::dontSendNotification);
+                                               return;
+                                           }
+                                           auto& channel = safe->channels[static_cast<size_t> (channelIndex)];
+                                           channel.instrument = Instrument::Sampler;
+                                           channel.name = juce::String::fromUTF8 (said.c_str()).substring (0, 16).toStdString();
+                                           channel.sample = std::move (sample);
+                                           channel.program = nullptr;
+                                           safe->strips[static_cast<size_t> (channelIndex)]->refreshFromChannel();
+                                           safe->updateTrackRouting();
+                                           safe->publishProject();
+                                           if (safe->samplerWindow != nullptr)
+                                               safe->samplerWindow->panel().refresh();
+                                           safe->statusLabel.setText ("The channel says: " + juce::String::fromUTF8 (said.c_str()) + "  ("
+                                                                          + juce::String (speechPhonemes (said)) + ")",
+                                                                      juce::dontSendNotification);
+                                       }),
+                             true);
 }
 
 void MainComponent::closeSamplerSettings()

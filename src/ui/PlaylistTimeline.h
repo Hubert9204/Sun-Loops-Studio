@@ -12,7 +12,7 @@ namespace sls
 {
 // 0.59.0: Draw was called Select; Select is the rectangle. 0.60.0: Mute and Slip, as in FL Studio's Playlist (the toolbar shows the
 // tools in FL Studio's order and with its names: Draw, Delete (Erase), Mute, Slip, Slice (Split), Cut, Select, Zoom).
-enum class PlaylistTool { Draw, Split, Cut, Erase, Zoom, Select, Mute, Slip, Paint }; // 0.61.0: Paint
+enum class PlaylistTool { Draw, Split, Cut, Erase, Zoom, Select, Mute, Slip, Paint, Playback }; // 0.61.0: Paint; 0.71.0: Playback
 
 // The timeline of the Playlist panel: the ruler, the tracks and their clips (the toolbar around it is PlaylistView).
 //
@@ -93,6 +93,9 @@ public:
     std::function<void (double)> onZoomChanged;       // pixels per tick
     // Left click (or drag) on the ruler: move the song position to this tick (snapped to the grid; Alt: no snap).
     std::function<void (int)> onSeek;
+    std::function<void (int)> onPlaybackStart, onPlaybackMove; // 0.71.0, the Playback tool (as the piano roll's)
+    std::function<void()> onPlaybackEnd;
+    bool playbackDrag = false;
     // The loop region (Arrangement::loopStartTick / loopEndTick) was made, moved, resized or deleted on the ruler.
     std::function<void()> onLoopChanged;
     // Text for the two readouts under the timeline: the position under the mouse, and the selected clip.
@@ -283,14 +286,23 @@ private:
     int sectionFirstTrack (int section) const noexcept { return arrangement.sectionStart (trackSectionOf (section)); }
     int sectionEndTrack (int section) const noexcept { return arrangement.sectionEnd (trackSectionOf (section)); }
     int sectionRows (int section) const noexcept;  // the rows it shows: its tracks not folded away, or the lanes
-    int sectionContentHeight (int section) const noexcept { return sectionRows (section) * kRowHeight; }
+    int sectionContentHeight (int section) const noexcept
+    {
+        if (section == kAutomationSection)
+            return sectionRows (section) * kLaneHeight;
+        int h = 0; // 0.72.0: the tracks' own heights
+        for (int t = sectionFirstTrack (section); t < sectionEndTrack (section); ++t)
+            h += arrangement.trackHidden (t) ? 0 : trackHeight (t);
+        return h;
+    }
     void layoutSections();                         // the buttons and the scroll bars, after a resize or a dragged border
     void updateSectionButtons();
     juce::ScrollBar& sectionScrollBar (int section) noexcept;
     void removeLane (int lane);                    // asks when the lane holds clips
 
     int trackCount() const noexcept { return std::max (1, arrangement.trackCount()); }
-    int trackHeight() const noexcept { return kRowHeight; }
+    int trackHeight (int track) const noexcept; // 0.72.0: each track its own (small, normal, large, extra large)
+    int rowOffset (int track) const noexcept;
     // 0.62.0: tracks folded away under their group's head take no row (and sit far off-screen, so nothing of theirs is drawn or hit)
     int rowOf (int track) const noexcept;          // its row inside its section
     int trackAtRow (int section, int row) const noexcept;

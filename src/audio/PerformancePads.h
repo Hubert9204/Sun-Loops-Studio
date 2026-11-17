@@ -2,10 +2,10 @@
 
 namespace sls
 {
-// Performance mode's MIDI pads (0.70.0, as FL Studio's performance mode played from a pad controller): the notes from C1 (36) up
-// are the cells of the Performance window, eight notes per row from the top row down. The first seven pads of a row launch its
-// first seven clips; the eighth stops the row. So a 4 x 4 or 8 x 8 pad controller that sends notes from C1 plays the window
-// without any set-up.
+// Performance mode's MIDI pads (0.70.0, as FL Studio's performance mode played from a pad controller): the notes from the first
+// pad note (C1 = 36 unless chosen otherwise, 0.71.0) up are the cells of the Performance window, `perRow` notes per row from the
+// top row down (8 unless chosen otherwise, 0.71.0). The pads of a row but the last launch its first clips; the last stops the
+// row. So a pad controller that sends notes from the first pad note plays the window without any set-up.
 struct PadAction
 {
     enum class Kind { None, Launch, StopRow };
@@ -15,12 +15,17 @@ struct PadAction
 
 constexpr int kFirstPadNote = 36, kPadsPerRow = 8, kPadRows = 8;
 
-inline PadAction performancePad (int note) noexcept
+inline PadAction performancePad (int note, int firstNote = kFirstPadNote, int perRow = kPadsPerRow) noexcept
 {
-    const int pad = note - kFirstPadNote;
-    if (pad < 0 || pad >= kPadsPerRow * kPadRows)
+    perRow = perRow < 2 ? 2 : (perRow > 16 ? 16 : perRow);
+    const int pad = note - firstNote;
+    if (pad < 0 || pad >= perRow * kPadRows || note > 127)
         return {};
-    const int row = pad / kPadsPerRow, column = pad % kPadsPerRow;
-    return { column == kPadsPerRow - 1 ? PadAction::Kind::StopRow : PadAction::Kind::Launch, row, column };
+    const int row = pad / perRow, column = pad % perRow;
+    return { column == perRow - 1 ? PadAction::Kind::StopRow : PadAction::Kind::Launch, row, column };
 }
+
+// The cells of the Performance window name their clip: a pattern clip by its index in the arrangement, an audio clip (0.71.0)
+// by kAudioCell + its index.
+constexpr int kAudioCell = 1 << 20;
 } // namespace sls

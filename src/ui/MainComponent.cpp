@@ -302,6 +302,36 @@ MainComponent::MainComponent()
 
     pianoRoll.setLoopLengthTicks (currentPatternTicks());
     pianoRoll.onSeek = [this] (int tick) { seekPattern (tick); };
+    // 0.71.0, the Playback tool of the Piano Roll and of the Playlist: play from the mouse while it is held, follow it when dragged
+    const auto scrubStart = [this] (bool song, int tick)
+    {
+        scrubbing = true;
+        playingBeforeScrub = engine.isPlaying();
+        if (song)
+            seekSong (tick);
+        else
+            seekPattern (tick);
+        if (! playingBeforeScrub)
+            setPlaying (true);
+    };
+    const auto scrubMove = [this] (bool song, int tick)
+    {
+        if (! scrubbing)
+            return;
+        engine.requestSeek (song ? std::max (0, tick) : std::clamp (tick, 0, currentPatternTicks() - 1));
+    };
+    const auto scrubEnd = [this]
+    {
+        if (scrubbing && ! playingBeforeScrub)
+            setPlaying (false);
+        scrubbing = false;
+    };
+    pianoRoll.onPlaybackStart = [scrubStart] (int tick) { scrubStart (false, tick); };
+    pianoRoll.onPlaybackMove = [scrubMove] (int tick) { scrubMove (false, tick); };
+    pianoRoll.onPlaybackEnd = scrubEnd;
+    playlistView.onPlaybackStart = [scrubStart] (int tick) { scrubStart (true, tick); };
+    playlistView.onPlaybackMove = [scrubMove] (int tick) { scrubMove (true, tick); };
+    playlistView.onPlaybackEnd = scrubEnd;
     pianoRoll.onStatus = [this] (const juce::String& text) { statusLabel.setText (text, juce::dontSendNotification); };
     if (settings != nullptr) // the velocity lane's height, as the user left it (0.54.0)
         pianoRoll.setVelocityLaneHeight (settings->getIntValue ("pianoroll.velocityHeight", 70));
@@ -443,6 +473,18 @@ MainComponent::MainComponent()
                 favourites.push_back ({ fields[2].toStdString(), static_cast<NodeKind> (std::clamp (fields[0].getIntValue(), 1, 5)), fields[1].toStdString(), {} });
         }
         browser.setFavourites (std::move (favourites));
+        // 0.72.0: the tags (one line per item: its key, a tab, its tags joined by commas) and the folder colours (path, tab, colour)
+        FileBrowser::TagMap tags;
+        for (const auto& line : juce::StringArray::fromLines (settings->getValue ("browser.tags")))
+            if (const auto fields = juce::StringArray::fromTokens (line, "\t", ""); fields.size() == 2)
+                if (auto list = parseTags (fields[1].toStdString()); ! list.empty())
+                    tags[fields[0].toStdString()] = std::move (list);
+        browser.setTags (std::move (tags));
+        FileBrowser::ColourMap colours;
+        for (const auto& line : juce::StringArray::fromLines (settings->getValue ("browser.folderColours")))
+            if (const auto fields = juce::StringArray::fromTokens (line, "\t", ""); fields.size() == 2 && fields[0].isNotEmpty())
+                colours[fields[0].toStdString()] = static_cast<std::uint32_t> (fields[1].getHexValue64() & 0xffffffff) | 0xff000000u;
+        browser.setFolderColours (std::move (colours));
         browser.setTab (settings->getIntValue ("browser.tab", 0));
     }
     browser.onFavouritesChanged = [this]
@@ -453,6 +495,24 @@ MainComponent::MainComponent()
         for (const auto& f : browser.getFavourites())
             lines.add (juce::String (static_cast<int> (f.kind)) + "\t" + juce::String (f.payload) + "\t" + juce::String (f.name));
         settings->setValue ("browser.favourites", lines.joinIntoString ("\n"));
+        settings->saveIfNeeded();
+    };
+    browser.onLooksChanged = [this] // 0.72.0
+    {
+        if (settings == nullptr)
+            return;
+        juce::StringArray tagLines, colourLines;
+        for (const auto& [key, list] : browser.getTags())
+        {
+            juce::StringArray words;
+            for (const auto& t : list)
+                words.add (juce::String (t));
+            tagLines.add (juce::String (key) + "\t" + words.joinIntoString (","));
+        }
+        for (const auto& [path, colour] : browser.getFolderColours())
+            colourLines.add (juce::String (path) + "\t" + juce::String::toHexString (static_cast<juce::int64> (colour)).paddedLeft ('0', 8));
+        settings->setValue ("browser.tags", tagLines.joinIntoString ("\n"));
+        settings->setValue ("browser.folderColours", colourLines.joinIntoString ("\n"));
         settings->saveIfNeeded();
     };
     browser.onTabChanged = [this] (int tab)
@@ -584,6 +644,7 @@ MainComponent::MainComponent()
         typingButton.setToggleState (typingOn, juce::dontSendNotification);
         metronomeVolume = static_cast<float> (settings->getDoubleValue ("metronome.volume", 0.5));
         noteQuantize = std::clamp (settings->getIntValue ("midirec.quantize", kTicksPerBeat / 4), 0, kTicksPerBeat);
+        noteBlend = settings->getBoolValue ("midirec.blend", true); // 0.71.0
         recordTarget = settings->getIntValue ("record.target", 0) == 1 ? RecordTarget::SamplerChannel : RecordTarget::PlaylistTrack;
     }
     applyMetronome();
@@ -1365,6 +1426,8 @@ void MainComponent::setPlaying (bool shouldPlay)
         finishRecording ({}); // stopping the song ends the take (finishRecording stops the transport itself)
     if (! shouldPlay)
         endNoteTake();
+    if (shouldPlay && ! engine.isPlaying())
+        noteTakeCleared.fill (false); // 0.71.0: a new take (for recording without blending)
     if (shouldPlay && noteRecordOn)
         statusLabel.setText ("Recording notes into " + juce::String (channels[static_cast<size_t> (selected)].name) + ", "
                                  + juce::String (arrangement.patterns[static_cast<size_t> (currentPattern)].name) + ": play your keyboard",

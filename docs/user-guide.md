@@ -353,6 +353,11 @@ Above the search box four tabs choose what the tree shows: **All**, **Project** 
   *Effects* (each mixer track with effects and what they are: a click opens the mixer on it) and *Automation* (the automation
   clips' targets). The folder follows the project as it changes.
 
+### Tags and folder colours (0.72.0)
+
+Right-click anything that can be dragged, *Tags...*: words to find it by, separated by commas. Searching **#word** shows only
+what has that tag (a plain search finds tags too). Right-click a folder for *Folder colour*. Both are kept between sessions.
+
 ## Channel Rack
 
 One row per channel, in FL Studio's order since 0.60.0: **M** (mute), **S** (solo), pan, volume, the **Track N** display, the
@@ -416,6 +421,14 @@ open the piano roll, add a channel) and the current pattern's length with **-** 
   next note), *Maximum notes* (the oldest note makes room), *Cut group* 1-8 and *Cut by group* (a note of a channel in the
   group ends the notes of the channels cut by it - a closed hi-hat cutting the open one; *Cut itself* for a channel whose new
   note ends its old one).
+
+### Icons, and the graph editor's shift and mod X / Y (0.71.0 - 0.72.0)
+
+**Icons** (0.72.0): right-click a channel, *Icon*: 16 small drawings (kick, snare, hi-hat, drums, piano, synth, bass, guitar,
+strings, brass, vocal, FX, audio, pad, bell, star) shown on its button. Playlist tracks and mixer strips have them too.
+
+The **graph editor** (*Graph*) has three more properties (0.71.0): **Shift** (the step starts up to a 16th later - a swing of
+its own), **Mod X** and **Mod Y** (the note's cutoff and resonance, as the Piano Roll's lanes).
 
 ### Right-click menu on a channel
 
@@ -493,6 +506,26 @@ Harp, Plucked Bass, Marimba, Vibraphone, Glass Harmonics, Church Bell, Metal Hit
 Legato and slide (Shift+click in the Piano Roll) work as with the classic engine. A synth preset (*Save as preset...*) stores the sound too.
 Every change can be undone with `Ctrl+Z`.
 
+### Drum engine (0.74.0)
+
+The **Drum synth** engine (*Engine > Drum synth*) is a playable drum synthesizer, the counterpart of FL Studio's Fruit Kick and
+Drumaxx: every hit is made, not played back, so it can be tuned, bent and played as a melody. **Model** chooses what it is:
+*Kick*, *Snare*, *Tom* (a body whose pitch falls from above to its note, the snare with its wires), *Clap* (three quick bursts of
+noise and a tail), *Hi-hat* and *Cymbal* (six square oscillators at the inharmonic ratios of the 808, mixed with noise and
+high-passed).
+
+- **DRUM**: **Tune** (an octave either way), **Sweep** (how far the body's pitch falls, up to four octaves; a harder hit falls
+  further), **Sweep time** (5 - 300 ms), **Decay** (how long the body rings, 30 ms to 3 s), **Key** (*Plays the notes' pitch*:
+  C5 is the model's own pitch and every key a semitone, so an 808 bass line is a kick played on the keys; *Always the same
+  pitch*: every key is the same drum).
+- **NOISE AND CLICK**: **Noise** (the level of the hiss - the snare's wires, the clap's hands, the metal of the hats), **Tone**
+  (dark to bright), **Noise decay** (10 ms to 1.5 s: a closed or an open hat), **Click** (the attack), **Drive** (saturation).
+- The **LFO** (pitch or volume) and **Output** work as for the other engines.
+
+Every hit rings out by itself, as a drum does: a short step in the Channel Rack plays the whole sound. The sound menu has nine
+ready-made drums: *Kick 808*, *Kick Punch*, *Kick Distorted*, *Snare*, *Tom*, *Clap*, *Closed Hat*, *Open Hat*, *Cymbal*. To
+build a kit, give each drum its own channel (or use the drum machine for samples).
+
 ## Sampler and SoundFonts
 
 Right-click a sampler channel > **Sampler settings...** opens a window for that channel:
@@ -536,6 +569,38 @@ samples* copies its whole folder.
 **Slices to sampler channel**: the edited audio is saved as a new WAV file, a **new sampler channel** plays slice 1 on C5, slice 2 on C#5 and so on
 (one key each, at their own pitch), and the current pattern gets **one note per slice at the time it had in the audio**, so the pattern plays the
 loop as it was and you can move, repeat or delete the notes to make a new groove.
+
+### Envelopes per target (0.71.0)
+
+Besides the volume envelope, the sampler has an envelope of its own for each of **pan**, **cutoff**, **resonance** and
+**pitch**, as FL Studio's sampler channel tabs. In *MODULATION*, **Envelopes** chooses which one the controls on its right show:
+**On**, **Amount** (pan: up to fully left or right; cutoff: up to 5 octaves; resonance: its whole range; pitch: up to 2 octaves;
+negative turns the envelope upside down) and its **A D S R**. They need no volume envelope; the cutoff and resonance envelopes
+need the filter.
+
+### Play modes: Granulizer and Wave Traveller (0.74.0)
+
+*PLAY MODE* at the bottom of the sampler window says how the channel's own sample is played (not a SoundFont or a slice program):
+
+- **Normal**: the sample as it is.
+- **Granular (Granulizer)**, as FL Studio's Fruity Granulizer: the sound is made of short overlapping grains read from a place
+  that moves through the sample at its own speed, so time and pitch are separate: the key changes the grains' pitch only, and a
+  note lasts as long as it is held. **Grain** (10 - 500 ms), **Density** (grains at once, 1 - 8), **Pos** (where the place starts),
+  **Speed** (100 %: the sample's own speed; 0 %: frozen - a pad out of one moment of a sample; negative: backwards; the place goes
+  round the sample), **Spread** (each grain starts up to 200 ms from the place, at random), **Pan** (each grain's random pan).
+- **Travel curve (Wave Traveller)**: the place in the sample follows a **Curve** for **Time** seconds, then the sample plays on:
+  *Forward*, *Backward*, *Tape stop* (slows down to a stop and the note ends), *Spin back* (wound back fast), *Scratch* (back
+  and forth), *Stutter* (the first quarter four times), *Wobble*. The key sets the speed, as in normal playing.
+
+### Speech synthesizer (0.74.0)
+
+**Speech...** in the sampler window makes the channel speak, as FL Studio's Speech Synthesizer: type a text, choose the **Voice**
+(male, female, child, robot, whisper), the **Pitch** (±12 semitones), the **Speed** and the **Intonation**, and **Speak**: the
+voice becomes the channel's sample, to be played on the keys, sliced, granulated or effected like any other. The text is read
+the Italian way (every letter as it is written, *c* and *g* soft before *e* and *i*, *gn*, *gli*, *sc*; the stress on the
+second-last vowel unless an accent puts it elsewhere, as in *città*); numbers are read as Italian words, a comma pauses, a full
+stop ends a sentence and a question mark makes it rise. English words come out with an accent. The status bar shows the sounds
+the text was read as. A project keeps only the text and the settings and makes the voice again when it is opened.
 
 ### Slicer (0.37.0)
 
@@ -861,6 +926,15 @@ the last 8th out of every half bar or the last beat out of every bar and closes 
 syncopated one; notes that start in a cut slice go, notes that reach into one are shortened), **Limit** (moves the selected notes by octaves into one, two or three octaves) and
 **LFO** (writes a wave - one cycle per beat, per bar, every 2 or every 4 bars - into the values of the lane shown).
 
+### Mod X / Mod Y lanes and the Playback tool (0.71.0)
+
+Two more event lanes: **Mod X** moves the note's filter cutoff (up to two octaves either way) and **Mod Y** its resonance, as
+FL Studio's note properties; the middle is "no change". The subtractive and additive synths and the sampler (with a filter) use
+them.
+
+The **Play** tool (key **0**) plays from where the mouse is pressed, and follows it while it is dragged (scrubbing); letting go
+stops. The Playlist has the same tool.
+
 ## Patterns
 
 A **pattern** holds the notes of every channel. The pattern box in the toolbar selects the current pattern: the
@@ -1015,6 +1089,12 @@ the actions of FL Studio's markers; an export ignores them): **Loop** goes back 
 **Skip** goes on from the marker after it, **Pause** stops there (Play goes on from the marker), **Start** is where Play starts
 the song when the start has not been put somewhere else. A marker with an action shows it after its name, in its own colour.
 
+**Punch in / out** (0.71.0): two more marker actions. When the song is recorded, *Punch in* keeps only what comes after its
+marker and *Punch out* stops the take at its marker, so a part can be re-recorded without touching what is around it.
+
+**Icons and heights** (0.72.0): a track's right-click menu has *Icon* and *Height* (Small, Normal, Large, Extra large): each
+track keeps its own height, saved with the project.
+
 ### Track lock, groups, Make unique, Consolidate (0.62.0)
 
 Right-click a track's name:
@@ -1053,6 +1133,12 @@ written into the timeline ahead of the playhead.
 36) up are the cells, eight to a row from the top row down: the first seven pads of a row launch its first seven clips, the
 eighth stops the row. So the bottom row of a 4 x 4 pad grid set to send notes from C1 launches the first row's first four clips,
 and an 8 x 8 grid covers eight rows. Those notes then do not play the selected instrument; every other note still does.
+
+**Clips and pads** (0.71.0): audio clips are cells too. Right-click a cell for its trigger mode, as in FL Studio: **Loop**
+(repeats until something else plays on its row), **One shot** (plays once, then the row stops) or **Hold** (plays while the cell,
+or its pad, is held), and **In sync** (it starts where it would be had it played from the first bar, so a clip launched late
+stays in step with the others). **Pads...** sets the pads' layout: the note of the first pad (C0, C1, C2, C3) and how many pads
+make a row (4, 8, 16; the last one of a row stops it).
 
 ### Tools, grid, zoom and undo
 
@@ -1308,6 +1394,9 @@ The arrow next to **Record** has *The recording becomes*: **A clip on a playlist
 channel**. With the second, an audio take from a microphone or guitar becomes the sample of a new channel, ready to be played with
 a MIDI keyboard or sequenced in the piano roll (with no free channel it is put on the playlist instead).
 
+**Blend** (0.71.0): in the *Rec notes* button's right-click menu. On (the default), recorded notes go in with the pattern's
+notes (overdub); off, a take replaces the channel's notes in that pattern.
+
 ## Pattern mode and Song mode
 
 The **Pattern / Song** button decides what Play does.
@@ -1512,6 +1601,22 @@ with the Peak Controller.
 sound before the effect with the sound after it - 100 % (the default) is the effect alone, 50 % half and half, 0 % as if the
 slot were bypassed. It works for every built-in effect and for plugins (a parallel compression without a bus); the controllers
 have none. It is saved with the project and with chain presets.
+
+### Effects added in 0.73.0: Hyper Chorus, Scratcher, Patcher
+
+| Effect | Parameters | Presets |
+| --- | --- | --- |
+| Hyper Chorus | As FL Studio's Hyper Chorus: up to eight chorus **Voices**, each with its own delay and LFO, spread across the stereo field. **Delay** (5 - 40 ms), **Depth**, **Rate**, **Spread** (0: all in the middle; 1: from left to right), **Tone**, **Mix**. | Wide double, Lush ensemble, Eight-voice swarm |
+| Scratcher | As Fruity Scratcher: the sound is a record under a needle. **Mode** *Hand* (the record follows **Position**: automate it, or move it with a controller, and every move is a scratch), *Baby* (back and forth), *Forward* (pushed and let go), *Chirp* (the fader cuts the way back), *Transformer* (the fader cuts the sound on and off); **Speed** (scratches per beat, in step with the song), **Depth** (how far the record moves, 20 - 1000 ms), **Smooth** (the hand's weight), **Mix**. | Baby scratch, Forwards, Chirps, Transformer, By hand |
+| Patcher | As FL Studio's Patcher: up to **ten effects in one slot**, in **Serial** (one after the other) or **Parallel** (each on the slot's sound, averaged), with an **Output** level. **Edit...** opens its window, with ten slots of its own (every built-in effect, no plugins or controllers): a chain that is saved, copied and moved as one effect. Its latency is compensated. | - |
+
+**Second target** (0.71.0): the Peak, Envelope and Formula Controllers have **Target 2 track / slot / param** (slot 0: none) and
+**Target 2 invert**: one controller moves two parameters, the second one the other way if wanted (a filter opening while
+another closes).
+
+**Icons, docking and separators** (0.72.0): a strip's right-click menu has *Strip icon*, *Dock* (*With the others*, *On the
+left*, *On the right*) and *Separator before this strip*, as FL Studio's: the master and a few buses can sit apart from the
+tracks.
 
 ### Master effects
 

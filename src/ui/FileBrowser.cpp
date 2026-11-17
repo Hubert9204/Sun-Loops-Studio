@@ -2,6 +2,7 @@
 
 #include "IconData.h"
 #include "library/DemoProjects.h"
+#include "ui/TextPrompt.h"
 
 namespace sls
 {
@@ -108,6 +109,28 @@ public:
             area.removeFromLeft (18);
         }
 
+        // 0.72.0: a coloured folder: a square of its colour, and its name in it
+        const auto folderColour = node.kind == NodeKind::Folder ? owner.folderColours.find (path.toStdString()) : owner.folderColours.end();
+        if (folderColour != owner.folderColours.end())
+        {
+            g.setColour (juce::Colour (folderColour->second));
+            g.fillRoundedRectangle (static_cast<float> (area.getX()), static_cast<float> (height) / 2.0f - 5.0f, 10.0f, 10.0f, 2.0f);
+            area.removeFromLeft (14);
+        }
+        // and a leaf's tags, at the right
+        if (node.kind != NodeKind::Folder)
+            if (const auto list = owner.tagsOf (node); ! list.empty())
+            {
+                juce::String text;
+                for (const auto& t : list)
+                    text << "#" << juce::String (t) << " ";
+                g.setFont (juce::FontOptions (10.5f));
+                const int w = std::min (area.getWidth() / 2, static_cast<int> (std::ceil (juce::GlyphArrangement::getStringWidth (g.getCurrentFont(), text.trim()))) + 6);
+                auto chip = area.removeFromRight (w);
+                g.setColour (kAccent.withAlpha (0.75f));
+                g.drawText (text.trim(), chip, juce::Justification::centredRight, true);
+            }
+
         const auto dot = dotColour (node.kind);
         if (! dot.isTransparent())
         {
@@ -118,7 +141,7 @@ public:
 
         const bool folder = node.kind == NodeKind::Folder;
         const bool dim = node.kind == NodeKind::Note;
-        g.setColour (node.kind == NodeKind::Action ? kAccent : (dim ? kDim : kText));
+        g.setColour (node.kind == NodeKind::Action ? kAccent : (dim ? kDim : (folderColour != owner.folderColours.end() ? juce::Colour (folderColour->second).brighter (0.4f) : kText)));
         g.setFont (juce::FontOptions (13.0f, folder ? juce::Font::bold : (node.kind == NodeKind::Note ? juce::Font::italic : juce::Font::plain)));
         g.drawText (juce::String (node.name), area, juce::Justification::centredLeft, true);
     }
@@ -153,18 +176,58 @@ public:
                                 });
             return;
         }
+        if (e.mods.isPopupMenu() && node.kind == NodeKind::Folder) // 0.72.0: a folder's colour
+        {
+            static constexpr std::uint32_t kColours[] = { 0xffd9534f, 0xffe8843a, 0xffe8c43a, 0xff9ccc4a, 0xff4cc38a, 0xff4ac9b0,
+                                                          0xff4a9fd9, 0xff6a7fe0, 0xff9a6fe0, 0xffd06fc8 };
+            static constexpr const char* kNames[] = { "Red", "Orange", "Yellow", "Lime", "Green", "Teal", "Blue", "Indigo", "Violet", "Pink" };
+            juce::PopupMenu menu, colours;
+            const auto current = owner.folderColours.find (path.toStdString());
+            colours.addItem (100, "None", true, current == owner.folderColours.end());
+            for (size_t i = 0; i < std::size (kColours); ++i)
+            {
+                juce::PopupMenu::Item item (kNames[i]);
+                item.itemID = 101 + static_cast<int> (i);
+                item.colour = juce::Colour (kColours[i]);
+                item.isTicked = current != owner.folderColours.end() && current->second == kColours[i];
+                colours.addItem (item);
+            }
+            menu.addSubMenu ("Folder colour", colours);
+            menu.showMenuAsync (juce::PopupMenu::Options(), [safe = juce::Component::SafePointer<FileBrowser> (&owner), where = path] (int result)
+                                {
+                                    if (safe != nullptr && result >= 100)
+                                        safe->setFolderColour (where, result == 100 ? 0u : kColours[static_cast<size_t> (result - 101) % std::size (kColours)]);
+                                });
+            return;
+        }
         if (e.mods.isPopupMenu())
         {
-            // 0.62.0: the favourites, from a right click on anything that can be dragged
+            // 0.62.0: the favourites, from a right click on anything that can be dragged; 0.72.0: its tags
             if (! node.isDraggable())
                 return;
             juce::PopupMenu menu;
             const bool starred = owner.isFavourite (node);
             menu.addItem (1, starred ? "Remove from the favourites" : "Add to the favourites");
+            menu.addItem (2, "Tags...");
             menu.showMenuAsync (juce::PopupMenu::Options(), [safe = juce::Component::SafePointer<FileBrowser> (&owner), copy = node] (int result)
                                 {
-                                    if (safe != nullptr && result == 1)
+                                    if (safe == nullptr)
+                                        return;
+                                    if (result == 1)
                                         safe->toggleFavourite (copy);
+                                    else if (result == 2)
+                                    {
+                                        juce::String current;
+                                        for (const auto& t : safe->tagsOf (copy))
+                                            current << (current.isEmpty() ? "" : ", ") << juce::String (t);
+                                        promptForText (*safe, "Tags of " + juce::String (copy.name),
+                                                       "Words to find it by, separated by commas (search for #word to see only what has that tag):",
+                                                       current, "Save", [safe, copy] (const juce::String& typed)
+                                                       {
+                                                           if (safe != nullptr)
+                                                               safe->setTagsOf (copy, typed.toStdString());
+                                                       });
+                                    }
                                 });
             return;
         }
@@ -341,6 +404,48 @@ void FileBrowser::setFavourites (std::vector<BrowserNode> list)
     applyFilter();
 }
 
+// 0.72.0: tags and folder colours
+void FileBrowser::setTags (TagMap newTags)
+{
+    tags = std::move (newTags);
+    applyFilter();
+}
+
+std::vector<std::string> FileBrowser::tagsOf (const BrowserNode& node) const
+{
+    const auto found = tags.find (tagKey (node));
+    return found != tags.end() ? found->second : std::vector<std::string> {};
+}
+
+void FileBrowser::setTagsOf (const BrowserNode& node, const std::string& typed)
+{
+    auto list = parseTags (typed);
+    if (list.empty())
+        tags.erase (tagKey (node));
+    else
+        tags[tagKey (node)] = std::move (list);
+    applyFilter();
+    if (onLooksChanged)
+        onLooksChanged();
+}
+
+void FileBrowser::setFolderColours (ColourMap colours)
+{
+    folderColours = std::move (colours);
+    tree.repaint();
+}
+
+void FileBrowser::setFolderColour (const juce::String& path, std::uint32_t colour)
+{
+    if (colour == 0)
+        folderColours.erase (path.toStdString());
+    else
+        folderColours[path.toStdString()] = colour;
+    tree.repaint();
+    if (onLooksChanged)
+        onLooksChanged();
+}
+
 bool FileBrowser::isFavourite (const BrowserNode& node) const noexcept
 {
     for (const auto& f : favourites)
@@ -413,7 +518,9 @@ void FileBrowser::applyFilter()
                 base.children.insert (base.children.end(), child.children.begin(), child.children.end()); // the part's own content, one level up
         }
     }
-    const auto shown = filterTree (base, query);
+    // (0.72.0: the tags count in the search)
+    const auto lookup = [] (const BrowserNode& n, const void* context) { return static_cast<const FileBrowser*> (context)->tagsOf (n); };
+    const auto shown = filterTree (base, query, lookup, this);
     shownLeaves = countLeaves (shown);
 
     tree.setRootItem (nullptr);

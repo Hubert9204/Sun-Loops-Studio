@@ -23,6 +23,7 @@ public:
     std::function<void()> onLoadSample;       // the "Load sample..." button
     std::function<void()> onLoadSoundFont;    // the "Load SoundFont..." button
     std::function<void()> onClearProgram;     // the "Use the sample" button (forget the program)
+    std::function<void()> onSpeech;           // the "Speech..." button (0.74.0: the speech synthesizer)
 
     void refresh(); // show the channel as it is now
 
@@ -34,7 +35,8 @@ private:
     juce::Slider& slider (juce::Slider& s, double lo, double hi, double step, const juce::String& suffix);
 
     juce::Label sourceLabel, programInfo;
-    juce::TextButton loadSampleButton { "Load sample..." }, loadFontButton { "Load SoundFont (.sf2)..." }, clearProgramButton { "Use the sample" };
+    juce::TextButton loadSampleButton { "Load sample..." }, loadFontButton { "Load SoundFont (.sf2)..." }, clearProgramButton { "Use the sample" },
+        speechButton { "Speech..." };
     juce::Slider rootSlider;
     juce::ToggleButton envelopeToggle { "Envelope (notes sustain while held)" };
     juce::Slider attackSlider, decaySlider, sustainSlider, releaseSlider;
@@ -51,12 +53,25 @@ private:
     juce::Slider delaySlider, holdSlider, lfo2RateSlider, lfo2DepthSlider;
     juce::ComboBox lfo2Box;
     juce::Label delayLabel { {}, "Delay" }, holdLabel { {}, "Hold" }, lfo2Label { {}, "LFO 2" }, lfo2RateLabel { {}, "Rate" }, lfo2DepthLabel { {}, "Depth" };
+    // 0.71.0: the envelopes of pan, cutoff, resonance and pitch (one shown at a time, as FL Studio's tabs)
+    juce::Label envLabel { {}, "Envelopes" }, envALabel { {}, "A" }, envDLabel { {}, "D" }, envSLabel { {}, "S" }, envRLabel { {}, "R" }, envAmountLabel { {}, "Amount" };
+    juce::ComboBox envTargetBox;
+    juce::ToggleButton envOnToggle { "On" };
+    juce::Slider envAttackSlider, envDecaySlider, envSustainSlider, envReleaseSlider, envAmountSlider;
+    int envShown = 0;
+    void writeEnvelope (const std::function<void (SamplerSettings::ModEnvelope&)>& change);
     juce::Label crossfadeLabel { {}, "Crossfade" }, cutoffEnvLabel { {}, "Envelope" }, lfoLabel { {}, "LFO" }, lfoRateLabel { {}, "Rate" },
         lfoDepthLabel { {}, "Depth" }, pitchEnvLabel { {}, "Pitch env." }, pitchEnvTimeLabel { {}, "Time" };
     juce::Label rootLabel { {}, "Root key" }, attackLabel { {}, "Attack" }, decayLabel { {}, "Decay" }, sustainLabel { {}, "Sustain" },
         releaseLabel { {}, "Release" }, loopLabel { {}, "Loop" }, loopStartLabel { {}, "Loop start" }, loopEndLabel { {}, "Loop end" },
         filterLabel { {}, "Filter" }, cutoffLabel { {}, "Cutoff" }, resonanceLabel { {}, "Resonance" };
-    std::array<juce::Rectangle<int>, 5> headers; // SOUND, ENVELOPE, LOOP, FILTER, MODULATION (0.62.0)
+    // 0.74.0: the play mode (normal, grains as the Granulizer, a travel curve as Wave Traveller) and its settings
+    juce::ComboBox playModeBox, curveBox;
+    juce::Slider grainSlider, densitySlider, travelTimeSlider, grainPositionSlider, grainSpeedSlider, grainSpreadSlider, grainPanSlider;
+    juce::Label playModeLabel { {}, "Play mode" }, grainLabel { {}, "Grain" }, densityLabel { {}, "Density" }, curveLabel { {}, "Curve" },
+        travelTimeLabel { {}, "Time" }, grainPositionLabel { {}, "Pos" }, grainSpeedLabel { {}, "Speed" }, grainSpreadLabel { {}, "Spread" },
+        grainPanLabel { {}, "Pan" };
+    std::array<juce::Rectangle<int>, 6> headers; // SOUND, ENVELOPE, LOOP, FILTER, MODULATION (0.62.0), PLAY MODE (0.74.0)
     bool updating = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SamplerPanel)

@@ -17,6 +17,9 @@ float StepGraph::valueOf (const Note& n, Property property) noexcept
         case Property::Pan:       return 0.5f + 0.5f * std::clamp (n.pan, -1.0f, 1.0f);
         case Property::Release:   return std::clamp (n.release, 0.0f, 1.0f);
         case Property::FinePitch: return 0.5f + 0.5f * std::clamp (n.finePitch / kFineRange, -1.0f, 1.0f);
+        case Property::ModX:      return std::clamp (n.modX, 0.0f, 1.0f);
+        case Property::ModY:      return std::clamp (n.modY, 0.0f, 1.0f);
+        case Property::Shift:     return std::clamp (n.shift, 0.0f, 1.0f);
         case Property::Velocity:  break;
     }
     return std::clamp (n.velocity, 0.0f, 1.0f);
@@ -30,6 +33,9 @@ void StepGraph::setValue (Note& n, Property property, float value01) noexcept
         case Property::Pan:       n.pan = std::abs (v - 0.5f) < 0.03f ? 0.0f : v * 2.0f - 1.0f; break; // (the middle catches)
         case Property::Release:   n.release = v; break;
         case Property::FinePitch: n.finePitch = std::abs (v - 0.5f) < 0.03f ? 0.0f : (v * 2.0f - 1.0f) * kFineRange; break;
+        case Property::ModX:      n.modX = std::abs (v - 0.5f) < 0.03f ? 0.5f : v; break;
+        case Property::ModY:      n.modY = std::abs (v - 0.5f) < 0.03f ? 0.5f : v; break;
+        case Property::Shift:     n.shift = v < 0.03f ? 0.0f : v; break;
         case Property::Velocity:  n.velocity = std::max (0.02f, v); break; // (a note of no velocity would be a rest)
     }
 }
@@ -40,6 +46,9 @@ StepGraph::StepGraph()
     propertyBox.addItem ("Pan", 2);
     propertyBox.addItem ("Release", 3);
     propertyBox.addItem ("Fine pitch", 4);
+    propertyBox.addItem ("Mod X (cutoff)", 5); // 0.71.0
+    propertyBox.addItem ("Mod Y (resonance)", 6);
+    propertyBox.addItem ("Shift (later in the step)", 7);
     propertyBox.setSelectedId (1, juce::dontSendNotification);
     propertyBox.setTooltip ("What the bars show and set for the notes of each step");
     propertyBox.onChange = [this] { setProperty (static_cast<Property> (propertyBox.getSelectedId() - 1)); };
@@ -88,7 +97,7 @@ void StepGraph::paint (juce::Graphics& g)
         return;
     g.setColour (juce::Colour (0xff14161a));
     g.fillRect (area);
-    const bool centred = shown == Property::Pan || shown == Property::FinePitch;
+    const bool centred = shown == Property::Pan || shown == Property::FinePitch || shown == Property::ModX || shown == Property::ModY;
     if (centred)
     {
         g.setColour (juce::Colours::white.withAlpha (0.18f));

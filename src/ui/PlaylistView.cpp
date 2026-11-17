@@ -53,7 +53,8 @@ PlaylistView::PlaylistView (Arrangement& arrangementToEdit) : timeline (arrangem
         { &cutTool,    PlaylistTool::Cut,    "Cut: drag across a clip to remove that stretch of it (3)" },
         { &selectTool, PlaylistTool::Select, "Select: drag from empty space to select every clip in the rectangle (Shift adds), then drag them, "
                                              "Delete, Ctrl+C, Ctrl+D (6)" },
-        { &zoomTool,   PlaylistTool::Zoom,   "Zoom: click to zoom in, right click to zoom out, drag to zoom to a stretch (5)" } };
+        { &zoomTool,   PlaylistTool::Zoom,   "Zoom: click to zoom in, right click to zoom out, drag to zoom to a stretch (5)" },
+        { &playbackTool, PlaylistTool::Playback, "Playback: hold the mouse on the tracks to play the song from there, drag to move along (scrub) (0)" } };
     for (const auto& t : tools)
     {
         auto* button = t.button;
@@ -128,6 +129,9 @@ PlaylistView::PlaylistView (Arrangement& arrangementToEdit) : timeline (arrangem
     timeline.onStatus = [this] (const juce::String& text) { if (onStatus) onStatus (text); };
     timeline.onConsolidate = [this] (int track, int from, int to) { if (onConsolidate) onConsolidate (track, from, to); };
     timeline.onSeek = [this] (int tick) { if (onSeek) onSeek (tick); };
+    timeline.onPlaybackStart = [this] (int tick) { if (onPlaybackStart) onPlaybackStart (tick); }; // 0.71.0
+    timeline.onPlaybackMove = [this] (int tick) { if (onPlaybackMove) onPlaybackMove (tick); };
+    timeline.onPlaybackEnd = [this] { if (onPlaybackEnd) onPlaybackEnd(); };
     timeline.onLoopChanged = [this] { if (onLoopChanged) onLoopChanged(); };
 
     for (juce::Component* c : std::initializer_list<juce::Component*> { &patternLabel, &patternBox, &newButton, &renameButton, &deleteButton,
@@ -137,7 +141,7 @@ PlaylistView::PlaylistView (Arrangement& arrangementToEdit) : timeline (arrangem
         addAndMakeVisible (c);
 
     for (juce::Button* b : std::initializer_list<juce::Button*> { &newButton, &renameButton, &deleteButton, &undoButton, &redoButton, &drawTool,
-                                                                   &splitTool, &cutTool, &eraseTool, &muteTool, &slipTool, &paintTool, &markerButton, &markerPrevButton, &markerNextButton, &zoomTool, &selectTool,
+                                                                   &splitTool, &cutTool, &eraseTool, &muteTool, &slipTool, &paintTool, &markerButton, &markerPrevButton, &markerNextButton, &zoomTool, &playbackTool, &selectTool,
                                                                    &zoomOutButton, &zoomInButton, &zoomFitButton })
         b->setMouseClickGrabsKeyboardFocus (false); // Space must keep playing after a click here
 
@@ -177,6 +181,7 @@ void PlaylistView::syncToolButtons()
     slipTool.setToggleState (timeline.getTool() == PlaylistTool::Slip, juce::dontSendNotification);
     paintTool.setToggleState (timeline.getTool() == PlaylistTool::Paint, juce::dontSendNotification);
     zoomTool.setToggleState (timeline.getTool() == PlaylistTool::Zoom, juce::dontSendNotification);
+    playbackTool.setToggleState (timeline.getTool() == PlaylistTool::Playback, juce::dontSendNotification);
 }
 
 void PlaylistView::paint (juce::Graphics& g)
@@ -209,7 +214,7 @@ void PlaylistView::resized()
     markerNextButton.setBounds (row1.removeFromLeft (22));
 
     auto row2 = area.removeFromTop (kToolbarRowHeight + 4).reduced (4, 2);
-    for (auto* b : { &drawTool, &paintTool, &eraseTool, &muteTool, &slipTool, &splitTool, &cutTool, &selectTool, &zoomTool }) // FL Studio's order (0.60.0; Paint 0.61.0)
+    for (auto* b : { &drawTool, &paintTool, &eraseTool, &muteTool, &slipTool, &splitTool, &cutTool, &selectTool, &zoomTool, &playbackTool }) // FL Studio's order (0.60.0; Paint 0.61.0; Playback 0.71.0)
     {
         b->setBounds (row2.removeFromLeft (52));
         row2.removeFromLeft (2);

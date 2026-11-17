@@ -44,7 +44,7 @@ jobs:
         run: |
           cmake -S . -B build-intel -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=x86_64
           cmake --build build-intel --target SunLoopsStudioTests -- -k 0
-          arch -x86_64 ./build-intel/SunLoopsStudioTests_artefacts/Release/SunLoopsStudioTests
+          SLS_TIMING_SCALE=3 arch -x86_64 ./build-intel/SunLoopsStudioTests_artefacts/Release/SunLoopsStudioTests
       - name: Pack the app (universal .dmg)
         if: always()
         run: BUILD_DIR="$PWD/build-dmg" scripts/build_macos.sh
