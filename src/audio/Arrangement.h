@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <utility>
+#include <limits>
 #include <cmath>
 #include <memory>
 #include <string>
@@ -66,6 +68,11 @@ struct Clip
     int lengthTicks = 4 * kTicksPerBeat;
     int offsetTicks = 0;
     bool muted = false; // 0.60.0: the Playlist's Mute tool (as in FL Studio): the clip stays but does not play
+    // 0.71.0, how performance mode launches it (FL Studio's trigger and position-sync settings): 0 loop, 1 one shot (plays once,
+    // then the row stops), 2 hold (plays while the cell or pad is held); in sync it starts where it would be had it played
+    // from the first bar, instead of from its own start
+    std::uint8_t launchMode = 0;
+    bool launchSync = false;
 
     int endTick() const noexcept { return startTick + lengthTicks; }
 };
@@ -96,6 +103,8 @@ struct AudioClip
     double takeFirstSeconds = 0.0;
     double takeSeconds = 0.0;
     bool muted = false; // 0.60.0: the Playlist's Mute tool
+    std::uint8_t launchMode = 0; // 0.71.0: as a pattern clip's (performance mode)
+    bool launchSync = false;
 
     int endTick() const noexcept { return startTick + lengthTicks; }
 
@@ -168,7 +177,7 @@ inline LoopTakes loopTakesOf (const std::vector<TempoMarker>& markers, double bp
 // 0.61.0: a named time marker on the playlist's ruler, as FL Studio's (Add time marker): a place in the song to jump to.
 // 0.62.0, a marker's action, as FL Studio's (live playback only): Loop goes back to the marker before it (or the start), Skip
 // goes on from the marker after it, Pause stops there, Start is where Play starts the song from.
-enum class MarkerAction : std::uint8_t { None, Loop, Skip, Pause, Start };
+enum class MarkerAction : std::uint8_t { None, Loop, Skip, Pause, Start, PunchIn, PunchOut }; // 0.71.0: punch in / out
 
 struct TimeMarker
 {
@@ -371,6 +380,22 @@ struct Arrangement
         }
         return jumps;
     }
+    // 0.71.0: the stretch a recording keeps, between a Punch in and a Punch out marker ({ -1, -1 }: no punch markers; a punch in
+    // alone keeps to the end, a punch out alone from the start)
+    std::pair<int, int> punchRange() const noexcept
+    {
+        int in = -1, out = -1;
+        for (const auto& m : markers)
+            if (m.action == MarkerAction::PunchIn && (in < 0 || m.tick < in))
+                in = m.tick;
+        for (const auto& m : markers)
+            if (m.action == MarkerAction::PunchOut && m.tick > std::max (0, in) && (out < 0 || m.tick < out))
+                out = m.tick;
+        if (in < 0 && out < 0)
+            return { -1, -1 };
+        return { std::max (0, in), out < 0 ? std::numeric_limits<int>::max() : out };
+    }
+
     int startMarkerTick() const noexcept
     {
         for (const auto& m : markers)

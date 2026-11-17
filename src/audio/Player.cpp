@@ -15,6 +15,8 @@ inline void applyNoteProperties (VoiceType& v, const Note& n, float defaultRelea
 {
     v.noteLeft = std::min (1.0f, 1.0f - n.pan);
     v.noteRight = std::min (1.0f, 1.0f + n.pan);
+    v.noteOctaves = n.cutoffOctaves(); // 0.71.0: mod X and mod Y
+    v.noteResonance = n.resonanceShift();
     if (std::abs (n.release - 0.5f) > 1.0e-3f)
         v.relStep = (v.relStep > 0.0f ? v.relStep : defaultReleaseStep) / n.releaseScale();
 }
@@ -930,10 +932,12 @@ float Player::renderSubtractive (Voice& v, const SynthPatch& patch) noexcept
         const float lfo = patch.lfoTarget == LfoTarget::Off ? 0.0f : lfoValue (patch.lfoWave, v.lfoPhase) * patch.lfoDepth;
         if (v.filter != SamplerFilter::Off)
         {
-            const double octaves = 6.0 * patch.envAmount * v.fenv + v.keyOctaves + (patch.lfoTarget == LfoTarget::Cutoff ? 3.0 * lfo : 0.0);
+            const double octaves = 6.0 * patch.envAmount * v.fenv + v.keyOctaves + (patch.lfoTarget == LfoTarget::Cutoff ? 3.0 * lfo : 0.0)
+                                 + v.noteOctaves; // (0.71.0: the note's mod X)
             const double fc = std::clamp (SamplerSettings::cutoffHz (patch.cutoff) * std::pow (2.0, octaves), 20.0, 0.45 * sampleRate);
             const double g = std::tan (kTwoPi * 0.5 * fc / sampleRate);
-            const double k = 2.0 - 1.94 * static_cast<double> (patch.resonance) * (patch.steep ? 0.8 : 1.0); // two in a row ring more
+            const double resonance = std::clamp (static_cast<double> (patch.resonance + v.noteResonance), 0.0, 1.0); // (and mod Y)
+            const double k = 2.0 - 1.94 * resonance * (patch.steep ? 0.8 : 1.0); // two in a row ring more
             const double a1 = 1.0 / (1.0 + g * (g + k));
             v.fk = static_cast<float> (k);
             v.fa1 = static_cast<float> (a1);
@@ -1079,7 +1083,8 @@ void Player::updateAdditive (Voice& v, const SynthPatch& patch) noexcept
     const float lfo = patch.lfoTarget == LfoTarget::Off ? 0.0f : lfoValue (patch.lfoWave, v.lfoPhase) * patch.lfoDepth;
     const float morph = std::clamp (patch.morph + patch.morphEnvAmount * v.menv + (patch.lfoTarget == LfoTarget::Morph ? 0.5f * lfo : 0.0f), 0.0f, 1.0f);
     const double f0 = v.increment / kTwoPi * v.pitchMod; // cycles per sample
-    const double octaves = 6.0 * patch.envAmount * v.fenv + v.keyOctaves + (patch.lfoTarget == LfoTarget::Cutoff ? 3.0 * lfo : 0.0);
+    const double octaves = 6.0 * patch.envAmount * v.fenv + v.keyOctaves + (patch.lfoTarget == LfoTarget::Cutoff ? 3.0 * lfo : 0.0)
+                         + v.noteOctaves; // (0.71.0: the note's mod X)
     const double fc = std::clamp (SamplerSettings::cutoffHz (patch.cutoff) * std::pow (2.0, octaves), 20.0, 20000.0);
     const double stretch = 0.0008 * ((1.0 - morph) * patch.timbreA.stretch + morph * patch.timbreB.stretch);
 
@@ -1491,9 +1496,11 @@ void Player::samplerVoiceOn (const Channel& channel, int channelIndex, const Not
     if (set.filter != SamplerFilter::Off)
     {
         // Topology-preserving state-variable filter (Simper): fixed for the note.
-        const double fc = std::min (SamplerSettings::cutoffHz (set.cutoff), 0.45 * sampleRate);
+        // (0.71.0: the note's mod X moves the cutoff, its mod Y the resonance)
+        const double fc = std::clamp (SamplerSettings::cutoffHz (set.cutoff) * std::pow (2.0, static_cast<double> (n.cutoffOctaves())), 20.0, 0.45 * sampleRate);
         const double g = std::tan (kTwoPi * 0.5 * fc / sampleRate);
-        const double k = 2.0 - 1.94 * static_cast<double> (set.resonance); // Q from 0.5 to about 16
+        const float resonance = std::clamp (set.resonance + n.resonanceShift(), 0.0f, 1.0f);
+        const double k = 2.0 - 1.94 * static_cast<double> (resonance); // Q from 0.5 to about 16
         const double a1 = 1.0 / (1.0 + g * (g + k));
         v.filter = set.filter;
         v.fk = static_cast<float> (k);
@@ -1501,7 +1508,7 @@ void Player::samplerVoiceOn (const Channel& channel, int channelIndex, const Not
         v.fa2 = static_cast<float> (g * a1);
         v.fa3 = static_cast<float> (g * g * a1);
         v.cutoffBase = static_cast<float> (fc);
-        v.resonanceBase = set.resonance;
+        v.resonanceBase = resonance;
     }
 
     // 0.62.0: ping-pong and crossfaded loops (the channel's own sample only), the LFO, the pitch envelope, the cutoff envelope
@@ -1526,7 +1533,23 @@ void Player::samplerVoiceOn (const Channel& channel, int channelIndex, const Not
     v.pitchEnv = set.pitchEnv;
     v.pitchEnvMul = static_cast<float> (std::pow (0.001, kModStep / (std::max (0.005, static_cast<double> (set.pitchEnvTime)) * sampleRate)));
     v.cutoffEnv = set.envelope && set.filter != SamplerFilter::Off ? set.cutoffEnv : 0.0f;
-    v.mods = v.smpLfoTarget != 0 || v.smpLfo2Target != 0 || std::abs (v.pitchEnv) > 0.0f || std::abs (v.cutoffEnv) > 0.0f;
+    bool envelopes = false; // 0.71.0: the envelopes of pan, cutoff, resonance and pitch
+    for (size_t e = 0; e < 4; ++e)
+    {
+        const auto& env = set.modEnvelopes[e];
+        const bool needsFilter = e == SamplerSettings::EnvCutoff || e == SamplerSettings::EnvResonance;
+        const bool on = env.on && std::abs (env.amount) > 0.0f && ! (needsFilter && set.filter == SamplerFilter::Off);
+        const auto steps = [this] (float seconds) { return static_cast<float> (kModStep / std::max (static_cast<double> (kModStep), static_cast<double> (seconds) * sampleRate)); };
+        v.menvAmount[e] = on ? env.amount : 0.0f;
+        v.menvLevel[e] = 0.0f;
+        v.menvStage[e] = 0;
+        v.menvAttack[e] = steps (env.attack);
+        v.menvDecay[e] = steps (env.decay) * (1.0f - env.sustain);
+        v.menvRelease[e] = steps (env.release);
+        v.menvSustain[e] = env.sustain;
+        envelopes = envelopes || on;
+    }
+    v.mods = v.smpLfoTarget != 0 || v.smpLfo2Target != 0 || std::abs (v.pitchEnv) > 0.0f || std::abs (v.cutoffEnv) > 0.0f || envelopes;
 
     applyNoteProperties (v, n, releaseStep);
     *target = v;
@@ -2268,6 +2291,48 @@ void Player::render (const Project& project, double bpm, bool playing,
                         };
                         applyLfo (v.smpLfoTarget, v.smpLfoDepth, lfo);
                         applyLfo (v.smpLfo2Target, v.smpLfo2Depth, lfo2);
+                        // 0.71.0: the envelopes of pan, cutoff, resonance and pitch, as FL Studio's
+                        for (size_t e = 0; e < 4; ++e)
+                        {
+                            if (! (std::abs (v.menvAmount[e]) > 0.0f))
+                                continue;
+                            auto& level = v.menvLevel[e];
+                            auto& stage = v.menvStage[e];
+                            if (v.state == State::Release && stage < 2)
+                                stage = 2;
+                            if (stage == 0)
+                            {
+                                level += v.menvAttack[e];
+                                if (level >= 1.0f)
+                                {
+                                    level = 1.0f;
+                                    stage = 1;
+                                }
+                            }
+                            else if (stage == 1)
+                                level = std::max (v.menvSustain[e], level - v.menvDecay[e]);
+                            else if (stage == 2)
+                                level = std::max (0.0f, level - v.menvRelease[e]);
+                            const float amount = v.menvAmount[e] * level;
+                            switch (e)
+                            {
+                                case SamplerSettings::EnvPan:
+                                    v.modLeft *= std::min (1.0f, 1.0f - amount);
+                                    v.modRight *= std::min (1.0f, 1.0f + amount);
+                                    break;
+                                case SamplerSettings::EnvCutoff:
+                                    octaves += 5.0f * amount;
+                                    filterMoves = true;
+                                    break;
+                                case SamplerSettings::EnvResonance:
+                                    resonance += amount;
+                                    filterMoves = true;
+                                    break;
+                                default:
+                                    semitones += 24.0f * amount;
+                                    break;
+                            }
+                        }
                         v.modPitch = std::abs (semitones) > 0.0f ? std::pow (2.0f, semitones / 12.0f) : 1.0f;
                         if (v.filter != SamplerFilter::Off && v.cutoffBase > 0.0f && filterMoves)
                         {
@@ -2586,6 +2651,17 @@ void Player::render (const Project& project, double bpm, bool playing,
                                                                       static_cast<int> (std::lround (slot.params[first + 1])) - 1,
                                                                       static_cast<int> (std::lround (slot.params[first + 2])) - 1,
                                                                       effects[t][s].controlValue() };
+                    // 0.71.0: a second target (slot 0: none), the value turned upside down when asked
+                    const auto second = static_cast<size_t> (effectControllerTarget2 (slot.type));
+                    const int secondSlot = static_cast<int> (std::lround (slot.params[second + 1]));
+                    if (secondSlot >= 1 && numPeakMods < kMaxPeakMods)
+                    {
+                        const int secondTrack = static_cast<int> (std::lround (slot.params[second]));
+                        const float value = effects[t][s].controlValue();
+                        peakMods[static_cast<size_t> (numPeakMods++)] = { secondTrack <= 0 ? static_cast<int> (t) : secondTrack - 1, secondSlot - 1,
+                                                                          static_cast<int> (std::lround (slot.params[second + 2])) - 1,
+                                                                          slot.params[second + 3] > 0.5f ? 1.0f - value : value };
+                    }
                 }
             }
 

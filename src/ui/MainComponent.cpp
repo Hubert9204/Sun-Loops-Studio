@@ -302,6 +302,36 @@ MainComponent::MainComponent()
 
     pianoRoll.setLoopLengthTicks (currentPatternTicks());
     pianoRoll.onSeek = [this] (int tick) { seekPattern (tick); };
+    // 0.71.0, the Playback tool of the Piano Roll and of the Playlist: play from the mouse while it is held, follow it when dragged
+    const auto scrubStart = [this] (bool song, int tick)
+    {
+        scrubbing = true;
+        playingBeforeScrub = engine.isPlaying();
+        if (song)
+            seekSong (tick);
+        else
+            seekPattern (tick);
+        if (! playingBeforeScrub)
+            setPlaying (true);
+    };
+    const auto scrubMove = [this] (bool song, int tick)
+    {
+        if (! scrubbing)
+            return;
+        engine.requestSeek (song ? std::max (0, tick) : std::clamp (tick, 0, currentPatternTicks() - 1));
+    };
+    const auto scrubEnd = [this]
+    {
+        if (scrubbing && ! playingBeforeScrub)
+            setPlaying (false);
+        scrubbing = false;
+    };
+    pianoRoll.onPlaybackStart = [scrubStart] (int tick) { scrubStart (false, tick); };
+    pianoRoll.onPlaybackMove = [scrubMove] (int tick) { scrubMove (false, tick); };
+    pianoRoll.onPlaybackEnd = scrubEnd;
+    playlistView.onPlaybackStart = [scrubStart] (int tick) { scrubStart (true, tick); };
+    playlistView.onPlaybackMove = [scrubMove] (int tick) { scrubMove (true, tick); };
+    playlistView.onPlaybackEnd = scrubEnd;
     pianoRoll.onStatus = [this] (const juce::String& text) { statusLabel.setText (text, juce::dontSendNotification); };
     if (settings != nullptr) // the velocity lane's height, as the user left it (0.54.0)
         pianoRoll.setVelocityLaneHeight (settings->getIntValue ("pianoroll.velocityHeight", 70));
@@ -584,6 +614,7 @@ MainComponent::MainComponent()
         typingButton.setToggleState (typingOn, juce::dontSendNotification);
         metronomeVolume = static_cast<float> (settings->getDoubleValue ("metronome.volume", 0.5));
         noteQuantize = std::clamp (settings->getIntValue ("midirec.quantize", kTicksPerBeat / 4), 0, kTicksPerBeat);
+        noteBlend = settings->getBoolValue ("midirec.blend", true); // 0.71.0
         recordTarget = settings->getIntValue ("record.target", 0) == 1 ? RecordTarget::SamplerChannel : RecordTarget::PlaylistTrack;
     }
     applyMetronome();
@@ -1365,6 +1396,8 @@ void MainComponent::setPlaying (bool shouldPlay)
         finishRecording ({}); // stopping the song ends the take (finishRecording stops the transport itself)
     if (! shouldPlay)
         endNoteTake();
+    if (shouldPlay && ! engine.isPlaying())
+        noteTakeCleared.fill (false); // 0.71.0: a new take (for recording without blending)
     if (shouldPlay && noteRecordOn)
         statusLabel.setText ("Recording notes into " + juce::String (channels[static_cast<size_t> (selected)].name) + ", "
                                  + juce::String (arrangement.patterns[static_cast<size_t> (currentPattern)].name) + ": play your keyboard",

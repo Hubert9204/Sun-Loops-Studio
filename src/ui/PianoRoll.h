@@ -80,13 +80,13 @@ public:
     void setChordStamp (int chord, int inversion); // chord < 0: a click makes one note
     // 0.62.0: the event lane shows one of the notes' properties (as FL Studio's event editor): velocity, pan, release or fine
     // pitch. Click the lane's label (bottom left) to choose.
-    enum class Lane { Velocity, Pan, Release, FinePitch };
+    enum class Lane { Velocity, Pan, Release, FinePitch, ModX, ModY }; // (0.71.0: mod X, mod Y)
     void setLane (Lane newLane);
     Lane getLane() const noexcept { return eventLane; }
     static const char* laneName (Lane l) noexcept;
     // 0.62.0: the tools, as FL Studio's: Draw (the roll's usual behaviour), Paint (drag to draw a row of notes), Mute (click a
     // note to mute or unmute it), Slice (click a note to cut it in two).
-    enum class Tool { Draw, Paint, Mute, Slice };
+    enum class Tool { Draw, Paint, Mute, Slice, Playback }; // (0.71.0: Playback)
     void setTool (Tool newTool);
     Tool getTool() const noexcept { return activeTool; }
     std::function<void()> onToolChanged;
@@ -114,6 +114,10 @@ public:
     bool handleKey (const juce::KeyPress& key); // true if the key was used
 
     std::function<void (int tick)> onSeek;                   // left click on the ruler
+    // 0.71.0, the Playback tool: the pattern plays from where the mouse is pressed, follows it while it is dragged, and stops
+    // when it is let go (it goes on when it was playing before)
+    std::function<void (int tick)> onPlaybackStart, onPlaybackMove;
+    std::function<void()> onPlaybackEnd;
     std::function<void (int start, int end)> onLoopChanged; // the region was drawn, moved, resized (-1, -1: deleted)
     std::function<void (const juce::String&)> onStatus;
 
@@ -137,7 +141,8 @@ public:
 private:
     // PendingEmpty (0.44.0): the button went down on empty grid; a drag turns it into Select, a release creates the note there.
     enum class Drag { None, Move, Resize, ResizeStart, Seek, LoopCreate, LoopMove, LoopResize, Select, Velocity, PendingEmpty, LaneHeight,
-                      Paint }; // 0.62.0
+                      Paint, // 0.62.0
+                      Playback }; // 0.71.0
     void createNotesAt (juce::Point<float> pos, bool noSnap);
     juce::Point<float> pendingPosition;
     bool pendingNoSnap = false;

@@ -984,8 +984,9 @@ void FxPanel::rebuildParameters()
             row.slider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 64, 20);
             // (0.62.0: the Peak Controller's target slot and parameter are whole numbers)
             // (and 0.70.0 the other controllers')
-            const int controllerTarget = effectControllerTarget (slot.type);
-            const bool whole = controllerTarget >= 0 && (i == controllerTarget + 1 || i == controllerTarget + 2);
+            const int controllerTarget = effectControllerTarget (slot.type), controllerTarget2 = effectControllerTarget2 (slot.type);
+            const bool whole = controllerTarget >= 0 && (i == controllerTarget + 1 || i == controllerTarget + 2 || i == controllerTarget2 + 1
+                                                         || i == controllerTarget2 + 2);
             row.slider.setRange (info.min, info.max, whole ? 1.0 : 0.0);
             if ((unit == "Hz" || unit == "ms" || unit == ":1") && info.min > 0.0f)
                 row.slider.setSkewFactorFromMidPoint (std::sqrt (static_cast<double> (info.min) * static_cast<double> (info.max)));
@@ -1053,30 +1054,33 @@ void FxPanel::updateHint()
         const auto& slot = track->slots[static_cast<size_t> (selectedSlot)];
         if (const int at = effectControllerTarget (slot.type); at >= 0) // 0.70.0: any of the three controllers
         {
-            const auto first = static_cast<size_t> (at);
-            const int targetTrack = juce::roundToInt (slot.params[first]);
-            const int targetSlot = juce::roundToInt (slot.params[first + 1]) - 1;
-            const int targetParam = juce::roundToInt (slot.params[first + 2]) - 1;
-            const MixerTrack* target = targetTrack <= 0 ? track : (trackAt ? trackAt (targetTrack - 1) : nullptr);
-            const auto where = targetTrack <= 0 ? juce::String ("this track") : "track " + juce::String (targetTrack);
-            const auto place = " (" + where + ", slot " + juce::String (targetSlot + 1) + ")";
-            if (target == nullptr || targetSlot < 0 || targetSlot >= kSlotsPerTrack)
-                text = "Drives nothing: no such track";
-            else
+            // what one of its targets is (0.71.0: the second one too)
+            const auto describe = [&] (size_t first) -> juce::String
             {
+                const int targetTrack = juce::roundToInt (slot.params[first]);
+                const int targetSlot = juce::roundToInt (slot.params[first + 1]) - 1;
+                const int targetParam = juce::roundToInt (slot.params[first + 2]) - 1;
+                const MixerTrack* target = targetTrack <= 0 ? track : (trackAt ? trackAt (targetTrack - 1) : nullptr);
+                const auto where = targetTrack <= 0 ? juce::String ("this track") : "track " + juce::String (targetTrack);
+                const auto place = " (" + where + ", slot " + juce::String (targetSlot + 1) + ")";
+                if (target == nullptr || targetSlot < 0 || targetSlot >= kSlotsPerTrack)
+                    return "nothing: no such track";
                 const auto& driven = target->slots[static_cast<size_t> (targetSlot)];
                 if (driven.type == EffectType::None)
-                    text = "Drives nothing yet: empty slot" + place;
-                else if (driven.type == EffectType::Plugin && driven.plugin != nullptr)
-                    text = "Drives: " + juce::String (driven.plugin->displayName()) + " > "
+                    return "nothing yet: empty slot" + place;
+                if (driven.type == EffectType::Plugin && driven.plugin != nullptr)
+                    return juce::String (driven.plugin->displayName()) + " > "
                          + (targetParam < driven.plugin->parameterCount() ? juce::String (driven.plugin->parameterName (targetParam)) : juce::String ("(no such parameter)"))
                          + place;
-                else if (effectIsController (driven.type) || targetParam >= effectParamCount (driven.type)
-                         || juce::String (effectParamInfo (driven.type, targetParam).unit) == "track")
-                    text = "Drives nothing: " + juce::String (effectName (driven.type)) + " has no parameter " + juce::String (targetParam + 1);
-                else
-                    text = "Drives: " + juce::String (effectName (driven.type)) + " > " + effectParamInfo (driven.type, targetParam).name + place;
-            }
+                if (effectIsController (driven.type) || targetParam >= effectParamCount (driven.type)
+                    || juce::String (effectParamInfo (driven.type, targetParam).unit) == "track")
+                    return "nothing: " + juce::String (effectName (driven.type)) + " has no parameter " + juce::String (targetParam + 1);
+                return juce::String (effectName (driven.type)) + " > " + effectParamInfo (driven.type, targetParam).name + place;
+            };
+            text = "Drives " + describe (static_cast<size_t> (at));
+            if (const int second = effectControllerTarget2 (slot.type); second >= 0 && juce::roundToInt (slot.params[static_cast<size_t> (second) + 1]) >= 1)
+                text += "; and " + describe (static_cast<size_t> (second))
+                      + (slot.params[static_cast<size_t> (second) + 3] > 0.5f ? juce::String (" (inverted)") : juce::String());
             if (slot.type == EffectType::FormulaController && formulaError.isNotEmpty())
                 text = "Formula not applied: " + formulaError;
         }

@@ -13,9 +13,12 @@ struct PerformanceModel
 {
     struct Cell
     {
-        int clip = -1; // index of the clip in the arrangement
+        int clip = -1; // index of the clip in the arrangement (0.71.0: kAudioCell + the index of an audio clip)
         juce::String name;
         juce::Colour colour;
+        bool audio = false;
+        int mode = 0;      // 0.71.0: 0 loop, 1 one shot, 2 hold
+        bool sync = false;
     };
     struct Row
     {
@@ -30,6 +33,7 @@ struct PerformanceModel
     bool on = false;
     int quantiseId = 1; // 1 bar, 2 bars, 4 bars, 1 beat, a 16th
     bool pads = false;  // 0.70.0: MIDI notes from C1 up launch the cells
+    int padFirst = 36, padsPerRow = 8; // 0.71.0
 };
 
 // Performance mode (0.62.0, after FL Studio's): the Playlist's pattern clips become cells to launch. A click on a cell starts
@@ -49,10 +53,14 @@ public:
     std::function<void (int)> onScene;        // a column (from 0)
     std::function<void (int)> onQuantise;     // the id of the quantise choice
     std::function<void (bool)> onPads;        // 0.70.0: the MIDI pads switch
+    std::function<void (int)> onRelease;      // 0.71.0: a cell let go (for the clips that play while held)
+    std::function<void (int, int, bool)> onCellMode; // a cell's launch mode (0 loop, 1 one shot, 2 hold) and sync
+    std::function<void (int, int)> onPadLayout;      // the first pad's note, the pads per row
 
     void paint (juce::Graphics&) override;
     void resized() override;
     void mouseDown (const juce::MouseEvent&) override;
+    void mouseUp (const juce::MouseEvent&) override;
 
 private:
     void timerCallback() override;
@@ -66,6 +74,8 @@ private:
     juce::TextButton onButton { "Performance mode" };
     juce::TextButton stopAllButton { "Stop all" };
     juce::TextButton padsButton { "MIDI pads" };
+    juce::TextButton padLayoutButton { "Pads..." };
+    int heldCell = -1; // the cell under a mouse button that is down
     juce::ComboBox quantiseBox;
     juce::Label quantiseLabel { {}, "Launch on" };
     bool blink = false;

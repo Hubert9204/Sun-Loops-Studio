@@ -156,7 +156,35 @@ SamplerPanel::SamplerPanel()
     pitchEnvTimeSlider.setSkewFactorFromMidPoint (0.3);
     pitchEnvTimeSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.pitchEnvTime = static_cast<float> (pitchEnvTimeSlider.getValue()); }); };
 
-    setSize (600, 814);
+    // 0.71.0: the envelopes of pan, cutoff, resonance and pitch
+    for (auto* l : { &envLabel, &envALabel, &envDLabel, &envSLabel, &envRLabel, &envAmountLabel })
+    {
+        l->setColour (juce::Label::textColourId, kPanelText);
+        addAndMakeVisible (*l);
+    }
+    for (const char* name : { "Pan", "Cutoff", "Resonance", "Pitch" })
+        envTargetBox.addItem (name, envTargetBox.getNumItems() + 1);
+    envTargetBox.setSelectedId (1, juce::dontSendNotification);
+    envTargetBox.setTooltip ("Which envelope the controls on its right show: each of pan, cutoff, resonance and pitch has its own");
+    envTargetBox.onChange = [this] { envShown = std::clamp (envTargetBox.getSelectedId() - 1, 0, 3); refresh(); };
+    addAndMakeVisible (envTargetBox);
+    envOnToggle.setColour (juce::ToggleButton::textColourId, kPanelText);
+    envOnToggle.setTooltip ("Switch this envelope on: it moves its target from the start of each note (cutoff and resonance need the filter)");
+    envOnToggle.onClick = [this] { writeEnvelope ([this] (SamplerSettings::ModEnvelope& e) { e.on = envOnToggle.getToggleState(); }); };
+    addAndMakeVisible (envOnToggle);
+    slider (envAttackSlider, 0.0, 10.0, 0.001, " s").setSkewFactorFromMidPoint (0.3);
+    envAttackSlider.onValueChange = [this] { writeEnvelope ([this] (SamplerSettings::ModEnvelope& e) { e.attack = static_cast<float> (envAttackSlider.getValue()); }); };
+    slider (envDecaySlider, 0.0, 10.0, 0.001, " s").setSkewFactorFromMidPoint (0.5);
+    envDecaySlider.onValueChange = [this] { writeEnvelope ([this] (SamplerSettings::ModEnvelope& e) { e.decay = static_cast<float> (envDecaySlider.getValue()); }); };
+    slider (envSustainSlider, 0.0, 100.0, 1.0, " %");
+    envSustainSlider.onValueChange = [this] { writeEnvelope ([this] (SamplerSettings::ModEnvelope& e) { e.sustain = static_cast<float> (envSustainSlider.getValue() / 100.0); }); };
+    slider (envReleaseSlider, 0.0, 10.0, 0.001, " s").setSkewFactorFromMidPoint (0.5);
+    envReleaseSlider.onValueChange = [this] { writeEnvelope ([this] (SamplerSettings::ModEnvelope& e) { e.release = static_cast<float> (envReleaseSlider.getValue()); }); };
+    slider (envAmountSlider, -100.0, 100.0, 1.0, " %");
+    envAmountSlider.setTooltip ("How far the envelope moves its target: pan fully left / right, cutoff 5 octaves, resonance its whole range, "
+                                "pitch 2 octaves (negative: the other way)");
+    envAmountSlider.onValueChange = [this] { writeEnvelope ([this] (SamplerSettings::ModEnvelope& e) { e.amount = static_cast<float> (envAmountSlider.getValue() / 100.0); }); };
+    setSize (600, 878);
 }
 
 juce::Slider& SamplerPanel::slider (juce::Slider& s, double lo, double hi, double step, const juce::String& suffix)
@@ -181,6 +209,12 @@ void SamplerPanel::write (const std::function<void (Channel&)>& change)
         if (onChanged)
             onChanged();
     }
+}
+
+void SamplerPanel::writeEnvelope (const std::function<void (SamplerSettings::ModEnvelope&)>& change)
+{
+    const auto shown = static_cast<size_t> (std::clamp (envShown, 0, 3));
+    write ([&] (Channel& c) { change (c.sampler.modEnvelopes[shown]); });
 }
 
 void SamplerPanel::refresh()
@@ -247,6 +281,18 @@ void SamplerPanel::refresh()
     delaySlider.setValue (s.delay, juce::dontSendNotification);
     holdSlider.setValue (s.hold, juce::dontSendNotification);
     lfo2Box.setSelectedId (static_cast<int> (s.lfo2Target) + 1, juce::dontSendNotification);
+    {
+        const auto& env = s.modEnvelopes[static_cast<size_t> (std::clamp (envShown, 0, 3))]; // 0.71.0
+        envTargetBox.setSelectedId (envShown + 1, juce::dontSendNotification);
+        envOnToggle.setToggleState (env.on, juce::dontSendNotification);
+        for (auto* sl : { &envAttackSlider, &envDecaySlider, &envSustainSlider, &envReleaseSlider, &envAmountSlider })
+            sl->setEnabled (env.on);
+        envAttackSlider.setValue (env.attack, juce::dontSendNotification);
+        envDecaySlider.setValue (env.decay, juce::dontSendNotification);
+        envSustainSlider.setValue (env.sustain * 100.0, juce::dontSendNotification);
+        envReleaseSlider.setValue (env.release, juce::dontSendNotification);
+        envAmountSlider.setValue (env.amount * 100.0, juce::dontSendNotification);
+    }
     lfo2RateSlider.setEnabled (s.lfo2Target != SamplerLfoTarget::Off);
     lfo2DepthSlider.setEnabled (s.lfo2Target != SamplerLfoTarget::Off);
     lfo2RateSlider.setValue (s.lfo2Rate, juce::dontSendNotification);
@@ -402,6 +448,29 @@ void SamplerPanel::resized()
         r.removeFromLeft (8);
         lfo2DepthLabel.setBounds (r.removeFromLeft (44));
         lfo2DepthSlider.setBounds (r);
+    }
+    {
+        auto r = area.removeFromTop (26); // 0.71.0: the envelope chosen, on / off, its amount
+        area.removeFromTop (6);
+        envLabel.setBounds (r.removeFromLeft (100));
+        envTargetBox.setBounds (r.removeFromLeft (120));
+        r.removeFromLeft (8);
+        envOnToggle.setBounds (r.removeFromLeft (52));
+        envAmountLabel.setBounds (r.removeFromLeft (56));
+        envAmountSlider.setBounds (r);
+    }
+    {
+        auto r = area.removeFromTop (26); // its attack, decay, sustain and release
+        area.removeFromTop (6);
+        r.removeFromLeft (100);
+        const int w = r.getWidth() / 4;
+        for (auto [label, sl] : { std::pair { &envALabel, &envAttackSlider }, std::pair { &envDLabel, &envDecaySlider },
+                                  std::pair { &envSLabel, &envSustainSlider }, std::pair { &envRLabel, &envReleaseSlider } })
+        {
+            auto cell = r.removeFromLeft (w);
+            label->setBounds (cell.removeFromLeft (16));
+            sl->setBounds (cell.reduced (2, 0));
+        }
     }
     {
         auto r = area.removeFromTop (26);

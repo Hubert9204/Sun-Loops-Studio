@@ -23,6 +23,20 @@ namespace sls
 {
 // ------------------------------------------------------------------------- Recording notes (MIDI keyboards)
 
+// 0.71.0: without blending, the first note a take records on a channel clears that channel's notes of the pattern first.
+bool MainComponent::clearForTake (int channel)
+{
+    if (noteBlend || channel < 0 || channel >= static_cast<int> (channels.size()) || noteTakeCleared[static_cast<size_t> (channel)])
+        return false;
+    noteTakeCleared[static_cast<size_t> (channel)] = true;
+    auto& notes = channels[static_cast<size_t> (channel)].notes;
+    if (notes.empty())
+        return false;
+    recordHistory(); // (Undo brings them back)
+    notes.clear();
+    return true;
+}
+
 void MainComponent::applyNoteRecording()
 {
     noteRecorder.configure (currentPatternTicks(), noteQuantize);
@@ -31,6 +45,7 @@ void MainComponent::applyNoteRecording()
     if (settings != nullptr)
     {
         settings->setValue ("midirec.quantize", noteQuantize);
+        settings->setValue ("midirec.blend", noteBlend); // 0.71.0
         settings->saveIfNeeded();
     }
 }
@@ -40,6 +55,7 @@ void MainComponent::toggleNoteRecording()
     noteRecordOn = ! noteRecordOn;
     if (! noteRecordOn)
         endNoteTake();
+    noteTakeCleared.fill (false); // 0.71.0
     applyNoteRecording();
 
     if (noteRecordOn)
@@ -66,6 +82,8 @@ void MainComponent::openNoteRecordMenu()
     for (const auto& o : options)
         menu.addItem (o.id, o.label, true, noteQuantize == o.ticks);
     menu.addSeparator();
+    menu.addItem (30, "Blend: recorded notes go in with the pattern's (off: a take replaces the channel's notes)", true, noteBlend); // 0.71.0
+    menu.addSeparator();
     // 0.28.0: what was played without recording
     menu.addSectionHeader ("Score log: what the MIDI keyboard played in the last 5 minutes");
     const bool logged = ! scoreLog.empty();
@@ -88,6 +106,15 @@ void MainComponent::openNoteRecordMenu()
                             if (result == 20 || result == 21)
                             {
                                 safe->dumpScoreLog (result == 20);
+                                return;
+                            }
+                            if (result == 30) // 0.71.0
+                            {
+                                safe->noteBlend = ! safe->noteBlend;
+                                safe->applyNoteRecording();
+                                safe->statusLabel.setText (safe->noteBlend ? "Rec notes blends: recorded notes go in with the pattern's"
+                                                                           : "Rec notes replaces: a take clears the channel's notes of the pattern first",
+                                                           juce::dontSendNotification);
                                 return;
                             }
                             if (result == 22)
@@ -136,6 +163,11 @@ void MainComponent::drainMidiTakes()
         {
             if (channel < 0 || channel >= static_cast<int> (channels.size()))
                 return;
+            if (clearForTake (channel)) // 0.71.0: recording without blending
+            {
+                touched[static_cast<size_t> (channel)] = true;
+                any = true;
+            }
             auto& notes = channels[static_cast<size_t> (channel)].notes;
             if (notes.size() < kMaxNotesPerChannel && addRecordedNote (notes, n))
             {

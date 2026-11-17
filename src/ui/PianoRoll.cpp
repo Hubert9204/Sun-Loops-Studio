@@ -44,6 +44,8 @@ float laneValue (const Note& n, PianoRoll::Lane lane) noexcept
         case PianoRoll::Lane::Pan:       return (n.pan + 1.0f) * 0.5f;
         case PianoRoll::Lane::Release:   return n.release;
         case PianoRoll::Lane::FinePitch: return (n.finePitch + 1200.0f) / 2400.0f;
+        case PianoRoll::Lane::ModX:      return n.modX;
+        case PianoRoll::Lane::ModY:      return n.modY;
         case PianoRoll::Lane::Velocity:  break;
     }
     return n.velocity;
@@ -58,6 +60,8 @@ void setLaneValue (Note& n, PianoRoll::Lane lane, float v) noexcept
         case PianoRoll::Lane::Pan:       n.pan = snapToMiddle (v) * 2.0f - 1.0f; return;
         case PianoRoll::Lane::Release:   n.release = snapToMiddle (v); return;
         case PianoRoll::Lane::FinePitch: n.finePitch = std::round ((snapToMiddle (v) * 2400.0f - 1200.0f) / 10.0f) * 10.0f; return; // steps of 10 cents
+        case PianoRoll::Lane::ModX:      n.modX = snapToMiddle (v); return;
+        case PianoRoll::Lane::ModY:      n.modY = snapToMiddle (v); return;
         case PianoRoll::Lane::Velocity:  n.velocity = std::max (0.01f, v); return;
     }
 }
@@ -74,6 +78,10 @@ juce::String laneText (const Note& n, PianoRoll::Lane lane)
             return "Release x" + juce::String (n.releaseScale(), 2);
         case PianoRoll::Lane::FinePitch:
             return "Fine pitch " + juce::String (n.finePitch > 0.0f ? "+" : "") + juce::String (juce::roundToInt (n.finePitch)) + " cents";
+        case PianoRoll::Lane::ModX:
+            return "Mod X (cutoff) " + juce::String (n.cutoffOctaves() >= 0.0f ? "+" : "") + juce::String (n.cutoffOctaves(), 2) + " octaves";
+        case PianoRoll::Lane::ModY:
+            return "Mod Y (resonance) " + juce::String (n.resonanceShift() >= 0.0f ? "+" : "") + juce::String (juce::roundToInt (n.resonanceShift() * 100.0f)) + " %";
         case PianoRoll::Lane::Velocity: break;
     }
     return "Velocity " + juce::String (juce::roundToInt (n.velocity * 100.0f)) + " %";
@@ -499,8 +507,8 @@ void PianoRoll::notifyChanged()
     {
         const auto before = [] (const Note& a, const Note& b)
         {
-            return std::tie (a.startTick, a.pitch, a.lengthTicks, a.velocity, a.link, a.pan, a.release, a.finePitch, a.colour, a.muted)
-                 < std::tie (b.startTick, b.pitch, b.lengthTicks, b.velocity, b.link, b.pan, b.release, b.finePitch, b.colour, b.muted);
+            return std::tie (a.startTick, a.pitch, a.lengthTicks, a.velocity, a.link, a.pan, a.release, a.finePitch, a.colour, a.muted, a.modX, a.modY, a.shift)
+                 < std::tie (b.startTick, b.pitch, b.lengthTicks, b.velocity, b.link, b.pan, b.release, b.finePitch, b.colour, b.muted, b.modX, b.modY, b.shift);
         };
         auto now = notes, was = reportedNotes;
         std::sort (now.begin(), now.end(), before);
@@ -872,6 +880,14 @@ void PianoRoll::mouseDown (const juce::MouseEvent& e)
     if (! gridArea().contains (e.getPosition()))
         return;
 
+    if (activeTool == Tool::Playback && ! right) // 0.71.0
+    {
+        dragMode = Drag::Playback;
+        if (onPlaybackStart)
+            onPlaybackStart (std::max (0, xToTick (e.position.x)));
+        return;
+    }
+
     const auto pos = e.position;
     const int hit = noteIndexAt (pos);
     const bool ctrl = e.mods.isCtrlDown() || e.mods.isCommandDown();
@@ -1052,6 +1068,12 @@ void PianoRoll::createNotesAt (juce::Point<float> pos, bool noSnap)
 
 void PianoRoll::mouseDrag (const juce::MouseEvent& e)
 {
+    if (dragMode == Drag::Playback) // 0.71.0: the playhead follows the mouse
+    {
+        if (onPlaybackMove)
+            onPlaybackMove (std::max (0, xToTick (e.position.x)));
+        return;
+    }
     if (dragMode == Drag::Paint) // 0.62.0: one note after another along the stroke, each on the key under the mouse
     {
         const int tick = snapDown (xToTick (e.position.x));
@@ -1232,6 +1254,13 @@ void PianoRoll::mouseDrag (const juce::MouseEvent& e)
 
 void PianoRoll::mouseUp (const juce::MouseEvent& e)
 {
+    if (dragMode == Drag::Playback)
+    {
+        dragMode = Drag::None;
+        if (onPlaybackEnd)
+            onPlaybackEnd();
+        return;
+    }
     if (dragMode == Drag::LaneHeight)
     {
         dragMode = Drag::None;
@@ -1570,6 +1599,8 @@ const char* PianoRoll::laneName (Lane l) noexcept
         case Lane::Pan:       return "Pan";
         case Lane::Release:   return "Release";
         case Lane::FinePitch: return "Fine pitch";
+        case Lane::ModX:      return "Mod X (cutoff)";
+        case Lane::ModY:      return "Mod Y (resonance)";
         case Lane::Velocity:  break;
     }
     return "Velocity";
@@ -1589,11 +1620,11 @@ void PianoRoll::showLaneMenu()
     juce::PopupMenu menu;
     menu.addSectionHeader ("Event lane");
     int id = 1;
-    for (const Lane l : { Lane::Velocity, Lane::Pan, Lane::Release, Lane::FinePitch })
+    for (const Lane l : { Lane::Velocity, Lane::Pan, Lane::Release, Lane::FinePitch, Lane::ModX, Lane::ModY })
         menu.addItem (id++, laneName (l), true, l == eventLane);
     menu.showMenuAsync (juce::PopupMenu::Options(), [safe = juce::Component::SafePointer<PianoRoll> (this)] (int result)
     {
-        if (safe != nullptr && result >= 1 && result <= 4)
+        if (safe != nullptr && result >= 1 && result <= 6)
             safe->setLane (static_cast<Lane> (result - 1));
     });
 }
@@ -1603,7 +1634,8 @@ void PianoRoll::setTool (Tool newTool)
     if (newTool == activeTool)
         return;
     activeTool = newTool;
-    setMouseCursor (activeTool == Tool::Slice ? juce::MouseCursor::IBeamCursor : activeTool == Tool::Mute ? juce::MouseCursor::PointingHandCursor
+    setMouseCursor (activeTool == Tool::Playback ? juce::MouseCursor::LeftRightResizeCursor
+                    : activeTool == Tool::Slice ? juce::MouseCursor::IBeamCursor : activeTool == Tool::Mute ? juce::MouseCursor::PointingHandCursor
                                                                                              : juce::MouseCursor::NormalCursor);
     if (onToolChanged)
         onToolChanged();

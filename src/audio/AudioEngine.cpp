@@ -102,15 +102,14 @@ void AudioEngine::handleMidi (const juce::MidiMessage& message)
 {
     // 0.70.0: performance mode's pads take the notes from C1 up for themselves (their note-offs are dropped too)
     if (padsOn.load (std::memory_order_relaxed) && (message.isNoteOn() || message.isNoteOff())
-        && performancePad (message.getNoteNumber()).kind != PadAction::Kind::None)
+        && performancePad (message.getNoteNumber(), padFirst.load (std::memory_order_relaxed), padPerRow.load (std::memory_order_relaxed)).kind
+               != PadAction::Kind::None)
     {
+        const unsigned at = padWrite.load (std::memory_order_relaxed); // (0.71.0: a pad let go too, as 128 + its note)
+        padNotes[at % padNotes.size()].store (message.getNoteNumber() + (message.isNoteOn() ? 0 : 128), std::memory_order_relaxed);
+        padWrite.store (at + 1, std::memory_order_release);
         if (message.isNoteOn())
-        {
-            const unsigned at = padWrite.load (std::memory_order_relaxed);
-            padNotes[at % padNotes.size()].store (message.getNoteNumber(), std::memory_order_relaxed);
-            padWrite.store (at + 1, std::memory_order_release);
             midiActivity.store (true, std::memory_order_relaxed);
-        }
         return;
     }
     bool note = false;

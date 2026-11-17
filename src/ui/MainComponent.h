@@ -465,6 +465,12 @@ private:
     RecordTarget recordTarget = RecordTarget::PlaylistTrack;        // where a recorded take goes
     bool noteRecordOn = false;                                       // MIDI keyboard notes are written into the pattern
     int noteQuantize = kTicksPerBeat / 4;                            // ticks; 0 = do not quantize
+    // 0.71.0, FL Studio's "Blend recording notes": on (the default), recorded notes go in with the pattern's; off, the first note
+    // a take records on a channel clears that channel's notes of the pattern first (Undo brings them back)
+    bool noteBlend = true;
+    std::array<bool, kMaxChannels> noteTakeCleared {};
+    bool clearForTake (int channel);
+    bool scrubbing = false, playingBeforeScrub = false; // 0.71.0: the Playback tool
     NoteRecorder noteRecorder;
     ScoreLog scoreLog; // what a MIDI keyboard played in the last five minutes (0.28.0)
     bool metronomeOn = false;
@@ -532,25 +538,32 @@ private:
     struct PerformanceSegment
     {
         Clip clip;
+        bool audio = false;    // 0.71.0: an audio clip (audioClip) instead of a pattern clip
+        AudioClip audioClip;
         int fromTick = 0, toTick = 0;
+        int phase = 0;         // 0.71.0, in sync: how far into the clip it starts
     };
-    struct PerformanceLane // one playlist track: what plays, and what takes over (or the stop) at `queuedAt`
+    struct PerformanceLane // one playlist track: what plays, and what takes over (or the stop) at `queuedAt`; cells as the panel's
     {
-        Clip playing, queued;
+        int playingCell = -1, queuedCell = -1;
         bool hasPlaying = false, hasQueued = false, stopQueued = false;
         int queuedAt = 0;
+        int queuedEndsAt = -1, playingEndsAt = -1; // 0.71.0: when a one-shot has played (-1: it loops)
     };
     std::vector<PerformanceSegment> performanceSegments;
     std::vector<PerformanceLane> performanceLanes;
     int performanceQuantise = 1; // the id of the panel's choice: 1 bar, 2 bars, 4 bars, a beat, a 16th
     bool performancePads = false; // 0.70.0: MIDI notes from C1 up launch the window's cells (see audio/PerformancePads.h)
+    int performancePadFirst = 36, performancePadsPerRow = 8; // 0.71.0: the pads' layout
+    void performanceRelease (int cell);                       // 0.71.0: a cell or pad let go
+    void setPerformanceCellMode (int cell, int mode, bool sync);
     void performancePadNote (int note);
     std::vector<std::vector<int>> performanceRows (std::vector<int>* rowTracks = nullptr) const; // per row: its clips, in time order
     int performanceHorizon = 0;  // how far ahead the timeline is written
     std::unique_ptr<PerformanceWindow> performanceWindow;
     void togglePerformanceWindow();
     void setPerformanceMode (bool on);
-    void performanceLaunch (int clipIndex);
+    void performanceLaunch (int cell); // a pattern clip's index, or kAudioCell + an audio clip's (0.71.0)
     void performanceStop (int track);
     void performanceCut (int track, int atTick);
     void performanceTick();           // from the timer

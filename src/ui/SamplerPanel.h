@@ -51,6 +51,13 @@ private:
     juce::Slider delaySlider, holdSlider, lfo2RateSlider, lfo2DepthSlider;
     juce::ComboBox lfo2Box;
     juce::Label delayLabel { {}, "Delay" }, holdLabel { {}, "Hold" }, lfo2Label { {}, "LFO 2" }, lfo2RateLabel { {}, "Rate" }, lfo2DepthLabel { {}, "Depth" };
+    // 0.71.0: the envelopes of pan, cutoff, resonance and pitch (one shown at a time, as FL Studio's tabs)
+    juce::Label envLabel { {}, "Envelopes" }, envALabel { {}, "A" }, envDLabel { {}, "D" }, envSLabel { {}, "S" }, envRLabel { {}, "R" }, envAmountLabel { {}, "Amount" };
+    juce::ComboBox envTargetBox;
+    juce::ToggleButton envOnToggle { "On" };
+    juce::Slider envAttackSlider, envDecaySlider, envSustainSlider, envReleaseSlider, envAmountSlider;
+    int envShown = 0;
+    void writeEnvelope (const std::function<void (SamplerSettings::ModEnvelope&)>& change);
     juce::Label crossfadeLabel { {}, "Crossfade" }, cutoffEnvLabel { {}, "Envelope" }, lfoLabel { {}, "LFO" }, lfoRateLabel { {}, "Rate" },
         lfoDepthLabel { {}, "Depth" }, pitchEnvLabel { {}, "Pitch env." }, pitchEnvTimeLabel { {}, "Time" };
     juce::Label rootLabel { {}, "Root key" }, attackLabel { {}, "Attack" }, decayLabel { {}, "Decay" }, sustainLabel { {}, "Sustain" },

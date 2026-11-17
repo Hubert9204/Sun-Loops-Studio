@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -52,6 +53,18 @@ struct SamplerSettings
     // knobs of FL Studio's envelope; a second LFO with its own target; either LFO can move the filter's resonance
     float delay = 0.0f;                           // seconds, 0..5 (needs the envelope)
     float hold = 0.0f;                            // seconds, 0..5 (needs the envelope)
+    // 0.71.0, the other envelopes of FL Studio's sampler channel: one for each of pan, cutoff, resonance and pitch, each with
+    // its own attack, decay, sustain and release and an amount (pan: up to fully left / right; cutoff: up to 5 octaves; resonance:
+    // up to its whole range; pitch: up to 2 octaves; negative turns it upside down). They need no volume envelope.
+    struct ModEnvelope
+    {
+        bool on = false;
+        float attack = 0.01f, decay = 0.3f, sustain = 0.0f, release = 0.3f; // seconds, seconds, 0..1, seconds
+        float amount = 0.5f;                                               // -1..1
+    };
+    enum ModEnvelopeTarget { EnvPan, EnvCutoff, EnvResonance, EnvPitch };
+    static constexpr int kModEnvelopes = 4;
+    std::array<ModEnvelope, kModEnvelopes> modEnvelopes {};
     SamplerLfoTarget lfo2Target = SamplerLfoTarget::Off;
     float lfo2Rate = 1.0f;                        // Hz, 0.05..20
     float lfo2Depth = 0.5f;                       // 0..1 (the resonance: up to half its range)
@@ -93,6 +106,14 @@ struct SamplerSettings
         s.lfo2Depth = std::clamp (finiteOr (s.lfo2Depth, 0.5f), 0.0f, 1.0f);
         s.delay = std::clamp (finiteOr (s.delay, 0.0f), 0.0f, 5.0f);
         s.hold = std::clamp (finiteOr (s.hold, 0.0f), 0.0f, 5.0f);
+        for (auto& e : s.modEnvelopes) // 0.71.0
+        {
+            e.attack = std::clamp (finiteOr (e.attack, 0.01f), 0.0f, 10.0f);
+            e.decay = std::clamp (finiteOr (e.decay, 0.3f), 0.0f, 10.0f);
+            e.sustain = std::clamp (finiteOr (e.sustain, 0.0f), 0.0f, 1.0f);
+            e.release = std::clamp (finiteOr (e.release, 0.3f), 0.0f, 10.0f);
+            e.amount = std::clamp (finiteOr (e.amount, 0.5f), -1.0f, 1.0f);
+        }
         s.lfoRate = std::clamp (finiteOr (s.lfoRate, 5.0f), 0.05f, 20.0f);
         s.lfoDepth = std::clamp (finiteOr (s.lfoDepth, 0.5f), 0.0f, 1.0f);
         s.cutoffEnv = std::clamp (finiteOr (s.cutoffEnv, 0.0f), -5.0f, 5.0f);

@@ -451,6 +451,18 @@ juce::var samplerSettingsToVar (const SamplerSettings& s)
         o->setProperty ("delay", s.delay);
     if (s.hold > 0.0f)
         o->setProperty ("hold", s.hold);
+    static const char* const envelopeNames[] = { "panEnv", "cutoffEnv2", "resonanceEnv", "pitchEnv2" }; // 0.71.0
+    for (size_t e = 0; e < s.modEnvelopes.size(); ++e)
+        if (const auto& env = s.modEnvelopes[e]; env.on)
+        {
+            auto* d = new juce::DynamicObject();
+            d->setProperty ("attack", env.attack);
+            d->setProperty ("decay", env.decay);
+            d->setProperty ("sustain", env.sustain);
+            d->setProperty ("release", env.release);
+            d->setProperty ("amount", env.amount);
+            o->setProperty (envelopeNames[e], juce::var (d));
+        }
     if (std::abs (s.cutoffEnv) > 0.0f)
         o->setProperty ("cutoffEnv", s.cutoffEnv);
     if (std::abs (s.pitchEnv) > 0.0f)
@@ -495,6 +507,18 @@ SamplerSettings samplerSettingsFromVar (const juce::var& v)
     s.lfo2Depth = static_cast<float> (readNumber (o->getProperty ("lfo2Depth"), 0.5, 0.0, 1.0));
     s.delay = static_cast<float> (readNumber (o->getProperty ("delay"), 0.0, 0.0, 5.0));
     s.hold = static_cast<float> (readNumber (o->getProperty ("hold"), 0.0, 0.0, 5.0));
+    static const char* const envelopeNames[] = { "panEnv", "cutoffEnv2", "resonanceEnv", "pitchEnv2" }; // 0.71.0
+    for (size_t e = 0; e < s.modEnvelopes.size(); ++e)
+        if (auto* d = o->getProperty (envelopeNames[e]).getDynamicObject())
+        {
+            auto& env = s.modEnvelopes[e];
+            env.on = true;
+            env.attack = static_cast<float> (readNumber (d->getProperty ("attack"), 0.01, 0.0, 10.0));
+            env.decay = static_cast<float> (readNumber (d->getProperty ("decay"), 0.3, 0.0, 10.0));
+            env.sustain = static_cast<float> (readNumber (d->getProperty ("sustain"), 0.0, 0.0, 1.0));
+            env.release = static_cast<float> (readNumber (d->getProperty ("release"), 0.3, 0.0, 10.0));
+            env.amount = static_cast<float> (readNumber (d->getProperty ("amount"), 0.5, -1.0, 1.0));
+        }
     s.lfoRate = static_cast<float> (readNumber (o->getProperty ("lfoRate"), 5.0, 0.05, 20.0));
     s.lfoDepth = static_cast<float> (readNumber (o->getProperty ("lfoDepth"), 0.5, 0.0, 1.0));
     s.cutoffEnv = static_cast<float> (readNumber (o->getProperty ("cutoffEnv"), 0.0, -5.0, 5.0));

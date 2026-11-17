@@ -684,6 +684,7 @@ juce::MouseCursor PlaylistTimeline::toolCursor() const
         case PlaylistTool::Mute:   return juce::MouseCursor::PointingHandCursor;
         case PlaylistTool::Slip:   return juce::MouseCursor::LeftRightResizeCursor;
         case PlaylistTool::Paint:  return juce::MouseCursor::CrosshairCursor;
+        case PlaylistTool::Playback: return juce::MouseCursor::LeftRightResizeCursor;
     }
     return juce::MouseCursor::NormalCursor;
 }
@@ -1126,6 +1127,8 @@ void PlaylistTimeline::showMarkerMenu (int marker)
         actions.addItem (12, "Skip: go on from the marker after this one", true, action == MarkerAction::Skip);
         actions.addItem (13, "Pause: stop here", true, action == MarkerAction::Pause);
         actions.addItem (14, "Start: Play starts the song from here", true, action == MarkerAction::Start);
+        actions.addItem (15, "Punch in: recordings keep what comes after this marker", true, action == MarkerAction::PunchIn); // 0.71.0
+        actions.addItem (16, "Punch out: recordings stop at this marker", true, action == MarkerAction::PunchOut);
         menu.addSubMenu ("Action", actions);
     }
     menu.addItem (3, "Delete marker");
@@ -1134,13 +1137,13 @@ void PlaylistTimeline::showMarkerMenu (int marker)
         if (safe == nullptr || choice == 0 || marker >= static_cast<int> (safe->arrangement.markers.size()))
             return;
         auto& m = safe->arrangement.markers[static_cast<size_t> (marker)];
-        if (choice >= 10 && choice <= 14)
+        if (choice >= 10 && choice <= 16)
         {
             safe->beginEdit();
             const auto action = static_cast<MarkerAction> (choice - 10);
-            if (action == MarkerAction::Start) // one place to start from
+            if (action == MarkerAction::Start || action == MarkerAction::PunchIn || action == MarkerAction::PunchOut) // one of each
                 for (auto& other : safe->arrangement.markers)
-                    if (other.action == MarkerAction::Start)
+                    if (other.action == action)
                         other.action = MarkerAction::None;
             m.action = action;
             safe->commitPendingUndo();
@@ -3169,6 +3172,7 @@ bool PlaylistTimeline::handleKey (const juce::KeyPress& key)
         case '7': changeTool (PlaylistTool::Mute); return true;   // 0.60.0
         case '8': changeTool (PlaylistTool::Slip); return true;
         case '9': changeTool (PlaylistTool::Paint); return true; // 0.61.0
+        case '0': changeTool (PlaylistTool::Playback); return true; // 0.71.0
         case '+': case '=': zoomBy (1.5, lastMouseX); return true;
         case '-': zoomBy (1.0 / 1.5, lastMouseX); return true;
         case 's': case 'S':
@@ -3498,6 +3502,14 @@ void PlaylistTimeline::mouseDown (const juce::MouseEvent& e)
         return;
     }
 
+    if (tool == PlaylistTool::Playback && ! e.mods.isPopupMenu()) // 0.71.0: play from here while the mouse is held
+    {
+        playbackDrag = true;
+        if (onPlaybackStart)
+            onPlaybackStart (std::max (0, xToTick (e.x)));
+        return;
+    }
+
     if (e.mods.isPopupMenu())
     {
         // A right click shows the clip's menu when the button comes up; a right drag erases every clip it passes (0.57.0).
@@ -3729,6 +3741,12 @@ void PlaylistTimeline::mouseDrag (const juce::MouseEvent& e)
 {
     lastMouseX = e.x;
     lastMouseY = e.y;
+    if (playbackDrag) // 0.71.0
+    {
+        if (onPlaybackMove)
+            onPlaybackMove (std::max (0, xToTick (e.x)));
+        return;
+    }
     const bool noSnap = e.mods.isAltDown();
 
     if (splitterDrag >= 0) // 0.69.0: the two sections beside the border share their heights anew
@@ -3952,6 +3970,13 @@ void PlaylistTimeline::mouseDrag (const juce::MouseEvent& e)
 
 void PlaylistTimeline::mouseUp (const juce::MouseEvent& e)
 {
+    if (playbackDrag) // 0.71.0
+    {
+        playbackDrag = false;
+        if (onPlaybackEnd)
+            onPlaybackEnd();
+        return;
+    }
     if (splitterDrag >= 0)
     {
         splitterDrag = -1;

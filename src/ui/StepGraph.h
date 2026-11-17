@@ -13,7 +13,7 @@ namespace sls
 class StepGraph : public juce::Component
 {
 public:
-    enum class Property { Velocity, Pan, Release, FinePitch };
+    enum class Property { Velocity, Pan, Release, FinePitch, ModX, ModY, Shift }; // (0.71.0: mod X, mod Y, shift)
 
     StepGraph();
 

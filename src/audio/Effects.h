@@ -317,7 +317,11 @@ inline constexpr EffectParamInfo peakctl[] = { { "Base", "%", 0.0f, 100.0f, 0.0f
                                                { "Target track", "track", 0.0f, 500.0f, 0.0f },
                                                { "Target slot", "", 1.0f, 10.0f, 2.0f },
                                                { "Target param", "", 1.0f, 24.0f, 1.0f },
-                                               { "Mute", "", 0.0f, 1.0f, 0.0f, "Off|On" } }; // On: the track's sound only drives the controller
+                                               { "Mute", "", 0.0f, 1.0f, 0.0f, "Off|On" },
+                                               { "Target 2 track", "track", 0.0f, 500.0f, 0.0f },
+                                               { "Target 2 slot", "", 0.0f, 10.0f, 0.0f },
+                                               { "Target 2 param", "", 1.0f, 24.0f, 1.0f },
+                                               { "Target 2 invert", "", 0.0f, 1.0f, 0.0f, "Off|On" } }; // (Mute On: the track's sound only drives the controller; 0.71.0: a second target, slot 0 = none)
 constexpr int kPeakTargetTrack = 5, kPeakTargetSlot = 6, kPeakTargetParam = 7;
 inline constexpr EffectParamInfo convolver[] = { { "Space", "", 0.0f, 5.0f, 1.0f, "Room|Hall|Plate|Spring|Cathedral|File" },
                                                  { "Length", "s", 0.1f, 4.0f, 1.5f },
@@ -367,7 +371,11 @@ inline constexpr EffectParamInfo envctl[] = { { "Threshold", "dB", -60.0f, 0.0f,
                                               { "Target track", "track", 0.0f, 500.0f, 0.0f },
                                               { "Target slot", "", 1.0f, 10.0f, 2.0f },
                                               { "Target param", "", 1.0f, 24.0f, 1.0f },
-                                              { "Mute", "", 0.0f, 1.0f, 0.0f, "Off|On" } };
+                                              { "Mute", "", 0.0f, 1.0f, 0.0f, "Off|On" },
+                                              { "Target 2 track", "track", 0.0f, 500.0f, 0.0f },
+                                              { "Target 2 slot", "", 0.0f, 10.0f, 0.0f },
+                                              { "Target 2 param", "", 1.0f, 24.0f, 1.0f },
+                                              { "Target 2 invert", "", 0.0f, 1.0f, 0.0f, "Off|On" } };
 // value = the slot's formula (see Formula.h) of the knobs A, B and C, the time, the song position and the track's level; with no
 // formula it is A.
 inline constexpr EffectParamInfo formulactl[] = { { "A", "", 0.0f, 1.0f, 0.5f },
@@ -375,7 +383,11 @@ inline constexpr EffectParamInfo formulactl[] = { { "A", "", 0.0f, 1.0f, 0.5f },
                                                   { "C", "", 0.0f, 1.0f, 0.5f },
                                                   { "Target track", "track", 0.0f, 500.0f, 0.0f },
                                                   { "Target slot", "", 1.0f, 10.0f, 2.0f },
-                                                  { "Target param", "", 1.0f, 24.0f, 1.0f } };
+                                                  { "Target param", "", 1.0f, 24.0f, 1.0f },
+                                              { "Target 2 track", "track", 0.0f, 500.0f, 0.0f },
+                                              { "Target 2 slot", "", 0.0f, 10.0f, 0.0f },
+                                              { "Target 2 param", "", 1.0f, 24.0f, 1.0f },
+                                              { "Target 2 invert", "", 0.0f, 1.0f, 0.0f, "Off|On" } };
 
 // The scales' notes as bit masks (bit n: n semitones above the key), in the order of the Scale choice; equal to theory::scales().
 inline constexpr std::uint16_t kPitchScaleMasks[] = { 0x0fff, 0x0ab5, 0x05ad, 0x09ad, 0x0aad, 0x06ad, 0x05ab, 0x0ad5, 0x06b5, 0x056b, 0x0295, 0x04a9, 0x04e9 };
@@ -490,6 +502,11 @@ inline int effectControllerTarget (EffectType t) noexcept
     return t == EffectType::PeakController ? 5 : (t == EffectType::EnvelopeController ? 7 : (t == EffectType::FormulaController ? 3 : -1));
 }
 inline bool effectIsController (EffectType t) noexcept { return effectControllerTarget (t) >= 0; }
+// 0.71.0: a controller's second target, its "Target 2 track" index (slot, param and invert follow; slot 0 = no second target)
+inline int effectControllerTarget2 (EffectType t) noexcept
+{
+    return t == EffectType::PeakController ? 9 : (t == EffectType::EnvelopeController ? 11 : (t == EffectType::FormulaController ? 6 : -1));
+}
 
 // One slot of a mixer track's effect chain: a type, a bypass switch and its parameter values.
 struct EffectSlot

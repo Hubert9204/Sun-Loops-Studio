@@ -29,11 +29,19 @@ struct Note
     float finePitch = 0.0f;            // cents, -1200..+1200
     std::uint8_t colour = 0;           // 0..15: the note's colour group (shown in the Piano Roll)
     bool muted = false;                // a muted note stays in the pattern but does not play (the Mute tool)
+    // 0.71.0, FL Studio's mod X / mod Y (the built-in instruments: X moves the filter's cutoff by up to 2 octaves either way, Y its
+    // resonance) and the graph editor's shift (the note starts later by up to one 16th)
+    float modX = 0.5f;                 // 0..1, 0.5 = no change
+    float modY = 0.5f;                 // 0..1, 0.5 = no change
+    float shift = 0.0f;                // 0..1 of a 16th
 
     bool hasProperties() const noexcept
     {
-        return std::abs (pan) > 0.0f || std::abs (release - 0.5f) > 0.0f || std::abs (finePitch) > 0.0f || colour != 0 || muted;
+        return std::abs (pan) > 0.0f || std::abs (release - 0.5f) > 0.0f || std::abs (finePitch) > 0.0f || colour != 0 || muted
+            || std::abs (modX - 0.5f) > 0.0f || std::abs (modY - 0.5f) > 0.0f || shift > 0.0f;
     }
+    float cutoffOctaves() const noexcept { return (std::clamp (modX, 0.0f, 1.0f) - 0.5f) * 4.0f; } // -2 .. +2
+    float resonanceShift() const noexcept { return std::clamp (modY, 0.0f, 1.0f) - 0.5f; }         // -0.5 .. +0.5
     // The factor on the release time (0.25 .. 1 .. 4).
     float releaseScale() const noexcept { return std::pow (4.0f, (std::clamp (release, 0.0f, 1.0f) - 0.5f) * 2.0f); }
 };
@@ -64,6 +72,15 @@ struct Sequence
             n.pan = std::isfinite (n.pan) ? std::clamp (n.pan, -1.0f, 1.0f) : 0.0f;
             n.release = std::isfinite (n.release) ? std::clamp (n.release, 0.0f, 1.0f) : 0.5f;
             n.finePitch = std::isfinite (n.finePitch) ? std::clamp (n.finePitch, -1200.0f, 1200.0f) : 0.0f;
+            n.modX = std::isfinite (n.modX) ? std::clamp (n.modX, 0.0f, 1.0f) : 0.5f; // 0.71.0
+            n.modY = std::isfinite (n.modY) ? std::clamp (n.modY, 0.0f, 1.0f) : 0.5f;
+            if (std::isfinite (n.shift) && n.shift > 0.0f) // the graph editor's shift: played later, inside the pattern
+            {
+                const int later = static_cast<int> (std::lround (std::min (n.shift, 1.0f) * kTicksPerBeat / 4));
+                if (n.startTick + later < s.lengthTicks)
+                    n.startTick += later;
+            }
+            n.shift = 0.0f;
             n.lengthTicks = std::min (n.lengthTicks, s.lengthTicks - n.startTick);
             kept.push_back (n);
         }

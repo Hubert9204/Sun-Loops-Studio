@@ -121,6 +121,12 @@ juce::var noteToVar (const Note& n)
             o->setProperty ("colour", static_cast<int> (n.colour));
         if (n.muted)
             o->setProperty ("muted", true);
+        if (std::abs (n.modX - 0.5f) > 0.0f) // 0.71.0
+            o->setProperty ("modX", number (static_cast<double> (n.modX)));
+        if (std::abs (n.modY - 0.5f) > 0.0f)
+            o->setProperty ("modY", number (static_cast<double> (n.modY)));
+        if (n.shift > 0.0f)
+            o->setProperty ("shift", number (static_cast<double> (n.shift)));
         a.add (juce::var (o));
     }
     return a;
@@ -258,6 +264,9 @@ bool readNote (const juce::var& v, int patternTicks, Note& out)
         out.finePitch = static_cast<float> (readNumber (o->getProperty ("fine"), 0.0, -1200.0, 1200.0));
         out.colour = static_cast<std::uint8_t> (readInt (o->getProperty ("colour"), 0, 0, 15));
         out.muted = readBool (o->getProperty ("muted"), false);
+        out.modX = static_cast<float> (readNumber (o->getProperty ("modX"), 0.5, 0.0, 1.0)); // 0.71.0
+        out.modY = static_cast<float> (readNumber (o->getProperty ("modY"), 0.5, 0.0, 1.0));
+        out.shift = static_cast<float> (readNumber (o->getProperty ("shift"), 0.0, 0.0, 1.0));
     }
     return true;
 }
@@ -484,6 +493,10 @@ juce::String ProjectDocument::toJson() const
             o->setProperty ("offsetTicks", c.offsetTicks);
         if (c.muted)
             o->setProperty ("muted", true); // 0.60.0
+        if (c.launchMode != 0) // 0.71.0
+            o->setProperty ("launchMode", static_cast<int> (c.launchMode));
+        if (c.launchSync)
+            o->setProperty ("launchSync", true);
         clipList.add (juce::var (o));
     }
     root->setProperty ("clips", clipList);
@@ -550,6 +563,10 @@ juce::String ProjectDocument::toJson() const
         }
         if (a.muted)
             o->setProperty ("muted", true); // 0.60.0
+        if (a.launchMode != 0) // 0.71.0
+            o->setProperty ("launchMode", static_cast<int> (a.launchMode));
+        if (a.launchSync)
+            o->setProperty ("launchSync", true);
         if (! a.stretch.isNeutral())
         {
             // Only the settings: the audio is stretched again when the project is opened.
@@ -612,7 +629,7 @@ juce::String ProjectDocument::toJson() const
         juce::Array<juce::var> list;
         for (const auto& m : arrangement.markers)
         {
-            static constexpr const char* kActions[] = { "", "loop", "skip", "pause", "start" };
+            static constexpr const char* kActions[] = { "", "loop", "skip", "pause", "start", "punch-in", "punch-out" };
             juce::Array<juce::var> entry { m.tick, juce::String (m.name) };
             if (m.action != MarkerAction::None) // 0.62.0 (a third value; older versions read the first two)
                 entry.add (juce::String (kActions[static_cast<int> (m.action)]));
@@ -973,6 +990,8 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
                     clip.lengthTicks = readInt (o->getProperty ("length"), 0, 0, 100000) * sharedTicks;
                 }
                 clip.muted = readBool (o->getProperty ("muted"), false); // 0.60.0
+                clip.launchMode = static_cast<std::uint8_t> (readInt (o->getProperty ("launchMode"), 0, 0, 2)); // 0.71.0
+                clip.launchSync = readBool (o->getProperty ("launchSync"), false);
             }
             if (o != nullptr && d.arrangement.canPlace (clip))
                 d.arrangement.clips.push_back (clip);
@@ -1006,6 +1025,8 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
                 clip.takeFirstSeconds = readNumber (o->getProperty ("takeFirstSeconds"), 0.0, 0.0, 1.0e6); // 0.47.0
                 clip.takeSeconds = readNumber (o->getProperty ("takeSeconds"), 0.0, 0.0, 1.0e6);
                 clip.muted = readBool (o->getProperty ("muted"), false); // 0.60.0
+                clip.launchMode = static_cast<std::uint8_t> (readInt (o->getProperty ("launchMode"), 0, 0, 2)); // 0.71.0
+                clip.launchSync = readBool (o->getProperty ("launchSync"), false);
                 if (auto* st = o->getProperty ("stretch").getDynamicObject())
                 {
                     clip.stretch.lengthRatio = readNumber (st->getProperty ("lengthRatio"), 1.0, kMinStretchRatio, kMaxStretchRatio);
@@ -1098,7 +1119,8 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
                 TimeMarker marker { readInt ((*pair)[0], 0, 0, d.arrangement.timelineTicks()), (*pair)[1].toString().substring (0, 64).toStdString() };
                 const auto action = pair->size() > 2 ? (*pair)[2].toString() : juce::String(); // 0.62.0
                 marker.action = action == "loop" ? MarkerAction::Loop : action == "skip" ? MarkerAction::Skip
-                              : action == "pause" ? MarkerAction::Pause : action == "start" ? MarkerAction::Start : MarkerAction::None;
+                              : action == "pause" ? MarkerAction::Pause : action == "start" ? MarkerAction::Start
+                              : action == "punch-in" ? MarkerAction::PunchIn : action == "punch-out" ? MarkerAction::PunchOut : MarkerAction::None;
                 d.arrangement.markers.push_back (std::move (marker));
             }
         d.arrangement.tidyMarkers();

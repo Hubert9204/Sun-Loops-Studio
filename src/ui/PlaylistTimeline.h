@@ -12,7 +12,7 @@ namespace sls
 {
 // 0.59.0: Draw was called Select; Select is the rectangle. 0.60.0: Mute and Slip, as in FL Studio's Playlist (the toolbar shows the
 // tools in FL Studio's order and with its names: Draw, Delete (Erase), Mute, Slip, Slice (Split), Cut, Select, Zoom).
-enum class PlaylistTool { Draw, Split, Cut, Erase, Zoom, Select, Mute, Slip, Paint }; // 0.61.0: Paint
+enum class PlaylistTool { Draw, Split, Cut, Erase, Zoom, Select, Mute, Slip, Paint, Playback }; // 0.61.0: Paint; 0.71.0: Playback
 
 // The timeline of the Playlist panel: the ruler, the tracks and their clips (the toolbar around it is PlaylistView).
 //
@@ -93,6 +93,9 @@ public:
     std::function<void (double)> onZoomChanged;       // pixels per tick
     // Left click (or drag) on the ruler: move the song position to this tick (snapped to the grid; Alt: no snap).
     std::function<void (int)> onSeek;
+    std::function<void (int)> onPlaybackStart, onPlaybackMove; // 0.71.0, the Playback tool (as the piano roll's)
+    std::function<void()> onPlaybackEnd;
+    bool playbackDrag = false;
     // The loop region (Arrangement::loopStartTick / loopEndTick) was made, moved, resized or deleted on the ruler.
     std::function<void()> onLoopChanged;
     // Text for the two readouts under the timeline: the position under the mouse, and the selected clip.
