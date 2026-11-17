@@ -122,6 +122,9 @@ BrowserNode scanDirectory (const juce::File& directory, NodeKind leafKind, const
         return result;
 
     auto entries = directory.findChildFiles (juce::File::findFilesAndDirectories | juce::File::ignoreHiddenFiles, false);
+    // Names starting with a dot are hidden on every system (0.75.0: Windows hides by an attribute only, and .DS_Store, .git...
+    // come from the others).
+    entries.removeIf ([] (const juce::File& f) { return f.getFileName().startsWithChar ('.'); });
 
     // Folders first, then files, each sorted by name without regard to case.
     std::sort (entries.begin(), entries.end(), [] (const juce::File& a, const juce::File& b)

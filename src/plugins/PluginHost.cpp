@@ -307,18 +307,22 @@ juce::FileSearchPath PluginHost::distributionPaths (const juce::String& formatNa
     };
     if (formatName == "VST3")
     {
+#if ! JUCE_WINDOWS // (0.75.0: Windows has no such folders, and its own are JUCE's defaults)
         for (const char* p : { "/usr/lib64/vst3", "/usr/local/lib64/vst3" })
             addIfThere (p);
+#endif
         const auto bundled = bundledPaths();
         for (int i = 0; i < bundled.getNumPaths(); ++i)
             paths.addIfNotAlreadyThere (bundled[i]);
     }
+#if ! JUCE_WINDOWS
     else if (formatName == "LV2")
         for (const char* p : { "/usr/lib/lv2", "/usr/lib64/lv2", "/usr/local/lib/lv2", "/usr/local/lib64/lv2" })
             addIfThere (p);
     else if (formatName == "LADSPA")
         for (const char* p : { "/usr/lib/ladspa", "/usr/lib64/ladspa", "/usr/local/lib/ladspa", "/usr/local/lib64/ladspa", "~/.ladspa" })
             addIfThere (p);
+#endif
     return paths;
 }
 

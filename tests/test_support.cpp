@@ -469,7 +469,15 @@ void testSemVerAndUpdates()
         r.url = "http://127.0.0.1:" + std::to_string (freePort) + "/";
         const auto started = std::chrono::steady_clock::now();
         const auto response = sls::http::perform (r);
-        supportCheck (response.offline && response.status == 0 && ! response.error.empty() && std::chrono::steady_clock::now() - started < std::chrono::seconds (2),
+#if defined(_WIN32) // (Windows tries a refused connection three times, half a second, then a second apart: about 2 s)
+        const auto atOnce = std::chrono::seconds (4);
+#else
+        const auto atOnce = std::chrono::seconds (2);
+#endif
+        const auto took = std::chrono::steady_clock::now() - started;
+        if (took >= atOnce || ! response.offline)
+            std::cout << "    took " << std::chrono::duration_cast<std::chrono::milliseconds> (took).count() << " ms, error: " << response.error << "\n";
+        supportCheck (response.offline && response.status == 0 && ! response.error.empty() && took < atOnce,
                "nothing listening: an \"offline\" answer at once, no exception");
     }
     {
@@ -578,10 +586,12 @@ void testCrashReports()
         supportCheck (false, "the sample crash file is read");
         return;
     }
+#if ! defined(_WIN32) // (Itanium names, as GCC and Clang write them on Linux and macOS: Windows reads only its own reports)
     supportCheck (report && report->frames.size() == 5 && report->crashFrame == 2 && report->where() == "sls::Player::render"
                && report->frames[2].symbol == "sls::Player::render(juce::AudioBuffer<float>&, int)" && report->frames[2].offset == "+0x1a"
                && report->frames[3].offset == "+0x12345" && report->frames[4].address == "0x7f0b1c000000",
            "frames: demangled names, offsets, frames without a name or a module; the crash is the frame after the handler and libc");
+#endif
     {
         const auto nonPie = sls::crash::parse ("SLS-CRASH 1\nsignal=6\nframes:\n./prog() [0x6b8e7c]\n/lib64/libc.so.6(gsignal+0x1e) [0x7f39e]\nend\n");
         supportCheck (nonPie && nonPie->frames.size() == 2 && nonPie->frames[0].module == "./prog" && nonPie->frames[0].symbol.empty()
@@ -592,6 +602,7 @@ void testCrashReports()
                && sls::crash::withoutParameters ("std::function<void (int)>::operator()(int) const") == "std::function<void (int)>::operator()"
                && sls::crash::withoutParameters ("plain") == "plain",
            "a function name without its parameters (anonymous namespaces and templates kept)");
+#if ! defined(_WIN32) // (Itanium names, as GCC and Clang write them on Linux and macOS: Windows reads only its own reports)
     supportCheck (report && sls::crash::issueTitle (*report) == "Crash: SIGSEGV in sls::Player::render (0.42.0)", "the issue title: signal, function, version");
     {
         auto inLibc = *report;
@@ -601,6 +612,7 @@ void testCrashReports()
                           && sls::crash::issueTitle (inLibc) == "Crash: SIGSEGV in memcpy, called from sls::Player::render (0.42.0)",
                       "a crash inside libc names the program's function that called it");
     }
+#endif
     const sls::crash::Redaction who { "/home/hubert", "hubert" };
     auto withLog = *report;
     withLog.log = { "[2026-11-10 14:00:00.000] [info] Opened /home/hubert/Music/song.slp", "contains ``` fences" };
@@ -609,6 +621,7 @@ void testCrashReports()
                && body.find ("| Audio driver | JACK |") != std::string::npos && body.find ("| Sample rate | 48000 Hz |") != std::string::npos
                && body.find ("| Buffer size | 128 samples |") != std::string::npos && body.find ("| Audio device | Scarlett 2i2 \\| USB |") != std::string::npos,
            "the body's system table: OS, architecture, audio driver, device (a | escaped), sample rate, buffer");
+#if ! defined(_WIN32) // (Itanium names, as GCC and Clang write them on Linux and macOS: Windows reads only its own reports)
     supportCheck (body.find ("### Stack trace\n\n```text\n#0  sls::crash::") != std::string::npos
                && body.find ("#2  sls::Player::render(juce::AudioBuffer<float>&, int) +0x1a  in sun-loops-studio  [0x55d0c2a10011]   <-- crashed here")
                       != std::string::npos,
@@ -625,6 +638,7 @@ void testCrashReports()
                           && mac->frames[2].address == "0x0000000104f2c8e4" && mac->where() == "sls::Player::render" && mac->frames[3].symbol.empty(),
                       "a macOS stack trace is read: module, address, function and offset; the crash is in Player::render");
     }
+#endif
     {
         // 0.75.0: a stack trace as the Windows handler writes it (module file names, DbgHelp's names, "+0x" offsets)
         const auto win = sls::crash::parse ("SLS-CRASH 1\nversion=0.75.0\nsignal=11\nsigname=SIGSEGV\ncode=1\naddress=0x10\nframes:\n"
