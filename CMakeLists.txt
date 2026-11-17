@@ -29,6 +29,9 @@ if(WIN32)
         add_compile_options("$<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CXX>,$<CXX_COMPILER_ID:Clang>>:-gline-tables-only>"
                             "$<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CXX>,$<CXX_COMPILER_ID:MSVC>>:/Zi>")
         add_link_options("$<$<CONFIG:Release>:/DEBUG>" "$<$<CONFIG:Release>:/OPT:REF>" "$<$<CONFIG:Release>:/OPT:ICF>")
+        # 8 MB of stack for every thread of a program, as Linux and macOS give the main thread (Windows: 1 MB). Only reserved:
+        # memory is used as the stack grows. (Ignored for the plugins, which are DLLs.)
+        add_link_options("/STACK:8388608")
     endif()
 endif()
 
