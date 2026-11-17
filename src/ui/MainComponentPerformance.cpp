@@ -1,4 +1,5 @@
 // Part of MainComponent (0.62.0): the Playlist's Make unique and Consolidate, and performance mode.
+#include "audio/PerformancePads.h"
 #include "ui/MainComponent.h"
 
 #include "audio/OfflineRenderer.h"
@@ -212,6 +213,7 @@ void MainComponent::setPerformanceMode (bool on)
     performanceSegments.clear();
     performanceLanes.assign (static_cast<size_t> (std::max (1, arrangement.trackCount())), PerformanceLane {});
     performanceHorizon = 0;
+    engine.setPerformancePads (on && performancePads); // 0.70.0
     engine.requestSeek (0);
     publishProject();
     refreshPerformancePanel();
@@ -285,10 +287,50 @@ void MainComponent::performanceStop (int track)
     refreshPerformancePanel();
 }
 
+// 0.70.0: the window's rows as the panel shows them: each playlist track that holds pattern clips, its clips in time order.
+std::vector<std::vector<int>> MainComponent::performanceRows (std::vector<int>* rowTracks) const
+{
+    std::vector<std::vector<int>> rows;
+    for (int t = 0; t < arrangement.trackCount(); ++t)
+    {
+        std::vector<int> onTrack;
+        for (int i = 0; i < static_cast<int> (arrangement.clips.size()); ++i)
+            if (arrangement.clips[static_cast<size_t> (i)].track == t)
+                onTrack.push_back (i);
+        if (onTrack.empty())
+            continue;
+        std::sort (onTrack.begin(), onTrack.end(), [this] (int a, int b)
+                   { return arrangement.clips[static_cast<size_t> (a)].startTick < arrangement.clips[static_cast<size_t> (b)].startTick; });
+        rows.push_back (std::move (onTrack));
+        if (rowTracks != nullptr)
+            rowTracks->push_back (t);
+    }
+    return rows;
+}
+
+// 0.70.0: a note of a MIDI pad controller (see audio/PerformancePads.h): launch a cell, or stop a row.
+void MainComponent::performancePadNote (int note)
+{
+    const auto action = performancePad (note);
+    if (action.kind == PadAction::Kind::None || ! performanceOn)
+        return;
+    std::vector<int> rowTracks;
+    const auto rows = performanceRows (&rowTracks);
+    if (action.row >= static_cast<int> (rows.size()))
+        return;
+    const auto& row = rows[static_cast<size_t> (action.row)];
+    if (action.kind == PadAction::Kind::StopRow)
+        performanceStop (rowTracks[static_cast<size_t> (action.row)]);
+    else if (action.column < static_cast<int> (row.size()))
+        performanceLaunch (row[static_cast<size_t> (action.column)]);
+}
+
 void MainComponent::performanceTick()
 {
     if (! performanceOn)
         return;
+    for (int note = engine.takePadNote(); note >= 0; note = engine.takePadNote()) // 0.70.0
+        performancePadNote (note);
     bool changed = false;
     if (! engine.isPlaying())
     {
@@ -334,6 +376,7 @@ void MainComponent::refreshPerformancePanel()
     PerformanceModel model;
     model.on = performanceOn;
     model.quantiseId = performanceQuantise;
+    model.pads = performancePads;
     const auto indexOf = [this] (const Clip& wanted)
     {
         for (int i = 0; i < static_cast<int> (arrangement.clips.size()); ++i)
@@ -407,6 +450,15 @@ void MainComponent::togglePerformanceWindow()
         }
     };
     panel.onQuantise = [this] (int id) { performanceQuantise = std::clamp (id, 1, 5); };
+    panel.onPads = [this] (bool on) // 0.70.0
+    {
+        performancePads = on;
+        engine.setPerformancePads (performanceOn && on);
+        refreshPerformancePanel();
+        statusLabel.setText (on ? "MIDI pads: the notes from C1 up launch the Performance window's cells (8 per row; the 8th pad of a row stops it)"
+                                : "MIDI pads are off: every note plays the selected instrument again",
+                             juce::dontSendNotification);
+    };
     performanceWindow->onClose = [safe = juce::Component::SafePointer<MainComponent> (this)]
     {
         juce::MessageManager::callAsync ([safe]

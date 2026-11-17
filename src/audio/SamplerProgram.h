@@ -16,7 +16,7 @@ namespace sls
 
 enum class LoopMode : std::uint8_t { Off, Forward, PingPong }; // 0.62.0: PingPong plays the loop forwards, then backwards
 // What a sampler channel's LFO moves (0.62.0).
-enum class SamplerLfoTarget : std::uint8_t { Off, Pitch, Cutoff, Pan, Volume };
+enum class SamplerLfoTarget : std::uint8_t { Off, Pitch, Cutoff, Pan, Volume, Resonance }; // 0.70.0: Resonance
 enum class SamplerFilter : std::uint8_t { Off, LowPass, HighPass, BandPass };
 
 // Settings of a sampler channel. With the envelope off and no loop a note plays its sample once to the end, whatever its length (the
@@ -48,6 +48,13 @@ struct SamplerSettings
     float cutoffEnv = 0.0f;                       // octaves the envelope moves the cutoff (-5..5); needs the envelope and a filter
     float pitchEnv = 0.0f;                        // semitones (-24..24): a note starts this far from its pitch and settles on it
     float pitchEnvTime = 0.1f;                    // seconds, 0.005..5
+    // 0.70.0: the volume envelope's delay (before the attack) and hold (at full level, before the decay), as the DEL and HOLD
+    // knobs of FL Studio's envelope; a second LFO with its own target; either LFO can move the filter's resonance
+    float delay = 0.0f;                           // seconds, 0..5 (needs the envelope)
+    float hold = 0.0f;                            // seconds, 0..5 (needs the envelope)
+    SamplerLfoTarget lfo2Target = SamplerLfoTarget::Off;
+    float lfo2Rate = 1.0f;                        // Hz, 0.05..20
+    float lfo2Depth = 0.5f;                       // 0..1 (the resonance: up to half its range)
 
     bool reverse = false;
     float start = 0.0f;     // 0..0.99
@@ -78,8 +85,14 @@ struct SamplerSettings
         if (static_cast<int> (s.loop) > static_cast<int> (LoopMode::PingPong))
             s.loop = LoopMode::Off;
         s.crossfade = std::clamp (finiteOr (s.crossfade, 0.0f), 0.0f, 1.0f);
-        if (static_cast<int> (s.lfoTarget) > static_cast<int> (SamplerLfoTarget::Volume))
+        if (static_cast<int> (s.lfoTarget) > static_cast<int> (SamplerLfoTarget::Resonance))
             s.lfoTarget = SamplerLfoTarget::Off;
+        if (static_cast<int> (s.lfo2Target) > static_cast<int> (SamplerLfoTarget::Resonance))
+            s.lfo2Target = SamplerLfoTarget::Off;
+        s.lfo2Rate = std::clamp (finiteOr (s.lfo2Rate, 1.0f), 0.05f, 20.0f);
+        s.lfo2Depth = std::clamp (finiteOr (s.lfo2Depth, 0.5f), 0.0f, 1.0f);
+        s.delay = std::clamp (finiteOr (s.delay, 0.0f), 0.0f, 5.0f);
+        s.hold = std::clamp (finiteOr (s.hold, 0.0f), 0.0f, 5.0f);
         s.lfoRate = std::clamp (finiteOr (s.lfoRate, 5.0f), 0.05f, 20.0f);
         s.lfoDepth = std::clamp (finiteOr (s.lfoDepth, 0.5f), 0.0f, 1.0f);
         s.cutoffEnv = std::clamp (finiteOr (s.cutoffEnv, 0.0f), -5.0f, 5.0f);

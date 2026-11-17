@@ -509,6 +509,35 @@ void flam (std::vector<Note>& notes, std::vector<bool>& selected, int ticks, flo
     std::stable_sort (notes.begin(), notes.end(), [] (const Note& a, const Note& b) { return a.startTick < b.startTick; });
 }
 
+void clawMachine (std::vector<Note>& notes, std::vector<bool>& selected, int periodTicks, int trimTicks)
+{
+    periodTicks = std::max (2, periodTicks);
+    trimTicks = std::clamp (trimTicks, 1, periodTicks - 1);
+    const int kept = periodTicks - trimTicks;
+    std::vector<bool> chosen (notes.size(), false);
+    for (const auto i : targets (notes, selected))
+        chosen[i] = true;
+    std::vector<Note> outNotes;
+    std::vector<bool> outSelected;
+    for (size_t i = 0; i < notes.size(); ++i)
+    {
+        Note n = notes[i];
+        if (chosen[i] && n.startTick >= 0)
+        {
+            const int period = n.startTick / periodTicks, offset = n.startTick % periodTicks;
+            if (offset >= kept)
+                continue; // it starts in a slice that is cut out
+            n.startTick = period * kept + offset;
+            n.lengthTicks = std::max (1, std::min (n.lengthTicks, kept - offset));
+        }
+        outNotes.push_back (n);
+        outSelected.push_back (i < selected.size() ? selected[i] : false);
+    }
+    notes = std::move (outNotes);
+    selected = std::move (outSelected);
+    std::stable_sort (notes.begin(), notes.end(), [] (const Note& a, const Note& b) { return a.startTick < b.startTick; });
+}
+
 void limit (std::vector<Note>& notes, std::vector<bool>& selected, int lowest, int highest)
 {
     lowest = std::clamp (lowest, 0, 127 - 11);

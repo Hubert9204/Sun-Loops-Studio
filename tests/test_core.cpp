@@ -23,6 +23,9 @@
 #include "audio/BufferTuning.h"
 #include "audio/BuiltinSamples.h"
 #include "audio/ClipEdit.h"
+#include "audio/Formula.h"
+#include "audio/PerformancePads.h"
+#include "audio/StepSequence.h"
 #include "audio/DrumSynth.h"
 #include "audio/SoundLibrary.h"
 #include "audio/MusicTheory.h"
@@ -5791,6 +5794,12 @@ void testHeliosManual062()
     check (top ("layer channel", "Layer channel", "en") && top ("canale layer", "canale Layer", "it"), "Helios: the Layer channel in both languages");
     check (top ("marker actions loop skip pause", "arker", "en") && top ("azioni dei marcatori", "arcatori", "it"), "Helios: marker actions");
     check (top ("mac mini 2012 catalina", "On a Mac", "en") && top ("mac mini 2012 catalina", "Su un Mac", "it"), "Helios: which Macs it runs on (0.63.0)");
+    check (top ("formula controller", "0.70.0", "en") && top ("formula controller", "0.70.0", "it"), "Helios: the Formula Controller (0.70.0)");
+    check (top ("frequency shifter", "0.70.0", "en") && top ("effetto granulare grani", "0.70.0", "it"), "Helios: the frequency shifter and Grains (0.70.0)");
+    check (top ("slot mix knob", "slot mix", "en") && top ("mix dello slot", "mix dello slot", "it"), "Helios: the slot mix (0.70.0)");
+    check (top ("performance mode midi pads", "Performance mode", "en") && top ("performance mode pad midi", "Performance mode", "it"), "Helios: the MIDI pads (0.70.0)");
+    check (top ("pre-fader send track delay", "Routing between tracks", "en") && top ("mandata pre-fader track delay", "Instradamento tra tracce", "it"),
+           "Helios: pre-fader sends and track delay (0.70.0)");
     check (top ("favourites browser tabs", "favourites", "en") && top ("preferiti browser", "preferiti", "it"), "Helios: the browser's favourites");
     check (top ("graph editor velocity steps", "graph editor", "en") && top ("editor a barre", "editor a barre", "it"), "Helios: the graph editor");
     check (top ("step edit", "step edit", "en") && top ("step edit", "step edit", "it"), "Helios: step editing");
@@ -8441,6 +8450,475 @@ void testMixer062()
 }
 
 // 0.62.0: the Layer channel, the master pitch, the markers' actions, playlist groups, and what performance mode rests on.
+// 0.70.0: the rest of the FL Studio alignment list (frequency shifter, vintage chorus / phaser, Effector, Grains, Envelope and
+// Formula Controllers, the slot mix, pre-fader and eight sends, track delay, the aux buses' delay compensation, the sampler's
+// delay / hold / second LFO / resonance, step rotate and randomize, claw machine, chop, the polyphony and the MIDI pads).
+void testFlParity070()
+{
+    std::cout << "FL Studio parity (0.70.0)\n";
+    const auto leftOf = [] (const juce::AudioBuffer<float>& b) { return std::vector<float> (b.getReadPointer (0), b.getReadPointer (0) + b.getNumSamples()); };
+    const auto finiteAndBounded = [] (const std::vector<float>& x, float limit)
+    {
+        for (const float v : x)
+            if (! std::isfinite (v) || std::abs (v) > limit)
+                return false;
+        return true;
+    };
+
+    // --- the formula
+    {
+        sls::Formula::Variables v;
+        v.a = 0.8f;
+        v.b = 0.25f;
+        v.beat = 1.25;
+        v.t = 2.0;
+        v.level = 0.5f;
+        const auto value = [&v] (const char* text) { auto f = sls::Formula::compile (text); return f != nullptr ? f->evaluate (v) : -1.0f; };
+        check (std::abs (value ("a * 0.5") - 0.4f) < 1.0e-6f && std::abs (value ("1 - 2 * 3 / 12") - 0.5f) < 1.0e-6f
+                   && std::abs (value ("(1 + 1) ^ -1") - 0.5f) < 1.0e-6f && std::abs (value ("2 ^ 3 ^ 0 / 4") - 0.5f) < 1.0e-6f,
+               "formula: numbers, variables, precedence, right-associative powers");
+        check (std::abs (value ("frac(beat)") - 0.25f) < 1.0e-6f && std::abs (value ("tri(0.25)") - 0.5f) < 1.0e-6f
+                   && std::abs (value ("saw(beat)") - 0.25f) < 1.0e-6f && value ("sqr(0.1)") == 1.0f && value ("sqr(0.6)") == 0.0f,
+               "formula: the waves of period 1");
+        check (value ("if(level > 0.4, b, a)") == 0.25f && value ("clamp(5, 0, 0.3)") == 0.3f && std::abs (value ("lerp(0, 1, b)") - 0.25f) < 1.0e-6f
+                   && value ("min(a, b)") == 0.25f && value ("max(a, b)") == 0.8f && value ("t == 2") == 1.0f,
+               "formula: if, clamp, lerp, min, max, comparisons");
+        check (value ("rnd(3.2)") == value ("rnd(3.9)") && value ("rnd(3.2)") != value ("rnd(4.1)") && value ("rnd(7)") >= 0.0f,
+               "formula: rnd changes only when its value passes a whole number");
+        check (value ("5") == 1.0f && value ("-3") == 0.0f && value ("1 / 0") == 0.0f && value ("log(0)") == 0.0f && value ("SIN(PI / 2)") > 0.999f,
+               "formula: the result is clamped to 0..1, a division by zero gives 0, names ignore case");
+        std::string why;
+        const bool refused = sls::Formula::compile ("sin(a", &why) == nullptr && ! why.empty() && sls::Formula::compile ("a + foo") == nullptr
+                             && sls::Formula::compile ("a +") == nullptr && sls::Formula::compile ("min(a)") == nullptr && sls::Formula::compile ("a b") == nullptr;
+        check (refused, "formula: text that cannot be read is refused with a reason (" + why + ")");
+        std::string deep;
+        for (int i = 0; i < 40; ++i)
+            deep += "(1+";
+        deep += "1";
+        for (int i = 0; i < 40; ++i)
+            deep += ")";
+        check (sls::Formula::compile (deep) == nullptr, "formula: a formula nested too deeply for the audio thread's stack is refused");
+    }
+
+    // --- frequency shifter: 1000 Hz moved up by 200 Hz
+    {
+        const auto sine = sineWave (1000.0, 0.5, 48000);
+        const auto up = runEffect (slotWith (sls::EffectType::FrequencyShifter, { 200.0f, 0.0f, 0.0f, 1.0f }), sine);
+        const double at1200 = toneEnergy (up.data(), 8000, 48000, 1200.0), at800 = toneEnergy (up.data(), 8000, 48000, 800.0),
+                     at1000 = toneEnergy (up.data(), 8000, 48000, 1000.0);
+        check (at1200 > 100.0 * at800 && at1200 > 100.0 * at1000, "frequency shifter: one side band only, 200 Hz above");
+        const auto down = runEffect (slotWith (sls::EffectType::FrequencyShifter, { -300.0f, 0.0f, 0.0f, 1.0f }), sine);
+        check (toneEnergy (down.data(), 8000, 48000, 700.0) > 100.0 * toneEnergy (down.data(), 8000, 48000, 1300.0), "frequency shifter: a negative shift moves down");
+        check (std::abs (rmsOf (up, 8000, 48000) / rmsOf (sine, 8000, 48000) - 1.0) < 0.05, "frequency shifter: the level is kept");
+        check (finiteAndBounded (runEffect (slotWith (sls::EffectType::FrequencyShifter, { 1000.0f, 20.0f, 0.9f, 1.0f }), sine), 8.0f),
+               "frequency shifter: full feedback stays bounded");
+    }
+
+    // --- vintage chorus and phaser, Effector, Grains: finite, they change the sound, mix 0 leaves it alone
+    {
+        const auto chord = [] {
+            auto x = sineWave (220.0, 0.3, 48000);
+            const auto y = sineWave (1760.0, 0.2, 48000);
+            for (size_t i = 0; i < x.size(); ++i)
+                x[i] += y[i];
+            return x;
+        }();
+        const auto changes = [&] (const sls::EffectSlot& slot)
+        {
+            const auto out = runEffect (slot, chord);
+            double diff = 0.0;
+            for (size_t i = 0; i < out.size(); ++i)
+                diff = std::max (diff, static_cast<double> (std::abs (out[i] - chord[i])));
+            return finiteAndBounded (out, 6.0f) && diff > 0.01;
+        };
+        const auto changesShown = [&] (const sls::EffectSlot& slot)
+        {
+            const auto out = runEffect (slot, chord);
+            double diff = 0.0;
+            float biggest = 0.0f;
+            bool finite = true;
+            for (size_t i = 0; i < out.size(); ++i)
+            {
+                diff = std::max (diff, static_cast<double> (std::abs (out[i] - chord[i])));
+                finite = finite && std::isfinite (out[i]);
+                biggest = std::max (biggest, std::abs (out[i]));
+            }
+            const bool ok = finite && biggest <= 6.0f && diff > 0.01;
+            if (! ok)
+                std::cout << "    (effector " << slot.params[0] << " x " << slot.params[1] << " y " << slot.params[2] << ": finite " << finite
+                          << ", peak " << biggest << ", largest change " << diff << ")\n";
+            return ok;
+        };
+        bool all = true;
+        for (float mode = 0.0f; mode <= 2.0f; mode += 1.0f)
+            all = all && changes (slotWith (sls::EffectType::VintageChorus, { mode, 1.0f, 0.6f, 0.5f }));
+        check (all, "vintage chorus: the three modes");
+        all = true;
+        for (float model = 0.0f; model <= 2.0f; model += 1.0f)
+            all = all && changes (slotWith (sls::EffectType::VintagePhaser, { model, 2.0f, 1.0f, 0.9f, 0.5f }));
+        check (all, "vintage phaser: the three models, at full feedback");
+        all = true;
+        for (float effect = 0.0f; effect <= 9.0f; effect += 1.0f)
+            // (some corners are transparent by design: Y 0 is "none" for the ring mod and the auto-pan, X 1 is the full sample rate for
+            // the lo-fi and an open filter for the low-pass)
+            for (const auto& [x, y] : { std::pair { 0.0f, 1.0f }, std::pair { 0.5f, 0.5f }, std::pair { 0.2f, 0.8f } })
+                all = changesShown (slotWith (sls::EffectType::Effector, { effect, x, y, 1.0f })) && all;
+        check (all, "effector: all ten effects at three places on the pad");
+        const auto lowPassed = runEffect (slotWith (sls::EffectType::Effector, { 4.0f, 0.4f, 0.3f, 1.0f }), chord); // (about 460 Hz)
+        // (toneEnergy is an amplitude: 460 Hz and 12 dB an octave leave 1760 Hz at about -23 dB)
+        check (toneEnergy (lowPassed.data(), 8000, 48000, 1760.0) < 0.1 * toneEnergy (chord.data(), 8000, 48000, 1760.0)
+                   && toneEnergy (lowPassed.data(), 8000, 48000, 220.0) > 0.9 * toneEnergy (chord.data(), 8000, 48000, 220.0),
+               "effector: the low-pass at a low X keeps the bass and takes the top away");
+        const auto highPassed = runEffect (slotWith (sls::EffectType::Effector, { 5.0f, 0.55f, 0.0f, 1.0f }), chord);
+        check (toneEnergy (highPassed.data(), 8000, 48000, 220.0) < 0.06 * toneEnergy (chord.data(), 8000, 48000, 220.0),
+               "effector: the high-pass takes the bass away");
+        bool dry = true;
+        for (const auto type : { sls::EffectType::VintageChorus, sls::EffectType::VintagePhaser, sls::EffectType::Effector, sls::EffectType::FrequencyShifter })
+        {
+            auto slot = sls::EffectSlot::make (type);
+            slot.params[static_cast<size_t> (sls::effectParamCount (type) - 1)] = 0.0f; // their Mix is the last parameter
+            dry = dry && runEffect (slot, chord) == chord;
+        }
+        check (dry, "vintage chorus, vintage phaser, effector, frequency shifter: mix 0 is bit-exact");
+
+        const auto sine = sineWave (500.0, 0.5, 48000);
+        const auto octave = runEffect (slotWith (sls::EffectType::Grains, { 80.0f, 12.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f }), sine);
+        check (toneEnergy (octave.data(), 12000, 48000, 1000.0) > 5.0 * toneEnergy (octave.data(), 12000, 48000, 500.0),
+               "grains: a pitch of +12 replays the sound an octave up");
+        const auto same = runEffect (slotWith (sls::EffectType::Grains, { 80.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f }), sine);
+        check (toneEnergy (same.data(), 12000, 48000, 500.0) > 5.0 * toneEnergy (same.data(), 12000, 48000, 1000.0)
+                   && rmsOf (same, 12000, 48000) > 0.5 * rmsOf (sine, 12000, 48000),
+               "grains: at pitch 0 the overlapping grains keep the pitch and the level");
+        check (finiteAndBounded (runEffect (slotWith (sls::EffectType::Grains, { 250.0f, -12.0f, 800.0f, 12.0f, 50.0f, 0.8f, 1.0f }), chord), 8.0f),
+               "grains: scatter, random pitch, reverse and feedback at their extremes stay bounded");
+    }
+
+    // --- envelope controller
+    {
+        auto slot = slotWith (sls::EffectType::EnvelopeController, { -30.0f, 10.0f, 100.0f, 50.0f, 50.0f, 0.0f, 100.0f, 0.0f, 2.0f, 1.0f, 0.0f });
+        sls::EffectUnit unit;
+        unit.prepare (kSr);
+        auto loud = sineWave (1000.0, 0.5, 9600);
+        auto loudR = loud;
+        float peak = 0.0f;
+        for (size_t i = 0; i < 960; i += 64) // the first 20 ms
+        {
+            unit.process (slot, loud.data() + i, loudR.data() + i, 64);
+            peak = std::max (peak, unit.controlValue());
+        }
+        check (peak > 0.95f, "envelope controller: the attack reaches the top when the track sounds");
+        for (size_t i = 960; i < loud.size(); i += 64)
+            unit.process (slot, loud.data() + i, loudR.data() + i, 64);
+        check (std::abs (unit.controlValue() - 0.5f) < 0.05f, "envelope controller: it decays to the sustain level while the sound goes on");
+        std::vector<float> quiet (9600, 0.0f), quietR = quiet;
+        for (size_t i = 0; i < quiet.size(); i += 64)
+            unit.process (slot, quiet.data() + i, quietR.data() + i, 64);
+        check (unit.controlValue() < 0.01f, "envelope controller: the release brings it back to the base when the sound stops");
+        check (sls::effectControllerTarget (sls::EffectType::EnvelopeController) == 7 && sls::effectControllerTarget (sls::EffectType::FormulaController) == 3
+                   && sls::effectControllerTarget (sls::EffectType::PeakController) == 5 && ! sls::effectIsController (sls::EffectType::Effector),
+               "controllers: where each one keeps its target");
+
+        // in the mixer: the envelope of a muted kick on track 1 pushes down a Panomatic's volume on track 2
+        auto kick = samplerChannel (sineSample (200.0, 0.4, 48000.0), { sls::Note { 60, 0, kBeat / 2, 1.0f } });
+        kick.mixerTrack = 0;
+        auto pad = samplerChannel (sineSample (1000.0, 1.5, 48000.0), { sls::Note { 60, 0, 2 * kBeat, 1.0f } });
+        pad.mixerTrack = 1;
+        pad.volume = 0.2f;
+        auto project = oneBar ({ kick, pad });
+        project.tracks[0].slots[0] = slotWith (sls::EffectType::EnvelopeController, { -30.0f, 1.0f, 100.0f, 100.0f, 50.0f, 80.0f, -80.0f, 2.0f, 1.0f, 1.0f, 1.0f });
+        project.tracks[1].slots[0] = sls::EffectSlot::make (sls::EffectType::Panomatic);
+        const auto ducked = leftOf (sls::renderToBuffer (project, {}));
+        check (rmsOf (ducked, 30000, 44000) > 50.0 * rmsOf (ducked, 3000, 10000) && rmsOf (ducked, 30000, 44000) > 0.01,
+               "envelope controller: the envelope of one track drives a parameter of an effect on another");
+    }
+
+    // --- formula controller
+    {
+        auto slot = slotWith (sls::EffectType::FormulaController, { 0.8f, 0.25f, 0.0f, 0.0f, 2.0f, 1.0f });
+        sls::EffectUnit unit;
+        unit.prepare (kSr);
+        std::vector<float> l (64, 0.0f), r (64, 0.0f);
+        unit.process (slot, l.data(), r.data(), 64);
+        check (std::abs (unit.controlValue() - 0.8f) < 1.0e-6f, "formula controller: without a formula its value is knob A");
+        slot.formula = sls::Formula::compile ("a * b + 0.1");
+        unit.process (slot, l.data(), r.data(), 64);
+        check (std::abs (unit.controlValue() - 0.3f) < 1.0e-6f, "formula controller: the formula of the knobs");
+        slot.formula = sls::Formula::compile ("saw(beat)");
+        sls::EffectTransport transport;
+        transport.tick = 480.0 * 2.5; // two and a half beats in
+        transport.ticksPerSample = 0.0;
+        unit.process (slot, l.data(), r.data(), 64, transport);
+        check (std::abs (unit.controlValue() - 0.5f) < 1.0e-3f, "formula controller: beat is the song's position");
+
+        // a square wave of the beat switches a Panomatic on track 2 between silent and full
+        auto pad = samplerChannel (sineSample (1000.0, 2.5, 48000.0), { sls::Note { 60, 0, 4 * kBeat, 1.0f } });
+        pad.volume = 0.2f;
+        auto project = oneBar ({ pad });
+        project.tracks[0].slots[0] = slotWith (sls::EffectType::FormulaController, { 0.0f, 0.0f, 0.0f, 0.0f, 2.0f, 1.0f });
+        project.tracks[0].slots[0].formula = sls::Formula::compile ("0.8 * sqr(beat)");
+        project.tracks[0].slots[1] = sls::EffectSlot::make (sls::EffectType::Panomatic);
+        const auto gated = leftOf (sls::renderToBuffer (project, {}));
+        // 120 BPM: a beat is 24000 samples, its first half (12000) on and the second off
+        check (rmsOf (gated, 2000, 10000) > 50.0 * rmsOf (gated, 14000, 22000) && rmsOf (gated, 26000, 34000) > 50.0 * rmsOf (gated, 38000, 46000),
+               "formula controller: a formula of the song's position drives an effect in time");
+
+        auto doc = sls::ProjectDocument::blank();
+        doc.tracks[2].slots[3] = project.tracks[0].slots[0];
+        doc.tracks[2].slots[4] = slotWith (sls::EffectType::Effector, { 6.0f, 0.3f, 0.7f, 1.0f });
+        doc.tracks[2].slots[4].mix = 0.35f;
+        doc.tracks[2].trackSends[5] = { 9, 0.5f, true };
+        doc.tracks[2].delayMs = 12.5f;
+        doc.tracks[2].colour = 0xff4a9fd9u;
+        const auto parsed = sls::ProjectDocument::fromJson (doc.toJson());
+        bool kept = parsed.document.has_value();
+        if (kept)
+        {
+            const auto& t = parsed.document->tracks[2];
+            std::cout << "    (read back: slot 4 " << static_cast<int> (t.slots[3].type) << " formula " << (t.slots[3].formula != nullptr ? t.slots[3].formula->text() : std::string ("none"))
+                      << ", slot 5 " << static_cast<int> (t.slots[4].type) << " mix " << t.slots[4].mix << ", send " << t.trackSends[0].target << " pre "
+                      << t.trackSends[0].preFader << ", delay " << t.delayMs << ", colour " << t.colour << ")\n";
+            kept = t.slots[3].type == sls::EffectType::FormulaController && t.slots[3].formula != nullptr && t.slots[3].formula->text() == "0.8 * sqr(beat)"
+                && t.slots[4].type == sls::EffectType::Effector && std::abs (t.slots[4].mix - 0.35f) < 1.0e-6f && std::abs (t.slots[3].mix - 1.0f) < 1.0e-6f
+                && t.trackSends[0].target == 9 && t.trackSends[0].preFader && ! t.trackSends[1].preFader && std::abs (t.delayMs - 12.5f) < 1.0e-4f
+                && t.colour == 0xff4a9fd9u && parsed.document->tracks[0].colour == 0u && parsed.document->tracks[0].delayMs == 0.0f;
+        }
+        check (kept, "project file: formulas, slot mix, pre-fader sends (the file keeps the sends in use), track delay and strip colour survive a save and a load");
+    }
+
+    // --- the slot mix
+    {
+        const auto sine = sineWave (300.0, 0.4, 24000);
+        auto slot = slotWith (sls::EffectType::Overdrive, { 30.0f, 0.5f, 1.0f, 1.0f });
+        slot.mix = 0.0f;
+        check (runEffect (slot, sine) == sine, "slot mix: 0 leaves the sound before the effect, bit-exact");
+        slot.mix = 1.0f;
+        const auto full = runEffect (slot, sine);
+        slot.mix = 0.5f;
+        const auto half = runEffect (slot, sine);
+        double error = 0.0;
+        for (size_t i = 0; i < sine.size(); ++i)
+            error = std::max (error, static_cast<double> (std::abs (half[i] - 0.5f * (sine[i] + full[i]))));
+        check (error < 1.0e-5, "slot mix: 50 % is the average of the sound before and after the effect");
+        auto plugin = sls::EffectSlot::make (sls::EffectType::PeakController);
+        plugin.mix = 0.0f; // a controller has nothing to mix: it still sees the sound
+        sls::EffectUnit unit;
+        unit.prepare (kSr);
+        auto loud = sineWave (1000.0, 0.5, 4800);
+        auto loudR = loud;
+        for (size_t i = 0; i < loud.size(); i += 64)
+            unit.process (plugin, loud.data() + i, loudR.data() + i, 64);
+        check (unit.controlValue() > 0.2f, "slot mix: a controller ignores it");
+    }
+
+    // --- pre-fader sends, eight sends, the track delay
+    {
+        const auto held = [] (double hz, int track)
+        {
+            auto c = samplerChannel (sineSample (hz, 1.5, 48000.0), { sls::Note { 60, 0, 2 * kBeat, 1.0f } });
+            c.mixerTrack = track;
+            c.volume = 0.2f;
+            return c;
+        };
+        auto project = oneBar ({ held (1000.0, 0) });
+        project.tracks[0].toMaster = false;
+        project.tracks[0].volume = 0.0f;
+        project.tracks[0].trackSends[7] = { 5, 1.0f, false };
+        check (rmsOf (leftOf (sls::renderToBuffer (project, {})), 12000, 36000) < 1.0e-6, "sends: a post-fader send follows the fader down to silence");
+        project.tracks[0].trackSends[7].preFader = true;
+        const auto pre = leftOf (sls::renderToBuffer (project, {}));
+        const auto plain = leftOf (sls::renderToBuffer (oneBar ({ held (1000.0, 0) }), {}));
+        check (std::abs (rmsOf (pre, 12000, 36000) / rmsOf (plain, 12000, 36000) - 1.0) < 0.01,
+               "sends: a pre-fader send (the eighth of the track) takes the sound before the fader");
+        project.tracks[0].mute = true;
+        check (rmsOf (leftOf (sls::renderToBuffer (project, {})), 12000, 36000) < 1.0e-6, "sends: a pre-fader send still follows the mute");
+
+        auto delayed = oneBar ({ held (1000.0, 0) });
+        delayed.tracks[0].delayMs = 10.0f;
+        const auto late = leftOf (sls::renderToBuffer (delayed, {}));
+        const int onPlain = firstOnset (plain.data(), static_cast<int> (plain.size()), 0.01f), onLate = firstOnset (late.data(), static_cast<int> (late.size()), 0.01f);
+        check (onPlain >= 0 && onLate - onPlain == 480, "track delay: 10 ms delays the track by 480 samples (" + std::to_string (onLate - onPlain) + ")");
+        auto two = oneBar ({ held (1000.0, 0), held (1500.0, 1) });
+        two.tracks[1].delayMs = 5.0f;
+        const auto mixed = leftOf (sls::renderToBuffer (two, {}));
+        const auto twoPlain = leftOf (sls::renderToBuffer (oneBar ({ held (1000.0, 0), held (1500.0, 1) }), {}));
+        // the 1000 Hz track starts as before (the sum crosses the threshold a sample or two later without the other) and the
+        // 1500 Hz one is all there, 240 samples later
+        check (std::abs (firstOnset (mixed.data(), static_cast<int> (mixed.size()), 0.01f) - firstOnset (twoPlain.data(), static_cast<int> (twoPlain.size()), 0.01f)) < 24
+                   && toneEnergy (mixed.data(), 12000, 36000, 1500.0) > 0.9 * toneEnergy (twoPlain.data(), 12000, 36000, 1500.0)
+                   && std::abs (toneEnergy (mixed.data(), 12000, 36000, 1000.0) / toneEnergy (twoPlain.data(), 12000, 36000, 1000.0) - 1.0) < 0.01,
+               "track delay: only the delayed track moves");
+    }
+
+    // --- delay compensation of the aux buses
+    {
+        const auto held = [] (double hz, int track)
+        {
+            auto c = samplerChannel (sineSample (hz, 1.5, 48000.0), { sls::Note { 60, 0, 2 * kBeat, 1.0f } });
+            c.mixerTrack = track;
+            c.volume = 0.1f;
+            return c;
+        };
+        auto project = oneBar ({ held (1000.0, 0), held (1500.0, 1) });
+        project.tracks[0].sends[0] = 1.0f;
+        project.console.aux[0].volume = 1.0f;
+        const auto plain = leftOf (sls::renderToBuffer (project, {}));
+        project.console.aux[0].slots[0] = slotWith (sls::EffectType::Maximizer, { 0.0f, -1.0f, 100.0f, 0.0f, 0.0f });
+        sls::Player player;
+        player.prepare (kSr);
+        renderBlocks (player, project, true, 0.2);
+        check (player.outputLatencySamples() > 16, "aux buses: the latency of an effect on a bus is reported (" + std::to_string (player.outputLatencySamples()) + " samples)");
+        const auto compensated = leftOf (sls::renderToBuffer (project, {}));
+        double error = 0.0;
+        for (size_t i = 4800; i < 40000; ++i)
+            error = std::max (error, static_cast<double> (std::abs (compensated[i] - plain[i])));
+        check (compensated.size() == plain.size() && error < 0.004, "aux buses: the tracks and the other bus wait for the bus with latency (error " + std::to_string (error) + ")");
+    }
+
+    // --- the sampler's envelope delay and hold, the second LFO, the resonance
+    {
+        auto channel = samplerChannel (sineSample (1000.0, 1.0, 48000.0), { sls::Note { 60, 0, kBeat, 1.0f } });
+        channel.sampler.envelope = true;
+        channel.sampler.attack = 0.001f;
+        channel.sampler.decay = 0.05f;
+        channel.sampler.sustain = 0.0f;
+        const auto plain = leftOf (sls::renderToBuffer (oneBar ({ channel }), {}));
+        channel.sampler.delay = 0.1f;
+        const auto waited = leftOf (sls::renderToBuffer (oneBar ({ channel }), {}));
+        const int onPlain = firstOnset (plain.data(), static_cast<int> (plain.size()), 0.02f), onWaited = firstOnset (waited.data(), static_cast<int> (waited.size()), 0.02f);
+        check (std::abs ((onWaited - onPlain) - 4800) < 64, "sampler: the envelope's delay holds the note back 100 ms (" + std::to_string (onWaited - onPlain) + ")");
+        channel.sampler.delay = 0.0f;
+        channel.sampler.hold = 0.2f;
+        const auto heldOut = leftOf (sls::renderToBuffer (oneBar ({ channel }), {}));
+        check (rmsOf (heldOut, 5000, 9000) > 0.5 * rmsOf (heldOut, 200, 1000) && rmsOf (plain, 5000, 9000) < 0.05 * rmsOf (plain, 200, 1000),
+               "sampler: the hold keeps the note at full level before it decays");
+
+        auto filtered = samplerChannel (sineSample (800.0, 1.5, 48000.0), { sls::Note { 60, 0, 2 * kBeat, 1.0f } });
+        filtered.sampler.filter = sls::SamplerFilter::LowPass;
+        filtered.sampler.cutoff = 0.534f; // (about 800 Hz)
+        filtered.sampler.resonance = 0.4f;
+        const auto still = leftOf (sls::renderToBuffer (oneBar ({ filtered }), {}));
+        filtered.sampler.lfo2Target = sls::SamplerLfoTarget::Resonance;
+        filtered.sampler.lfo2Rate = 4.0f;
+        filtered.sampler.lfo2Depth = 1.0f;
+        const auto wobbling = leftOf (sls::renderToBuffer (oneBar ({ filtered }), {}));
+        double lowest = 1.0e9, highest = 0.0;
+        for (int at = 6000; at + 2400 <= 42000; at += 1200)
+        {
+            const double r = rmsOf (wobbling, at, at + 2400);
+            lowest = std::min (lowest, r);
+            highest = std::max (highest, r);
+        }
+        check (finiteAndBounded (wobbling, 8.0f) && highest > 1.3 * lowest && wobbling != still,
+               "sampler: the second LFO on the resonance makes the level at the cutoff rise and fall");
+        filtered.sampler.lfoTarget = sls::SamplerLfoTarget::Volume;
+        filtered.sampler.lfoDepth = 1.0f;
+        filtered.sampler.lfoRate = 2.0f;
+        check (finiteAndBounded (leftOf (sls::renderToBuffer (oneBar ({ filtered }), {})), 8.0f), "sampler: two LFOs at once");
+
+        sls::SamplerSettings set;
+        set.delay = 0.25f;
+        set.hold = 0.5f;
+        set.lfo2Target = sls::SamplerLfoTarget::Resonance;
+        set.lfo2Rate = 3.0f;
+        set.lfo2Depth = 0.75f;
+        set.lfoTarget = sls::SamplerLfoTarget::Resonance;
+        const auto back = sls::samplerSettingsFromVar (sls::samplerSettingsToVar (set));
+        check (back.delay == 0.25f && back.hold == 0.5f && back.lfo2Target == sls::SamplerLfoTarget::Resonance && back.lfo2Rate == 3.0f
+                   && back.lfo2Depth == 0.75f && back.lfoTarget == sls::SamplerLfoTarget::Resonance,
+               "sampler: delay, hold and the second LFO survive a save and a load");
+    }
+
+    // --- the Channel Rack: rotate and randomize the steps
+    {
+        std::vector<sls::Note> notes;
+        int setSteps = 0;
+        const int pattern = 16 * sls::steps::kStepTicks;
+        sls::steps::setStep (notes, setSteps, 0, true, pattern, 60, 0.5f);
+        sls::steps::setStep (notes, setSteps, 15, true, pattern, 60, 0.7f);
+        check (sls::steps::rotateSteps (notes, 1, pattern, 60), "steps: rotate right moves them");
+        std::set<int> on;
+        for (const auto& n : notes)
+            on.insert (n.startTick / sls::steps::kStepTicks);
+        float firstVelocity = 0.0f;
+        for (const auto& n : notes)
+            firstVelocity = n.startTick == 0 ? n.velocity : firstVelocity;
+        check (on == std::set<int> { 0, 1 } && std::abs (firstVelocity - 0.7f) < 1.0e-6f, "steps: the last step comes round to the first, keeping its velocity");
+        sls::steps::rotateSteps (notes, -2, pattern, 60);
+        on.clear();
+        for (const auto& n : notes)
+            on.insert (n.startTick / sls::steps::kStepTicks);
+        check (on == std::set<int> { 14, 15 }, "steps: rotate left wraps the other way");
+
+        std::vector<sls::Note> a, b;
+        int sa = 0, sb = 0;
+        sls::steps::randomizeSteps (a, sa, pattern, 60, 0.5f, 1234u);
+        sls::steps::randomizeSteps (b, sb, pattern, 60, 0.5f, 1234u);
+        bool velocities = true;
+        for (const auto& n : a)
+            velocities = velocities && n.velocity >= 0.55f && n.velocity <= 1.0f && sls::steps::isStepNote (n, 60);
+        bool sameSeedSame = a.size() == b.size();
+        for (size_t i = 0; sameSeedSame && i < a.size(); ++i)
+            sameSeedSame = a[i].startTick == b[i].startTick && a[i].velocity == b[i].velocity;
+        check (sameSeedSame && a.size() >= 3 && a.size() <= 13 && velocities, "steps: randomize (half the steps, the same seed the same pattern, velocities 0.55..1)");
+        std::vector<sls::Note> none;
+        int sn = 0;
+        sls::steps::randomizeSteps (none, sn, pattern, 60, 0.0f, 99u);
+        check (none.empty(), "steps: randomize at density 0 leaves nothing on");
+    }
+
+    // --- the Piano Roll's claw machine
+    {
+        std::vector<sls::Note> notes;
+        for (int i = 0; i < 8; ++i)
+            notes.push_back ({ 60 + i, i * kBeat / 4, kBeat / 4, 0.8f }); // eight 16ths: two beats
+        std::vector<bool> selected (notes.size(), false);
+        sls::theory::clawMachine (notes, selected, kBeat, kBeat / 4);
+        bool right = notes.size() == 6;
+        for (size_t i = 0; right && i < notes.size(); ++i)
+            right = notes[i].startTick == static_cast<int> (i) * kBeat / 4 && notes[i].lengthTicks == kBeat / 4;
+        check (right && notes[3].pitch == 64 && selected.size() == notes.size(), "claw machine: the last 16th of each beat is cut out and the rest closes up");
+        std::vector<sls::Note> longNote { { 60, 0, kBeat, 0.8f } };
+        std::vector<bool> none;
+        sls::theory::clawMachine (longNote, none, kBeat, kBeat / 4);
+        check (longNote.size() == 1 && longNote[0].lengthTicks == 3 * kBeat / 4, "claw machine: a note that reaches into a cut slice ends where it starts");
+    }
+
+    // --- the Playlist: chop a clip
+    {
+        sls::Arrangement a;
+        a.patterns.resize (1);
+        a.clips.push_back ({ 0, 0, 2 * kBeat, 4 * kBeat });
+        const int cuts = sls::chopPatternClip (a, 0, kBeat);
+        std::vector<int> starts;
+        for (const auto& c : a.clips)
+            starts.push_back (c.startTick);
+        std::sort (starts.begin(), starts.end());
+        bool lengths = true;
+        for (const auto& c : a.clips)
+            lengths = lengths && c.lengthTicks == kBeat;
+        check (cuts == 3 && a.clips.size() == 4 && starts == std::vector<int> { 2 * kBeat, 3 * kBeat, 4 * kBeat, 5 * kBeat } && lengths,
+               "chop: a clip of four beats becomes four clips of one");
+        check (sls::chopPatternClip (a, 0, 2 * kBeat) == 0, "chop: a clip not longer than a piece is left whole");
+    }
+
+    // --- polyphony and the MIDI pads
+    {
+        sls::Player player;
+        player.prepare (kSr);
+        const auto chord = oneBar ({ synthChannel ({ { 60, 0, 2 * kBeat, 0.8f }, { 64, 0, 2 * kBeat, 0.8f }, { 67, 0, 2 * kBeat, 0.8f } }) });
+        renderBlocks (player, chord, true, 0.3);
+        check (player.polyphony() == 3, "polyphony: three notes sounding are counted (" + std::to_string (player.polyphony()) + ")");
+        renderBlocks (player, chord, false, 3.0);
+        check (player.polyphony() == 0, "polyphony: none once they have stopped");
+
+        const auto first = sls::performancePad (36), seventh = sls::performancePad (42), stop = sls::performancePad (43), next = sls::performancePad (44);
+        check (first.kind == sls::PadAction::Kind::Launch && first.row == 0 && first.column == 0 && seventh.kind == sls::PadAction::Kind::Launch
+                   && seventh.column == 6 && stop.kind == sls::PadAction::Kind::StopRow && stop.row == 0 && next.row == 1 && next.column == 0
+                   && sls::performancePad (35).kind == sls::PadAction::Kind::None && sls::performancePad (100).kind == sls::PadAction::Kind::None,
+               "MIDI pads: from C1, eight to a row, the eighth stops the row");
+    }
+}
+
 void testRackPlaylistToolbar062()
 {
     std::cout << "Layer channel, master pitch, marker actions, playlist groups (0.62.0)\n";
@@ -13091,6 +13569,7 @@ int main()
     testFlParity062();
     testMixer062();
     testRackPlaylistToolbar062();
+    testFlParity070();
     testOneShot();
     testAutomation();
     testMidiImport();

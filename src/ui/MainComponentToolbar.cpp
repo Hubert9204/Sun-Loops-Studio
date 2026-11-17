@@ -74,7 +74,11 @@ void MainComponent::updateToolbarReadouts()
             memoryText = bytes <= 0 ? juce::String ("\n")
                        : megabytes < 1000 ? "\nRAM " + juce::String (megabytes) + "M" : "\nRAM " + juce::String (static_cast<double> (megabytes) / 1024.0, 1) + "G";
         }
-        cpuLabel.setText ("CPU " + juce::String (percent) + " %" + (memoryText.length() > 1 ? memoryText : juce::String()), juce::dontSendNotification);
+        // 0.70.0: the polyphony (the notes of the built-in instruments sounding now), as FL Studio's count next to the CPU
+        const int voices = engine.polyphony();
+        cpuLabel.setText ("CPU " + juce::String (percent) + "%" + (voices > 0 ? " " + juce::String (voices) + "v" : juce::String())
+                              + (memoryText.length() > 1 ? memoryText : juce::String()),
+                          juce::dontSendNotification);
         cpuLabel.setColour (juce::Label::textColourId, percent >= 85 ? juce::Colour (0xffd9534f) : percent >= 60 ? juce::Colour (0xffe8b030)
                                                                                                                  : juce::Colour (0xffb9bfc9));
     }

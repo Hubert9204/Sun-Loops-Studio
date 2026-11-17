@@ -9,6 +9,7 @@
 
 #include "audio/Biquad.h"
 #include "audio/Convolver.h"
+#include "audio/Formula.h"
 #include "audio/HostedPlugin.h"
 
 namespace sls
@@ -37,10 +38,18 @@ enum class EffectType : std::uint8_t
     WaveShaper,     // Fruity WaveShaper: a choice of curves
     Vocoder,        // Fruity Vocoder / Vocodex: a voice shapes a carrier
     PeakController, // Fruity Peak Controller: the level of this track (and an LFO) drives a parameter of another effect
-    Convolver       // Fruity Convolver: a convolution reverb
+    Convolver,      // Fruity Convolver: a convolution reverb
+    // 0.70.0
+    FrequencyShifter,   // Frequency Shifter: every frequency moves by the same number of Hz
+    VintageChorus,      // Vintage Chorus: the two-button ensemble of an analogue polysynth (a bucket-brigade delay)
+    VintagePhaser,      // Vintage Phaser: three four-stage pedals
+    Effector,           // Effector: ten effects, each with two controls (X and Y)
+    Grains,             // Fruity Granulizer as an effect: the last moments of the sound replayed as grains
+    EnvelopeController, // Fruity Envelope Controller: an envelope started by the track's sound drives a parameter
+    FormulaController   // Fruity Formula Controller: a formula of time, the song position, the level and three knobs
 };
 
-constexpr int kEffectTypeCount = 28;
+constexpr int kEffectTypeCount = 35;
 constexpr int kMaxEffectParams = 24; // 0.61.0: 24 (the 7-band EQ has 22); 8 before
 constexpr int kSlotsPerTrack = 10; // insert effects per mixer track, aux bus and master (0.45.0: 10, as in FL Studio; 4 before)
 
@@ -57,12 +66,14 @@ inline constexpr EffectMenuEntry kEffectMenu[] = {
     { EffectType::Gate, nullptr },              { EffectType::Transient, nullptr },
     { EffectType::Overdrive, "Drive" },         { EffectType::WaveShaper, nullptr },     { EffectType::Squeeze, nullptr },
     { EffectType::Chorus, "Modulation" },       { EffectType::Flanger, nullptr },        { EffectType::Phaser, nullptr },
-    { EffectType::Vibrato, nullptr },
+    { EffectType::Vibrato, nullptr },           { EffectType::VintageChorus, nullptr },  { EffectType::VintagePhaser, nullptr },
+    { EffectType::FrequencyShifter, nullptr },
     { EffectType::Reverb, "Space and time" },   { EffectType::Convolver, nullptr },      { EffectType::Delay, nullptr },
-    { EffectType::TimeShaper, nullptr },
+    { EffectType::TimeShaper, nullptr },        { EffectType::Grains, nullptr },
+    { EffectType::Effector, "Multi-effect" },
     { EffectType::PitchCorrector, "Pitch and voice" }, { EffectType::Vocoder, nullptr },
     { EffectType::Imager, "Stereo" },           { EffectType::Panomatic, nullptr },
-    { EffectType::PeakController, "Controllers" },
+    { EffectType::PeakController, "Controllers" }, { EffectType::EnvelopeController, nullptr }, { EffectType::FormulaController, nullptr },
 };
 
 struct EffectParamInfo
@@ -104,6 +115,13 @@ inline const char* effectName (EffectType t) noexcept
         case EffectType::Vocoder:      return "Vocoder";
         case EffectType::PeakController: return "Peak Controller";
         case EffectType::Convolver:    return "Convolver";
+        case EffectType::FrequencyShifter: return "Frequency Shifter";
+        case EffectType::VintageChorus: return "Vintage Chorus";
+        case EffectType::VintagePhaser: return "Vintage Phaser";
+        case EffectType::Effector:     return "Effector";
+        case EffectType::Grains:       return "Grains";
+        case EffectType::EnvelopeController: return "Envelope Controller";
+        case EffectType::FormulaController: return "Formula Controller";
         case EffectType::None:         break;
     }
     return "Empty";
@@ -308,6 +326,57 @@ inline constexpr EffectParamInfo convolver[] = { { "Space", "", 0.0f, 5.0f, 1.0f
                                                  { "Mix", "", 0.0f, 1.0f, 0.3f },
                                                  { "Output", "dB", -24.0f, 12.0f, 0.0f } };
 
+// 0.70.0
+// Every frequency moves by Shift (so harmonics stop being harmonic); Stereo moves the left channel up and the right one down by
+// that much more, Feedback sends the shifted sound round again (a spiral of shifts).
+inline constexpr EffectParamInfo freqshift[] = { { "Shift", "Hz", -1000.0f, 1000.0f, 50.0f },
+                                                 { "Stereo", "Hz", 0.0f, 20.0f, 0.0f },
+                                                 { "Feedback", "", 0.0f, 0.9f, 0.0f },
+                                                 { "Mix", "", 0.0f, 1.0f, 1.0f } };
+inline constexpr EffectParamInfo vchorus[] = { { "Mode", "", 0.0f, 2.0f, 0.0f, "I|II|I+II" },
+                                               { "Depth", "", 0.0f, 1.0f, 1.0f },
+                                               { "Tone", "", 0.0f, 1.0f, 0.6f },
+                                               { "Mix", "", 0.0f, 1.0f, 0.5f } };
+inline constexpr EffectParamInfo vphaser[] = { { "Model", "", 0.0f, 2.0f, 0.0f, "Stone|Ninety|Vibe" },
+                                               { "Rate", "Hz", 0.05f, 10.0f, 0.5f },
+                                               { "Depth", "", 0.0f, 1.0f, 0.8f },
+                                               { "Feedback", "", 0.0f, 0.9f, 0.5f },
+                                               { "Mix", "", 0.0f, 1.0f, 0.5f } };
+// What X and Y do depends on the effect: see runEffector (and the manual).
+inline constexpr EffectParamInfo effector[] = { { "Effect", "", 0.0f, 9.0f, 0.0f,
+                                                  "Distortion|Lo-fi|Flanger|Phaser|Low-pass|High-pass|Delay|Ring mod|Auto-pan|Formant" },
+                                                { "X", "", 0.0f, 1.0f, 0.5f },
+                                                { "Y", "", 0.0f, 1.0f, 0.5f },
+                                                { "Mix", "", 0.0f, 1.0f, 1.0f } };
+inline constexpr EffectParamInfo grains[] = { { "Grain", "ms", 10.0f, 250.0f, 80.0f },
+                                              { "Pitch", "st", -12.0f, 12.0f, 0.0f },
+                                              { "Scatter", "ms", 0.0f, 800.0f, 100.0f },
+                                              { "Random pitch", "st", 0.0f, 12.0f, 0.0f },
+                                              { "Reverse", "%", 0.0f, 100.0f, 0.0f },
+                                              { "Feedback", "", 0.0f, 0.8f, 0.0f },
+                                              { "Mix", "", 0.0f, 1.0f, 0.5f } };
+// value = Base + Amount x an envelope that starts each time the track's sound rises above Threshold and is released when it
+// falls below it; the target as the Peak Controller's.
+inline constexpr EffectParamInfo envctl[] = { { "Threshold", "dB", -60.0f, 0.0f, -30.0f },
+                                              { "Attack", "ms", 0.5f, 2000.0f, 10.0f },
+                                              { "Decay", "ms", 1.0f, 4000.0f, 300.0f },
+                                              { "Sustain", "%", 0.0f, 100.0f, 0.0f },
+                                              { "Release", "ms", 1.0f, 4000.0f, 300.0f },
+                                              { "Base", "%", 0.0f, 100.0f, 0.0f },
+                                              { "Amount", "%", -100.0f, 100.0f, 100.0f },
+                                              { "Target track", "track", 0.0f, 500.0f, 0.0f },
+                                              { "Target slot", "", 1.0f, 10.0f, 2.0f },
+                                              { "Target param", "", 1.0f, 24.0f, 1.0f },
+                                              { "Mute", "", 0.0f, 1.0f, 0.0f, "Off|On" } };
+// value = the slot's formula (see Formula.h) of the knobs A, B and C, the time, the song position and the track's level; with no
+// formula it is A.
+inline constexpr EffectParamInfo formulactl[] = { { "A", "", 0.0f, 1.0f, 0.5f },
+                                                  { "B", "", 0.0f, 1.0f, 0.5f },
+                                                  { "C", "", 0.0f, 1.0f, 0.5f },
+                                                  { "Target track", "track", 0.0f, 500.0f, 0.0f },
+                                                  { "Target slot", "", 1.0f, 10.0f, 2.0f },
+                                                  { "Target param", "", 1.0f, 24.0f, 1.0f } };
+
 // The scales' notes as bit masks (bit n: n semitones above the key), in the order of the Scale choice; equal to theory::scales().
 inline constexpr std::uint16_t kPitchScaleMasks[] = { 0x0fff, 0x0ab5, 0x05ad, 0x09ad, 0x0aad, 0x06ad, 0x05ab, 0x0ad5, 0x06b5, 0x056b, 0x0295, 0x04a9, 0x04e9 };
 
@@ -346,6 +415,13 @@ inline int effectParamCount (EffectType t) noexcept
         case EffectType::Vocoder:      return count (vocoder);
         case EffectType::PeakController: return count (peakctl);
         case EffectType::Convolver:    return count (convolver);
+        case EffectType::FrequencyShifter: return count (freqshift);
+        case EffectType::VintageChorus: return count (vchorus);
+        case EffectType::VintagePhaser: return count (vphaser);
+        case EffectType::Effector:     return count (effector);
+        case EffectType::Grains:       return count (grains);
+        case EffectType::EnvelopeController: return count (envctl);
+        case EffectType::FormulaController: return count (formulactl);
         case EffectType::Plugin:
         case EffectType::None:         break;
     }
@@ -387,6 +463,13 @@ inline EffectParamInfo effectParamInfo (EffectType t, int index) noexcept
         case EffectType::Vocoder:      return vocoder[i];
         case EffectType::PeakController: return peakctl[i];
         case EffectType::Convolver:    return convolver[i];
+        case EffectType::FrequencyShifter: return freqshift[i];
+        case EffectType::VintageChorus: return vchorus[i];
+        case EffectType::VintagePhaser: return vphaser[i];
+        case EffectType::Effector:     return effector[i];
+        case EffectType::Grains:       return grains[i];
+        case EffectType::EnvelopeController: return envctl[i];
+        case EffectType::FormulaController: return formulactl[i];
         case EffectType::Plugin:
         case EffectType::None:         break;
     }
@@ -400,14 +483,24 @@ inline int effectChoice (EffectType t, int index, float value) noexcept
     return static_cast<int> (std::lround (std::clamp (value, info.min, info.max)));
 }
 
+// The controllers (0.62.0 the Peak Controller, 0.70.0 the Envelope and Formula Controllers) drive a parameter of another effect:
+// the index of their "Target track" parameter ("Target slot" and "Target param" follow it), or -1 for the other effects.
+inline int effectControllerTarget (EffectType t) noexcept
+{
+    return t == EffectType::PeakController ? 5 : (t == EffectType::EnvelopeController ? 7 : (t == EffectType::FormulaController ? 3 : -1));
+}
+inline bool effectIsController (EffectType t) noexcept { return effectControllerTarget (t) >= 0; }
+
 // One slot of a mixer track's effect chain: a type, a bypass switch and its parameter values.
 struct EffectSlot
 {
     EffectType type = EffectType::None;
     bool bypass = false;
+    float mix = 1.0f; // 0.70.0, the slot's own mix knob (as FL Studio's): 0 = only the sound before the effect .. 1 = only the effect's
     std::array<float, kMaxEffectParams> params {};
     std::shared_ptr<HostedPlugin> plugin; // EffectType::Plugin only (its parameters live in the plugin)
     std::shared_ptr<Convolver> convolver; // EffectType::Convolver only (0.62.0): its impulse response, see prepareConvolver
+    std::shared_ptr<const Formula> formula; // EffectType::FormulaController only (0.70.0); null: the value is knob A
 
     static EffectSlot make (EffectType t) noexcept
     {
@@ -429,6 +522,9 @@ struct EffectSlot
             s.plugin = nullptr;
         if (type != EffectType::Convolver)
             s.convolver = nullptr;
+        if (type != EffectType::FormulaController)
+            s.formula = nullptr;
+        s.mix = std::isfinite (mix) ? std::clamp (mix, 0.0f, 1.0f) : 1.0f;
         for (int i = 0; i < kMaxEffectParams; ++i)
         {
             auto& v = s.params[static_cast<size_t> (i)];
@@ -447,7 +543,8 @@ struct EffectSlot
 
     bool operator== (const EffectSlot& o) const noexcept
     {
-        return type == o.type && bypass == o.bypass && params == o.params && plugin == o.plugin && convolver == o.convolver;
+        return type == o.type && bypass == o.bypass && params == o.params && plugin == o.plugin && convolver == o.convolver
+            && formula == o.formula && std::abs (mix - o.mix) < 1.0e-6f;
     }
 };
 
@@ -536,7 +633,8 @@ inline bool effectNeedsMemory (EffectType t) noexcept
 {
     return t == EffectType::Reverb || t == EffectType::Delay || t == EffectType::Chorus || t == EffectType::PitchCorrector
         || t == EffectType::Flanger || t == EffectType::Vibrato // 0.61.0
-        || t == EffectType::Vocoder; // 0.62.0
+        || t == EffectType::Vocoder // 0.62.0
+        || t == EffectType::VintageChorus || t == EffectType::Effector || t == EffectType::Grains; // 0.70.0
 }
 
 // The DSP behind one slot. All memory is allocated in prepare() (or lent: attachMemory, attachTimeBuffer); process() never
@@ -564,7 +662,7 @@ public:
     // Samples by which the effect delays the sound (the Maximizer looks ahead); 0 for the others.
     int latencySamples (EffectType t) const noexcept { return t == EffectType::Maximizer ? lookahead : 0; }
 
-    // The Peak Controller's value after the last block, 0..1 (0.62.0); the Player writes it into the parameter it drives.
+    // A controller's value after the last block, 0..1 (0.62.0); the Player writes it into the parameter it drives.
     float controlValue() const noexcept { return control; }
 
 private:
@@ -606,6 +704,15 @@ private:
     void runVocoder (const EffectSlot&, float*, float*, int, const EffectTransport&) noexcept;
     void runPeakController (const EffectSlot&, float*, float*, int) noexcept;
     void runConvolver (const EffectSlot&, float*, float*, int) noexcept;
+    // 0.70.0
+    void runFrequencyShifter (const EffectSlot&, float*, float*, int) noexcept;
+    void runVintageChorus (const EffectSlot&, float*, float*, int) noexcept;
+    void runVintagePhaser (const EffectSlot&, float*, float*, int) noexcept;
+    void runEffector (const EffectSlot&, float*, float*, int) noexcept;
+    void runGrains (const EffectSlot&, float*, float*, int) noexcept;
+    void runEnvelopeController (const EffectSlot&, float*, float*, int) noexcept;
+    void runFormulaController (const EffectSlot&, float*, float*, int, const EffectTransport&) noexcept;
+    void runSlot (const EffectSlot&, float*, float*, int, const EffectTransport&) noexcept;
     void setReverbType (int type) noexcept;
 
     double sampleRate = 48000.0;
@@ -672,6 +779,25 @@ private:
     float control = 0.0f;
     std::array<float, 4> vocCached { -1.0f, -1.0f, -1.0f, -1.0f };
     const Convolver* convolverSeen = nullptr;
+
+    // 0.70.0: the frequency shifter's two all-pass chains per channel (four sections each: x1, x2, y1, y2), the delayed sample of
+    // the first chain and the oscillator's phase; the grains; the controllers' envelope stage and clock
+    std::array<std::array<std::array<float, 4>, 8>, 2> hilbert {};
+    std::array<float, 2> hilbertHeld {};
+    std::array<double, 2> shiftPhase {};
+    struct Grain
+    {
+        double delay = 0.0, drift = 0.0; // samples behind the write position, and how that changes per sample
+        int age = 0, life = 0;           // life 0: not playing
+    };
+    static constexpr int kGrains = 4;
+    std::array<Grain, kGrains> grainVoices {};
+    int grainClock = 0;
+    std::uint32_t grainRandom = 0x2545f491u;
+    std::array<std::array<float, 4>, 2> vintageCoef {}; // the vintage phaser's four stages per channel
+    int ctlStage = 0; // envelope controller: 0 idle, 1 attack, 2 decay / sustain, 3 release
+    float ctlLevel = 0.0f;
+    double ctlTime = 0.0, ctlBeat = 0.0;
 
     // time shaper
     float* timeL = nullptr;

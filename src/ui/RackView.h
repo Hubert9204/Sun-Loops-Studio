@@ -160,6 +160,18 @@ public:
             resized();
         };
         addAndMakeVisible (graphButton);
+        // 0.70.0: the swing of every channel at once (FL Studio's global swing knob)
+        swingLabel.setFont (juce::FontOptions (12.0f));
+        swingLabel.setColour (juce::Label::textColourId, juce::Colour (0xffd0d4dc));
+        swingLabel.setText ("Swing", juce::dontSendNotification);
+        addAndMakeVisible (swingLabel);
+        swingSlider.setRange (0.0, 100.0, 1.0);
+        swingSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 44, 18);
+        swingSlider.setTextValueSuffix (" %");
+        swingSlider.setDoubleClickReturnValue (true, 0.0);
+        swingSlider.setTooltip ("Global swing: sets the swing of every channel at once (each channel's own swing slider still moves it alone)");
+        swingSlider.onValueChange = [this] { if (onGlobalSwing) onGlobalSwing (static_cast<float> (swingSlider.getValue() * 0.01)); };
+        addAndMakeVisible (swingSlider);
         addChildComponent (graph);
         setGroups ({}, {});
         setPatternBeats (4);
@@ -177,6 +189,9 @@ public:
         groupBox.setSelectedId (current.isEmpty() || found < 0 ? 1 : found + 2, juce::dontSendNotification);
     }
     StepGraph& stepGraph() noexcept { return graph; }
+    // 0.70.0
+    std::function<void (float)> onGlobalSwing; // 0..1, for every channel
+    void setGlobalSwing (float swing) { swingSlider.setValue (std::round (swing * 100.0f), juce::dontSendNotification); }
     bool graphShown() const noexcept { return graph.isVisible(); }
 
     std::function<void (juce::Component&)> onOptionsMenu; // 0.60.0: show the channel options menu under this button
@@ -213,6 +228,19 @@ public:
         bar.removeFromLeft (6);
         graphButton.setBounds (bar.removeFromLeft (58));
         bar.removeFromLeft (8);
+        if (bar.getWidth() > 520) // (the swing makes room for the pattern's length on a narrow rack)
+        {
+            swingLabel.setBounds (bar.removeFromLeft (40));
+            swingSlider.setBounds (bar.removeFromLeft (130));
+            bar.removeFromLeft (8);
+            swingLabel.setVisible (true);
+            swingSlider.setVisible (true);
+        }
+        else
+        {
+            swingLabel.setVisible (false);
+            swingSlider.setVisible (false);
+        }
         if (graph.isVisible()) // (as wide as the rows above it, which a scroll bar may have narrowed)
             graph.setBounds (area.removeFromBottom (StepGraph::kHeight).withWidth (std::max (1, rack.getMaximumVisibleWidth())));
         longerButton.setBounds (bar.removeFromRight (28));
@@ -233,6 +261,8 @@ private:
     juce::TextButton optionsButton { juce::String::fromUTF8 ("\xe2\x89\xa1") }; // "≡" (0.60.0)
     juce::ComboBox groupBox;                   // 0.62.0
     juce::TextButton graphButton { "Graph" };
+    juce::Label swingLabel;                    // 0.70.0
+    juce::Slider swingSlider { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
     StepGraph graph;
 };
 } // namespace sls

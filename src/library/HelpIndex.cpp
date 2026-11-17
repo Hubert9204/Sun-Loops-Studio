@@ -93,6 +93,14 @@ const std::map<std::string, std::string>& synonyms()
         { "blocca", "lock" }, { "bloccare", "lock" }, { "gruppo", "group" }, { "gruppi", "group" }, { "raggruppa", "group" },
         { "controller", "controller" }, { "peak", "controller" }, { "ducking", "controller" }, { "colore", "colour" },
         { "colori", "colour" }, { "color", "colour" }, { "colors", "colour" }, { "intonazione", "pitch" },
+        // 0.70.0
+        { "granulizer", "grains" }, { "granulare", "grains" }, { "granular", "grains" }, { "grani", "grains" },
+        { "frequency", "frequency" }, { "frequenza", "frequency" }, { "shifter", "shifter" }, { "formula", "formula" },
+        { "espressione", "formula" }, { "envelope", "envelope" }, { "inviluppo", "envelope" }, { "effector", "effector" },
+        { "polyphony", "polyphony" }, { "polifonia", "polyphony" }, { "voices", "polyphony" }, { "voci", "polyphony" },
+        { "claw", "claw" }, { "chop", "chop" }, { "taglia", "chop" }, { "tagliare", "chop" }, { "pezzi", "chop" },
+        { "pads", "pads" }, { "pad", "pads" }, { "prefader", "pre" }, { "rotate", "rotate" }, { "ruota", "rotate" },
+        { "randomize", "randomize" }, { "casuale", "randomize" }, { "random", "randomize" },
     };
     return map;
 }

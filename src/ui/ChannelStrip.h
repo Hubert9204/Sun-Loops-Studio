@@ -45,6 +45,9 @@ public:
     // 0.61.0, as FL Studio's step menu: a step every `every` steps (1 = all of them), or none; true when anything changed.
     bool fillEvery (int every);
     bool clearSteps();
+    // 0.70.0: the steps moved one place (wrapping round), and a random pattern
+    bool rotateSteps (int by);
+    bool randomizeSteps (float density);
 
 private:
     static constexpr int kStepTicks = steps::kStepTicks;

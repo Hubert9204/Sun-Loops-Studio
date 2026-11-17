@@ -543,6 +543,9 @@ private:
     std::vector<PerformanceSegment> performanceSegments;
     std::vector<PerformanceLane> performanceLanes;
     int performanceQuantise = 1; // the id of the panel's choice: 1 bar, 2 bars, 4 bars, a beat, a 16th
+    bool performancePads = false; // 0.70.0: MIDI notes from C1 up launch the window's cells (see audio/PerformancePads.h)
+    void performancePadNote (int note);
+    std::vector<std::vector<int>> performanceRows (std::vector<int>* rowTracks = nullptr) const; // per row: its clips, in time order
     int performanceHorizon = 0;  // how far ahead the timeline is written
     std::unique_ptr<PerformanceWindow> performanceWindow;
     void togglePerformanceWindow();

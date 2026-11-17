@@ -115,4 +115,46 @@ inline bool setStep (std::vector<Note>& notes, int& setSteps, int step, bool on,
     return changed;
 }
 
+// 0.70.0, as FL Studio's "Rotate left / right" of the Channel Rack: every step moves by `by` steps (positive: later) and the ones
+// pushed past an end come back in at the other. Each step keeps its velocity, pan and the rest. True when anything moved.
+inline bool rotateSteps (std::vector<Note>& notes, int by, int patternTicks, int pitch)
+{
+    const int count = patternSteps (patternTicks);
+    by = ((by % count) + count) % count;
+    if (by == 0)
+        return false;
+    bool changed = false;
+    for (auto& n : notes)
+        if (isStepNote (n, pitch) && n.startTick < count * kStepTicks)
+        {
+            n.startTick = ((n.startTick / kStepTicks + by) % count) * kStepTicks;
+            changed = true;
+        }
+    return changed;
+}
+
+// 0.70.0, "Randomize": each step is switched on with the chance `density` (0..1) and a velocity between 0.55 and 1; the same
+// `seed` always gives the same pattern. True when anything changed.
+inline bool randomizeSteps (std::vector<Note>& notes, int& setSteps, int patternTicks, int pitch, float density, std::uint32_t seed)
+{
+    bool changed = false;
+    std::uint32_t state = seed != 0 ? seed : 0x9e3779b9u;
+    const auto next = [&state] () noexcept
+    {
+        state ^= state << 13;
+        state ^= state >> 17;
+        state ^= state << 5;
+        return static_cast<float> (state & 0xffffffu) / static_cast<float> (0x1000000);
+    };
+    for (int step = 0; step < patternSteps (patternTicks); ++step)
+    {
+        const bool on = next() < density;
+        const float velocity = 0.55f + 0.45f * next();
+        changed = setStep (notes, setSteps, step, false, patternTicks, pitch) || changed;
+        if (on)
+            changed = setStep (notes, setSteps, step, true, patternTicks, pitch, velocity) || changed;
+    }
+    return changed;
+}
+
 } // namespace sls::steps

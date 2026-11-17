@@ -114,6 +114,9 @@ plugins. See [docs/roadmap.md](docs/roadmap.md) for exactly what is and is not v
   meter and 10 insert-effect slots (0.45.0; with effect-chain presets) (14 built-in effects with presets: Equalizer, Parametric EQ, Filter, Compressor, Maximizer, Transient, Overdrive, Chorus, Phaser, Reverb with Hall/Room/Plate, Delay with Stereo/Ping-pong/Tape, Time Shaper (like Gross Beat), Pitch Corrector (like Pitcher), Stereo Imager; each with bypass), two **sends** (pre or post fader)
   and two **VCA** switches. Two **aux buses** with their own effects and two **VCA groups** sit beside the tracks. The master strip on the
   right has the same 10 effect slots, applied to the whole mix. The Compressor has a **sidechain** input from any track (0.45.0). Several channels can share a track.
+  **Since 0.70.0**: Frequency Shifter, Vintage Chorus, Vintage Phaser, Effector (ten effects on an X / Y pad), Grains (granular),
+  the Envelope and Formula Controllers (beside the Peak Controller), a **mix knob on every slot**, pre-fader sends, eight sends per
+  track, a track delay, strip colours and delay compensation on the aux buses too.
 - **Synth** - every synth channel can switch from the classic sine to a **subtractive synth**: two band-limited oscillators and noise, a 12 or
   24 dB filter with its own envelope, an amplitude envelope and an LFO, or to an **FM synth** with four operators and a modulation matrix
   (feedback, eight classic algorithms), to an **additive synth** (0.24.0: up to 64 harmonics, two timbres with formants and a morph
@@ -212,7 +215,7 @@ Press **Space** to play, **F5 / F6 / F7 / F9** to show panels and **F8** for the
 ./build/SunLoopsStudioTests_artefacts/Release/SunLoopsStudioTests
 ```
 
-Headless (no audio device or display needed), 1989 checks at 0.68.0. They cover, among other things, synth pitch and
+Headless (no audio device or display needed), more than 2,100 checks at 0.70.0. They cover, among other things, synth pitch and
 sample-exact timing, every instrument and effect, that `Player::render` never allocates (effects included), a concurrent stress test of
 the UI-to-audio hand-over, the project file (round trip, damaged and hostile files, missing samples, atomic writing), FL Studio and MIDI
 import, export to every format, recording, automation, tempo changes, the plugin host, SunBurst and HexForge (presets, voices,

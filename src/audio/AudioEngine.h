@@ -61,6 +61,18 @@ public:
     juce::String describeMidiInputs() const;
     // True once if a MIDI note has arrived since the last call (for an activity light).
     bool consumeMidiActivity() noexcept { return midiActivity.exchange (false, std::memory_order_relaxed); }
+    // 0.70.0, performance mode's MIDI pads: while on, the notes from C1 up (see PerformancePads.h) do not play the instrument;
+    // they wait here for the message thread, which takes them one by one (-1: none left).
+    void setPerformancePads (bool on) noexcept { padsOn.store (on, std::memory_order_relaxed); }
+    int takePadNote() noexcept
+    {
+        const unsigned written = padWrite.load (std::memory_order_acquire);
+        if (padRead == written)
+            return -1;
+        if (written - padRead > padNotes.size()) // (more arrived than the queue holds: the oldest are gone)
+            padRead = written - static_cast<unsigned> (padNotes.size());
+        return padNotes[padRead++ % padNotes.size()].load (std::memory_order_relaxed);
+    }
     // Feed a MIDI message as if it had come from a keyboard (also used by the tests).
     void handleMidi (const juce::MidiMessage& message);
 
@@ -77,6 +89,7 @@ public:
     // Correctors in more slots than the player's pool covers are waiting for (see Player::effectMemoryShortfall).
     void serviceEffectMemory();
     int timeShapersWithoutMemory() const noexcept { return player.timeShaperShortfall(); } // only shape the volume (0.41.0)
+    int polyphony() const noexcept { return player.polyphony(); } // 0.70.0: notes of the built-in instruments sounding now
 
     // Audio input. The input is only opened when the user chooses one in the Audio dialog or presses Record.
     int getNumActiveInputChannels() const;
@@ -272,6 +285,10 @@ private:
     std::atomic<double> outputLatencySamples { 0.0 };
     std::atomic<int> midiTarget { 0 };
     std::atomic<bool> midiActivity { false };
+    std::atomic<bool> padsOn { false }; // 0.70.0
+    std::array<std::atomic<int>, 32> padNotes {};
+    std::atomic<unsigned> padWrite { 0 };
+    unsigned padRead = 0; // message thread
     std::atomic<bool> monitorInput { false };
     std::atomic<float> inputPeak { 0.0f };
 

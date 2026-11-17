@@ -82,6 +82,10 @@ void glue (std::vector<Note>& notes, std::vector<bool>& selected);              
 void flam (std::vector<Note>& notes, std::vector<bool>& selected, int ticks, float velocity); // a grace note `ticks` before each note
 // 0.62.0: Limit, as FL Studio's: notes outside lowest..highest move by octaves until they are inside (the range is at least an octave).
 void limit (std::vector<Note>& notes, std::vector<bool>& selected, int lowest, int highest);
+// 0.70.0: Claw machine, as FL Studio's: the last `trimTicks` of every `periodTicks` are cut out and what follows moves up to close
+// the gap, so a straight pattern becomes a shorter, syncopated one. Notes that start in a cut slice go; a note that reaches into
+// one ends where it starts.
+void clawMachine (std::vector<Note>& notes, std::vector<bool>& selected, int periodTicks, int trimTicks);
 void velocityRamp (std::vector<Note>& notes, std::vector<bool>& selected, float from, float to); // by start time
 void setVelocity (std::vector<Note>& notes, std::vector<bool>& selected, float velocity);
 void randomizeVelocity (std::vector<Note>& notes, std::vector<bool>& selected, float low, float high, std::uint32_t seed);

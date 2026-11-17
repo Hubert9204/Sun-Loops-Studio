@@ -70,10 +70,15 @@ struct TrackSend
 {
     int target = -1;    // index of the track it feeds; -1: not in use
     float level = 1.0f; // 0..1.5
+    bool preFader = false; // 0.70.0: the send takes the sound before the track's fader and balance (it still follows mute / solo)
 
-    bool operator== (const TrackSend& o) const noexcept { return target == o.target && std::abs (level - o.level) < 1.0e-6f; }
+    bool operator== (const TrackSend& o) const noexcept
+    {
+        return target == o.target && std::abs (level - o.level) < 1.0e-6f && preFader == o.preFader;
+    }
 };
-constexpr int kTrackSends = 4;
+constexpr int kTrackSends = 8; // 0.70.0: 8 (4 before)
+constexpr float kMaxTrackDelayMs = 200.0f;
 
 struct MixerTrack
 {
@@ -96,6 +101,10 @@ struct MixerTrack
     // both. A track that feeds another is processed before it; a send that would close a loop is ignored.
     bool toMaster = true;
     std::array<TrackSend, kTrackSends> trackSends {};
+    // 0.70.0: a delay of the track's output set by hand (FL Studio's track latency), on top of the automatic compensation; and
+    // the strip's colour in the mixer (0xAARRGGBB, 0 = the default look)
+    float delayMs = 0.0f; // 0 .. kMaxTrackDelayMs
+    std::uint32_t colour = 0;
 
     bool sendsTo (int track) const noexcept
     {
