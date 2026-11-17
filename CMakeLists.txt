@@ -91,6 +91,7 @@ set(SLS_CORE_SOURCES
     src/audio/Player.cpp
     src/audio/Effects.cpp
     src/audio/Convolver.cpp
+    src/audio/Formula.cpp
     src/audio/BuiltinSamples.cpp
     src/audio/SoundLibrary.cpp
     src/audio/DrumSynth.cpp

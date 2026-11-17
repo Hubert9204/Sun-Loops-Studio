@@ -77,6 +77,7 @@ public:
     // Correctors in more slots than the player's pool covers are waiting for (see Player::effectMemoryShortfall).
     void serviceEffectMemory();
     int timeShapersWithoutMemory() const noexcept { return player.timeShaperShortfall(); } // only shape the volume (0.41.0)
+    int polyphony() const noexcept { return player.polyphony(); } // 0.70.0: notes of the built-in instruments sounding now
 
     // Audio input. The input is only opened when the user chooses one in the Audio dialog or presses Record.
     int getNumActiveInputChannels() const;

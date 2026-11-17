@@ -53,6 +53,33 @@ Coefs peakCoefs (double hz, double gainDb, double q, double sampleRate) noexcept
     const double a0 = 1 + alpha / A;
     return { (1 + alpha * A) / a0, -2 * cw / a0, (1 - alpha * A) / a0, -2 * cw / a0, (1 - alpha / A) / a0 };
 }
+
+// The slot's mix knob (0.70.0): `run (left, right, count, samplesAlreadyDone)` works in place; below 1 the sound before it is kept
+// and blended back in, 256 samples at a time.
+template <typename Run>
+inline void blended (float mix, float* left, float* right, int numSamples, Run&& run) noexcept
+{
+    if (mix >= 0.9995f)
+    {
+        run (left, right, numSamples, 0);
+        return;
+    }
+    std::array<float, 256> dryL, dryR;
+    for (int done = 0; done < numSamples; done += 256)
+    {
+        const int count = std::min (256, numSamples - done);
+        float* l = left + done;
+        float* r = right + done;
+        std::copy_n (l, count, dryL.begin());
+        std::copy_n (r, count, dryR.begin());
+        run (l, r, count, done);
+        for (int i = 0; i < count; ++i)
+        {
+            l[i] = dryL[static_cast<size_t> (i)] + mix * (l[i] - dryL[static_cast<size_t> (i)]);
+            r[i] = dryR[static_cast<size_t> (i)] + mix * (r[i] - dryR[static_cast<size_t> (i)]);
+        }
+    }
+}
 } // namespace
 
 void EffectMemory::prepare (double sampleRate)
@@ -218,6 +245,18 @@ void EffectUnit::reset() noexcept
     control = 0.0f; // 0.62.0
     vocCached.fill (-1.0f);
     convolverSeen = nullptr; // the convolver it meets next starts silent
+    for (auto& channel : hilbert) // 0.70.0
+        for (auto& section : channel)
+            section.fill (0.0f);
+    hilbertHeld = {};
+    shiftPhase = {};
+    grainVoices = {};
+    grainClock = 0;
+    for (auto& c : vintageCoef)
+        c.fill (0.0f);
+    ctlStage = 0;
+    ctlLevel = 0.0f;
+    ctlTime = ctlBeat = 0.0;
     if (timeL != nullptr)
     {
         std::fill_n (timeL, timeFrames, 0.0f);
@@ -265,7 +304,8 @@ void EffectUnit::process (const EffectSlot& requested, float* left, float* right
         // A plugin keeps its own state; bypass simply leaves the signal alone.
         active = EffectType::Plugin;
         if (! requested.bypass && requested.plugin != nullptr)
-            requested.plugin->process (left, right, numSamples, nullptr, 0);
+            blended (requested.mix, left, right, numSamples,
+                     [&] (float* l, float* r, int count, int) noexcept { requested.plugin->process (l, r, count, nullptr, 0); });
         return;
     }
     if (requested.type == EffectType::None) // an empty slot (most of them): no copy of the slot, nothing to do
@@ -296,6 +336,27 @@ void EffectUnit::process (const EffectSlot& requested, float* left, float* right
     if (dirty)
         reset();
 
+    if (effectIsController (slot.type)) // a controller has nothing to mix
+    {
+        runSlot (slot, left, right, numSamples, transport);
+        return;
+    }
+    blended (slot.mix, left, right, numSamples, [&] (float* l, float* r, int count, int done) noexcept
+    {
+        if (done == 0)
+        {
+            runSlot (slot, l, r, count, transport);
+            return;
+        }
+        auto later = transport; // (the song has moved on by the samples already done)
+        if (later.tick >= 0.0)
+            later.tick += done * later.ticksPerSample;
+        runSlot (slot, l, r, count, later);
+    });
+}
+
+void EffectUnit::runSlot (const EffectSlot& slot, float* left, float* right, int numSamples, const EffectTransport& transport) noexcept
+{
     switch (slot.type)
     {
         case EffectType::Equalizer:    runEqualizer (slot, left, right, numSamples); break;
@@ -324,6 +385,13 @@ void EffectUnit::process (const EffectSlot& requested, float* left, float* right
         case EffectType::Vocoder:      runVocoder (slot, left, right, numSamples, transport); break;
         case EffectType::PeakController: runPeakController (slot, left, right, numSamples); break;
         case EffectType::Convolver:    runConvolver (slot, left, right, numSamples); break;
+        case EffectType::FrequencyShifter: runFrequencyShifter (slot, left, right, numSamples); break;
+        case EffectType::VintageChorus: runVintageChorus (slot, left, right, numSamples); break;
+        case EffectType::VintagePhaser: runVintagePhaser (slot, left, right, numSamples); break;
+        case EffectType::Effector:     runEffector (slot, left, right, numSamples); break;
+        case EffectType::Grains:       runGrains (slot, left, right, numSamples); break;
+        case EffectType::EnvelopeController: runEnvelopeController (slot, left, right, numSamples); break;
+        case EffectType::FormulaController: runFormulaController (slot, left, right, numSamples, transport); break;
         case EffectType::Plugin:
         case EffectType::None:         break;
     }
@@ -1488,6 +1556,67 @@ const std::vector<EffectPreset>& effectPresets (EffectType t)
             };
             return list;
         }
+        case EffectType::FrequencyShifter: // 0.70.0
+        {
+            static const std::vector<EffectPreset> list {
+                make ("Slow barber pole", { 0.5f, 0.0f, 0.6f, 0.5f }),
+                make ("Detune", { 4.0f, 3.0f, 0.0f, 0.5f }),
+                make ("Bell tones", { 220.0f, 0.0f, 0.0f, 1.0f }),
+                make ("Downward spiral", { -30.0f, 5.0f, 0.75f, 0.6f }),
+            };
+            return list;
+        }
+        case EffectType::VintageChorus:
+        {
+            static const std::vector<EffectPreset> list {
+                make ("Ensemble I", { 0.0f, 1.0f, 0.6f, 0.5f }),
+                make ("Ensemble II", { 1.0f, 1.0f, 0.6f, 0.5f }),
+                make ("Shimmer (I + II)", { 2.0f, 1.0f, 0.7f, 0.5f }),
+                make ("Dark and wide", { 0.0f, 1.0f, 0.2f, 0.6f }),
+            };
+            return list;
+        }
+        case EffectType::VintagePhaser:
+        {
+            static const std::vector<EffectPreset> list {
+                make ("Slow stone", { 0.0f, 0.25f, 0.9f, 0.7f, 0.5f }),
+                make ("Script ninety", { 1.0f, 0.8f, 0.7f, 0.2f, 0.5f }),
+                make ("Throbbing vibe", { 2.0f, 4.0f, 0.9f, 0.1f, 0.6f }),
+            };
+            return list;
+        }
+        case EffectType::Effector:
+        {
+            static const std::vector<EffectPreset> list {
+                make ("Telephone (lo-fi)", { 1.0f, 0.6f, 0.7f, 1.0f }),
+                make ("Jet flanger", { 2.0f, 0.3f, 0.8f, 1.0f }),
+                make ("Filter sweep down", { 4.0f, 0.35f, 0.6f, 1.0f }),
+                make ("Dub echo", { 6.0f, 0.45f, 0.65f, 1.0f }),
+                make ("Robot (ring mod)", { 7.0f, 0.4f, 1.0f, 1.0f }),
+                make ("Talking (formant)", { 9.0f, 0.2f, 0.7f, 1.0f }),
+            };
+            return list;
+        }
+        case EffectType::Grains:
+        {
+            static const std::vector<EffectPreset> list {
+                make ("Cloud", { 120.0f, 0.0f, 400.0f, 0.0f, 0.0f, 0.3f, 0.6f }),
+                make ("Octave up shimmer", { 90.0f, 12.0f, 200.0f, 0.0f, 0.0f, 0.4f, 0.4f }),
+                make ("Backwards", { 200.0f, 0.0f, 100.0f, 0.0f, 100.0f, 0.0f, 1.0f }),
+                make ("Scattered pitches", { 60.0f, 0.0f, 600.0f, 7.0f, 30.0f, 0.2f, 0.7f }),
+            };
+            return list;
+        }
+        case EffectType::EnvelopeController:
+        {
+            static const std::vector<EffectPreset> list {
+                make ("Pluck (opens, then closes)", { -30.0f, 5.0f, 250.0f, 0.0f, 200.0f, 0.0f, 100.0f }),
+                make ("Swell", { -30.0f, 600.0f, 300.0f, 100.0f, 500.0f, 0.0f, 100.0f }),
+                make ("Duck while it sounds", { -30.0f, 10.0f, 100.0f, 100.0f, 300.0f, 100.0f, -100.0f }),
+            };
+            return list;
+        }
+        case EffectType::FormulaController:
         case EffectType::Equalizer:
         case EffectType::BassBoost:
         case EffectType::Vibrato:
@@ -1664,6 +1793,465 @@ void EffectUnit::runConvolver (const EffectSlot& s, float* l, float* r, int n) n
             r[done + i] = (r[done + i] + mix * (wetR[static_cast<size_t> (i)] - r[done + i])) * out;
         }
     }
+}
+
+// ------------------------------------------------------------------------- 0.70.0: frequency shifter, vintage chorus and phaser,
+// effector, grains, envelope and formula controllers
+
+namespace
+{
+// One tick of a state-variable filter (the same as the Filter's): the low-pass, band-pass and high-pass outputs.
+struct SvfOut
+{
+    float low, band, high;
+};
+inline SvfOut svfTick (float in, float g, float k, float& ic1, float& ic2) noexcept
+{
+    const float a1 = 1.0f / (1.0f + g * (g + k)), a2 = g * a1, a3 = g * a2;
+    const float v3 = in - ic2;
+    const float v1 = a1 * ic1 + a2 * v3;
+    const float v2 = ic2 + a2 * ic1 + a3 * v3;
+    ic1 = flush (2.0f * v1 - ic1);
+    ic2 = flush (2.0f * v2 - ic2);
+    return { v2, v1, in - k * v1 - v2 };
+}
+
+inline float random01 (std::uint32_t& state) noexcept
+{
+    state ^= state << 13;
+    state ^= state >> 17;
+    state ^= state << 5;
+    return static_cast<float> (state & 0xffffffu) / static_cast<float> (0x1000000);
+}
+
+// 0..1 on a logarithmic scale between two values.
+inline double logScale (double x, double low, double high) noexcept { return low * std::pow (high / low, std::clamp (x, 0.0, 1.0)); }
+} // namespace
+
+// Frequency shifter: two chains of all-pass filters (Olli Niemitalo's coefficients) turn the sound into a pair of signals 90
+// degrees apart; multiplied by a cosine and a sine of the shift frequency and added, only one side band is left: every frequency
+// moved up (or down) by the same number of Hz.
+void EffectUnit::runFrequencyShifter (const EffectSlot& s, float* l, float* r, int n) noexcept
+{
+    static constexpr float kSquares[2][4] = { { 0.6923878f * 0.6923878f, 0.9360654322959f * 0.9360654322959f, 0.9882295226860f * 0.9882295226860f,
+                                                0.9987488452737f * 0.9987488452737f },
+                                              { 0.4021921162426f * 0.4021921162426f, 0.8561710882420f * 0.8561710882420f,
+                                                0.9722909545651f * 0.9722909545651f, 0.9952884791278f * 0.9952884791278f } };
+    const double step[2] = { (static_cast<double> (s.params[0]) + s.params[1]) / sampleRate, (static_cast<double> (s.params[0]) - s.params[1]) / sampleRate };
+    const float feedback = s.params[2], mix = s.params[3];
+    float* io[2] = { l, r };
+    for (int i = 0; i < n; ++i)
+        for (size_t ch = 0; ch < 2; ++ch)
+        {
+            const float in = io[ch][i];
+            const float x = in + feedback * phaserLast[ch];
+            float path[2];
+            for (size_t p = 0; p < 2; ++p)
+            {
+                float v = x;
+                for (size_t k = 0; k < 4; ++k)
+                {
+                    auto& st = hilbert[ch][p * 4 + k]; // x1, x2, y1, y2
+                    const float y = kSquares[p][k] * (v + st[3]) - st[1];
+                    st[1] = st[0];
+                    st[0] = v;
+                    st[3] = st[2];
+                    st[2] = flush (y);
+                    v = y;
+                }
+                path[p] = v;
+            }
+            const float inPhase = hilbertHeld[ch]; // the first chain, one sample late
+            hilbertHeld[ch] = path[0];
+            const float quadrature = path[1];
+            shiftPhase[ch] += step[ch];
+            shiftPhase[ch] -= std::floor (shiftPhase[ch]);
+            const double angle = 2.0 * kPi * shiftPhase[ch];
+            const float out = inPhase * static_cast<float> (std::cos (angle)) - quadrature * static_cast<float> (std::sin (angle));
+            phaserLast[ch] = flush (std::clamp (out, -4.0f, 4.0f));
+            io[ch][i] = in * (1.0f - mix) + out * mix;
+        }
+}
+
+// Vintage chorus: one short delay per channel swept by a triangle (the right channel the other way round), darkened and gently
+// saturated as a bucket-brigade chip does. The three modes are the two buttons of an analogue polysynth's ensemble and both
+// together (a fast, shallow shimmer).
+void EffectUnit::runVintageChorus (const EffectSlot& s, float* l, float* r, int n) noexcept
+{
+    if (memory == nullptr)
+        return;
+    static constexpr double kRate[] = { 0.513, 0.863, 9.75 };
+    static constexpr float kShort[] = { 1.66f, 1.66f, 3.3f }, kLong[] = { 5.35f, 5.35f, 3.7f }; // ms
+    auto& delayLine = memory->delayLine;
+    const int size = static_cast<int> (delayLine[0].size());
+    const auto mode = static_cast<size_t> (effectChoice (EffectType::VintageChorus, 0, s.params[0]));
+    const double step = kRate[mode] / sampleRate;
+    const float centre = static_cast<float> (0.5 * (kShort[mode] + kLong[mode]) * 0.001 * sampleRate);
+    const float swing = static_cast<float> (0.5 * (kLong[mode] - kShort[mode]) * 0.001 * sampleRate) * s.params[1];
+    const float tone = static_cast<float> (1.0 - std::exp (-2.0 * kPi * std::min (3000.0 * std::pow (4.0, static_cast<double> (s.params[2])), 0.45 * sampleRate) / sampleRate));
+    const float mix = s.params[3];
+    float* io[2] = { l, r };
+    for (int i = 0; i < n; ++i)
+    {
+        lfoPhase += step;
+        if (lfoPhase >= 1.0)
+            lfoPhase -= 1.0;
+        const float sweep = lfoShape (1, lfoPhase);
+        for (size_t ch = 0; ch < 2; ++ch)
+        {
+            const float in = io[ch][i];
+            const float tap = readLine (delayLine[ch], delayWrite, std::max (1.0f, centre + (ch == 0 ? swing : -swing) * sweep));
+            delayLine[ch][static_cast<size_t> (delayWrite)] = in;
+            delayTone[ch] = flush (delayTone[ch] + tone * (tap - delayTone[ch]));
+            const float wet = std::tanh (delayTone[ch] * 0.8f) * 1.25f;
+            io[ch][i] = in * (1.0f - mix) + wet * mix;
+        }
+        if (++delayWrite >= size)
+            delayWrite = 0;
+    }
+}
+
+// Vintage phaser: four all-pass stages as three pedals wire them. Stone: a wide, slow sweep and a feedback that sings; Ninety: a
+// narrower sweep around the mid range, less feedback, a little grit; Vibe: four stages tuned far apart and a lopsided sweep (a
+// lamp and four light cells), the right channel a quarter turn later.
+void EffectUnit::runVintagePhaser (const EffectSlot& s, float* l, float* r, int n) noexcept
+{
+    const int model = effectChoice (EffectType::VintagePhaser, 0, s.params[0]);
+    const double step = static_cast<double> (s.params[1]) / sampleRate;
+    const float depth = s.params[2];
+    const float feedback = s.params[3] * (model == 1 ? 0.5f : (model == 2 ? 0.35f : 1.0f));
+    const float mix = s.params[4];
+    static constexpr double kCentre[] = { 600.0, 800.0, 300.0 };
+    static constexpr double kOctaves[] = { 2.5, 1.5, 1.6 };
+    static constexpr double kVibeRatio[] = { 0.45, 1.0, 3.2, 9.0 };
+    float* io[2] = { l, r };
+    for (int i = 0; i < n; ++i)
+    {
+        lfoPhase += step;
+        if (lfoPhase >= 1.0)
+            lfoPhase -= 1.0;
+        if (--controlLeft <= 0)
+        {
+            controlLeft = 16;
+            for (size_t ch = 0; ch < 2; ++ch)
+            {
+                double sweep = std::sin (2.0 * kPi * (lfoPhase + (model == 2 && ch == 1 ? 0.25 : 0.0)));
+                if (model == 2) // the lamp is slow to dim: more time near the top of the sweep
+                    sweep = 2.0 * std::pow (0.5 + 0.5 * sweep, 0.6) - 1.0;
+                const double base = kCentre[model] * std::pow (2.0, kOctaves[model] * depth * sweep);
+                for (size_t st = 0; st < 4; ++st)
+                {
+                    const double hz = std::clamp (base * (model == 2 ? kVibeRatio[st] : 1.0), 20.0, 0.45 * sampleRate);
+                    const double t = std::tan (kPi * hz / sampleRate);
+                    vintageCoef[ch][st] = static_cast<float> ((t - 1.0) / (t + 1.0));
+                }
+            }
+        }
+        for (size_t ch = 0; ch < 2; ++ch)
+        {
+            const float in = io[ch][i];
+            float x = in + feedback * phaserLast[ch];
+            if (model == 1)
+                x = std::tanh (x * 1.2f) * (1.0f / 1.2f);
+            for (size_t st = 0; st < 4; ++st)
+            {
+                auto& z = phaserState[ch][st];
+                const float a = vintageCoef[ch][st];
+                const float y = a * x + z;
+                z = flush (x - a * y);
+                x = y;
+            }
+            phaserLast[ch] = flush (std::clamp (x, -4.0f, 4.0f));
+            io[ch][i] = in * (1.0f - mix) + x * mix;
+        }
+    }
+}
+
+// Effector: ten effects with two controls each, made to be moved while the song plays (automate X and Y).
+//   Distortion  X drive, Y tone             Lo-fi      X sample rate, Y bits        Flanger   X delay, Y feedback
+//   Phaser      X frequency, Y feedback     Low-pass   X cutoff, Y resonance        High-pass X cutoff, Y resonance
+//   Delay       X time, Y feedback          Ring mod   X frequency, Y amount        Auto-pan  X rate, Y depth
+//   Formant     X vowel (A E I O U), Y sharpness
+void EffectUnit::runEffector (const EffectSlot& s, float* l, float* r, int n) noexcept
+{
+    const int effect = effectChoice (EffectType::Effector, 0, s.params[0]);
+    const double x = s.params[1], y = s.params[2];
+    const float mix = s.params[3];
+    float* io[2] = { l, r };
+    std::vector<float>* lines = memory != nullptr ? memory->delayLine.data() : nullptr;
+    const int size = lines != nullptr ? static_cast<int> (lines[0].size()) : 0;
+
+    // what the controls mean for this effect, worked out once per block
+    const float fx = static_cast<float> (x), fy = static_cast<float> (y);
+    float p1 = 0.0f, p2 = 0.0f, p3 = 0.0f, p4 = 0.0f;
+    double step = 0.0;
+    switch (effect)
+    {
+        case 0: // drive, level, tone
+            p1 = static_cast<float> (logScale (x, 1.0, 40.0));
+            p2 = 0.5f + 0.5f / std::sqrt (p1);
+            p3 = static_cast<float> (1.0 - std::exp (-2.0 * kPi * std::min (logScale (y, 500.0, 16000.0), 0.45 * sampleRate) / sampleRate));
+            break;
+        case 1: // hold length, steps
+            p1 = static_cast<float> (std::lround (logScale (1.0 - x, 1.0, 60.0)));
+            p2 = std::pow (2.0f, std::round (2.0f + 14.0f * fy)) * 0.5f;
+            break;
+        case 2: // centre delay, feedback
+            p1 = static_cast<float> (logScale (x, 0.3, 10.0) * 0.001 * sampleRate);
+            p2 = 0.9f * fy;
+            step = 0.25 / sampleRate;
+            break;
+        case 3: // feedback
+            p2 = 0.9f * fy;
+            step = 0.4 / sampleRate;
+            break;
+        case 4:
+        case 5: // cutoff, damping
+            p1 = static_cast<float> (std::tan (kPi * std::min (logScale (x, 40.0, 18000.0), 0.45 * sampleRate) / sampleRate));
+            p2 = 2.0f - 1.9f * fy;
+            break;
+        case 6: // time, feedback
+            p1 = static_cast<float> (logScale (x, 20.0, 800.0) * 0.001 * sampleRate);
+            p2 = 0.9f * fy;
+            break;
+        case 7:
+            step = logScale (x, 20.0, 4000.0) / sampleRate;
+            break;
+        case 8:
+            step = logScale (x, 0.1, 20.0) / sampleRate;
+            break;
+        default: // the two formants of the vowel between which X stands, and how sharp they are
+        {
+            static constexpr double kF1[] = { 730.0, 530.0, 270.0, 570.0, 300.0 }, kF2[] = { 1090.0, 1840.0, 2290.0, 840.0, 870.0 };
+            const double at = std::clamp (x, 0.0, 1.0) * 4.0;
+            const auto from = static_cast<size_t> (std::min (3.0, std::floor (at)));
+            const double blend = at - static_cast<double> (from);
+            const double f1 = kF1[from] * std::pow (kF1[from + 1] / kF1[from], blend), f2 = kF2[from] * std::pow (kF2[from + 1] / kF2[from], blend);
+            p1 = static_cast<float> (std::tan (kPi * std::min (f1, 0.45 * sampleRate) / sampleRate));
+            p3 = static_cast<float> (std::tan (kPi * std::min (f2, 0.45 * sampleRate) / sampleRate));
+            p2 = 0.5f - 0.44f * fy;
+            p4 = (1.0f + 2.0f * fy) * p2; // (a band-pass's peak is 1 / damping: brought back to 1, then made up for the narrower band)
+            break;
+        }
+    }
+    if ((effect == 2 || effect == 6) && lines == nullptr)
+        return;
+
+    for (int i = 0; i < n; ++i)
+    {
+        lfoPhase += step;
+        if (lfoPhase >= 1.0)
+            lfoPhase -= 1.0;
+        if (effect == 3 && --controlLeft <= 0)
+        {
+            controlLeft = 16;
+            const double hz = std::clamp (logScale (x, 100.0, 5000.0) * std::pow (2.0, std::sin (2.0 * kPi * lfoPhase)), 20.0, 0.45 * sampleRate);
+            const double t = std::tan (kPi * hz / sampleRate);
+            phaserCoef[0] = phaserCoef[1] = static_cast<float> ((t - 1.0) / (t + 1.0));
+        }
+        const bool sample = sqCount == 0;
+        for (size_t ch = 0; ch < 2; ++ch)
+        {
+            const float in = io[ch][i];
+            float wet = in;
+            switch (effect)
+            {
+                case 0:
+                    delayTone[ch] = flush (delayTone[ch] + p3 * (std::tanh (in * p1) * p2 - delayTone[ch]));
+                    wet = delayTone[ch];
+                    break;
+                case 1:
+                    if (sample)
+                        sqHold[ch] = std::round (in * p2) / p2;
+                    wet = sqHold[ch];
+                    break;
+                case 2:
+                {
+                    const float d = std::max (1.0f, p1 * (1.0f + 0.5f * lfoShape (0, lfoPhase + (ch == 1 ? 0.25 : 0.0))));
+                    const float tap = readLine (lines[ch], delayWrite, d);
+                    lines[ch][static_cast<size_t> (delayWrite)] = flush (in + p2 * tap);
+                    wet = 0.5f * (in + tap);
+                    break;
+                }
+                case 3:
+                {
+                    float v = in + p2 * phaserLast[ch];
+                    for (size_t st = 0; st < 6; ++st)
+                    {
+                        auto& z = phaserState[ch][st];
+                        const float out = phaserCoef[ch] * v + z;
+                        z = flush (v - phaserCoef[ch] * out);
+                        v = out;
+                    }
+                    phaserLast[ch] = flush (std::clamp (v, -4.0f, 4.0f));
+                    wet = 0.5f * (in + v);
+                    break;
+                }
+                case 4: wet = svfTick (in, p1, p2, svf1a[ch], svf1b[ch]).low; break;
+                case 5: wet = svfTick (in, p1, p2, svf1a[ch], svf1b[ch]).high; break;
+                case 6:
+                {
+                    if (delayCurrent[ch] < 0.0f)
+                        delayCurrent[ch] = p1;
+                    delayCurrent[ch] += (p1 - delayCurrent[ch]) * 0.0004f; // a moved X glides (the pitch bends as a tape delay's)
+                    const float tap = readLine (lines[ch], delayWrite, std::clamp (delayCurrent[ch], 1.0f, static_cast<float> (size - 2)));
+                    lines[ch][static_cast<size_t> (delayWrite)] = flush (in + p2 * tap);
+                    wet = in + 0.6f * tap;
+                    break;
+                }
+                case 7: wet = in * (1.0f - fy + fy * lfoShape (0, lfoPhase)); break;
+                case 8:
+                {
+                    const float pan = fy * lfoShape (0, lfoPhase);
+                    wet = in * (ch == 0 ? std::min (1.0f, 1.0f - pan) : std::min (1.0f, 1.0f + pan));
+                    break;
+                }
+                default:
+                    wet = p4 * (svfTick (in, p1, p2, svf1a[ch], svf1b[ch]).band + 0.7f * svfTick (in, p3, p2, svf2a[ch], svf2b[ch]).band);
+                    break;
+            }
+            io[ch][i] = in * (1.0f - mix) + wet * mix;
+        }
+        if (effect == 1 && ++sqCount >= static_cast<int> (p1))
+            sqCount = 0;
+        if ((effect == 2 || effect == 6) && ++delayWrite >= size)
+            delayWrite = 0;
+    }
+}
+
+// Grains: the sound is recorded, and four overlapping grains (Hann windows, a quarter of a grain apart) replay pieces of the last
+// moments: from up to Scatter back, at their own pitch, some of them backwards.
+void EffectUnit::runGrains (const EffectSlot& s, float* l, float* r, int n) noexcept
+{
+    if (memory == nullptr)
+        return;
+    auto& delayLine = memory->delayLine;
+    const int size = static_cast<int> (delayLine[0].size());
+    const int life = std::clamp (static_cast<int> (s.params[0] * 0.001 * sampleRate), 64, std::max (64, size / 8));
+    const int hop = std::max (1, life / kGrains);
+    const double scatter = s.params[2] * 0.001 * sampleRate;
+    const float feedback = s.params[5], mix = s.params[6];
+    for (int i = 0; i < n; ++i)
+    {
+        if (--grainClock <= 0)
+        {
+            grainClock = hop;
+            auto* voice = &grainVoices[0];
+            for (auto& g : grainVoices) // a free voice, or the one that has played longest
+                if (g.life == 0 || (voice->life != 0 && g.age > voice->age))
+                    voice = &g;
+            const double semitones = static_cast<double> (s.params[1]) + s.params[3] * (2.0 * random01 (grainRandom) - 1.0);
+            const double ratio = std::pow (2.0, semitones / 12.0);
+            const bool backwards = random01 (grainRandom) * 100.0f < s.params[4];
+            voice->drift = backwards ? 1.0 + ratio : 1.0 - ratio;
+            const double travel = voice->drift * life; // how far the delay moves while the grain plays
+            double start = 2.0 + scatter * random01 (grainRandom) + std::max (0.0, -travel);
+            start = std::min (start, static_cast<double> (size - 2) - std::max (0.0, travel));
+            voice->delay = std::max (start, 2.0 + std::max (0.0, -travel));
+            voice->age = 0;
+            voice->life = life;
+        }
+        float wetL = 0.0f, wetR = 0.0f;
+        for (auto& g : grainVoices)
+        {
+            if (g.life == 0)
+                continue;
+            const float window = 0.5f - 0.5f * static_cast<float> (std::cos (2.0 * kPi * g.age / g.life));
+            const float d = static_cast<float> (std::clamp (g.delay, 1.0, static_cast<double> (size - 2)));
+            wetL += window * readLine (delayLine[0], delayWrite, d);
+            wetR += window * readLine (delayLine[1], delayWrite, d);
+            g.delay += g.drift;
+            if (++g.age >= g.life)
+                g.life = 0;
+        }
+        wetL *= 0.5f; // four Hann windows a quarter apart add up to 2
+        wetR *= 0.5f;
+        delayLine[0][static_cast<size_t> (delayWrite)] = flush (l[i] + feedback * wetL);
+        delayLine[1][static_cast<size_t> (delayWrite)] = flush (r[i] + feedback * wetR);
+        l[i] = l[i] * (1.0f - mix) + wetL * mix;
+        r[i] = r[i] * (1.0f - mix) + wetR * mix;
+        if (++delayWrite >= size)
+            delayWrite = 0;
+    }
+}
+
+// Envelope controller: the track's sound rising above the threshold starts an envelope (attack, decay to the sustain level);
+// falling below half the threshold releases it. The value goes to the parameter the slot names, as the Peak Controller's.
+void EffectUnit::runEnvelopeController (const EffectSlot& s, float* l, float* r, int n) noexcept
+{
+    const float threshold = dbToGain (s.params[0]);
+    const float follow = static_cast<float> (std::exp (-1.0 / (0.005 * sampleRate)));
+    const float attack = static_cast<float> (1.0 / std::max (1.0, s.params[1] * 0.001 * sampleRate));
+    const float decay = static_cast<float> (std::exp (-1.0 / (s.params[2] * 0.001 * sampleRate * 0.25)));
+    const float sustain = s.params[3] * 0.01f;
+    const float release = static_cast<float> (std::exp (-1.0 / (s.params[4] * 0.001 * sampleRate * 0.25)));
+    for (int i = 0; i < n; ++i)
+    {
+        const float level = std::max (std::fabs (l[i]), std::fabs (r[i]));
+        ctlLevel = level > ctlLevel ? level : flush (ctlLevel * follow);
+        const bool sounding = ctlStage == 1 || ctlStage == 2;
+        const bool gate = ctlLevel > (sounding ? 0.5f * threshold : threshold);
+        if (gate && ! sounding)
+            ctlStage = 1;
+        else if (! gate && sounding)
+            ctlStage = 3;
+        if (ctlStage == 1)
+        {
+            env += attack;
+            if (env >= 1.0f)
+            {
+                env = 1.0f;
+                ctlStage = 2;
+            }
+        }
+        else if (ctlStage == 2)
+            env = sustain + (env - sustain) * decay;
+        else if (ctlStage == 3)
+        {
+            env *= release;
+            if (env < 1.0e-4f)
+            {
+                env = 0.0f;
+                ctlStage = 0;
+            }
+        }
+    }
+    control = std::clamp (s.params[5] * 0.01f + s.params[6] * 0.01f * env, 0.0f, 1.0f);
+    if (effectChoice (EffectType::EnvelopeController, 10, s.params[10]) == 1)
+    {
+        std::fill_n (l, n, 0.0f);
+        std::fill_n (r, n, 0.0f);
+    }
+}
+
+// Formula controller: the slot's formula is worked out once per block from the three knobs, the time since the controller
+// started, the song position (its own clock at 120 BPM while the song is stopped) and the track's level.
+void EffectUnit::runFormulaController (const EffectSlot& s, float* l, float* r, int n, const EffectTransport& transport) noexcept
+{
+    const float follow = static_cast<float> (std::exp (-1.0 / (0.15 * sampleRate)));
+    for (int i = 0; i < n; ++i)
+    {
+        const float level = std::max (std::fabs (l[i]), std::fabs (r[i]));
+        ctlLevel = level > ctlLevel ? level : flush (ctlLevel * follow);
+    }
+    ctlTime += n / sampleRate;
+    if (transport.tick >= 0.0)
+        ctlBeat = (transport.tick + n * transport.ticksPerSample) / 480.0;
+    else
+        ctlBeat += 2.0 * n / sampleRate;
+    if (s.formula == nullptr)
+    {
+        control = s.params[0];
+        return;
+    }
+    Formula::Variables v;
+    v.a = s.params[0];
+    v.b = s.params[1];
+    v.c = s.params[2];
+    v.t = ctlTime;
+    v.beat = ctlBeat;
+    v.level = std::min (ctlLevel, 1.0f);
+    control = s.formula->evaluate (v);
 }
 
 void prepareConvolver (EffectSlot& slot, double sampleRate, bool fresh)

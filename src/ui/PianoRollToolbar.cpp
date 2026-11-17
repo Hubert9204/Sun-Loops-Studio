@@ -250,6 +250,11 @@ void PianoRollToolbar::showToolsMenu()
         limitMenu.addItem (91, "To three octaves (C3 - B5)");
         limitMenu.addItem (92, "To one octave (C5 - B5)");
         menu.addSubMenu ("Limit (move notes by octaves into a range)", limitMenu);
+        juce::PopupMenu clawMenu; // 0.70.0
+        clawMenu.addItem (97, "Cut a 16th out of every beat");
+        clawMenu.addItem (98, "Cut an 8th out of every half bar (2 beats)");
+        clawMenu.addItem (99, "Cut a beat out of every bar");
+        menu.addSubMenu ("Claw machine (cut slices out and close the gaps)", clawMenu);
         juce::PopupMenu lfoMenu;
         lfoMenu.addItem (93, "One cycle per beat");
         lfoMenu.addItem (94, "One cycle per bar");
@@ -328,6 +333,14 @@ void PianoRollToolbar::showToolsMenu()
                                 case 90: editor.applyTool ([] (Notes& n, Sel& s) { theory::limit (n, s, 48, 71); }, "Limited to C4 - B5"); break;
                                 case 91: editor.applyTool ([] (Notes& n, Sel& s) { theory::limit (n, s, 36, 71); }, "Limited to C3 - B5"); break;
                                 case 92: editor.applyTool ([] (Notes& n, Sel& s) { theory::limit (n, s, 60, 71); }, "Limited to C5 - B5"); break;
+                                case 97: editor.applyTool ([] (Notes& n, Sel& s) { theory::clawMachine (n, s, kTicksPerBeat, kTicksPerBeat / 4); }, "Claw machine: a 16th out of every beat"); break;
+                                case 98: editor.applyTool ([] (Notes& n, Sel& s) { theory::clawMachine (n, s, 2 * kTicksPerBeat, kTicksPerBeat / 2); }, "Claw machine: an 8th out of every half bar"); break;
+                                case 99:
+                                {
+                                    const int bar = interfaceMeter().barTicks();
+                                    editor.applyTool ([bar] (Notes& n, Sel& s) { theory::clawMachine (n, s, bar, kTicksPerBeat); }, "Claw machine: a beat out of every bar");
+                                    break;
+                                }
                                 case 93: editor.applyLaneLfo (kTicksPerBeat, 1.0f); break;
                                 case 94: editor.applyLaneLfo (interfaceMeter().barTicks(), 1.0f); break;
                                 case 95: editor.applyLaneLfo (2 * interfaceMeter().barTicks(), 1.0f); break;

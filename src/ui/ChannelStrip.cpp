@@ -119,6 +119,27 @@ bool StepGrid::fillEvery (int every)
     return changed;
 }
 
+bool StepGrid::rotateSteps (int by)
+{
+    if (! steps::rotateSteps (channel.notes, by, loopLengthTicks, steps::stepPitch (channel)))
+        return false;
+    repaint();
+    if (onStepsEdited)
+        onStepsEdited();
+    return true;
+}
+
+bool StepGrid::randomizeSteps (float density)
+{
+    const auto seed = static_cast<std::uint32_t> (juce::Random::getSystemRandom().nextInt());
+    if (! steps::randomizeSteps (channel.notes, channel.steps, loopLengthTicks, steps::stepPitch (channel), density, seed))
+        return false;
+    repaint();
+    if (onStepsEdited)
+        onStepsEdited();
+    return true;
+}
+
 bool StepGrid::clearSteps()
 {
     bool changed = false;
@@ -474,6 +495,11 @@ void ChannelStrip::showContextMenu()
         stepMenu.addItem (32, "Fill each 8 steps");
         stepMenu.addItem (33, "Fill every step");
         stepMenu.addSeparator();
+        stepMenu.addItem (35, "Rotate left (one step earlier)"); // 0.70.0
+        stepMenu.addItem (36, "Rotate right (one step later)");
+        stepMenu.addItem (37, "Randomize (sparse)");
+        stepMenu.addItem (38, "Randomize (busy)");
+        stepMenu.addSeparator();
         stepMenu.addItem (34, "Clear the steps");
         menu.addSubMenu ("Steps", stepMenu);
     }
@@ -664,6 +690,10 @@ void ChannelStrip::showContextMenu()
                                 case 32: safe->grid.fillEvery (8); break;
                                 case 33: safe->grid.fillEvery (1); break;
                                 case 34: safe->grid.clearSteps(); break;
+                                case 35: safe->grid.rotateSteps (-1); break;
+                                case 36: safe->grid.rotateSteps (1); break;
+                                case 37: safe->grid.randomizeSteps (0.25f); break;
+                                case 38: safe->grid.randomizeSteps (0.5f); break;
                                 case 16: if (safe->onLoadSoundFont) safe->onLoadSoundFont (i); break;
                                 case 18: if (safe->onOpenPlugin) safe->onOpenPlugin (i); break;
                                 case 19: if (safe->onSynthSettings) safe->onSynthSettings (i); break;

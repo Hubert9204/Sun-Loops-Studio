@@ -77,6 +77,13 @@ const char* effectKey (EffectType t)
         case EffectType::Vocoder:      return "vocoder";
         case EffectType::PeakController: return "peak-controller";
         case EffectType::Convolver:    return "convolver";
+        case EffectType::FrequencyShifter: return "frequency-shifter"; // 0.70.0
+        case EffectType::VintageChorus: return "vintage-chorus";
+        case EffectType::VintagePhaser: return "vintage-phaser";
+        case EffectType::Effector:     return "effector";
+        case EffectType::Grains:       return "grains";
+        case EffectType::EnvelopeController: return "envelope-controller";
+        case EffectType::FormulaController: return "formula-controller";
         case EffectType::None:       break;
     }
     return "none";
@@ -135,6 +142,8 @@ juce::var slotToVar (const EffectSlot& slot, const PluginSpec* plugin)
         auto* o = new juce::DynamicObject();
         o->setProperty ("type", "plugin");
         o->setProperty ("bypass", slot.bypass);
+        if (slot.mix < 0.9995f) // 0.70.0
+            o->setProperty ("mix", number (static_cast<double> (std::clamp (slot.mix, 0.0f, 1.0f))));
         if (plugin != nullptr)
             o->setProperty ("plugin", pluginToVar (*plugin));
         return juce::var (o);
@@ -143,6 +152,10 @@ juce::var slotToVar (const EffectSlot& slot, const PluginSpec* plugin)
     auto* o = new juce::DynamicObject();
     o->setProperty ("type", effectKey (s.type));
     o->setProperty ("bypass", s.bypass);
+    if (s.mix < 0.9995f) // 0.70.0: the slot's mix knob
+        o->setProperty ("mix", number (static_cast<double> (s.mix)));
+    if (s.type == EffectType::FormulaController && s.formula != nullptr)
+        o->setProperty ("formula", juce::String::fromUTF8 (s.formula->text().c_str()));
     juce::Array<juce::var> params;
     for (int i = 0; i < effectParamCount (s.type); ++i)
         params.add (number (static_cast<double> (s.params[static_cast<size_t> (i)])));
@@ -185,11 +198,16 @@ EffectSlot readSlot (const juce::var& v, std::vector<PluginSpec>& plugins, Plugi
         EffectSlot slot;
         slot.type = EffectType::Plugin;
         slot.bypass = readBool (o->getProperty ("bypass"), false);
+        slot.mix = static_cast<float> (readNumber (o->getProperty ("mix"), 1.0, 0.0, 1.0));
         return slot;
     }
 
     EffectSlot slot = EffectSlot::make (effectFromKey (o->getProperty ("type").toString()));
     slot.bypass = readBool (o->getProperty ("bypass"), false);
+    slot.mix = static_cast<float> (readNumber (o->getProperty ("mix"), 1.0, 0.0, 1.0)); // 0.70.0
+    if (slot.type == EffectType::FormulaController) // (a formula that cannot be read leaves the controller at its knob A)
+        if (const auto text = o->getProperty ("formula").toString(); text.isNotEmpty())
+            slot.formula = Formula::compile (text.toStdString());
 
     if (auto* params = o->getProperty ("params").getArray())
         for (int i = 0; i < std::min (params->size(), effectParamCount (slot.type)); ++i)
@@ -371,11 +389,17 @@ juce::String ProjectDocument::toJson() const
                     auto* r = new juce::DynamicObject();
                     r->setProperty ("track", send.target);
                     r->setProperty ("level", number (static_cast<double> (send.level)));
+                    if (send.preFader) // 0.70.0
+                        r->setProperty ("preFader", true);
                     routes.add (juce::var (r));
                 }
             if (! routes.isEmpty())
                 o->setProperty ("trackSends", routes);
         }
+        if (t.delayMs > 0.0f) // 0.70.0
+            o->setProperty ("delayMs", number (static_cast<double> (t.delayMs)));
+        if (t.colour != 0)
+            o->setProperty ("colour", juce::String::toHexString (static_cast<juce::int64> (t.colour)).paddedLeft ('0', 8));
         trackList.add (juce::var (o));
     }
     root->setProperty ("tracks", trackList);
@@ -755,7 +779,10 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
                     {
                         t.trackSends[static_cast<size_t> (k)].target = readInt (route->getProperty ("track"), -1, -1, kMaxTracks - 1);
                         t.trackSends[static_cast<size_t> (k)].level = static_cast<float> (readNumber (route->getProperty ("level"), 1.0, 0.0, 1.5));
+                        t.trackSends[static_cast<size_t> (k)].preFader = readBool (route->getProperty ("preFader"), false); // 0.70.0
                     }
+            t.delayMs = static_cast<float> (readNumber (o->getProperty ("delayMs"), 0.0, 0.0, static_cast<double> (kMaxTrackDelayMs)));
+            t.colour = static_cast<std::uint32_t> (o->getProperty ("colour").toString().getHexValue64() & 0xffffffff);
         }
     }
     for (auto& c : d.channels) // a channel on a track the file does not have goes to the last one

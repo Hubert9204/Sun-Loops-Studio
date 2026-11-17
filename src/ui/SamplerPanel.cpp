@@ -119,9 +119,32 @@ SamplerPanel::SamplerPanel()
     lfoBox.addItem ("Cutoff", 3);
     lfoBox.addItem ("Pan", 4);
     lfoBox.addItem ("Volume (tremolo)", 5);
-    lfoBox.setTooltip ("What the LFO moves: the pitch (up to 2 semitones), the filter's cutoff (up to 3 octaves), the pan or the volume");
+    lfoBox.addItem ("Resonance", 6); // 0.70.0
+    lfoBox.setTooltip ("What the LFO moves: the pitch (up to 2 semitones), the filter's cutoff (up to 3 octaves), the pan, the volume or the "
+                       "filter's resonance");
     addAndMakeVisible (lfoBox);
-    lfoBox.onChange = [this] { write ([this] (Channel& c) { c.sampler.lfoTarget = static_cast<SamplerLfoTarget> (std::clamp (lfoBox.getSelectedId() - 1, 0, 4)); }); };
+    lfoBox.onChange = [this] { write ([this] (Channel& c) { c.sampler.lfoTarget = static_cast<SamplerLfoTarget> (std::clamp (lfoBox.getSelectedId() - 1, 0, 5)); }); };
+    // 0.70.0: the envelope's delay and hold, and a second LFO with its own target
+    for (auto* l : { &delayLabel, &holdLabel, &lfo2Label, &lfo2RateLabel, &lfo2DepthLabel })
+    {
+        l->setColour (juce::Label::textColourId, kPanelText);
+        addAndMakeVisible (*l);
+    }
+    slider (delaySlider, 0.0, 5.0, 0.001, " s").setSkewFactorFromMidPoint (0.3);
+    delaySlider.setTooltip ("The envelope waits this long before its attack (FL Studio's DEL)");
+    delaySlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.delay = static_cast<float> (delaySlider.getValue()); }); };
+    slider (holdSlider, 0.0, 5.0, 0.001, " s").setSkewFactorFromMidPoint (0.3);
+    holdSlider.setTooltip ("The envelope stays at full level this long after the attack, before it decays (FL Studio's HOLD)");
+    holdSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.hold = static_cast<float> (holdSlider.getValue()); }); };
+    for (const char* name : { "Off", "Pitch (vibrato)", "Cutoff", "Pan", "Volume (tremolo)", "Resonance" })
+        lfo2Box.addItem (name, lfo2Box.getNumItems() + 1);
+    lfo2Box.setTooltip ("A second LFO with its own target, rate and depth");
+    addAndMakeVisible (lfo2Box);
+    lfo2Box.onChange = [this] { write ([this] (Channel& c) { c.sampler.lfo2Target = static_cast<SamplerLfoTarget> (std::clamp (lfo2Box.getSelectedId() - 1, 0, 5)); }); };
+    slider (lfo2RateSlider, 0.05, 20.0, 0.05, " Hz");
+    lfo2RateSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.lfo2Rate = static_cast<float> (lfo2RateSlider.getValue()); }); };
+    slider (lfo2DepthSlider, 0.0, 100.0, 1.0, " %");
+    lfo2DepthSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.lfo2Depth = static_cast<float> (lfo2DepthSlider.getValue() / 100.0); }); };
     slider (lfoRateSlider, 0.05, 20.0, 0.05, " Hz");
     lfoRateSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.lfoRate = static_cast<float> (lfoRateSlider.getValue()); }); };
     slider (lfoDepthSlider, 0.0, 100.0, 1.0, " %");
@@ -133,7 +156,7 @@ SamplerPanel::SamplerPanel()
     pitchEnvTimeSlider.setSkewFactorFromMidPoint (0.3);
     pitchEnvTimeSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.pitchEnvTime = static_cast<float> (pitchEnvTimeSlider.getValue()); }); };
 
-    setSize (600, 750);
+    setSize (600, 814);
 }
 
 juce::Slider& SamplerPanel::slider (juce::Slider& s, double lo, double hi, double step, const juce::String& suffix)
@@ -219,6 +242,15 @@ void SamplerPanel::refresh()
     lfoRateSlider.setEnabled (s.lfoTarget != SamplerLfoTarget::Off);
     lfoDepthSlider.setEnabled (s.lfoTarget != SamplerLfoTarget::Off);
     lfoRateSlider.setValue (s.lfoRate, juce::dontSendNotification);
+    delaySlider.setEnabled (s.envelope); // 0.70.0
+    holdSlider.setEnabled (s.envelope);
+    delaySlider.setValue (s.delay, juce::dontSendNotification);
+    holdSlider.setValue (s.hold, juce::dontSendNotification);
+    lfo2Box.setSelectedId (static_cast<int> (s.lfo2Target) + 1, juce::dontSendNotification);
+    lfo2RateSlider.setEnabled (s.lfo2Target != SamplerLfoTarget::Off);
+    lfo2DepthSlider.setEnabled (s.lfo2Target != SamplerLfoTarget::Off);
+    lfo2RateSlider.setValue (s.lfo2Rate, juce::dontSendNotification);
+    lfo2DepthSlider.setValue (s.lfo2Depth * 100.0, juce::dontSendNotification);
     lfoDepthSlider.setValue (s.lfoDepth * 100.0, juce::dontSendNotification);
     pitchEnvSlider.setValue (s.pitchEnv, juce::dontSendNotification);
     pitchEnvTimeSlider.setValue (s.pitchEnvTime, juce::dontSendNotification);
@@ -294,6 +326,16 @@ void SamplerPanel::resized()
     area.removeFromTop (4);
     envelopeToggle.setBounds (area.removeFromTop (24).withTrimmedLeft (96));
     area.removeFromTop (4);
+    {
+        // 0.70.0: the delay and the hold share a row
+        auto r = area.removeFromTop (26);
+        area.removeFromTop (6);
+        delayLabel.setBounds (r.removeFromLeft (100));
+        delaySlider.setBounds (r.removeFromLeft (r.getWidth() / 2 - 4));
+        r.removeFromLeft (8);
+        holdLabel.setBounds (r.removeFromLeft (70));
+        holdSlider.setBounds (r);
+    }
     row (attackLabel, attackSlider);
     row (decayLabel, decaySlider);
     row (sustainLabel, sustainSlider);
@@ -350,6 +392,18 @@ void SamplerPanel::resized()
         lfoDepthSlider.setBounds (r);
     }
     {
+        auto r = area.removeFromTop (26); // 0.70.0
+        area.removeFromTop (6);
+        lfo2Label.setBounds (r.removeFromLeft (100));
+        lfo2Box.setBounds (r.removeFromLeft (120));
+        r.removeFromLeft (8);
+        lfo2RateLabel.setBounds (r.removeFromLeft (36));
+        lfo2RateSlider.setBounds (r.removeFromLeft ((r.getWidth() - 52) / 2));
+        r.removeFromLeft (8);
+        lfo2DepthLabel.setBounds (r.removeFromLeft (44));
+        lfo2DepthSlider.setBounds (r);
+    }
+    {
         auto r = area.removeFromTop (26);
         pitchEnvLabel.setBounds (r.removeFromLeft (100));
         pitchEnvSlider.setBounds (r.removeFromLeft (r.getWidth() / 2 - 4));
@@ -363,9 +417,17 @@ SamplerWindow::SamplerWindow()
     : juce::DocumentWindow ("Sampler", juce::Colour (0xff1b1e24), juce::DocumentWindow::closeButton)
 {
     setUsingNativeTitleBar (false);
-    setContentNonOwned (&content, true);
+    // 0.70.0: the panel has grown taller than a 768-pixel screen: it sits in a viewport as tall as the screen allows.
+    int available = content.getHeight();
+    if (const auto* display = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay())
+        available = std::max (300, display->userArea.getHeight() - 60);
+    const bool scrolls = content.getHeight() > available;
+    scroller.setViewedComponent (&content, false);
+    scroller.setScrollBarsShown (scrolls, false);
+    scroller.setSize (content.getWidth() + (scrolls ? scroller.getScrollBarThickness() : 0), std::min (content.getHeight(), available));
+    setContentNonOwned (&scroller, true);
     setResizable (false, false);
-    centreWithSize (content.getWidth(), content.getHeight());
+    centreWithSize (scroller.getWidth(), scroller.getHeight());
     setAlwaysOnTop (true);
 }
 } // namespace sls

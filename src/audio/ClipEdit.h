@@ -312,4 +312,27 @@ inline bool cleanPatternName (std::string& name)
         name.resize (40);
     return true;
 }
+// 0.70.0, Chop (as the Playlist's chop commands in FL Studio): the clip is cut into pieces of `pieceTicks`, counted from its
+// start. Clip `index` stays the first piece; returns how many cuts were made (0: the clip is not longer than a piece).
+inline int chopPatternClip (Arrangement& a, int index, int pieceTicks)
+{
+    if (index < 0 || index >= static_cast<int> (a.clips.size()) || pieceTicks < 1)
+        return 0;
+    const int start = a.clips[static_cast<size_t> (index)].startTick, end = a.clips[static_cast<size_t> (index)].endTick();
+    int cuts = 0;
+    for (int at = start + ((end - start - 1) / pieceTicks) * pieceTicks; at > start; at -= pieceTicks) // from the last cut to the first
+        cuts += splitPatternClip (a, index, at) >= 0 ? 1 : 0;
+    return cuts;
+}
+
+inline int chopAudioClip (Arrangement& a, int index, int pieceTicks, double bpm)
+{
+    if (index < 0 || index >= static_cast<int> (a.audioClips.size()) || pieceTicks < 1)
+        return 0;
+    const int start = a.audioClips[static_cast<size_t> (index)].startTick, end = a.audioClips[static_cast<size_t> (index)].endTick();
+    int cuts = 0;
+    for (int at = start + ((end - start - 1) / pieceTicks) * pieceTicks; at > start; at -= pieceTicks)
+        cuts += splitAudioClip (a, index, at, bpm) >= 0 ? 1 : 0;
+    return cuts;
+}
 } // namespace sls

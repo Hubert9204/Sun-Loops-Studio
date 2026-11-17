@@ -92,6 +92,17 @@ MainComponent::MainComponent()
         rackGroup = group;
         refreshRackStrips();
     };
+    rackBody.onGlobalSwing = [this] (float swing) // 0.70.0: every channel's swing at once
+    {
+        for (size_t i = 0; i < channels.size(); ++i)
+        {
+            channels[i].swing = swing;
+            if (i < strips.size())
+                strips[i]->refreshFromChannel();
+        }
+        markDirty();
+        publishProject();
+    };
     rackBody.stepGraph().onEdited = [this]
     {
         if (selected >= 0 && selected < static_cast<int> (channels.size()))
@@ -179,7 +190,8 @@ MainComponent::MainComponent()
     cpuLabel.setFont (juce::FontOptions (11.0f));
     cpuLabel.setJustificationType (juce::Justification::centred);
     cpuLabel.setColour (juce::Label::textColourId, juce::Colour (0xffb9bfc9));
-    cpuLabel.setTooltip ("CPU: how much of each audio buffer's time the audio takes. Near 100 % the sound crackles: use a larger buffer.");
+    cpuLabel.setTooltip ("CPU: how much of each audio buffer's time the audio takes. Near 100 % the sound crackles: use a larger buffer. "
+                         "The number with a v is the polyphony: how many notes of the built-in instruments are sounding. RAM: the memory in use.");
     cpuLabel.setText ("CPU 0 %", juce::dontSendNotification);
 
     // The Plugin picker (0.60.0): instruments and effects in one window, like FL Studio's.
@@ -642,6 +654,18 @@ void MainComponent::refreshRackStrips()
     if (! groups.contains (rackGroup))
         rackGroup.clear(); // the group is gone (its last channel left it)
     rackBody.setGroups (groups, rackGroup);
+    {
+        // 0.70.0: the global swing shows the channels' swing when they all share one (the drum machines have their own per pad)
+        float shared = -1.0f;
+        bool same = true;
+        for (const auto& c : channels)
+            if (c.instrument != Instrument::Drums)
+            {
+                same = same && (shared < 0.0f || std::abs (c.swing - shared) < 0.005f);
+                shared = shared < 0.0f ? c.swing : shared;
+            }
+        rackBody.setGlobalSwing (same && shared >= 0.0f ? shared : 0.0f);
+    }
     std::vector<ChannelStrip*> stripPointers;
     stripPointers.reserve (strips.size());
     for (size_t i = 0; i < strips.size(); ++i)
@@ -746,7 +770,7 @@ void MainComponent::resized()
     gap (top, 3);
     meter.setBounds (top.removeFromLeft (14));
     gap (top, 10);
-    cpuLabel.setBounds (top.removeFromLeft (64));
+    cpuLabel.setBounds (top.removeFromLeft (78)); // (0.70.0: wider, for the polyphony)
 
     area.removeFromTop (6);
 

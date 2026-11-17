@@ -52,7 +52,8 @@ Player::Player()
       routeFed (static_cast<size_t> (kMaxTracks), 0), routeDone (static_cast<size_t> (kMaxTracks), 0),
       pdcLine (static_cast<size_t> (kMaxTracks), -1), pdcDelay (static_cast<size_t> (kMaxTracks), 0),
       pdcTail (static_cast<size_t> (kMaxTracks), 0), pdcOwn (static_cast<size_t> (kMaxTracks), 0),
-      pdcLatency (static_cast<size_t> (kMaxTracks), 0), pdcDue (static_cast<size_t> (kMaxTracks), 0)
+      pdcLatency (static_cast<size_t> (kMaxTracks), 0), pdcDue (static_cast<size_t> (kMaxTracks), 0),
+      auxPdc (static_cast<size_t> (1 + kAuxBuses) * 2 * static_cast<size_t> (kMaxLatency), 0.0f)
 {
     memoryStore.reserve (static_cast<size_t> (kMaxEffectMemories));
     freeMemory.reserve (static_cast<size_t> (kMaxEffectMemories));
@@ -1473,6 +1474,8 @@ void Player::samplerVoiceOn (const Channel& channel, int channelIndex, const Not
         v.sustainLevel = set.sustain;
         v.decayStep = static_cast<float> ((1.0 - set.sustain) / (std::max (0.001, static_cast<double> (set.decay)) * sampleRate));
         v.relStep = static_cast<float> (1.0 / (std::max (0.002, static_cast<double> (set.release)) * sampleRate));
+        v.delayLeft = static_cast<int> (std::lround (static_cast<double> (set.delay) * sampleRate)); // 0.70.0
+        v.holdLeft = static_cast<int> (std::lround (static_cast<double> (set.hold) * sampleRate));
     }
     else
         v.attackStep = static_cast<float> (1.0 / (0.0005 * sampleRate)); // 0.5 ms
@@ -1498,6 +1501,7 @@ void Player::samplerVoiceOn (const Channel& channel, int channelIndex, const Not
         v.fa2 = static_cast<float> (g * a1);
         v.fa3 = static_cast<float> (g * g * a1);
         v.cutoffBase = static_cast<float> (fc);
+        v.resonanceBase = set.resonance;
     }
 
     // 0.62.0: ping-pong and crossfaded loops (the channel's own sample only), the LFO, the pitch envelope, the cutoff envelope
@@ -1505,14 +1509,24 @@ void Player::samplerVoiceOn (const Channel& channel, int channelIndex, const Not
     v.pingPong = loops && ownSample && set.loop == LoopMode::PingPong;
     v.xfade = loops && ! v.pingPong && ownSample ? static_cast<float> (std::min (static_cast<double> (set.crossfade) * (v.loopEnd - v.loopStart), v.loopStart)) : 0.0f;
     v.smpLfoTarget = set.lfoDepth > 0.0f ? static_cast<std::uint8_t> (set.lfoTarget) : std::uint8_t { 0 };
-    if (v.smpLfoTarget == static_cast<std::uint8_t> (SamplerLfoTarget::Cutoff) && set.filter == SamplerFilter::Off)
+    // (0.70.0: a second LFO; an LFO on the cutoff or the resonance needs a filter)
+    const auto needsFilter = [] (std::uint8_t target) noexcept
+    {
+        return target == static_cast<std::uint8_t> (SamplerLfoTarget::Cutoff) || target == static_cast<std::uint8_t> (SamplerLfoTarget::Resonance);
+    };
+    if (needsFilter (v.smpLfoTarget) && set.filter == SamplerFilter::Off)
         v.smpLfoTarget = 0;
+    v.smpLfo2Target = set.lfo2Depth > 0.0f ? static_cast<std::uint8_t> (set.lfo2Target) : std::uint8_t { 0 };
+    if (needsFilter (v.smpLfo2Target) && set.filter == SamplerFilter::Off)
+        v.smpLfo2Target = 0;
+    v.smpLfo2Step = static_cast<float> (static_cast<double> (set.lfo2Rate) * kModStep / sampleRate);
+    v.smpLfo2Depth = set.lfo2Depth;
     v.smpLfoStep = static_cast<float> (static_cast<double> (set.lfoRate) * kModStep / sampleRate);
     v.smpLfoDepth = set.lfoDepth;
     v.pitchEnv = set.pitchEnv;
     v.pitchEnvMul = static_cast<float> (std::pow (0.001, kModStep / (std::max (0.005, static_cast<double> (set.pitchEnvTime)) * sampleRate)));
     v.cutoffEnv = set.envelope && set.filter != SamplerFilter::Off ? set.cutoffEnv : 0.0f;
-    v.mods = v.smpLfoTarget != 0 || std::abs (v.pitchEnv) > 0.0f || std::abs (v.cutoffEnv) > 0.0f;
+    v.mods = v.smpLfoTarget != 0 || v.smpLfo2Target != 0 || std::abs (v.pitchEnv) > 0.0f || std::abs (v.cutoffEnv) > 0.0f;
 
     applyNoteProperties (v, n, releaseStep);
     *target = v;
@@ -1810,16 +1824,17 @@ void Player::render (const Project& project, double bpm, bool playing,
             return slot.plugin != nullptr ? std::clamp (slot.plugin->latencySamples(), 0, kMaxLatency) : 0;
         return unit.latencySamples (slot.type);
     };
-    bool anyPeak = false, anyRoute = false, anyLatency = false;
+    bool anyPeak = false, anyRoute = false, anyLatency = false, anyManualDelay = false;
     for (size_t t = 0; t < numTracks; ++t)
     {
         const auto& tr = trackAt (t);
+        anyManualDelay = anyManualDelay || tr.delayMs > 0.0f;
         int own = 0;
         for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
         {
             if (tr.slots[s].type == EffectType::None)
                 continue;
-            anyPeak = anyPeak || (tr.slots[s].type == EffectType::PeakController && ! tr.slots[s].bypass);
+            anyPeak = anyPeak || (effectIsController (tr.slots[s].type) && ! tr.slots[s].bypass); // 0.70.0: any of the three controllers
             own += slotLatency (effects[t][s], tr.slots[s]);
         }
         pdcOwn[t] = std::min (own, kMaxLatency);
@@ -1890,9 +1905,22 @@ void Player::render (const Project& project, double bpm, bool playing,
             pdcDelay[t] = std::clamp (pdcDue[t] - pdcLatency[t], 0, kMaxLatency);
         }
     }
+    // 0.70.0: the delay a track was given by hand comes on top of that.
+    int longestDelay = pathLatency;
+    if (anyManualDelay)
+    {
+        if (! anyLatency)
+            std::fill_n (pdcDelay.begin(), numTracks, 0);
+        for (size_t t = 0; t < numTracks; ++t)
+        {
+            const auto manual = static_cast<int> (std::lround (std::clamp (trackAt (t).delayMs, 0.0f, kMaxTrackDelayMs) * 0.001 * sampleRate));
+            pdcDelay[t] = std::min (pdcDelay[t] + manual, kMaxLatency - 1);
+            longestDelay = std::max (longestDelay, pdcDelay[t]);
+        }
+    }
     int wantedLength = 0;
-    if (pathLatency > 0)
-        for (wantedLength = 64; wantedLength < pathLatency + 1;)
+    if (longestDelay > 0)
+        for (wantedLength = 64; wantedLength < longestDelay + 1;)
             wantedLength *= 2;
     if (wantedLength != pdcLength)
     {
@@ -1907,8 +1935,40 @@ void Player::render (const Project& project, double bpm, bool playing,
         int masterLatency = 0;
         for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
             masterLatency += slotLatency (masterEffects[s], project.masterSlots[s]);
-        outputLatency.store (pathLatency + masterLatency, std::memory_order_relaxed);
+        // 0.70.0: the aux buses' own effects
+        int slowestAux = 0;
+        for (size_t a = 0; a < static_cast<size_t> (kAuxBuses); ++a)
+        {
+            int own = 0;
+            for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
+                own += slotLatency (auxEffects[a][s], project.console.aux[a].slots[s]);
+            auxOwn[a] = std::min (own, kMaxLatency - 1);
+            slowestAux = std::max (slowestAux, auxOwn[a]);
+        }
+        if (slowestAux != auxComp)
+        {
+            if (slowestAux > 0)
+                std::fill (auxPdc.begin(), auxPdc.end(), 0.0f); // (the lines start silent: this happens when such an effect comes or goes)
+            auxComp = slowestAux;
+            auxPdcWrite = 0;
+        }
+        outputLatency.store (pathLatency + auxComp + masterLatency, std::memory_order_relaxed);
     }
+    // Delays the sound in place through one of the aux compensation's lines.
+    const auto throughAuxLine = [this] (size_t line, float* l, float* r, int count, int delay) noexcept
+    {
+        float* lineL = auxPdc.data() + line * 2 * static_cast<size_t> (kMaxLatency);
+        float* lineR = lineL + kMaxLatency;
+        constexpr int mask = kMaxLatency - 1;
+        for (int i = 0; i < count; ++i)
+        {
+            const int w = (auxPdcWrite + i) & mask;
+            lineL[w] = l[i];
+            lineR[w] = r[i];
+            l[i] = lineL[(w - delay) & mask];
+            r[i] = lineR[(w - delay) & mask];
+        }
+    };
 
     // Automation (Song mode) and Peak Controllers: effect parameters are changed in copies of the slots, so the project itself is
     // never touched.
@@ -1968,7 +2028,7 @@ void Player::render (const Project& project, double bpm, bool playing,
                     target.plugin->setParameter (mod.param, mod.value);
                 continue;
             }
-            if (target.type == EffectType::PeakController || mod.param >= effectParamCount (target.type))
+            if (effectIsController (target.type) || mod.param >= effectParamCount (target.type))
                 continue;
             const auto info = effectParamInfo (target.type, mod.param);
             if (info.unit[0] == 't' && info.unit[1] == 'r') // "track": a choice of track is not something to sweep
@@ -2128,6 +2188,15 @@ void Player::render (const Project& project, double bpm, bool playing,
                 if (v.state == State::Idle)
                     continue;
 
+                if (v.delayLeft > 0) // 0.70.0, the envelope's delay: the note waits (a note let go while it waits never sounds)
+                {
+                    if (v.state == State::Release)
+                        v = Voice {};
+                    else
+                        --v.delayLeft;
+                    continue;
+                }
+
                 float l = 0.0f, r = 0.0f;
 
                 // Safety net: a held note whose "off" never arrived does not sound for ever.
@@ -2160,27 +2229,51 @@ void Player::render (const Project& project, double bpm, bool playing,
                         v.smpLfoPhase += v.smpLfoStep;
                         if (v.smpLfoPhase >= 1.0f)
                             v.smpLfoPhase -= 1.0f;
+                        const float lfo2 = v.smpLfo2Target != 0 ? std::sin (6.2831853f * v.smpLfo2Phase) : 0.0f; // 0.70.0
+                        v.smpLfo2Phase += v.smpLfo2Step;
+                        if (v.smpLfo2Phase >= 1.0f)
+                            v.smpLfo2Phase -= 1.0f;
                         float semitones = v.pitchEnv;
                         v.pitchEnv = std::abs (v.pitchEnv) > 0.002f ? v.pitchEnv * v.pitchEnvMul : 0.0f;
                         v.modLeft = v.modRight = 1.0f;
                         float octaves = v.cutoffEnv * v.env;
-                        switch (static_cast<SamplerLfoTarget> (v.smpLfoTarget))
+                        float resonance = v.resonanceBase;
+                        bool filterMoves = std::abs (v.cutoffEnv) > 0.0f;
+                        const auto applyLfo = [&] (std::uint8_t target, float depth, float value) noexcept
                         {
-                            case SamplerLfoTarget::Pitch:  semitones += 2.0f * v.smpLfoDepth * lfo; break;
-                            case SamplerLfoTarget::Cutoff: octaves += 3.0f * v.smpLfoDepth * lfo; break;
-                            case SamplerLfoTarget::Pan:
-                                v.modLeft = std::min (1.0f, 1.0f - v.smpLfoDepth * lfo);
-                                v.modRight = std::min (1.0f, 1.0f + v.smpLfoDepth * lfo);
-                                break;
-                            case SamplerLfoTarget::Volume: v.modLeft = v.modRight = 1.0f - v.smpLfoDepth * 0.5f * (1.0f - lfo); break;
-                            case SamplerLfoTarget::Off:    break;
-                        }
+                            switch (static_cast<SamplerLfoTarget> (target))
+                            {
+                                case SamplerLfoTarget::Pitch:  semitones += 2.0f * depth * value; break;
+                                case SamplerLfoTarget::Cutoff:
+                                    octaves += 3.0f * depth * value;
+                                    filterMoves = true;
+                                    break;
+                                case SamplerLfoTarget::Pan:
+                                    v.modLeft *= std::min (1.0f, 1.0f - depth * value);
+                                    v.modRight *= std::min (1.0f, 1.0f + depth * value);
+                                    break;
+                                case SamplerLfoTarget::Volume:
+                                {
+                                    const float gain = 1.0f - depth * 0.5f * (1.0f - value);
+                                    v.modLeft *= gain;
+                                    v.modRight *= gain;
+                                    break;
+                                }
+                                case SamplerLfoTarget::Resonance:
+                                    resonance += 0.5f * depth * value;
+                                    filterMoves = true;
+                                    break;
+                                case SamplerLfoTarget::Off:    break;
+                            }
+                        };
+                        applyLfo (v.smpLfoTarget, v.smpLfoDepth, lfo);
+                        applyLfo (v.smpLfo2Target, v.smpLfo2Depth, lfo2);
                         v.modPitch = std::abs (semitones) > 0.0f ? std::pow (2.0f, semitones / 12.0f) : 1.0f;
-                        if (v.filter != SamplerFilter::Off && v.cutoffBase > 0.0f
-                            && (std::abs (v.cutoffEnv) > 0.0f || v.smpLfoTarget == static_cast<std::uint8_t> (SamplerLfoTarget::Cutoff)))
+                        if (v.filter != SamplerFilter::Off && v.cutoffBase > 0.0f && filterMoves)
                         {
                             const double fc = std::clamp (static_cast<double> (v.cutoffBase) * std::pow (2.0, static_cast<double> (octaves)), 20.0, 0.45 * sampleRate);
                             const double g = std::tan (kTwoPi * 0.5 * fc / sampleRate);
+                            v.fk = static_cast<float> (2.0 - 1.94 * static_cast<double> (std::clamp (resonance, 0.0f, 1.0f)));
                             const double a1 = 1.0 / (1.0 + g * (g + static_cast<double> (v.fk)));
                             v.fa1 = static_cast<float> (a1);
                             v.fa2 = static_cast<float> (g * a1);
@@ -2301,7 +2394,9 @@ void Player::render (const Project& project, double bpm, bool playing,
                 }
                 else if (v.state == State::Sustain)
                 {
-                    if (v.env > v.sustainLevel) // the decay of a sampler envelope
+                    if (v.holdLeft > 0) // 0.70.0: the envelope's hold at full level
+                        --v.holdLeft;
+                    else if (v.env > v.sustainLevel) // the decay of a sampler envelope
                     {
                         v.env = std::max (v.sustainLevel, v.env - v.decayStep);
                         if (v.env <= 0.0f)
@@ -2483,13 +2578,13 @@ void Player::render (const Project& project, double bpm, bool playing,
             {
                 const auto& slot = slotCopies ? trackSlotsNow[t][s] : tr.slots[s];
                 effects[t][s].process (slot, l, r, n, trackTransport);
-                if (slot.type == EffectType::PeakController && ! slot.bypass && numPeakMods < kMaxPeakMods)
+                if (const int at = effectControllerTarget (slot.type); at >= 0 && ! slot.bypass && numPeakMods < kMaxPeakMods)
                 {
-                    using namespace effect_tables;
-                    const int targetTrack = static_cast<int> (std::lround (slot.params[kPeakTargetTrack]));
+                    const auto first = static_cast<size_t> (at); // "Target track", then "Target slot" and "Target param"
+                    const int targetTrack = static_cast<int> (std::lround (slot.params[first]));
                     peakMods[static_cast<size_t> (numPeakMods++)] = { targetTrack <= 0 ? static_cast<int> (t) : targetTrack - 1,
-                                                                      static_cast<int> (std::lround (slot.params[kPeakTargetSlot])) - 1,
-                                                                      static_cast<int> (std::lround (slot.params[kPeakTargetParam])) - 1,
+                                                                      static_cast<int> (std::lround (slot.params[first + 1])) - 1,
+                                                                      static_cast<int> (std::lround (slot.params[first + 2])) - 1,
                                                                       effects[t][s].controlValue() };
                 }
             }
@@ -2572,8 +2667,10 @@ void Player::render (const Project& project, double bpm, bool playing,
                         float* toL = trackL[static_cast<size_t> (send.target)].data();
                         float* toR = trackR[static_cast<size_t> (send.target)].data();
                         const float level = std::min (send.level, 1.5f) * (trackAudible[t] ? 1.0f : 0.0f);
-                        // (the sound after the fader is what went to the master: recompute it from the gain reached)
-                        const float gl = trackGain[t] * balanceLeft[t] * level, gr = trackGain[t] * balanceRight[t] * level;
+                        // (the sound after the fader is what went to the master: recompute it from the gain reached; 0.70.0: a
+                        // pre-fader send takes it as it is before the fader and balance)
+                        const float gl = send.preFader ? level : trackGain[t] * balanceLeft[t] * level;
+                        const float gr = send.preFader ? level : trackGain[t] * balanceRight[t] * level;
                         for (int i = 0; i < n; ++i)
                         {
                             toL[i] += l[i] * gl;
@@ -2584,7 +2681,10 @@ void Player::render (const Project& project, double bpm, bool playing,
         if (pdcLength > 0)
             pdcWrite = (pdcWrite + n) & (pdcLength - 1);
 
-        // 2b. Aux buses: effects, fader and balance, then the master bus.
+        // 2b. Aux buses: effects, fader and balance, then the master bus. (0.70.0: when a bus's effects delay the sound, the tracks'
+        // sum and the faster buses wait for it.)
+        if (auxComp > 0)
+            throughAuxLine (0, mixL.data(), mixR.data(), n, auxComp);
         for (size_t a = 0; a < static_cast<size_t> (kAuxBuses); ++a)
         {
             const auto& bus = project.console.aux[a];
@@ -2592,6 +2692,8 @@ void Player::render (const Project& project, double bpm, bool playing,
             float* r = auxR[a].data();
             for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
                 auxEffects[a][s].process (bus.slots[s], l, r, n, trackTransport);
+            if (auxComp > 0)
+                throughAuxLine (1 + a, l, r, n, auxComp - auxOwn[a]);
 
             for (int i = 0; i < n; ++i)
             {
@@ -2606,6 +2708,9 @@ void Player::render (const Project& project, double bpm, bool playing,
             if (auxMeanSquare[a] < 1.0e-20f)
                 auxMeanSquare[a] = 0.0f;
         }
+
+        if (auxComp > 0)
+            auxPdcWrite = (auxPdcWrite + n) & (kMaxLatency - 1);
 
         // 3. Master bus: insert effects on the sum of all tracks, then a soft limiter, added to the output.
         for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
@@ -2635,5 +2740,9 @@ void Player::render (const Project& project, double bpm, bool playing,
         for (size_t t = 0; t < numTracks; ++t)
             missing += pdcDelay[t] > 0 && pdcLine[t] < 0 && trackPeaks[t] > 0.0f ? 1 : 0;
     pdcMissing.store (missing, std::memory_order_relaxed);
+    int sounding = 0; // 0.70.0
+    for (const auto& v : voices)
+        sounding += v.state != State::Idle ? 1 : 0;
+    voicesSounding.store (sounding, std::memory_order_relaxed);
 }
 } // namespace sls

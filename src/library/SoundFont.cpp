@@ -409,6 +409,20 @@ std::shared_ptr<const SamplerProgram> loadProgram (const ProgramSpec& spec, cons
     return program;
 }
 
+namespace
+{
+const char* lfoTargetKey (SamplerLfoTarget t) noexcept
+{
+    static const char* const targets[] = { "off", "pitch", "cutoff", "pan", "volume", "resonance" };
+    return targets[std::min (static_cast<size_t> (t), std::size (targets) - 1)];
+}
+SamplerLfoTarget lfoTargetFromKey (const juce::String& text) noexcept
+{
+    return text == "pitch" ? SamplerLfoTarget::Pitch : text == "cutoff" ? SamplerLfoTarget::Cutoff : text == "pan" ? SamplerLfoTarget::Pan
+           : text == "volume" ? SamplerLfoTarget::Volume : text == "resonance" ? SamplerLfoTarget::Resonance : SamplerLfoTarget::Off;
+}
+} // namespace
+
 juce::var samplerSettingsToVar (const SamplerSettings& s)
 {
     auto* o = new juce::DynamicObject();
@@ -423,11 +437,20 @@ juce::var samplerSettingsToVar (const SamplerSettings& s)
         o->setProperty ("crossfade", s.crossfade);
     if (s.lfoTarget != SamplerLfoTarget::Off)
     {
-        static const char* const targets[] = { "off", "pitch", "cutoff", "pan", "volume" };
-        o->setProperty ("lfoTarget", targets[static_cast<int> (s.lfoTarget)]);
+        o->setProperty ("lfoTarget", lfoTargetKey (s.lfoTarget));
         o->setProperty ("lfoRate", s.lfoRate);
         o->setProperty ("lfoDepth", s.lfoDepth);
     }
+    if (s.lfo2Target != SamplerLfoTarget::Off) // 0.70.0
+    {
+        o->setProperty ("lfo2Target", lfoTargetKey (s.lfo2Target));
+        o->setProperty ("lfo2Rate", s.lfo2Rate);
+        o->setProperty ("lfo2Depth", s.lfo2Depth);
+    }
+    if (s.delay > 0.0f)
+        o->setProperty ("delay", s.delay);
+    if (s.hold > 0.0f)
+        o->setProperty ("hold", s.hold);
     if (std::abs (s.cutoffEnv) > 0.0f)
         o->setProperty ("cutoffEnv", s.cutoffEnv);
     if (std::abs (s.pitchEnv) > 0.0f)
@@ -466,9 +489,12 @@ SamplerSettings samplerSettingsFromVar (const juce::var& v)
     const auto loopText = o->getProperty ("loop").toString();
     s.loop = loopText == "forward" ? LoopMode::Forward : loopText == "pingpong" ? LoopMode::PingPong : LoopMode::Off;
     s.crossfade = static_cast<float> (readNumber (o->getProperty ("crossfade"), 0.0, 0.0, 1.0)); // 0.62.0
-    const auto lfoText = o->getProperty ("lfoTarget").toString();
-    s.lfoTarget = lfoText == "pitch" ? SamplerLfoTarget::Pitch : lfoText == "cutoff" ? SamplerLfoTarget::Cutoff : lfoText == "pan" ? SamplerLfoTarget::Pan
-                  : lfoText == "volume" ? SamplerLfoTarget::Volume : SamplerLfoTarget::Off;
+    s.lfoTarget = lfoTargetFromKey (o->getProperty ("lfoTarget").toString());
+    s.lfo2Target = lfoTargetFromKey (o->getProperty ("lfo2Target").toString()); // 0.70.0
+    s.lfo2Rate = static_cast<float> (readNumber (o->getProperty ("lfo2Rate"), 1.0, 0.05, 20.0));
+    s.lfo2Depth = static_cast<float> (readNumber (o->getProperty ("lfo2Depth"), 0.5, 0.0, 1.0));
+    s.delay = static_cast<float> (readNumber (o->getProperty ("delay"), 0.0, 0.0, 5.0));
+    s.hold = static_cast<float> (readNumber (o->getProperty ("hold"), 0.0, 0.0, 5.0));
     s.lfoRate = static_cast<float> (readNumber (o->getProperty ("lfoRate"), 5.0, 0.05, 20.0));
     s.lfoDepth = static_cast<float> (readNumber (o->getProperty ("lfoDepth"), 0.5, 0.0, 1.0));
     s.cutoffEnv = static_cast<float> (readNumber (o->getProperty ("cutoffEnv"), 0.0, -5.0, 5.0));

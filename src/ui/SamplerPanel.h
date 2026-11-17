@@ -47,6 +47,10 @@ private:
     // 0.62.0: loop crossfade, the envelope's hold on the cutoff, the LFO and the pitch envelope
     juce::Slider crossfadeSlider, cutoffEnvSlider, lfoRateSlider, lfoDepthSlider, pitchEnvSlider, pitchEnvTimeSlider;
     juce::ComboBox lfoBox;
+    // 0.70.0: the envelope's delay and hold, and a second LFO
+    juce::Slider delaySlider, holdSlider, lfo2RateSlider, lfo2DepthSlider;
+    juce::ComboBox lfo2Box;
+    juce::Label delayLabel { {}, "Delay" }, holdLabel { {}, "Hold" }, lfo2Label { {}, "LFO 2" }, lfo2RateLabel { {}, "Rate" }, lfo2DepthLabel { {}, "Depth" };
     juce::Label crossfadeLabel { {}, "Crossfade" }, cutoffEnvLabel { {}, "Envelope" }, lfoLabel { {}, "LFO" }, lfoRateLabel { {}, "Rate" },
         lfoDepthLabel { {}, "Depth" }, pitchEnvLabel { {}, "Pitch env." }, pitchEnvTimeLabel { {}, "Time" };
     juce::Label rootLabel { {}, "Root key" }, attackLabel { {}, "Attack" }, decayLabel { {}, "Decay" }, sustainLabel { {}, "Sustain" },
@@ -69,5 +73,6 @@ public:
 
 private:
     SamplerPanel content;
+    juce::Viewport scroller; // 0.70.0: the panel scrolls on a screen that is not tall enough for it
 };
 } // namespace sls

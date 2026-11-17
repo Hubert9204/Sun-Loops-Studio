@@ -154,6 +154,11 @@ private:
         float smpLfoPhase = 0.0f, smpLfoStep = 0.0f, smpLfoDepth = 0.0f;
         float pitchEnv = 0.0f, pitchEnvMul = 1.0f; // semitones left, and their decay every kModStep samples
         float cutoffBase = 0.0f, cutoffEnv = 0.0f; // Hz, octaves
+        // 0.70.0: the envelope's delay and hold (samples left), the second LFO, the filter's resonance as set (for an LFO on it)
+        int delayLeft = 0, holdLeft = 0;
+        std::uint8_t smpLfo2Target = 0;
+        float smpLfo2Phase = 0.0f, smpLfo2Step = 0.0f, smpLfo2Depth = 0.0f;
+        float resonanceBase = 0.0f;
         int modCount = 0;
         float modPitch = 1.0f, modLeft = 1.0f, modRight = 1.0f;
         float padGain = 1.0f;               // the pad's (or a sampler zone's) level and pan (1 / 1 / 1 for every other voice)
@@ -342,13 +347,21 @@ private:
     std::vector<float> pdcArena;
     std::vector<int> pdcLine, pdcDelay, pdcTail, pdcOwn, pdcLatency, pdcDue;
     int pdcLength = 0, pdcNext = 0, pdcWrite = 0;
+    // 0.70.0: effects on the aux buses that delay the sound. The tracks' sum waits for the slowest bus (line 0) and each bus for
+    // the difference (lines 1 ..), so everything meets in time on the master.
+    std::vector<float> auxPdc; // (1 + kAuxBuses) stereo lines of kMaxLatency samples
+    std::array<int, kAuxBuses> auxOwn {};
+    int auxComp = 0, auxPdcWrite = 0;
     std::atomic<int> outputLatency { 0 }, pdcMissing { 0 };
+    std::atomic<int> voicesSounding { 0 }; // 0.70.0: the polyphony read-out
 
 public:
     // Samples by which delay compensation and the master's own effects delay the whole mix (an export drops as many from its
     // start), and how many sounding tracks got no delay line (the arena was full). Any thread.
     int outputLatencySamples() const noexcept { return outputLatency.load (std::memory_order_relaxed); }
     int delayCompensationShortfall() const noexcept { return pdcMissing.load (std::memory_order_relaxed); }
+    // 0.70.0: how many notes of the built-in instruments were sounding at the end of the last block (FL Studio's polyphony count)
+    int polyphony() const noexcept { return voicesSounding.load (std::memory_order_relaxed); }
 
 private:
 

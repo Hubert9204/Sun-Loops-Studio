@@ -44,6 +44,13 @@ juce::String shortEffectName (EffectType t)
         case EffectType::Vocoder:      return "Vocod";
         case EffectType::PeakController: return "PeakCt";
         case EffectType::Convolver:    return "Convol";
+        case EffectType::FrequencyShifter: return "FShift"; // 0.70.0
+        case EffectType::VintageChorus: return "V-Chor";
+        case EffectType::VintagePhaser: return "V-Phas";
+        case EffectType::Effector:     return "Effect";
+        case EffectType::Grains:       return "Grains";
+        case EffectType::EnvelopeController: return "EnvCt";
+        case EffectType::FormulaController: return "FormCt";
         case EffectType::None:       break;
     }
     return juce::String::fromUTF8 ("\xe2\x80\x94");
@@ -344,6 +351,9 @@ void MixerStrip::showAutomated (AutomationKind kind, int slot, float value)
 void MixerStrip::refreshFromTrack()
 {
     nameLabel.setText (isAux ? juce::String (track.name) : "Track " + juce::String (index + 1), juce::dontSendNotification);
+    // (0.70.0: dark text on a coloured strip's name)
+    nameLabel.setColour (juce::Label::textColourId, track.colour != 0 && ! isAux ? juce::Colour (0xff15171a) : juce::Colour (0xffe6e8ec));
+    repaint();
     for (size_t a = 0; a < sendSliders.size(); ++a)
         sendSliders[a].setValue (track.sends[a], juce::dontSendNotification);
     preButton.setToggleState (track.sendsPreFader, juce::dontSendNotification);
@@ -391,6 +401,14 @@ void MixerStrip::paint (juce::Graphics& g)
     g.setColour (selected ? kStripSelectedBg : kStripBg);
     g.fillRoundedRectangle (getLocalBounds().toFloat().reduced (1.0f), 4.0f);
 
+    if (track.colour != 0 && ! isAux) // 0.70.0: the strip's own colour, behind its name and as a wash over the strip
+    {
+        const juce::Colour own (track.colour);
+        g.setColour (own.withAlpha (0.10f));
+        g.fillRoundedRectangle (getLocalBounds().toFloat().reduced (1.0f), 4.0f);
+        g.setColour (own.withAlpha (0.85f));
+        g.fillRoundedRectangle (3.0f, 5.0f, static_cast<float> (getWidth()) - 6.0f, 20.0f, 3.0f);
+    }
     if (selected || isAux)
     {
         g.setColour (isAux ? juce::Colour (0xff7bc47f) : kAccent);
@@ -648,6 +666,46 @@ void MasterStrip::mouseDown (const juce::MouseEvent&)
 
 // ------------------------------------------------------------------------- FxPanel
 
+void XyPad::setPosition (float x, float y)
+{
+    px = juce::jlimit (0.0f, 1.0f, x);
+    py = juce::jlimit (0.0f, 1.0f, y);
+    repaint();
+}
+
+void XyPad::paint (juce::Graphics& g)
+{
+    const auto area = getLocalBounds().toFloat().reduced (1.0f);
+    g.setColour (juce::Colour (0xff1e2126));
+    g.fillRoundedRectangle (area, 4.0f);
+    g.setColour (juce::Colour (0xff3a3f48));
+    for (int k = 1; k < 4; ++k)
+    {
+        g.drawVerticalLine (juce::roundToInt (area.getX() + area.getWidth() * static_cast<float> (k) / 4.0f), area.getY(), area.getBottom());
+        g.drawHorizontalLine (juce::roundToInt (area.getY() + area.getHeight() * static_cast<float> (k) / 4.0f), area.getX(), area.getRight());
+    }
+    const float x = area.getX() + px * area.getWidth(), y = area.getBottom() - py * area.getHeight();
+    g.setColour (kAccent.withAlpha (0.35f));
+    g.drawVerticalLine (juce::roundToInt (x), area.getY(), area.getBottom());
+    g.drawHorizontalLine (juce::roundToInt (y), area.getX(), area.getRight());
+    g.setColour (kAccent);
+    g.fillEllipse (x - 6.0f, y - 6.0f, 12.0f, 12.0f);
+    g.setColour (juce::Colour (0xff9aa0ab));
+    g.setFont (juce::Font (juce::FontOptions (11.0f)));
+    g.drawText ("X", getLocalBounds().reduced (6, 3), juce::Justification::bottomRight);
+    g.drawText ("Y", getLocalBounds().reduced (6, 3), juce::Justification::topLeft);
+}
+
+void XyPad::mouseDrag (const juce::MouseEvent& e)
+{
+    const auto area = getLocalBounds().toFloat().reduced (1.0f);
+    if (area.getWidth() <= 0.0f || area.getHeight() <= 0.0f)
+        return;
+    setPosition ((e.position.x - area.getX()) / area.getWidth(), (area.getBottom() - e.position.y) / area.getHeight());
+    if (onMove)
+        onMove (px, py);
+}
+
 FxPanel::FxPanel()
 {
     styleSmallLabel (titleLabel, 13.0f, true, juce::Justification::centredLeft);
@@ -683,6 +741,44 @@ FxPanel::FxPanel()
     addChildComponent (timeShaperNotice);
     addChildComponent (presetButton);
     presetButton.setTooltip ("Ready-made settings of this effect");
+
+    // 0.70.0
+    styleSmallLabel (mixLabel, 11.0f, false, juce::Justification::centredLeft);
+    mixLabel.setText ("Slot mix", juce::dontSendNotification);
+    addChildComponent (mixLabel);
+    mixSlider.setRange (0.0, 100.0, 1.0);
+    mixSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 64, 20);
+    mixSlider.setTextValueSuffix (" %");
+    mixSlider.setDoubleClickReturnValue (true, 100.0);
+    mixSlider.setTooltip ("The slot's own mix: how much of the effect's sound against the sound before it (100 %: only the effect's, as before 0.70.0)");
+    mixSlider.onValueChange = [this]
+    {
+        if (track == nullptr)
+            return;
+        track->slots[static_cast<size_t> (selectedSlot)].mix = static_cast<float> (mixSlider.getValue() * 0.01);
+        if (onChanged)
+            onChanged (trackIndex);
+    };
+    addChildComponent (mixSlider);
+    styleSmallLabel (formulaLabel, 11.0f, false, juce::Justification::centredLeft);
+    formulaLabel.setText ("Formula", juce::dontSendNotification);
+    addChildComponent (formulaLabel);
+    formulaEditor.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 12.0f, juce::Font::plain)));
+    formulaEditor.setTextToShowWhenEmpty ("a   (for example: 0.5 + 0.5 * sin(2 * pi * beat) * a)", juce::Colour (0xff7a808a));
+    formulaEditor.setTooltip ("The controller's value, 0..1. Names: a b c (the knobs), t (seconds), beat (song position), level (this track's "
+                              "peak), pi. Functions: sin cos tan abs sqrt exp log floor ceil round frac tri saw sqr rnd min max pow clamp if "
+                              "lerp. Enter applies it.");
+    formulaEditor.onReturnKey = [this] { applyFormula(); };
+    formulaEditor.onFocusLost = [this] { applyFormula(); };
+    addChildComponent (formulaEditor);
+    effectorPad.onMove = [this] (float x, float y)
+    {
+        if (track == nullptr || track->slots[static_cast<size_t> (selectedSlot)].type != EffectType::Effector)
+            return;
+        params[1].slider.setValue (x, juce::sendNotificationSync); // (the sliders write the slot and tell the engine)
+        params[2].slider.setValue (y, juce::sendNotificationSync);
+    };
+    addChildComponent (effectorPad);
 
     for (size_t s = 0; s < slotButtons.size(); ++s)
     {
@@ -836,7 +932,7 @@ void FxPanel::rebuildParameters()
             // A mixer track (0.45.0: the compressor's sidechain): "Off" or one of the project's tracks, by name.
             row.name.setText (info.name, juce::dontSendNotification);
             row.choice.clear (juce::dontSendNotification);
-            row.choice.addItem (slot.type == EffectType::PeakController ? "This track"
+            row.choice.addItem (effectIsController (slot.type) ? "This track"
                                     : slot.type == EffectType::Vocoder ? "None (left = voice, right = carrier)" : "Off (its own sound)", 1);
             const int tracks = trackCount ? trackCount() : 8;
             for (int t = 0; t < tracks; ++t)
@@ -849,7 +945,7 @@ void FxPanel::rebuildParameters()
                                        ? "The gate opens when the chosen track plays (its sound before its own effects and fader)"
                                        : slot.type == EffectType::Vocoder
                                              ? "The voice: the level of each band of the chosen track's sound sets the level of the same band of this track"
-                                             : slot.type == EffectType::PeakController
+                                             : effectIsController (slot.type)
                                                    ? "The mixer track whose effect this controller drives"
                                                    : "The compressor turns this track down when the chosen track plays (its sound before its own effects and fader)");
             row.choice.onChange = [this, i]
@@ -887,7 +983,9 @@ void FxPanel::rebuildParameters()
         {
             row.slider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 64, 20);
             // (0.62.0: the Peak Controller's target slot and parameter are whole numbers)
-            const bool whole = slot.type == EffectType::PeakController && (i == effect_tables::kPeakTargetSlot || i == effect_tables::kPeakTargetParam);
+            // (and 0.70.0 the other controllers')
+            const int controllerTarget = effectControllerTarget (slot.type);
+            const bool whole = controllerTarget >= 0 && (i == controllerTarget + 1 || i == controllerTarget + 2);
             row.slider.setRange (info.min, info.max, whole ? 1.0 : 0.0);
             if ((unit == "Hz" || unit == "ms" || unit == ":1") && info.min > 0.0f)
                 row.slider.setSkewFactorFromMidPoint (std::sqrt (static_cast<double> (info.min) * static_cast<double> (info.max)));
@@ -915,8 +1013,10 @@ void FxPanel::rebuildParameters()
         {
             if (track == nullptr)
                 return;
-            track->slots[static_cast<size_t> (selectedSlot)].params[static_cast<size_t> (i)]
-                = static_cast<float> (params[static_cast<size_t> (i)].slider.getValue());
+            auto& changed = track->slots[static_cast<size_t> (selectedSlot)];
+            changed.params[static_cast<size_t> (i)] = static_cast<float> (params[static_cast<size_t> (i)].slider.getValue());
+            if (changed.type == EffectType::Effector && (i == 1 || i == 2))
+                effectorPad.setPosition (changed.params[1], changed.params[2]);
             updateHint();
             if (onChanged)
                 onChanged (trackIndex);
@@ -924,6 +1024,22 @@ void FxPanel::rebuildParameters()
     }
     irButton.setVisible (slot.type == EffectType::Convolver);
     irButton.onClick = [this] { chooseImpulseResponse(); };
+    // 0.70.0
+    const bool mixable = slot.type != EffectType::None && ! effectIsController (slot.type);
+    mixLabel.setVisible (mixable);
+    mixSlider.setVisible (mixable);
+    mixSlider.setValue (std::round (slot.mix * 100.0f), juce::dontSendNotification);
+    const bool isFormula = slot.type == EffectType::FormulaController;
+    formulaLabel.setVisible (isFormula);
+    formulaEditor.setVisible (isFormula);
+    if (isFormula && ! formulaEditor.hasKeyboardFocus (false))
+    {
+        formulaEditor.setText (slot.formula != nullptr ? juce::String::fromUTF8 (slot.formula->text().c_str()) : juce::String(), false);
+        formulaError.clear();
+    }
+    effectorPad.setVisible (slot.type == EffectType::Effector);
+    if (slot.type == EffectType::Effector)
+        effectorPad.setPosition (slot.params[1], slot.params[2]);
     updateHint();
     resized();
 }
@@ -935,12 +1051,12 @@ void FxPanel::updateHint()
     if (track != nullptr)
     {
         const auto& slot = track->slots[static_cast<size_t> (selectedSlot)];
-        if (slot.type == EffectType::PeakController)
+        if (const int at = effectControllerTarget (slot.type); at >= 0) // 0.70.0: any of the three controllers
         {
-            using namespace effect_tables;
-            const int targetTrack = juce::roundToInt (slot.params[kPeakTargetTrack]);
-            const int targetSlot = juce::roundToInt (slot.params[kPeakTargetSlot]) - 1;
-            const int targetParam = juce::roundToInt (slot.params[kPeakTargetParam]) - 1;
+            const auto first = static_cast<size_t> (at);
+            const int targetTrack = juce::roundToInt (slot.params[first]);
+            const int targetSlot = juce::roundToInt (slot.params[first + 1]) - 1;
+            const int targetParam = juce::roundToInt (slot.params[first + 2]) - 1;
             const MixerTrack* target = targetTrack <= 0 ? track : (trackAt ? trackAt (targetTrack - 1) : nullptr);
             const auto where = targetTrack <= 0 ? juce::String ("this track") : "track " + juce::String (targetTrack);
             const auto place = " (" + where + ", slot " + juce::String (targetSlot + 1) + ")";
@@ -955,12 +1071,14 @@ void FxPanel::updateHint()
                     text = "Drives: " + juce::String (driven.plugin->displayName()) + " > "
                          + (targetParam < driven.plugin->parameterCount() ? juce::String (driven.plugin->parameterName (targetParam)) : juce::String ("(no such parameter)"))
                          + place;
-                else if (driven.type == EffectType::PeakController || targetParam >= effectParamCount (driven.type)
+                else if (effectIsController (driven.type) || targetParam >= effectParamCount (driven.type)
                          || juce::String (effectParamInfo (driven.type, targetParam).unit) == "track")
                     text = "Drives nothing: " + juce::String (effectName (driven.type)) + " has no parameter " + juce::String (targetParam + 1);
                 else
                     text = "Drives: " + juce::String (effectName (driven.type)) + " > " + effectParamInfo (driven.type, targetParam).name + place;
             }
+            if (slot.type == EffectType::FormulaController && formulaError.isNotEmpty())
+                text = "Formula not applied: " + formulaError;
         }
         else if (slot.type == EffectType::Convolver)
         {
@@ -974,6 +1092,41 @@ void FxPanel::updateHint()
     }
     hintLabel.setText (text, juce::dontSendNotification);
     hintLabel.setVisible (text.isNotEmpty());
+}
+
+// 0.70.0: the text of the formula box becomes the Formula Controller's formula (empty: the value is knob A again); text that
+// cannot be read leaves the formula as it was and says why in the hint line.
+void FxPanel::applyFormula()
+{
+    if (track == nullptr)
+        return;
+    auto& slot = track->slots[static_cast<size_t> (selectedSlot)];
+    if (slot.type != EffectType::FormulaController)
+        return;
+    const auto text = formulaEditor.getText().trim();
+    const auto before = slot.formula != nullptr ? juce::String::fromUTF8 (slot.formula->text().c_str()) : juce::String();
+    if (text == before)
+        return;
+    if (text.isEmpty())
+    {
+        slot.formula = nullptr;
+        formulaError.clear();
+    }
+    else
+    {
+        std::string why;
+        if (auto made = Formula::compile (text.toStdString(), &why))
+        {
+            slot.formula = std::move (made);
+            formulaError.clear();
+        }
+        else
+            formulaError = juce::String::fromUTF8 (why.c_str());
+    }
+    updateHint();
+    resized();
+    if (formulaError.isEmpty() && onChanged)
+        onChanged (trackIndex);
 }
 
 void FxPanel::chooseImpulseResponse()
@@ -1114,8 +1267,8 @@ void FxPanel::showSlotMenu (int slot)
                                 if (type != current.type)
                                 {
                                     auto made = EffectSlot::make (type);
-                                    if (type == EffectType::PeakController) // 0.62.0: it drives the slot after its own to begin with
-                                        made.params[effect_tables::kPeakTargetSlot] = static_cast<float> (slot + 1 < kSlotsPerTrack ? slot + 2 : 1);
+                                    if (const int at = effectControllerTarget (type); at >= 0) // 0.62.0: a controller drives the slot after its own to begin with
+                                        made.params[static_cast<size_t> (at) + 1] = static_cast<float> (slot + 1 < kSlotsPerTrack ? slot + 2 : 1);
                                     safe->applySlot (slot, made);
                                 }
                             }
@@ -1169,6 +1322,25 @@ void FxPanel::resized()
     }
     if (hintLabel.isVisible())
         hintLabel.setBounds (area.removeFromTop (18));
+    if (formulaEditor.isVisible()) // 0.70.0
+    {
+        area.removeFromTop (2);
+        auto row = area.removeFromTop (22);
+        formulaLabel.setBounds (row.removeFromLeft (64));
+        formulaEditor.setBounds (row);
+    }
+    if (mixSlider.isVisible())
+    {
+        area.removeFromTop (2);
+        auto row = area.removeFromTop (22);
+        mixLabel.setBounds (row.removeFromLeft (64));
+        mixSlider.setBounds (row);
+    }
+    if (effectorPad.isVisible())
+    {
+        effectorPad.setBounds (area.removeFromBottom (std::min (150, std::max (60, area.getHeight() / 3))));
+        area.removeFromBottom (4);
+    }
     area.removeFromTop (4);
     timeShaperNotice.setBounds (area.removeFromBottom (60));
     notePlaceholder.setBounds (area);
@@ -1466,6 +1638,31 @@ void MixerPanel::addStrip (size_t i)
     }
 }
 
+// 0.70.0: a track delay typed in (the routing menu's Track delay > Other...).
+void MixerPanel::askTrackDelay (int index)
+{
+    if (trackData == nullptr || index < 0 || index >= static_cast<int> (trackData->size()))
+        return;
+    auto* window = new juce::AlertWindow ("Track " + juce::String (index + 1) + ": delay",
+                                          "Milliseconds by which this track's sound is delayed (0 to " + juce::String (kMaxTrackDelayMs, 0)
+                                              + "), on top of the automatic delay compensation.",
+                                          juce::MessageBoxIconType::NoIcon, this);
+    window->addTextEditor ("ms", juce::String ((*trackData)[static_cast<size_t> (index)].delayMs, 1), "Delay (ms)");
+    window->addButton ("OK", 1, juce::KeyPress (juce::KeyPress::returnKey));
+    window->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+    window->enterModalState (true, juce::ModalCallbackFunction::create ([safe = juce::Component::SafePointer<MixerPanel> (this), window, index] (int result)
+    {
+        if (result != 1 || safe == nullptr || safe->trackData == nullptr || index >= static_cast<int> (safe->trackData->size()))
+            return;
+        auto& t = (*safe->trackData)[static_cast<size_t> (index)];
+        t.delayMs = juce::jlimit (0.0f, kMaxTrackDelayMs, window->getTextEditorContents ("ms").replaceCharacter (',', '.').getFloatValue());
+        safe->strips[static_cast<size_t> (index)]->refreshFromTrack();
+        if (safe->onTrackChanged)
+            safe->onTrackChanged (index);
+    }),
+                             true);
+}
+
 // 0.62.0: where a track goes. FL Studio draws cables from the selected track to the others; here it is a menu on the track.
 void MixerPanel::showRouteMenu (int index, juce::Component& button)
 {
@@ -1511,11 +1708,36 @@ void MixerPanel::showRouteMenu (int index, juce::Component& button)
             levels.addItem (5000 + static_cast<int> (s) * 10 + static_cast<int> (l), juce::String (kLevels[l]) + " %", true,
                             juce::roundToInt (send.level * 100.0f) == kLevels[l]);
         levels.addSeparator();
+        levels.addItem (5000 + static_cast<int> (s) * 10 + 8, "Before the fader (pre-fader)", true, send.preFader); // 0.70.0
         levels.addItem (5000 + static_cast<int> (s) * 10 + 9, "Remove this send");
-        menu.addSubMenu ("Level to " + nameOf (send.target) + "  (" + juce::String (juce::roundToInt (send.level * 100.0f)) + " %)", levels);
+        menu.addSubMenu ("Level to " + nameOf (send.target) + "  (" + juce::String (juce::roundToInt (send.level * 100.0f)) + " %"
+                             + (send.preFader ? ", pre-fader)" : ")"),
+                         levels);
     }
     menu.addSeparator();
     menu.addItem (2, "Reset (the master only)", ! track.toMaster || used > 0);
+    // 0.70.0: the track's own delay and its colour
+    static constexpr float kDelays[] = { 0.0f, 1.0f, 2.0f, 5.0f, 10.0f, 20.0f, 30.0f, 50.0f, 100.0f, 200.0f };
+    static constexpr std::uint32_t kColours[] = { 0xffd9534f, 0xffe8843a, 0xffe8a93a, 0xffd9c94a, 0xff9ccc4a, 0xff4cc38a,
+                                                  0xff4ac9b0, 0xff4a9fd9, 0xff6a7fe0, 0xff9a6fe0, 0xffd06fc8, 0xff9aa0ab };
+    static constexpr const char* kColourNames[] = { "Red", "Orange", "Amber", "Yellow", "Lime", "Green", "Teal", "Blue", "Indigo", "Violet", "Pink", "Grey" };
+    menu.addSeparator();
+    juce::PopupMenu delays;
+    bool listed = false;
+    for (size_t d = 0; d < std::size (kDelays); ++d)
+    {
+        const bool current = std::abs (track.delayMs - kDelays[d]) < 0.05f;
+        listed = listed || current;
+        delays.addItem (7000 + static_cast<int> (d), d == 0 ? juce::String ("None") : juce::String (kDelays[d], 0) + " ms", true, current);
+    }
+    delays.addSeparator();
+    delays.addItem (7100, "Other..." + (listed ? juce::String() : "  (" + juce::String (track.delayMs, 1) + " ms)"), true, ! listed);
+    menu.addSubMenu ("Track delay" + (track.delayMs > 0.0f ? "  (" + juce::String (track.delayMs, 1) + " ms)" : juce::String()), delays);
+    juce::PopupMenu colours;
+    colours.addItem (8000, "Default", true, track.colour == 0);
+    for (size_t c = 0; c < std::size (kColours); ++c)
+        colours.addItem (8001 + static_cast<int> (c), kColourNames[c], true, track.colour == kColours[c]);
+    menu.addSubMenu ("Strip colour", colours);
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&button),
                         [safe = juce::Component::SafePointer<MixerPanel> (this), index] (int result)
                         {
@@ -1536,11 +1758,22 @@ void MixerPanel::showRouteMenu (int index, juce::Component& button)
                                 t.toMaster = true;
                                 t.trackSends = {};
                             }
+                            else if (result >= 8000) // 0.70.0
+                                t.colour = result == 8000 ? 0u : kColours[static_cast<size_t> (result - 8001) % std::size (kColours)];
+                            else if (result == 7100)
+                            {
+                                safe->askTrackDelay (index);
+                                return;
+                            }
+                            else if (result >= 7000)
+                                t.delayMs = kDelays[static_cast<size_t> (result - 7000) % std::size (kDelays)];
                             else if (result >= 5000)
                             {
                                 auto& send = t.trackSends[static_cast<size_t> ((result - 5000) / 10) % t.trackSends.size()];
                                 const int choice = (result - 5000) % 10;
-                                if (choice == 9)
+                                if (choice == 8)
+                                    send.preFader = ! send.preFader;
+                                else if (choice == 9)
                                     send = {};
                                 else
                                     send.level = static_cast<float> (kLevels[static_cast<size_t> (choice) % std::size (kLevels)]) / 100.0f;
@@ -1549,7 +1782,7 @@ void MixerPanel::showRouteMenu (int index, juce::Component& button)
                             {
                                 t.toMaster = false;
                                 t.trackSends = {};
-                                t.trackSends[0] = { result - 3000, 1.0f };
+                                t.trackSends[0] = { result - 3000, 1.0f, false };
                             }
                             else if (result >= 1000)
                             {
@@ -1563,7 +1796,7 @@ void MixerPanel::showRouteMenu (int index, juce::Component& button)
                                     }
                                 if (! removed)
                                     if (auto* s = freeSend())
-                                        *s = { target, 1.0f };
+                                        *s = { target, 1.0f, false };
                             }
                             safe->strips[static_cast<size_t> (index)]->refreshFromTrack();
                             if (safe->onTrackChanged)

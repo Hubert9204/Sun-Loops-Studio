@@ -170,6 +170,20 @@ private:
 
 // The effects of the selected track: four slots (pick an effect, switch it on/off) and the parameters of the
 // selected slot: the built-in effects, or a third-party plugin effect (VST3, LV2, LADSPA; 0.17.0).
+// The Effector's pad (0.70.0): a dot at (X, Y), dragged with the mouse; X runs left to right and Y bottom to top.
+class XyPad : public juce::Component
+{
+public:
+    void setPosition (float x, float y);
+    std::function<void (float x, float y)> onMove;
+    void paint (juce::Graphics&) override;
+    void mouseDown (const juce::MouseEvent& e) override { mouseDrag (e); }
+    void mouseDrag (const juce::MouseEvent&) override;
+
+private:
+    float px = 0.5f, py = 0.5f;
+};
+
 class FxPanel : public juce::Component
 {
 public:
@@ -233,6 +247,14 @@ private:
     std::unique_ptr<juce::FileChooser> irChooser;
     void updateHint();
     void chooseImpulseResponse();
+    // 0.70.0: the slot's own mix knob, the Formula Controller's formula and the Effector's pad
+    juce::Label mixLabel;
+    juce::Slider mixSlider { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
+    juce::Label formulaLabel;
+    juce::TextEditor formulaEditor;
+    juce::String formulaError;
+    XyPad effectorPad;
+    void applyFormula();
     struct ParamRow
     {
         juce::Label name;
@@ -301,6 +323,7 @@ private:
     void layoutInner();
     void addStrip (size_t index);
     void showRouteMenu (int index, juce::Component& button); // 0.62.0
+    void askTrackDelay (int index); // 0.70.0
     void showAddTrackMenu();
     void selectMaster();
     void selectAux (int aux);

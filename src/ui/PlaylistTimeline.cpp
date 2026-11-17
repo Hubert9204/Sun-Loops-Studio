@@ -2990,6 +2990,14 @@ void PlaylistTimeline::showClipMenu (int x, int y)
 
     juce::PopupMenu menu;
     menu.addItem (1, "Split here");
+    {
+        juce::PopupMenu chop; // 0.70.0
+        chop.addItem (20, "Every bar");
+        chop.addItem (21, "Every beat");
+        chop.addItem (22, "Every half beat (8ths)");
+        chop.addItem (23, "Every quarter beat (16ths)");
+        menu.addSubMenu ("Chop into pieces", chop);
+    }
     menu.addItem (2, "Duplicate (Ctrl+D)");
     menu.addItem (3, "Copy (Ctrl+C)");
     if (audio >= 0)
@@ -3033,6 +3041,21 @@ void PlaylistTimeline::showClipMenu (int x, int y)
                             {
                                 case 1: if (safe->splitAt (track, tick, false)) safe->notifyChanged(); break;
                                 case 2: safe->duplicateSelected(); break;
+                                case 20: case 21: case 22: case 23: // 0.70.0: chop
+                                {
+                                    const int piece = result == 20 ? interfaceMeter().barTicks() : kTicksPerBeat >> (result - 21);
+                                    safe->beginEdit();
+                                    const int cuts = audio >= 0 ? chopAudioClip (safe->arrangement, audio, piece, safe->bpm)
+                                                                : chopPatternClip (safe->arrangement, pattern, piece);
+                                    if (cuts > 0)
+                                    {
+                                        safe->commitPendingUndo();
+                                        safe->notifyChanged();
+                                    }
+                                    else
+                                        safe->pendingUndoValid = false;
+                                    break;
+                                }
                                 case 3: safe->copySelected(); break;
                                 case 4: safe->editAudioProperties (audio); break;
                                 case 7: safe->editAudioStretch (audio); break;
