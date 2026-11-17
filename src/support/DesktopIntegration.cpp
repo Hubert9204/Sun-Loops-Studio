@@ -6,6 +6,12 @@
 
 #include "IconData.h"
 
+#if JUCE_WINDOWS
+ #include <windows.h>
+ #include <shlobj.h> // SHChangeNotify
+ #pragma comment(lib, "shell32.lib")
+#endif
+
 namespace sls::desktop
 {
 namespace
@@ -118,6 +124,22 @@ juce::String desktopEntry (const juce::String& executable)
            "X-Sun-Loops-Studio-Generated=true\n";
 }
 
+juce::String windowsOpenCommand (const juce::String& executable)
+{
+    return "\"" + executable + "\" \"%1\"";
+}
+
+juce::String executableOfCommand (const juce::String& command)
+{
+    const auto text = command.trim();
+    if (text.startsWithChar ('"'))
+        return text.substring (1).upToFirstOccurrenceOf ("\"", false, false);
+    // Not quoted: up to ".exe" (the path may have spaces), else up to the first space.
+    if (const int exe = text.indexOfIgnoreCase (".exe"); exe > 0)
+        return text.substring (0, exe + 4);
+    return text.upToFirstOccurrenceOf (" ", false, false);
+}
+
 Result install (const Setup& setup)
 {
     Result result;
@@ -181,6 +203,31 @@ void integrateInBackground()
         // The first time: open .slp files with this program, unless another program was already chosen for them.
         if (result.desktopFileCreated && query ({ "xdg-mime", "query", "default", kMimeType }).isEmpty())
             runTool ({ "xdg-mime", "default", "sun-loops-studio.desktop", kMimeType });
+    });
+   #elif JUCE_WINDOWS
+    const auto executable = juce::File::getSpecialLocation (juce::File::currentExecutableFile).getFullPathName();
+    juce::Thread::launch ([executable]
+    {
+        // What opens .slp files now (the user's and the machine's settings together, as Explorer sees them).
+        const auto progId = juce::WindowsRegistry::getValue ("HKEY_CLASSES_ROOT\\.slp\\");
+        const auto command = progId.isEmpty() ? juce::String()
+                                              : juce::WindowsRegistry::getValue ("HKEY_CLASSES_ROOT\\" + progId + "\\shell\\open\\command\\");
+        const auto current = executableOfCommand (command);
+        if (current.isNotEmpty() && juce::File::isAbsolutePath (current) && juce::File (current).existsAsFile())
+            return; // installed, or another program chosen: theirs
+        const juce::String root ("HKEY_CURRENT_USER\\Software\\Classes\\");
+        const juce::String id ("SunLoopsStudio.Project");
+        const bool ok = juce::WindowsRegistry::setValue (root + ".slp\\", id)
+                        && juce::WindowsRegistry::setValue (root + id + "\\", "Sun Loops Studio project")
+                        && juce::WindowsRegistry::setValue (root + id + "\\DefaultIcon\\", executable + ",0")
+                        && juce::WindowsRegistry::setValue (root + id + "\\shell\\open\\command\\", windowsOpenCommand (executable));
+        if (! ok)
+        {
+            spdlog::warn ("Desktop integration: the .slp file type could not be registered");
+            return;
+        }
+        ::SHChangeNotify (SHCNE_ASSOCCHANGED, SHCNF_IDLIST, nullptr, nullptr); // Explorer shows the new icon
+        spdlog::info ("Desktop integration: .slp files registered for this user ({})", executable.toStdString());
     });
    #endif
 }

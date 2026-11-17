@@ -1,6 +1,9 @@
 #include "support/ProcessMemory.h"
 
-#if defined(__APPLE__)
+#if defined(_WIN32)
+ #include <windows.h>
+ #include <psapi.h>
+#elif defined(__APPLE__)
  #include <mach/mach.h>
 #elif defined(__linux__)
  #include <cstdio>
@@ -11,7 +14,13 @@ namespace sls
 {
 std::int64_t residentMemoryBytes() noexcept
 {
-#if defined(__APPLE__)
+#if defined(_WIN32)
+    // Windows (0.75.0): the working set, what Task Manager shows as memory in use.
+    PROCESS_MEMORY_COUNTERS counters {};
+    if (::GetProcessMemoryInfo (::GetCurrentProcess(), &counters, sizeof (counters)))
+        return static_cast<std::int64_t> (counters.WorkingSetSize);
+    return 0;
+#elif defined(__APPLE__)
     mach_task_basic_info info {};
     mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
     if (::task_info (::mach_task_self(), MACH_TASK_BASIC_INFO, reinterpret_cast<task_info_t> (&info), &count) == KERN_SUCCESS)

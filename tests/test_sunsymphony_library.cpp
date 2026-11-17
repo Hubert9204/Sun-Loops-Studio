@@ -1,9 +1,5 @@
 // SunSymphony's Library manager (0.67.0): the built-in catalog is consistent, and an instrument installs only with intact files.
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <poll.h>
-#include <sys/socket.h>
-#include <unistd.h>
+#include "TestSockets.h" // POSIX or Winsock (0.75.0)
 
 #include <atomic>
 #include <cmath>
@@ -77,15 +73,15 @@ class FolderServer
 public:
     explicit FolderServer (juce::File root) : folder (std::move (root))
     {
+        testsockets::start();
         listener = ::socket (AF_INET, SOCK_STREAM, 0);
-        int yes = 1;
-        ::setsockopt (listener, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof (yes));
+        testsockets::reuseAddress (listener);
         sockaddr_in address {};
         address.sin_family = AF_INET;
         address.sin_addr.s_addr = htonl (INADDR_LOOPBACK);
         ::bind (listener, reinterpret_cast<sockaddr*> (&address), sizeof (address));
         ::listen (listener, 16);
-        socklen_t length = sizeof (address);
+        testsockets::Length length = sizeof (address);
         ::getsockname (listener, reinterpret_cast<sockaddr*> (&address), &length);
         port = ntohs (address.sin_port);
         worker = std::thread ([this] { serve(); });
@@ -94,7 +90,7 @@ public:
     {
         stop = true;
         worker.join();
-        ::close (listener);
+        testsockets::close (listener);
     }
     juce::String base() const { return "http://127.0.0.1:" + juce::String (port) + "/"; }
     int requests() const { return served.load(); }
@@ -104,17 +100,17 @@ private:
     {
         while (! stop)
         {
-            pollfd p { listener, POLLIN, 0 };
-            if (::poll (&p, 1, 50) <= 0)
+            testsockets::Poll p { listener, POLLIN, 0 };
+            if (testsockets::poll (&p, 1, 50) <= 0)
                 continue;
-            const int client = ::accept (listener, nullptr, nullptr);
-            if (client < 0)
+            const auto client = ::accept (listener, nullptr, nullptr);
+            if (client == testsockets::kNone)
                 continue;
             std::string request;
             char buffer[4096];
             while (request.find ("\r\n\r\n") == std::string::npos)
             {
-                const auto n = ::recv (client, buffer, sizeof (buffer), 0);
+                const auto n = testsockets::receive (client, buffer, sizeof (buffer));
                 if (n <= 0)
                     break;
                 request.append (buffer, static_cast<size_t> (n));
@@ -125,15 +121,16 @@ private:
             const bool found = folder.getChildFile (path).loadFileAsData (body);
             const auto header = juce::String (found ? "HTTP/1.1 200 OK" : "HTTP/1.1 404 Not Found") + "\r\nContent-Length: "
                                 + juce::String (found ? static_cast<int> (body.getSize()) : 0) + "\r\nConnection: close\r\n\r\n";
-            ::send (client, header.toRawUTF8(), header.getNumBytesAsUTF8(), MSG_NOSIGNAL);
+            testsockets::sendAll (client, header.toRawUTF8(), header.getNumBytesAsUTF8());
             if (found)
-                ::send (client, body.getData(), body.getSize(), MSG_NOSIGNAL);
-            ::close (client);
+                testsockets::sendAll (client, body.getData(), body.getSize());
+            testsockets::close (client);
             ++served;
         }
     }
     juce::File folder;
-    int listener = -1, port = 0;
+    testsockets::Handle listener = testsockets::kNone;
+    int port = 0;
     std::atomic<bool> stop { false };
     std::atomic<int> served { 0 };
     std::thread worker;

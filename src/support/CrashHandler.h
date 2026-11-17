@@ -13,6 +13,10 @@ namespace sls::crash
 // <directory>/crash_last_session.log, then lets the signal end the program as it would have. An uncaught C++ exception is noted
 // (its what()) before std::terminate aborts. At the next start the file is read (CrashReport.h) and offered as a bug report.
 // Plain C++ (POSIX, no JUCE), tested in a child process.
+// Windows (0.75.0, CrashHandlerWindows.cpp): the same file, written for a structured exception nobody handled (access violation,
+// stack overflow, division by zero, illegal instruction...: named as the signal they correspond to, SIGSEGV, SIGFPE, SIGILL) and
+// for abort() (SIGABRT, which an uncaught C++ exception ends in), with the stack walked by DbgHelp; then the program ends with
+// the exception's code (3 for abort, as Windows's own abort does).
 constexpr const char* kCrashFileName = "crash_last_session.log";
 
 struct InstallOptions

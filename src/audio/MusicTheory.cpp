@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cmath>
 #include <map>
 #include <numeric>
@@ -84,7 +85,7 @@ std::vector<int> heptatonicIntervals (const Scale& scale)
 {
     const auto& all = scales();
     auto mask = all[static_cast<size_t> (std::clamp (scale.type, 0, static_cast<int> (all.size()) - 1))].mask;
-    if (__builtin_popcount (mask) != 7)
+    if (std::popcount (static_cast<unsigned> (mask)) != 7)
         mask = (mask & (1u << 3)) != 0 && (mask & (1u << 4)) == 0 ? all[static_cast<size_t> (indexOfScale ("Natural minor"))].mask
                                                                   : all[static_cast<size_t> (indexOfScale ("Major"))].mask;
     std::vector<int> intervals;

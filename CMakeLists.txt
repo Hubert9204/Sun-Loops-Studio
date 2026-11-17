@@ -4,11 +4,33 @@ cmake_minimum_required(VERSION 3.22)
 # 10.15 Catalina (0.63.0): the newest macOS of Intel Macs from 2012 (Mac mini, iMac, MacBook Pro). The Apple silicon half of the
 # app needs macOS 11 in any case (the first macOS for those Macs); the compiler refuses any call that Catalina does not have.
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Oldest macOS the program runs on")
-project(SunLoopsStudio VERSION 0.74.0 LANGUAGES C CXX ASM)
+# Windows (0.75.0): the C and C++ runtime is linked into every program and plugin (/MT), so nothing has to be installed beside
+# them (no Visual C++ Redistributable). Must be set before project().
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "The MSVC runtime: static")
+project(SunLoopsStudio VERSION 0.74.0 LANGUAGES C CXX)
+# The assembler links the sound library in on Linux and macOS; Windows (0.75.0) uses a resource instead (see below).
+if(NOT WIN32)
+    enable_language(ASM)
+endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# Windows (0.75.0): built with clang-cl (Visual Studio's Clang, the compiler the continuous integration and the releases use) or
+# MSVC. windows.h without its min / max macros, M_PI and friends from <cmath>, the C library's plain functions (getenv...)
+# without "deprecated" warnings; the sources are UTF-8 (Italian text).
+if(WIN32)
+    add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN _USE_MATH_DEFINES _CRT_SECURE_NO_WARNINGS _WIN32_WINNT=0x0A00)
+    if(MSVC)
+        add_compile_options(/utf-8 $<$<CXX_COMPILER_ID:MSVC>:/bigobj> $<$<CXX_COMPILER_ID:MSVC>:/Zc:__cplusplus>)
+        # Function names for the crash reports' stack traces: a .pdb next to each program, also in Release builds (with Clang only
+        # the names and line tables, which keeps it small). /OPT:REF and /OPT:ICF are what a Release build has without /DEBUG.
+        add_compile_options("$<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CXX>,$<CXX_COMPILER_ID:Clang>>:-gline-tables-only>"
+                            "$<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CXX>,$<CXX_COMPILER_ID:MSVC>>:/Zi>")
+        add_link_options("$<$<CONFIG:Release>:/DEBUG>" "$<$<CONFIG:Release>:/OPT:REF>" "$<$<CONFIG:Release>:/OPT:ICF>")
+    endif()
+endif()
 
 # JUCE is downloaded at configure time (needs network once). Pin the tag so builds are reproducible.
 include(FetchContent)
@@ -50,7 +72,30 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(spdlog nlohmann_json)
 set_target_properties(spdlog PROPERTIES POSITION_INDEPENDENT_CODE ON)
-find_package(CURL REQUIRED)
+if(WIN32)
+    # Windows (0.75.0): libcurl is built in from its pinned source, with Windows's own TLS (Schannel: the system's certificates)
+    # and nothing else - HTTP and HTTPS only, no compression or other libraries, a static library.
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+    foreach(on BUILD_STATIC_LIBS CURL_USE_SCHANNEL HTTP_ONLY CURL_DISABLE_INSTALL ENABLE_UNICODE CURL_STATIC_CRT)
+        set(${on} ON CACHE BOOL "" FORCE)
+    endforeach()
+    foreach(off BUILD_CURL_EXE BUILD_TESTING BUILD_EXAMPLES BUILD_LIBCURL_DOCS BUILD_MISC_DOCS ENABLE_CURL_MANUAL CURL_USE_OPENSSL
+                CURL_USE_LIBPSL USE_LIBIDN2 USE_WIN32_IDN CURL_USE_LIBSSH2 CURL_ZLIB CURL_BROTLI CURL_ZSTD USE_NGHTTP2)
+        set(${off} OFF CACHE BOOL "" FORCE)
+    endforeach()
+    set(CURL_DISABLE_LDAP ON CACHE BOOL "" FORCE)
+    FetchContent_Declare(
+        curl
+        URL https://github.com/curl/curl/releases/download/curl-8_11_1/curl-8.11.1.tar.xz
+        URL_HASH SHA256=c7ca7db48b0909743eaef34250da02c19bc61d4f1dcedd6603f109409536ab56
+        DOWNLOAD_EXTRACT_TIMESTAMP ON
+        SYSTEM
+        ${SLS_JUCE_FETCH_OPTIONS}
+    )
+    FetchContent_MakeAvailable(curl)
+else()
+    find_package(CURL REQUIRED)
+endif()
 
 # GitHub repository that crash reports go to and updates come from. A token for creating issues can be built in with
 # -DSLS_CRASH_REPORT_TOKEN=... (never commit one: anyone with the program can read it); without one the user can paste their
@@ -81,10 +126,18 @@ add_custom_command(OUTPUT "${SLS_LIBRARY_ZIP}"
     DEPENDS ${SLS_LIBRARY_DEPENDS}
     COMMENT "Packing the sound library"
     VERBATIM)
-configure_file(src/audio/SoundLibraryData.S.in "${CMAKE_CURRENT_BINARY_DIR}/SoundLibraryData.S" @ONLY)
-set_source_files_properties("${CMAKE_CURRENT_BINARY_DIR}/SoundLibraryData.S" PROPERTIES OBJECT_DEPENDS "${SLS_LIBRARY_ZIP}")
-add_library(SunLoopsLibraryData STATIC "${CMAKE_CURRENT_BINARY_DIR}/SoundLibraryData.S" "${SLS_LIBRARY_ZIP}")
-set_target_properties(SunLoopsLibraryData PROPERTIES POSITION_INDEPENDENT_CODE ON LINKER_LANGUAGE C)
+if(WIN32)
+    # Windows (0.75.0): the zip is a resource (RCDATA "SLS_SOUND_LIBRARY") of the program, found with FindResource. An object
+    # library, so that the compiled resource goes straight to the linker of each program (a static library's would be dropped).
+    configure_file(src/audio/SoundLibraryData.rc.in "${CMAKE_CURRENT_BINARY_DIR}/SoundLibraryData.rc" @ONLY)
+    set_source_files_properties("${CMAKE_CURRENT_BINARY_DIR}/SoundLibraryData.rc" PROPERTIES OBJECT_DEPENDS "${SLS_LIBRARY_ZIP}")
+    add_library(SunLoopsLibraryData OBJECT "${CMAKE_CURRENT_BINARY_DIR}/SoundLibraryData.rc" "${SLS_LIBRARY_ZIP}")
+else()
+    configure_file(src/audio/SoundLibraryData.S.in "${CMAKE_CURRENT_BINARY_DIR}/SoundLibraryData.S" @ONLY)
+    set_source_files_properties("${CMAKE_CURRENT_BINARY_DIR}/SoundLibraryData.S" PROPERTIES OBJECT_DEPENDS "${SLS_LIBRARY_ZIP}")
+    add_library(SunLoopsLibraryData STATIC "${CMAKE_CURRENT_BINARY_DIR}/SoundLibraryData.S" "${SLS_LIBRARY_ZIP}")
+    set_target_properties(SunLoopsLibraryData PROPERTIES POSITION_INDEPENDENT_CODE ON LINKER_LANGUAGE C)
+endif()
 
 # Code shared by the app and the tests (no GUI dependencies).
 set(SLS_CORE_SOURCES
@@ -123,6 +176,7 @@ set(SLS_CORE_SOURCES
     src/plugins/PluginHost.cpp
     src/support/Logging.cpp
     src/support/CrashHandler.cpp
+    src/support/CrashHandlerWindows.cpp # 0.75.0 (empty elsewhere)
     src/support/CrashReport.cpp
     src/support/ProcessMemory.cpp
     src/support/Http.cpp
@@ -268,6 +322,9 @@ target_link_libraries(SunLoopsStudio PRIVATE
     juce::juce_gui_extra
     juce::juce_recommended_config_flags
     juce::juce_recommended_warning_flags)
+if(WIN32) # the crash handler's stack traces (0.75.0)
+    target_link_libraries(SunLoopsStudio PRIVATE dbghelp)
+endif()
 
 # --- Helios LLM mode (0.64.0): sun-loops-helios, the helper that runs the language model ------------------------------
 # tools/helios-llm is built as a project of its own, once per processor (llama.cpp cannot be built for Apple silicon and Intel in
@@ -296,7 +353,8 @@ if(SLS_HELIOS_LLM)
             -DSLS_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
             -DFETCHCONTENT_SOURCE_DIR_JUCE=${juce_SOURCE_DIR}
             -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
-            -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER})
+            -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+            "-DCMAKE_MSVC_RUNTIME_LIBRARY=${CMAKE_MSVC_RUNTIME_LIBRARY}")
         if(FETCHCONTENT_SOURCE_DIR_LLAMA) # a local llama.cpp checkout instead of downloading it
             list(APPEND args -DFETCHCONTENT_SOURCE_DIR_LLAMA=${FETCHCONTENT_SOURCE_DIR_LLAMA})
         endif()
@@ -558,6 +616,9 @@ target_include_directories(SunLoopsStudioTests SYSTEM PRIVATE third_party/signal
 target_compile_definitions(SunLoopsStudioTests PRIVATE ${SLS_COMMON_DEFINITIONS} SLS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_link_options(SunLoopsStudioTests PRIVATE "LINKER:--export-dynamic-symbol=_ZN3sls*")
+endif()
+if(WIN32) # the crash handler's stack traces and the tests' little HTTP server (0.75.0)
+    target_link_libraries(SunLoopsStudioTests PRIVATE dbghelp ws2_32)
 endif()
 if(APPLE) # the Audio Unit host's generic editor (a window the tests never open, but the code is linked)
     target_link_libraries(SunLoopsStudioTests PRIVATE "-framework CoreAudioKit")

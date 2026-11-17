@@ -1,5 +1,8 @@
 #include "support/CrashHandler.h"
 
+// Linux and macOS. Windows (0.75.0) has its own handler: CrashHandlerWindows.cpp.
+#if ! defined(_WIN32)
+
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -385,3 +388,4 @@ void setContext (const std::vector<std::pair<std::string, std::string>>& fields)
     contextIndex.store (next, std::memory_order_release);
 }
 } // namespace sls::crash
+#endif // ! _WIN32

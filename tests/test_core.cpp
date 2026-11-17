@@ -14032,9 +14032,12 @@ void testSessionLog();
 void testHeliosChat();     // tests/test_helios.cpp
 void testHeliosDownload(); // tests/test_support.cpp
 void testDesktopIntegration(); // tests/test_support.cpp
+bool runCrashChild (int argc, char** argv); // tests/test_support.cpp (Windows: the crash tests' child process)
 
-int main()
+int main (int argc, char** argv)
 {
+    if (runCrashChild (argc, argv))
+        return 0;
     testProjectModel();
     testSingleNote();
     testSampleAccuracy();

@@ -8,6 +8,15 @@
 #include "audio/AudioExport.h"
 #include "audio/BuiltinSamples.h"
 
+// How to install ffmpeg on this system (0.75.0).
+#if defined(_WIN32)
+ #define SLS_FFMPEG_HOW "on Windows: winget install Gyan.FFmpeg, then start Sun Loops Studio again"
+#elif defined(__APPLE__)
+ #define SLS_FFMPEG_HOW "on a Mac: brew install ffmpeg"
+#else
+ #define SLS_FFMPEG_HOW "on Fedora / Nobara: sudo dnf install ffmpeg"
+#endif
+
 namespace sls
 {
 namespace
@@ -15,7 +24,7 @@ namespace
 juce::String ffmpegMissingMessage (const juce::File& file)
 {
     return "Reading " + file.getFileName()
-         + " needs the ffmpeg program, which was not found. Install it (on Fedora / Nobara: sudo dnf install ffmpeg).";
+         + " needs the ffmpeg program, which was not found. Install it (" SLS_FFMPEG_HOW ").";
 }
 
 bool hasExtensionIn (const juce::File& file, const juce::StringArray& extensions)

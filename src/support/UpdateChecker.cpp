@@ -52,8 +52,9 @@ std::optional<UpdateInfo> parseRelease (std::string_view json, std::string* erro
             const auto name = stringField (asset, "name");
             const auto link = stringField (asset, "browser_download_url");
             // the AppImage for this processor; on macOS (0.63.0, arch "macOS") the universal disk image
-            const bool wanted = arch == "macOS" ? endsWith (name, "-macOS.dmg")
-                                                : endsWith (name, ".AppImage") && name.find (std::string (arch)) != std::string::npos;
+            const bool wanted = arch == "macOS"     ? endsWith (name, "-macOS.dmg")
+                                : arch == "Windows" ? endsWith (name, "-Windows-x64-Setup.exe") // 0.75.0
+                                                    : endsWith (name, ".AppImage") && name.find (std::string (arch)) != std::string::npos;
             if (! link.empty() && wanted)
             {
                 info.url = link;
@@ -199,7 +200,9 @@ bool UpdateChecker::start (Callback callback)
         request.maxResponseBytes = std::size_t { 1024 } * 1024;
         request.cancel = &cancel;
         // which download fits this computer: the macOS disk image, or the AppImage for this processor (0.63.0)
-#if defined(__APPLE__)
+#if defined(_WIN32)
+        constexpr std::string_view platform = "Windows"; // 0.75.0: the installer
+#elif defined(__APPLE__)
         constexpr std::string_view platform = "macOS";
 #elif defined(__aarch64__)
         constexpr std::string_view platform = "aarch64";

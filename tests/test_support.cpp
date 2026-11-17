@@ -17,17 +17,18 @@
 #include <thread>
 #include <vector>
 
-#include <arpa/inet.h>
-#include <dlfcn.h>
+#include "TestSockets.h" // POSIX or Winsock (0.75.0)
+#if defined(_WIN32)
+ #include <windows.h>
+#else
+ #include <dlfcn.h>
+ #include <sys/resource.h>
+ #include <sys/wait.h>
+ #include <unistd.h>
+#endif
 #if defined(__linux__)
  #include <link.h>
 #endif
-#include <netinet/in.h>
-#include <poll.h>
-#include <sys/resource.h>
-#include <sys/socket.h>
-#include <sys/wait.h>
-#include <unistd.h>
 
 #include <spdlog/spdlog.h>
 
@@ -49,9 +50,18 @@ namespace fs = std::filesystem;
 
 namespace
 {
+long long processId()
+{
+#if defined(_WIN32)
+    return static_cast<long long> (::GetCurrentProcessId());
+#else
+    return static_cast<long long> (::getpid());
+#endif
+}
+
 fs::path freshFolder (const std::string& name)
 {
-    auto dir = fs::temp_directory_path() / ("sls-support-test-" + std::to_string (::getpid())) / name;
+    auto dir = fs::temp_directory_path() / ("sls-support-test-" + std::to_string (processId())) / name;
     std::error_code ignored;
     fs::remove_all (dir, ignored);
     fs::create_directories (dir);
@@ -70,16 +80,16 @@ class MiniServer
 public:
     explicit MiniServer (std::string responseText, bool silentServer = false) : response (std::move (responseText)), silent (silentServer)
     {
+        testsockets::start();
         listener = ::socket (AF_INET, SOCK_STREAM, 0);
-        int yes = 1;
-        ::setsockopt (listener, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof (yes));
+        testsockets::reuseAddress (listener);
         sockaddr_in address {};
         address.sin_family = AF_INET;
         address.sin_addr.s_addr = htonl (INADDR_LOOPBACK);
         address.sin_port = 0;
         if (::bind (listener, reinterpret_cast<sockaddr*> (&address), sizeof (address)) != 0 || ::listen (listener, 4) != 0)
             std::cerr << "MiniServer: cannot listen on 127.0.0.1\n";
-        socklen_t length = sizeof (address);
+        testsockets::Length length = sizeof (address);
         ::getsockname (listener, reinterpret_cast<sockaddr*> (&address), &length);
         port = ntohs (address.sin_port);
         worker = std::thread ([this] { serve(); });
@@ -90,7 +100,7 @@ public:
         stop.store (true);
         if (worker.joinable())
             worker.join();
-        ::close (listener);
+        testsockets::close (listener);
     }
 
     std::string base() const { return "http://127.0.0.1:" + std::to_string (port); }
@@ -109,22 +119,22 @@ public:
 private:
     void serve()
     {
-        pollfd p { listener, POLLIN, 0 };
-        while (! stop.load() && ::poll (&p, 1, 50) == 0) {}
+        testsockets::Poll p { listener, POLLIN, 0 };
+        while (! stop.load() && testsockets::poll (&p, 1, 50) == 0) {}
         if (stop.load())
             return;
-        const int client = ::accept (listener, nullptr, nullptr);
-        if (client < 0)
+        const auto client = ::accept (listener, nullptr, nullptr);
+        if (client == testsockets::kNone)
             return;
         std::string text;
         char buffer[4096];
         std::size_t expected = std::string::npos;
-        pollfd c { client, POLLIN, 0 };
+        testsockets::Poll c { client, POLLIN, 0 };
         while (! stop.load())
         {
-            if (::poll (&c, 1, 50) <= 0)
+            if (testsockets::poll (&c, 1, 50) <= 0)
                 continue;
-            const auto n = ::recv (client, buffer, sizeof (buffer), 0);
+            const auto n = testsockets::receive (client, buffer, sizeof (buffer));
             if (n <= 0)
                 break;
             text.append (buffer, static_cast<std::size_t> (n));
@@ -145,16 +155,16 @@ private:
             request = text;
         }
         if (! silent)
-            ::send (client, response.data(), response.size(), MSG_NOSIGNAL);
+            testsockets::sendAll (client, response.data(), response.size());
         else
             while (! stop.load())
                 std::this_thread::sleep_for (std::chrono::milliseconds (20));
-        ::close (client);
+        testsockets::close (client);
     }
 
     std::string response;
     bool silent;
-    int listener = -1;
+    testsockets::Handle listener = testsockets::kNone;
     int port = 0;
     std::atomic<bool> stop { false };
     std::mutex lock;
@@ -162,24 +172,90 @@ private:
     std::thread worker;
 };
 
-// Runs `crash` in a child process with the handler installed; returns the signal that ended the child (0 if none).
-int crashInChild (const fs::path& dir, const std::function<void()>& crash)
+} // namespace
+
+namespace sls::crashtest
+{
+void writeThroughNull (std::uintptr_t where);
+void throwUncaught (int code);
+int recurseForever (int depth);
+int divideByZero (int divisor);
+} // namespace sls::crashtest
+
+namespace
+{
+// The crashes of the child processes, by name: "segv", "abort", "fpe", "overflow"; anything else ends normally.
+void crashNow (const std::string& kind)
+{
+    if (kind == "segv")
+        sls::crashtest::writeThroughNull (static_cast<std::uintptr_t> (processId() & 0) + 16);
+    else if (kind == "abort")
+        sls::crashtest::throwUncaught (7);
+    else if (kind == "fpe")
+    {
+#if defined(_WIN32) // (Windows: a real division by zero; raise(SIGFPE) there is only the C library's own signal)
+        static_cast<void> (sls::crashtest::divideByZero (0));
+#else
+        std::raise (SIGFPE);
+#endif
+    }
+    else if (kind == "overflow")
+        static_cast<void> (sls::crashtest::recurseForever (0));
+}
+
+void crashWithHandler (const fs::path& dir, const std::string& kind)
+{
+    sls::crash::install ({ dir, "9.8.7" });
+    sls::crash::setContext ({ { "audio_driver", "ALSA" }, { "audio_device", "Test Card" }, { "sample_rate", "48000" }, { "buffer_size", "256" } });
+    crashNow (kind);
+}
+
+// Runs the crash `kind` in a child process with the handler installed; returns the signal that ended the child (0 if none).
+// Windows (0.75.0) has no fork(): the test program is started again with --crash-child, and the code it ends with (the
+// exception's, or 3 for abort) is turned back into the signal.
+int crashInChild (const fs::path& dir, const std::string& kind)
 {
     std::cout.flush(); // or the child flushes the parent's buffered output a second time when it exits
     std::fflush (nullptr);
+#if defined(_WIN32)
+    wchar_t self[MAX_PATH * 2] {};
+    ::GetModuleFileNameW (nullptr, self, MAX_PATH * 2);
+    std::wstring command = L"\"" + std::wstring (self) + L"\" --crash-child " + std::wstring (kind.begin(), kind.end()) + L" \"" + dir.wstring() + L"\"";
+    STARTUPINFOW startup {};
+    startup.cb = sizeof (startup);
+    PROCESS_INFORMATION process {};
+    if (! ::CreateProcessW (nullptr, command.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startup, &process))
+        return -1;
+    ::WaitForSingleObject (process.hProcess, 60000);
+    DWORD code = 0;
+    ::GetExitCodeProcess (process.hProcess, &code);
+    ::CloseHandle (process.hThread);
+    ::CloseHandle (process.hProcess);
+    switch (code)
+    {
+        case 0: return 0;
+        case 3: return SIGABRT;
+        case EXCEPTION_ACCESS_VIOLATION:
+        case EXCEPTION_STACK_OVERFLOW: return SIGSEGV;
+        case EXCEPTION_INT_DIVIDE_BY_ZERO:
+        case EXCEPTION_FLT_DIVIDE_BY_ZERO: return SIGFPE;
+        default:
+            std::cout << "    the child ended with code 0x" << std::hex << code << std::dec << "\n";
+            return -1;
+    }
+#else
     const pid_t child = ::fork();
     if (child == 0)
     {
         rlimit noCore { 0, 0 };
         ::setrlimit (RLIMIT_CORE, &noCore);
-        sls::crash::install ({ dir, "9.8.7" });
-        sls::crash::setContext ({ { "audio_driver", "ALSA" }, { "audio_device", "Test Card" }, { "sample_rate", "48000" }, { "buffer_size", "256" } });
-        crash();
+        crashWithHandler (dir, kind);
         ::_exit (0);
     }
     int status = 0;
     ::waitpid (child, &status, 0);
     return WIFSIGNALED (status) ? WTERMSIG (status) : 0;
+#endif
 }
 
 const char* kSampleCrash = R"(SLS-CRASH 1
@@ -228,7 +304,21 @@ namespace sls::crashtest
         return 0;
     return recurseForever (depth + 1) + pad[0];
 }
+[[gnu::noinline]] int divideByZero (int divisor)
+{
+    volatile int d = divisor;
+    return 1000 / d;
+}
 } // namespace sls::crashtest
+
+// Windows (0.75.0): the child process of crashInChild. main() calls it first; it does not return when asked to crash.
+bool runCrashChild (int argc, char** argv)
+{
+    if (argc != 4 || std::string (argv[1]) != "--crash-child")
+        return false;
+    crashWithHandler (fs::path (argv[3]), argv[2]);
+    return true;
+}
 
 void testSemVerAndUpdates()
 {
@@ -340,7 +430,7 @@ void testSemVerAndUpdates()
                    && request.find ("Accept: application/vnd.github+json") != std::string::npos && request.find ("Authorization") == std::string::npos,
                "GET /repos/{owner}/{repo}/releases/latest with a User-Agent and GitHub's Accept header, no token");
         // the download this computer gets: the test release has only AppImages, so on a Mac it is the release page (0.63.0)
-#if defined(__APPLE__)
+#if defined(__APPLE__) || defined(_WIN32) // (Windows, 0.75.0: likewise, no installer in it)
         const std::string expectedUrl = "https://github.com/o/r/releases/tag/v0.43.0";
 #elif defined(__aarch64__)
         const std::string expectedUrl = "https://x/arm";
@@ -416,7 +506,7 @@ void testCrashReports()
     // Real crashes in a child process.
     {
         const auto dir = freshFolder ("segv");
-        const int sig = crashInChild (dir, [] { sls::crashtest::writeThroughNull (static_cast<std::uintptr_t> (::getpid() & 0) + 16); });
+        const int sig = crashInChild (dir, "segv");
         auto report = sls::crash::load (sls::crash::crashFile (dir));
         if (report)
             sls::crash::symbolize (*report, sls::crash::executablePath());
@@ -438,7 +528,7 @@ void testCrashReports()
     }
     {
         const auto dir = freshFolder ("abort");
-        const int sig = crashInChild (dir, [] { sls::crashtest::throwUncaught (7); });
+        const int sig = crashInChild (dir, "abort");
         auto report = sls::crash::load (sls::crash::crashFile (dir));
         if (report)
             sls::crash::symbolize (*report, sls::crash::executablePath());
@@ -459,7 +549,7 @@ void testCrashReports()
     }
     {
         const auto dir = freshFolder ("fpe");
-        const int sig = crashInChild (dir, [] { std::raise (SIGFPE); });
+        const int sig = crashInChild (dir, "fpe");
         auto report = sls::crash::load (sls::crash::crashFile (dir));
         if (report)
             sls::crash::symbolize (*report, sls::crash::executablePath());
@@ -468,7 +558,7 @@ void testCrashReports()
     }
     {
         const auto dir = freshFolder ("overflow");
-        const int sig = crashInChild (dir, [] { static_cast<void> (sls::crashtest::recurseForever (0)); });
+        const int sig = crashInChild (dir, "overflow");
         auto report = sls::crash::load (sls::crash::crashFile (dir));
         if (report)
             sls::crash::symbolize (*report, sls::crash::executablePath());
@@ -477,7 +567,7 @@ void testCrashReports()
     }
     {
         const auto dir = freshFolder ("clean");
-        const int sig = crashInChild (dir, [] {});
+        const int sig = crashInChild (dir, "none");
         supportCheck (sig == 0 && ! fs::exists (sls::crash::crashFile (dir)), "a normal exit leaves no crash file");
     }
 
@@ -534,6 +624,26 @@ void testCrashReports()
         supportCheck (mac && mac->frames.size() == 4 && mac->frames[2].module == "SunLoopsStudio" && mac->frames[2].offset == "+0x1a"
                           && mac->frames[2].address == "0x0000000104f2c8e4" && mac->where() == "sls::Player::render" && mac->frames[3].symbol.empty(),
                       "a macOS stack trace is read: module, address, function and offset; the crash is in Player::render");
+    }
+    {
+        // 0.75.0: a stack trace as the Windows handler writes it (module file names, DbgHelp's names, "+0x" offsets)
+        const auto win = sls::crash::parse ("SLS-CRASH 1\nversion=0.75.0\nsignal=11\nsigname=SIGSEGV\ncode=1\naddress=0x10\nframes:\n"
+                                            "Sun Loops Studio.exe(sls::crash::detail::onException+0x0) [0x7ff6a0001000]\n"
+                                            "KERNELBASE.dll(RaiseException+0x6c) [0x7ffd10002000]\n"
+                                            "Sun Loops Studio.exe(_CxxThrowException+0x97) [0x7ff6a0003000]\n"
+                                            "Sun Loops Studio.exe(sls::Player::render+0x1a) [0x7ff6a0004000]\n"
+                                            "ntdll.dll(+0x2bb2a) [0x7ffd1002bb2a]\n"
+                                            "end\n");
+        supportCheck (win && win->frames.size() == 5 && win->frames[3].module == "Sun Loops Studio.exe" && win->frames[3].offset == "+0x1a"
+                          && win->where() == "sls::Player::render" && win->frames[4].symbol.empty() && win->frames[4].offset == "+0x2bb2a",
+                      "a Windows stack trace is read; RaiseException and _CxxThrowException are skipped, the crash is in Player::render");
+        auto inDll = *win;
+        inDll.frames.insert (inDll.frames.begin() + 3, sls::crash::Frame { "C:\\Windows\\System32\\ucrtbase.dll", "memcpy", "+0x20", "0x7f01", "" });
+        inDll.crashFrame = 3;
+        supportCheck (inDll.signature() == "memcpy, called from sls::Player::render", "a crash inside a Windows DLL names the program's function that called it");
+        const sls::crash::Redaction windowsUser { "C:\\Users\\hubert", "hubert" };
+        const auto text = sls::crash::redact ("Opened C:\\Users\\hubert\\Music\\a.slp and C:/Users/hubert/Music/b.slp, D:\\hubert\\x", windowsUser);
+        supportCheck (text == "Opened ~\\Music\\a.slp and ~/Music/b.slp, D:\\<user>\\x", "Windows: the user's folder (\\ or /) and name are removed");
     }
     supportCheck (body.find ("hubert") == std::string::npos && body.find ("~/Music/song.slp") != std::string::npos && body.find ("~/Apps") == std::string::npos
                && body.find ("contains ''' fences") != std::string::npos,
@@ -719,11 +829,16 @@ void testSessionLog()
                       && last[0].rfind ("[20", 0) == 0 && before.find ("line 399 of") != std::string::npos,
                   "the last lines, with time stamp and level");
     supportCheck (readAll (dir / "session.1.log").find ("rotation test") != std::string::npos, "the older lines are in session.1.log");
-    supportCheck (! sls::logging::start ({ "/proc/no-such-folder" }), "a folder that cannot be written: false, the program goes on (logging to stderr)");
+    {
+        // A folder that cannot be made: its parent is a file (on every system; 0.75.0, before: /proc, Linux only).
+        const auto blocker = freshFolder ("log-blocked") / "a-file";
+        std::ofstream (blocker) << "not a folder";
+        supportCheck (! sls::logging::start ({ blocker / "logs" }), "a folder that cannot be written: false, the program goes on (logging to stderr)");
+    }
     sls::logging::stop();
     std::error_code ignored;
     if (std::getenv ("SLS_KEEP_TEST_FILES") == nullptr)
-        fs::remove_all (fs::temp_directory_path() / ("sls-support-test-" + std::to_string (::getpid())), ignored);
+        fs::remove_all (fs::temp_directory_path() / ("sls-support-test-" + std::to_string (processId())), ignored);
 }
 
 // 0.68.1: the .slp file type, its icon and the menu entry, written into the user's data folder (also from the AppImage).
@@ -763,4 +878,10 @@ void testDesktopIntegration()
     const auto theirs = sls::desktop::install (setup);
     supportCheck (! theirs.changed && data.getChildFile ("applications/sun-loops-studio.desktop").loadFileAsString().contains ("Mine"),
                   "a menu entry the user made is left alone");
+    // 0.75.0: the Windows file type's "open" command, and reading the program back from one (quoted or not)
+    const juce::String exe ("C:\\Program Files\\Sun Loops Studio\\Sun Loops Studio.exe");
+    supportCheck (sls::desktop::windowsOpenCommand (exe) == "\"" + exe + "\" \"%1\"" && sls::desktop::executableOfCommand (sls::desktop::windowsOpenCommand (exe)) == exe
+                      && sls::desktop::executableOfCommand (exe + " \"%1\"") == exe && sls::desktop::executableOfCommand ("notepad.exe %1") == "notepad.exe"
+                      && sls::desktop::executableOfCommand ("").isEmpty(),
+                  "Windows: the .slp \"open\" command quotes the program; the program is read back from any command");
 }

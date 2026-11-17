@@ -10,9 +10,13 @@
 #include <memory>
 #include <sstream>
 
-#include <cxxabi.h>
-#include <pwd.h>
-#include <unistd.h>
+#if defined(_WIN32) // 0.75.0
+ #include <windows.h>
+#else
+ #include <cxxabi.h>
+ #include <pwd.h>
+ #include <unistd.h>
+#endif
 #if defined(__linux__)
  #include <elf.h>
 #elif defined(__APPLE__)
@@ -32,7 +36,7 @@ std::string_view trimView (std::string_view s) noexcept
 
 std::string baseName (const std::string& path)
 {
-    const auto slash = path.find_last_of ('/');
+    const auto slash = path.find_last_of ("/\\"); // (Windows paths too, 0.75.0)
     return slash == std::string::npos ? path : path.substr (slash + 1);
 }
 
@@ -103,6 +107,15 @@ Frame parseFrame (std::string_view line)
     return f;
 }
 
+bool isWindowsSystemModule (const std::string& module)
+{
+    std::string lower;
+    for (const char c : module)
+        lower += static_cast<char> (c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c);
+    return lower == "ntdll.dll" || lower == "kernelbase.dll" || lower == "kernel32.dll" || startsWith (lower, "ucrtbase")
+           || startsWith (lower, "vcruntime") || startsWith (lower, "msvcp");
+}
+
 bool isSignalMachinery (const Frame& f)
 {
     static const char* const names[] = { "_sigtramp", "__pthread_kill", "__abort", "abort_message", "demangling_terminate_handler()",
@@ -110,13 +123,20 @@ bool isSignalMachinery (const Frame& f)
                                          "__restore_rt", "raise", "gsignal", "abort", "pthread_kill", "__pthread_kill_implementation",
                                          "__pthread_kill_internal", "killpg", "__GI_raise", "__GI_abort", "std::terminate()",
                                          "__gnu_cxx::__verbose_terminate_handler()", "__cxa_throw", "__cxa_rethrow", "std::unexpected()",
-                                         "_Unwind_Resume", "_Unwind_RaiseException", "__assert_fail", "__assert_fail_base" };
+                                         "_Unwind_Resume", "_Unwind_RaiseException", "__assert_fail", "__assert_fail_base",
+                                         // Windows (0.75.0): throwing, raising and aborting in the C and C++ runtime
+                                         "RaiseException", "_CxxThrowException", "CxxThrowException", "RtlRaiseException",
+                                         "KiUserExceptionDispatcher", "terminate", "_wassert", "_assert", "common_assert",
+                                         "issue_debug_notification", "__acrt_report_runtime_error" };
     for (const auto* n : names)
         if (f.symbol == n)
             return true;
     if (f.symbol.find ("sls::crash::") != std::string::npos || startsWith (f.symbol, "__cxxabiv1::"))
         return true;
     const auto module = baseName (f.module);
+    // Windows (0.75.0): the system's own DLLs (the exception dispatcher, RaiseException) and the runtime's (a DLL's copy of it).
+    if (isWindowsSystemModule (module))
+        return true;
     // macOS (0.63.0): the system libraries only export some of their functions, so their frames carry the name of the nearest
     // exported one (__cxa_get_exception_ptr for the code that throws): every frame of them counts, named or not.
     if (startsWith (module, "libsystem_") || startsWith (module, "libc++abi.dylib"))
@@ -167,7 +187,11 @@ std::string formatTime (long long seconds)
         return "unknown";
     const auto t = static_cast<std::time_t> (seconds);
     std::tm utc {};
+#if defined(_WIN32)
+    gmtime_s (&utc, &t);
+#else
     gmtime_r (&t, &utc);
+#endif
     char buffer[32];
     std::strftime (buffer, sizeof (buffer), "%Y-%m-%d %H:%M UTC", &utc);
     return buffer;
@@ -178,6 +202,9 @@ std::string demangle (const std::string& symbol)
 {
     if (symbol.empty() || ! startsWith (symbol, "_Z"))
         return symbol;
+#if defined(_WIN32)
+    return symbol; // (Windows names arrive readable from DbgHelp; an Itanium name is shown as it is)
+#else
     int status = 0;
     std::unique_ptr<char, void (*) (void*)> result (abi::__cxa_demangle (symbol.c_str(), nullptr, nullptr, &status), std::free);
     if (status == 0 && result != nullptr)
@@ -190,6 +217,7 @@ std::string demangle (const std::string& symbol)
             return base + " [" + symbol.substr (dot + 1) + "]";
     }
     return symbol;
+#endif
 }
 
 namespace
@@ -275,7 +303,13 @@ const ElfFunction* functionAt (const std::vector<ElfFunction>& functions, std::u
 std::filesystem::path executablePath()
 {
     std::error_code error;
-#if defined(__APPLE__)
+#if defined(_WIN32)
+    wchar_t buffer[MAX_PATH * 2] {};
+    const auto n = ::GetModuleFileNameW (nullptr, buffer, MAX_PATH * 2);
+    if (n == 0)
+        return {};
+    return std::filesystem::path (std::wstring (buffer, n));
+#elif defined(__APPLE__)
     char buffer[4096] {};
     std::uint32_t size = sizeof (buffer);
     if (::_NSGetExecutablePath (buffer, &size) == 0)
@@ -369,6 +403,8 @@ std::string Report::signature() const
     const auto isLibrary = [] (const Frame& f)
     {
         const auto m = baseName (f.module);
+        if (m.size() > 4 && (m.compare (m.size() - 4, 4, ".dll") == 0 || m.compare (m.size() - 4, 4, ".DLL") == 0))
+            return true; // Windows (0.75.0)
         return (startsWith (m, "lib") || startsWith (m, "ld-linux")) && m.find (".so") != std::string::npos;
     };
     if (! isLibrary (frames[static_cast<std::size_t> (crashFrame)]))
@@ -465,6 +501,15 @@ std::optional<Report> load (const std::filesystem::path& file)
 Redaction Redaction::current()
 {
     Redaction r;
+#if defined(_WIN32)
+    // Windows (0.75.0): C:\Users\<name>, and the name signed in.
+    if (const char* home = std::getenv ("USERPROFILE"))
+        r.home = home;
+    if (const char* user = std::getenv ("USERNAME"))
+        r.user = user;
+    while (r.home.size() > 3 && (r.home.back() == '\\' || r.home.back() == '/'))
+        r.home.pop_back();
+#else
     if (const char* home = std::getenv ("HOME"))
         r.home = home;
     if (const auto* pw = ::getpwuid (::getuid()); pw != nullptr && pw->pw_name != nullptr)
@@ -473,6 +518,7 @@ Redaction Redaction::current()
         r.user = user;
     while (r.home.size() > 1 && r.home.back() == '/')
         r.home.pop_back();
+#endif
     return r;
 }
 
@@ -486,11 +532,19 @@ std::string redact (std::string text, const Redaction& redaction)
             text.replace (at, from.size(), to);
     };
     if (redaction.home.size() > 1)
+    {
         replaceAll (redaction.home, "~");
+        // Windows (0.75.0): the same folder written with / (C:/Users/name), as programs often do
+        auto forward = redaction.home;
+        std::replace (forward.begin(), forward.end(), '\\', '/');
+        if (forward != redaction.home)
+            replaceAll (forward, "~");
+    }
     if (redaction.user.size() >= 2)
     {
         replaceAll ("/" + redaction.user + "/", "/<user>/");
         replaceAll ("/" + redaction.user + "\n", "/<user>\n");
+        replaceAll ("\\" + redaction.user + "\\", "\\<user>\\");
         replaceAll ("user " + redaction.user, "user <user>");
     }
     return text;
@@ -598,7 +652,11 @@ bool archive (const std::filesystem::path& crashFile, const std::string& how)
         return false;
     const auto now = std::time (nullptr);
     std::tm local {};
+#if defined(_WIN32)
+    localtime_s (&local, &now);
+#else
     localtime_r (&now, &local);
+#endif
     char stamp[32];
     std::strftime (stamp, sizeof (stamp), "%Y%m%d-%H%M%S", &local);
     std::filesystem::rename (crashFile, folder / ("crash-" + std::string (stamp) + "-" + how + ".log"), error);

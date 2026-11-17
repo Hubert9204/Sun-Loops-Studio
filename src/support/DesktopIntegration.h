@@ -13,6 +13,10 @@
 // then refreshes the desktop's caches (update-mime-database, update-desktop-database, gtk-update-icon-cache, kbuildsycoca) and,
 // the first time only, makes the program the default for .slp files when nothing else is. A copy installed with
 // `cmake --install` already has all of this, so it is left alone.
+// Windows (0.75.0): the installer registers the .slp file type itself. A copy started from the zip (or one whose registered
+// program file is gone - moved or uninstalled) registers it for the user at start-up, in HKEY_CURRENT_USER\Software\Classes:
+// .slp -> SunLoopsStudio.Project, its icon (the program's) and "open" (the program with the file). A file type that already opens
+// with an existing program - the installed copy, or another program the user chose - is left alone.
 namespace sls::desktop
 {
 struct Setup
@@ -37,4 +41,9 @@ void integrateInBackground();
 
 // The .desktop file's text for an executable (quoted as the Desktop Entry specification asks).
 juce::String desktopEntry (const juce::String& executable);
+
+// Windows (0.75.0): the "open" command of the .slp file type for a program ("C:\...\Sun Loops Studio.exe" "%1"), and the program
+// file an "open" command starts (quoted or not; empty when there is none).
+juce::String windowsOpenCommand (const juce::String& executable);
+juce::String executableOfCommand (const juce::String& command);
 } // namespace sls::desktop
