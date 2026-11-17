@@ -18,10 +18,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Windows (0.75.0): built with clang-cl (Visual Studio's Clang, the compiler the continuous integration and the releases use) or
-# MSVC. windows.h without its min / max macros, M_PI and friends from <cmath>, the C library's plain functions (getenv...)
+# MSVC. windows.h without its min / max macros (but whole: JUCE needs shellapi.h and the rest), M_PI and friends from <cmath>, the C library's plain functions (getenv...)
 # without "deprecated" warnings; the sources are UTF-8 (Italian text).
 if(WIN32)
-    add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN _USE_MATH_DEFINES _CRT_SECURE_NO_WARNINGS _WIN32_WINNT=0x0A00)
+    add_compile_definitions(NOMINMAX _USE_MATH_DEFINES _CRT_SECURE_NO_WARNINGS _WIN32_WINNT=0x0A00)
     if(MSVC)
         add_compile_options(/utf-8 $<$<CXX_COMPILER_ID:MSVC>:/bigobj> $<$<CXX_COMPILER_ID:MSVC>:/Zc:__cplusplus>)
         # Function names for the crash reports' stack traces: a .pdb next to each program, also in Release builds (with Clang only
