@@ -8559,9 +8559,11 @@ void testFlParity070()
         check (all, "vintage phaser: the three models, at full feedback");
         all = true;
         for (float effect = 0.0f; effect <= 9.0f; effect += 1.0f)
-            for (const auto& [x, y] : { std::pair { 0.0f, 1.0f }, std::pair { 0.5f, 0.5f }, std::pair { 1.0f, 1.0f } }) // (Y 0 is "none" for some)
+            // (some corners are transparent by design: Y 0 is "none" for the ring mod and the auto-pan, X 1 is the full sample rate for
+            // the lo-fi and an open filter for the low-pass)
+            for (const auto& [x, y] : { std::pair { 0.0f, 1.0f }, std::pair { 0.5f, 0.5f }, std::pair { 0.2f, 0.8f } })
                 all = changesShown (slotWith (sls::EffectType::Effector, { effect, x, y, 1.0f })) && all;
-        check (all, "effector: all ten effects at the corners of the pad");
+        check (all, "effector: all ten effects at three places on the pad");
         const auto lowPassed = runEffect (slotWith (sls::EffectType::Effector, { 4.0f, 0.4f, 0.3f, 1.0f }), chord); // (about 460 Hz)
         // (toneEnergy is an amplitude: 460 Hz and 12 dB an octave leave 1760 Hz at about -23 dB)
         check (toneEnergy (lowPassed.data(), 8000, 48000, 1760.0) < 0.1 * toneEnergy (chord.data(), 8000, 48000, 1760.0)
