@@ -2,6 +2,41 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.75.0 - 2026-11-17
+
+Windows.
+
+### Added
+- **Windows** (Windows 10 and 11, 64-bit): `Sun-Loops-Studio-<version>-Windows-x64-Setup.exe`, an installer (Inno Setup, in English
+  and Italian) that installs for the user alone without an administrator password or, if chosen, for everyone; it adds a Start
+  menu entry, a desktop icon if wanted, the `.slp` file type (icon, double-click opens the project) and can copy the four
+  instruments into the VST3 folder for other music programs. `Sun-Loops-Studio-<version>-Windows-x64.zip` is the same folder,
+  to start without installing. Not signed with a code-signing certificate: SmartScreen may ask the first time (More info > Run
+  anyway). Built from the same code as the Linux and macOS programs; the differences are written for each system side by side:
+  - the crash handler (unhandled structured exceptions - access violation, stack overflow, division by zero, illegal
+    instruction - and `abort()`, which an uncaught C++ exception ends in), with the stack walked by DbgHelp and the function
+    names from the program's `.pdb`, shipped next to it; the same report at the next start;
+  - the session log and crash files in `%LOCALAPPDATA%\SunLoopsStudio`, Helios's models in `%LOCALAPPDATA%\Sun Loops Studio\Helios`;
+  - the memory read-out (the working set);
+  - plugins: VST3 and LV2 are hosted; the bundled plugins are found in the program's `VST3` folder;
+  - the built-in sound library linked in as a Windows resource;
+  - a copy started from the zip registers the `.slp` file type for the user (unless an installed copy already opens them);
+  - ffmpeg is looked for as `ffmpeg.exe` (PATH, winget's folder, `C:\ffmpeg\bin`); its "not found" message says how to install it
+    on each system;
+  - the update check offers the installer on Windows;
+  - libcurl is built in from its source (8.11.1, Windows's own TLS) and the C++ runtime is linked into every program and plugin:
+    nothing else needs to be installed.
+- **Continuous integration on Windows**: every push is built with Visual Studio's Clang and tested on a GitHub Windows machine;
+  the run keeps the installer and the zip. A release attaches them (with `SHA256SUMS-Windows.txt`) next to the AppImage and the
+  `.dmg` (`scripts/build_windows.ps1`).
+- An **"On Windows"** chapter in the user guide (both languages) and the Windows build in `docs/building.md`.
+
+### Changed
+- The tests' crash checks run in a child process started by name (on Windows the test program starts itself again with
+  `--crash-child`), and their little HTTP servers use Winsock there.
+- `.gitattributes`: files are checked out with their LF line ends on Windows too, so the files built into the program are the
+  same on every system.
+
 ## 0.74.0 - 2026-11-17
 
 The whole FL Studio alignment list still open after 0.70.0 (see `fl-studio-alignment.md`): nothing in it is missing any more.

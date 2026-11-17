@@ -88,6 +88,39 @@ Sun Loops Studio funziona su macOS 10.15 Catalina o successivo, sui Mac Apple si
 - **Limiti attuali**: i report dei crash nominano le funzioni solo quanto lo fa la traccia dello stack di macOS. Il programma è
   stato compilato e i suoi test automatici eseguiti su un Mac di GitHub; non è ancora stato provato a mano su un Mac vero.
 
+## Su Windows (0.75.0)
+
+Sun Loops Studio funziona su Windows 10 e Windows 11 (64 bit, processori Intel e AMD), come su Linux, con queste differenze:
+
+- **Installazione**: `Sun-Loops-Studio-<versione>-Windows-x64-Setup.exe` lo installa solo per te (senza password di
+  amministratore, in `%LOCALAPPDATA%\Programs\Sun Loops Studio`) oppure, se lo scegli nella sua prima pagina, per tutti
+  (`C:\Program Files\Sun Loops Studio`). Aggiunge una voce nel menu Start, un'icona sul desktop se la vuoi, e fa sì che i file
+  di progetto `.slp` mostrino l'icona del programma e si aprano con un doppio clic. *Impostazioni > App* lo disinstalla (i tuoi
+  progetti, suoni e impostazioni restano). Lo zip `Sun-Loops-Studio-<versione>-Windows-x64.zip` contiene la stessa cartella, per
+  usare il programma senza installarlo: estrailo dove vuoi e avvia `Sun Loops Studio.exe`; al primo avvio registra i file `.slp`
+  per te, a meno che una copia installata non li apra già.
+- **Il primo avvio**: il programma non è firmato con un certificato di firma del codice, quindi Windows SmartScreen può dire
+  *PC protetto da Windows*: fai clic su **Ulteriori informazioni** > **Esegui comunque**. Dopo si avvia normalmente.
+- **Scorciatoie**: come su Linux (**Ctrl**+Z, **Ctrl**+S...).
+- **Audio**: i dispositivi *Windows Audio* (WASAPI) e *DirectSound* nelle impostazioni audio; *Windows Audio (Exclusive Mode)* o
+  *(Low Latency Mode)* danno la latenza più bassa. I driver ASIO non sono ancora supportati. Le tastiere MIDI funzionano tramite
+  il MIDI di Windows.
+- **Plugin**: VST3 (`C:\Program Files\Common Files\VST3` e la tua `%LOCALAPPDATA%\Programs\Common\VST3`) e LV2
+  (`%APPDATA%\LV2`, `C:\Program Files\Common Files\LV2`); i plugin LADSPA esistono solo su Linux e gli Audio Unit solo sul Mac.
+  SunBurst, HexForge, SunSymphony e SunRiff stanno nella cartella `VST3` del programma; l'installer può copiarli anche nella
+  cartella VST3, per gli altri programmi musicali.
+- **File**: progetti, campioni, kit e preset stanno in `Musica\Sun Loops Studio` della tua cartella utente
+  (`C:\Users\<nome>\Music\Sun Loops Studio`), come sugli altri sistemi; le impostazioni in `%APPDATA%\SunLoopsStudio`, il log
+  della sessione e i report dei crash in `%LOCALAPPDATA%\SunLoopsStudio` (*Help > Show the session log folder*), i modelli
+  linguistici di Helios in `%LOCALAPPDATA%\Sun Loops Studio\Helios`.
+- **ffmpeg** (esportazione MP3 e AAC, importazione AAC e video): apri un terminale e scrivi `winget install Gyan.FFmpeg`, poi
+  riavvia Sun Loops Studio. Viene cercato nelle cartelle di `PATH`, nella cartella di winget e in `C:\ffmpeg\bin`; la variabile
+  `SLS_FFMPEG` può indicare il file al suo posto.
+- **Aggiornamenti**: il controllo degli aggiornamenti propone il nuovo installer.
+- **Limiti attuali**: il programma è stato compilato e i suoi test automatici eseguiti su una macchina Windows di GitHub; non è
+  ancora stato provato a mano su un PC vero. Non c'è una versione per Windows su ARM (lì il programma x64 funziona tramite
+  l'emulazione di Windows).
+
 ## Progetti
 
 **Il brano dimostrativo (0.52.0).** Al primo avvio il programma si apre con "Sunrise Drive" (dalla 0.53.0 solo allora; gli avvii
@@ -281,7 +314,7 @@ download non serve internet e non viene inviato nulla.
   ma lentamente) o **Better** (Gemma 4 E4B, 4,6 GB: risponde meglio, serve un computer con almeno 16 GB di memoria) e premi
   **Download**. Il download si può interrompere (**Cancel download**) e riprende da dove si era fermato. **Delete model** lo
   cancella dal computer. I modelli stanno in `~/.local/share/sun-loops-studio/helios` (Linux), `~/Library/Application
-  Support/Sun Loops Studio/Helios` (Mac) o `%APPDATA%\Sun Loops Studio\Helios` (Windows).
+  Support/Sun Loops Studio/Helios` (Mac) o `%LOCALAPPDATA%\Sun Loops Studio\Helios` (Windows).
 - **Scrivi e premi Invio** (o **Send**). La prima risposta arriva dopo qualche secondo in più, perché il modello si carica; su un
   computer vecchio anche qualche minuto. La risposta compare mentre viene scritta; **Stop** la interrompe, **New chat** ricomincia
   da capo (Helios dimentica la conversazione).

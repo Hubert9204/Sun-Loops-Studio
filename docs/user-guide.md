@@ -68,6 +68,37 @@ Sun Loops Studio runs on macOS 10.15 Catalina or newer, on Apple silicon and on 
 - **Current limits**: crash reports name the functions only as far as macOS's own stack trace does. The program was built and its automated tests were run on a GitHub Mac; it has not yet been
   tried by hand on a real Mac.
 
+## On Windows (0.75.0)
+
+Sun Loops Studio runs on Windows 10 and Windows 11 (64-bit, on Intel and AMD processors), as on Linux, with these differences:
+
+- **Installing**: `Sun-Loops-Studio-<version>-Windows-x64-Setup.exe` installs it for you alone (no administrator password needed,
+  in `%LOCALAPPDATA%\Programs\Sun Loops Studio`) or, if you choose so in its first page, for everyone (`C:\Program Files\Sun Loops
+  Studio`). It adds a Start menu entry, a desktop icon if you want one, and makes `.slp` project files show the program's icon and
+  open with a double-click. *Settings > Apps* uninstalls it (your projects, sounds and settings stay). The zip
+  `Sun-Loops-Studio-<version>-Windows-x64.zip` holds the same folder, for using the program without installing it: unpack it
+  anywhere and start `Sun Loops Studio.exe`; at its first start it registers the `.slp` files for you, unless an installed copy
+  already opens them.
+- **The first start**: the program is not signed with a code-signing certificate, so Windows SmartScreen may say *Windows
+  protected your PC*: click **More info** > **Run anyway**. After that it starts normally.
+- **Shortcuts**: as on Linux (**Ctrl**+Z, **Ctrl**+S...).
+- **Audio**: *Windows Audio* (WASAPI) and *DirectSound* devices in the audio settings; *Windows Audio (Exclusive Mode)* or
+  *(Low Latency Mode)* give the lowest latency. ASIO drivers are not supported yet. MIDI keyboards work through Windows's own MIDI.
+- **Plugins**: VST3 (`C:\Program Files\Common Files\VST3` and your own `%LOCALAPPDATA%\Programs\Common\VST3`) and LV2
+  (`%APPDATA%\LV2`, `C:\Program Files\Common Files\LV2`); LADSPA plugins exist only on Linux and Audio Units only on the Mac.
+  SunBurst, HexForge, SunSymphony and SunRiff are in the program's own `VST3` folder; the installer can also copy them into the
+  VST3 folder, for other music programs.
+- **Files**: projects, samples, kits and presets are in `Music\Sun Loops Studio` of your user folder
+  (`C:\Users\<name>\Music\Sun Loops Studio`), as on the other systems; the settings are in `%APPDATA%\SunLoopsStudio`, the session
+  log and crash reports in `%LOCALAPPDATA%\SunLoopsStudio` (*Help > Show the session log folder*), Helios's language models in
+  `%LOCALAPPDATA%\Sun Loops Studio\Helios`.
+- **ffmpeg** (MP3 and AAC export, AAC and video import): open a terminal and type `winget install Gyan.FFmpeg`, then start Sun
+  Loops Studio again. It is found in the folders of `PATH`, in winget's own folder and in `C:\ffmpeg\bin`; the `SLS_FFMPEG`
+  variable can name the file instead.
+- **Updates**: the update check offers the new installer.
+- **Current limits**: the program was built and its automated tests were run on a GitHub Windows machine; it has not yet been
+  tried by hand on a real PC. There is no build for Windows on ARM (the x64 program runs there through Windows's emulation).
+
 ## Projects
 
 **The demo song (0.52.0).** On its first start the program opens with "Sunrise Drive" (since 0.53.0 only then; later starts begin
@@ -254,7 +285,7 @@ nothing is sent anywhere.
   (Gemma 4 E4B, 4.6 GB: better answers, for computers with 16 GB of memory or more) and press **Download**. The download can be
   stopped (**Cancel download**) and goes on where it stopped. **Delete model** removes it from the computer. Models are kept in
   `~/.local/share/sun-loops-studio/helios` (Linux), `~/Library/Application Support/Sun Loops Studio/Helios` (Mac) or
-  `%APPDATA%\Sun Loops Studio\Helios` (Windows).
+  `%LOCALAPPDATA%\Sun Loops Studio\Helios` (Windows).
 - **Type and press Enter** (or **Send**). The first answer takes a few seconds longer while the model loads; on an old computer, a
   few minutes. The answer appears as it is written; **Stop** interrupts it, **New chat** starts again (Helios forgets the
   conversation).
