@@ -293,6 +293,7 @@ private:
     void openSynthSettings (int channelIndex);  // MainComponentSynth.cpp (0.18.0)
     void closeSynthSettings();
     void chooseSoundFontFor (int channelIndex);
+    void openSpeechDialog (int channelIndex); // 0.74.0
     void chooseSoundFontPreset (int channelIndex, const juce::File& file);
     void applySoundFont (int channelIndex, const juce::File& file, int presetIndex); // reads it on another thread (0.47.0)
     void useSoundFont (int channelIndex, const juce::File& file, std::shared_ptr<const SamplerProgram> program, const juce::String& error,

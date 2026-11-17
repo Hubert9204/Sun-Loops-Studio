@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "audio/SampleData.h"
@@ -25,8 +26,8 @@ namespace sls
 // Exact equality of two stored settings (bit for bit: what was saved is what is read back).
 inline bool sameValue (float a, float b) noexcept { return std::memcmp (&a, &b, sizeof (float)) == 0; }
 
-enum class SynthEngine : std::uint8_t { Classic, Subtractive, FM, Additive, Physical };
-constexpr int kSynthEngines = 5;
+enum class SynthEngine : std::uint8_t { Classic, Subtractive, FM, Additive, Physical, Drum }; // Drum: 0.74.0
+constexpr int kSynthEngines = 6;
 enum class Waveform : std::uint8_t { Sine, Triangle, Saw, Square };
 enum class LfoTarget : std::uint8_t { Off, Pitch, Cutoff, Amp, PulseWidth, Morph }; // Morph (0.24.0): the additive timbre morph
 
@@ -136,6 +137,60 @@ struct PhysicalSettings
     static double decaySeconds (float d) noexcept { return 0.15 * std::pow (100.0, std::clamp (static_cast<double> (d), 0.0, 1.0)); }
 };
 
+// The drum engine (0.74.0, as Fruit Kick and Drumaxx): a playable drum synthesizer. A body (a sine whose pitch falls from above
+// to its note: kick, tom, the snare's shell), a hiss (filtered noise: the snare's wires, a clap's hands, the metal of hats and
+// cymbals, which add six square oscillators at the 808's inharmonic ratios), a click and a drive. The key sets the pitch
+// (C5 = the model's own), unless key tracking is off; every note rings out by itself, as a drum does.
+enum class DrumModel : std::uint8_t { Kick, Snare, Tom, Clap, HiHat, Cymbal };
+constexpr int kDrumModels = 6;
+
+struct DrumSettings
+{
+    DrumModel model = DrumModel::Kick;
+    float tune = 0.5f;       // 0..1: an octave down to an octave up
+    float sweep = 0.5f;      // 0..1: how far the body's pitch falls, up to 4 octaves
+    float sweepTime = 0.3f;  // 0..1: how quickly, 5 ms to 300 ms
+    float decay = 0.4f;      // 0..1: the body's ring, 30 ms to 3 s (to -60 dB)
+    float noise = 0.1f;      // 0..1: the level of the hiss
+    float noiseTone = 0.5f;  // 0..1: its colour, from dark to bright
+    float noiseDecay = 0.3f; // 0..1: its ring, 10 ms to 1.5 s
+    float click = 0.3f;      // 0..1: the attack's click
+    float drive = 0.0f;      // 0..1: saturation
+    bool keyTrack = true;
+
+    static double seconds (float v, double lo, double hi) noexcept { return lo * std::pow (hi / lo, std::clamp (static_cast<double> (v), 0.0, 1.0)); }
+    static double baseHz (DrumModel m) noexcept
+    {
+        switch (m)
+        {
+            case DrumModel::Snare: return 185.0;
+            case DrumModel::Tom: return 110.0;
+            case DrumModel::Clap: return 1100.0;   // the centre of the hands' noise
+            case DrumModel::HiHat: return 400.0;   // the metal's lowest square
+            case DrumModel::Cymbal: return 300.0;
+            case DrumModel::Kick: break;
+        }
+        return 50.0;
+    }
+    DrumSettings sanitised (const DrumSettings& d) const noexcept
+    {
+        DrumSettings s = *this;
+        if (static_cast<int> (s.model) >= kDrumModels)
+            s.model = DrumModel::Kick;
+        for (auto [v, def] : { std::pair<float*, float> { &s.tune, d.tune }, { &s.sweep, d.sweep }, { &s.sweepTime, d.sweepTime }, { &s.decay, d.decay },
+                               { &s.noise, d.noise }, { &s.noiseTone, d.noiseTone }, { &s.noiseDecay, d.noiseDecay }, { &s.click, d.click },
+                               { &s.drive, d.drive } })
+            *v = std::clamp (finiteOr (*v, def), 0.0f, 1.0f);
+        return s;
+    }
+    bool operator== (const DrumSettings& o) const noexcept
+    {
+        return model == o.model && sameValue (tune, o.tune) && sameValue (sweep, o.sweep) && sameValue (sweepTime, o.sweepTime)
+            && sameValue (decay, o.decay) && sameValue (noise, o.noise) && sameValue (noiseTone, o.noiseTone) && sameValue (noiseDecay, o.noiseDecay)
+            && sameValue (click, o.click) && sameValue (drive, o.drive) && keyTrack == o.keyTrack;
+    }
+};
+
 struct FmOperator
 {
     float ratio = 1.0f;  // frequency / note frequency, 0.125..32
@@ -241,6 +296,8 @@ struct SynthPatch
 
     // Physical engine (0.24.0). The amplitude envelope's attack and release, the LFO (pitch or level) and `gain` apply too.
     PhysicalSettings physical {};
+    // Drum engine (0.74.0). The LFO (pitch or level) and `gain` apply too; the notes ring out by themselves.
+    DrumSettings drum {};
 
     SynthPatch sanitised() const noexcept
     {
@@ -290,6 +347,7 @@ struct SynthPatch
         p.morphEnvAmount = std::clamp (finiteOr (p.morphEnvAmount, d.morphEnvAmount), -1.0f, 1.0f);
         p.morphEnv = p.morphEnv.sanitised (d.morphEnv);
         p.physical = p.physical.sanitised (d.physical);
+        p.drum = p.drum.sanitised (d.drum);
         return p;
     }
 
@@ -300,7 +358,7 @@ struct SynthPatch
             && sameValue (keyTrack, o.keyTrack) && amp == o.amp && filterEnv == o.filterEnv && lfoWave == o.lfoWave
             && sameValue (lfoRate, o.lfoRate) && lfoTarget == o.lfoTarget && sameValue (lfoDepth, o.lfoDepth) && sameValue (gain, o.gain)
             && op == o.op && matrix == o.matrix && timbreA == o.timbreA && timbreB == o.timbreB && sameValue (morph, o.morph)
-            && sameValue (morphEnvAmount, o.morphEnvAmount) && morphEnv == o.morphEnv && physical == o.physical;
+            && sameValue (morphEnvAmount, o.morphEnvAmount) && morphEnv == o.morphEnv && physical == o.physical && drum == o.drum;
     }
 };
 
@@ -568,6 +626,24 @@ inline const std::vector<NamedSynthPatch>& synthFactoryPatches()
         v.push_back ({ "Glass Harmonics", physical (PhysicalModel::Glass, { PhysicalModel::Glass, 0.7f, 0.25f, 0.6f, 0.4f, 0.0f, 0.0f, 0.3f }, 1.2f) });
         v.push_back ({ "Church Bell", physical (PhysicalModel::Bell, { PhysicalModel::Bell, 0.75f, 0.2f, 0.85f, 0.3f, 0.0f, 0.0f, 0.0f }, 8.0f) });
         v.push_back ({ "Metal Hit", physical (PhysicalModel::Metal, { PhysicalModel::Metal, 0.8f, 0.35f, 0.7f, 0.25f, 0.0f, 0.0f, 0.2f }, 3.0f) });
+        // Drum synthesis (0.74.0).
+        const auto drum = [] (DrumSettings s)
+        {
+            SynthPatch p;
+            p.engine = SynthEngine::Drum;
+            p.drum = s;
+            return p;
+        };
+        // model, tune, sweep, sweep time, decay, noise, noise tone, noise decay, click, drive
+        v.push_back ({ "Kick 808", drum ({ DrumModel::Kick, 0.45f, 0.45f, 0.35f, 0.75f, 0.0f, 0.3f, 0.1f, 0.15f, 0.0f }) });
+        v.push_back ({ "Kick Punch", drum ({ DrumModel::Kick, 0.55f, 0.6f, 0.2f, 0.35f, 0.05f, 0.6f, 0.05f, 0.6f, 0.35f }) });
+        v.push_back ({ "Kick Distorted", drum ({ DrumModel::Kick, 0.45f, 0.55f, 0.3f, 0.6f, 0.0f, 0.5f, 0.1f, 0.4f, 0.8f }) });
+        v.push_back ({ "Snare", drum ({ DrumModel::Snare, 0.5f, 0.25f, 0.2f, 0.25f, 0.7f, 0.6f, 0.35f, 0.35f, 0.1f }) });
+        v.push_back ({ "Tom", drum ({ DrumModel::Tom, 0.5f, 0.3f, 0.4f, 0.5f, 0.05f, 0.4f, 0.15f, 0.25f, 0.0f }) });
+        v.push_back ({ "Clap", drum ({ DrumModel::Clap, 0.5f, 0.0f, 0.3f, 0.0f, 1.0f, 0.5f, 0.35f, 0.0f, 0.0f }) });
+        v.push_back ({ "Closed Hat", drum ({ DrumModel::HiHat, 0.5f, 0.0f, 0.3f, 0.0f, 0.8f, 0.8f, 0.12f, 0.1f, 0.0f }) });
+        v.push_back ({ "Open Hat", drum ({ DrumModel::HiHat, 0.5f, 0.0f, 0.3f, 0.0f, 0.8f, 0.75f, 0.55f, 0.1f, 0.0f }) });
+        v.push_back ({ "Cymbal", drum ({ DrumModel::Cymbal, 0.5f, 0.0f, 0.3f, 0.0f, 0.9f, 0.65f, 0.85f, 0.15f, 0.0f }) });
         return v;
     }();
     return list;

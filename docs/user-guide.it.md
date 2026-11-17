@@ -385,6 +385,12 @@ project*), **Plugins** (i plugin trovati) e **★** (i preferiti). La scheda sce
   apre il mixer su quella traccia) e *Automation* (i bersagli delle clip di automazione). La cartella segue il progetto mentre
   cambia.
 
+### Tag e colori delle cartelle (0.72.0)
+
+Tasto destro su tutto ciò che si può trascinare, *Tags...*: parole con cui ritrovarlo, separate da virgole. Cercando **#parola**
+si vede solo ciò che ha quel tag (anche una ricerca normale trova i tag). Tasto destro su una cartella per *Folder colour*.
+Entrambi restano da una sessione all'altra.
+
 ## Channel Rack
 
 Una riga per canale, nell'ordine di FL Studio dalla 0.60.0: **M** (mute), **S** (solo), pan, volume, il display **Track N**, il
@@ -454,6 +460,15 @@ assegna una traccia libera del mixer, apri il piano roll, aggiungi un canale), i
   successiva), *Maximum notes* (la nota più vecchia lascia il posto), *Cut group* 1-8 e *Cut by group* (una nota di un canale del
   gruppo tronca le note dei canali che ne dipendono: l'hi-hat chiuso che tronca quello aperto; *Cut itself* per un canale la cui
   nota nuova tronca quella vecchia).
+
+### Icone, e shift e mod X / Y dell'editor a barre (0.71.0 - 0.72.0)
+
+**Icone** (0.72.0): tasto destro su un canale, *Icon*: 16 piccoli disegni (cassa, rullante, hi-hat, batteria, piano, synth,
+basso, chitarra, archi, ottoni, voce, FX, audio, pad, campana, stella) mostrati sul suo pulsante. Le tracce della Playlist e le
+strisce del mixer li hanno anche loro.
+
+L'**editor a barre** (*Graph*) ha tre proprietà in più (0.71.0): **Shift** (lo step parte fino a un sedicesimo dopo - uno swing
+tutto suo), **Mod X** e **Mod Y** (cutoff e risonanza della nota, come le corsie del Piano Roll).
 
 ### Menu del tasto destro su un canale
 
@@ -535,6 +550,27 @@ Church Bell, Metal Hit*.
 Legato e slide (Shift+clic nel Piano Roll) funzionano come con il motore classico. Un preset di synth (*Save as preset...*) salva anche il
 suono. Ogni modifica si annulla con `Ctrl+Z`.
 
+### Motore batteria (0.74.0)
+
+Il motore **Drum synth** (*Engine > Drum synth*) è un sintetizzatore di batteria suonabile, il corrispettivo di Fruit Kick e
+Drumaxx di FL Studio: ogni colpo è generato, non riprodotto, quindi si può accordare, piegare e suonare come una melodia.
+**Model** sceglie che cosa è: *Kick*, *Snare*, *Tom* (un corpo la cui intonazione scende dall'alto fino alla nota; il rullante con
+la sua cordiera), *Clap* (tre raffiche veloci di rumore e una coda), *Hi-hat* e *Cymbal* (sei onde quadre ai rapporti inarmonici
+della 808, mescolate al rumore e filtrate passa-alto).
+
+- **DRUM**: **Tune** (un'ottava in su o in giù), **Sweep** (di quanto scende l'intonazione del corpo, fino a quattro ottave; un
+  colpo più forte scende di più), **Sweep time** (5 - 300 ms), **Decay** (quanto risuona il corpo, da 30 ms a 3 s), **Key**
+  (*Plays the notes' pitch*: C5 è l'intonazione del modello e ogni tasto un semitono, così una linea di basso 808 è una cassa
+  suonata sulla tastiera; *Always the same pitch*: ogni tasto è lo stesso tamburo).
+- **NOISE AND CLICK**: **Noise** (il livello del fruscio: la cordiera del rullante, le mani del clap, il metallo dei piatti),
+  **Tone** (da scuro a brillante), **Noise decay** (da 10 ms a 1,5 s: hi-hat chiuso o aperto), **Click** (l'attacco), **Drive**
+  (saturazione).
+- **LFO** (intonazione o volume) e **Output** funzionano come negli altri motori.
+
+Ogni colpo risuona da solo fino alla fine, come un vero tamburo: anche uno step breve nel Channel Rack suona tutto il suono. Il
+menu dei suoni ha nove batterie pronte: *Kick 808*, *Kick Punch*, *Kick Distorted*, *Snare*, *Tom*, *Clap*, *Closed Hat*,
+*Open Hat*, *Cymbal*. Per un kit dai a ogni tamburo il suo canale (o usa la drum machine per i campioni).
+
 ## Sampler e SoundFont
 
 Tasto destro su un canale sampler > **Sampler settings...** apre una finestra per quel canale:
@@ -578,6 +614,41 @@ with samples* ne copia tutta la cartella.
 premi **Slices to sampler channel**: l'audio modificato viene salvato come nuovo file WAV, un **nuovo canale sampler** suona la slice 1 su C5, la 2 su
 C#5 e così via (un tasto ciascuna, alla loro altezza), e il pattern corrente riceve **una nota per slice nel momento in cui era nell'audio**, quindi il
 pattern suona il loop com'era e puoi spostare, ripetere o eliminare le note per fare un groove nuovo.
+
+### Inviluppi per destinazione (0.71.0)
+
+Oltre all'inviluppo del volume, il sampler ha un inviluppo suo per ciascuno di **pan**, **cutoff**, **risonanza** e
+**intonazione**, come le schede del canale sampler di FL Studio. In *MODULATION*, **Envelopes** sceglie quale mostrano i
+controlli alla sua destra: **On**, **Amount** (pan: fino a tutto a sinistra o a destra; cutoff: fino a 5 ottave; risonanza: tutta
+la sua escursione; intonazione: fino a 2 ottave; negativo capovolge l'inviluppo) e i suoi **A D S R**. Non serve l'inviluppo del
+volume; quelli di cutoff e risonanza richiedono il filtro.
+
+### Modi di riproduzione: Granulizer e Wave Traveller (0.74.0)
+
+*PLAY MODE*, in fondo alla finestra del sampler, dice come suona il campione del canale (non un SoundFont o un programma di slice):
+
+- **Normal**: il campione così com'è.
+- **Granular (Granulizer)**, come Fruity Granulizer di FL Studio: il suono è fatto di brevi grani sovrapposti letti da un punto
+  che si muove nel campione con una velocità sua, quindi tempo e intonazione sono separati: il tasto cambia solo l'intonazione
+  dei grani e la nota dura finché è tenuta. **Grain** (10 - 500 ms), **Density** (grani contemporanei, 1 - 8), **Pos** (da dove
+  parte il punto), **Speed** (100 %: la velocità del campione; 0 %: fermo - un pad da un solo istante di un campione; negativo:
+  all'indietro; il punto gira attorno al campione), **Spread** (ogni grano parte fino a 200 ms dal punto, a caso), **Pan** (il pan
+  casuale di ogni grano).
+- **Travel curve (Wave Traveller)**: il punto nel campione segue una **Curve** per **Time** secondi, poi il campione prosegue:
+  *Forward*, *Backward*, *Tape stop* (rallenta fino a fermarsi e la nota finisce), *Spin back* (riavvolto veloce), *Scratch*
+  (avanti e indietro), *Stutter* (il primo quarto quattro volte), *Wobble*. Il tasto decide la velocità, come nella riproduzione
+  normale.
+
+### Sintesi vocale (0.74.0)
+
+**Speech...** nella finestra del sampler fa parlare il canale, come lo Speech Synthesizer di FL Studio: scrivi un testo, scegli la
+**Voice** (maschile, femminile, bambino, robot, sussurro), il **Pitch** (±12 semitoni), la **Speed** e l'**Intonation**, poi
+**Speak**: la voce diventa il campione del canale, da suonare sulla tastiera, affettare, granulare o trattare con gli effetti come
+qualsiasi altro. Il testo si legge all'italiana (ogni lettera come è scritta, *c* e *g* dolci davanti a *e* e *i*, *gn*, *gli*,
+*sc*; l'accento sulla penultima vocale, salvo un accento scritto, come in *città*); i numeri si leggono come parole italiane, la
+virgola fa una pausa, il punto chiude la frase e il punto interrogativo la fa salire. Le parole inglesi escono con l'accento. La
+barra di stato mostra i suoni in cui è stato letto il testo. Un progetto conserva solo il testo e le impostazioni e rifà la voce
+quando viene aperto.
 
 ### Slicer (0.37.0)
 
@@ -913,6 +984,15 @@ ci entrano vengono accorciate), **Limit** (sposta le note
 selezionate di ottave dentro una, due o tre ottave) e **LFO** (scrive un'onda - un ciclo per quarto, per battuta, ogni 2 o ogni 4
 battute - nei valori della corsia mostrata).
 
+### Corsie Mod X / Mod Y e lo strumento Playback (0.71.0)
+
+Due corsie degli eventi in più: **Mod X** sposta il cutoff del filtro della nota (fino a due ottave in su o in giù) e **Mod Y**
+la sua risonanza, come le proprietà delle note di FL Studio; il centro è "nessun cambiamento". Le usano i synth sottrattivo e
+additivo e il sampler (con un filtro).
+
+Lo strumento **Play** (tasto **0**) suona da dove si preme il mouse e lo segue mentre lo si trascina (scrubbing); lasciando si
+ferma. La Playlist ha lo stesso strumento.
+
 ## Pattern
 
 Un **pattern** contiene le note di tutti i canali. Il menu dei pattern nella barra sceglie il pattern corrente: il
@@ -1075,6 +1155,13 @@ l'esportazione le ignora): **Loop** torna al marcatore precedente (o all'inizio)
 **Pause** si ferma lì (Play riparte dal marcatore), **Start** è il punto da cui Play fa partire il brano quando l'inizio non è stato
 messo altrove. Un marcatore con un'azione la mostra dopo il nome, con un colore suo.
 
+**Punch in / out** (0.71.0): due azioni dei marcatori in più. Quando si registra il brano, *Punch in* tiene solo ciò che viene
+dopo il suo marcatore e *Punch out* ferma la ripresa al suo marcatore, così si può registrare di nuovo una parte senza toccare
+quello che c'è intorno.
+
+**Icone e altezze** (0.72.0): il menu del tasto destro di una traccia ha *Icon* e *Height* (Small, Normal, Large, Extra large):
+ogni traccia ha la sua altezza, salvata con il progetto.
+
 ### Blocco e gruppi di tracce, Make unique, Consolidate (0.62.0)
 
 Tasto destro sul nome di una traccia:
@@ -1114,6 +1201,12 @@ brano. I pattern si possono modificare mentre suonano. Gli scambi sono esatti al
 **C1** (nota 36) in su sono le celle, otto per riga dalla riga in alto: i primi sette pad di una riga lanciano le sue prime sette
 clip, l'ottavo ferma la riga. Così la fila in basso di una griglia 4 x 4 che manda note da C1 lancia le prime quattro clip della
 prima riga, e una griglia 8 x 8 copre otto righe. Quelle note allora non suonano lo strumento selezionato; tutte le altre sì.
+
+**Clip e pad** (0.71.0): anche le clip audio sono celle. Tasto destro su una cella per il suo modo di lancio, come in FL Studio:
+**Loop** (si ripete finché sulla riga non suona altro), **One shot** (suona una volta, poi la riga si ferma) o **Hold** (suona
+finché la cella, o il suo pad, è tenuta), e **In sync** (parte dal punto in cui sarebbe se avesse suonato dalla prima battuta,
+così una clip lanciata in ritardo resta a tempo con le altre). **Pads...** imposta la disposizione dei pad: la nota del primo pad
+(C0, C1, C2, C3) e quanti pad fanno una riga (4, 8, 16; l'ultimo di una riga la ferma).
 
 ### Strumenti, griglia, zoom e annulla
 
@@ -1373,6 +1466,9 @@ La freccia accanto a **Record** ha *The recording becomes*: **A clip on a playli
 channel**. Con la seconda, una registrazione da microfono o chitarra diventa il sample di un nuovo canale, pronto da suonare con una
 tastiera MIDI o da sequenziare nel piano roll (senza canali liberi viene messa nella playlist).
 
+**Blend** (0.71.0): nel menu del tasto destro del pulsante *Rec notes*. Acceso (predefinito), le note registrate si aggiungono
+a quelle del pattern (sovraincisione); spento, una ripresa sostituisce le note del canale in quel pattern.
+
 ## Modalità Pattern e Song
 
 Il pulsante **Pattern / Song** decide cosa fa Play.
@@ -1578,6 +1674,22 @@ Peak Controller.
 miscela il suono prima dell'effetto con quello dopo - 100 % (predefinito) è solo l'effetto, 50 % metà e metà, 0 % come se lo slot
 fosse in bypass. Funziona per tutti gli effetti interni e per i plugin (una compressione parallela senza bus); i controller non
 ce l'hanno. Si salva con il progetto e con i preset di catena.
+
+### Effetti aggiunti nella 0.73.0: Hyper Chorus, Scratcher, Patcher
+
+| Effetto | Parametri | Preset |
+| --- | --- | --- |
+| Hyper Chorus | Come Hyper Chorus di FL Studio: fino a otto **Voices** di chorus, ciascuna con il suo ritardo e il suo LFO, sparse nel campo stereo. **Delay** (5 - 40 ms), **Depth**, **Rate**, **Spread** (0: tutte al centro; 1: da sinistra a destra), **Tone**, **Mix**. | Wide double, Lush ensemble, Eight-voice swarm |
+| Scratcher | Come Fruity Scratcher: il suono è un disco sotto una puntina. **Mode** *Hand* (il disco segue **Position**: automatizzala, o muovila con un controller, e ogni movimento è uno scratch), *Baby* (avanti e indietro), *Forward* (spinto e lasciato andare), *Chirp* (il fader taglia il ritorno), *Transformer* (il fader accende e spegne il suono); **Speed** (scratch per battito, a tempo con il brano), **Depth** (di quanto si muove il disco, 20 - 1000 ms), **Smooth** (il peso della mano), **Mix**. | Baby scratch, Forwards, Chirps, Transformer, By hand |
+| Patcher | Come il Patcher di FL Studio: fino a **dieci effetti in uno slot**, in **Serial** (uno dopo l'altro) o **Parallel** (ciascuno sul suono dello slot, in media), con un livello **Output**. **Edit...** apre la sua finestra, con dieci slot suoi (tutti gli effetti inclusi, niente plugin né controller): una catena che si salva, copia e sposta come un solo effetto. La sua latenza è compensata. | - |
+
+**Seconda destinazione** (0.71.0): Peak, Envelope e Formula Controller hanno **Target 2 track / slot / param** (slot 0: nessuna)
+e **Target 2 invert**: un controller muove due parametri, il secondo anche al contrario (un filtro che si apre mentre un altro si
+chiude).
+
+**Icone, aggancio e separatori** (0.72.0): il menu del tasto destro di una striscia ha *Strip icon*, *Dock* (*With the others*,
+*On the left*, *On the right*) e *Separator before this strip*, come in FL Studio: il master e qualche bus possono stare in
+disparte rispetto alle tracce.
 
 ### Effetti sul master
 

@@ -69,7 +69,7 @@ private:
     struct Section
     {
         juce::String title;
-        std::array<int, kSynthEngines> columns { 0, 0, -1, -1, -1 }; // per engine (Classic, Subtractive, FM, Additive, Physical): the column, or -1 when hidden
+        std::array<int, kSynthEngines> columns { 0, 0, -1, -1, -1, -1 }; // per engine (Classic, Subtractive, FM, Additive, Physical, Drum): the column, or -1 when hidden
         std::vector<Row> rows;
         juce::Rectangle<int> header;
         int column (SynthEngine e) const noexcept { return columns[static_cast<size_t> (e)]; }

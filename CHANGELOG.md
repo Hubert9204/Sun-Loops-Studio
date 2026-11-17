@@ -2,6 +2,44 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.74.0 - 2026-11-17
+
+The whole FL Studio alignment list still open after 0.70.0 (see `fl-studio-alignment.md`): nothing in it is missing any more.
+Built in four steps (0.71 - 0.74) and released together.
+
+### Added
+- **Drum synth** engine (as Fruit Kick and Drumaxx): kick, snare, tom, clap, hi-hat and cymbal, made rather than played back -
+  tune, pitch sweep and its time, decay, noise with its tone and decay, click, drive; played on the keys (C5 is the model's own
+  pitch) or the same on every key; every hit rings out by itself. Nine ready-made drums in the synth's sound menu.
+- **Speech synthesizer** (*Speech...* in the sampler window, as FL Studio's): a typed text becomes the channel's sample - a formant
+  synthesizer reading the Italian way, five voices (male, female, child, robot, whisper), pitch, speed and intonation; a question
+  mark rises. Projects keep the text and make the voice again.
+- **Sampler play modes**: **Granular** (the Granulizer as a channel: grain length, density, position, speed - frozen to backwards
+  -, spread, pan; the key sets the pitch only) and **Travel curve** (Wave Traveller: forward, backward, tape stop, spin back,
+  scratch, stutter, wobble over a time you set).
+- **Sampler envelopes per target**: pan, cutoff, resonance and pitch each have an ADSR envelope with an amount.
+- **Effects**: **Hyper Chorus** (up to eight voices across the stereo field), **Scratcher** (by hand with Position, or Baby,
+  Forward, Chirp and Transformer patterns in time with the song), **Patcher** (up to ten effects in one slot, in series or in
+  parallel, edited in a window of their own, latency compensated). With presets.
+- **Controllers**: the Peak, Envelope and Formula Controllers drive a **second target** (optionally upside down).
+- **Notes**: **Mod X** and **Mod Y** lanes in the Piano Roll (each note's cutoff and resonance) and in the graph editor, with
+  **Shift** (a step starts up to a 16th later).
+- **Playback tool** in the Piano Roll and the Playlist (key 0): plays from the mouse and follows it.
+- **Performance mode**: audio clips in the cells; trigger modes per cell (Loop, One shot, Hold) and *In sync*; the pads' layout
+  (first note, pads per row).
+- **Recording**: **Punch in / Punch out** marker actions; the **Blend** switch for recorded notes (overdub or replace).
+- **Looks**: 16 **icons** for channels, Playlist tracks and mixer strips; four **row heights** per Playlist track; mixer strips
+  **docked** left or right with **separators**; **tags** (search #tag) and **folder colours** in the browser.
+- Helios knows the new words (speech, sintesi vocale, traveller, patcher, scratch, punch, overdub, icone, tag...), and both
+  guides describe everything above.
+
+### Project files
+- Notes may have `"modX"`, `"modY"` and `"shift"`; synth patches may have `"engine": "drum"` and `"drum"`; sampler settings may
+  have `"granular"` or `"traveller"` and the envelopes `"panEnv"`, `"cutoffEnv2"`, `"resonanceEnv"`, `"pitchEnv2"`; a speech
+  sample's source is `builtin:speech:...`; slots may have `"patch"` (the Patcher's effects); clips may have `"launchMode"` and
+  `"launchSync"`; markers the actions `"punch-in"` / `"punch-out"`; channels, Playlist tracks and mixer tracks an `"icon"`, Playlist tracks a
+  `"height"`, mixer tracks `"dock"` and `"separator"`. Earlier versions ignore them; files from earlier versions open as before.
+
 ## 0.70.0 - 2026-11-17
 
 The rest of the FL Studio alignment list (see `fl-studio-alignment.md`): seven effects, the slot mix, the routing's missing

@@ -33,7 +33,9 @@ SamplerPanel::SamplerPanel()
         addAndMakeVisible (*l);
     }
 
-    for (auto* b : { &loadSampleButton, &loadFontButton, &clearProgramButton })
+    speechButton.setTooltip ("The speech synthesizer: type a text and this channel plays it, spoken (as FL Studio's Speech Synthesizer)");
+    speechButton.onClick = [this] { if (onSpeech) onSpeech(); };
+    for (auto* b : { &loadSampleButton, &loadFontButton, &clearProgramButton, &speechButton })
         addAndMakeVisible (*b);
     loadSampleButton.onClick = [this] { if (onLoadSample) onLoadSample(); };
     loadFontButton.onClick = [this] { if (onLoadSoundFont) onLoadSoundFont(); };
@@ -184,7 +186,55 @@ SamplerPanel::SamplerPanel()
     envAmountSlider.setTooltip ("How far the envelope moves its target: pan fully left / right, cutoff 5 octaves, resonance its whole range, "
                                 "pitch 2 octaves (negative: the other way)");
     envAmountSlider.onValueChange = [this] { writeEnvelope ([this] (SamplerSettings::ModEnvelope& e) { e.amount = static_cast<float> (envAmountSlider.getValue() / 100.0); }); };
-    setSize (600, 878);
+
+    // 0.74.0: the play mode
+    for (auto* l : { &playModeLabel, &grainLabel, &densityLabel, &curveLabel, &travelTimeLabel, &grainPositionLabel, &grainSpeedLabel,
+                     &grainSpreadLabel, &grainPanLabel })
+    {
+        l->setColour (juce::Label::textColourId, kPanelText);
+        addAndMakeVisible (*l);
+    }
+    for (const char* name : { "Normal", "Granular (Granulizer)", "Travel curve (Wave Traveller)" })
+        playModeBox.addItem (name, playModeBox.getNumItems() + 1);
+    playModeBox.setTooltip ("Normal: the sample as it is. Granular: short overlapping grains read from a place that moves through the sample at "
+                            "its own speed; the key sets their pitch only. Travel curve: the place in the sample follows a curve (a tape stop, a "
+                            "spin back, a scratch...), then the sample plays on");
+    playModeBox.onChange = [this] { write ([this] (Channel& c) { c.sampler.playMode = static_cast<SamplerSettings::PlayMode> (std::clamp (playModeBox.getSelectedId() - 1, 0, 2)); }); };
+    addAndMakeVisible (playModeBox);
+    for (const char* name : { "Forward", "Backward", "Tape stop", "Spin back", "Scratch", "Stutter", "Wobble" })
+        curveBox.addItem (name, curveBox.getNumItems() + 1);
+    curveBox.onChange = [this] { write ([this] (Channel& c) { c.sampler.travelCurve = std::clamp (curveBox.getSelectedId() - 1, 0, SamplerSettings::kTravelCurves - 1); }); };
+    addAndMakeVisible (curveBox);
+    slider (grainSlider, 10.0, 500.0, 1.0, " ms").setSkewFactorFromMidPoint (80.0);
+    grainSlider.setTooltip ("The length of each grain");
+    grainSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.grainMs = static_cast<float> (grainSlider.getValue()); }); };
+    slider (densitySlider, 1.0, 8.0, 0.1, {});
+    densitySlider.setTooltip ("How many grains sound at once");
+    densitySlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.grainDensity = static_cast<float> (densitySlider.getValue()); }); };
+    slider (travelTimeSlider, 0.05, 10.0, 0.01, " s").setSkewFactorFromMidPoint (1.0);
+    travelTimeSlider.setTooltip ("How long the curve takes; then the sample plays on (a tape stop ends the note)");
+    travelTimeSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.travelTime = static_cast<float> (travelTimeSlider.getValue()); }); };
+    slider (grainPositionSlider, 0.0, 100.0, 0.1, " %");
+    grainPositionSlider.setTooltip ("Where in the sample the grains start reading");
+    grainPositionSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.grainPosition = static_cast<float> (grainPositionSlider.getValue() / 100.0); }); };
+    slider (grainSpeedSlider, -200.0, 200.0, 1.0, " %");
+    grainSpeedSlider.setTooltip ("How fast that place moves: 100 % the sample's own speed, 0 % frozen, negative backwards");
+    grainSpeedSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.grainSpeed = static_cast<float> (grainSpeedSlider.getValue() / 100.0); }); };
+    slider (grainSpreadSlider, 0.0, 100.0, 1.0, " %");
+    grainSpreadSlider.setTooltip ("Each grain starts up to 200 ms away from that place, at random");
+    grainSpreadSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.grainSpread = static_cast<float> (grainSpreadSlider.getValue() / 100.0); }); };
+    slider (grainPanSlider, 0.0, 100.0, 1.0, " %");
+    grainPanSlider.setTooltip ("Each grain's random pan");
+    grainPanSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.grainPan = static_cast<float> (grainPanSlider.getValue() / 100.0); }); };
+    for (auto* sl : { &grainPositionSlider, &grainSpeedSlider, &grainSpreadSlider, &grainPanSlider })
+        sl->setTextBoxStyle (juce::Slider::TextBoxRight, false, 60, 22);
+    // the one-letter labels of the envelopes' A D S R and the play mode's short names fit their narrow cells (no "...")
+    for (auto* l : { &envALabel, &envDLabel, &envSLabel, &envRLabel, &grainPositionLabel, &grainSpeedLabel, &grainSpreadLabel, &grainPanLabel })
+    {
+        l->setBorderSize (juce::BorderSize<int> (0, 2, 0, 2));
+        l->setMinimumHorizontalScale (0.7f);
+    }
+    setSize (600, 924);
 }
 
 juce::Slider& SamplerPanel::slider (juce::Slider& s, double lo, double hi, double step, const juce::String& suffix)
@@ -253,6 +303,30 @@ void SamplerPanel::refresh()
                              juce::dontSendNotification);
     }
     clearProgramButton.setEnabled (program);
+    {
+        // 0.74.0: the play mode (the channel's own sample only)
+        const auto& smp = c->sampler;
+        const bool granular = smp.playMode == SamplerSettings::PlayMode::Granular;
+        const bool travels = smp.playMode == SamplerSettings::PlayMode::Traveller;
+        playModeBox.setEnabled (! program);
+        playModeBox.setSelectedId (static_cast<int> (smp.playMode) + 1, juce::dontSendNotification);
+        for (juce::Component* x : { static_cast<juce::Component*> (&grainLabel), static_cast<juce::Component*> (&grainSlider),
+                                    static_cast<juce::Component*> (&densityLabel), static_cast<juce::Component*> (&densitySlider) })
+            x->setVisible (! travels);
+        for (juce::Component* x : { static_cast<juce::Component*> (&curveLabel), static_cast<juce::Component*> (&curveBox),
+                                    static_cast<juce::Component*> (&travelTimeLabel), static_cast<juce::Component*> (&travelTimeSlider) })
+            x->setVisible (travels);
+        for (auto* sl : { &grainSlider, &densitySlider, &grainPositionSlider, &grainSpeedSlider, &grainSpreadSlider, &grainPanSlider })
+            sl->setEnabled (granular && ! program);
+        curveBox.setSelectedId (smp.travelCurve + 1, juce::dontSendNotification);
+        travelTimeSlider.setValue (smp.travelTime, juce::dontSendNotification);
+        grainSlider.setValue (smp.grainMs, juce::dontSendNotification);
+        densitySlider.setValue (smp.grainDensity, juce::dontSendNotification);
+        grainPositionSlider.setValue (smp.grainPosition * 100.0, juce::dontSendNotification);
+        grainSpeedSlider.setValue (smp.grainSpeed * 100.0, juce::dontSendNotification);
+        grainSpreadSlider.setValue (smp.grainSpread * 100.0, juce::dontSendNotification);
+        grainPanSlider.setValue (smp.grainPan * 100.0, juce::dontSendNotification);
+    }
     rootSlider.setEnabled (! program);
     loopBox.setEnabled (! program);
     loopStartSlider.setEnabled (! program && c->sampler.loop != LoopMode::Off);
@@ -318,7 +392,7 @@ void SamplerPanel::paint (juce::Graphics& g)
     g.fillAll (kPanelBackground);
     g.setColour (kPanelDim);
     g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
-    const char* names[] = { "SOUND", "ENVELOPE", "LOOP", "FILTER", "MODULATION" };
+    const char* names[] = { "SOUND", "ENVELOPE", "LOOP", "FILTER", "MODULATION", "PLAY MODE" };
     for (size_t i = 0; i < headers.size(); ++i)
     {
         g.drawText (names[i], headers[i], juce::Justification::centredLeft);
@@ -340,6 +414,8 @@ void SamplerPanel::resized()
     loadFontButton.setBounds (buttons.removeFromLeft (190));
     buttons.removeFromLeft (8);
     clearProgramButton.setBounds (buttons.removeFromLeft (130));
+    buttons.removeFromLeft (8);
+    speechButton.setBounds (buttons); // 0.74.0
 
     const auto row = [&area] (juce::Label& label, juce::Component& c)
     {
@@ -479,6 +555,39 @@ void SamplerPanel::resized()
         r.removeFromLeft (8);
         pitchEnvTimeLabel.setBounds (r.removeFromLeft (70));
         pitchEnvTimeSlider.setBounds (r);
+    }
+    // 0.74.0: the play mode
+    area.removeFromTop (10);
+    headers[5] = area.removeFromTop (18);
+    area.removeFromTop (4);
+    {
+        auto r = area.removeFromTop (26);
+        area.removeFromTop (6);
+        playModeLabel.setBounds (r.removeFromLeft (100));
+        playModeBox.setBounds (r.removeFromLeft (150));
+        r.removeFromLeft (8);
+        auto first = r.removeFromLeft (r.getWidth() / 2 - 4);
+        r.removeFromLeft (8);
+        grainLabel.setBounds (first.removeFromLeft (40));
+        grainSlider.setBounds (first);
+        curveLabel.setBounds (grainLabel.getBounds());
+        curveBox.setBounds (first);
+        densityLabel.setBounds (r.removeFromLeft (52));
+        densitySlider.setBounds (r);
+        travelTimeLabel.setBounds (densityLabel.getBounds());
+        travelTimeSlider.setBounds (r);
+    }
+    {
+        auto r = area.removeFromTop (26);
+        r.removeFromLeft (100);
+        const int w = r.getWidth() / 4;
+        for (auto [label, sl] : { std::pair { &grainPositionLabel, &grainPositionSlider }, std::pair { &grainSpeedLabel, &grainSpeedSlider },
+                                  std::pair { &grainSpreadLabel, &grainSpreadSlider }, std::pair { &grainPanLabel, &grainPanSlider } })
+        {
+            auto cell = r.removeFromLeft (w);
+            label->setBounds (cell.removeFromLeft (label == &grainPositionLabel || label == &grainPanLabel ? 28 : 44));
+            sl->setBounds (cell.reduced (2, 0));
+        }
     }
 }
 

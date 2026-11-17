@@ -30,6 +30,7 @@ constexpr float kSubtractiveGain = 0.35f; // a full saw through an open filter a
 constexpr float kFmGain = 0.5f;           // a single full sine operator about as loud as the classic synth
 constexpr float kAdditiveGain = 0.35f;    // like the subtractive engine: a saw-like spectrum through no filter
 constexpr float kPhysicalGain = 0.6f;
+constexpr float kDrumGain = 0.7f; // 0.74.0: a full kick about as loud as a sampled one
 const SynthPatch defaultPatch {};
 constexpr float kSampleGain = 0.5f;
 constexpr float kWaveNorm = 1.0f / 1.35f;
@@ -746,6 +747,8 @@ void Player::startNote (const Channel& channel, int channelIndex, const Note& n,
         additiveVoiceOn (v, channel.synth, n.pitch);
     else if (channel.synth.engine == SynthEngine::Physical)
         physicalVoiceOn (v, channel.synth, static_cast<size_t> (target - voices.data()));
+    else if (channel.synth.engine == SynthEngine::Drum)
+        drumVoiceOn (v, channel.synth, n.pitch);
 
     applyNoteProperties (v, n, releaseStep);
     *target = v;
@@ -1149,6 +1152,141 @@ float Player::renderAdditive (Voice& v, const SynthPatch& patch) noexcept
     return x * v.ampMod * patch.gain;
 }
 
+// --- Drum engine (0.74.0) ---------------------------------------------------------------------------------------------------
+void Player::drumVoiceOn (Voice& v, const SynthPatch& patch, int pitch) noexcept
+{
+    const auto& d = patch.drum;
+    v.drum = true;
+    v.drumModel = static_cast<std::uint8_t> (d.model);
+    // the note's pitch (C5 = the model's own) or always the model's own; the tune an octave either way
+    const double keyed = d.keyTrack ? std::pow (2.0, (pitch - 60) / 12.0) * (v.increment / (kTwoPi * pitchToHz (pitch) / sampleRate)) : 1.0;
+    const double hz = DrumSettings::baseHz (d.model) * std::pow (2.0, 2.0 * static_cast<double> (d.tune) - 1.0) * keyed;
+    v.increment = kTwoPi * std::min (hz, 0.45 * sampleRate) / sampleRate;
+    v.phase = 0.25 * kTwoPi; // starts at its peak: the body's own click
+    const auto fall = [this] (double secondsTo60dB) { return static_cast<float> (std::pow (10.0, -3.0 / (std::max (secondsTo60dB, 0.002) * sampleRate))); };
+    const double bodySeconds = DrumSettings::seconds (d.decay, 0.03, 3.0);
+    const double hissSeconds = DrumSettings::seconds (d.noiseDecay, 0.01, 1.5);
+    const bool metal = d.model == DrumModel::HiHat || d.model == DrumModel::Cymbal;
+    const bool hasBody = d.model == DrumModel::Kick || d.model == DrumModel::Snare || d.model == DrumModel::Tom;
+    v.drumBody = hasBody ? 1.0f : 0.0f;
+    v.drumBodyMul = fall (bodySeconds);
+    v.drumHiss = d.noise;
+    v.drumHissMul = fall (hissSeconds);
+    v.drumClick = d.click * (0.4f + 0.6f * v.velocity);
+    v.drumClickMul = fall (0.006);
+    v.drumSweep = 1.0f;
+    v.drumSweepMul = static_cast<float> (std::exp (-1.0 / (DrumSettings::seconds (d.sweepTime, 0.005, 0.3) * sampleRate)));
+    v.drumSweepOctaves = 4.0f * d.sweep * (0.6f + 0.4f * v.velocity); // a harder hit falls further
+    v.drumDrive = 1.0f + 8.0f * d.drive;
+    v.drumDriveNorm = 1.0f / std::tanh (v.drumDrive);
+    v.drumAge = 0;
+    v.drumClapGap = std::max (1, static_cast<int> (0.011 * sampleRate));
+    v.noise = 0x6d2b79f5u ^ static_cast<std::uint32_t> (v.age * 2654435761u);
+    // the metal: six squares at the 808's ratios
+    static constexpr double kMetal[6] = { 1.0, 1.4832, 1.8008, 2.5464, 2.6306, 3.8975 };
+    for (size_t k = 0; k < 6; ++k)
+    {
+        v.drumPhase[k] = 0.0;
+        v.drumInc[k] = metal ? std::min (hz * kMetal[k], 0.45 * sampleRate) / sampleRate : 0.0;
+    }
+    // the hiss's filter: a band for snares and claps, high-passed for metal, low for kicks and toms
+    const double toneHz = d.model == DrumModel::Clap ? hz * std::pow (2.0, 2.0 * static_cast<double> (d.noiseTone) - 1.0)
+                                                     : 400.0 * std::pow (40.0, static_cast<double> (d.noiseTone));
+    const double fc = std::clamp (toneHz, 40.0, 0.45 * sampleRate);
+    const double g = std::tan (kTwoPi * 0.5 * fc / sampleRate);
+    const double k = metal ? 1.4 : d.model == DrumModel::Clap || d.model == DrumModel::Snare ? 1.0 : 1.6;
+    const double a1 = 1.0 / (1.0 + g * (g + k));
+    v.filter = metal ? SamplerFilter::HighPass : hasBody && d.model != DrumModel::Snare ? SamplerFilter::LowPass : SamplerFilter::BandPass;
+    v.fk = static_cast<float> (k);
+    v.fa1 = static_cast<float> (a1);
+    v.fa2 = static_cast<float> (g * a1);
+    v.fa3 = static_cast<float> (g * g * a1);
+    v.s1L = v.s2L = 0.0f;
+    // it rings out by itself: no attack, and the voice ends when its longest part has died away (a note off changes nothing)
+    const double longest = std::max ({ hasBody ? bodySeconds : 0.0, d.noise > 0.0f ? hissSeconds + (d.model == DrumModel::Clap ? 0.03 : 0.0) : 0.0, 0.03 });
+    v.attackStep = 1.0f;
+    v.sustainLevel = 0.0f;
+    v.holdLeft = static_cast<int> (0.9 * longest * sampleRate);
+    v.decayStep = static_cast<float> (1.0 / (0.25 * longest * sampleRate));
+    v.relStep = v.decayStep; // a note off leaves it ringing (see renderDrum); a choke or a note's own release still fades it
+    v.lfoPhase = 0.0f;
+    v.lfoInc = static_cast<float> (patch.lfoRate / sampleRate);
+    v.controlLeft = 0;
+    v.pitchMod = 1.0;
+    v.ampMod = 1.0f;
+}
+
+float Player::renderDrum (Voice& v, const SynthPatch& patch) noexcept
+{
+    if (--v.controlLeft <= 0)
+    {
+        v.controlLeft = kControlInterval;
+        updateModulation (v, patch); // the LFO on the pitch or the level
+    }
+    v.lfoPhase += v.lfoInc;
+    if (v.lfoPhase >= 1.0f)
+        v.lfoPhase -= 1.0f;
+    if (v.state == State::Release && std::abs (v.relStep - v.decayStep) <= 1.0e-12f)
+        v.state = State::Sustain; // a drum rings out after its note ends
+    const auto model = static_cast<DrumModel> (v.drumModel);
+    v.noise ^= v.noise << 13;
+    v.noise ^= v.noise >> 17;
+    v.noise ^= v.noise << 5;
+    const float white = static_cast<float> (static_cast<double> (v.noise) / 2147483648.0 - 1.0);
+
+    float out = 0.0f;
+    if (v.drumBody > 1.0e-5f)
+    {
+        const double rate = v.increment * v.pitchMod * std::pow (2.0, static_cast<double> (v.drumSweepOctaves * v.drumSweep));
+        v.phase += std::min (rate, 0.45 * kTwoPi);
+        if (v.phase >= kTwoPi)
+            v.phase -= kTwoPi;
+        float body = static_cast<float> (std::sin (v.phase));
+        if (model == DrumModel::Snare) // the shell's second mode
+            body = 0.7f * body + 0.3f * static_cast<float> (std::sin (1.59 * v.phase));
+        out += body * v.drumBody;
+        v.drumBody *= v.drumBodyMul;
+        v.drumSweep *= v.drumSweepMul;
+    }
+    if (v.drumHiss > 1.0e-5f)
+    {
+        float source = white;
+        if (v.drumInc[0] > 0.0)
+        {
+            float metal = 0.0f;
+            for (size_t k = 0; k < 6; ++k)
+            {
+                v.drumPhase[k] += v.drumInc[k] * v.pitchMod;
+                if (v.drumPhase[k] >= 1.0)
+                    v.drumPhase[k] -= 1.0;
+                metal += v.drumPhase[k] < 0.5 ? 1.0f : -1.0f;
+            }
+            source = (model == DrumModel::Cymbal ? 0.55f : 0.75f) * metal / 6.0f + (model == DrumModel::Cymbal ? 0.45f : 0.25f) * white;
+        }
+        const float v3 = source - v.s2L;
+        const float v1 = v.fa1 * v.s1L + v.fa2 * v3;
+        const float v2 = v.s2L + v.fa2 * v.s1L + v.fa3 * v3;
+        v.s1L = 2.0f * v1 - v.s1L;
+        v.s2L = 2.0f * v2 - v.s2L;
+        const float filtered = v.filter == SamplerFilter::LowPass ? v2 : v.filter == SamplerFilter::BandPass ? 1.6f * v1 : source - v.fk * v1 - v2;
+        float level = v.drumHiss;
+        if (model == DrumModel::Clap && v.drumAge < 3 * v.drumClapGap) // the hands: three quick bursts before the tail
+            level = static_cast<float> (std::exp (-static_cast<double> (v.drumAge % v.drumClapGap) / (0.0025 * sampleRate)));
+        else
+            v.drumHiss *= v.drumHissMul;
+        out += filtered * level;
+    }
+    if (v.drumClick > 1.0e-5f)
+    {
+        out += v.drumClick * (0.6f * white + (v.drumAge < 2 ? 1.0f : 0.0f));
+        v.drumClick *= v.drumClickMul;
+    }
+    ++v.drumAge;
+    if (v.drumDrive > 1.0f)
+        out = std::tanh (out * v.drumDrive) * v.drumDriveNorm;
+    return out * v.ampMod;
+}
+
 // --- Physical engine (0.24.0) ---------------------------------------------------------------------------------------------
 namespace
 {
@@ -1444,7 +1582,11 @@ void Player::samplerVoiceOn (const Channel& channel, int channelIndex, const Not
 {
     const auto& set = channel.sampler;
     const bool loops = loopEnd > loopStart + 1.0;
-    const bool held = set.envelope || loops;
+    // 0.74.0: grains or a travel curve (the channel's own sample only; a travel curve does not loop)
+    const bool own = sample == channel.sample.get();
+    const bool granular = own && set.playMode == SamplerSettings::PlayMode::Granular;
+    const bool travels = own && ! loops && set.playMode == SamplerSettings::PlayMode::Traveller;
+    const bool held = set.envelope || loops || granular;
 
     Voice* target = &takeVoice();
     Voice v;
@@ -1467,10 +1609,35 @@ void Player::samplerVoiceOn (const Channel& channel, int channelIndex, const Not
     v.fadeInFrames = static_cast<float> (static_cast<double> (set.fadeIn) * frames);
     v.fadeOutFrames = loops ? 0.0f : static_cast<float> (static_cast<double> (set.fadeOut) * frames);
     v.step = std::pow (2.0, ((n.pitch - rootKey) * keyTrack + tune + static_cast<double> (channel.pitch) + n.finePitch / 100.0) / 12.0) * sample->sampleRate / sampleRate;
-    if (loops)
+    if (loops && ! granular)
     {
         v.loopStart = loopStart;
         v.loopEnd = std::min (loopEnd, static_cast<double> (sample->numFrames()));
+    }
+    if (granular)
+    {
+        v.playMode = 1;
+        v.pos = std::floor (static_cast<double> (set.grainPosition) * std::max (0.0, frames - 2.0));
+        v.mirror = false;
+        v.fadeInFrames = v.fadeOutFrames = 0.0f;
+        v.grainScan = static_cast<double> (set.grainSpeed) * sample->sampleRate / sampleRate;
+        v.grainLen = std::max (16, static_cast<int> (static_cast<double> (set.grainMs) * 0.001 * sampleRate));
+        v.grainEvery = std::max (1, static_cast<int> (static_cast<double> (v.grainLen) / static_cast<double> (set.grainDensity)));
+        v.grainNext = 0;
+        v.grainJitter = static_cast<float> (static_cast<double> (set.grainSpread) * 0.2 * sample->sampleRate);
+        v.grainPanAmount = set.grainPan;
+        v.grainNorm = std::min (1.0f, 2.0f / set.grainDensity); // Hann windows overlapping `density` times add up to density / 2
+        v.grainAge.fill (v.grainLen);
+        v.noise = 0x9e3779b9u ^ static_cast<std::uint32_t> (v.age * 2654435761u);
+    }
+    else if (travels)
+    {
+        v.playMode = 2;
+        v.travelCurve = set.travelCurve;
+        v.travelLen = std::max (1, static_cast<int> (static_cast<double> (set.travelTime) * sampleRate));
+        v.travelAge = 0;
+        v.travelOrigin = v.pos;
+        v.travelSpan = static_cast<double> (v.travelLen) * v.step; // the frames the curve crosses at the note's own speed
     }
 
     if (set.envelope)
@@ -2358,64 +2525,148 @@ void Player::render (const Project& project, double bpm, bool playing,
                         }
                     }
 
-                    const int idx = static_cast<int> (v.pos);
                     const int frames = v.sample->numFrames();
-                    if (idx + 1 >= frames && ! (looping && idx < frames))
+                    float travelFade = 1.0f;
+                    if (v.playMode == 2 && v.travelAge < v.travelLen) // 0.74.0: the travel curve sets the place
                     {
-                        v = Voice {};
-                        continue;
-                    }
-                    // The sample after this one: at the end of a loop it is the loop's first sample.
-                    const int next = looping && idx + 1 >= static_cast<int> (v.loopEnd) ? (v.pingPong ? idx : static_cast<int> (v.loopStart)) : idx + 1;
-                    const float frac = static_cast<float> (v.pos - idx);
-                    const float* sl = v.sample->left.data();
-                    const float* sr = v.sample->right.data();
-                    // 0.61.0: reversed, the same walk reads the sample from its end
-                    const int ri = v.mirror ? frames - 1 - idx : idx;
-                    const int rn = v.mirror ? frames - 1 - next : next;
-                    float xl = sl[ri] + frac * (sl[rn] - sl[ri]);
-                    float xr = sr[ri] + frac * (sr[rn] - sr[ri]);
-                    if (v.xfade > 0.0f && v.pos > v.loopEnd - static_cast<double> (v.xfade)) // 0.62.0: the loop's end fades into its start
-                    {
-                        const double other = v.pos - (v.loopEnd - v.loopStart);
-                        const int oi = static_cast<int> (other);
-                        if (other >= 0.0 && oi + 1 < frames)
+                        const double u = static_cast<double> (v.travelAge) / static_cast<double> (v.travelLen);
+                        v.pos = std::clamp (v.travelOrigin + v.travelSpan * SamplerSettings::travelAt (v.travelCurve, u), 0.0, std::max (0.0, frames - 2.0));
+                        if (v.travelCurve == SamplerSettings::TravelTapeStop) // the tape stops: the sound fades with it, and ends
+                            travelFade = static_cast<float> (std::min (1.0, (1.0 - u) * 8.0));
+                        if (++v.travelAge >= v.travelLen && v.travelCurve == SamplerSettings::TravelTapeStop)
                         {
-                            const float of = static_cast<float> (other - oi);
-                            const float t = static_cast<float> ((v.pos - (v.loopEnd - static_cast<double> (v.xfade))) / static_cast<double> (v.xfade));
-                            xl += t * ((sl[oi] + of * (sl[oi + 1] - sl[oi])) - xl);
-                            xr += t * ((sr[oi] + of * (sr[oi + 1] - sr[oi])) - xr);
+                            v = Voice {};
+                            continue;
                         }
                     }
-                    if (v.fadeInFrames > 0.0f || v.fadeOutFrames > 0.0f)
+                    if (v.playMode == 1) // 0.74.0: grains
                     {
-                        float fade = 1.0f;
-                        if (v.fadeInFrames > 0.0f)
-                            fade = std::min (fade, (static_cast<float> (v.pos) - v.fadeFrom) / v.fadeInFrames);
-                        if (v.fadeOutFrames > 0.0f)
-                            fade = std::min (fade, static_cast<float> (frames - 1 - v.pos) / v.fadeOutFrames);
-                        fade = std::clamp (fade, 0.0f, 1.0f);
-                        xl *= fade;
-                        xr *= fade;
-                    }
-                    if (v.filter != SamplerFilter::Off)
-                    {
-                        const auto svf = [&v] (float x, float& ic1, float& ic2)
+                        const float* gl = v.sample->left.data();
+                        const float* gr = v.sample->right.data();
+                        const auto random = [&v]
                         {
-                            const float v3 = x - ic2;
-                            const float v1 = v.fa1 * ic1 + v.fa2 * v3;
-                            const float v2 = ic2 + v.fa2 * ic1 + v.fa3 * v3;
-                            ic1 = 2.0f * v1 - ic1;
-                            ic2 = 2.0f * v2 - ic2;
-                            return v.filter == SamplerFilter::LowPass ? v2 : v.filter == SamplerFilter::BandPass ? v1 : x - v.fk * v1 - v2;
+                            v.noise ^= v.noise << 13;
+                            v.noise ^= v.noise >> 17;
+                            v.noise ^= v.noise << 5;
+                            return static_cast<float> (static_cast<double> (v.noise) / 2147483648.0 - 1.0);
                         };
-                        xl = svf (xl, v.s1L, v.s2L);
-                        xr = svf (xr, v.s1R, v.s2R);
+                        if (--v.grainNext <= 0)
+                        {
+                            v.grainNext = v.grainEvery;
+                            size_t slot = 0;
+                            for (size_t k = 0; k < v.grainAge.size(); ++k)
+                                if (v.grainAge[k] > v.grainAge[slot])
+                                    slot = k; // a free one (age = length) or else the oldest
+                            v.grainPos[slot] = std::clamp (v.pos + static_cast<double> (v.grainJitter * random()), 0.0, std::max (0.0, frames - 2.0));
+                            v.grainAge[slot] = 0;
+                            const float p = v.grainPanAmount * random();
+                            v.grainL[slot] = std::min (1.0f, 1.0f - p);
+                            v.grainR[slot] = std::min (1.0f, 1.0f + p);
+                        }
+                        float gxl = 0.0f, gxr = 0.0f;
+                        const double rate = v.step * static_cast<double> (v.modPitch);
+                        for (size_t k = 0; k < v.grainAge.size(); ++k)
+                        {
+                            if (v.grainAge[k] >= v.grainLen)
+                                continue;
+                            const int gi = static_cast<int> (v.grainPos[k]);
+                            if (gi < 0 || gi + 1 >= frames)
+                            {
+                                v.grainAge[k] = v.grainLen;
+                                continue;
+                            }
+                            const float gf = static_cast<float> (v.grainPos[k] - gi);
+                            const float w = 0.5f - 0.5f * std::cos (6.2831853f * static_cast<float> (v.grainAge[k]) / static_cast<float> (v.grainLen));
+                            gxl += w * v.grainL[k] * (gl[gi] + gf * (gl[gi + 1] - gl[gi]));
+                            gxr += w * v.grainR[k] * (gr[gi] + gf * (gr[gi + 1] - gr[gi]));
+                            v.grainPos[k] += rate;
+                            ++v.grainAge[k];
+                        }
+                        float xl = gxl * v.grainNorm, xr = gxr * v.grainNorm;
+                        if (v.filter != SamplerFilter::Off)
+                        {
+                            const auto svf = [&v] (float x, float& ic1, float& ic2)
+                            {
+                                const float v3 = x - ic2;
+                                const float v1 = v.fa1 * ic1 + v.fa2 * v3;
+                                const float v2 = ic2 + v.fa2 * ic1 + v.fa3 * v3;
+                                ic1 = 2.0f * v1 - ic1;
+                                ic2 = 2.0f * v2 - ic2;
+                                return v.filter == SamplerFilter::LowPass ? v2 : v.filter == SamplerFilter::BandPass ? v1 : x - v.fk * v1 - v2;
+                            };
+                            xl = svf (xl, v.s1L, v.s2L);
+                            xr = svf (xr, v.s1R, v.s2R);
+                        }
+                        const float gain = v.env * v.velocity * kSampleGain * v.padGain;
+                        l = xl * gain * v.padLeft * v.modLeft;
+                        r = xr * gain * v.padRight * v.modRight;
+                        // the place moves on at its own speed, round the sample
+                        v.pos += v.grainScan;
+                        const double span = std::max (1.0, frames - 1.0);
+                        if (v.pos >= span || v.pos < 0.0)
+                            v.pos -= std::floor (v.pos / span) * span;
                     }
-                    const float gain = v.env * v.velocity * kSampleGain * v.padGain;
-                    l = xl * gain * v.padLeft * v.modLeft;
-                    r = xr * gain * v.padRight * v.modRight;
-                    v.pos += (v.backwards ? -v.step : v.step) * static_cast<double> (v.modPitch);
+                    else
+                    {
+                        const int idx = static_cast<int> (v.pos);
+                        if (idx + 1 >= frames && ! (looping && idx < frames))
+                        {
+                            v = Voice {};
+                            continue;
+                        }
+                        // The sample after this one: at the end of a loop it is the loop's first sample.
+                        const int next = looping && idx + 1 >= static_cast<int> (v.loopEnd) ? (v.pingPong ? idx : static_cast<int> (v.loopStart)) : idx + 1;
+                        const float frac = static_cast<float> (v.pos - idx);
+                        const float* sl = v.sample->left.data();
+                        const float* sr = v.sample->right.data();
+                        // 0.61.0: reversed, the same walk reads the sample from its end
+                        const int ri = v.mirror ? frames - 1 - idx : idx;
+                        const int rn = v.mirror ? frames - 1 - next : next;
+                        float xl = sl[ri] + frac * (sl[rn] - sl[ri]);
+                        float xr = sr[ri] + frac * (sr[rn] - sr[ri]);
+                        if (v.xfade > 0.0f && v.pos > v.loopEnd - static_cast<double> (v.xfade)) // 0.62.0: the loop's end fades into its start
+                        {
+                            const double other = v.pos - (v.loopEnd - v.loopStart);
+                            const int oi = static_cast<int> (other);
+                            if (other >= 0.0 && oi + 1 < frames)
+                            {
+                                const float of = static_cast<float> (other - oi);
+                                const float t = static_cast<float> ((v.pos - (v.loopEnd - static_cast<double> (v.xfade))) / static_cast<double> (v.xfade));
+                                xl += t * ((sl[oi] + of * (sl[oi + 1] - sl[oi])) - xl);
+                                xr += t * ((sr[oi] + of * (sr[oi + 1] - sr[oi])) - xr);
+                            }
+                        }
+                        if (v.fadeInFrames > 0.0f || v.fadeOutFrames > 0.0f)
+                        {
+                            float fade = 1.0f;
+                            if (v.fadeInFrames > 0.0f)
+                                fade = std::min (fade, (static_cast<float> (v.pos) - v.fadeFrom) / v.fadeInFrames);
+                            if (v.fadeOutFrames > 0.0f)
+                                fade = std::min (fade, static_cast<float> (frames - 1 - v.pos) / v.fadeOutFrames);
+                            fade = std::clamp (fade, 0.0f, 1.0f);
+                            xl *= fade;
+                            xr *= fade;
+                        }
+                        if (v.filter != SamplerFilter::Off)
+                        {
+                            const auto svf = [&v] (float x, float& ic1, float& ic2)
+                            {
+                                const float v3 = x - ic2;
+                                const float v1 = v.fa1 * ic1 + v.fa2 * v3;
+                                const float v2 = ic2 + v.fa2 * ic1 + v.fa3 * v3;
+                                ic1 = 2.0f * v1 - ic1;
+                                ic2 = 2.0f * v2 - ic2;
+                                return v.filter == SamplerFilter::LowPass ? v2 : v.filter == SamplerFilter::BandPass ? v1 : x - v.fk * v1 - v2;
+                            };
+                            xl = svf (xl, v.s1L, v.s2L);
+                            xr = svf (xr, v.s1R, v.s2R);
+                        }
+                        const float gain = v.env * v.velocity * kSampleGain * v.padGain * travelFade;
+                        l = xl * gain * v.padLeft * v.modLeft;
+                        r = xr * gain * v.padRight * v.modRight;
+                        if (! (v.playMode == 2 && v.travelAge < v.travelLen))
+                            v.pos += (v.backwards ? -v.step : v.step) * static_cast<double> (v.modPitch);
+                    }
                 }
                 else if (v.subtractive)
                 {
@@ -2435,6 +2686,12 @@ void Player::render (const Project& project, double bpm, bool playing,
                     const auto& patch = static_cast<size_t> (v.channel) < project.channels.size() ? project.channels[static_cast<size_t> (v.channel)].synth
                                                                                                   : defaultPatch;
                     l = r = renderAdditive (v, patch) * v.env * v.velocity * kAdditiveGain;
+                }
+                else if (v.drum)
+                {
+                    const auto& patch = static_cast<size_t> (v.channel) < project.channels.size() ? project.channels[static_cast<size_t> (v.channel)].synth
+                                                                                                  : defaultPatch;
+                    l = r = renderDrum (v, patch) * v.env * v.velocity * kDrumGain;
                 }
                 else if (v.physical)
                 {

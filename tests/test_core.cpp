@@ -16,6 +16,7 @@
 
 #include <juce_audio_formats/juce_audio_formats.h>
 
+#include "audio/SpeechSynth.h"
 #include "audio/Arrangement.h"
 #include "audio/TypingKeyboard.h"
 #include "audio/AudioExport.h"
@@ -5807,6 +5808,20 @@ void testHeliosManual062()
     check (top ("make unique consolidate", "Make unique", "en"), "Helios: Make unique and Consolidate");
     check (top ("note pan release fine pitch lane", "event lanes", "en") && top ("corsie degli eventi pan release", "corsie degli eventi", "it"),
            "Helios: the Piano Roll's event lanes");
+    // 0.71.0 - 0.74.0
+    check (top ("drum synth kick 808 drumaxx", "Drum engine", "en") && top ("sintetizzatore di batteria cassa 808", "Motore batteria", "it"),
+           "Helios: the drum synth (0.74.0)");
+    check (top ("speech synthesizer text", "Speech synthesizer", "en") && top ("sintesi vocale testo", "Sintesi vocale", "it"), "Helios: speech (0.74.0)");
+    check (top ("wave traveller tape stop", "Play modes", "en") && top ("wave traveller tape stop", "Modi di riproduzione", "it"),
+           "Helios: the Granulizer and Wave Traveller play modes (0.74.0)");
+    check (top ("patcher hyper chorus scratcher", "0.73.0", "en") && top ("patcher hyper chorus scratcher", "0.73.0", "it"),
+           "Helios: Patcher, Hyper Chorus, Scratcher (0.73.0)");
+    check (top ("sampler envelope per target pan cutoff", "Envelopes per target", "en")
+               && top ("inviluppi per destinazione pan cutoff", "Inviluppi per destinazione", "it"),
+           "Helios: the sampler's envelopes per target (0.71.0)");
+    check (top ("browser tags folder colour", "Tags", "en") && top ("tag colori delle cartelle", "Tag e colori", "it"), "Helios: tags and folder colours (0.72.0)");
+    check (top ("mod x mod y lane playback tool", "Mod X", "en") && top ("corsie mod x mod y strumento playback", "Mod X", "it"),
+           "Helios: the Mod X / Y lanes and the Playback tool (0.71.0)");
 }
 
 double energyOf (const sls::SampleData& s, int from, int to)
@@ -9244,6 +9259,215 @@ void testEffects073()
         renderBlocks (player, project, true, 0.2);
         check (player.outputLatencySamples() > 16, "patcher: the latency of its effects is compensated (" + std::to_string (player.outputLatencySamples()) + " samples)");
         check (bounded (leftOf (sls::renderToBuffer (project, {})), 4.0f), "patcher: renders in a project");
+    }
+}
+
+// 0.74.0: the drum synthesizer, the Granulizer and Wave Traveller play modes, the speech synthesizer.
+namespace
+{
+// The frequency of x[begin, end) from its rising zero crossings.
+double crossingHz (const float* x, int begin, int end)
+{
+    int first = -1, last = -1, count = 0;
+    for (int i = begin + 1; i < end; ++i)
+        if (x[i - 1] < 0.0f && x[i] >= 0.0f)
+        {
+            if (first < 0)
+                first = i;
+            last = i;
+            ++count;
+        }
+    return count >= 2 ? (count - 1) * kSr / (last - first) : 0.0;
+}
+} // namespace
+
+void testInstruments074()
+{
+    std::cout << "Drum synth, Granulizer, Wave Traveller, speech (0.74.0)\n";
+    const auto at = [] (double seconds) { return static_cast<int> (seconds * kSr); };
+
+    // --- the drum engine
+    const auto drumRender = [] (sls::DrumSettings d, int pitch, int lengthTicks)
+    {
+        auto c = synthChannel ({ sls::Note { pitch, 0, lengthTicks, 1.0f } });
+        c.synth.engine = sls::SynthEngine::Drum;
+        c.synth.drum = d;
+        sls::RenderOptions o;
+        o.tailSeconds = 2.0;
+        return sls::renderToBuffer (oneBar ({ c }), o);
+    };
+    {
+        sls::DrumSettings kick;
+        kick.decay = 0.75f;
+        kick.noise = 0.0f;
+        kick.click = 0.0f;
+        const auto b = drumRender (kick, 60, kBeat / 4);
+        const float* x = b.getReadPointer (0);
+        const double early = crossingHz (x, at (0.002), at (0.03)), late = crossingHz (x, at (0.25), at (0.45));
+        check (early > 1.5 * late && std::abs (late - 50.0) < 6.0,
+               "drum: a kick's pitch falls to its note (" + std::to_string (early) + " Hz -> " + std::to_string (late) + " Hz)");
+        check (peakOf (x, at (0.3), at (0.35)) > 0.05f * peakOf (x, 0, at (0.05)), "drum: it rings on after its (short) note has ended");
+        check (peakOf (x, at (1.5), at (2.5)) < 1.0e-4f, "drum: and stops by itself");
+        const auto up = drumRender (kick, 72, kBeat / 4);
+        check (std::abs (crossingHz (up.getReadPointer (0), at (0.25), at (0.45)) - 100.0) < 10.0, "drum: an octave up the keyboard is an octave up");
+        auto fixed = kick;
+        fixed.keyTrack = false;
+        const auto same = drumRender (fixed, 72, kBeat / 4);
+        check (std::abs (crossingHz (same.getReadPointer (0), at (0.25), at (0.45)) - 50.0) < 6.0, "drum: without key tracking every key is the same drum");
+    }
+    {
+        bool all = true;
+        double hatRate = 0.0, kickRate = 0.0;
+        for (int m = 0; m < sls::kDrumModels; ++m)
+        {
+            sls::DrumSettings d;
+            d.model = static_cast<sls::DrumModel> (m);
+            d.noise = 0.8f;
+            d.noiseDecay = 0.4f;
+            d.drive = m == 0 ? 1.0f : 0.0f;
+            const auto b = drumRender (d, 60, kBeat / 4);
+            const float* x = b.getReadPointer (0);
+            const float peak = peakOf (x, 0, b.getNumSamples());
+            bool finite = true;
+            for (int i = 0; i < b.getNumSamples(); ++i)
+                finite = finite && std::isfinite (x[i]);
+            all = all && finite && peak > 0.02f && peak < 2.0f;
+            int crossings = 0;
+            for (int i = 1; i < at (0.1); ++i)
+                crossings += (x[i - 1] < 0.0f) != (x[i] < 0.0f) ? 1 : 0;
+            if (d.model == sls::DrumModel::HiHat)
+                hatRate = crossings / 0.1;
+            if (d.model == sls::DrumModel::Kick)
+                kickRate = crossings / 0.1;
+        }
+        check (all, "drum: kick, snare, tom, clap, hi-hat and cymbal all sound, bounded");
+        check (hatRate > 10.0 * kickRate, "drum: a hi-hat is bright, a kick is deep");
+        sls::SynthPatch p;
+        p.engine = sls::SynthEngine::Drum;
+        p.drum = { sls::DrumModel::Clap, 0.3f, 0.2f, 0.7f, 0.1f, 0.9f, 0.25f, 0.6f, 0.05f, 0.45f, false };
+        check (sls::synthPatchFromVar (sls::synthPatchToVar (p)) == p, "drum: a patch survives a save and a load");
+        bool factory = false;
+        for (const auto& f : sls::synthFactoryPatches())
+            factory = factory || (f.name == "Kick 808" && f.patch.engine == sls::SynthEngine::Drum);
+        check (factory, "drum: ready-made drums in the synth's menu");
+    }
+
+    // --- the Granulizer: a frozen cloud of grains holds a short sample as long as the key; the key sets the pitch only
+    {
+        auto c = samplerChannel (sineSample (440.0, 0.25, kSr), { sls::Note { 72, 0, 2 * kBeat, 1.0f } });
+        c.sampler.playMode = sls::SamplerSettings::PlayMode::Granular;
+        c.sampler.grainSpeed = 0.0f;
+        c.sampler.grainPosition = 0.3f;
+        c.sampler.grainSpread = 0.0f;
+        c.sampler.grainDensity = 4.0f;
+        const auto b = sls::renderToBuffer (oneBar ({ c }), {});
+        const float* x = b.getReadPointer (0);
+        check (peakOf (x, at (0.7), at (0.9)) > 0.05f, "granular: a 0.25 s sample sounds for the whole 1 s note");
+        check (peakOf (x, at (1.2), at (1.9)) < 1.0e-3f, "granular: and stops with it");
+        check (std::abs (crossingHz (x, at (0.3), at (0.8)) - 880.0) < 30.0,
+               "granular: an octave up is 880 Hz (" + std::to_string (crossingHz (x, at (0.3), at (0.8))) + ")");
+        auto moving = c;
+        moving.sampler.grainSpeed = 1.0f;
+        moving.sampler.grainPan = 1.0f;
+        const auto m = sls::renderToBuffer (oneBar ({ moving }), {});
+        double diff = 0.0;
+        for (int i = at (0.1); i < at (0.9); ++i)
+            diff += std::abs (m.getReadPointer (0)[i] - m.getReadPointer (1)[i]);
+        check (diff > 1.0 && peakOf (m.getReadPointer (0), at (0.7), at (0.9)) > 0.02f, "granular: grains panned at random, the place moving round the sample");
+    }
+
+    // --- Wave Traveller: the curve sets the place in the sample
+    {
+        auto plain = samplerChannel (sineSample (440.0, 2.0, kSr), { sls::Note { 60, 0, kBeat, 1.0f } });
+        auto forward = plain;
+        forward.sampler.playMode = sls::SamplerSettings::PlayMode::Traveller;
+        forward.sampler.travelCurve = sls::SamplerSettings::TravelForward;
+        forward.sampler.travelTime = 0.3f;
+        const auto a = sls::renderToBuffer (oneBar ({ plain }), {});
+        const auto f = sls::renderToBuffer (oneBar ({ forward }), {});
+        float error = 0.0f;
+        for (int i = 0; i < at (1.5); ++i)
+            error = std::max (error, std::abs (a.getReadPointer (0)[i] - f.getReadPointer (0)[i]));
+        check (error < 1.0e-3f, "traveller: the forward curve is the sample as it is");
+        auto stop = forward;
+        stop.sampler.travelCurve = sls::SamplerSettings::TravelTapeStop;
+        stop.sampler.travelTime = 0.5f;
+        const auto t = sls::renderToBuffer (oneBar ({ stop }), {});
+        const float* x = t.getReadPointer (0);
+        const double start = crossingHz (x, at (0.0), at (0.08)), end = crossingHz (x, at (0.3), at (0.4));
+        check (start > 380.0 && start < 450.0 && end < 0.6 * start, "traveller: a tape stop slows down (" + std::to_string (start) + " -> " + std::to_string (end) + " Hz)");
+        check (peakOf (x, at (0.55), at (1.5)) < 1.0e-3f, "traveller: and the note ends when the tape has stopped");
+        auto spin = forward;
+        spin.sampler.travelCurve = sls::SamplerSettings::TravelSpinBack;
+        const auto sb = sls::renderToBuffer (oneBar ({ spin }), {});
+        check (peakOf (sb.getReadPointer (0), 0, at (1.0)) > 0.1f, "traveller: a spin back plays");
+
+        sls::SamplerSettings s;
+        s.playMode = sls::SamplerSettings::PlayMode::Granular;
+        s.grainMs = 120.0f;
+        s.grainSpeed = -0.5f;
+        s.grainPan = 0.4f;
+        const auto back = sls::samplerSettingsFromVar (sls::samplerSettingsToVar (s));
+        sls::SamplerSettings tr;
+        tr.playMode = sls::SamplerSettings::PlayMode::Traveller;
+        tr.travelCurve = sls::SamplerSettings::TravelScratch;
+        tr.travelTime = 2.5f;
+        const auto back2 = sls::samplerSettingsFromVar (sls::samplerSettingsToVar (tr));
+        check (back.playMode == s.playMode && std::abs (back.grainMs - 120.0f) < 1.0e-3f && std::abs (back.grainSpeed + 0.5f) < 1.0e-3f
+                   && std::abs (back.grainPan - 0.4f) < 1.0e-3f && back2.playMode == tr.playMode && back2.travelCurve == tr.travelCurve
+                   && std::abs (back2.travelTime - 2.5f) < 1.0e-3f,
+               "play modes: saved and loaded");
+    }
+
+    // --- the speech synthesizer
+    {
+        check (sls::speechPhonemes ("ciao") == "t S a' o", "speech: \"ciao\" is read t S a' o (" + sls::speechPhonemes ("ciao") + ")");
+        check (sls::speechPhonemes ("gnocchi") == "ny o' k: i", "speech: \"gnocchi\" is read ny o' k: i (" + sls::speechPhonemes ("gnocchi") + ")");
+        check (sls::speechPhonemes ("città") == "t S i t: a'", "speech: an accent moves the stress (" + sls::speechPhonemes ("città") + ")");
+        sls::SpeechSettings settings;
+        const auto said = sls::speak ("Ciao, come stai?", settings);
+        bool ok = said != nullptr;
+        if (ok)
+        {
+            const double seconds = said->numFrames() / said->sampleRate;
+            float peak = 0.0f;
+            for (const float v : said->left)
+                peak = std::max (peak, std::abs (v));
+            ok = seconds > 0.6 && seconds < 3.0 && std::abs (peak - 0.8f) < 0.01f;
+        }
+        check (ok, "speech: a sentence is a second or two of voice, normalised");
+        const auto again = sls::speak ("Ciao, come stai?", settings);
+        check (again != nullptr && said != nullptr && again->left == said->left, "speech: the same text makes the same sound every time");
+        sls::SpeechSettings fast = settings;
+        fast.speed = 2.0f;
+        const auto quick = sls::speak ("Ciao, come stai?", fast);
+        const double ratio = quick != nullptr && said != nullptr ? static_cast<double> (quick->numFrames()) / said->numFrames() : 0.0;
+        check (ratio > 0.45 && ratio < 0.7, "speech: twice the speed, about half the length (" + std::to_string (ratio) + ")");
+        bool voices = true;
+        for (int v = 1; v < sls::kSpeechVoices; ++v)
+        {
+            sls::SpeechSettings s = settings;
+            s.voice = static_cast<sls::SpeechVoice> (v);
+            const auto x = sls::speak ("uno due tre", s);
+            voices = voices && x != nullptr && x->numFrames() > 1000;
+            if (x != nullptr)
+                for (const float y : x->left)
+                    voices = voices && std::isfinite (y);
+        }
+        check (voices, "speech: female, child, robot and whisper voices");
+        settings.voice = sls::SpeechVoice::Female;
+        settings.pitch = 3.0f;
+        const auto id = sls::speechId ("Perché no? 42", settings);
+        std::string text;
+        sls::SpeechSettings parsed;
+        check (sls::parseSpeechId (id, text, parsed) && text == "Perché no? 42" && parsed.voice == sls::SpeechVoice::Female
+                   && std::abs (parsed.pitch - 3.0f) < 1.0e-3f,
+               "speech: the text and the voice are kept in the sample's id");
+        const auto made = sls::makeBuiltinSample (id);
+        const auto direct = sls::speak ("Perché no? 42", settings);
+        check (made != nullptr && direct != nullptr && made->left == direct->left && made->source == "builtin:" + id,
+               "speech: a project makes the voice again from the id");
+        check (sls::speak ("  ...  ", settings) == nullptr, "speech: nothing to say, no sample");
     }
 }
 
@@ -13901,6 +14125,7 @@ int main()
     testFlParity071();
     testLooks072();
     testEffects073();
+    testInstruments074();
     testOneShot();
     testAutomation();
     testMidiImport();

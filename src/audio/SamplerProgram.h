@@ -69,6 +69,41 @@ struct SamplerSettings
     float lfo2Rate = 1.0f;                        // Hz, 0.05..20
     float lfo2Depth = 0.5f;                       // 0..1 (the resonance: up to half its range)
 
+    // 0.74.0: how the channel's own sample is played. Normal; in grains (as FL Studio's Fruity Granulizer: short windowed grains,
+    // overlapping, read from a position that moves through the sample at its own speed, the key setting their pitch only); or along
+    // a travel curve (as Wave Traveller: the place in the sample follows a curve over `travelTime` — a tape stop, a spin back, a
+    // scratch — then plays on).
+    enum class PlayMode : std::uint8_t { Normal, Granular, Traveller };
+    enum TravelCurve { TravelForward, TravelBackward, TravelTapeStop, TravelSpinBack, TravelScratch, TravelStutter, TravelWobble };
+    static constexpr int kTravelCurves = 7;
+    PlayMode playMode = PlayMode::Normal;
+    float grainMs = 80.0f;       // a grain's length, 10..500 ms
+    float grainDensity = 2.0f;   // grains sounding at once, 1..8
+    float grainPosition = 0.0f;  // where the grains start reading, 0..1 of the sample
+    float grainSpeed = 1.0f;     // how fast that place moves, -2..2 (1: the sample's own speed; 0: frozen; negative: backwards)
+    float grainSpread = 0.1f;    // 0..1: each grain starts up to 200 ms from that place, at random
+    float grainPan = 0.0f;       // 0..1: each grain's random pan
+    int travelCurve = TravelTapeStop;
+    float travelTime = 1.0f;     // seconds the curve takes, 0.05..10
+
+    // The place along a travel curve (0..1 of its span) at `u` (0..1 of its time).
+    static double travelAt (int curve, double u) noexcept
+    {
+        u = std::clamp (u, 0.0, 1.0);
+        constexpr double twoPi = 6.283185307179586;
+        switch (curve)
+        {
+            case TravelBackward: return 1.0 - u;
+            case TravelTapeStop: return u - 0.5 * u * u;                                // slows down to a stop
+            case TravelSpinBack: return u < 0.6 ? u : 0.6 - 1.5 * (u - 0.6);            // forwards, then wound back fast
+            case TravelScratch:  return 0.5 * u + 0.12 * std::sin (twoPi * 3.0 * u);   // back and forth
+            case TravelStutter:  return 0.25 * std::fmod (u * 4.0, 1.0);                // the first quarter four times
+            case TravelWobble:   return u + 0.015 * std::sin (twoPi * 8.0 * u);        // the speed wobbles
+            default: break;
+        }
+        return u;
+    }
+
     bool reverse = false;
     float start = 0.0f;     // 0..0.99
     float fadeIn = 0.0f;    // 0..1
@@ -77,7 +112,7 @@ struct SamplerSettings
     static double cutoffHz (float c) noexcept { return 20.0 * std::pow (1000.0, std::clamp (static_cast<double> (c), 0.0, 1.0)); }
 
     // A note sounds as long as it is held (and its release) instead of to the end of the sample.
-    bool sustains() const noexcept { return envelope || loop != LoopMode::Off; }
+    bool sustains() const noexcept { return envelope || loop != LoopMode::Off || playMode == PlayMode::Granular; }
 
     SamplerSettings sanitised() const noexcept
     {
@@ -121,6 +156,16 @@ struct SamplerSettings
         s.pitchEnvTime = std::clamp (finiteOr (s.pitchEnvTime, 0.1f), 0.005f, 5.0f);
         if (static_cast<int> (s.filter) > static_cast<int> (SamplerFilter::BandPass))
             s.filter = SamplerFilter::Off;
+        if (static_cast<int> (s.playMode) > static_cast<int> (PlayMode::Traveller)) // 0.74.0
+            s.playMode = PlayMode::Normal;
+        s.grainMs = std::clamp (finiteOr (s.grainMs, 80.0f), 10.0f, 500.0f);
+        s.grainDensity = std::clamp (finiteOr (s.grainDensity, 2.0f), 1.0f, 8.0f);
+        s.grainPosition = std::clamp (finiteOr (s.grainPosition, 0.0f), 0.0f, 1.0f);
+        s.grainSpeed = std::clamp (finiteOr (s.grainSpeed, 1.0f), -2.0f, 2.0f);
+        s.grainSpread = std::clamp (finiteOr (s.grainSpread, 0.1f), 0.0f, 1.0f);
+        s.grainPan = std::clamp (finiteOr (s.grainPan, 0.0f), 0.0f, 1.0f);
+        s.travelCurve = std::clamp (s.travelCurve, 0, kTravelCurves - 1);
+        s.travelTime = std::clamp (finiteOr (s.travelTime, 1.0f), 0.05f, 10.0f);
         return s;
     }
 };
