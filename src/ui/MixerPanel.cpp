@@ -1,4 +1,5 @@
 #include "ui/MixerPanel.h"
+#include "ui/Icons.h"
 
 #include <cmath>
 
@@ -413,6 +414,15 @@ void MixerStrip::paint (juce::Graphics& g)
     {
         g.setColour (isAux ? juce::Colour (0xff7bc47f) : kAccent);
         g.fillRoundedRectangle (4.0f, 1.0f, static_cast<float> (getWidth()) - 8.0f, 3.0f, 1.5f);
+    }
+    if (! isAux && track.icon != 0) // 0.72.0: the strip's icon, in the corner of its name
+        drawIcon (g, track.icon, juce::Rectangle<float> (4.0f, 6.0f, 14.0f, 14.0f),
+                  track.colour != 0 ? juce::Colour (0xff15171a) : juce::Colours::white.withAlpha (0.8f));
+    if (! isAux && track.dock != 0) // and a mark for a docked strip
+    {
+        g.setColour (juce::Colours::white.withAlpha (0.35f));
+        const float y = static_cast<float> (getHeight()) - 6.0f;
+        g.fillRect (track.dock == 1 ? 4.0f : static_cast<float> (getWidth()) - 14.0f, y, 10.0f, 2.0f);
     }
 }
 
@@ -1742,6 +1752,15 @@ void MixerPanel::showRouteMenu (int index, juce::Component& button)
     for (size_t c = 0; c < std::size (kColours); ++c)
         colours.addItem (8001 + static_cast<int> (c), kColourNames[c], true, track.colour == kColours[c]);
     menu.addSubMenu ("Strip colour", colours);
+    // 0.72.0: its icon, where it is docked, a gap before it
+    juce::PopupMenu icons, docks;
+    addIconItems (icons, 9000, track.icon);
+    menu.addSubMenu ("Strip icon", icons);
+    docks.addItem (9100, "With the others", true, track.dock == 0);
+    docks.addItem (9101, "On the left", true, track.dock == 1);
+    docks.addItem (9102, "On the right (before the + button)", true, track.dock == 2);
+    menu.addSubMenu ("Dock", docks);
+    menu.addItem (9110, "Separator before this strip", true, track.separator);
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&button),
                         [safe = juce::Component::SafePointer<MixerPanel> (this), index] (int result)
                         {
@@ -1761,6 +1780,17 @@ void MixerPanel::showRouteMenu (int index, juce::Component& button)
                             {
                                 t.toMaster = true;
                                 t.trackSends = {};
+                            }
+                            else if (result >= 9000) // 0.72.0
+                            {
+                                if (result == 9110)
+                                    t.separator = ! t.separator;
+                                else if (result >= 9100)
+                                    t.dock = static_cast<std::uint8_t> (result - 9100);
+                                else
+                                    t.icon = static_cast<std::uint8_t> (std::clamp (result - 9000, 0, kIconCount));
+                                safe->layoutInner();
+                                safe->strips[static_cast<size_t> (index)]->repaint();
                             }
                             else if (result >= 8000) // 0.70.0
                                 t.colour = result == 8000 ? 0u : kColours[static_cast<size_t> (result - 8001) % std::size (kColours)];
@@ -1899,16 +1929,33 @@ void MixerPanel::layoutInner()
 {
     constexpr int kGap = 10; // between the tracks, the aux buses and the VCA groups
     const int count = static_cast<int> (strips.size() + auxStrips.size() + vcaStrips.size());
-    const int needed = count * MixerStrip::kWidth + kAddButtonWidth + (auxStrips.empty() ? 0 : kGap) + (vcaStrips.empty() ? 0 : kGap);
+    int separators = 0; // (0.72.0)
+    if (trackData != nullptr)
+        for (const auto& t : *trackData)
+            separators += t.separator ? 1 : 0;
+    const int needed = count * MixerStrip::kWidth + kAddButtonWidth + (auxStrips.empty() ? 0 : kGap) + (vcaStrips.empty() ? 0 : kGap) + separators * 8;
     const int height = std::max (1, viewport.getMaximumVisibleHeight());
     inner.setSize (std::max (needed, viewport.getMaximumVisibleWidth()), height);
 
+    // 0.72.0: the strips docked on the left first, then the others, then those docked on the right; a separator leaves a gap
+    constexpr int kSeparator = 8;
     int x = 0;
-    for (auto& s : strips)
+    const auto place = [&] (int dock)
     {
-        s->setBounds (x, 0, MixerStrip::kWidth, height);
-        x += MixerStrip::kWidth;
-    }
+        for (size_t i = 0; i < strips.size(); ++i)
+        {
+            const auto* data = trackData != nullptr && i < trackData->size() ? &(*trackData)[i] : nullptr;
+            if ((data != nullptr ? data->dock : 0) != dock)
+                continue;
+            if (data != nullptr && data->separator && x > 0)
+                x += kSeparator;
+            strips[i]->setBounds (x, 0, MixerStrip::kWidth, height);
+            x += MixerStrip::kWidth;
+        }
+    };
+    place (1);
+    place (0);
+    place (2);
     addTrackButton.setBounds (x + 2, 6, kAddButtonWidth - 4, 28);
     x += kAddButtonWidth;
     if (! auxStrips.empty())

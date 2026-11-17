@@ -212,6 +212,9 @@ struct PlaylistTrack
     bool locked = false;
     bool grouped = false;
     bool collapsed = false; // a group's head: the grouped tracks under it are hidden
+    // 0.72.0: the icon before its name (see ui/Icons.h) and its height (0 small, 1 normal, 2 large, 3 extra large)
+    std::uint8_t icon = 0;
+    std::uint8_t height = 1;
     TrackSection section = TrackSection::Audio; // 0.69.0
     bool operator== (const PlaylistTrack&) const = default;
 };

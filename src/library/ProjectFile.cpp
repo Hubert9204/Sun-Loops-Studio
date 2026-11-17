@@ -324,6 +324,8 @@ juce::String ProjectDocument::toJson() const
         }
         if (c.colour != 0)
             o->setProperty ("colour", juce::String::toHexString (static_cast<juce::int64> (c.colour)).paddedLeft ('0', 8));
+        if (c.icon != 0) // 0.72.0
+            o->setProperty ("icon", static_cast<int> (c.icon));
         if (! c.group.empty())
             o->setProperty ("group", juce::String (c.group));
         if (c.instrument == Instrument::Plugin)
@@ -409,6 +411,12 @@ juce::String ProjectDocument::toJson() const
             o->setProperty ("delayMs", number (static_cast<double> (t.delayMs)));
         if (t.colour != 0)
             o->setProperty ("colour", juce::String::toHexString (static_cast<juce::int64> (t.colour)).paddedLeft ('0', 8));
+        if (t.icon != 0) // 0.72.0
+            o->setProperty ("icon", static_cast<int> (t.icon));
+        if (t.dock != 0)
+            o->setProperty ("dock", t.dock == 1 ? "left" : "right");
+        if (t.separator)
+            o->setProperty ("separator", true);
         trackList.add (juce::var (o));
     }
     root->setProperty ("tracks", trackList);
@@ -515,6 +523,10 @@ juce::String ProjectDocument::toJson() const
             o->setProperty ("name", juce::String (pt.name));
         if (pt.colour != 0)
             o->setProperty ("colour", juce::String::toHexString (static_cast<juce::int64> (pt.colour)).paddedLeft ('0', 8));
+        if (pt.icon != 0) // 0.72.0
+            o->setProperty ("icon", static_cast<int> (pt.icon));
+        if (pt.height != 1)
+            o->setProperty ("height", static_cast<int> (pt.height));
         if (pt.pattern >= 0)
             o->setProperty ("pattern", pt.pattern);
         if (pt.mute)
@@ -696,6 +708,7 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
         // 0.62.0: the rack's colour and filter group, the Layer channel
         if (const auto hex = o->getProperty ("colour").toString().trim(); hex.length() == 8 && hex.containsOnly ("0123456789abcdefABCDEF"))
             c.colour = static_cast<std::uint32_t> (hex.getHexValue64()) | 0xff000000u;
+        c.icon = static_cast<std::uint8_t> (readInt (o->getProperty ("icon"), 0, 0, 16)); // 0.72.0
         c.group = o->getProperty ("group").toString().substring (0, 32).toStdString();
         if (instrument == "layer")
         {
@@ -800,6 +813,10 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
                     }
             t.delayMs = static_cast<float> (readNumber (o->getProperty ("delayMs"), 0.0, 0.0, static_cast<double> (kMaxTrackDelayMs)));
             t.colour = static_cast<std::uint32_t> (o->getProperty ("colour").toString().getHexValue64() & 0xffffffff);
+            t.icon = static_cast<std::uint8_t> (readInt (o->getProperty ("icon"), 0, 0, 16)); // 0.72.0
+            const auto dock = o->getProperty ("dock").toString();
+            t.dock = static_cast<std::uint8_t> (dock == "left" ? 1 : dock == "right" ? 2 : 0);
+            t.separator = readBool (o->getProperty ("separator"), false);
         }
     }
     for (auto& c : d.channels) // a channel on a track the file does not have goes to the last one
@@ -952,6 +969,8 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
                 const auto hex = o->getProperty ("colour").toString().trim();
                 if (hex.length() == 8 && hex.containsOnly ("0123456789abcdefABCDEF"))
                     pt.colour = static_cast<std::uint32_t> (hex.getHexValue64()) | 0xff000000u;
+                pt.icon = static_cast<std::uint8_t> (readInt (o->getProperty ("icon"), 0, 0, 16)); // 0.72.0
+                pt.height = static_cast<std::uint8_t> (readInt (o->getProperty ("height"), 1, 0, 3));
                 pt.mute = readBool (o->getProperty ("mute"), false); // 0.60.0
                 pt.solo = readBool (o->getProperty ("solo"), false);
                 pt.locked = readBool (o->getProperty ("locked"), false); // 0.62.0

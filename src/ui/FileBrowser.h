@@ -2,6 +2,8 @@
 
 #include <functional>
 #include <array>
+#include <map>
+#include <string>
 #include <memory>
 #include <vector>
 
@@ -38,6 +40,18 @@ public:
     bool isFavourite (const BrowserNode& node) const noexcept;
     void toggleFavourite (const BrowserNode& node);
     std::function<void()> onFavouritesChanged;
+    // 0.72.0: tags on sounds, presets and plugins (searched as words, or alone with "#tag") and colours of folders; the owner
+    // keeps them between sessions
+    using TagMap = std::map<std::string, std::vector<std::string>>;
+    using ColourMap = std::map<std::string, std::uint32_t>;
+    void setTags (TagMap newTags);
+    const TagMap& getTags() const noexcept { return tags; }
+    std::vector<std::string> tagsOf (const BrowserNode& node) const;
+    void setTagsOf (const BrowserNode& node, const std::string& typed);
+    void setFolderColours (ColourMap colours);
+    const ColourMap& getFolderColours() const noexcept { return folderColours; }
+    void setFolderColour (const juce::String& path, std::uint32_t colour);
+    std::function<void()> onLooksChanged; // the tags or the folder colours
     std::function<void (int)> onTabChanged;
     std::function<void()> onRefresh;
     std::function<void()> onOpenFolder;
@@ -56,6 +70,8 @@ private:
     BrowserNode fullTree;
     int tab = All;
     std::vector<BrowserNode> favourites;
+    TagMap tags;         // 0.72.0: tagKey (node) -> its tags
+    ColourMap folderColours; // a folder's place in the tree ("/Samples/Drums") -> its colour (0xAARRGGBB)
     std::array<juce::TextButton, 4> tabButtons;
     juce::Label titleLabel;
     juce::TextButton collapseButton { juce::String::fromUTF8 ("\xe2\x97\x80") };

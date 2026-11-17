@@ -473,6 +473,18 @@ MainComponent::MainComponent()
                 favourites.push_back ({ fields[2].toStdString(), static_cast<NodeKind> (std::clamp (fields[0].getIntValue(), 1, 5)), fields[1].toStdString(), {} });
         }
         browser.setFavourites (std::move (favourites));
+        // 0.72.0: the tags (one line per item: its key, a tab, its tags joined by commas) and the folder colours (path, tab, colour)
+        FileBrowser::TagMap tags;
+        for (const auto& line : juce::StringArray::fromLines (settings->getValue ("browser.tags")))
+            if (const auto fields = juce::StringArray::fromTokens (line, "\t", ""); fields.size() == 2)
+                if (auto list = parseTags (fields[1].toStdString()); ! list.empty())
+                    tags[fields[0].toStdString()] = std::move (list);
+        browser.setTags (std::move (tags));
+        FileBrowser::ColourMap colours;
+        for (const auto& line : juce::StringArray::fromLines (settings->getValue ("browser.folderColours")))
+            if (const auto fields = juce::StringArray::fromTokens (line, "\t", ""); fields.size() == 2 && fields[0].isNotEmpty())
+                colours[fields[0].toStdString()] = static_cast<std::uint32_t> (fields[1].getHexValue64() & 0xffffffff) | 0xff000000u;
+        browser.setFolderColours (std::move (colours));
         browser.setTab (settings->getIntValue ("browser.tab", 0));
     }
     browser.onFavouritesChanged = [this]
@@ -483,6 +495,24 @@ MainComponent::MainComponent()
         for (const auto& f : browser.getFavourites())
             lines.add (juce::String (static_cast<int> (f.kind)) + "\t" + juce::String (f.payload) + "\t" + juce::String (f.name));
         settings->setValue ("browser.favourites", lines.joinIntoString ("\n"));
+        settings->saveIfNeeded();
+    };
+    browser.onLooksChanged = [this] // 0.72.0
+    {
+        if (settings == nullptr)
+            return;
+        juce::StringArray tagLines, colourLines;
+        for (const auto& [key, list] : browser.getTags())
+        {
+            juce::StringArray words;
+            for (const auto& t : list)
+                words.add (juce::String (t));
+            tagLines.add (juce::String (key) + "\t" + words.joinIntoString (","));
+        }
+        for (const auto& [path, colour] : browser.getFolderColours())
+            colourLines.add (juce::String (path) + "\t" + juce::String::toHexString (static_cast<juce::int64> (colour)).paddedLeft ('0', 8));
+        settings->setValue ("browser.tags", tagLines.joinIntoString ("\n"));
+        settings->setValue ("browser.folderColours", colourLines.joinIntoString ("\n"));
         settings->saveIfNeeded();
     };
     browser.onTabChanged = [this] (int tab)

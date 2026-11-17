@@ -9058,15 +9058,18 @@ void testFlParity071()
 
         auto doc = sls::ProjectDocument::blank();
         doc.arrangement.markers = a.markers;
-        doc.arrangement.clips.push_back ({ 0, 0, 0, 4 * kBeat });
+        doc.arrangement.clips.push_back ({ 0, std::max (0, doc.arrangement.dedicatedTrack (0)), 0, 4 * kBeat }); // (on the pattern's own track)
         doc.arrangement.clips.back().launchMode = 2;
         doc.arrangement.clips.back().launchSync = true;
         const auto parsed = sls::ProjectDocument::fromJson (doc.toJson());
         bool kept = parsed.document.has_value() && parsed.document->arrangement.markers.size() == 3 && ! parsed.document->arrangement.clips.empty();
+        if (! kept)
+            std::cout << "    (read back: " << (parsed.document.has_value() ? std::to_string (parsed.document->arrangement.markers.size()) + " markers, "
+                                                + std::to_string (parsed.document->arrangement.clips.size()) + " clips" : std::string ("nothing")) << ")\n";
         if (kept)
         {
             const auto& d = *parsed.document;
-            kept = d.arrangement.markers[0].action == sls::MarkerAction::PunchIn && d.arrangement.markers[2].action == sls::MarkerAction::PunchOut
+            kept = d.arrangement.punchRange().first == 960 && d.arrangement.punchRange().second == 3840 // (the markers come back in time order)
                 && d.arrangement.clips.back().launchMode == 2 && d.arrangement.clips.back().launchSync;
         }
         check (kept, "punch markers and a clip's launch mode survive a save and a load");
@@ -9076,6 +9079,53 @@ void testFlParity071()
                    && second.column == 0 && sls::performancePad (47, 48, 4).kind == sls::PadAction::Kind::None,
                "pads: another first note and four pads to a row");
     }
+}
+
+// 0.72.0: icons, track heights, docking, separators, browser tags.
+void testLooks072()
+{
+    std::cout << "Looks (0.72.0)\n";
+    auto doc = sls::ProjectDocument::blank();
+    doc.channels[0].icon = 5;
+    doc.tracks[3].icon = 11;
+    doc.tracks[3].dock = 1;
+    doc.tracks[4].dock = 2;
+    doc.tracks[4].separator = true;
+    doc.arrangement.playlistTracks[0].icon = 13;
+    doc.arrangement.playlistTracks[0].height = 3;
+    doc.arrangement.playlistTracks[1].height = 0;
+    const auto parsed = sls::ProjectDocument::fromJson (doc.toJson());
+    bool kept = parsed.document.has_value();
+    if (kept)
+    {
+        const auto& d = *parsed.document;
+        kept = d.channels[0].icon == 5 && d.tracks[3].icon == 11 && d.tracks[3].dock == 1 && d.tracks[4].dock == 2 && d.tracks[4].separator
+            && ! d.tracks[3].separator && d.tracks[0].dock == 0 && d.arrangement.playlistTracks[0].icon == 13
+            && d.arrangement.playlistTracks[0].height == 3 && d.arrangement.playlistTracks[1].height == 0 && d.arrangement.playlistTracks[2].height == 1;
+    }
+    check (kept, "icons, docking, separators and track heights survive a save and a load");
+
+    const auto tags = sls::parseTags ("Drums, dark kick ,#Lo-Fi,drums,, ");
+    check (tags == std::vector<std::string> { "drums", "dark kick", "lo-fi" }, "tags: trimmed, lower case, no repeats, no empty ones");
+
+    sls::BrowserNode root { "root", sls::NodeKind::Folder, {}, {} };
+    sls::BrowserNode samples { "Samples", sls::NodeKind::Folder, {}, {} };
+    samples.children.push_back ({ "Kick 01", sls::NodeKind::AudioFile, "/s/kick01.wav", {} });
+    samples.children.push_back ({ "Snare 02", sls::NodeKind::AudioFile, "/s/snare02.wav", {} });
+    samples.children.push_back ({ "Pad", sls::NodeKind::AudioFile, "/s/pad.wav", {} });
+    root.children.push_back (samples);
+    static std::map<std::string, std::vector<std::string>> tagMap;
+    tagMap[sls::tagKey (samples.children[2])] = { "dreamy", "lo-fi" };
+    tagMap[sls::tagKey (samples.children[1])] = { "lo-fi" };
+    const sls::TagLookup lookup = [] (const sls::BrowserNode& n, const void*) {
+        const auto found = tagMap.find (sls::tagKey (n));
+        return found != tagMap.end() ? found->second : std::vector<std::string> {};
+    };
+    check (sls::countLeaves (sls::filterTree (root, "dreamy", lookup, nullptr)) == 1, "tags: a word finds what is tagged with it");
+    check (sls::countLeaves (sls::filterTree (root, "#lo-fi", lookup, nullptr)) == 2 && sls::countLeaves (sls::filterTree (root, "#kick", lookup, nullptr)) == 0
+               && sls::countLeaves (sls::filterTree (root, "kick", lookup, nullptr)) == 1,
+           "tags: #word looks at the tags only, a plain word at names and tags");
+    check (sls::countLeaves (sls::filterTree (root, "lo-fi")) == 0, "tags: without the lookup only names count");
 }
 
 void testRackPlaylistToolbar062()
@@ -13730,6 +13780,7 @@ int main()
     testRackPlaylistToolbar062();
     testFlParity070();
     testFlParity071();
+    testLooks072();
     testOneShot();
     testAutomation();
     testMidiImport();

@@ -191,6 +191,7 @@ target_sources(SunLoopsStudio PRIVATE
     src/ui/StepGraph.cpp
     src/ui/PanelWindow.cpp
     src/ui/MixerPanel.cpp
+    src/ui/Icons.cpp
     src/ui/PlaylistTimeline.cpp
     src/ui/PlaylistView.cpp
     src/ui/PluginPicker.cpp

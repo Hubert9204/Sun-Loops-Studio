@@ -1,4 +1,5 @@
 #include "ui/ChannelStrip.h"
+#include "ui/Icons.h"
 
 #include <algorithm>
 
@@ -317,6 +318,7 @@ void ChannelStrip::showAutomated (AutomationKind kind, float value)
 void ChannelStrip::refreshFromChannel()
 {
     nameLabel.setText (juce::String (channel.name), juce::dontSendNotification);
+    nameLabel.setBorderSize (juce::BorderSize<int> (1, channel.icon != 0 ? 22 : 5, 1, 5)); // 0.72.0: room for the icon
     muteButton.setToggleState (channel.mute, juce::dontSendNotification);
     soloButton.setToggleState (channel.solo, juce::dontSendNotification);
     volumeSlider.setValue (channel.volume, juce::dontSendNotification);
@@ -364,6 +366,8 @@ void ChannelStrip::paint (juce::Graphics& g)
     }
     g.setColour (selected ? kPreview.withAlpha (0.9f) : juce::Colours::white.withAlpha (0.12f));
     g.drawRoundedRectangle (button, 3.0f, 1.0f);
+    if (channel.icon != 0) // 0.72.0: the icon at the button's left (the name moves over for it)
+        drawIcon (g, channel.icon, button.withWidth (button.getHeight()).reduced (4.0f), juce::Colours::white.withAlpha (0.85f));
 }
 
 // 0.60.0: the row follows FL Studio's Channel Rack from left to right - mute (and solo), pan, volume, the mixer track, the
@@ -557,6 +561,9 @@ void ChannelStrip::showContextMenu()
             colours.addItem (item);
         }
         menu.addSubMenu ("Colour", colours);
+        juce::PopupMenu icons; // 0.72.0
+        addIconItems (icons, 700, channel.icon);
+        menu.addSubMenu ("Icon", icons);
         juce::PopupMenu groups;
         const auto existing = listGroups ? listGroups() : juce::StringArray();
         groups.addItem (519, "None (shown under All only)", true, channel.group.empty());
@@ -599,6 +606,14 @@ void ChannelStrip::showContextMenu()
                                 return;
                             }
                             // 0.62.0: colour, filter group, the layer's children
+                            if (result >= 700 && result <= 700 + kIconCount) // 0.72.0
+                            {
+                                safe->channel.icon = static_cast<std::uint8_t> (result - 700);
+                                safe->refreshFromChannel();
+                                safe->repaint();
+                                if (safe->onLooksChanged) safe->onLooksChanged (i);
+                                return;
+                            }
                             if (result >= 500 && result <= 516)
                             {
                                 safe->channel.colour = result == 500 ? 0u : paletteColour (result - 501).getARGB();
