@@ -7,7 +7,7 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Oldest macOS the program r
 # Windows (0.75.0): the C and C++ runtime is linked into every program and plugin (/MT), so nothing has to be installed beside
 # them (no Visual C++ Redistributable). Must be set before project().
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "The MSVC runtime: static")
-project(SunLoopsStudio VERSION 0.75.0 LANGUAGES C CXX)
+project(SunLoopsStudio VERSION 0.76.0 LANGUAGES C CXX)
 # The assembler links the sound library in on Linux and macOS; Windows (0.75.0) uses a resource instead (see below).
 if(NOT WIN32)
     enable_language(ASM)
@@ -220,6 +220,40 @@ juce_add_binary_data(SunLoopsIcons HEADER_NAME IconData.h NAMESPACE IconData
     SOURCES resources/icons/app_icon_256.png)
 set_target_properties(SunLoopsIcons PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
+# --- ASIO (Windows, 0.76.0) ---------------------------------------------------------------------------------------------
+# The low-latency drivers of most audio interfaces on Windows. JUCE hosts them with Steinberg's ASIO SDK, which is used here under
+# its GPLv3 licence (Steinberg offers it so since October 2025; the program is AGPLv3, which may be combined with GPLv3 code). The
+# SDK is not copied into the repository: it is downloaded at configure time from Steinberg, pinned and checked by SHA-256.
+# -DSLS_ASIO=OFF builds without it (Windows Audio and DirectSound only).
+option(SLS_ASIO "Windows: host ASIO drivers (downloads Steinberg's ASIO SDK, used under GPLv3)" ON)
+set(SLS_ASIO_ENABLED OFF)
+if(WIN32 AND SLS_ASIO)
+    FetchContent_Declare(
+        asiosdk
+        URL https://download.steinberg.net/sdk_downloads/ASIO-SDK_2.3.4_2025-10-15.zip
+        URL_HASH SHA256=d5ebf0c20dd2c5f43771fd0c1418f4b361bf52434ee670097cfa6b3a335e2eca
+        DOWNLOAD_EXTRACT_TIMESTAMP ON
+        ${SLS_JUCE_FETCH_OPTIONS}
+    )
+    FetchContent_MakeAvailable(asiosdk) # (headers only: nothing to build)
+    file(GLOB_RECURSE SLS_ASIO_HEADER "${asiosdk_SOURCE_DIR}/*/iasiodrv.h")
+    list(LENGTH SLS_ASIO_HEADER headerCount)
+    if(NOT headerCount EQUAL 1)
+        message(FATAL_ERROR "The ASIO SDK in ${asiosdk_SOURCE_DIR} has no (or more than one) iasiodrv.h: ${SLS_ASIO_HEADER}")
+    endif()
+    get_filename_component(SLS_ASIO_INCLUDE_DIR "${SLS_ASIO_HEADER}" DIRECTORY)
+    file(GLOB SLS_ASIO_LICENSE "${asiosdk_SOURCE_DIR}/LICENSE*.txt" "${asiosdk_SOURCE_DIR}/license*.txt")
+    set(SLS_ASIO_ENABLED ON)
+    message(STATUS "ASIO: hosted, with the SDK in ${SLS_ASIO_INCLUDE_DIR}")
+endif()
+# Lets a program (or a plugin's Standalone) open ASIO devices.
+function(sls_enable_asio target)
+    if(SLS_ASIO_ENABLED)
+        target_include_directories(${target} SYSTEM PRIVATE "${SLS_ASIO_INCLUDE_DIR}")
+        target_compile_definitions(${target} PRIVATE JUCE_ASIO=1 SLS_ASIO=1)
+    endif()
+endfunction()
+
 # --- Application -------------------------------------------------------------
 juce_add_gui_app(SunLoopsStudio
     PRODUCT_NAME "Sun Loops Studio"
@@ -328,6 +362,7 @@ target_link_libraries(SunLoopsStudio PRIVATE
 if(WIN32) # the crash handler's stack traces (0.75.0)
     target_link_libraries(SunLoopsStudio PRIVATE dbghelp)
 endif()
+sls_enable_asio(SunLoopsStudio)
 
 # --- Helios LLM mode (0.64.0): sun-loops-helios, the helper that runs the language model ------------------------------
 # tools/helios-llm is built as a project of its own, once per processor (llama.cpp cannot be built for Apple silicon and Intel in
@@ -464,6 +499,7 @@ if(SLS_BUILD_SUNBURST)
         COPY_PLUGIN_AFTER_BUILD FALSE)
     target_sources(SunBurst PRIVATE ${SUNBURST_SOURCES} plugins/common/HardwareUi.cpp plugins/common/SynthUi.cpp plugins/sunburst/SunBurstEditor.cpp plugins/sunburst/PluginMain.cpp)
     target_include_directories(SunBurst PRIVATE src plugins)
+    sls_enable_asio(SunBurst) # (its Standalone)
     target_compile_definitions(SunBurst PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
     target_link_libraries(SunBurst PRIVATE
         juce::juce_audio_utils
@@ -502,6 +538,7 @@ if(SLS_BUILD_HEXFORGE)
     target_sources(HexForge PRIVATE ${HEXFORGE_SOURCES} src/sunburst/Wavetables.cpp src/sunburst/Fx.cpp src/synthkit/SynthProcessor.cpp
                    plugins/common/HardwareUi.cpp plugins/common/SynthUi.cpp plugins/hexforge/HexEditor.cpp plugins/hexforge/PluginMain.cpp)
     target_include_directories(HexForge PRIVATE src plugins)
+    sls_enable_asio(HexForge) # (its Standalone)
     target_compile_definitions(HexForge PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
     target_link_libraries(HexForge PRIVATE
         juce::juce_audio_utils
@@ -540,6 +577,7 @@ if(SLS_BUILD_SUNSYMPHONY)
                    plugins/sunsymphony/LibraryManager.cpp plugins/sunsymphony/LibraryPanel.cpp
                    plugins/sunsymphony/SunSymphonyProcessor.cpp plugins/sunsymphony/SunSymphonyEditor.cpp plugins/sunsymphony/PluginMain.cpp)
     target_include_directories(SunSymphony PRIVATE src plugins)
+    sls_enable_asio(SunSymphony) # (its Standalone)
     target_compile_definitions(SunSymphony PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
     target_link_libraries(SunSymphony PRIVATE
         SunSymphonyData
@@ -581,6 +619,7 @@ if(SLS_BUILD_SUNRIFF)
     target_sources(SunRiff PRIVATE ${SUNRIFF_SOURCES} plugins/common/HardwareUi.cpp plugins/common/SynthUi.cpp
                    plugins/sunriff/RiffEditor.cpp plugins/sunriff/PluginMain.cpp)
     target_include_directories(SunRiff PRIVATE src plugins)
+    sls_enable_asio(SunRiff) # (its Standalone)
     target_compile_definitions(SunRiff PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
     target_link_libraries(SunRiff PRIVATE
         juce::juce_audio_utils
@@ -622,6 +661,10 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 endif()
 if(WIN32) # the crash handler's stack traces and the tests' little HTTP server (0.75.0)
     target_link_libraries(SunLoopsStudioTests PRIVATE dbghelp ws2_32)
+endif()
+if(SLS_ASIO_ENABLED) # 0.76.0: the ASIO device type is checked
+    target_link_libraries(SunLoopsStudioTests PRIVATE juce::juce_audio_devices)
+    sls_enable_asio(SunLoopsStudioTests)
 endif()
 if(APPLE) # the Audio Unit host's generic editor (a window the tests never open, but the code is linked)
     target_link_libraries(SunLoopsStudioTests PRIVATE "-framework CoreAudioKit")

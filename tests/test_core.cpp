@@ -14048,6 +14048,7 @@ void testHeliosChat();     // tests/test_helios.cpp
 void testHeliosDownload(); // tests/test_support.cpp
 void testDesktopIntegration(); // tests/test_support.cpp
 bool runCrashChild (int argc, char** argv); // tests/test_support.cpp (Windows: the crash tests' child process)
+void testAsioHost(); // tests/test_support.cpp (0.76.0: ASIO on Windows; nothing elsewhere)
 
 int main (int argc, char** argv)
 {
@@ -14136,6 +14137,7 @@ int main (int argc, char** argv)
     testCrashReports();
     testHeliosDownload();
     testDesktopIntegration();
+    testAsioHost();
     testSessionLog();
     testHeliosChat();
     testMidiNotes();

@@ -30,7 +30,8 @@ From the [Releases page](https://github.com/Hubert9204/Sun-Loops-Studio/releases
   you alone without an administrator password (or for everyone, if you choose so), adds a Start menu entry and opens `.slp`
   projects with a double-click. `Sun-Loops-Studio-<version>-Windows-x64.zip` is the same program without installing: unpack it and
   start `Sun Loops Studio.exe`. The program is not signed with a code-signing certificate, so SmartScreen may stop the first
-  start: **More info** > **Run anyway**. Details: [On Windows](docs/user-guide.md#on-windows-0750).
+  start: **More info** > **Run anyway**. Audio interfaces work through their **ASIO** drivers (since 0.76.0) or Windows Audio.
+  Details: [On Windows](docs/user-guide.md#on-windows-0750).
 
 All of them contain the program, its sounds and its four instruments: the SunBurst and HexForge synthesizers, the SunRiff guitar and the
 SunSymphony orchestral sampler (its orchestra is downloaded from inside it). On Linux:

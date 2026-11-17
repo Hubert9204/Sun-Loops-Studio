@@ -2,6 +2,24 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.76.0 - 2026-11-17
+
+ASIO on Windows.
+
+### Added
+- **ASIO drivers on Windows**: *ASIO* is an audio device type in **Audio...**, next to Windows Audio and DirectSound - the
+  low-latency driver of most audio interfaces. A stereo pair of its outputs and up to two of its inputs (as with the other
+  device types), its sample rates and buffer sizes; its **Control Panel** button opens the driver's own settings, and a buffer size changed there is picked up at once.
+  When the driver fixes the buffer size itself, the buffer menu and **Auto** say to change it in its Control Panel. A new
+  installation still starts with Windows Audio. The Standalone versions of SunBurst, HexForge, SunSymphony and SunRiff offer
+  ASIO too.
+- Built with Steinberg's ASIO SDK 2.3.4, used under its GPLv3 licence (the program is AGPLv3): downloaded at configure time from
+  Steinberg and checked by SHA-256, not copied into the repository; its licence is shipped as `LICENSE-ASIO-SDK.txt`.
+  `-DSLS_ASIO=OFF` builds without it.
+- Tests: the ASIO device type is offered; the continuous integration installs a free ASIO driver (FlexASIO), which the tests
+  must find, load and open.
+- The "On Windows" chapter of the user guide (both languages) explains how to choose an ASIO driver.
+
 ## 0.75.0 - 2026-11-17
 
 Windows.

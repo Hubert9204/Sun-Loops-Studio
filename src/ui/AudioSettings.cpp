@@ -168,11 +168,13 @@ void AudioSettingsComponent::refreshSizes()
     delayLabel.setText ("= " + juce::String (bufferMilliseconds (current, rate), 1) + " ms of delay",
                         juce::dontSendNotification);
 
-    const bool choosable = sizes.size() > 1; // JACK, for instance, fixes the buffer in the server
+    const bool choosable = sizes.size() > 1; // JACK, for instance, fixes the buffer in the server; many ASIO drivers too
     sizeBox.setEnabled (choosable && tuner == nullptr);
     autoButton.setEnabled (choosable);
     if (! choosable && tuner == nullptr)
-        autoStatus.setText ("This audio system fixes the buffer size itself (for example JACK: change it there).",
+        autoStatus.setText (device->getTypeName() == "ASIO"
+                                ? "This ASIO driver fixes the buffer size itself: change it in its Control Panel (the button above)."
+                                : "This audio system fixes the buffer size itself (for example JACK: change it there).",
                             juce::dontSendNotification);
 }
 
