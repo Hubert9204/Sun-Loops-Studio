@@ -26,8 +26,9 @@ Windows.
   - the update check offers the installer on Windows;
   - libcurl is built in from its source (8.11.1, Windows's own TLS) and the C++ runtime is linked into every program and plugin:
     nothing else needs to be installed.
-- **Continuous integration on Windows**: every push is built with Visual Studio's Clang and tested on a GitHub Windows machine;
-  the run keeps the installer and the zip. A release attaches them (with `SHA256SUMS-Windows.txt`) next to the AppImage and the
+- **Continuous integration on Windows**: every push is built with Visual Studio's Clang and tested on a GitHub Windows machine,
+  which then starts the program from the unpacked zip (its screen goes into the log) and installs, starts and uninstalls it with
+  the installer; the run keeps the installer and the zip. A release attaches them (with `SHA256SUMS-Windows.txt`) next to the AppImage and the
   `.dmg` (`scripts/build_windows.ps1`).
 - An **"On Windows"** chapter in the user guide (both languages) and the Windows build in `docs/building.md`.
 

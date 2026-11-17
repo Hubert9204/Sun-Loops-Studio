@@ -81,15 +81,22 @@ jobs:
         if: always()
         shell: pwsh
         run: scripts\build_windows.ps1 -BuildDir build
-      # Starts the packed program as a user would (the folder of the zip), lets it run for half a minute and checks that it is
-      # still running, that its session log says it started and that no crash report was left; the screen goes into the log.
-      - name: Smoke test (start the packed program)
+      # The zip as a user would use it: unpacked somewhere else and started from there for 40 seconds. It must still be running,
+      # its session log must say it started, it must have registered the .slp files for this user and left no crash report; the
+      # screen (the program's window brought to the front) goes into the log, between SCREENSHOT-BEGIN and SCREENSHOT-END.
+      - name: Try the zip (start the program unpacked)
         shell: pwsh
         run: |
-          Get-ChildItem -Recurse "build\stage\Sun Loops Studio" | Where-Object { -not $_.PSIsContainer } | ForEach-Object { "{0,12:N0}  {1}" -f $_.Length, $_.FullName.Substring((Resolve-Path "build\stage").Path.Length + 1) }
-          $p = Start-Process -FilePath "build\stage\Sun Loops Studio\Sun Loops Studio.exe" -PassThru
+          $zip = Get-Item dist\Sun-Loops-Studio-*-Windows-x64.zip
+          Expand-Archive $zip.FullName -DestinationPath "$env:RUNNER_TEMP\unpacked" -Force
+          $folder = "$env:RUNNER_TEMP\unpacked\Sun Loops Studio"
+          Get-ChildItem -Recurse $folder -File | ForEach-Object { "{0,12:N0}  {1}" -f $_.Length, $_.FullName.Substring($folder.Length + 1) }
+          $p = Start-Process -FilePath "$folder\Sun Loops Studio.exe" -PassThru
           Start-Sleep -Seconds 40
           Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          Add-Type -Namespace Win -Name User32 -MemberDefinition '[DllImport("user32.dll")] public static extern bool ShowWindow(System.IntPtr h, int c); [DllImport("user32.dll")] public static extern bool SetForegroundWindow(System.IntPtr h);'
+          $p.Refresh()
+          if ($p.MainWindowHandle -ne 0) { [Win.User32]::ShowWindow($p.MainWindowHandle, 3) | Out-Null; [Win.User32]::SetForegroundWindow($p.MainWindowHandle) | Out-Null; Start-Sleep -Seconds 3 }
           $screen = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
           $bitmap = New-Object System.Drawing.Bitmap $screen.Width, $screen.Height
           [System.Drawing.Graphics]::FromImage($bitmap).CopyFromScreen($screen.Location, [System.Drawing.Point]::Empty, $screen.Size)
@@ -97,11 +104,41 @@ jobs:
           $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
           "SCREENSHOT-BEGIN"; [Convert]::ToBase64String($stream.ToArray()); "SCREENSHOT-END"
           $state = "$env:LOCALAPPDATA\SunLoopsStudio"
-          Get-Content "$state\logs\session.log" -Tail 60
-          "File type: " + (Get-ItemProperty "HKCU:\Software\Classes\SunLoopsStudio.Project\shell\open\command" -ErrorAction SilentlyContinue).'(default)'
+          Get-Content "$state\logs\session.log" -Tail 40
+          $command = (Get-ItemProperty "HKCU:\Software\Classes\SunLoopsStudio.Project\shell\open\command" -ErrorAction SilentlyContinue).'(default)'
+          "File type: $command"
           if ($p.HasExited) { throw "the program ended by itself (exit code $($p.ExitCode))" }
           Stop-Process -Id $p.Id -Force
           if (Test-Path "$state\crash_last_session.log") { Get-Content "$state\crash_last_session.log"; throw "a crash report was written" }
+          if ($command -ne "`"$folder\Sun Loops Studio.exe`" `"%1`"") { throw ".slp files were not registered for the unpacked program" }
+      # The installer, silently for this user: the files in %LOCALAPPDATA%\Programs, the .slp files opening the installed program,
+      # the program starting from there; then the uninstaller, which must take all of it away again.
+      - name: Try the installer (install, start, uninstall)
+        shell: pwsh
+        run: |
+          $setup = Get-Item dist\Sun-Loops-Studio-*-Windows-x64-Setup.exe
+          Start-Process -FilePath $setup.FullName -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/CURRENTUSER", "/NORESTART", "/LOG=$env:RUNNER_TEMP\setup.log" -Wait
+          $app = "$env:LOCALAPPDATA\Programs\Sun Loops Studio"
+          Get-ChildItem $app -Name
+          foreach ($f in "Sun Loops Studio.exe", "Sun Loops Studio.pdb", "sun-loops-helios.exe", "VST3\SunBurst.vst3", "VST3\SunRiff.vst3", "unins000.exe") {
+            if (-not (Test-Path "$app\$f")) { Get-Content "$env:RUNNER_TEMP\setup.log" -Tail 30; throw "not installed: $f" }
+          }
+          $command = (Get-ItemProperty "HKCU:\Software\Classes\SunLoopsStudio.Project\shell\open\command").'(default)'
+          "File type: $command"
+          if ($command -ne "`"$app\Sun Loops Studio.exe`" `"%1`"") { throw ".slp files do not open the installed program" }
+          if (-not (Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Sun Loops Studio.lnk")) { throw "no Start menu entry" }
+          $p = Start-Process -FilePath "$app\Sun Loops Studio.exe" -PassThru
+          Start-Sleep -Seconds 20
+          if ($p.HasExited) { throw "the installed program ended by itself (exit code $($p.ExitCode))" }
+          Stop-Process -Id $p.Id -Force
+          Start-Sleep -Seconds 2
+          Start-Process -FilePath "$app\unins000.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
+          # (the uninstaller goes on from a copy of itself: wait for it)
+          for ($i = 0; $i -lt 60 -and (Test-Path "$app\Sun Loops Studio.exe"); $i++) { Start-Sleep -Seconds 1 }
+          Start-Sleep -Seconds 2
+          if (Test-Path "$app\Sun Loops Studio.exe") { throw "the uninstaller left the program behind" }
+          if (Test-Path "HKCU:\Software\Classes\SunLoopsStudio.Project") { throw "the uninstaller left the .slp file type behind" }
+          "Installed, started and uninstalled."
       - uses: actions/upload-artifact@v4
         if: always()
         with:

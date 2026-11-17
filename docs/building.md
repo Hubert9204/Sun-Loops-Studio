@@ -53,7 +53,7 @@ macOS, and keeps the `.dmg` of each run as an artifact (*Actions* > the run > *A
 
 ### Windows (0.75.0)
 
-The program runs on Windows 10 and 11 (x64). Building it needs **Visual Studio 2022** or its free *Build Tools*, with the workload
+The program runs on Windows 10 and 11 (x64). Building it needs **Visual Studio 2022** (or newer) or its free *Build Tools*, with the workload
 *Desktop development with C++* and the component *C++ Clang Compiler for Windows* (the build uses that Clang, `clang-cl`, as the
 continuous integration and the releases do; CMake and Ninja come with Visual Studio), and **Git**. libcurl is built in from its
 source (with Windows's own TLS), so nothing else is needed. For the installer also **Inno Setup 6** (`winget install
@@ -82,7 +82,8 @@ unhandled structured exceptions and `abort()`, the stack walked with DbgHelp), t
 (`src/audio/SoundLibraryData.rc.in`), the folders (`%LOCALAPPDATA%`), the `.slp` file type for a copy started from the zip
 (`src/support/DesktopIntegration.cpp`) and the tests' child processes (no `fork()`: the test program starts itself again with
 `--crash-child`). LADSPA and Audio Units are not hosted on Windows; VST3 and LV2 are. The continuous integration builds and tests
-every push on Windows too and keeps the installer and the zip of each run as artifacts.
+every push on Windows too, starts the program from the unpacked zip, installs, starts and uninstalls it with the installer,
+and keeps the installer and the zip of each run as artifacts.
 
 ## Build
 

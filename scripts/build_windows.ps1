@@ -3,7 +3,7 @@
 #
 #   powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1
 #
-# Needs: Windows 10 or 11 (x64) with Visual Studio 2022 or its Build Tools, workloads "Desktop development with C++" and the
+# Needs: Windows 10 or 11 (x64) with Visual Studio 2022 (or newer) or its Build Tools, workloads "Desktop development with C++" and the
 # component "C++ Clang Compiler for Windows" (CMake and Ninja come with them), Git, and Inno Setup 6 for the installer
 # (winget install JRSoftware.InnoSetup; without it only the zip is made). The script finds Visual Studio by itself; it can also be
 # run from a "x64 Native Tools Command Prompt for VS 2022".
