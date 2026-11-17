@@ -70,6 +70,10 @@ jobs:
         run: cmake --build build -- -k 0
       - name: Run the tests
         run: .\build\SunLoopsStudioTests_artefacts\Release\SunLoopsStudioTests.exe
+      - name: Show the tests' crash report, if they crashed
+        if: failure()
+        shell: bash
+        run: cat "$TEMP/sls-tests-crash/crash_last_session.log" || echo "no crash report"
       - name: Install Inno Setup (for the installer)
         if: always()
         run: choco install innosetup --no-progress -y

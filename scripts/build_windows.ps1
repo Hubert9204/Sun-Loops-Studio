@@ -19,6 +19,9 @@ $ErrorActionPreference = "Stop"
 $root = (Resolve-Path "$PSScriptRoot\..").Path
 if (-not $BuildDir) { $BuildDir = Join-Path $root "build-windows" }
 if (-not $DistDir) { $DistDir = Join-Path $root "dist" }
+# Whole paths (Inno Setup reads relative ones from the .iss file's folder).
+if (-not [System.IO.Path]::IsPathRooted($BuildDir)) { $BuildDir = Join-Path (Get-Location).Path $BuildDir }
+if (-not [System.IO.Path]::IsPathRooted($DistDir)) { $DistDir = Join-Path (Get-Location).Path $DistDir }
 
 $version = (Select-String -Path "$root\CMakeLists.txt" -Pattern '^project\(SunLoopsStudio VERSION ([0-9.]+)').Matches[0].Groups[1].Value
 if (-not $version) { throw "cannot read the version from CMakeLists.txt" }

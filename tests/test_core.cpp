@@ -6,7 +6,9 @@
 #include <set>
 #include <cmath>
 #include <cstring>
+#include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <iostream>
 #include <limits>
 #include <map>
@@ -17,6 +19,7 @@
 #include <juce_audio_formats/juce_audio_formats.h>
 
 #include "audio/SpeechSynth.h"
+#include "support/CrashHandler.h"
 #include "audio/Arrangement.h"
 #include "audio/TypingKeyboard.h"
 #include "audio/AudioExport.h"
@@ -6397,7 +6400,8 @@ void testInputRecorder()
     }
     {   // failures leave nothing behind
         sls::InputRecorder rec;
-        const auto bad = juce::File ("/proc/no-such-folder/take.wav");
+        dir.getChildFile ("a-file").replaceWithText ("not a folder");
+        const auto bad = dir.getChildFile ("a-file").getChildFile ("take.wav"); // its folder is a file (0.75.0: /proc was Linux only)
         check (rec.start (bad, 48000.0, sls::InputRecorder::Channels::Mono, 0).isNotEmpty() && ! rec.isActive(), "an impossible location is reported");
         check (rec.start (dir.getChildFile ("x.wav"), 0.0, sls::InputRecorder::Channels::Mono, 0).isNotEmpty(), "no sample rate (no device) is reported");
         check (rec.start (dir.getChildFile ("a.wav"), 48000.0, sls::InputRecorder::Channels::Mono, 0).isEmpty()
@@ -14038,6 +14042,12 @@ int main (int argc, char** argv)
 {
     if (runCrashChild (argc, argv))
         return 0;
+#if defined(_WIN32)
+    // Windows (0.75.0): every line reaches the log at once (a pipe is otherwise fully buffered, and a crash would lose the last
+    // lines), and a crash of the tests themselves leaves its report in %TEMP%\sls-tests-crash for the CI to show.
+    std::setvbuf (stdout, nullptr, _IONBF, 0);
+    sls::crash::install ({ std::filesystem::temp_directory_path() / "sls-tests-crash", "tests" });
+#endif
     testProjectModel();
     testSingleNote();
     testSampleAccuracy();
