@@ -884,7 +884,7 @@ void PianoRoll::mouseDown (const juce::MouseEvent& e)
     {
         dragMode = Drag::Playback;
         if (onPlaybackStart)
-            onPlaybackStart (std::max (0, xToTick (e.position.x)));
+            onPlaybackStart (std::max (0, static_cast<int> (xToTick (e.position.x))));
         return;
     }
 
@@ -1071,7 +1071,7 @@ void PianoRoll::mouseDrag (const juce::MouseEvent& e)
     if (dragMode == Drag::Playback) // 0.71.0: the playhead follows the mouse
     {
         if (onPlaybackMove)
-            onPlaybackMove (std::max (0, xToTick (e.position.x)));
+            onPlaybackMove (std::max (0, static_cast<int> (xToTick (e.position.x))));
         return;
     }
     if (dragMode == Drag::Paint) // 0.62.0: one note after another along the stroke, each on the key under the mouse

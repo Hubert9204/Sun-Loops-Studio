@@ -8919,6 +8919,165 @@ void testFlParity070()
     }
 }
 
+// 0.71.0: the features 0.70.0 left narrower than FL Studio's: mod X / mod Y and the graph editor's shift, the sampler's envelopes
+// of pan / cutoff / resonance / pitch, the controllers' second target, punch markers, launch modes and the pads' layout.
+void testFlParity071()
+{
+    std::cout << "FL Studio parity (0.71.0)\n";
+    const auto leftOf = [] (const juce::AudioBuffer<float>& b) { return std::vector<float> (b.getReadPointer (0), b.getReadPointer (0) + b.getNumSamples()); };
+
+    // --- shift: the note starts later by its share of a 16th
+    {
+        auto plainNote = sls::Note { 69, 0, kBeat, 0.8f };
+        auto shifted = plainNote;
+        shifted.shift = 0.5f;
+        const auto a = leftOf (sls::renderToBuffer (oneBar ({ synthChannel ({ plainNote }) }), {}));
+        const auto b = leftOf (sls::renderToBuffer (oneBar ({ synthChannel ({ shifted }) }), {}));
+        const int onA = firstOnset (a.data(), static_cast<int> (a.size()), 0.01f), onB = firstOnset (b.data(), static_cast<int> (b.size()), 0.01f);
+        // half a 16th = 60 ticks = 1/8 of a beat at 120 BPM = 3000 samples
+        check (onA >= 0 && std::abs ((onB - onA) - 3000) < 8, "shift: half a 16th starts the note 3000 samples later (" + std::to_string (onB - onA) + ")");
+        const auto project = sls::Project::make ({ synthChannel ({ shifted }) }, 4 * kBeat);
+        check (project.channels[0].notes.size() == 1 && project.channels[0].notes[0].startTick == 60, "shift: the played note starts at tick 60");
+    }
+
+    // --- mod X / mod Y on a filtered sampler
+    {
+        auto channel = samplerChannel (sineSample (2000.0, 1.0, 48000.0), { sls::Note { 60, 0, kBeat, 1.0f } });
+        channel.sampler.filter = sls::SamplerFilter::LowPass;
+        channel.sampler.cutoff = 0.434f; // about 400 Hz
+        const auto level = [&] (float modX, float modY)
+        {
+            auto c = channel;
+            c.notes[0].modX = modX;
+            c.notes[0].modY = modY;
+            const auto out = leftOf (sls::renderToBuffer (oneBar ({ c }), {}));
+            return rmsOf (out, 4000, 20000);
+        };
+        const double closed = level (0.5f, 0.5f), opened = level (1.0f, 0.5f), shut = level (0.0f, 0.5f);
+        check (opened > 4.0 * closed && closed > 4.0 * shut, "mod X: the note's cutoff moves 2 octaves up and down");
+        auto resonant = channel;
+        resonant.sampler.cutoff = 0.6f; // about 1.25 kHz: the 2 kHz tone is near the peak of a resonance
+        resonant.sampler.resonance = 0.4f;
+        const auto res = [&] (float modY)
+        {
+            auto c = resonant;
+            c.notes[0].modY = modY;
+            c.notes[0].modX = 0.66f; // (the cutoff moved up near the tone)
+            return rmsOf (leftOf (sls::renderToBuffer (oneBar ({ c }), {})), 4000, 20000);
+        };
+        check (res (1.0f) > 1.3 * res (0.0f), "mod Y: the note's resonance raises the level at the cutoff");
+        sls::Note n;
+        n.modX = 0.75f;
+        n.modY = 0.2f;
+        n.shift = 0.25f;
+        auto doc = sls::ProjectDocument::blank();
+        doc.arrangement.patterns[0].notes.resize (1);
+        doc.arrangement.patterns[0].notes[0] = { n };
+        const auto parsed = sls::ProjectDocument::fromJson (doc.toJson());
+        bool kept = parsed.document.has_value() && ! parsed.document->arrangement.patterns.empty()
+                    && ! parsed.document->arrangement.patterns[0].notes.empty() && parsed.document->arrangement.patterns[0].notes[0].size() == 1;
+        if (kept)
+        {
+            const auto& back = parsed.document->arrangement.patterns[0].notes[0][0];
+            kept = std::abs (back.modX - 0.75f) < 1.0e-6f && std::abs (back.modY - 0.2f) < 1.0e-6f && std::abs (back.shift - 0.25f) < 1.0e-6f;
+        }
+        check (kept, "mod X, mod Y and shift survive a save and a load");
+    }
+
+    // --- the sampler's envelopes of pitch and pan
+    {
+        auto channel = samplerChannel (sineSample (500.0, 1.5, 48000.0), { sls::Note { 60, 0, 2 * kBeat, 1.0f } });
+        auto& pitch = channel.sampler.modEnvelopes[sls::SamplerSettings::EnvPitch];
+        pitch.on = true;
+        pitch.attack = 0.0f;
+        pitch.decay = 0.5f;
+        pitch.sustain = 0.0f;
+        pitch.amount = 0.5f; // 12 semitones at the top
+        const auto out = leftOf (sls::renderToBuffer (oneBar ({ channel }), {}));
+        check (toneEnergy (out.data(), 200, 2600, 1000.0) > 3.0 * toneEnergy (out.data(), 200, 2600, 500.0)
+                   && toneEnergy (out.data(), 36000, 46000, 500.0) > 3.0 * toneEnergy (out.data(), 36000, 46000, 1000.0),
+               "sampler: the pitch envelope starts the note an octave up and brings it down");
+        auto panned = samplerChannel (sineSample (500.0, 1.5, 48000.0), { sls::Note { 60, 0, 2 * kBeat, 1.0f } });
+        auto& pan = panned.sampler.modEnvelopes[sls::SamplerSettings::EnvPan];
+        pan.on = true;
+        pan.attack = 0.0f;
+        pan.decay = 10.0f;
+        pan.sustain = 1.0f;
+        pan.amount = -1.0f; // fully left
+        const auto stereo = sls::renderToBuffer (oneBar ({ panned }), {});
+        double left = 0.0, right = 0.0;
+        for (int i = 4000; i < 20000; ++i)
+        {
+            left += std::abs (stereo.getSample (0, i));
+            right += std::abs (stereo.getSample (1, i));
+        }
+        check (left > 20.0 * right, "sampler: the pan envelope moves the note to the left");
+        auto cutoff = samplerChannel (sineSample (500.0, 1.5, 48000.0), { sls::Note { 60, 0, 2 * kBeat, 1.0f } });
+        cutoff.sampler.modEnvelopes[sls::SamplerSettings::EnvCutoff].on = true; // no filter: it does nothing
+        const auto plainOut = leftOf (sls::renderToBuffer (oneBar ({ samplerChannel (sineSample (500.0, 1.5, 48000.0), { sls::Note { 60, 0, 2 * kBeat, 1.0f } }) }), {}));
+        check (leftOf (sls::renderToBuffer (oneBar ({ cutoff }), {})) == plainOut, "sampler: a cutoff envelope without a filter does nothing");
+
+        sls::SamplerSettings set;
+        set.modEnvelopes[sls::SamplerSettings::EnvResonance] = { true, 0.2f, 0.4f, 0.3f, 0.6f, -0.7f };
+        const auto back = sls::samplerSettingsFromVar (sls::samplerSettingsToVar (set));
+        const auto& e = back.modEnvelopes[sls::SamplerSettings::EnvResonance];
+        check (e.on && e.attack == 0.2f && e.decay == 0.4f && e.sustain == 0.3f && e.release == 0.6f && e.amount == -0.7f
+                   && ! back.modEnvelopes[sls::SamplerSettings::EnvPan].on,
+               "sampler: the envelopes survive a save and a load");
+    }
+
+    // --- a controller's second target, inverted
+    {
+        auto pad = samplerChannel (sineSample (1000.0, 1.5, 48000.0), { sls::Note { 60, 0, 2 * kBeat, 1.0f } });
+        pad.volume = 0.2f;
+        const auto render = [&] (float invert)
+        {
+            auto project = oneBar ({ pad });
+            auto controller = slotWith (sls::EffectType::FormulaController, { 0.0f, 0.0f, 0.0f, 0.0f, 9.0f, 1.0f, 0.0f, 2.0f, 1.0f, invert });
+            controller.formula = sls::Formula::compile ("1"); // first target: slot 9, empty; second: slot 2, the Panomatic's volume
+            project.tracks[0].slots[0] = controller;
+            project.tracks[0].slots[1] = sls::EffectSlot::make (sls::EffectType::Panomatic);
+            return rmsOf (leftOf (sls::renderToBuffer (project, {})), 12000, 36000);
+        };
+        check (render (1.0f) < 0.01 * render (0.0f) && render (0.0f) > 0.01, "controllers: the second target, and turned upside down");
+        check (sls::effectControllerTarget2 (sls::EffectType::PeakController) == 9 && sls::effectControllerTarget2 (sls::EffectType::EnvelopeController) == 11
+                   && sls::effectControllerTarget2 (sls::EffectType::FormulaController) == 6 && sls::effectControllerTarget2 (sls::EffectType::Delay) < 0
+                   && std::string (sls::effectParamInfo (sls::EffectType::PeakController, 9).name) == "Target 2 track",
+               "controllers: where the second target is kept");
+    }
+
+    // --- punch markers, launch modes, the pads' layout
+    {
+        sls::Arrangement a;
+        check (a.punchRange().first < 0, "punch: none without punch markers");
+        a.markers.push_back ({ 960, "in", sls::MarkerAction::PunchIn });
+        check (a.punchRange().first == 960 && a.punchRange().second == std::numeric_limits<int>::max(), "punch: a punch in alone keeps to the end");
+        a.markers.push_back ({ 480, "out early", sls::MarkerAction::PunchOut }); // before the punch in: ignored
+        a.markers.push_back ({ 3840, "out", sls::MarkerAction::PunchOut });
+        check (a.punchRange().first == 960 && a.punchRange().second == 3840, "punch: in and out, a punch out before the punch in ignored");
+
+        auto doc = sls::ProjectDocument::blank();
+        doc.arrangement.markers = a.markers;
+        doc.arrangement.clips.push_back ({ 0, 0, 0, 4 * kBeat });
+        doc.arrangement.clips.back().launchMode = 2;
+        doc.arrangement.clips.back().launchSync = true;
+        const auto parsed = sls::ProjectDocument::fromJson (doc.toJson());
+        bool kept = parsed.document.has_value() && parsed.document->arrangement.markers.size() == 3 && ! parsed.document->arrangement.clips.empty();
+        if (kept)
+        {
+            const auto& d = *parsed.document;
+            kept = d.arrangement.markers[0].action == sls::MarkerAction::PunchIn && d.arrangement.markers[2].action == sls::MarkerAction::PunchOut
+                && d.arrangement.clips.back().launchMode == 2 && d.arrangement.clips.back().launchSync;
+        }
+        check (kept, "punch markers and a clip's launch mode survive a save and a load");
+
+        const auto first = sls::performancePad (48, 48, 4), stop = sls::performancePad (51, 48, 4), second = sls::performancePad (52, 48, 4);
+        check (first.kind == sls::PadAction::Kind::Launch && first.row == 0 && stop.kind == sls::PadAction::Kind::StopRow && second.row == 1
+                   && second.column == 0 && sls::performancePad (47, 48, 4).kind == sls::PadAction::Kind::None,
+               "pads: another first note and four pads to a row");
+    }
+}
+
 void testRackPlaylistToolbar062()
 {
     std::cout << "Layer channel, master pitch, marker actions, playlist groups (0.62.0)\n";
@@ -13570,6 +13729,7 @@ int main()
     testMixer062();
     testRackPlaylistToolbar062();
     testFlParity070();
+    testFlParity071();
     testOneShot();
     testAutomation();
     testMidiImport();

@@ -141,15 +141,6 @@ namespace
 {
 constexpr int kOpenEnd = std::numeric_limits<int>::max();
 
-bool sameClip (const Clip& a, const Clip& b) noexcept
-{
-    return a.pattern == b.pattern && a.track == b.track && a.startTick == b.startTick && a.lengthTicks == b.lengthTicks && a.offsetTicks == b.offsetTicks;
-}
-
-bool sameAudio (const AudioClip& a, const AudioClip& b) noexcept
-{
-    return a.track == b.track && a.startTick == b.startTick && a.lengthTicks == b.lengthTicks && a.name == b.name;
-}
 } // namespace
 
 int MainComponent::performanceBoundary() const

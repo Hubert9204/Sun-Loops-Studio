@@ -1537,8 +1537,8 @@ void Player::samplerVoiceOn (const Channel& channel, int channelIndex, const Not
     for (size_t e = 0; e < 4; ++e)
     {
         const auto& env = set.modEnvelopes[e];
-        const bool needsFilter = e == SamplerSettings::EnvCutoff || e == SamplerSettings::EnvResonance;
-        const bool on = env.on && std::abs (env.amount) > 0.0f && ! (needsFilter && set.filter == SamplerFilter::Off);
+        const bool onFilter = e == SamplerSettings::EnvCutoff || e == SamplerSettings::EnvResonance;
+        const bool on = env.on && std::abs (env.amount) > 0.0f && ! (onFilter && set.filter == SamplerFilter::Off);
         const auto steps = [this] (float seconds) { return static_cast<float> (kModStep / std::max (static_cast<double> (kModStep), static_cast<double> (seconds) * sampleRate)); };
         v.menvAmount[e] = on ? env.amount : 0.0f;
         v.menvLevel[e] = 0.0f;
