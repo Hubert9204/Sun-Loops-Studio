@@ -288,7 +288,7 @@ void MainComponent::performanceStop (int track)
 }
 
 // 0.70.0: the window's rows as the panel shows them: each playlist track that holds pattern clips, its clips in time order.
-std::vector<std::vector<int>> MainComponent::performanceRows (std::vector<int>* tracks) const
+std::vector<std::vector<int>> MainComponent::performanceRows (std::vector<int>* rowTracks) const
 {
     std::vector<std::vector<int>> rows;
     for (int t = 0; t < arrangement.trackCount(); ++t)
@@ -302,8 +302,8 @@ std::vector<std::vector<int>> MainComponent::performanceRows (std::vector<int>* 
         std::sort (onTrack.begin(), onTrack.end(), [this] (int a, int b)
                    { return arrangement.clips[static_cast<size_t> (a)].startTick < arrangement.clips[static_cast<size_t> (b)].startTick; });
         rows.push_back (std::move (onTrack));
-        if (tracks != nullptr)
-            tracks->push_back (t);
+        if (rowTracks != nullptr)
+            rowTracks->push_back (t);
     }
     return rows;
 }
@@ -314,13 +314,13 @@ void MainComponent::performancePadNote (int note)
     const auto action = performancePad (note);
     if (action.kind == PadAction::Kind::None || ! performanceOn)
         return;
-    std::vector<int> tracks;
-    const auto rows = performanceRows (&tracks);
+    std::vector<int> rowTracks;
+    const auto rows = performanceRows (&rowTracks);
     if (action.row >= static_cast<int> (rows.size()))
         return;
     const auto& row = rows[static_cast<size_t> (action.row)];
     if (action.kind == PadAction::Kind::StopRow)
-        performanceStop (tracks[static_cast<size_t> (action.row)]);
+        performanceStop (rowTracks[static_cast<size_t> (action.row)]);
     else if (action.column < static_cast<int> (row.size()))
         performanceLaunch (row[static_cast<size_t> (action.column)]);
 }
