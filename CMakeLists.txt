@@ -21,7 +21,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # MSVC. windows.h without its min / max macros (but whole: JUCE needs shellapi.h and the rest), M_PI and friends from <cmath>, the C library's plain functions (getenv...)
 # without "deprecated" warnings; the sources are UTF-8 (Italian text).
 if(WIN32)
-    add_compile_definitions(NOMINMAX _USE_MATH_DEFINES _CRT_SECURE_NO_WARNINGS _WIN32_WINNT=0x0A00)
+    add_compile_definitions(NOMINMAX= _USE_MATH_DEFINES _CRT_SECURE_NO_WARNINGS) # (NOMINMAX empty, as JUCE defines it again)
     if(MSVC)
         add_compile_options(/utf-8 $<$<CXX_COMPILER_ID:MSVC>:/bigobj> $<$<CXX_COMPILER_ID:MSVC>:/Zc:__cplusplus>)
         # Function names for the crash reports' stack traces: a .pdb next to each program, also in Release builds (with Clang only

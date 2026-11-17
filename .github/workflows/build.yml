@@ -81,6 +81,27 @@ jobs:
         if: always()
         shell: pwsh
         run: scripts\build_windows.ps1 -BuildDir build
+      # Starts the packed program as a user would (the folder of the zip), lets it run for half a minute and checks that it is
+      # still running, that its session log says it started and that no crash report was left; the screen goes into the log.
+      - name: Smoke test (start the packed program)
+        shell: pwsh
+        run: |
+          Get-ChildItem -Recurse "build\stage\Sun Loops Studio" | Where-Object { -not $_.PSIsContainer } | ForEach-Object { "{0,12:N0}  {1}" -f $_.Length, $_.FullName.Substring((Resolve-Path "build\stage").Path.Length + 1) }
+          $p = Start-Process -FilePath "build\stage\Sun Loops Studio\Sun Loops Studio.exe" -PassThru
+          Start-Sleep -Seconds 40
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $screen = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bitmap = New-Object System.Drawing.Bitmap $screen.Width, $screen.Height
+          [System.Drawing.Graphics]::FromImage($bitmap).CopyFromScreen($screen.Location, [System.Drawing.Point]::Empty, $screen.Size)
+          $stream = New-Object System.IO.MemoryStream
+          $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
+          "SCREENSHOT-BEGIN"; [Convert]::ToBase64String($stream.ToArray()); "SCREENSHOT-END"
+          $state = "$env:LOCALAPPDATA\SunLoopsStudio"
+          Get-Content "$state\logs\session.log" -Tail 60
+          "File type: " + (Get-ItemProperty "HKCU:\Software\Classes\SunLoopsStudio.Project\shell\open\command" -ErrorAction SilentlyContinue).'(default)'
+          if ($p.HasExited) { throw "the program ended by itself (exit code $($p.ExitCode))" }
+          Stop-Process -Id $p.Id -Force
+          if (Test-Path "$state\crash_last_session.log") { Get-Content "$state\crash_last_session.log"; throw "a crash report was written" }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
