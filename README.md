@@ -2,7 +2,7 @@
 
 *[Italiano](README.it.md)*
 
-An open source, loop-based music production program for Linux, written in C++20 with JUCE 8. You build
+An open source, loop-based music production program for Linux, macOS and Windows, written in C++20 with JUCE 8. You build
 beats and melodies in a **Channel Rack**, write notes in a **Piano Roll**, arrange patterns on a
 **Playlist** (together with audio files and recordings), balance them in a **Mixer** with effects and export the result
 to WAV, MP3, Ogg, AAC, FLAC or AIFF. A **Browser** on the left
@@ -26,8 +26,13 @@ From the [Releases page](https://github.com/Hubert9204/Sun-Loops-Studio/releases
   Open the disk image and drag **Sun Loops Studio** onto **Applications**. The app is not signed with an Apple Developer
   certificate, so the first time macOS refuses to open it: right-click (or Control-click) the app > **Open** > **Open**, or
   *System Settings > Privacy & Security > Open Anyway*. Recording asks once for the microphone.
+- **Windows** (since 0.75.0): `Sun-Loops-Studio-<version>-Windows-x64-Setup.exe`, for Windows 10 and 11 (64-bit). It installs for
+  you alone without an administrator password (or for everyone, if you choose so), adds a Start menu entry and opens `.slp`
+  projects with a double-click. `Sun-Loops-Studio-<version>-Windows-x64.zip` is the same program without installing: unpack it and
+  start `Sun Loops Studio.exe`. The program is not signed with a code-signing certificate, so SmartScreen may stop the first
+  start: **More info** > **Run anyway**. Details: [On Windows](docs/user-guide.md#on-windows-0750).
 
-Both contain the program, its sounds and its four instruments: the SunBurst and HexForge synthesizers, the SunRiff guitar and the
+All of them contain the program, its sounds and its four instruments: the SunBurst and HexForge synthesizers, the SunRiff guitar and the
 SunSymphony orchestral sampler (its orchestra is downloaded from inside it). On Linux:
 
 ```bash

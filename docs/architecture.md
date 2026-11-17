@@ -610,7 +610,7 @@ Without the note the system text forbids closing slogans, and `tidyAnswer` remov
 no model, downloading, idle, loading, ready, answering, failed. The download (`http::download`, libcurl) writes to
 `<file>.part`, continues an interrupted one with an HTTP range, starts over when the server sends the whole file, checks the
 free space first and the `GGUF` mark at the end. Models live in `~/.local/share/sun-loops-studio/helios` (XDG_DATA_HOME),
-`~/Library/Application Support/Sun Loops Studio/Helios` or `%APPDATA%\Sun Loops Studio\Helios`. The assistant belongs to
+`~/Library/Application Support/Sun Loops Studio/Helios` or `%LOCALAPPDATA%\Sun Loops Studio\Helios`. The assistant belongs to
 `MainComponent` and outlives the window: closing the window (or unticking LLM mode) stops the helper and gives its memory back,
 the conversation stays and is read again by the next helper. Messages from a helper that was stopped since are ignored (each
 helper has a number). The settings remember `helios.llmMode` and `helios.model`.

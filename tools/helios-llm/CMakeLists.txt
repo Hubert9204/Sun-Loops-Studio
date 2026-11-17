@@ -28,7 +28,8 @@ message(STATUS "sun-loops-helios: building for ${SLS_HELIOS_ARCH}")
 # Only the library: no tools, server, tests, network or OpenMP (ggml's own thread pool), linked in statically.
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 foreach(off LLAMA_BUILD_COMMON LLAMA_BUILD_TESTS LLAMA_BUILD_TOOLS LLAMA_BUILD_EXAMPLES LLAMA_BUILD_SERVER LLAMA_BUILD_APP
-            LLAMA_BUILD_UI LLAMA_OPENSSL LLAMA_ALL_WARNINGS GGML_NATIVE GGML_OPENMP GGML_BLAS GGML_BACKEND_DL)
+            LLAMA_BUILD_UI LLAMA_OPENSSL LLAMA_ALL_WARNINGS GGML_NATIVE GGML_OPENMP GGML_BLAS GGML_BACKEND_DL
+            GGML_CCACHE) # (0.75.0: ccache would also be put before the Windows resource compiler, which then fails)
     set(${off} OFF CACHE BOOL "" FORCE)
 endforeach()
 

@@ -6,7 +6,9 @@
 #include <set>
 #include <cmath>
 #include <cstring>
+#include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <iostream>
 #include <limits>
 #include <map>
@@ -17,6 +19,7 @@
 #include <juce_audio_formats/juce_audio_formats.h>
 
 #include "audio/SpeechSynth.h"
+#include "support/CrashHandler.h"
 #include "audio/Arrangement.h"
 #include "audio/TypingKeyboard.h"
 #include "audio/AudioExport.h"
@@ -114,6 +117,12 @@ void check (bool ok, const char* name)
         ++failures;
 }
 void check (bool ok, const std::string& name) { check (ok, name.c_str()); }
+
+// The same file, as this system writes its path ("/home/me/a.wav" becomes "C:\home\me\a.wav" on Windows, 0.75.0).
+bool samePath (const std::string& path, const char* expected)
+{
+    return juce::File (juce::String (juce::CharPointer_UTF8 (path.c_str()))) == juce::File (expected);
+}
 
 constexpr double kSr = 48000.0;
 constexpr int kBeat = sls::kTicksPerBeat;
@@ -3944,7 +3953,7 @@ void testFlpFiles()
     {
         const auto& d = *back.document;
         check (d.channels.size() == 2 && d.channels[0].name == "Lead" && d.channels[0].instrument == sls::Instrument::Sampler
-                   && d.channels[1].instrument == sls::Instrument::Sampler && d.sampleSources[1] == "/home/me/Samples/kick.wav" && d.channels[1].rootPitch == 48,
+                   && d.channels[1].instrument == sls::Instrument::Sampler && samePath (d.sampleSources[1], "/home/me/Samples/kick.wav") && d.channels[1].rootPitch == 48,
                "the channels come back (the synth as an empty Sampler, as FL Studio would have it); the audio file is not a rack channel");
         check (d.arrangement.patternLength (0) == 2 * 1920 && d.arrangement.patternLength (1) == 2 * 1920 && d.arrangement.patterns.size() == 2, "two-bar patterns, both of them");
         const auto& n = d.arrangement.patterns[0].notes[0];
@@ -3956,7 +3965,7 @@ void testFlpFiles()
         for (const auto& c : d.arrangement.clips)
             clipsOnTrack0 += c.track == 0 && c.pattern == 0 ? 1 : 0;
         check (d.arrangement.clips.size() == 3 && clipsOnTrack0 == 2, "the pattern clips come back (one per repeat)");
-        check (d.arrangement.audioClips.size() == 1 && d.arrangement.audioClips[0].data->source == "/home/me/Audio/vocal take.wav"
+        check (d.arrangement.audioClips.size() == 1 && samePath (d.arrangement.audioClips[0].data->source, "/home/me/Audio/vocal take.wav")
                    && d.arrangement.audioClips[0].startTick == 960 && d.arrangement.audioClips[0].lengthTicks == 5000,
                "the audio clip comes back with its file, place and length");
         check (d.arrangement.playlistTracks[0].name == "Beat" && d.arrangement.playlistTracks[0].colour == 0xffe0524au,
@@ -6397,8 +6406,10 @@ void testInputRecorder()
     }
     {   // failures leave nothing behind
         sls::InputRecorder rec;
-        const auto bad = juce::File ("/proc/no-such-folder/take.wav");
+        dir.getChildFile ("a-file").replaceWithText ("not a folder");
+        const auto bad = dir.getChildFile ("a-file").getChildFile ("take.wav"); // its folder is a file (0.75.0: /proc was Linux only)
         check (rec.start (bad, 48000.0, sls::InputRecorder::Channels::Mono, 0).isNotEmpty() && ! rec.isActive(), "an impossible location is reported");
+        dir.getChildFile ("a-file").deleteFile();
         check (rec.start (dir.getChildFile ("x.wav"), 0.0, sls::InputRecorder::Channels::Mono, 0).isNotEmpty(), "no sample rate (no device) is reported");
         check (rec.start (dir.getChildFile ("a.wav"), 48000.0, sls::InputRecorder::Channels::Mono, 0).isEmpty()
                    && rec.start (dir.getChildFile ("b.wav"), 48000.0, sls::InputRecorder::Channels::Mono, 0).isNotEmpty(),
@@ -11444,7 +11455,8 @@ void testProjectWithSamples()
     const auto text = projectFile.loadFileAsString();
     check (text.contains ("Samples/kick.wav") && ! text.contains (a.getFullPathName()),
            "the copies are referred to by relative paths");
-    check (notes.size() == 1 && notes[0].contains ("gone.wav") && text.contains (dir.getChildFile ("gone.wav").getFullPathName()),
+    // (as JSON writes it: a Windows path's backslashes doubled, 0.75.0)
+    check (notes.size() == 1 && notes[0].contains ("gone.wav") && text.contains (dir.getChildFile ("gone.wav").getFullPathName().replace ("\\", "\\\\")),
            "a missing file is reported and keeps its old path");
 
     // Move the folder: the project still finds its sounds.
@@ -13293,6 +13305,9 @@ void testPluginHosting()
         bool listed = false;
         for (int i = 0; i < extra.getNumPaths(); ++i)
             listed = listed || extra[i] == ladspaHome;
+#if JUCE_WINDOWS // (0.75.0: no LADSPA on Windows)
+        listed = extra.getNumPaths() == 0;
+#endif
         check (listed && sls::PluginHost::distributionPaths ("Nonsense").getNumPaths() == 0,
                "extra plugin folders: an existing ~/.ladspa is added, unknown formats get none");
         if (made)
@@ -14032,9 +14047,18 @@ void testSessionLog();
 void testHeliosChat();     // tests/test_helios.cpp
 void testHeliosDownload(); // tests/test_support.cpp
 void testDesktopIntegration(); // tests/test_support.cpp
+bool runCrashChild (int argc, char** argv); // tests/test_support.cpp (Windows: the crash tests' child process)
 
-int main()
+int main (int argc, char** argv)
 {
+    if (runCrashChild (argc, argv))
+        return 0;
+#if defined(_WIN32)
+    // Windows (0.75.0): every line reaches the log at once (a pipe is otherwise fully buffered, and a crash would lose the last
+    // lines), and a crash of the tests themselves leaves its report in %TEMP%\sls-tests-crash for the CI to show.
+    std::setvbuf (stdout, nullptr, _IONBF, 0);
+    sls::crash::install ({ std::filesystem::temp_directory_path() / "sls-tests-crash", "tests" });
+#endif
     testProjectModel();
     testSingleNote();
     testSampleAccuracy();

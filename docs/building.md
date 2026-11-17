@@ -51,6 +51,40 @@ open "build/SunLoopsStudio_artefacts/Release/Sun Loops Studio.app"
 hosted on macOS; VST3, LV2 and **Audio Units** are. The continuous integration builds and tests every push on Fedora and on
 macOS, and keeps the `.dmg` of each run as an artifact (*Actions* > the run > *Artifacts*).
 
+### Windows (0.75.0)
+
+The program runs on Windows 10 and 11 (x64). Building it needs **Visual Studio 2022** (or newer) or its free *Build Tools*, with the workload
+*Desktop development with C++* and the component *C++ Clang Compiler for Windows* (the build uses that Clang, `clang-cl`, as the
+continuous integration and the releases do; CMake and Ninja come with Visual Studio), and **Git**. libcurl is built in from its
+source (with Windows's own TLS), so nothing else is needed. For the installer also **Inno Setup 6** (`winget install
+JRSoftware.InnoSetup`).
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1
+```
+
+The script finds Visual Studio by itself, builds in `build-windows\` and writes to `dist\` the installer
+`Sun-Loops-Studio-<version>-Windows-x64-Setup.exe` (`scripts\windows\SunLoopsStudio.iss`) and the zip
+`Sun-Loops-Studio-<version>-Windows-x64.zip`, both holding the folder the program is installed as: `Sun Loops Studio.exe`, its
+`.pdb` (the function names of crash reports), `sun-loops-helios.exe`, and SunBurst, HexForge, SunSymphony and SunRiff in `VST3\`.
+The C++ runtime is linked into every program and plugin, so no Visual C++ Redistributable is needed. By hand, from a *x64 Native
+Tools Command Prompt for VS 2022*:
+
+```bat
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl
+cmake --build build
+"build\SunLoopsStudio_artefacts\Release\Sun Loops Studio.exe"
+build\SunLoopsStudioTests_artefacts\Release\SunLoopsStudioTests.exe
+```
+
+The differences from the other systems are written side by side in the code: the crash handler (`src/support/CrashHandlerWindows.cpp`:
+unhandled structured exceptions and `abort()`, the stack walked with DbgHelp), the built-in sound library linked in as a resource
+(`src/audio/SoundLibraryData.rc.in`), the folders (`%LOCALAPPDATA%`), the `.slp` file type for a copy started from the zip
+(`src/support/DesktopIntegration.cpp`) and the tests' child processes (no `fork()`: the test program starts itself again with
+`--crash-child`). LADSPA and Audio Units are not hosted on Windows; VST3 and LV2 are. The continuous integration builds and tests
+every push on Windows too, starts the program from the unpacked zip, installs, starts and uninstalls it with the installer,
+and keeps the installer and the zip of each run as artifacts.
+
 ## Build
 
 ```bash
@@ -193,7 +227,9 @@ CHANGELOG section (`scripts/release_notes.py 0.51.0` prints it). Pushing a tag (
 checking that the tag matches `CMakeLists.txt`; *Run workflow* with an existing tag publishes it again, replacing its files.
 From then on every copy of the program from 0.43.0 on finds the release through its update check and offers the AppImage.
 Since 0.63.0 a second job builds the macOS disk image on a GitHub Mac and adds it (with `SHA256SUMS-macOS.txt`) to the same
-release; the program on a Mac offers that `.dmg` as its update.
+release; the program on a Mac offers that `.dmg` as its update. Since 0.75.0 a third job builds the Windows installer and zip on a
+GitHub Windows machine (`scripts/build_windows.ps1`) and adds them with `SHA256SUMS-Windows.txt`; the program on Windows offers the
+installer as its update.
 
 ## Crash reports and the update check (0.43.0)
 

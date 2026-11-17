@@ -2,7 +2,7 @@
 
 *[English](README.md)*
 
-Un programma open source per produrre musica a loop su Linux, scritto in C++20 con JUCE 8. Costruisci ritmi e
+Un programma open source per produrre musica a loop su Linux, macOS e Windows, scritto in C++20 con JUCE 8. Costruisci ritmi e
 melodie nel **Channel Rack**, scrivi le note nel **Piano Roll**, disponi i pattern nella **Playlist** (insieme a file audio e registrazioni), bilanciali nel
 **Mixer** con effetti ed esporti il risultato in WAV, MP3, Ogg, AAC, FLAC o AIFF. Un **Browser** a sinistra raccoglie i tuoi suoni; ogni altro
 strumento sta in un pannello mobile che puoi spostare, ridimensionare, sovrapporre, aprire e chiudere.
@@ -18,8 +18,20 @@ strumento sta in un pannello mobile che puoi spostare, ridimensionare, sovrappor
 
 ## Download
 
-Scarica l'ultima **AppImage** dalla [pagina delle release](https://github.com/Hubert9204/Sun-Loops-Studio/releases/latest)
-(`Sun-Loops-Studio-<versione>-x86_64.AppImage`, un solo file con il programma, i suoi suoni e i suoi quattro strumenti: i sintetizzatori SunBurst e HexForge, la chitarra SunRiff e il campionatore orchestrale SunSymphony, la cui orchestra si scarica dall'interno):
+Dalla [pagina delle release](https://github.com/Hubert9204/Sun-Loops-Studio/releases/latest):
+
+- **Linux**: `Sun-Loops-Studio-<versione>-x86_64.AppImage` (vedi sotto);
+- **macOS** (dalla 0.63.0): `Sun-Loops-Studio-<versione>-macOS.dmg`, una sola app per i Mac Apple silicon e Intel, macOS 10.15
+  Catalina o successivo. Apri l'immagine disco e trascina **Sun Loops Studio** su **Applicazioni**; la prima volta: tasto destro
+  sull'app > **Apri** > **Apri** (l'app non è firmata con un certificato Apple Developer);
+- **Windows** (dalla 0.75.0): `Sun-Loops-Studio-<versione>-Windows-x64-Setup.exe`, per Windows 10 e 11 (64 bit). Installa solo
+  per te senza password di amministratore (o per tutti, se lo scegli), aggiunge una voce nel menu Start e apre i progetti `.slp`
+  con un doppio clic. `Sun-Loops-Studio-<versione>-Windows-x64.zip` è lo stesso programma senza installazione: estrailo e avvia
+  `Sun Loops Studio.exe`. Il programma non è firmato con un certificato di firma del codice, quindi SmartScreen può fermare il
+  primo avvio: **Ulteriori informazioni** > **Esegui comunque**. Dettagli: [Su Windows](docs/user-guide.it.md#su-windows-0750).
+
+Tutti contengono il programma, i suoi suoni e i suoi quattro strumenti: i sintetizzatori SunBurst e HexForge, la chitarra SunRiff
+e il campionatore orchestrale SunSymphony, la cui orchestra si scarica dall'interno. Su Linux:
 
 ```bash
 chmod +x Sun-Loops-Studio-*-x86_64.AppImage

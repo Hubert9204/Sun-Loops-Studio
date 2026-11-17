@@ -10,9 +10,13 @@
 
 #include <juce_audio_formats/juce_audio_formats.h>
 
+#if defined(_WIN32)
+ #include <windows.h>
+#else
 // The archive, linked in by SoundLibraryData.S (see CMakeLists.txt).
 extern "C" const char sls_sound_library[];
 extern "C" const char sls_sound_library_end[];
+#endif
 
 namespace sls
 {
@@ -29,10 +33,25 @@ juce::ZipFile* archive()
 {
     static std::unique_ptr<juce::ZipFile> zip = []
     {
+#if defined(_WIN32)
+        // Windows (0.75.0): the program's resource "SLS_SOUND_LIBRARY" (SoundLibraryData.rc), mapped with the program's file.
+        const char* data = nullptr;
+        size_t size = 0;
+        if (auto* found = ::FindResourceA (nullptr, "SLS_SOUND_LIBRARY", MAKEINTRESOURCEA (10))) // 10: RT_RCDATA
+            if (auto* loaded = ::LoadResource (nullptr, found))
+            {
+                data = static_cast<const char*> (::LockResource (loaded));
+                size = static_cast<size_t> (::SizeofResource (nullptr, found));
+            }
+        if (data == nullptr || size < 22)
+            return std::unique_ptr<juce::ZipFile>();
+        return std::make_unique<juce::ZipFile> (new juce::MemoryInputStream (data, size, false), true);
+#else
         const auto size = static_cast<size_t> (sls_sound_library_end - sls_sound_library);
         if (size < 22) // smaller than an empty zip
             return std::unique_ptr<juce::ZipFile>();
         return std::make_unique<juce::ZipFile> (new juce::MemoryInputStream (sls_sound_library, size, false), true);
+#endif
     }();
     return zip.get();
 }

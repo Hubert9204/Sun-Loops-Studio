@@ -130,7 +130,8 @@ juce::File HeliosAssistant::modelFolder()
 #if JUCE_MAC
     return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Application Support/Sun Loops Studio/Helios");
 #elif JUCE_WINDOWS
-    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Sun Loops Studio/Helios");
+    // Big files: the local application data (%LOCALAPPDATA%), not the roaming one where settings follow the user (0.75.0).
+    return juce::File::getSpecialLocation (juce::File::windowsLocalAppData).getChildFile ("Sun Loops Studio/Helios");
 #else
     // Big files: ~/.local/share (XDG_DATA_HOME), not ~/.config where the settings are.
     const auto xdg = juce::SystemStats::getEnvironmentVariable ("XDG_DATA_HOME", {});

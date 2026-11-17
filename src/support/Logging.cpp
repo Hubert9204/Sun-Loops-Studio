@@ -20,7 +20,13 @@ std::filesystem::path file;
 std::filesystem::path stateDirectory()
 {
     std::filesystem::path base;
-#if defined(__APPLE__)
+#if defined(_WIN32)
+    // Windows (0.75.0): the user's local application data, %LOCALAPPDATA% (C:\Users\<name>\AppData\Local).
+    if (const wchar_t* local = ::_wgetenv (L"LOCALAPPDATA"); local != nullptr && *local != L'\0')
+        base = std::filesystem::path (local);
+    else
+        base = std::filesystem::temp_directory_path();
+#elif defined(__APPLE__)
     // macOS (0.63.0): where programs keep their own files, ~/Library/Application Support.
     if (const char* home = std::getenv ("HOME"); home != nullptr && *home != '\0')
         base = std::filesystem::path (home) / "Library" / "Application Support";

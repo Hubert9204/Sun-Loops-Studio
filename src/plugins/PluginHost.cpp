@@ -244,7 +244,11 @@ juce::FileSearchPath PluginHost::bundledPaths()
         prefixes.add (juce::File (appDir).getChildFile ("usr"));
     const auto executable = juce::File::getSpecialLocation (juce::File::currentExecutableFile);
     prefixes.add (executable.getParentDirectory().getParentDirectory());
-#if JUCE_MAC
+#if JUCE_WINDOWS
+    // 0.75.0: C:\Program Files\Sun Loops Studio\Sun Loops Studio.exe, the bundled plugins in its VST3 folder (the installer and
+    // the zip lay it out so); a development build finds them in build\<Plugin>_artefacts\Release\VST3 as on the other systems.
+    prefixes.add (executable.getParentDirectory());
+#elif JUCE_MAC
     // 0.63.0: Sun Loops Studio.app/Contents/MacOS/Sun Loops Studio. The bundled plugins are in Contents/PlugIns/VST3; a
     // development build's .app sits in build/SunLoopsStudio_artefacts/Release, as the Linux program does.
     const auto contents = executable.getParentDirectory().getParentDirectory();
@@ -256,7 +260,8 @@ juce::FileSearchPath PluginHost::bundledPaths()
 #endif
     for (const auto& prefix : prefixes)
     {
-        juce::Array<juce::File> dirs { prefix.getChildFile ("lib/vst3"), prefix.getChildFile ("lib64/vst3"), prefix.getChildFile ("PlugIns/VST3") };
+        juce::Array<juce::File> dirs { prefix.getChildFile ("lib/vst3"), prefix.getChildFile ("lib64/vst3"), prefix.getChildFile ("PlugIns/VST3"),
+                                       prefix.getChildFile ("VST3") };
         // A development build: build/SunLoopsStudio_artefacts/Release/Sun Loops Studio -> build/<Plugin>_artefacts/Release/VST3
         for (const char* name : { "SunBurst", "HexForge", "SunSymphony", "SunRiff" })
             for (const char* config : { "Release", "Debug" })
@@ -302,18 +307,22 @@ juce::FileSearchPath PluginHost::distributionPaths (const juce::String& formatNa
     };
     if (formatName == "VST3")
     {
+#if ! JUCE_WINDOWS // (0.75.0: Windows has no such folders, and its own are JUCE's defaults)
         for (const char* p : { "/usr/lib64/vst3", "/usr/local/lib64/vst3" })
             addIfThere (p);
+#endif
         const auto bundled = bundledPaths();
         for (int i = 0; i < bundled.getNumPaths(); ++i)
             paths.addIfNotAlreadyThere (bundled[i]);
     }
+#if ! JUCE_WINDOWS
     else if (formatName == "LV2")
         for (const char* p : { "/usr/lib/lv2", "/usr/lib64/lv2", "/usr/local/lib/lv2", "/usr/local/lib64/lv2" })
             addIfThere (p);
     else if (formatName == "LADSPA")
         for (const char* p : { "/usr/lib/ladspa", "/usr/lib64/ladspa", "/usr/local/lib/ladspa", "/usr/local/lib64/ladspa", "~/.ladspa" })
             addIfThere (p);
+#endif
     return paths;
 }
 

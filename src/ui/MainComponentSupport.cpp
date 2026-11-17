@@ -2,7 +2,9 @@
 // audio facts written into crash files, and the status line copied to the session log.
 #include "ui/MainComponent.h"
 
-#include <sys/stat.h>
+#if ! defined(_WIN32)
+ #include <sys/stat.h>
+#endif
 
 #include <spdlog/spdlog.h>
 
@@ -79,7 +81,9 @@ void MainComponent::askForGitHubToken()
                            return;
                        settings->setValue (kTokenKey, typed.trim());
                        settings->saveIfNeeded();
+#if ! defined(_WIN32) // (Windows: the settings are in the user's own %APPDATA% already)
                        ::chmod (settings->getFile().getFullPathName().toRawUTF8(), 0600); // the token: readable by this user only
+#endif
                        statusLabel.setText (typed.trim().isEmpty() ? "No GitHub token: crash reports open in the browser"
                                                                    : "GitHub token saved for crash reports",
                                             juce::dontSendNotification);

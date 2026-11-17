@@ -3,7 +3,18 @@
 #include <algorithm>
 #include <cmath>
 
-#include <unistd.h>
+#if ! defined(_WIN32)
+ #include <unistd.h>
+#endif
+
+// How to install ffmpeg on this system (0.75.0).
+#if defined(_WIN32)
+ #define SLS_FFMPEG_HOW "on Windows: winget install Gyan.FFmpeg, then start Sun Loops Studio again"
+#elif defined(__APPLE__)
+ #define SLS_FFMPEG_HOW "on a Mac: brew install ffmpeg"
+#else
+ #define SLS_FFMPEG_HOW "on Fedora / Nobara: sudo dnf install ffmpeg"
+#endif
 
 namespace sls
 {
@@ -53,6 +64,21 @@ juce::File findFfmpeg()
         return juce::File (fromEnvironment);
 
     juce::StringArray folders;
+#if defined(_WIN32)
+    // Windows (0.75.0): PATH is separated by ';' and the program is ffmpeg.exe. winget's links (winget install Gyan.FFmpeg) and
+    // the usual hand-made C:\ffmpeg\bin are looked at too.
+    folders.addTokens (juce::SystemStats::getEnvironmentVariable ("PATH", {}), ";", "\"");
+    folders.addIfNotAlreadyThere (juce::SystemStats::getEnvironmentVariable ("LOCALAPPDATA", {}) + "\\Microsoft\\WinGet\\Links");
+    for (const char* usual : { "C:\\ffmpeg\\bin", "C:\\Program Files\\ffmpeg\\bin" })
+        folders.addIfNotAlreadyThere (usual);
+    folders.trim();
+    folders.removeEmptyStrings();
+    for (const auto& folder : folders)
+        if (juce::File::isAbsolutePath (folder.unquoted()))
+            if (const auto candidate = juce::File (folder.unquoted()).getChildFile ("ffmpeg.exe"); candidate.existsAsFile())
+                return candidate;
+    return {};
+#else
     folders.addTokens (juce::SystemStats::getEnvironmentVariable ("PATH", {}), ":", "");
     for (const char* usual : { "/usr/bin", "/usr/local/bin", "/bin", "/opt/homebrew/bin" })
         folders.addIfNotAlreadyThere (usual);
@@ -66,6 +92,7 @@ juce::File findFfmpeg()
             return candidate;
     }
     return {};
+#endif
 }
 
 namespace
@@ -218,7 +245,7 @@ juce::Result exportBuffer (juce::AudioBuffer<float> buffer, const RenderOptions&
         if (! ffmpeg.existsAsFile())
             return juce::Result::fail (juce::String (info.extension).substring (1).toUpperCase()
                                        + " export needs the ffmpeg program, which was not found. "
-                                         "Install it (on Fedora / Nobara: sudo dnf install ffmpeg) or choose another format.");
+                                         "Install it (" SLS_FFMPEG_HOW ") or choose another format.");
     }
     if (! file.getParentDirectory().createDirectory())
         return juce::Result::fail ("Cannot create the folder " + file.getParentDirectory().getFullPathName());
