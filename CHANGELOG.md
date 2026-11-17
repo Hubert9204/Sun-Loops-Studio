@@ -8,8 +8,8 @@ ASIO on Windows.
 
 ### Added
 - **ASIO drivers on Windows**: *ASIO* is an audio device type in **Audio...**, next to Windows Audio and DirectSound - the
-  low-latency driver of most audio interfaces. Every input and output channel the driver offers, its sample rates and buffer
-  sizes; its **Control Panel** button opens the driver's own settings, and a buffer size changed there is picked up at once.
+  low-latency driver of most audio interfaces. A stereo pair of its outputs and up to two of its inputs (as with the other
+  device types), its sample rates and buffer sizes; its **Control Panel** button opens the driver's own settings, and a buffer size changed there is picked up at once.
   When the driver fixes the buffer size itself, the buffer menu and **Auto** say to change it in its Control Panel. A new
   installation still starts with Windows Audio. The Standalone versions of SunBurst, HexForge, SunSymphony and SunRiff offer
   ASIO too.
