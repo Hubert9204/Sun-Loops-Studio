@@ -84,6 +84,9 @@ const char* effectKey (EffectType t)
         case EffectType::Grains:       return "grains";
         case EffectType::EnvelopeController: return "envelope-controller";
         case EffectType::FormulaController: return "formula-controller";
+        case EffectType::HyperChorus:  return "hyper-chorus"; // 0.73.0
+        case EffectType::Scratcher:    return "scratcher";
+        case EffectType::Patcher:      return "patcher";
         case EffectType::None:       break;
     }
     return "none";
@@ -162,6 +165,13 @@ juce::var slotToVar (const EffectSlot& slot, const PluginSpec* plugin)
         o->setProperty ("mix", number (static_cast<double> (s.mix)));
     if (s.type == EffectType::FormulaController && s.formula != nullptr)
         o->setProperty ("formula", juce::String::fromUTF8 (s.formula->text().c_str()));
+    if (s.type == EffectType::Patcher && s.patch != nullptr) // 0.73.0: its effects
+    {
+        juce::Array<juce::var> inner;
+        for (const auto& sub : *s.patch)
+            inner.add (slotToVar (sub, nullptr));
+        o->setProperty ("patch", inner);
+    }
     juce::Array<juce::var> params;
     for (int i = 0; i < effectParamCount (s.type); ++i)
         params.add (number (static_cast<double> (s.params[static_cast<size_t> (i)])));
@@ -235,6 +245,19 @@ EffectSlot readSlot (const juce::var& v, std::vector<PluginSpec>& plugins, Plugi
                 none.space = Convolver::Room;
                 slot.convolver = Convolver::make (none, loaded.data);
             }
+    }
+    if (slot.type == EffectType::Patcher) // 0.73.0: its effects (no plugins, controllers or Patchers inside)
+    {
+        std::vector<EffectSlot> inner (static_cast<size_t> (kPatcherSlots));
+        if (auto* list = o->getProperty ("patch").getArray())
+            for (int k = 0; k < std::min (list->size(), kPatcherSlots); ++k)
+                if (auto* sub = (*list)[k].getDynamicObject(); sub != nullptr && sub->getProperty ("type").toString() != "plugin")
+                {
+                    auto read = readSlot ((*list)[k], plugins, place, index, slotIndex);
+                    if (read.type != EffectType::Patcher && ! effectIsController (read.type))
+                        inner[static_cast<size_t> (k)] = std::move (read);
+                }
+        slot.patch = std::make_shared<const std::vector<EffectSlot>> (std::move (inner));
     }
     return slot.sanitised();
 }

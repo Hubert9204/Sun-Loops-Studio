@@ -1,5 +1,6 @@
 #include "ui/MixerPanel.h"
 #include "ui/Icons.h"
+#include "ui/PatcherWindow.h"
 
 #include <cmath>
 
@@ -52,6 +53,9 @@ juce::String shortEffectName (EffectType t)
         case EffectType::Grains:       return "Grains";
         case EffectType::EnvelopeController: return "EnvCt";
         case EffectType::FormulaController: return "FormCt";
+        case EffectType::HyperChorus:  return "HypCh"; // 0.73.0
+        case EffectType::Scratcher:    return "Scratch";
+        case EffectType::Patcher:      return "Patch";
         case EffectType::None:       break;
     }
     return juce::String::fromUTF8 ("\xe2\x80\x94");
@@ -736,6 +740,9 @@ FxPanel::FxPanel()
             onChainMenu (chainButton, *track, trackIndex);
     };
     addAndMakeVisible (chainButton);
+    addChildComponent (patchButton); // 0.73.0
+    patchButton.setTooltip ("Open the Patcher's window: its own ten slots, in series or in parallel (Routing)");
+    patchButton.onClick = [this] { openPatcher(); };
     addChildComponent (irButton); // 0.62.0
     irButton.setTooltip ("Use an audio file as the impulse response (the Space becomes File)");
     hintLabel.setFont (juce::Font (juce::FontOptions (12.0f)));
@@ -841,11 +848,49 @@ FxPanel::FxPanel()
     refresh();
 }
 
+FxPanel::~FxPanel() = default;
+
 void FxPanel::setTrack (MixerTrack* newTrack, int newIndex)
 {
+    if (newTrack != track || newIndex != trackIndex)
+        patcherWindow.reset(); // 0.73.0: a Patcher's window belongs to the slot shown
     track = newTrack;
     trackIndex = newIndex;
     refresh();
+}
+
+// 0.73.0: the window of the selected Patcher slot; what changes there goes back into the slot.
+void FxPanel::openPatcher()
+{
+    if (track == nullptr || track->slots[static_cast<size_t> (selectedSlot)].type != EffectType::Patcher)
+        return;
+    auto& slot = track->slots[static_cast<size_t> (selectedSlot)];
+    patcherWindow = std::make_unique<PatcherWindow> ("Patcher - " + (trackIndex == kMasterIndex ? juce::String ("Master") : "Track " + juce::String (trackIndex + 1))
+                                                     + ", slot " + juce::String (selectedSlot + 1));
+    for (size_t k = 0; k < static_cast<size_t> (kPatcherSlots); ++k)
+        patcherWindow->inner.slots[k] = slot.patch != nullptr && k < slot.patch->size() ? (*slot.patch)[k] : EffectSlot {};
+    auto& inner = patcherWindow->panel();
+    inner.trackNameOf = trackNameOf;
+    inner.trackCount = trackCount;
+    inner.trackAt = trackAt;
+    inner.refresh();
+    patcherWindow->onEdited = [this, slotIndex = selectedSlot, owner = trackIndex]
+    {
+        if (track == nullptr || trackIndex != owner || patcherWindow == nullptr)
+            return;
+        auto& outer = track->slots[static_cast<size_t> (slotIndex)];
+        if (outer.type != EffectType::Patcher)
+            return;
+        outer.patch = std::make_shared<const std::vector<EffectSlot>> (patcherWindow->inner.slots.begin(), patcherWindow->inner.slots.begin() + kPatcherSlots);
+        if (onChanged)
+            onChanged (trackIndex);
+    };
+    patcherWindow->onClose = [safe = juce::Component::SafePointer<FxPanel> (this)]
+    {
+        juce::MessageManager::callAsync ([safe] { if (safe != nullptr) safe->patcherWindow.reset(); });
+    };
+    patcherWindow->setVisible (true);
+    patcherWindow->toFront (true);
 }
 
 void FxPanel::setSelectedSlot (int slot)
@@ -1034,6 +1079,7 @@ void FxPanel::rebuildParameters()
         };
     }
     irButton.setVisible (slot.type == EffectType::Convolver);
+    patchButton.setVisible (slot.type == EffectType::Patcher); // 0.73.0
     irButton.onClick = [this] { chooseImpulseResponse(); };
     // 0.70.0
     const bool mixable = slot.type != EffectType::None && ! effectIsController (slot.type);
@@ -1233,20 +1279,24 @@ void FxPanel::showSlotMenu (int slot)
     menu.addSectionHeader ("Slot " + juce::String (slot + 1));
     for (const auto& entry : kEffectMenu)
     {
+        // (0.73.0: inside a Patcher, no controllers and no Patcher)
+        if (nested && (effectIsController (entry.type) || entry.type == EffectType::Patcher))
+            continue;
         if (entry.group != nullptr)
             menu.addSectionHeader (entry.group);
         menu.addItem (static_cast<int> (entry.type), effectName (entry.type), true, current.type == entry.type);
     }
     menu.addSeparator();
-    const auto plugins = listEffectPlugins ? listEffectPlugins() : std::vector<PluginChoice> {};
+    const auto plugins = listEffectPlugins && ! nested ? listEffectPlugins() : std::vector<PluginChoice> {};
     juce::PopupMenu pluginMenu;
     for (size_t i = 0; i < plugins.size(); ++i)
         pluginMenu.addItem (1000 + static_cast<int> (i), plugins[i].name);
-    if (plugins.empty())
+    if (! nested && plugins.empty())
         menu.addItem (100, "Plugin effects (scan the browser's Plugin folder first)", false);
-    else
+    else if (! nested)
         menu.addSubMenu ("Plugin effects", pluginMenu);
-    menu.addItem (103, "Open plugin window", current.type == EffectType::Plugin && current.plugin != nullptr);
+    if (! nested)
+        menu.addItem (103, "Open plugin window", current.type == EffectType::Plugin && current.plugin != nullptr);
     menu.addSeparator();
     menu.addItem (101, "Bypass", current.type != EffectType::None, current.bypass);
     menu.addItem (102, "Remove effect", current.type != EffectType::None);
@@ -1283,6 +1333,8 @@ void FxPanel::showSlotMenu (int slot)
                                     auto made = EffectSlot::make (type);
                                     if (const int at = effectControllerTarget (type); at >= 0) // 0.62.0: a controller drives the slot after its own to begin with
                                         made.params[static_cast<size_t> (at) + 1] = static_cast<float> (slot + 1 < kSlotsPerTrack ? slot + 2 : 1);
+                                    if (type == EffectType::Patcher) // 0.73.0: ten empty slots of its own
+                                        made.patch = std::make_shared<const std::vector<EffectSlot>> (static_cast<size_t> (kPatcherSlots));
                                     safe->applySlot (slot, made);
                                 }
                             }
@@ -1327,6 +1379,11 @@ void FxPanel::resized()
         head.removeFromRight (4);
         if (presetButton.isVisible())
             presetButton.setBounds (head.removeFromRight (82));
+        if (patchButton.isVisible()) // 0.73.0
+        {
+            head.removeFromRight (4);
+            patchButton.setBounds (head.removeFromRight (60));
+        }
         if (irButton.isVisible())
         {
             head.removeFromRight (4);

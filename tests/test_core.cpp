@@ -9128,6 +9128,125 @@ void testLooks072()
     check (sls::countLeaves (sls::filterTree (root, "lo-fi")) == 0, "tags: without the lookup only names count");
 }
 
+// 0.73.0: Hyper Chorus, Scratcher, Patcher.
+void testEffects073()
+{
+    std::cout << "Hyper Chorus, Scratcher, Patcher (0.73.0)\n";
+    const auto leftOf = [] (const juce::AudioBuffer<float>& b) { return std::vector<float> (b.getReadPointer (0), b.getReadPointer (0) + b.getNumSamples()); };
+    const auto bounded = [] (const std::vector<float>& x, float limit)
+    {
+        for (const float v : x)
+            if (! std::isfinite (v) || std::abs (v) > limit)
+                return false;
+        return true;
+    };
+    const auto sine = sineWave (440.0, 0.4, 48000);
+
+    // --- Hyper Chorus: the voices spread left and right
+    {
+        sls::EffectUnit unit;
+        unit.prepare (kSr);
+        sls::EffectMemory memory;
+        memory.prepare (kSr);
+        unit.attachMemory (&memory);
+        auto l = sine, r = sine;
+        const auto slot = slotWith (sls::EffectType::HyperChorus, { 8.0f, 20.0f, 6.0f, 1.0f, 1.0f, 0.7f, 1.0f });
+        for (size_t i = 0; i < l.size(); i += 64)
+            unit.process (slot, l.data() + i, r.data() + i, 64);
+        double diff = 0.0;
+        for (size_t i = 8000; i < l.size(); ++i)
+            diff += std::abs (l[i] - r[i]);
+        check (bounded (l, 4.0f) && bounded (r, 4.0f) && diff / static_cast<double> (l.size() - 8000) > 0.02 && rmsOf (l, 8000, 48000) > 0.1,
+               "hyper chorus: eight voices, different on the left and on the right");
+        auto dry = slotWith (sls::EffectType::HyperChorus, { 4.0f, 15.0f, 3.0f, 0.3f, 0.8f, 0.7f, 0.0f });
+        check (runEffect (dry, sine) == sine, "hyper chorus: mix 0 is bit-exact");
+    }
+
+    // --- Scratcher: by hand, Position 0 plays along; a jump of Position is a scratch (the record moves: the pitch bends)
+    {
+        auto still = slotWith (sls::EffectType::Scratcher, { 0.0f, 0.0f, 1.0f, 250.0f, 0.5f, 1.0f });
+        const auto along = runEffect (still, sine);
+        double error = 0.0;
+        for (size_t i = 100; i < along.size(); ++i)
+            error = std::max (error, static_cast<double> (std::abs (along[i] - sine[i])));
+        check (error < 1.0e-5, "scratcher: by hand at Position 0 the sound plays through");
+        sls::EffectUnit unit;
+        unit.prepare (kSr);
+        sls::EffectMemory memory;
+        memory.prepare (kSr);
+        unit.attachMemory (&memory);
+        auto l = sineWave (1000.0, 0.4, 48000), r = l;
+        auto moved = still;
+        for (size_t i = 0; i < l.size(); i += 64)
+        {
+            moved.params[1] = i < 24000 ? 0.0f : 1.0f; // the record pulled back 250 ms halfway
+            unit.process (moved, l.data() + i, r.data() + i, 64);
+        }
+        // while it is pulled back the record runs backwards for a moment: the 1 kHz tone is not 1 kHz then
+        check (toneEnergy (l.data(), 24000, 25200, 1000.0) < 0.5 * toneEnergy (l.data(), 10000, 11200, 1000.0)
+                   && toneEnergy (l.data(), 40000, 47000, 1000.0) > 0.5 * toneEnergy (l.data(), 10000, 11200, 1000.0),
+               "scratcher: moving the record bends the sound, and it plays on at its new place");
+        bool all = true;
+        for (float mode = 1.0f; mode <= 4.0f; mode += 1.0f)
+            all = all && bounded (runEffect (slotWith (sls::EffectType::Scratcher, { mode, 0.0f, 4.0f, 1000.0f, 0.0f, 1.0f }), sine), 4.0f);
+        check (all, "scratcher: the four patterns at their extremes stay bounded");
+    }
+
+    // --- Patcher: its effects in series and in parallel
+    {
+        auto patcher = sls::EffectSlot::make (sls::EffectType::Patcher);
+        std::vector<sls::EffectSlot> inner (static_cast<size_t> (sls::kPatcherSlots));
+        inner[0] = slotWith (sls::EffectType::Panomatic, { -6.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f }); // (its volume, -6 dB)
+        inner[3] = slotWith (sls::EffectType::Panomatic, { -6.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f });
+        patcher.patch = std::make_shared<const std::vector<sls::EffectSlot>> (inner);
+        sls::preparePatcher (patcher, kSr);
+        check (patcher.patcherState != nullptr && patcher.patcherState->types[0] == sls::EffectType::Panomatic
+                   && patcher.patcherState->types[1] == sls::EffectType::None,
+               "patcher: its state is made for its effects");
+        const auto serial = runEffect (patcher, sine);
+        check (std::abs (rmsOf (serial, 4000, 40000) / rmsOf (sine, 4000, 40000) - 0.25) < 0.02, "patcher: in series, two -6 dB make -12 dB");
+        patcher.params[0] = 1.0f; // parallel
+        const auto parallel = runEffect (patcher, sine);
+        check (std::abs (rmsOf (parallel, 4000, 40000) / rmsOf (sine, 4000, 40000) - 0.5) < 0.02, "patcher: in parallel, the two -6 dB averaged are -6 dB");
+        const auto before = patcher.patcherState;
+        sls::preparePatcher (patcher, kSr);
+        check (patcher.patcherState == before, "patcher: a state that still fits is kept");
+        auto changed = inner;
+        changed[1] = sls::EffectSlot::make (sls::EffectType::Delay);
+        patcher.patch = std::make_shared<const std::vector<sls::EffectSlot>> (changed);
+        sls::preparePatcher (patcher, kSr);
+        check (patcher.patcherState != before && patcher.patcherState->memories[1] != nullptr, "patcher: another effect gets a new state, with its memory");
+
+        auto doc = sls::ProjectDocument::blank();
+        doc.tracks[1].slots[2] = patcher;
+        const auto parsed = sls::ProjectDocument::fromJson (doc.toJson());
+        bool kept = parsed.document.has_value();
+        if (kept)
+        {
+            const auto& back = parsed.document->tracks[1].slots[2];
+            kept = back.type == sls::EffectType::Patcher && back.patch != nullptr && back.patch->size() == static_cast<size_t> (sls::kPatcherSlots)
+                && (*back.patch)[0].type == sls::EffectType::Panomatic && (*back.patch)[1].type == sls::EffectType::Delay && back.params[0] == 1.0f;
+        }
+        check (kept, "patcher: its effects survive a save and a load");
+
+        // in the mixer, with the Maximizer's look-ahead inside: the mix reports it
+        auto pad = samplerChannel (sineSample (1000.0, 1.5, 48000.0), { sls::Note { 60, 0, 2 * kBeat, 1.0f } });
+        pad.volume = 0.1f;
+        auto project = oneBar ({ pad });
+        auto latent = sls::EffectSlot::make (sls::EffectType::Patcher);
+        std::vector<sls::EffectSlot> withMax (static_cast<size_t> (sls::kPatcherSlots));
+        withMax[0] = slotWith (sls::EffectType::Maximizer, { 0.0f, -1.0f, 100.0f, 0.0f, 0.0f });
+        latent.patch = std::make_shared<const std::vector<sls::EffectSlot>> (withMax);
+        project.tracks[0].slots[0] = latent;
+        sls::prepareConvolvers (project.tracks, project.masterSlots, project.console.aux, kSr);
+        sls::Player player;
+        player.prepare (kSr);
+        renderBlocks (player, project, true, 0.2);
+        check (player.outputLatencySamples() > 16, "patcher: the latency of its effects is compensated (" + std::to_string (player.outputLatencySamples()) + " samples)");
+        check (bounded (leftOf (sls::renderToBuffer (project, {})), 4.0f), "patcher: renders in a project");
+    }
+}
+
 void testRackPlaylistToolbar062()
 {
     std::cout << "Layer channel, master pitch, marker actions, playlist groups (0.62.0)\n";
@@ -13781,6 +13900,7 @@ int main()
     testFlParity070();
     testFlParity071();
     testLooks072();
+    testEffects073();
     testOneShot();
     testAutomation();
     testMidiImport();

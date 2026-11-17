@@ -46,10 +46,15 @@ enum class EffectType : std::uint8_t
     Effector,           // Effector: ten effects, each with two controls (X and Y)
     Grains,             // Fruity Granulizer as an effect: the last moments of the sound replayed as grains
     EnvelopeController, // Fruity Envelope Controller: an envelope started by the track's sound drives a parameter
-    FormulaController   // Fruity Formula Controller: a formula of time, the song position, the level and three knobs
+    FormulaController,  // Fruity Formula Controller: a formula of time, the song position, the level and three knobs
+    // 0.73.0
+    HyperChorus,        // Hyper Chorus: up to eight voices spread across the stereo field
+    Scratcher,          // Fruity Scratcher: the sound on a turntable, moved by hand (automation) or by patterns
+    Patcher             // Patcher: a chain of up to ten effects inside one slot, in series or in parallel
 };
 
-constexpr int kEffectTypeCount = 35;
+constexpr int kEffectTypeCount = 38;
+constexpr int kPatcherSlots = 10;
 constexpr int kMaxEffectParams = 24; // 0.61.0: 24 (the 7-band EQ has 22); 8 before
 constexpr int kSlotsPerTrack = 10; // insert effects per mixer track, aux bus and master (0.45.0: 10, as in FL Studio; 4 before)
 
@@ -67,10 +72,11 @@ inline constexpr EffectMenuEntry kEffectMenu[] = {
     { EffectType::Overdrive, "Drive" },         { EffectType::WaveShaper, nullptr },     { EffectType::Squeeze, nullptr },
     { EffectType::Chorus, "Modulation" },       { EffectType::Flanger, nullptr },        { EffectType::Phaser, nullptr },
     { EffectType::Vibrato, nullptr },           { EffectType::VintageChorus, nullptr },  { EffectType::VintagePhaser, nullptr },
+    { EffectType::HyperChorus, nullptr },
     { EffectType::FrequencyShifter, nullptr },
     { EffectType::Reverb, "Space and time" },   { EffectType::Convolver, nullptr },      { EffectType::Delay, nullptr },
-    { EffectType::TimeShaper, nullptr },        { EffectType::Grains, nullptr },
-    { EffectType::Effector, "Multi-effect" },
+    { EffectType::TimeShaper, nullptr },        { EffectType::Grains, nullptr },        { EffectType::Scratcher, nullptr },
+    { EffectType::Effector, "Multi-effect" },   { EffectType::Patcher, nullptr },
     { EffectType::PitchCorrector, "Pitch and voice" }, { EffectType::Vocoder, nullptr },
     { EffectType::Imager, "Stereo" },           { EffectType::Panomatic, nullptr },
     { EffectType::PeakController, "Controllers" }, { EffectType::EnvelopeController, nullptr }, { EffectType::FormulaController, nullptr },
@@ -122,6 +128,9 @@ inline const char* effectName (EffectType t) noexcept
         case EffectType::Grains:       return "Grains";
         case EffectType::EnvelopeController: return "Envelope Controller";
         case EffectType::FormulaController: return "Formula Controller";
+        case EffectType::HyperChorus:  return "Hyper Chorus";
+        case EffectType::Scratcher:    return "Scratcher";
+        case EffectType::Patcher:      return "Patcher";
         case EffectType::None:         break;
     }
     return "Empty";
@@ -389,6 +398,26 @@ inline constexpr EffectParamInfo formulactl[] = { { "A", "", 0.0f, 1.0f, 0.5f },
                                               { "Target 2 param", "", 1.0f, 24.0f, 1.0f },
                                               { "Target 2 invert", "", 0.0f, 1.0f, 0.0f, "Off|On" } };
 
+// 0.73.0
+inline constexpr EffectParamInfo hyperchorus[] = { { "Voices", "", 2.0f, 8.0f, 4.0f },
+                                                   { "Delay", "ms", 5.0f, 40.0f, 15.0f },
+                                                   { "Depth", "ms", 0.0f, 10.0f, 3.0f },
+                                                   { "Rate", "Hz", 0.05f, 5.0f, 0.3f },
+                                                   { "Spread", "", 0.0f, 1.0f, 0.8f },
+                                                   { "Tone", "", 0.0f, 1.0f, 0.7f },
+                                                   { "Mix", "", 0.0f, 1.0f, 0.5f } };
+// Hand: the record follows Position (automate it, or move it with a controller); the others move it by themselves, Speed times
+// a beat: Baby (back and forth), Forward (pushed forward and let go), Chirp (forward with the fader cutting the way back),
+// Transformer (the record plays, the fader cuts it on and off).
+inline constexpr EffectParamInfo scratcher[] = { { "Mode", "", 0.0f, 4.0f, 1.0f, "Hand|Baby|Forward|Chirp|Transformer" },
+                                                 { "Position", "", 0.0f, 1.0f, 0.0f },
+                                                 { "Speed", "/beat", 0.25f, 4.0f, 1.0f },
+                                                 { "Depth", "ms", 20.0f, 1000.0f, 250.0f },
+                                                 { "Smooth", "", 0.0f, 1.0f, 0.5f },
+                                                 { "Mix", "", 0.0f, 1.0f, 1.0f } };
+inline constexpr EffectParamInfo patcher[] = { { "Routing", "", 0.0f, 1.0f, 0.0f, "Serial|Parallel" },
+                                               { "Output", "dB", -24.0f, 12.0f, 0.0f } };
+
 // The scales' notes as bit masks (bit n: n semitones above the key), in the order of the Scale choice; equal to theory::scales().
 inline constexpr std::uint16_t kPitchScaleMasks[] = { 0x0fff, 0x0ab5, 0x05ad, 0x09ad, 0x0aad, 0x06ad, 0x05ab, 0x0ad5, 0x06b5, 0x056b, 0x0295, 0x04a9, 0x04e9 };
 
@@ -434,6 +463,9 @@ inline int effectParamCount (EffectType t) noexcept
         case EffectType::Grains:       return count (grains);
         case EffectType::EnvelopeController: return count (envctl);
         case EffectType::FormulaController: return count (formulactl);
+        case EffectType::HyperChorus:  return count (hyperchorus);
+        case EffectType::Scratcher:    return count (scratcher);
+        case EffectType::Patcher:      return count (patcher);
         case EffectType::Plugin:
         case EffectType::None:         break;
     }
@@ -482,6 +514,9 @@ inline EffectParamInfo effectParamInfo (EffectType t, int index) noexcept
         case EffectType::Grains:       return grains[i];
         case EffectType::EnvelopeController: return envctl[i];
         case EffectType::FormulaController: return formulactl[i];
+        case EffectType::HyperChorus:  return hyperchorus[i];
+        case EffectType::Scratcher:    return scratcher[i];
+        case EffectType::Patcher:      return patcher[i];
         case EffectType::Plugin:
         case EffectType::None:         break;
     }
@@ -508,6 +543,8 @@ inline int effectControllerTarget2 (EffectType t) noexcept
     return t == EffectType::PeakController ? 9 : (t == EffectType::EnvelopeController ? 11 : (t == EffectType::FormulaController ? 6 : -1));
 }
 
+struct PatcherState; // 0.73.0 (below)
+
 // One slot of a mixer track's effect chain: a type, a bypass switch and its parameter values.
 struct EffectSlot
 {
@@ -518,6 +555,10 @@ struct EffectSlot
     std::shared_ptr<HostedPlugin> plugin; // EffectType::Plugin only (its parameters live in the plugin)
     std::shared_ptr<Convolver> convolver; // EffectType::Convolver only (0.62.0): its impulse response, see prepareConvolver
     std::shared_ptr<const Formula> formula; // EffectType::FormulaController only (0.70.0); null: the value is knob A
+    // EffectType::Patcher only (0.73.0): its effects (up to kPatcherSlots; replaced, never changed in place, so the audio thread can
+    // keep reading the old ones) and the state that plays them (made on the message thread by preparePatcher)
+    std::shared_ptr<const std::vector<EffectSlot>> patch;
+    std::shared_ptr<PatcherState> patcherState;
 
     static EffectSlot make (EffectType t) noexcept
     {
@@ -541,6 +582,11 @@ struct EffectSlot
             s.convolver = nullptr;
         if (type != EffectType::FormulaController)
             s.formula = nullptr;
+        if (type != EffectType::Patcher)
+        {
+            s.patch = nullptr;
+            s.patcherState = nullptr;
+        }
         s.mix = std::isfinite (mix) ? std::clamp (mix, 0.0f, 1.0f) : 1.0f;
         for (int i = 0; i < kMaxEffectParams; ++i)
         {
@@ -561,7 +607,7 @@ struct EffectSlot
     bool operator== (const EffectSlot& o) const noexcept
     {
         return type == o.type && bypass == o.bypass && params == o.params && plugin == o.plugin && convolver == o.convolver
-            && formula == o.formula && std::abs (mix - o.mix) < 1.0e-6f;
+            && formula == o.formula && std::abs (mix - o.mix) < 1.0e-6f && patch == o.patch && patcherState == o.patcherState;
     }
 };
 
@@ -651,7 +697,8 @@ inline bool effectNeedsMemory (EffectType t) noexcept
     return t == EffectType::Reverb || t == EffectType::Delay || t == EffectType::Chorus || t == EffectType::PitchCorrector
         || t == EffectType::Flanger || t == EffectType::Vibrato // 0.61.0
         || t == EffectType::Vocoder // 0.62.0
-        || t == EffectType::VintageChorus || t == EffectType::Effector || t == EffectType::Grains; // 0.70.0
+        || t == EffectType::VintageChorus || t == EffectType::Effector || t == EffectType::Grains // 0.70.0
+        || t == EffectType::HyperChorus || t == EffectType::Scratcher; // 0.73.0
 }
 
 // The DSP behind one slot. All memory is allocated in prepare() (or lent: attachMemory, attachTimeBuffer); process() never
@@ -730,6 +777,10 @@ private:
     void runEnvelopeController (const EffectSlot&, float*, float*, int) noexcept;
     void runFormulaController (const EffectSlot&, float*, float*, int, const EffectTransport&) noexcept;
     void runSlot (const EffectSlot&, float*, float*, int, const EffectTransport&) noexcept;
+    // 0.73.0
+    void runHyperChorus (const EffectSlot&, float*, float*, int) noexcept;
+    void runScratcher (const EffectSlot&, float*, float*, int, const EffectTransport&) noexcept;
+    void runPatcher (const EffectSlot&, float*, float*, int, const EffectTransport&) noexcept;
     void setReverbType (int type) noexcept;
 
     double sampleRate = 48000.0;
@@ -815,6 +866,10 @@ private:
     int ctlStage = 0; // envelope controller: 0 idle, 1 attack, 2 decay / sustain, 3 release
     float ctlLevel = 0.0f;
     double ctlTime = 0.0, ctlBeat = 0.0;
+    // 0.73.0: the hyper chorus's voices' phases; the scratcher's place on the record (samples back) and its fader
+    std::array<double, 8> hyperPhase {};
+    double scratchDelay = 0.0, scratchVelocity = 0.0;
+    float scratchFader = 1.0f;
 
     // time shaper
     float* timeL = nullptr;
@@ -849,4 +904,19 @@ private:
     double pcAlign = 0.0;         // samples: how far back the analysed sound is, on average (the heads' mean delay)
     std::array<PitchHead, 2> pcHeads {};
 };
+
+// 0.73.0, the Patcher's state: one unit per effect inside it, the memories of those that need one, and room to mix in parallel.
+// Made on the message thread (preparePatcher) and replaced, not changed, when what it needs changes.
+struct PatcherState
+{
+    static constexpr int kChunk = 512;
+    double sampleRate = 0.0;
+    std::array<EffectUnit, kPatcherSlots> units;
+    std::array<std::unique_ptr<EffectMemory>, kPatcherSlots> memories;
+    std::array<EffectType, kPatcherSlots> types {};
+    std::vector<float> dryL, dryR, accL, accR;
+};
+
+// Message thread (0.73.0): a Patcher slot gets the state its effects need at this rate (its convolvers their responses too).
+void preparePatcher (EffectSlot& slot, double sampleRate, bool fresh = false);
 } // namespace sls

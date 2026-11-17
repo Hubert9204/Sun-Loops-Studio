@@ -1845,6 +1845,18 @@ void Player::render (const Project& project, double bpm, bool playing,
             return 0;
         if (slot.type == EffectType::Plugin)
             return slot.plugin != nullptr ? std::clamp (slot.plugin->latencySamples(), 0, kMaxLatency) : 0;
+        if (slot.type == EffectType::Patcher && slot.patch != nullptr && slot.patcherState != nullptr) // 0.73.0: its effects' latency
+        {
+            const bool parallel = effectChoice (EffectType::Patcher, 0, slot.params[0]) == 1;
+            int total = 0;
+            for (size_t k = 0; k < std::min (slot.patch->size(), static_cast<size_t> (kPatcherSlots)); ++k)
+            {
+                const auto& sub = (*slot.patch)[k];
+                const int own = sub.bypass ? 0 : slot.patcherState->units[k].latencySamples (sub.type);
+                total = parallel ? std::max (total, own) : total + own;
+            }
+            return std::min (total, kMaxLatency);
+        }
         return unit.latencySamples (slot.type);
     };
     bool anyPeak = false, anyRoute = false, anyLatency = false, anyManualDelay = false;
