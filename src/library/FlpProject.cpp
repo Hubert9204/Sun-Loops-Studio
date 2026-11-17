@@ -29,10 +29,16 @@ std::string resolveSample (const std::string& stored, const juce::File& folder)
 {
     if (stored.empty())
         return {};
-    const auto unixPath = juce::String (stored).replaceCharacter ('\\', '/');
-    if (juce::File::isAbsolutePath (unixPath) && juce::File (unixPath).existsAsFile())
-        return juce::File (unixPath).getFullPathName().toStdString();
-    const auto name = unixPath.fromLastOccurrenceOf ("/", false, false);
+    // With this system's separator (0.75.0: on Windows / becomes \, elsewhere \ becomes /): each system recognises an absolute
+    // path only by its own.
+#if JUCE_WINDOWS
+    const auto path = juce::String (stored).replaceCharacter ('/', '\\');
+#else
+    const auto path = juce::String (stored).replaceCharacter ('\\', '/');
+#endif
+    if (juce::File::isAbsolutePath (path) && juce::File (path).existsAsFile())
+        return juce::File (path).getFullPathName().toStdString();
+    const auto name = path.fromLastOccurrenceOf (juce::File::getSeparatorString(), false, false);
     if (folder.isDirectory() && name.isNotEmpty())
     {
         if (const auto here = folder.getChildFile (name); here.existsAsFile())
@@ -42,9 +48,9 @@ std::string resolveSample (const std::string& stored, const juce::File& folder)
                 return there.getFullPathName().toStdString();
     }
     // Not found: keep a usable absolute path so the project reports it as missing (and keeps the reference).
-    if (juce::File::isAbsolutePath (unixPath))
-        return unixPath.toStdString();
-    return (folder.isDirectory() ? folder.getChildFile (name) : juce::File ("/" + name)).getFullPathName().toStdString();
+    if (juce::File::isAbsolutePath (path))
+        return path.toStdString();
+    return (folder.isDirectory() ? folder.getChildFile (name) : juce::File (juce::File::getSeparatorString() + name)).getFullPathName().toStdString();
 }
 } // namespace
 
