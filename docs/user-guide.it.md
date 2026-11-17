@@ -102,9 +102,18 @@ Sun Loops Studio funziona su Windows 10 e Windows 11 (64 bit, processori Intel e
 - **Il primo avvio**: il programma non è firmato con un certificato di firma del codice, quindi Windows SmartScreen può dire
   *PC protetto da Windows*: fai clic su **Ulteriori informazioni** > **Esegui comunque**. Dopo si avvia normalmente.
 - **Scorciatoie**: come su Linux (**Ctrl**+Z, **Ctrl**+S...).
-- **Audio**: i dispositivi *Windows Audio* (WASAPI) e *DirectSound* nelle impostazioni audio; *Windows Audio (Exclusive Mode)* o
-  *(Low Latency Mode)* danno la latenza più bassa. I driver ASIO non sono ancora supportati. Le tastiere MIDI funzionano tramite
-  il MIDI di Windows.
+- **Audio**: i dispositivi *Windows Audio* (WASAPI), *DirectSound* e, dalla 0.76.0, **ASIO** nelle impostazioni audio
+  (**Audio...**). Una nuova installazione parte con *Windows Audio*; *Windows Audio (Exclusive Mode)* o *(Low Latency Mode)*
+  abbassano la latenza. Le tastiere MIDI funzionano tramite il MIDI di Windows.
+- **ASIO** (0.76.0): il driver a bassa latenza che accompagna la maggior parte delle schede audio (Focusrite, Steinberg, RME,
+  Behringer, MOTU...). In **Audio...** scegli *ASIO* come tipo di dispositivo audio, poi il driver della tua scheda come
+  dispositivo. Il pulsante **Control Panel** apre le impostazioni del driver: molti driver ASIO fissano lì la dimensione del
+  buffer (il menu del buffer e **Auto** allora lo dicono), e la modifica è presa subito. Di solito un driver ASIO serve un solo
+  programma alla volta, quindi gli altri programmi possono restare muti mentre Sun Loops Studio lo usa (scegli di nuovo
+  *Windows Audio* per condividere la scheda). Per la scheda audio integrata del computer esistono driver ASIO generici gratuiti
+  (ASIO4ALL, FlexASIO), ma lì *Windows Audio (Low Latency Mode)* di solito va altrettanto bene. Se un driver si comporta male, si
+  può riavviare il programma e scegliere *Windows Audio*. (ASIO è un marchio e un software di Steinberg Media Technologies GmbH;
+  il suo SDK è usato sotto licenza GPLv3.)
 - **Plugin**: VST3 (`C:\Program Files\Common Files\VST3` e la tua `%LOCALAPPDATA%\Programs\Common\VST3`) e LV2
   (`%APPDATA%\LV2`, `C:\Program Files\Common Files\LV2`); i plugin LADSPA esistono solo su Linux e gli Audio Unit solo sul Mac.
   SunBurst, HexForge, SunSymphony e SunRiff stanno nella cartella `VST3` del programma; l'installer può copiarli anche nella

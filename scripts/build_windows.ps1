@@ -76,6 +76,10 @@ foreach ($plugin in "SunBurst", "HexForge", "SunSymphony", "SunRiff") {
     else { Write-Warning "$plugin.vst3 was not built" }
 }
 Copy-Item "$root\LICENSE" (Join-Path $stage "LICENSE.txt")
+# 0.76.0: the ASIO SDK's licence (Steinberg's, used under GPLv3), next to the program that includes it
+$asioLicense = Get-ChildItem (Join-Path $BuildDir "_deps\asiosdk-src") -Filter "LICENSE*.txt" -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($asioLicense) { Copy-Item $asioLicense.FullName (Join-Path $stage "LICENSE-ASIO-SDK.txt") }
+else { Write-Warning "no ASIO SDK licence found (built without ASIO?)" }
 
 # --- the zip ---
 New-Item -ItemType Directory -Force -Path $DistDir | Out-Null

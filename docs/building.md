@@ -63,10 +63,15 @@ JRSoftware.InnoSetup`).
 powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1
 ```
 
+**ASIO** (0.76.0): the configure step also downloads Steinberg's ASIO SDK 2.3.4 (from `download.steinberg.net`, checked by
+SHA-256), which JUCE needs to host ASIO drivers; it is used under its GPLv3 licence and its licence text is shipped as
+`LICENSE-ASIO-SDK.txt`. `-DSLS_ASIO=OFF` builds without it (Windows Audio and DirectSound only). The continuous integration
+installs a free ASIO driver (FlexASIO) and the tests check that it is found and loaded.
+
 The script finds Visual Studio by itself, builds in `build-windows\` and writes to `dist\` the installer
 `Sun-Loops-Studio-<version>-Windows-x64-Setup.exe` (`scripts\windows\SunLoopsStudio.iss`) and the zip
 `Sun-Loops-Studio-<version>-Windows-x64.zip`, both holding the folder the program is installed as: `Sun Loops Studio.exe`, its
-`.pdb` (the function names of crash reports), `sun-loops-helios.exe`, and SunBurst, HexForge, SunSymphony and SunRiff in `VST3\`.
+`.pdb` (the function names of crash reports), `sun-loops-helios.exe`, the licences, and SunBurst, HexForge, SunSymphony and SunRiff in `VST3\`.
 The C++ runtime is linked into every program and plugin, so no Visual C++ Redistributable is needed. By hand, from a *x64 Native
 Tools Command Prompt for VS 2022*:
 

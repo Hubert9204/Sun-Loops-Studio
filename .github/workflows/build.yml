@@ -68,7 +68,18 @@ jobs:
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl
       - name: Build (warnings are reported in the log; every error is shown, not only the first)
         run: cmake --build build -- -k 0
+      # 0.76.0: a real ASIO driver for the tests to find and load - FlexASIO (free, MIT), its installer pinned by SHA-256.
+      - name: Install an ASIO driver (FlexASIO)
+        shell: pwsh
+        run: |
+          $setup = "$env:RUNNER_TEMP\FlexASIO-1.10b.exe"
+          Invoke-WebRequest https://github.com/dechamps/FlexASIO/releases/download/flexasio-1.10b/FlexASIO-1.10b.exe -OutFile $setup
+          if ((Get-FileHash $setup -Algorithm SHA256).Hash -ne "FE496BCC08D6C421C6244C8A60AC7B538560BDA138000FD1A54AB8EBCE031209") { throw "FlexASIO: wrong checksum" }
+          Start-Process -FilePath $setup -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
+          Get-ChildItem "HKLM:\SOFTWARE\ASIO" | ForEach-Object { "ASIO driver registered: " + $_.PSChildName }
       - name: Run the tests
+        env:
+          SLS_EXPECT_ASIO_DRIVER: FlexASIO
         run: .\build\SunLoopsStudioTests_artefacts\Release\SunLoopsStudioTests.exe
       - name: Show the tests' crash report, if they crashed
         if: failure()

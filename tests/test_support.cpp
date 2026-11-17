@@ -38,6 +38,9 @@
 
 #include <juce_events/juce_events.h>
 #include <juce_graphics/juce_graphics.h>
+#if SLS_ASIO
+ #include <juce_audio_devices/juce_audio_devices.h>
+#endif
 #include "support/GitHub.h"
 #include "support/Http.h"
 #include "support/Logging.h"
@@ -898,4 +901,48 @@ void testDesktopIntegration()
                       && sls::desktop::executableOfCommand (exe + " \"%1\"") == exe && sls::desktop::executableOfCommand ("notepad.exe %1") == "notepad.exe"
                       && sls::desktop::executableOfCommand ("").isEmpty(),
                   "Windows: the .slp \"open\" command quotes the program; the program is read back from any command");
+}
+
+// 0.76.0: ASIO on Windows. The device type is there (built with Steinberg's SDK); the drivers installed on this computer are found
+// in the registry. The CI installs FlexASIO (a free ASIO driver) and names it in SLS_EXPECT_ASIO_DRIVER: it must be listed, and
+// it is opened as a real driver would be (without sound hardware it may refuse to start: its answer is shown).
+void testAsioHost()
+{
+#if SLS_ASIO
+    std::cout << "ASIO drivers (0.76.0)\n";
+    const juce::ScopedJuceInitialiser_GUI juceInit;
+    juce::AudioDeviceManager manager;
+    juce::AudioIODeviceType* asio = nullptr;
+    juce::StringArray typeNames;
+    for (auto* type : manager.getAvailableDeviceTypes())
+    {
+        typeNames.add (type->getTypeName());
+        if (type->getTypeName() == "ASIO")
+            asio = type;
+    }
+    std::cout << "    device types: " << typeNames.joinIntoString (", ") << "\n";
+    supportCheck (asio != nullptr, "the ASIO device type is offered next to Windows Audio and DirectSound");
+    if (asio == nullptr)
+        return;
+    asio->scanForDevices();
+    const auto drivers = asio->getDeviceNames();
+    std::cout << "    ASIO drivers on this computer: " << (drivers.isEmpty() ? juce::String ("none") : drivers.joinIntoString (", ")) << "\n";
+    const auto expected = juce::SystemStats::getEnvironmentVariable ("SLS_EXPECT_ASIO_DRIVER", {});
+    if (expected.isEmpty())
+        return;
+    supportCheck (drivers.contains (expected), "an installed ASIO driver is found (FlexASIO in the CI)");
+    if (std::unique_ptr<juce::AudioIODevice> device (asio->createDevice (expected, expected)); device != nullptr)
+    {
+        const auto error = device->open (device->getInputChannelNames().isEmpty() ? juce::BigInteger() : juce::BigInteger (1),
+                                         juce::BigInteger (3), device->getCurrentSampleRate() > 0 ? device->getCurrentSampleRate() : 48000.0,
+                                         device->getDefaultBufferSize());
+        std::cout << "    opening it: " << (error.isEmpty() ? juce::String ("open, ") + juce::String (device->getCurrentBufferSizeSamples())
+                                                                  + " samples at " + juce::String (device->getCurrentSampleRate()) + " Hz"
+                                                            : error) << "\n";
+        device->close();
+        supportCheck (true, "the driver is loaded and asked to open, and closed again without a crash");
+    }
+    else
+        supportCheck (false, "the driver is loaded");
+#endif
 }
