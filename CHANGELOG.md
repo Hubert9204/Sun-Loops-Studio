@@ -2,6 +2,37 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.70.0 - 2026-11-17
+
+The rest of the FL Studio alignment list (see `fl-studio-alignment.md`): seven effects, the slot mix, the routing's missing
+pieces, the sampler's modulation, and tools in the Channel Rack, the Piano Roll, the Playlist and performance mode.
+
+### Added
+- **Effects**: **Frequency Shifter** (every frequency moved by the same number of Hz, with stereo spread and feedback),
+  **Vintage Chorus** (the I / II / I+II ensemble of an analogue polysynth), **Vintage Phaser** (Stone, Ninety and Vibe models),
+  **Effector** (ten effects with two controls each and an X / Y pad), **Grains** (a granular effect: pitch, scatter, random pitch,
+  reverse, feedback). With presets.
+- **Controllers**: **Envelope Controller** (an envelope started by the track's sound) and **Formula Controller** (a formula of three
+  knobs, the time, the song position and the level, typed into the effect panel; numbers, + - * / % ^, comparisons, 20 functions,
+  checked when typed and run on the audio thread without allocating). Both drive any parameter of an effect or plugin, as the Peak
+  Controller.
+- **Slot mix**: every effect slot (plugins too) has its own mix knob, as in FL Studio. Saved with projects and chain presets.
+- **Mixer routing**: **pre-fader** sends between tracks, **eight** sends per track (four before), a **track delay** set by hand (0 -
+  200 ms) and a **strip colour**; the **aux buses' latency is compensated** too.
+- **Sampler**: the envelope's **Delay** and **Hold**, a **second LFO** with its own target, and **Resonance** as an LFO target. The
+  sampler window scrolls on short screens.
+- **Channel Rack**: *Steps > Rotate left / right* and *Randomize*, and a **global swing** slider in the rack's bar.
+- **Piano Roll**: *Tools > Claw machine*.
+- **Playlist**: *Chop into pieces* (a bar, a beat, an 8th, a 16th) in every clip's menu.
+- **Performance mode**: **MIDI pads** - the notes from C1 up launch the cells (eight to a row, the eighth stops the row).
+- **Toolbar**: the **polyphony** next to the CPU (*CPU 12% 7v*).
+- Helios knows the new words (granulizer, formula, chop, claw, pads, polifonia...), and both guides describe everything above.
+
+### Project files
+- Slots may have `"mix"` (when below 1) and, for the Formula Controller, `"formula"`; sends may have `"preFader": true`; tracks may
+  have `"delayMs"` and `"colour"` (hex AARRGGBB); sampler settings may have `"delay"`, `"hold"`, `"lfo2Target"`, `"lfo2Rate"`,
+  `"lfo2Depth"` and the LFO target `"resonance"`. Earlier versions ignore them; files from earlier versions open as before.
+
 ## 0.69.0 - 2026-11-16
 
 The Playlist in three sections.

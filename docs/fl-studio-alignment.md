@@ -1,12 +1,12 @@
-# FL Studio ↔ Sun Loops Studio: review and gap analysis (0.62.0)
+# FL Studio ↔ Sun Loops Studio: review and gap analysis (0.70.0)
 
 Written on 2026-11-12 from Image-Line's online manual (*Basics > Workflow*, *Toolbar panels*, *Channel Rack*, *Piano Roll*,
 *Playlist*, *Mixer*, *Plugin picker*, *Browser*, and the pages of the native instruments and effects) and from the code of this
 repository. Every module is compared control by control with its FL Studio counterpart.
 
-Status: **✔** present and equivalent · **◐** present but narrower than FL Studio's · **✘** missing. "0.60" / "0.61" / "0.62"
+Status: **✔** present and equivalent · **◐** present but narrower than FL Studio's · **✘** missing. "0.60" ... "0.70"
 mark what those releases added. Section 12 lists what 0.62.0 implemented (the whole "still open" list of 0.61.0), section 13
-what is still narrower than FL Studio's or missing.
+what 0.70.0 implemented (most of 0.62.0's "still open" list), section 14 what is still narrower than FL Studio's or missing.
 
 This is not full parity: FL Studio is two decades of work by a large team. The aim of 0.60 - 0.62 was that every window has
 the same layout, tools and connections, that every *category* of native effect has a counterpart, and that the engine can do
@@ -37,7 +37,7 @@ Browser / Plugin picker ──drag──▶ Channel Rack (instruments, one row p
 | Plugin picker → Mixer slot | Double-click or *Add to the selected track* (0.60) | ◐ no drag onto a slot |
 | Mixer track → mixer track (routing cables) | The routing button on every strip (0.62) | ✔ a menu, not cables |
 | Global snap, editors follow with "Main" | Snap panel + *Main* in both editors (0.60) | ✔ |
-| Link a control to an automation clip / controller | Automation clips for volumes, pans, effect and plugin parameters; Peak Controller for effect and plugin parameters (0.62) | ◐ no Formula / Envelope controller; a controller drives one parameter |
+| Link a control to an automation clip / controller | Automation clips for volumes, pans, effect and plugin parameters; Peak (0.62), Envelope and Formula (0.70) Controllers for effect and plugin parameters | ◐ a controller drives one parameter |
 
 ## 2. Toolbar
 
@@ -52,7 +52,7 @@ Browser / Plugin picker ──drag──▶ Channel Rack (instruments, one row p
 | Global snap | Same (0.60) | ✔ |
 | Master volume | Same + meter | ✔ |
 | Master pitch | *Pitch* in the toolbar, ±12 semitones (0.62) | ◐ whole semitones; drum channels are not moved |
-| CPU / memory / polyphony | CPU % (0.60), RAM (0.62, Linux) | ◐ no polyphony count |
+| CPU / memory / polyphony | CPU % (0.60), RAM (0.62), polyphony (0.70) | ✔ |
 | Shortcut panel | Same six windows, same order (0.60) | ✔ |
 | Recording panel: metronome, count-in, loop record, typing keyboard, step editing | Metronome, Typing keys, Record options, *Step edit* (0.62) | ◐ no blend / overdub switch |
 | Undo history window | Undo / redo (one list per editor) | ◐ |
@@ -65,10 +65,10 @@ Browser / Plugin picker ──drag──▶ Channel Rack (instruments, one row p
 | Channel options menu | ≡ menu (0.60) | ✔ |
 | Step menu: fill each 2 / 4 / 8 steps, clear | *Steps* submenu (0.61) | ✔ |
 | Step sequencer ↔ piano roll preview | Same | ✔ |
-| Pattern length, swing | Length in the bar; swing per channel | ◐ no global swing |
+| Pattern length, swing | Length in the bar; swing per channel and a global swing (0.70) | ✔ |
 | Graph editor (per-step velocity, pan, pitch…) | *Graph*: velocity, pan, release, fine pitch per step (0.62) | ◐ no shift / mod X / mod Y |
 | Channel filter groups, channel colours and icons | Filter groups and colours (0.62) | ◐ no icons |
-| Rotate / shift steps, randomize steps | – | ✘ |
+| Rotate / shift steps, randomize steps | *Steps > Rotate left / right*, *Randomize* (0.70) | ✔ |
 | Clone, rename, delete, move | Same | ✔ |
 | Layer channel, Audio clip channel, Automation clip channel | Layer channel (0.62); audio and automation clips live on the Playlist | ◐ |
 
@@ -80,8 +80,8 @@ Browser / Plugin picker ──drag──▶ Channel Rack (instruments, one row p
 | Reverse, SMP START, IN / OUT fades | Reverse, Start, Fade in, Fade out (0.61) | ✔ |
 | Normalize, remove DC, reverse polarity, swap stereo (precomputed) | In the sample editor (Normalise, Remove DC, Invert) | ◐ not as channel switches |
 | Loop: sustain loop points, ping-pong, crossfade | Forward and ping-pong loop with start / end, crossfade (0.62) | ✔ |
-| Volume envelope (delay, attack, hold, decay, sustain, release) | ADSR | ◐ no delay / hold |
-| Envelopes and LFOs for pan, cutoff, resonance, pitch | One LFO (to pitch, cutoff, pan or volume), a pitch envelope, the volume envelope to the cutoff (0.62) | ◐ one LFO and no envelope of its own per target; nothing on the resonance |
+| Volume envelope (delay, attack, hold, decay, sustain, release) | Delay, hold (0.70) and ADSR | ✔ |
+| Envelopes and LFOs for pan, cutoff, resonance, pitch | Two LFOs (0.62, 0.70: to pitch, cutoff, resonance, pan or volume), a pitch envelope, the volume envelope to the cutoff | ◐ no envelope of its own per target |
 | Time stretching on the channel (modes, pitch, mul, time) | On audio clips (stretch and pitch), not on sampler channels | ◐ |
 | Polyphony: max voices, mono, portamento / slide time | Maximum notes, Mono, Portamento in the channel's menu (0.62); slide and legato notes | ✔ |
 | Cut groups (cut / cut by) | Cut group / Cut by group in the channel's menu (0.62); choke groups on drum pads | ✔ |
@@ -121,7 +121,7 @@ Browser / Plugin picker ──drag──▶ Channel Rack (instruments, one row p
 | Tools: quantize, legato / articulate, strum, arpeggiate, chop, flip, randomize, scale levels | Quantize, Humanize, Legato, Staccato, Strum, Arpeggiate, Chop, Flip, Velocity tools | ✔ |
 | Tools: glue, flam, flip horizontally | Glue, Flam, Reverse (0.61) | ✔ |
 | Riff machine, score generators | Generate menu (chords, riffs, bassline) | ◐ |
-| Limit, LFO tool, claw machine, key-change, score logger | Limit, LFO on the lane shown (0.62); score log (*Dump the score log*) | ◐ no claw machine |
+| Limit, LFO tool, claw machine, key-change, score logger | Limit, LFO on the lane shown (0.62); Claw machine (0.70); score log (*Dump the score log*) | ✔ |
 | Time markers, loop region inside the roll | Loop region | ◐ |
 
 ## 7. Playlist
@@ -136,9 +136,9 @@ Browser / Plugin picker ──drag──▶ Channel Rack (instruments, one row p
 | Time markers (named), jump to marker, marker actions | Markers, ◂ ▸ (0.61); actions Loop, Skip, Pause, Start (0.62) | ◐ no punch in / out or time-signature markers as actions |
 | Loop region, tempo and time-signature changes | Same | ✔ |
 | Picker panel | The *Pattern* box and the browser | ◐ |
-| Clip menu: make unique, consolidate / bounce, chop | Make unique, Consolidate to audio (clip or track) (0.62), mute, split, takes | ◐ no chop |
+| Clip menu: make unique, consolidate / bounce, chop | Make unique, Consolidate to audio (clip or track) (0.62), Chop into pieces (0.70), mute, split, takes | ✔ |
 | Audio clip stretch, pitch, fades, reverse | Stretch and pitch, sample editor, pitch editor, stems | ✔ |
-| Performance (live) mode | Performance window: launch pattern clips on the bar, scenes, stop (0.62) | ◐ mouse only (no MIDI controller mapping), pattern clips only, no per-clip trigger modes |
+| Performance (live) mode | Performance window: launch pattern clips on the bar, scenes, stop (0.62); MIDI pads from C1 (0.70) | ◐ pattern clips only, no per-clip trigger modes, a fixed pad layout |
 | Snap with "Main" | Same (0.60) | ✔ |
 
 ## 8. Mixer
@@ -148,13 +148,13 @@ Browser / Plugin picker ──drag──▶ Channel Rack (instruments, one row p
 | Master + insert tracks | Master + up to 500 tracks | ✔ |
 | Fader, pan, mute, solo, meter | Same (peak + RMS meter) | ✔ |
 | Stereo separation, polarity, swap left / right | Separation slider, Ø, ⇄ (0.61) | ✔ |
-| 10 effect slots with mix knob and on / off | 10 slots with bypass; mix inside each effect | ◐ no per-slot mix knob for every effect |
-| Free routing of any track to any track, with send level | Routing button: to the master and / or up to four tracks, each with a level (0.62); aux buses, VCA groups | ◐ four sends per track; sends are post-fader |
+| 10 effect slots with mix knob and on / off | 10 slots with bypass and a slot mix for every effect and plugin (0.70) | ✔ |
+| Free routing of any track to any track, with send level | Routing button: to the master and / or up to eight tracks (0.70; four in 0.62), each with a level and pre- or post-fader (0.70); aux buses, VCA groups | ✔ a menu, not cables |
 | Sidechain to any track | Compressor, Gate (0.61) and Vocoder (0.62) listen to any track | ✔ |
 | Per-track EQ (3 bands) in the mixer | Equalizer / Parametric EQ as effects | ◐ |
-| Track delay compensation, track latency | Automatic, from the Maximizer's look-ahead and the latency plugins report; exports trimmed (0.62) | ◐ no manual track delay; the aux buses' own latency is not compensated |
+| Track delay compensation, track latency | Automatic, from the Maximizer's look-ahead and the latency plugins report; exports trimmed (0.62); the aux buses too, and a track delay set by hand (0.70) | ✔ |
 | Track recording (arm, input select) | Recording on Playlist tracks | ◐ |
-| Track colours, icons, docking left / right, separators | – | ✘ |
+| Track colours, icons, docking left / right, separators | Strip colours (0.70) | ◐ no icons, docking or separators |
 | Effect chain presets (mixer track states) | Chain presets (.slchain) | ✔ |
 
 ## 9. Native effects
@@ -185,12 +185,13 @@ Browser / Plugin picker ──drag──▶ Channel Rack (instruments, one row p
 | NewTone, Edison | Pitch editor, Sample editor | ✔ |
 | Fruity Stereo Enhancer, Stereo Shaper | Stereo Imager | ✔ |
 | Fruity Balance, Panomatic | Panomatic (0.61) | ✔ |
-| Pitch Shifter, Frequency Shifter | Pitch on audio clips | ◐ |
+| Pitch Shifter, Frequency Shifter | Pitch on audio clips; Frequency Shifter (0.70) | ✔ |
 | Vocodex / Fruity Vocoder | Vocoder (0.62: 8 / 12 / 16 bands, the voice from another track) | ◐ no unvoiced / noise path, no band editor |
-| Fruity Granulizer, Scratcher | – | ✘ |
-| Peak Controller, Formula Controller, Envelope Controller | Peak Controller (0.62: level + LFO to one parameter of an effect or plugin) | ◐ no Formula / Envelope controller |
+| Fruity Granulizer, Scratcher | Grains (0.70), a granular effect on a mixer track | ◐ not as a sampler channel; no Scratcher |
+| Peak Controller, Formula Controller, Envelope Controller | Peak Controller (0.62), Envelope and Formula Controllers (0.70), each to one parameter of an effect or plugin | ✔ |
 | Spectroman, dB Meter, Wave Candy | Meters window | ✔ |
-| Patcher, Effector, Hyper Chorus, Vintage Chorus / Phaser | – | ✘ |
+| Effector, Vintage Chorus / Phaser | Effector with its X / Y pad, Vintage Chorus, Vintage Phaser (0.70) | ✔ |
+| Patcher, Hyper Chorus | – | ✘ |
 
 ## 10. Browser and Plugin picker
 
@@ -234,18 +235,31 @@ Every point of the "still open" list of 0.61.0, in its order:
 9. **Browser**: favourites, tabs, the Current project node.
 10. **Toolbar**: master pitch, memory read-out, step editing.
 
-## 13. Still narrower than FL Studio's, or missing
+## 13. What 0.70.0 implemented
 
-What the tables above mark ◐ or ✘ after 0.62.0, the larger ones first (0.68.0 added FL Slayer's counterpart, SunRiff):
+From the "still open" list of 0.62.0, in its order:
 
-1. **Performance mode** is driven by the mouse: there is no mapping of a MIDI controller's pads to the cells, no per-clip trigger
-   and position-sync modes, and audio clips cannot be launched.
-2. **Delay compensation** has no manual per-track delay, and the latency of effects on the two aux buses is not compensated.
-3. **Sampler modulation**: one LFO and no separate envelope per target; the resonance cannot be modulated.
-4. **Internal controllers**: only the Peak Controller (no Formula or Envelope controller), one parameter each.
-5. **Native instruments** without a counterpart: speech synth, Granulizer, Wave Traveller, drum synthesis (Fruit Kick, Drumaxx);
-   **effects**: Patcher, Effector, the vintage chorus / phaser models, frequency shifter, Scratcher.
-6. **Looks**: channel and track icons, per-track row heights, tags and coloured folders in the browser, mixer track colours
-   and docking.
-7. Piano Roll: mod X / Y lanes, claw machine, a Playback tool. Playlist: chop, punch markers. Mixer: a mix knob per slot,
-   pre-fader track sends, more than four sends per track.
+1. **Performance mode**: MIDI pads - the notes from C1 up launch the cells, eight to a row, the eighth stops the row.
+2. **Delay compensation**: a track delay set by hand (0 - 200 ms) and the aux buses' own latency.
+3. **Sampler modulation**: a second LFO with its own target, the resonance as an LFO target, the envelope's delay and hold.
+4. **Internal controllers**: the Envelope Controller and the Formula Controller (a formula language of 20 functions, compiled
+   once and run on the audio thread without allocating).
+5. **Effects**: Frequency Shifter, Vintage Chorus, Vintage Phaser, Effector (ten effects, an X / Y pad) and Grains (granular).
+6. **Looks**: mixer strip colours.
+7. Piano Roll: claw machine. Playlist: chop. Mixer: a mix knob per slot, pre-fader track sends, eight sends per track.
+   Channel Rack: rotate and randomize steps, a global swing. Toolbar: the polyphony count.
+
+## 14. Still narrower than FL Studio's, or missing
+
+What the tables above mark ◐ or ✘ after 0.70.0, the larger ones first:
+
+1. **Native instruments** without a counterpart: speech synth, Wave Traveller, Granulizer as a sampler channel, drum synthesis
+   as instruments (Fruit Kick, Drumaxx; the built-in kits are generated, but not playable synths); **effects**: Patcher, Hyper
+   Chorus, Scratcher.
+2. **Performance mode**: pattern clips only (no audio clips), no per-clip trigger and position-sync modes, a fixed pad layout.
+3. **Sampler**: no envelope of its own per target (pan, cutoff, resonance, pitch each with an ADSR, as FL Studio's).
+4. **Controllers** drive one parameter each.
+5. **Looks**: channel and track icons, per-track row heights, tags and coloured folders in the browser, mixer docking and
+   separators.
+6. Piano Roll: mod X / Y lanes, a Playback tool. Playlist: punch markers. Recording: a blend / overdub switch. Graph editor:
+   shift and mod X / Y.

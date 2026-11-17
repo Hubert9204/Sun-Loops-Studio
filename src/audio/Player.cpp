@@ -1510,9 +1510,9 @@ void Player::samplerVoiceOn (const Channel& channel, int channelIndex, const Not
     v.xfade = loops && ! v.pingPong && ownSample ? static_cast<float> (std::min (static_cast<double> (set.crossfade) * (v.loopEnd - v.loopStart), v.loopStart)) : 0.0f;
     v.smpLfoTarget = set.lfoDepth > 0.0f ? static_cast<std::uint8_t> (set.lfoTarget) : std::uint8_t { 0 };
     // (0.70.0: a second LFO; an LFO on the cutoff or the resonance needs a filter)
-    const auto needsFilter = [] (std::uint8_t target) noexcept
+    const auto needsFilter = [] (std::uint8_t lfoTo) noexcept
     {
-        return target == static_cast<std::uint8_t> (SamplerLfoTarget::Cutoff) || target == static_cast<std::uint8_t> (SamplerLfoTarget::Resonance);
+        return lfoTo == static_cast<std::uint8_t> (SamplerLfoTarget::Cutoff) || lfoTo == static_cast<std::uint8_t> (SamplerLfoTarget::Resonance);
     };
     if (needsFilter (v.smpLfoTarget) && set.filter == SamplerFilter::Off)
         v.smpLfoTarget = 0;

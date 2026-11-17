@@ -286,8 +286,8 @@ float Formula::evaluate (const Variables& v) const noexcept
             case Op::Add:      two ([] (float a, float b) noexcept { return a + b; }); break;
             case Op::Sub:      two ([] (float a, float b) noexcept { return a - b; }); break;
             case Op::Mul:      two ([] (float a, float b) noexcept { return a * b; }); break;
-            case Op::Div:      two ([] (float a, float b) noexcept { return b != 0.0f ? a / b : 0.0f; }); break;
-            case Op::Mod:      two ([] (float a, float b) noexcept { return b != 0.0f ? a - b * std::floor (a / b) : 0.0f; }); break;
+            case Op::Div:      two ([] (float a, float b) noexcept { return std::abs (b) > 0.0f ? a / b : 0.0f; }); break;
+            case Op::Mod:      two ([] (float a, float b) noexcept { return std::abs (b) > 0.0f ? a - b * std::floor (a / b) : 0.0f; }); break;
             case Op::Pow:      two ([] (float a, float b) noexcept { return std::pow (a, b); }); break;
             case Op::Less:     two ([] (float a, float b) noexcept { return a < b ? 1.0f : 0.0f; }); break;
             case Op::Greater:  two ([] (float a, float b) noexcept { return a > b ? 1.0f : 0.0f; }); break;
@@ -324,7 +324,7 @@ float Formula::evaluate (const Variables& v) const noexcept
             {
                 const float otherwise = stack[static_cast<size_t> (--top)], then = stack[static_cast<size_t> (--top)];
                 float& value = stack[static_cast<size_t> (top - 1)];
-                value = value != 0.0f ? then : otherwise;
+                value = std::abs (value) > 0.0f ? then : otherwise;
                 break;
             }
             case Op::Lerp:

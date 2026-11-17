@@ -1,3 +1,4 @@
+#include "audio/PerformancePads.h"
 #include "audio/AudioEngine.h"
 
 #include <cmath>
@@ -99,6 +100,19 @@ juce::String AudioEngine::describeMidiInputs() const
 
 void AudioEngine::handleMidi (const juce::MidiMessage& message)
 {
+    // 0.70.0: performance mode's pads take the notes from C1 up for themselves (their note-offs are dropped too)
+    if (padsOn.load (std::memory_order_relaxed) && (message.isNoteOn() || message.isNoteOff())
+        && performancePad (message.getNoteNumber()).kind != PadAction::Kind::None)
+    {
+        if (message.isNoteOn())
+        {
+            const unsigned at = padWrite.load (std::memory_order_relaxed);
+            padNotes[at % padNotes.size()].store (message.getNoteNumber(), std::memory_order_relaxed);
+            padWrite.store (at + 1, std::memory_order_release);
+            midiActivity.store (true, std::memory_order_relaxed);
+        }
+        return;
+    }
     bool note = false;
     {
         const juce::SpinLock::ScopedLockType lock (producerLock);

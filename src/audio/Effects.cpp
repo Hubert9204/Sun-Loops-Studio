@@ -1867,7 +1867,7 @@ void EffectUnit::runFrequencyShifter (const EffectSlot& s, float* l, float* r, i
             shiftPhase[ch] += step[ch];
             shiftPhase[ch] -= std::floor (shiftPhase[ch]);
             const double angle = 2.0 * kPi * shiftPhase[ch];
-            const float out = inPhase * static_cast<float> (std::cos (angle)) - quadrature * static_cast<float> (std::sin (angle));
+            const float out = inPhase * static_cast<float> (std::cos (angle)) + quadrature * static_cast<float> (std::sin (angle));
             phaserLast[ch] = flush (std::clamp (out, -4.0f, 4.0f));
             io[ch][i] = in * (1.0f - mix) + out * mix;
         }
@@ -1982,7 +1982,7 @@ void EffectUnit::runEffector (const EffectSlot& s, float* l, float* r, int n) no
     const int size = lines != nullptr ? static_cast<int> (lines[0].size()) : 0;
 
     // what the controls mean for this effect, worked out once per block
-    const float fx = static_cast<float> (x), fy = static_cast<float> (y);
+    const auto fy = static_cast<float> (y);
     float p1 = 0.0f, p2 = 0.0f, p3 = 0.0f, p4 = 0.0f;
     double step = 0.0;
     switch (effect)

@@ -20,7 +20,13 @@ PerformancePanel::PerformancePanel()
     quantiseBox.onChange = [this] { if (onQuantise) onQuantise (quantiseBox.getSelectedId()); };
     quantiseLabel.setFont (juce::FontOptions (12.0f));
     quantiseLabel.setColour (juce::Label::textColourId, juce::Colour (0xffb9bfc9));
-    for (auto* c : std::initializer_list<juce::Component*> { &onButton, &stopAllButton, &quantiseBox, &quantiseLabel })
+    // 0.70.0
+    padsButton.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff2f7d5b));
+    padsButton.setTooltip ("On: a MIDI pad controller launches the cells. The notes from C1 (36) up are the cells, eight per row from the top "
+                           "row: the first seven pads of a row launch its first seven clips, the eighth stops the row. Those notes then "
+                           "do not play the selected instrument.");
+    padsButton.onClick = [this] { if (onPads) onPads (! model.pads); };
+    for (auto* c : std::initializer_list<juce::Component*> { &onButton, &stopAllButton, &quantiseBox, &quantiseLabel, &padsButton })
         addAndMakeVisible (c);
     startTimerHz (4);
 }
@@ -29,6 +35,7 @@ void PerformancePanel::setModel (PerformanceModel newModel)
 {
     model = std::move (newModel);
     onButton.setToggleState (model.on, juce::dontSendNotification);
+    padsButton.setToggleState (model.pads, juce::dontSendNotification);
     quantiseBox.setSelectedId (model.quantiseId, juce::dontSendNotification);
     repaint();
 }
@@ -71,6 +78,8 @@ void PerformancePanel::resized()
     quantiseBox.setBounds (bar.removeFromLeft (130));
     bar.removeFromLeft (12);
     stopAllButton.setBounds (bar.removeFromLeft (80));
+    bar.removeFromLeft (12);
+    padsButton.setBounds (bar.removeFromLeft (90));
 }
 
 void PerformancePanel::paint (juce::Graphics& g)

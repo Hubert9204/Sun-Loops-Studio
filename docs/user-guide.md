@@ -39,7 +39,9 @@ AI -, license, credits, with buttons for the GitHub page and Discord). Until 0.5
 
 In the row of window buttons: **Pitch** moves every note of the synths,
 samplers and plugin instruments by -12 to +12 semitones (drum channels keep their pitch; plugins get whole keys; double-click
-for 0; saved with the project). Under the CPU read-out, **RAM** is the memory the program holds (on Linux). **Step edit**: while
+for 0; saved with the project). Under the CPU read-out, **RAM** is the memory the program holds (on Linux and macOS). Since 0.70.0
+the CPU panel also shows the **polyphony**, as FL Studio's: *CPU 12% 7v* means seven notes of the built-in instruments are
+sounding. **Step edit**: while
 the song is stopped, every note you play - typing keys or a MIDI keyboard - is written into the pattern of the channel you play,
 at the pattern's start marker (click the Piano Roll's ruler to move it); when you let go of every key the marker moves on by
 the toolbar's snap (a 16th when the snap is a bar or *None*). Keys held together make a chord on one step. While the song
@@ -399,6 +401,9 @@ open the piano roll, add a channel) and the current pattern's length with **-** 
   group...* (or an existing one) puts the channel in a group; the box next to ≡ shows **All** channels or only one group's.
   A group exists as long as a channel is in it. Groups are saved with the project.
 - **Colour**: right-click a channel > *Colour* gives its name button one of 16 colours (*Default* takes it away).
+- **Swing** (0.70.0, FL Studio's global swing): the slider in the rack's bar sets the swing of every channel at once (0-100 %;
+  double-click: 0). Each channel's own swing slider still moves that channel alone; the global one shows the value they share
+  (0 when they differ). Drum machines keep their per-pad swing.
 - **Graph** (as FL Studio's graph editor): the button next to the group box opens a strip under the rows with one bar per step
   of the **selected** channel, under its step buttons. The box on the left chooses what the bars show: *Velocity*, *Pan*,
   *Release* or *Fine pitch* (±100 cents; pan and fine pitch grow from the middle line). Drag across the bars to set them;
@@ -419,6 +424,7 @@ open the piano roll, add a channel) and the current pattern's length with **-** 
 | Drum machine... | (Drum channels) opens the drum machine window. |
 | Piano roll | Selects the channel and opens the Piano Roll for it. |
 | Steps > Fill each 2 / 4 / 8 steps, Fill every step, Clear the steps | (0.61.0, as FL Studio's step menu) Writes a step every 2, 4 or 8 steps of the pattern (or all of them), or removes them all. |
+| Steps > Rotate left / Rotate right, Randomize (sparse / busy) | (0.70.0, as FL Studio's) Moves every step one place earlier or later - the one pushed past an end comes back in at the other, with its velocity, pan and the rest; or writes a random pattern (a quarter or half of the steps on, velocities from 55 to 100 %). Undo takes it back. |
 | Instrument > Synth / Sampler | Chooses what makes the sound. Switching to Sampler on a channel without a sample asks for one. The sample is kept if you switch back to Synth. |
 | Instrument > Plugin instruments | The instrument plugins found by the last scan: the channel plays the chosen plugin (see *Plugins*). |
 | Plugin window... | (Plugin channels) opens the plugin's own window. A double-click on the channel does the same. |
@@ -496,9 +502,13 @@ Right-click a sampler channel > **Sampler settings...** opens a window for that 
 - **Loop** (0.62.0): *Off*, *Forward* or **Ping-pong** (the loop plays forwards, then backwards, and so on); **Crossfade**
   blends the end of the loop into its start so that it does not click. **Envelope to cutoff** opens (or, negative, closes) the
   filter with the volume envelope.
-- **Modulation** (0.62.0): an **LFO** with a target (*Pitch*, *Cutoff*, *Pan* or *Volume*), a rate and a depth, and a **pitch
-  envelope** (the note starts up to two octaves above or below and falls or rises to its pitch in the time set: a kick's
-  thump, a riser).
+- **Modulation** (0.62.0): an **LFO** with a target (*Pitch*, *Cutoff*, *Pan*, *Volume* or, since 0.70.0, *Resonance*), a rate
+  and a depth, and a **pitch envelope** (the note starts up to two octaves above or below and falls or rises to its pitch in the
+  time set: a kick's thump, a riser). **LFO 2** (0.70.0): a second LFO with its own target, rate and depth - a vibrato and a
+  filter wobble at once, or two speeds on the cutoff. *Resonance* moves the filter's resonance by up to half its range.
+- **Delay** and **Hold** (0.70.0, FL Studio's DEL and HOLD): with the envelope on, a note waits *Delay* before its attack
+  (a note let go while it waits does not sound) and stays at full level for *Hold* after it, before the decay. The window
+  scrolls when the screen is not tall enough for it.
 - **Reverse**, **Start**, **Fade in**, **Fade out** (0.61.0, as *Reverse*, *SMP START*, *IN* and *OUT* of FL Studio's sampler channel):
   play the sample backwards; start a note further into the sample (0-99 %); fade the start in and the end out over a part of the
   sample's length. They apply to notes that do not loop (a looping note keeps its fade in).
@@ -846,7 +856,9 @@ grid: **Draw** (as described above), **Paint** (drag along a row to write one no
 in two at the snap). The label at the corner of the **event lane** under the grid chooses what the lane shows and edits:
 *Velocity*, **Pan** (per note, from the middle), **Release** (how long the note rings after its end, against the instrument's
 own release) or **Fine pitch** (cents). Every instrument plays these values. In the **Tools** menu: *Note colour* (16 colours
-for the notes you write next or the selected ones), **Limit** (moves the selected notes by octaves into one, two or three octaves) and
+for the notes you write next or the selected ones), **Claw machine** (0.70.0, as FL Studio's: cuts the last 16th out of every beat,
+the last 8th out of every half bar or the last beat out of every bar and closes the gaps, so a straight pattern becomes a shorter,
+syncopated one; notes that start in a cut slice go, notes that reach into one are shortened), **Limit** (moves the selected notes by octaves into one, two or three octaves) and
 **LFO** (writes a wave - one cycle per beat, per bar, every 2 or every 4 bars - into the values of the lane shown).
 
 ## Patterns
@@ -1015,6 +1027,8 @@ Right-click a track's name:
   master's effects, with up to two seconds of tail) to a WAV file in `Samples/Consolidated` and puts it on the track as an audio
   clip; the pattern clips stay, muted, and Undo brings everything back. *Consolidate to audio (this clip)* in a pattern clip's
   menu does one clip. The audio clip plays through the mixer track of its playlist track, like any audio clip.
+- **Chop into pieces** (0.70.0, any clip's menu): cuts the clip into pieces of a bar, a beat, an 8th or a 16th, counted from its
+  start (as the chop commands of FL Studio's Playlist) - to rearrange a pattern or a drum loop piece by piece. One undo step.
 - **Make unique** (a pattern clip's menu): the clip gets its own copy of the pattern, which opens for editing; the other clips
   of the old pattern are not touched.
 
@@ -1033,7 +1047,12 @@ are the cells. Switch **Performance mode** on (or just click a cell):
 The first cell starts the transport; **Stop** ends the performance. While the mode is on the Playlist's own arrangement does
 not play (automation clips and audio clips are not part of a performance); closing the window or switching the mode off gives
 the song back. Patterns can be edited while they are performed. The switches are exact to the sample: a launched clip is
-written into the timeline ahead of the playhead. There is no MIDI controller mapping yet: the cells are clicked.
+written into the timeline ahead of the playhead.
+
+**MIDI pads** (0.70.0): with this switch on (and the mode on), a pad controller plays the window. The notes from **C1** (note
+36) up are the cells, eight to a row from the top row down: the first seven pads of a row launch its first seven clips, the
+eighth stops the row. So the bottom row of a 4 x 4 pad grid set to send notes from C1 launches the first row's first four clips,
+and an 8 x 8 grid covers eight rows. Those notes then do not play the selected instrument; every other note still does.
 
 ### Tools, grid, zoom and undo
 
@@ -1474,6 +1493,26 @@ In the same slot menu as the others (*Drive*, *Space and time*, *Pitch and voice
 | Vocoder | As Fruity Vocoder / Vocodex: **Modulator** (the mixer track with the voice; *None*: the left input is the voice and the right one the carrier), Bands (8, 12, 16), Attack, Release, Width, Formant (moves the carrier's bands), Output, Mix. Put it on the track of a rich sustained sound (a saw chord) and choose the voice's track. | Robot, Old vocoder, Whisper |
 | Peak Controller | As Fruity Peak Controller: value = Base + Volume x the track's peak level + an LFO (LFO amount, LFO rate), falling back by Decay. The value sets parameter **Target param** of the effect in **Target slot** of **Target track** (*This track* or another) between its minimum and maximum; the line under the effect's name says what it drives. Works on plugins' parameters too. **Mute**: the track's sound only drives the controller (a ghost kick that ducks a bass). | Follow the level, Duck, Slow LFO, Level and wobble |
 
+### Effects added in 0.70.0, and the slot mix
+
+| Effect | Parameters | Presets |
+| --- | --- | --- |
+| Frequency Shifter | As FL Studio's Frequency Shifter: **Shift** (-1000 to +1000 Hz: every frequency moves by the same number of Hz, so harmonics stop being harmonic - metallic, bell-like, or a slow "barber pole" with a small shift and feedback), **Stereo** (the left channel moves that much further up and the right one down), **Feedback**, **Mix**. | Slow barber pole, Detune, Bell tones, Downward spiral |
+| Vintage Chorus | As FL Studio's Vintage Chorus (the ensemble of an analogue polysynth): **Mode** I, II or I+II (slow and wide, faster, or a fast shimmer), **Depth**, **Tone** (a darker or brighter bucket-brigade delay), **Mix**. | Ensemble I, Ensemble II, Shimmer, Dark and wide |
+| Vintage Phaser | As FL Studio's Vintage Phaser: **Model** *Stone* (a wide, slow sweep with a singing feedback), *Ninety* (a narrower, gritty sweep) or *Vibe* (four stages tuned far apart and a lopsided sweep, the right channel a quarter turn later), **Rate**, **Depth**, **Feedback**, **Mix**. | Slow stone, Script ninety, Throbbing vibe |
+| Effector | As FL Studio's Effector: **ten effects with two controls each**, made to be played: *Distortion* (X drive, Y tone), *Lo-fi* (X sample rate, Y bits), *Flanger* (X delay, Y feedback), *Phaser* (X frequency, Y feedback), *Low-pass* and *High-pass* (X cutoff, Y resonance), *Delay* (X time - moving it bends the pitch as a tape delay -, Y feedback), *Ring mod* (X frequency, Y amount), *Auto-pan* (X rate, Y depth), *Formant* (X the vowel A E I O U, Y sharpness). The **X / Y pad** under its controls moves both at once; automate X and Y for builds and drops. | Telephone, Jet flanger, Filter sweep down, Dub echo, Robot, Talking |
+| Grains | A granular effect (the counterpart of Fruity Granulizer on a mixer track): the last moments of the sound are replayed as four overlapping grains. **Grain** (10-250 ms), **Pitch** (±12 semitones), **Scatter** (how far back a grain may start), **Random pitch**, **Reverse** (the share of grains played backwards), **Feedback**, **Mix**. | Cloud, Octave up shimmer, Backwards, Scattered pitches |
+| Envelope Controller | As Fruity Envelope Controller: when the track's sound rises above **Threshold** an envelope starts (**Attack**, **Decay** to **Sustain**); when it falls below, **Release**. Value = **Base** + **Amount** x the envelope, sent as the Peak Controller's to **Target param** of the effect in **Target slot** of **Target track**. **Mute** silences the track (it only drives). | Pluck, Swell, Duck while it sounds |
+| Formula Controller | As Fruity Formula Controller: the value is a **formula** typed into the box under its name (Enter applies it), worked out every block. Names: **a b c** (the three knobs, 0-1), **t** (seconds), **beat** (the song's position in beats; its own clock at 120 BPM while stopped), **level** (this track's peak), **pi**. Operators **+ - * / % ^**, comparisons (1 or 0), brackets. Functions: *sin cos tan abs sqrt exp log floor ceil round frac*, the waves *tri saw sqr* (period 1, between 0 and 1), *rnd(x)* (a new random value each time x passes a whole number), *min max pow*, *clamp(x, low, high)*, *if(condition, then, otherwise)*, *lerp(from, to, x)*. The result is kept between 0 and 1. Examples: `0.5 + 0.5 * sin(2 * pi * beat / 4) * a` (a slow wave of one bar, depth on A), `sqr(beat * 2)` (a gate on 8ths), `rnd(beat * 4)` (a new random value every 16th), `if(level > 0.3, b, a)`. A formula that cannot be read is not applied and the line under the name says why. Empty: the value is knob A. | - |
+
+The three controllers drive the parameters of other effects and of plugins on any track. They are in the *Controllers* group,
+with the Peak Controller.
+
+**Slot mix** (0.70.0, as the mix knob next to each slot in FL Studio): under an effect's controls, **Slot mix** blends the
+sound before the effect with the sound after it - 100 % (the default) is the effect alone, 50 % half and half, 0 % as if the
+slot were bypassed. It works for every built-in effect and for plugins (a parallel compression without a bus); the controllers
+have none. It is saved with the project and with chain presets.
+
 ### Master effects
 
 The **master strip** (right of the tracks) has the same ten effect slots as a track. Click a slot to pick an effect
@@ -1492,9 +1531,15 @@ bottom of FL Studio's mixer:
 
 - **The master** (ticked by default);
 - **Also send to** > a track: the track's sound after its fader also goes into that track, before that track's effects. Up to
-  four sends per track; *Level to Track n* sets each from 25 to 150 %, or removes it;
+  **eight** sends per track (four before 0.70.0); *Level to Track n* sets each from 25 to 150 %, switches it to **Before the
+  fader (pre-fader)** - it then takes the sound before the track's fader and balance, as a monitor or reverb send that does
+  not follow the fader (it still follows mute and solo) - or removes it;
 - **Route to this track only**: not to the master, only to the chosen track - a bus (all the drums through one compressor);
 - **Reset** puts it back to the master only.
+- **Track delay** (0.70.0, FL Studio's track latency): delays the track's sound by 1 to 200 ms (*Other...* for any value), on top
+  of the automatic compensation - to line up a track recorded late, or to push a part behind the beat.
+- **Strip colour** (0.70.0): one of twelve colours for the strip (its name and a wash over it); *Default* takes it away.
+  Saved with the project.
 
 The button shows the result: **> M+2** (master and two sends), **> 5** (only track 5), **> -** (nowhere: silent). A track is
 processed before the tracks it feeds, whatever their numbers; a send that would close a loop is ignored; a muted track sends
@@ -1502,7 +1547,8 @@ nothing. A bus fed by sends can be chosen as the sidechain of a compressor, gate
 
 **Delay compensation** is automatic: when an effect delays its track (the Maximizer's look-ahead, a plugin that reports a
 latency), every other track is delayed by the same amount after its own effects, so that they stay together - also when the
-slow effect is on a bus. An export drops the mix's latency from its start. The effects on Aux A / B are not compensated.
+slow effect is on a bus. An export drops the mix's latency from its start. Since 0.70.0 the effects on **Aux A / B** are
+compensated too: when one of them delays its bus, the tracks and the other bus wait for it on the master.
 
 ### Sends, aux buses and VCA groups
 

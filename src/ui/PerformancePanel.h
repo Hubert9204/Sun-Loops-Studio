@@ -29,6 +29,7 @@ struct PerformanceModel
     std::vector<Row> rows;
     bool on = false;
     int quantiseId = 1; // 1 bar, 2 bars, 4 bars, 1 beat, a 16th
+    bool pads = false;  // 0.70.0: MIDI notes from C1 up launch the cells
 };
 
 // Performance mode (0.62.0, after FL Studio's): the Playlist's pattern clips become cells to launch. A click on a cell starts
@@ -47,6 +48,7 @@ public:
     std::function<void()> onStopAll;
     std::function<void (int)> onScene;        // a column (from 0)
     std::function<void (int)> onQuantise;     // the id of the quantise choice
+    std::function<void (bool)> onPads;        // 0.70.0: the MIDI pads switch
 
     void paint (juce::Graphics&) override;
     void resized() override;
@@ -63,6 +65,7 @@ private:
     PerformanceModel model;
     juce::TextButton onButton { "Performance mode" };
     juce::TextButton stopAllButton { "Stop all" };
+    juce::TextButton padsButton { "MIDI pads" };
     juce::ComboBox quantiseBox;
     juce::Label quantiseLabel { {}, "Launch on" };
     bool blink = false;

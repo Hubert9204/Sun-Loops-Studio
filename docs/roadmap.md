@@ -1,6 +1,6 @@
 # Status and roadmap
 
-Version 0.69.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
+Version 0.70.0 (alpha). This page separates what has been **verified** from what has only been **written**, and lists
 what is missing. If something here disagrees with the program, the program is right: please fix the page.
 
 ## What has been verified, and how
@@ -82,6 +82,7 @@ what is missing. If something here disagrees with the program, the program is ri
 | In the app (0.58.0): a note clicked into the spare quarter of a 4-quarter pattern, the pattern then 5 quarters (20 steps) in the rack and a new spare quarter after it; the wheel scrolling pitch, Ctrl+wheel zooming, Shift+wheel scrolling time to the end; the demo song in Song mode with the Beat pattern open: the playhead line in the Piano Roll while a Beat clip plays, none while other patterns play | Manual, in a virtual display | Worked |
 | In the app (0.57.0), on the demo song: a selection rectangle from an empty place selecting 6 pattern clips (no clip placed), one of them dragged moving all six 4 bars and one track, Ctrl+Z, the six deleted with Delete, Ctrl+Z; a right-button stroke deleting two pattern clips, a third and two automation clips, all of them back with one Ctrl+Z; a right click without moving opening the clip's menu; a click on empty space placing a clip; Ctrl+A (46 clips); three selected clips duplicated with Ctrl+D right after them | Manual, in a virtual display | Worked |
 | Each pattern's own length (0.56.0): one pattern made longer leaving the others and their clips alone, a new pattern at 4 quarters, Pattern and Song mode playing each pattern over its own length, a split counting in its clip's pattern, the timeline following the longest pattern, the time signature lengthening only the short patterns, the project file per pattern and older files with one length | Automated headless tests (1711 checks in total) | All pass |
+| FL Studio parity (0.70.0): the formula language (precedence, the 20 functions, refused text with a reason, too-deep nesting refused), the frequency shifter (one side band, up and down, level kept, full feedback bounded), the vintage chorus / phaser models, the Effector's ten effects at the pad's corners and its filters' slopes, Grains (an octave up at +12, the level kept at 0), the Envelope and Formula Controllers alone and driving a Panomatic on another track in time with the song, the slot mix (0 bit-exact, 50 % the average), pre-fader and eight sends, the track delay (480 samples for 10 ms), the aux buses' delay compensation, the sampler's delay / hold / second LFO on the resonance, rotate and randomize, claw machine, chop, the polyphony count, the pad layout, and every new field through a save and a load | Automated headless tests | All pass |
 | SunRiff (0.68.0): every string type in tune within 5 cents (E2-E5), Damping, Hold and the sustain pedal, the coarse and fine bends of both Glissando settings, Powerchords / Autochords / Strumming (down then up) / SoloFixed / SoloDynamic, every amp, cabinet and effect with full drive and feedback finite and bounded, the 34 presets, no allocation; loaded and played inside Sun Loops Studio | Automated headless tests | All pass |
 | In the app (0.68.0): SunRiff Standalone's window (the guitar with its pickup, radio buttons, panels, the preset menu by category); the AppImage listing SunRiff among the bundled plugins | Manual, in a virtual display | Worked; eight preset demos rendered and measured (levels, spectra), not judged by ear |
 | SunSymphony library (0.67.0): the built-in catalog (29 instruments, every file with size, SHA-256 and a fixed GitHub address, every SFZ naming only files it downloads), a damaged file refused and the instrument left uninstalled, a verified download installing samples, SFZ and credits, Remove; round robins, unpitched and one-shot zones in the engine | Automated headless tests (the downloads against a local server) | All pass |
@@ -138,6 +139,10 @@ what is missing. If something here disagrees with the program, the program is ri
 | A use-after-free when clicking an item that rebuilds the browser tree (crash on *Scan for VST3 plugins...*) | Found in that manual session | Fixed (item actions are deferred); the same click was repeated afterwards |
 
 ## What has not been verified
+
+- **The 0.70.0 effects by ear, and their windows.** Frequency Shifter, Vintage Chorus / Phaser, Effector, Grains and the two
+  controllers were measured, not listened to; the Effector's X / Y pad, the formula box, the slot mix row, the sampler window's
+  new rows and the MIDI pads with a real pad controller were not tried in the app.
 
 - **SunRiff by ear (0.68.0).** Its strings, amp and presets were measured, not listened to; the VST3 in other programs, CPU use
   with twelve strings and feedback on a real machine, and its playing modes with a real MIDI keyboard were not tried.
