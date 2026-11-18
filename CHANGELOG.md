@@ -2,6 +2,25 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.77.0 - 2026-11-18
+
+ASIO by default on Windows.
+
+### Changed
+- **ASIO is the default audio device on Windows.** At the first start (no audio settings saved yet) the program tries the ASIO
+  drivers installed on the computer and opens the first that starts, with the driver's own sample rate and buffer size (set in
+  its Control Panel) and its outputs only; the audio interfaces' own drivers are tried first, the generic ones that wrap
+  Windows's audio (ASIO4ALL, FlexASIO, Generic Low Latency, ASIO2WASAPI) and virtual mixers (Voicemeeter, JACK) after them. Each
+  driver is first tried on its own, so one that is installed but cannot start (its interface unplugged) leaves nothing behind.
+  The choice is saved like one made in **Audio...**. Without a driver that starts: Windows Audio, as before. Each step is
+  written in the session log.
+- When a saved ASIO driver does not start at a later start (the interface switched off), that session falls back to Windows
+  Audio with its inputs closed and the usual buffer, instead of JUCE's default inputs.
+
+### Added
+- Tests: the order the ASIO drivers are tried in; the continuous integration checks that the program, started on a Windows
+  machine with FlexASIO installed but no sound hardware, tries FlexASIO and then uses Windows Audio.
+
 ## 0.76.0 - 2026-11-17
 
 ASIO on Windows.
