@@ -79,6 +79,7 @@
 #include "library/FlpProject.h"
 #include "plugins/PluginScanner.h"
 #include "ui/PanelLayout.h"
+#include "ui/DragItems.h"
 
 // Several checks below deliberately compare floats with ==: "exactly zero" means silence or
 // "no contribution at all", which is the property being tested.
@@ -11920,6 +11921,76 @@ void testAuditioner()
 
 // ------------------------------------------------------------------------- 0.15.0: seeking and the loop region
 
+// 0.82.0: dragging channels, mixer tracks and playlist tracks to another place
+void testReorder082()
+{
+    std::cout << "\n[0.82.0 drag & drop reorder]\n";
+    using namespace sls;
+    {
+        Arrangement a;
+        a.patterns.resize (2);
+        a.resetTracks();
+        a.addPatternTrack (1); // audio 0..3, pattern tracks 4 (pattern 0) and 5 (pattern 1)
+        AudioClip au;
+        au.data = sineSample (440.0, 0.05, 48000.0);
+        au.lengthTicks = 960;
+        au.track = 1;
+        a.audioClips = { au };
+        a.clips = { { 0, 4, 0, 960, 0 }, { 1, 5, 0, 960, 0 }, { 1, 2, 0, 960, 0 } };
+        check (! a.moveTrack (1, 4), "a track does not move into another section");
+        check (a.moveTrack (1, 3) && a.audioClips[0].track == 3 && a.mixerTrackOf (3) == 1 && a.clips[2].track == 1,
+               "an audio track moved down keeps its mixer track; the clips between move up one place");
+        check (a.moveTrack (3, 1) && a.audioClips[0].track == 1 && a.playlistTracks[1].mixerTrack == -1,
+               "moved back where it was, its mixer track is implicit again");
+        check (a.moveTrack (5, 4) && a.dedicatedTrack (1) == 4 && a.dedicatedTrack (0) == 5 && a.clips[0].track == 5 && a.clips[1].track == 4,
+               "two pattern tracks swap, with their clips");
+    }
+    {
+        RecordSetup r;
+        r.tracks[1].armed = true;
+        r.tracks[1].firstInput = 3;
+        r.moveTrack (1, 3);
+        check (r.tracks[3].armed && r.tracks[3].firstInput == 3 && ! r.tracks[1].armed, "the recording settings follow the moved track");
+    }
+    {
+        std::vector<MixerTrack> tracks = Project::defaultTracks();
+        tracks[2].slots[0] = EffectSlot::make (EffectType::Reverb);
+        tracks[0].trackSends[0] = { 2, 1.0f, false };
+        tracks[5].slots[1] = EffectSlot::make (EffectType::Compressor);
+        tracks[5].slots[1].params[5] = 3.0f; // sidechain from track 3 (1-based)
+        std::vector<Channel> ch (2);
+        ch[0].mixerTrack = 2;
+        ch[1].mixerTrack = 4;
+        Console con = Console::defaults();
+        std::array<EffectSlot, kSlotsPerTrack> master {};
+        Arrangement b;
+        b.patterns.resize (1);
+        b.resetTracks();
+        AudioClip au;
+        au.data = sineSample (440.0, 0.05, 48000.0);
+        au.lengthTicks = 960;
+        au.track = 2;
+        b.audioClips = { au };
+        AutomationClip ac;
+        ac.points = { AutomationPoint {} };
+        ac.target = { AutomationKind::TrackMute, 4, 0, 0 };
+        b.automationClips = { ac };
+        check (moveMixerTrack (tracks, ch, b, con, master, 2, 5), "mixer track 3 moves to place 6");
+        check (tracks[5].slots[0].type == EffectType::Reverb && tracks[5].name == "Track 6" && tracks[2].name == "Track 3",
+               "the track goes with its effects; the default names follow the places");
+        check (ch[0].mixerTrack == 5 && ch[1].mixerTrack == 3 && tracks[0].trackSends[0].target == 5, "channels and sends follow");
+        check (tracks[4].slots[1].params[5] == 6.0f, "a sidechain source follows its track");
+        check (b.automationClips[0].target.index == 3 && b.mixerTrackOf (2) == 5, "track automation and playlist audio follow");
+        check (! moveMixerTrack (tracks, ch, b, con, master, 2, 2) && ! moveMixerTrack (tracks, ch, b, con, master, -1, 2), "nothing to do: no move");
+    }
+    check (drag::parseMove (drag::moveDescription ("channel", 7), "channel") == 7, "a dragged channel is read back");
+    check (drag::parseMove (drag::moveDescription ("channel", 7), "mixertrack") == -1 && drag::parseMove ("sls:file:/x.wav", "channel") == -1,
+           "a move of something else, or a file, is not a channel move");
+    juce::var desc (drag::moveDescription ("mixertrack", 3));
+    drag::Item item;
+    check (! drag::Item::parse (desc, item), "a move is not a browser item");
+}
+
 void testChannelRemap()
 {
     std::cout << "Deleting, moving and cloning channels\n";
@@ -14766,6 +14837,7 @@ int main (int argc, char** argv)
     testSeekAndLoopRegion();
     testPatternLoopRegion();
     testChannelRemap();
+    testReorder082();
     testProjectWithSamples();
     testPatternLength();
     testAdvancedSampler();

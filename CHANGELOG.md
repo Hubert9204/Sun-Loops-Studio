@@ -2,6 +2,20 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.82.0 - 2026-11-18
+
+Drag & drop to reorder, as in FL Studio (third block of the plan).
+
+### Added
+- **Channel Rack**: drag a channel's row onto another channel to move it there (onto the empty area under the list: to the end).
+  Its steps, notes, mixer track, layers, playlist clips and automation go with it.
+- **Mixer**: drag a track strip onto another strip to move the track there, with its effects, fader, sends and name. Channels,
+  playlist audio tracks, sends, sidechain sources, controller targets and automation clips follow it; tracks still named
+  "Track N" are renamed after their new place. A green frame shows the strip it will land on.
+- **Playlist**: drag a track's name up or down to move it inside its section, with its clips, name, colour, mute and record
+  settings; a green line shows where it will go. A moved audio track keeps playing through the same mixer track.
+- Every move can be undone with **Ctrl+Z**.
+
 ## 0.81.0 - 2026-11-18
 
 Long audio from the disk, more clips, backups and a single-file project (second block of the plan).

@@ -170,7 +170,8 @@ Instruments). Their DSP code is also compiled into the test program, to be teste
   adjustable buffer with an **Auto** button that finds a size that does not crackle; MIDI keyboards switched on as they are
   plugged in.
 - **Interface** - FL Studio's layout of menus, toolbar and panels; F5 / F6 / F7 / F8 / F9 for Playlist, Channel Rack, Piano Roll,
-  Browser and Mixer; the computer keyboard as a piano; a saved layout.
+  Browser and Mixer; the computer keyboard as a piano; a saved layout; channels, mixer tracks and playlist tracks reordered by
+  dragging them.
 
 Everything above is described in detail in the [user guide](docs/user-guide.md) ([Italiano](docs/user-guide.it.md)).
 

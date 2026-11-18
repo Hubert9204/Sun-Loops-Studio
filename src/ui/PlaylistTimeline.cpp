@@ -1400,6 +1400,19 @@ void PlaylistTimeline::paintLoopRegion (juce::Graphics& g)
     }
 }
 
+void PlaylistTimeline::paintOverChildren (juce::Graphics& g)
+{
+    // 0.82.0: a track dragged by its name: a line where it would go (above the track it is over when moving up, under it moving down)
+    if (drag != Drag::TrackMove || trackMoveFrom < 0 || trackMoveTo < 0 || trackMoveTo == trackMoveFrom)
+        return;
+    const int top = trackTop (trackMoveTo);
+    if (top < -1000)
+        return;
+    const int y = trackMoveTo < trackMoveFrom ? top : top + trackHeight (trackMoveTo);
+    g.setColour (juce::Colour (0xff4cc38a));
+    g.fillRect (0, y - 1, getWidth(), 3);
+}
+
 void PlaylistTimeline::paint (juce::Graphics& g)
 {
     g.fillAll (kBackground);
@@ -3499,6 +3512,11 @@ void PlaylistTimeline::mouseDown (const juce::MouseEvent& e)
         setSelectedTrack (track);
         if (onTrackSelected)
             onTrackSelected (track);
+        if (track >= 0 && track < arrangement.trackCount()) // 0.82.0: dragging the name up or down moves the track (in its section)
+        {
+            drag = Drag::TrackMove;
+            trackMoveFrom = trackMoveTo = track;
+        }
         return;
     }
     if (e.x >= kNameWidth && inLanes (e.y))
@@ -3855,6 +3873,28 @@ void PlaylistTimeline::mouseDrag (const juce::MouseEvent& e)
     }
     const bool noSnap = e.mods.isAltDown();
 
+    if (drag == Drag::TrackMove) // 0.82.0
+    {
+        if (std::abs (e.getDistanceFromDragStartY()) < 4 || trackMoveFrom < 0 || trackMoveFrom >= arrangement.trackCount())
+            return;
+        const int section = sectionOfTrack (trackMoveFrom);
+        const int first = sectionFirstTrack (section), last = sectionEndTrack (section) - 1;
+        int target = trackMoveTo;
+        if (e.y < sectionArea (section).bodyTop)
+            target = first;
+        else if (e.y >= sectionArea (section).bodyBottom())
+            target = last;
+        else if (inTracks (e.y))
+            target = std::clamp (yToTrack (e.y), first, last);
+        setMouseCursor (juce::MouseCursor::DraggingHandCursor);
+        if (target != trackMoveTo)
+        {
+            trackMoveTo = target;
+            repaint();
+        }
+        return;
+    }
+
     if (splitterDrag >= 0) // 0.69.0: the two sections beside the border share their heights anew
     {
         const auto upper = static_cast<size_t> (splitterDrag), lower = upper + 1;
@@ -4076,6 +4116,43 @@ void PlaylistTimeline::mouseDrag (const juce::MouseEvent& e)
 
 void PlaylistTimeline::mouseUp (const juce::MouseEvent& e)
 {
+    if (drag == Drag::TrackMove) // 0.82.0: the dragged track goes where it was let go
+    {
+        drag = Drag::None;
+        const int from = trackMoveFrom, to = trackMoveTo;
+        trackMoveFrom = trackMoveTo = -1;
+        setMouseCursor (juce::MouseCursor::NormalCursor);
+        repaint();
+        if (from >= 0 && to >= 0 && from != to)
+        {
+            beginEdit();
+            if (! arrangement.moveTrack (from, to))
+            {
+                pendingUndoValid = false;
+                return;
+            }
+            commitPendingUndo();
+            // its record switch and the selected track go with it (the ones between move one place)
+            const auto moving = recordArms[static_cast<size_t> (from)];
+            if (from < to)
+                for (int t = from; t < to; ++t)
+                    recordArms[static_cast<size_t> (t)] = recordArms[static_cast<size_t> (t + 1)];
+            else
+                for (int t = from; t > to; --t)
+                    recordArms[static_cast<size_t> (t)] = recordArms[static_cast<size_t> (t - 1)];
+            recordArms[static_cast<size_t> (to)] = moving;
+            clearSelection(); // (the clips' indices did not change, but a group may now span other tracks)
+            tracksChanged();
+            setSelectedTrack (to);
+            if (onTrackMoved)
+                onTrackMoved (from, to);
+            if (onTrackSelected)
+                onTrackSelected (to);
+            notifyChanged();
+        }
+        return;
+    }
+
     if (playbackDrag) // 0.71.0
     {
         playbackDrag = false;

@@ -558,6 +558,43 @@ struct Arrangement
         return true;
     }
 
+    // 0.82.0: moves track `from` to place `to` inside its section (dragging its name, as in FL Studio); the tracks between move one
+    // place, every clip goes with its track, and a track's audio keeps playing through the mixer track it played through (it names
+    // it when its number changes). False (and nothing changes) for a bad index or a place in another section.
+    bool moveTrack (int from, int to)
+    {
+        if (from < 0 || from >= trackCount() || to < 0 || to >= trackCount() || from == to || trackSection (from) != trackSection (to))
+            return false;
+        const auto newIndex = [from, to] (int t)
+        {
+            if (t == from)
+                return to;
+            if (from < to && t > from && t <= to)
+                return t - 1;
+            if (to < from && t >= to && t < from)
+                return t + 1;
+            return t;
+        };
+        for (int t = 0; t < trackCount(); ++t)
+        {
+            auto& track = playlistTracks[static_cast<size_t> (t)];
+            const bool hasAudio = std::any_of (audioClips.begin(), audioClips.end(), [t] (const AudioClip& c) { return c.track == t; });
+            if (newIndex (t) != t && track.mixerTrack < 0 && hasAudio)
+                track.mixerTrack = t;
+            else if (track.mixerTrack == newIndex (t))
+                track.mixerTrack = -1; // (its number gives that track now)
+        }
+        const auto moving = playlistTracks[static_cast<size_t> (from)];
+        playlistTracks.erase (playlistTracks.begin() + from);
+        playlistTracks.insert (playlistTracks.begin() + to, moving);
+        for (auto& c : clips)
+            c.track = newIndex (c.track);
+        for (auto& c : audioClips)
+            c.track = newIndex (c.track);
+        tidyTrackSections();
+        return true;
+    }
+
     // How many clips (pattern and audio) are on track `t`.
     int clipsOnTrack (int t) const noexcept
     {

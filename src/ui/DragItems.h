@@ -36,4 +36,22 @@ struct Item
         return out.kind == "file" || out.kind == "builtin" || out.kind == "instrument" || out.kind == "preset" || out.kind == "plugin";
     }
 };
+
+// 0.82.0: moving something inside the program by dragging it (a channel of the rack, a mixer track): "sls-move:<what>:<index>". Not an
+// Item, so the browser's drop targets (the playlist, an empty rack) never take it for one of theirs.
+inline juce::String moveDescription (const char* what, int index)
+{
+    return juce::String ("sls-move:") + what + ":" + juce::String (index);
+}
+// The index a move of `what` carries, or -1 when the description is not one.
+inline int parseMove (const juce::var& description, const char* what)
+{
+    if (! description.isString())
+        return -1;
+    const auto prefix = juce::String ("sls-move:") + what + ":";
+    const auto text = description.toString();
+    if (! text.startsWith (prefix) || ! text.substring (prefix.length()).containsOnly ("0123456789") || text.length() == prefix.length())
+        return -1;
+    return text.substring (prefix.length()).getIntValue();
+}
 } // namespace sls::drag

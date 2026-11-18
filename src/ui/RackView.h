@@ -36,18 +36,25 @@ public:
 
     std::function<void()> onAddChannel;
     std::function<void (const drag::Item&)> onItemDroppedOnEmptyArea; // new channel from a browser item
+    std::function<void (int)> onChannelDroppedOnEmptyArea;           // 0.82.0: a channel dragged under the last one: to the end
 
     // juce::DragAndDropTarget: only reached where no channel strip is under the mouse.
     bool isInterestedInDragSource (const SourceDetails& d) override
     {
         drag::Item item;
-        return addButton.isVisible() && drag::Item::parse (d.description, item);
+        return (addButton.isVisible() && drag::Item::parse (d.description, item)) || drag::parseMove (d.description, "channel") >= 0;
     }
     void itemDragEnter (const SourceDetails&) override { setHighlight (true); }
     void itemDragExit (const SourceDetails&) override { setHighlight (false); }
     void itemDropped (const SourceDetails& d) override
     {
         setHighlight (false);
+        if (const int channel = drag::parseMove (d.description, "channel"); channel >= 0)
+        {
+            if (onChannelDroppedOnEmptyArea)
+                onChannelDroppedOnEmptyArea (channel);
+            return;
+        }
         drag::Item item;
         if (drag::Item::parse (d.description, item) && onItemDroppedOnEmptyArea)
             onItemDroppedOnEmptyArea (item);

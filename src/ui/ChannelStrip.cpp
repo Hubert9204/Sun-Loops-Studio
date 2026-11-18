@@ -417,7 +417,7 @@ void ChannelStrip::resized()
 bool ChannelStrip::isInterestedInDragSource (const SourceDetails& details)
 {
     drag::Item item;
-    return drag::Item::parse (details.description, item);
+    return drag::Item::parse (details.description, item) || drag::parseMove (details.description, "channel") >= 0; // 0.82.0: a channel moved here
 }
 
 void ChannelStrip::setDropHighlight (bool on)
@@ -433,6 +433,12 @@ void ChannelStrip::itemDropped (const SourceDetails& details)
 {
     setDropHighlight (false);
 
+    if (const int from = drag::parseMove (details.description, "channel"); from >= 0)
+    {
+        if (from != index && onChannelDropped)
+            onChannelDropped (from, index);
+        return;
+    }
     drag::Item item;
     if (drag::Item::parse (details.description, item) && onItemDropped)
         onItemDropped (index, item);
@@ -456,6 +462,14 @@ void ChannelStrip::mouseDown (const juce::MouseEvent& e)
 
     if (e.mods.isPopupMenu())
         showContextMenu();
+}
+
+void ChannelStrip::mouseDrag (const juce::MouseEvent& e)
+{
+    if (e.mods.isPopupMenu() || e.getDistanceFromDragStart() < 6)
+        return;
+    if (auto* container = juce::DragAndDropContainer::findParentDragContainerFor (this); container != nullptr && ! container->isDragAndDropActive())
+        container->startDragging (drag::moveDescription ("channel", index), this); // (its picture follows the mouse)
 }
 
 void ChannelStrip::mouseDoubleClick (const juce::MouseEvent& e)

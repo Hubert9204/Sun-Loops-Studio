@@ -10,6 +10,7 @@
 #include "audio/Automation.h"
 #include "audio/Project.h"
 #include "ui/AutomatableSlider.h"
+#include "ui/DragItems.h"
 #include "ui/RightClickButton.h"
 #include "ui/VuMeter.h"
 
@@ -35,7 +36,7 @@ private:
 
 // One vertical mixer track: name and the channels routed to it, four effect slots, balance, mute/solo,
 // a fader with a Peak/RMS meter and a dB read-out.
-class MixerStrip : public juce::Component
+class MixerStrip : public juce::Component, public juce::DragAndDropTarget
 {
 public:
     // `isAuxBus`: the strip of an aux bus (its index is kAuxIndexBase + n): no sends, no VCA, no solo.
@@ -59,6 +60,15 @@ public:
     std::function<void (const AutomationTarget&)> onAutomate; // right click on the fader / balance
     std::function<void (int, juce::Component&)> onRouteMenu;  // 0.62.0: the routing button was clicked (track, the button)
     std::function<void (int)> onStripMenu;                    // 0.79.0: right click on the strip (its name, its empty places)
+    std::function<void (int, int)> onTrackDropped;            // 0.82.0: track (first) dragged onto this strip (second): it moves here
+
+    // 0.82.0: dragging a track's strip (its name or an empty place) onto another moves the track there
+    void mouseDrag (const juce::MouseEvent&) override;
+    bool isInterestedInDragSource (const SourceDetails& d) override { return ! isAux && drag::parseMove (d.description, "mixertrack") >= 0; }
+    void itemDragEnter (const SourceDetails&) override { dropHighlight = true; repaint(); }
+    void itemDragExit (const SourceDetails&) override { dropHighlight = false; repaint(); }
+    void itemDropped (const SourceDetails& d) override;
+    void paintOverChildren (juce::Graphics&) override;
 
     void paint (juce::Graphics&) override;
     void resized() override;
@@ -80,6 +90,7 @@ private:
     bool isAux = false;
     int selectedSlot = -1;
     int auxCount = kDefaultAuxBuses;
+    bool dropHighlight = false; // 0.82.0
 
     juce::Label nameLabel;
     juce::Label routedLabel;
@@ -322,6 +333,7 @@ public:
     std::function<void (int)> onAddTracks;          // the "+" button: add this many tracks (0.29.0)
     std::function<void()> onRemoveLastTrack;        // its menu, and (0.78.0) the "-" under it: remove the last track
     std::function<void (int)> onDeleteTrack;        // 0.79.0: a strip's right-click menu (or its routing menu): delete that track
+    std::function<void (int, int)> onMoveTrack;     // 0.82.0: a strip dragged onto another: move track (first) to that place (second)
     std::function<void()> onAddAuxBus;              // 0.78.0: the "+" after the aux buses
     std::function<void()> onRemoveLastAuxBus;       // 0.78.0: the "-" under it
     std::function<void (double)> onMasterVolumeChanged;

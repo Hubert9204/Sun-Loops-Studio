@@ -72,6 +72,21 @@ struct RecordSetup
             tracks[0].armed = true;
     }
 
+    // 0.82.0: track `from` was moved to place `to` (dragged): its settings go with it, the ones between move one place.
+    void moveTrack (int from, int to)
+    {
+        if (from < 0 || from >= kMaxPlaylistTracks || to < 0 || to >= kMaxPlaylistTracks || from == to)
+            return;
+        const auto moving = tracks[static_cast<std::size_t> (from)];
+        if (from < to)
+            for (int i = from; i < to; ++i)
+                tracks[static_cast<std::size_t> (i)] = tracks[static_cast<std::size_t> (i + 1)];
+        else
+            for (int i = from; i > to; --i)
+                tracks[static_cast<std::size_t> (i)] = tracks[static_cast<std::size_t> (i - 1)];
+        tracks[static_cast<std::size_t> (to)] = moving;
+    }
+
     // Toggles one track. The last armed track cannot be disarmed: Record always has somewhere to write.
     void toggle (int track)
     {
