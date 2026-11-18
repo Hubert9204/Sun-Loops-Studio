@@ -1597,7 +1597,8 @@ void MainComponent::deleteMixerTrack (int track)
         message += "\n- Track " + list (use.feeders, [] (int t) { return juce::String (t + 1); }) + (use.feeders.size() == 1 ? " sends" : " send")
                  + " to it: the send is removed (a track that went only there goes to the master).";
     if (use.listeners > 0)
-        message += "\n- " + juce::String (use.listeners) + (use.listeners == 1 ? " effect listens" : " effects listen") + " to it (sidechain): set to Off.";
+        message += "\n- " + juce::String (use.listeners) + (use.listeners == 1 ? " effect points" : " effects point")
+                 + " at it: a sidechain is set to Off, a controller that drives it is bypassed (its second target is cleared).";
     if (use.automationClips > 0)
         message += "\n- " + juce::String (use.automationClips) + (use.automationClips == 1 ? " automation clip moves" : " automation clips move")
                  + " it: deleted.";
@@ -1617,14 +1618,21 @@ void MainComponent::doDeleteMixerTrack (int track, int heir)
     if (track < 0 || track >= count || count <= kDefaultTracks || heir < 0 || heir >= count || heir == track)
         return;
     closeAutomationEditor(); // its clip index may change
+    const int selectedBefore = mixerPanel.getSelectedTrack();
     mixerPanel.setTracks (tracks, tracks.size() - 1); // the last strip goes first (the strips refer to the tracks in place)
-    sls::deleteMixerTrack (tracks, channels, arrangement, console, masterTrack.slots, track, heir);
-    mixerPanel.setTracks (tracks);
+    const bool deleted = sls::deleteMixerTrack (tracks, channels, arrangement, console, masterTrack.slots, track, heir);
+    mixerPanel.setTracks (tracks); // (when nothing was deleted, this gives the last strip back)
+    if (! deleted)
+        return;
     for (int t = 0; t < static_cast<int> (tracks.size()); ++t)
         mixerPanel.refreshTrack (t);
     mixerPanel.refreshTrack (kMasterIndex);
     mixerPanel.refreshConsole();
-    mixerPanel.setSelectedTrack (std::min (track, static_cast<int> (tracks.size()) - 1));
+    // the selection stays on what was selected: the master, an aux bus, or the same track (now one place lower when it came after)
+    if (selectedBefore >= 0 && selectedBefore < kMaxTracks)
+        mixerPanel.setSelectedTrack (std::min (selectedBefore > track ? selectedBefore - 1 : selectedBefore, static_cast<int> (tracks.size()) - 1));
+    else
+        mixerPanel.setSelectedTrack (selectedBefore);
     for (auto& strip : strips)
     {
         strip->setTrackCount (static_cast<int> (tracks.size()));

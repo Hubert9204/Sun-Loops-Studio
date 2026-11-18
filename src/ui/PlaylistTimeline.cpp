@@ -1938,8 +1938,8 @@ void PlaylistTimeline::showTrackMenu (int track)
         if (ofPattern)
             menu.addItem (6, "Delete track (and its pattern, " + juce::String (arrangement.patterns[static_cast<size_t> (t.pattern)].name) + ")...",
                           arrangement.patterns.size() > 1 && onDeletePattern != nullptr);
-        else
-            menu.addItem (6, "Delete track", arrangement.trackCount() > 1);
+        else // (each section keeps at least one track, as with its - button)
+            menu.addItem (6, "Delete track", arrangement.trackCount() > 1 && sectionEndTrack (sectionOfTrack (track)) - sectionFirstTrack (sectionOfTrack (track)) > 1);
         menu.addItem (13, "Audio plays through mixer track " + juce::String (arrangement.mixerTrackOf (track) + 1), false); // 0.79.0
     }
     menu.showMenuAsync (juce::PopupMenu::Options().withMousePosition(),

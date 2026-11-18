@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "audio/Arrangement.h"
@@ -13,8 +14,9 @@
 namespace sls
 {
 // 0.79.0: deleting any mixer track, not only the last one. Everything that names mixer tracks by number follows: the tracks
-// after it move down one place, and so do the channels routed to them, the other tracks' sends to them, the effects that listen
-// to them (a compressor's, a gate's or a vocoder's sidechain), the automation clips that move them, and the playlist tracks whose
+// after it move down one place, and so do the channels routed to them, the other tracks' sends to them, the effects that point at
+// them (a compressor's, a gate's or a vocoder's sidechain, a controller's targets: every parameter in "track"), the automation
+// clips that move them, and the playlist tracks whose
 // audio plays through them (which then name their mixer track: see PlaylistTrack::mixerTrack). What played through the deleted
 // track itself goes to its heir (see mixerTrackHeir). Plain C++, tested.
 
@@ -32,7 +34,7 @@ struct MixerTrackUse
     int effects = 0;                  // effect slots in use on it
     int automationClips = 0;          // automation clips that move it
     std::vector<int> feeders;         // other mixer tracks sending to it
-    int listeners = 0;                // effects (anywhere) whose sidechain is this track
+    int listeners = 0;                // effects (anywhere) pointing at this track: a sidechain, a controller's target
 
     bool empty() const noexcept
     {
@@ -73,14 +75,24 @@ void forEachSlot (std::vector<MixerTrack>& tracks, Console& console, std::array<
         visit (slot);
 }
 
-// The track (0-based) a slot's sidechain names, or -1.
-inline int sidechainOf (const EffectSlot& slot) noexcept
+// The parameters that name a mixer track (unit "track": 1-based, 0 = off / this track): a sidechain, a controller's targets.
+inline bool isTrackParam (EffectType type, int param) noexcept
 {
-    const int param = effectSidechainParam (slot.type);
-    if (param < 0)
-        return -1;
+    return param >= 0 && param < effectParamCount (type) && std::string_view (effectParamInfo (type, param).unit) == "track";
+}
+// The track (0-based) such a parameter names, or -1 (off, this track, or not a number).
+inline int trackParamValue (const EffectSlot& slot, int param) noexcept
+{
     const float v = slot.params[static_cast<size_t> (param)];
     return std::isfinite (v) ? static_cast<int> (std::lround (v)) - 1 : -1;
+}
+// How many of a slot's track parameters name track `k`.
+inline int pointsAt (const EffectSlot& slot, int k) noexcept
+{
+    int n = 0;
+    for (int i = 0; i < effectParamCount (slot.type); ++i)
+        n += isTrackParam (slot.type, i) && trackParamValue (slot, i) == k ? 1 : 0;
+    return n;
 }
 } // namespace detail
 
@@ -108,7 +120,7 @@ inline MixerTrackUse mixerTrackUse (const std::vector<MixerTrack>& tracks, const
     auto tracksCopy = tracks;
     auto consoleCopy = console;
     auto masterCopy = masterSlots;
-    detail::forEachSlot (tracksCopy, consoleCopy, masterCopy, [&] (EffectSlot& slot) { use.listeners += detail::sidechainOf (slot) == k ? 1 : 0; });
+    detail::forEachSlot (tracksCopy, consoleCopy, masterCopy, [&] (EffectSlot& slot) { use.listeners += detail::pointsAt (slot, k) > 0 ? 1 : 0; });
     return use;
 }
 
@@ -184,11 +196,26 @@ inline bool deleteMixerTrack (std::vector<MixerTrack>& tracks, std::vector<Chann
     detail::forEachSlot (tracks, console, masterSlots,
                          [k] (EffectSlot& slot)
                          {
-                             const int key = detail::sidechainOf (slot);
-                             if (key < k)
-                                 return;
-                             const auto param = static_cast<size_t> (effectSidechainParam (slot.type));
-                             slot.params[param] = key == k ? 0.0f : static_cast<float> (key); // off, or one track lower (1-based: key - 1 + 1)
+                             const int target = effectControllerTarget (slot.type), target2 = effectControllerTarget2 (slot.type);
+                             for (int i = 0; i < effectParamCount (slot.type); ++i)
+                             {
+                                 if (! detail::isTrackParam (slot.type, i))
+                                     continue;
+                                 const int named = detail::trackParamValue (slot, i);
+                                 if (named < k)
+                                     continue;
+                                 auto& value = slot.params[static_cast<size_t> (i)];
+                                 if (named > k)
+                                 {
+                                     value = static_cast<float> (named); // one track lower (1-based: named - 1 + 1)
+                                     continue;
+                                 }
+                                 value = 0.0f; // a sidechain: off
+                                 if (i == target)
+                                     slot.bypass = true; // a controller's target is gone (0 would be "this track": another effect)
+                                 else if (i == target2 && i + 1 < effectParamCount (slot.type))
+                                     slot.params[static_cast<size_t> (i + 1)] = 0.0f; // its second target: none (slot 0)
+                             }
                          });
 
     auto& clips = arrangement.automationClips;
