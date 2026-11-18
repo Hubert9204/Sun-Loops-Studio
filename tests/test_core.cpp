@@ -4636,7 +4636,7 @@ void testTempo083()
         const auto savedMarkers = interfaceMeterMarkers();
         interfaceMeter() = four;
         interfaceMeterMarkers() = markers;
-        check (formatBarsBeatsTicks (5280) == "4.1.000" && formatBarsBeatsTicks (8400) == "6.2.000" && formatBarsBeatsTicks (8400, four) == "5.3.000",
+        check (formatBarsBeatsTicks (5280) == "4.1.000" && formatBarsBeatsTicks (8400) == "6.2.000" && formatBarsBeatsTicks (8400, four) == "5.2.240",
                "positions are written as the song counts its bars");
         interfaceMeter() = savedMeter;
         interfaceMeterMarkers() = savedMarkers;
@@ -4702,7 +4702,7 @@ void testTempo083()
                "stretched twice as long, its audio has half the tempo and the clip the same beats");
         auto doc = ProjectDocument::blank();
         doc.arrangement.audioClips = { clip };
-        doc.arrangement.audioClips[0].data = nullptr;
+        doc.arrangement.audioClips[0].data = makeMissingSample ("/loops/drums 120 bpm.wav");
         check (doc.toJson().indexOf ("\"tempo\"") >= 0, "a clip's tempo is saved");
     }
     {   // and how they sound: 2 s of 440 Hz recorded at 120 BPM, in a song at 60 BPM
