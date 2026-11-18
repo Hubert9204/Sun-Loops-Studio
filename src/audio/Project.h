@@ -23,7 +23,10 @@ namespace sls
 constexpr int kMaxChannels = 32;
 constexpr int kMaxTracks = 500;    // mixer tracks a project can have (0.29.0; 8 before); every channel is routed to exactly one
 constexpr int kDefaultTracks = 8;  // what a new project has, and the fewest (a playlist track n plays through mixer track n)
-constexpr int kAuxBuses = 2;  // aux buses ("returns"): tracks send to them, they have their own effects and fader
+// Aux buses ("returns"): tracks send to them, they have their own effects and fader. 0.78.0: a project has 0 to kAuxBuses of them
+// (Console::auxCount; + and - in the mixer), 2 in a new project as before.
+constexpr int kAuxBuses = 8;
+constexpr int kDefaultAuxBuses = 2;
 constexpr int kVcaGroups = 2; // VCA groups: one fader that scales the faders of its member tracks
 static_assert (kAuxBuses == kAutomationAuxBuses && kVcaGroups == kAutomationVcaGroups);
 
@@ -91,7 +94,7 @@ struct MixerTrack
     std::array<EffectSlot, kSlotsPerTrack> slots {};
 
     // Only used by the tracks (an aux bus ignores them).
-    std::array<float, kAuxBuses> sends {}; // level sent to each aux bus, 0 (off) .. 1.5
+    std::array<float, kAuxBuses> sends {}; // level sent to each aux bus, 0 (off) .. 1.5 (only the first Console::auxCount are used)
     bool sendsPreFader = false;            // sends take the signal before the fader, balance and VCA (they still follow mute/solo)
     std::uint8_t vcaMask = 0;              // bit n: this track is a member of VCA group n
     // 0.61.0, as the buttons and the knob of every FL Studio mixer track (applied after the effects, before the fader):
@@ -139,7 +142,8 @@ inline void prepareConvolvers (std::vector<MixerTrack>& tracks, std::array<Effec
 // and the VCA groups (a level and a mute switch each).
 struct Console
 {
-    std::array<MixerTrack, kAuxBuses> aux;
+    std::array<MixerTrack, kAuxBuses> aux; // the first auxCount are the project's buses; the others are unused, at their defaults
+    int auxCount = kDefaultAuxBuses;       // 0.78.0: 0 .. kAuxBuses
     std::array<float, kVcaGroups> vcaLevel { 1.0f, 1.0f };
     std::array<bool, kVcaGroups> vcaMute {};
 
@@ -289,6 +293,11 @@ struct Project
             t.vcaMask = static_cast<std::uint8_t> (t.vcaMask & ((1u << kVcaGroups) - 1u));
         }
 
+        // 0.78.0: the number of aux buses; nothing is sent to one the project does not have
+        console.auxCount = std::clamp (console.auxCount, 0, kAuxBuses);
+        for (auto& t : tracks)
+            for (size_t a = static_cast<size_t> (console.auxCount); a < t.sends.size(); ++a)
+                t.sends[a] = 0.0f;
         for (auto& a : console.aux)
         {
             a.volume = std::clamp (finiteOr (a.volume, 1.0f), 0.0f, 1.5f);

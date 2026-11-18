@@ -1615,7 +1615,8 @@ Premi **F9** o il pulsante **Mixer F9**. Il Mixer si apre grande sopra gli altri
 8 **tracce** verticali all'inizio, la strip **master** a destra e il **pannello effetti** della traccia selezionata.
 
 **Più tracce (0.29.0).** Il pulsante **+** dopo l'ultima traccia ne aggiunge una; con il tasto destro se ne aggiungono 10 o 100 alla
-volta, oppure si toglie l'ultima (solo se nessun canale ci suona, non ha effetti e nessuna automazione la controlla). Un progetto può
+volta. Il pulsante **-** sotto di esso (0.78.0; prima solo nel menu del tasto destro) toglie l'ultima traccia, solo se nessun canale ci
+suona, non ha effetti e nessuna automazione la controlla - altrimenti la barra di stato dice perché è rimasta. Il mixer tiene almeno 8 tracce. Un progetto può
 avere fino a **500** tracce; scorri il mixer in orizzontale per raggiungerle (aggiungendo, il mixer scorre a quella nuova). Aggiungere
 e togliere si annulla con Annulla, e il file del progetto ricorda il numero. Le tracce senza suono e senza effetti non costano quasi
 nulla. Riverberi, delay, chorus e Pitch Corrector hanno bisogno di circa 0,8 MB di memoria ciascuno, che viene preparata man mano che
@@ -1781,22 +1782,29 @@ effetti su **Aux A / B** vengono compensati: quando uno di essi ritarda il suo b
 
 Sotto i suoi slot effetti ogni traccia ha:
 
-- **A** e **B**: quanta parte della traccia va a **Aux A** e **Aux B** (tutto a sinistra: niente; 1,5 tutto a destra). Doppio clic su uno slider
-  per spegnere il send;
+- **A**, **B**, ...: quanta parte della traccia va a **Aux A**, **Aux B** e agli altri bus aux (tutto a sinistra: niente; 1,5 tutto a destra).
+  Doppio clic su uno slider per spegnere il send. C'è uno slider per ogni bus aux del progetto, due per riga dal terzo bus in poi;
 - **Pre**: se acceso, i send prendono il suono **prima** del fader, del bilanciamento e del VCA (il livello del send non segue il fader). Spento
   (predefinito), sono **post-fader**. Una traccia in mute, o zittita dal solo di un'altra, non manda niente in nessun caso;
 - **V1** e **V2**: mettono la traccia nel gruppo VCA 1 e/o 2.
 
-I **bus aux** (le due strip dopo le tracce, con la barra verde) sommano ciò che le tracce mandano, lo fanno passare dai loro dieci slot effetti
+I **bus aux** (le strip dopo le tracce, con la barra verde) sommano ciò che le tracce mandano, lo fanno passare dai loro dieci slot effetti
 (clic su uno slot come su una traccia), poi da fader e bilanciamento, e aggiungono il risultato al mix **prima degli effetti master**. Uso tipico: un riverbero
 su Aux A, un delay su Aux B (imposta il Mix dell'effetto al 100 %), e ogni traccia manda quanto serve. Un bus aux ha mute e bilanciamento ma niente
-solo, e il nome è fisso (Aux A, Aux B). I parametri dei suoi effetti non si possono ancora automatizzare.
+solo, e il nome è fisso (Aux A, Aux B, ...). I parametri dei suoi effetti non si possono ancora automatizzare.
+
+**Quanti bus aux (0.78.0).** Un progetto nuovo ne ha due, come prima. Il pulsante **+** dopo l'ultimo bus aux ne aggiunge uno (Aux C,
+Aux D, ..., fino a **8**, Aux H); ogni traccia riceve uno slider di send per esso. Il pulsante **-** sotto di esso toglie l'**ultimo** bus,
+solo se niente lo usa: nessuna traccia gli manda segnale, non ha effetti e nessuna clip di automazione lo controlla (fader, bilanciamento o
+un send verso di esso) - altrimenti la barra di stato dice cosa lo trattiene. Si possono togliere tutti, fino a nessuno. Un bus aggiunto di
+nuovo riparte pulito (fader a 0 dB, nessun effetto). Aggiungere e togliere si annulla con Annulla, e il file del progetto ricorda il numero
+(i file delle versioni precedenti si aprono con due).
 
 I **gruppi VCA** (le due strip con la barra blu) hanno fader e mute. Il fader moltiplica il fader di ogni traccia membro (da 0 a +3,5 dB); il mute le zittisce.
 Il VCA non muove i fader dei membri, li scala: un send post-fader lo segue, uno pre-fader no, e una traccia in due gruppi è scalata da entrambi. La strip mostra
 quante tracce ne fanno parte.
 
-Non c'è una finestra a parte per la matrice di routing: ogni strip di traccia è una riga della matrice (i suoi due send e i due interruttori VCA), le strip dei
+Non c'è una finestra a parte per la matrice di routing: ogni strip di traccia è una riga della matrice (i suoi send e i due interruttori VCA), le strip dei
 bus e dei gruppi sono le colonne. Un bus non si può mandare a un altro bus (niente anelli di feedback) e non c'è sidechain. Send, bus e gruppi VCA si salvano nel progetto.
 
 Con i bus il mixer è più largo: se il pannello è troppo stretto le strip scorrono di lato (c'è una barra sotto); doppio clic sulla barra del titolo del pannello
@@ -1902,7 +1910,7 @@ occupato più tardi, un brano più pesante o un mixer pieno di effetti possono r
 
 ## Limiti
 
-- Fino a 32 canali, fino a 500 tracce del mixer (8 all'inizio) con 10 slot effetti ciascuna, 2 bus aux (10 slot ciascuno), 2 gruppi VCA, 64 pattern, da 1 a 128 tracce di playlist, una linea del
+- Fino a 32 canali, fino a 500 tracce del mixer (8 all'inizio) con 10 slot effetti ciascuna, fino a 8 bus aux (2 all'inizio, 10 slot ciascuno), 2 gruppi VCA, 64 pattern, da 1 a 128 tracce di playlist, una linea del
   tempo di almeno 32 pattern e 64 battute, 4 corsie di automazione (fino a 32 dalla 0.69.0), 64 clip di automazione di al massimo 256 punti, 32 voci simultanee.
 - Gli effetti usano circa 15 MB di memoria a 48 kHz all'inizio, più circa 0,8 MB per ogni riverbero, delay, chorus e Pitch Corrector oltre
   il sedicesimo (di più a frequenze di campionamento maggiori). La memoria preparata resta finché il dispositivo audio non riparte.

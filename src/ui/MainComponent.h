@@ -210,6 +210,8 @@ private:
     void setTrackCount (size_t count);
     void addMixerTracks (int howMany);
     void removeLastMixerTrack(); // only when nothing uses it
+    void addAuxBus();            // 0.78.0: the mixer's + after the aux buses
+    void removeLastAuxBus();     // 0.78.0: its -, only when nothing uses the bus
     void drainScoreEvents();               // 0.28.0: into scoreLog
     void dumpScoreLog (bool lastPhraseOnly); // the score log's notes into the current pattern
     void endNoteTake();

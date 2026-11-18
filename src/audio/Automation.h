@@ -34,7 +34,7 @@ enum class AutomationKind : std::uint8_t { ChannelVolume, ChannelPan, TrackVolum
                                            ChannelPlugin, TrackPlugin, MasterPlugin, TrackSend, AuxVolume, AuxPan, VcaLevel };
 constexpr int kAutomationKindCount = 13;
 constexpr int kMaxPluginParams = 65536; // a parameter number beyond this is not a plugin's
-constexpr int kAutomationAuxBuses = 2;  // = kAuxBuses and kVcaGroups (Project.h, which includes this file)
+constexpr int kAutomationAuxBuses = 8;  // = kAuxBuses and kVcaGroups (Project.h, which includes this file)
 constexpr int kAutomationVcaGroups = 2;
 
 inline bool isPluginAutomation (AutomationKind k) noexcept

@@ -2,6 +2,22 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.78.0 - 2026-11-18
+
+Adding and removing in the mixer.
+
+### Added
+- **Aux buses can be added and removed**: a **+** and a **-** after the last aux bus. A project has 0 to 8 buses (Aux A to Aux H);
+  a new project has two, as before. Every track gets a send slider per bus (two to a row from the third bus on). The **-** removes
+  the last bus only when nothing uses it - no track sends to it, no effects, no automation clip on its fader, balance or a send to
+  it - and the status bar says what keeps it otherwise. Undoable; the project file keeps the number (older files open with two).
+- **A "-" for mixer tracks** under the "+" after the last track: it removes the last track, with the same rules as before (until now
+  the only way was the right-click menu of the "+").
+
+### Changed
+- The audio engine processes only the buses the project has; a send to a bus that is not there is set to 0 when the project is read.
+- The README and the user guide (English and Italian) describe the + and - buttons and up to eight aux buses.
+
 ## 0.77.1 - 2026-11-18
 
 Documentation and downloads.
