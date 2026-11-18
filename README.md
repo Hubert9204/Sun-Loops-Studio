@@ -120,7 +120,7 @@ What is and is not verified, feature by feature: [docs/roadmap.md](docs/roadmap.
 - **Built-in sounds** - a sampled Grand Piano and Electric Bass, two sampled acoustic drum kits, three electronic kits and a hand
   percussion kit ([licences](resources/sounds/README.md)).
 - **Mixer** - 8 to 500 tracks, each with fader, pan, stereo separation, polarity, mute / solo, meters, **10 effect slots** with a
-  mix knob, 8 sends (pre or post fader), free routing, a track delay and plugin delay compensation; two aux buses and two VCA
+  mix knob, 8 sends (pre or post fader), free routing, a track delay and plugin delay compensation; up to eight aux buses (+ and - in the mixer) and two VCA
   groups; a master strip.
 - **36 built-in effects and controllers** - EQs, filters, compressors and a multiband compressor, maximizer, gate, overdrive,
   wave shaper, chorus, flanger, phaser and their vintage versions, delays, reverbs and a convolution reverb, vocoder, pitch

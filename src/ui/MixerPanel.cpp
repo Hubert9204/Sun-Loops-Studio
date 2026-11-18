@@ -310,8 +310,10 @@ MixerStrip::MixerStrip (MixerTrack& trackToControl, int trackIndex, bool isAuxBu
         addAndMakeVisible (preButton);
         for (size_t a = 0; a < sendSliders.size(); ++a)
         {
-            addAndMakeVisible (sendSliders[a]);
-            addAndMakeVisible (sendLabels[a]);
+            addChildComponent (sendSliders[a]);
+            addChildComponent (sendLabels[a]);
+            sendSliders[a].setVisible (static_cast<int> (a) < auxCount);
+            sendLabels[a].setVisible (static_cast<int> (a) < auxCount);
         }
         for (auto& b : vcaButtons)
             addAndMakeVisible (b);
@@ -447,11 +449,18 @@ void MixerStrip::resized()
 
     if (! isAux)
     {
-        for (size_t a = 0; a < sendSliders.size(); ++a)
+        // The sends, one per aux bus: one to a row for up to two buses, two to a row beyond (0.78.0)
+        const int perRow = auxCount > 2 ? 2 : 1;
+        for (int a = 0; a < auxCount; a += perRow)
         {
             auto row = area.removeFromTop (16);
-            sendLabels[a].setBounds (row.removeFromLeft (12));
-            sendSliders[a].setBounds (row);
+            const int cell = row.getWidth() / perRow;
+            for (int k = 0; k < perRow && a + k < auxCount; ++k)
+            {
+                auto part = k + 1 < perRow ? row.removeFromLeft (cell) : row;
+                sendLabels[static_cast<size_t> (a + k)].setBounds (part.removeFromLeft (perRow == 1 ? 12 : 10));
+                sendSliders[static_cast<size_t> (a + k)].setBounds (part);
+            }
         }
         area.removeFromTop (2);
         preButton.setBounds (area.removeFromTop (18).reduced (1, 0));
@@ -489,6 +498,21 @@ void MixerStrip::resized()
     area.removeFromTop (4);
 
     layoutFaderColumn (area, dbLabel, meter, fader);
+}
+
+void MixerStrip::setAuxCount (int count)
+{
+    count = std::clamp (count, 0, kAuxBuses);
+    if (count == auxCount)
+        return;
+    auxCount = count;
+    if (! isAux)
+        for (size_t a = 0; a < sendSliders.size(); ++a)
+        {
+            sendSliders[a].setVisible (static_cast<int> (a) < auxCount);
+            sendLabels[a].setVisible (static_cast<int> (a) < auxCount);
+        }
+    resized();
 }
 
 juce::String MixerStrip::routingText (const MixerTrack& track)
@@ -1530,10 +1554,42 @@ void MixerPanel::selectAux (int aux)
 void MixerPanel::setConsole (Console& consoleToControl)
 {
     consoleData = &consoleToControl;
-    auxStrips.clear();
     vcaStrips.clear();
 
-    for (int a = 0; a < kAuxBuses; ++a)
+    if (addAuxButton.getParentComponent() == nullptr) // 0.78.0
+    {
+        addAuxButton.setTooltip ("Add an aux bus (up to " + juce::String (kAuxBuses) + "): every track gets a send to it");
+        addAuxButton.onClick = [this] { if (onAddAuxBus) onAddAuxBus(); };
+        removeAuxButton.setTooltip ("Remove the last aux bus (only when no track sends to it and it has no effects or automation)");
+        removeAuxButton.onClick = [this] { if (onRemoveLastAuxBus) onRemoveLastAuxBus(); };
+        inner.addAndMakeVisible (addAuxButton);
+        inner.addAndMakeVisible (removeAuxButton);
+    }
+    rebuildAuxStrips();
+
+    for (int g = 0; g < kVcaGroups; ++g)
+    {
+        auto strip = std::make_unique<VcaStrip> (consoleToControl, g);
+        strip->onChanged = [this] { if (onTrackChanged) onTrackChanged (kMasterIndex); };
+        strip->onAutomate = [this] (const AutomationTarget& t) { if (onAutomate) onAutomate (t); };
+        inner.addAndMakeVisible (*strip);
+        vcaStrips.push_back (std::move (strip));
+    }
+
+    refreshConsole();
+    layoutInner();
+}
+
+void MixerPanel::rebuildAuxStrips()
+{
+    if (consoleData == nullptr)
+        return;
+    auto& consoleToControl = *consoleData;
+    const int count = std::clamp (consoleToControl.auxCount, 0, kAuxBuses);
+    if (selectedTrack >= kAuxIndexBase + count) // the selected bus is gone: the master takes its place in the effects panel
+        selectedTrack = kMasterIndex;
+    auxStrips.clear();
+    for (int a = 0; a < count; ++a)
     {
         auto strip = std::make_unique<MixerStrip> (consoleToControl.aux[static_cast<size_t> (a)], kAuxIndexBase + a, true);
         strip->onSelect = [this] (int idx) { selectAux (idx - kAuxIndexBase); };
@@ -1557,22 +1613,22 @@ void MixerPanel::setConsole (Console& consoleToControl)
         inner.addAndMakeVisible (*strip);
         auxStrips.push_back (std::move (strip));
     }
-
-    for (int g = 0; g < kVcaGroups; ++g)
-    {
-        auto strip = std::make_unique<VcaStrip> (consoleToControl, g);
-        strip->onChanged = [this] { if (onTrackChanged) onTrackChanged (kMasterIndex); };
-        strip->onAutomate = [this] (const AutomationTarget& t) { if (onAutomate) onAutomate (t); };
-        inner.addAndMakeVisible (*strip);
-        vcaStrips.push_back (std::move (strip));
-    }
-
-    refreshConsole();
-    layoutInner();
+    for (auto& s : strips)
+        s->setAuxCount (count);
+    addAuxButton.setEnabled (count < kAuxBuses);
+    removeAuxButton.setEnabled (count > 0);
 }
 
 void MixerPanel::refreshConsole()
 {
+    if (consoleData != nullptr && static_cast<int> (auxStrips.size()) != std::clamp (consoleData->auxCount, 0, kAuxBuses))
+    {
+        const bool auxWasSelected = selectedTrack >= kAuxIndexBase;
+        rebuildAuxStrips(); // 0.78.0: a bus added or removed, or a project with another number of them
+        layoutInner();
+        if (auxWasSelected)
+            setSelectedTrack (selectedTrack);
+    }
     for (auto& s : auxStrips)
         s->refreshFromTrack();
     for (auto& s : vcaStrips)
@@ -1647,8 +1703,16 @@ void MixerPanel::setTracks (std::vector<MixerTrack>& tracks, size_t stripCount)
         };
         addTrackButton.onRightClick = [this] { showAddTrackMenu(); };
         inner.addAndMakeVisible (addTrackButton);
+        removeTrackButton.setTooltip ("Remove the last mixer track (only when no channel plays through it and it has no effects or "
+                                      "automation; the mixer keeps at least " + juce::String (kDefaultTracks) + ")");
+        removeTrackButton.onClick = [this] { if (onRemoveLastTrack) onRemoveLastTrack(); };
+        inner.addAndMakeVisible (removeTrackButton);
     }
     addTrackButton.setEnabled (tracks.size() < static_cast<size_t> (kMaxTracks));
+    removeTrackButton.setEnabled (tracks.size() > static_cast<size_t> (kDefaultTracks));
+    if (consoleData != nullptr)
+        for (auto& s : strips)
+            s->setAuxCount (consoleData->auxCount);
 
     if (selectedTrack != kMasterIndex && selectedTrack < kMaxTracks) // (an aux bus keeps its selection)
         selectedTrack = std::clamp (selectedTrack, 0, std::max (0, static_cast<int> (strips.size()) - 1));
@@ -1990,7 +2054,7 @@ void MixerPanel::layoutInner()
     if (trackData != nullptr)
         for (const auto& t : *trackData)
             separators += t.separator ? 1 : 0;
-    const int needed = count * MixerStrip::kWidth + kAddButtonWidth + (auxStrips.empty() ? 0 : kGap) + (vcaStrips.empty() ? 0 : kGap) + separators * 8;
+    const int needed = count * MixerStrip::kWidth + 2 * kAddButtonWidth + kGap + (vcaStrips.empty() ? 0 : kGap) + separators * 8;
     const int height = std::max (1, viewport.getMaximumVisibleHeight());
     inner.setSize (std::max (needed, viewport.getMaximumVisibleWidth()), height);
 
@@ -2014,14 +2078,18 @@ void MixerPanel::layoutInner()
     place (0);
     place (2);
     addTrackButton.setBounds (x + 2, 6, kAddButtonWidth - 4, 28);
+    removeTrackButton.setBounds (x + 2, 38, kAddButtonWidth - 4, 28); // 0.78.0
     x += kAddButtonWidth;
-    if (! auxStrips.empty())
-        x += kGap;
+    x += kGap;
     for (auto& s : auxStrips)
     {
         s->setBounds (x, 0, MixerStrip::kWidth, height);
         x += MixerStrip::kWidth;
     }
+    // 0.78.0: + and - for the aux buses, after them (there even when the project has none)
+    addAuxButton.setBounds (x + 2, 6, kAddButtonWidth - 4, 28);
+    removeAuxButton.setBounds (x + 2, 38, kAddButtonWidth - 4, 28);
+    x += kAddButtonWidth;
     if (! vcaStrips.empty())
         x += kGap;
     for (auto& s : vcaStrips)

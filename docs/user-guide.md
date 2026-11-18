@@ -1543,8 +1543,9 @@ controls do not.
 Press **F9** or the **Mixer F9** button. The Mixer opens large over the other panels; press F9 again to close it.
 It has 8 vertical **tracks** to start with, a **master** strip on the right and the **effects panel** of the selected track.
 
-**More tracks (0.29.0).** The **+** button after the last track adds one; right-click it to add 10 or 100 at once, or to remove
-the last track (only when no channel plays through it, it has no effects and no automation controls it). A project can have up to
+**More tracks (0.29.0).** The **+** button after the last track adds one; right-click it to add 10 or 100 at once. The **-** button
+under it (0.78.0; before, only in the right-click menu) removes the last track, only when no channel plays through it, it has no effects
+and no automation controls it - otherwise the status bar says why the track was kept. The mixer keeps at least 8 tracks. A project can have up to
 **500** tracks; scroll the mixer sideways to reach them (adding scrolls to the new one). Adding and removing can be undone, and
 the project file keeps the number. Tracks with no sound and no effect cost almost no processing. Reverbs, delays, choruses and
 Pitch Correctors need about 0.8 MB of memory each, which is made for them as they are added: the very first moment after adding
@@ -1704,22 +1705,28 @@ compensated too: when one of them delays its bus, the tracks and the other bus w
 
 Under its effect slots every track has:
 
-- **A** and **B**: how much of the track is sent to **Aux A** and **Aux B** (all the way left: nothing; 1.5 at the far right). Double-click
-  a slider to switch the send off;
+- **A**, **B**, ...: how much of the track is sent to **Aux A**, **Aux B** and the other aux buses (all the way left: nothing; 1.5 at the far
+  right). Double-click a slider to switch the send off. There is one slider per aux bus the project has, two to a row from the third bus on;
 - **Pre**: when on, the sends take the sound **before** the fader, the balance and the VCA (so the send level does not follow the
   fader). Off (the default), they are **post-fader**. A muted track, or a track silenced by another track's solo, sends nothing either way;
 - **V1** and **V2**: put the track in VCA group 1 and/or 2.
 
-**Aux buses** (the two strips after the tracks, with a green bar) sum what the tracks send them, run it through their own ten effect slots
+**Aux buses** (the strips after the tracks, with a green bar) sum what the tracks send them, run it through their own ten effect slots
 (click a slot as on a track), then their fader and balance, and add the result to the mix **before the master effects**. Typical use: one reverb
 on Aux A, a delay on Aux B (set the effect's Mix to 100 %), and each track sends as much as it needs. An aux bus has mute and balance but no
-solo, and its name is fixed (Aux A, Aux B). Its effect parameters cannot be automated yet.
+solo, and its name is fixed (Aux A, Aux B, ...). Its effect parameters cannot be automated yet.
+
+**How many aux buses (0.78.0).** A new project has two, as before. The **+** button after the last aux bus adds one (Aux C, Aux D, ...,
+up to **8**, Aux H); every track gets a send slider for it. The **-** button under it removes the **last** bus, only when nothing uses
+it: no track sends to it, it has no effects and no automation clip controls it (its fader, balance or a send to it) - otherwise the
+status bar says what keeps it. Every bus can be removed, down to none. A bus added again starts clean (fader at 0 dB, no effects).
+Adding and removing can be undone, and the project file keeps the number (files from older versions open with two).
 
 **VCA groups** (the two strips with a blue bar) have a fader and a mute. The fader multiplies the fader of every member track
 (0 to +3.5 dB); mute silences them. The VCA does not move the member faders, it scales them: a post-fader send follows it, a
 pre-fader send does not, and a track in two groups is scaled by both. The strip shows how many tracks are members.
 
-There is no separate routing-matrix window: each track strip is one row of the matrix (its two sends and its two VCA switches), the
+There is no separate routing-matrix window: each track strip is one row of the matrix (its sends and its two VCA switches), the
 strips of the buses and groups are the columns. A bus cannot be sent to another bus (no feedback loops) and there is no sidechain. Sends, buses
 and VCA groups are saved in the project.
 
@@ -1825,7 +1832,7 @@ a heavier song or a plugin-heavy mixer can still need a bigger size.
 
 ## Limits
 
-- Up to 32 channels, up to 500 mixer tracks (8 to start with) with 10 effect slots each, 2 aux buses (10 slots each), 2 VCA groups, 64 patterns, 1 to 128 playlist tracks, a timeline of
+- Up to 32 channels, up to 500 mixer tracks (8 to start with) with 10 effect slots each, up to 8 aux buses (2 to start with, 10 slots each), 2 VCA groups, 64 patterns, 1 to 128 playlist tracks, a timeline of
   at least 32 patterns and 64 bars, 4 automation lanes (up to 32 since 0.69.0), 64 automation clips of up to 256 points each, 32 simultaneous voices.
 - The effects use about 15 MB of memory at 48 kHz to start with, plus about 0.8 MB for every reverb, delay, chorus and Pitch Corrector beyond
   the sixteenth (more at higher sample rates). Memory made for them stays until the audio device restarts.

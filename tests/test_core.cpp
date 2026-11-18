@@ -18,6 +18,7 @@
 
 #include <juce_audio_formats/juce_audio_formats.h>
 
+#include "audio/AuxBuses.h"
 #include "audio/SpeechSynth.h"
 #include "support/CrashHandler.h"
 #include "audio/Arrangement.h"
@@ -2195,6 +2196,58 @@ void testConsole()
         check (player.getAuxPeak (0) > 0.05f && player.getAuxRms (0) > 0.01f && player.getAuxPeak (1) == 0.0f && player.getAuxPeak (7) == 0.0f,
                "aux meters: the bus that receives the send reads a level, the other reads zero");
     }
+    {
+        // 0.78.0: a project has 0 to 8 aux buses (+ and - in the mixer)
+        const auto third = render ([] (auto& t, auto&) { t[0].sends[2] = 1.0f; });
+        check (std::abs (peakIn (third, 0, 24000) / refPeak - 1.0f) < 0.05f,
+               "a send to a bus the project does not have (the third, with two buses) is not heard");
+        const auto added = render ([] (auto& t, auto& c) { sls::addAuxBus (c); t[0].sends[2] = 1.0f; });
+        check (std::abs (peakIn (added, 0, 24000) / refPeak - 2.0f) < 0.15f, "with a third bus added, the send to it is heard like the others");
+        const auto none = render ([] (auto& t, auto& c) { c.auxCount = 0; t[0].sends[0] = 1.0f; });
+        check (std::abs (peakIn (none, 0, 24000) / refPeak - 1.0f) < 0.05f, "with no aux bus at all, the sends are silent and the track plays");
+        auto clamped = sls::Console::defaults();
+        clamped.auxCount = 99;
+        auto someTracks = sls::Project::defaultTracks();
+        someTracks[0].sends[5] = 1.0f;
+        auto withTwo = sls::Console::defaults();
+        const auto p1 = sls::Project::make ({}, 1920, someTracks, {}, {}, {}, clamped);
+        const auto p2 = sls::Project::make ({}, 1920, someTracks, {}, {}, {}, withTwo);
+        check (p1.console.auxCount == sls::kAuxBuses && p1.tracks[0].sends[5] == 1.0f && p2.tracks[0].sends[5] == 0.0f,
+               "the number of aux buses is clamped to 8; a send to a bus the project does not have is set to 0");
+    }
+    {
+        auto console = sls::Console::defaults();
+        auto tracks = sls::Project::defaultTracks();
+        std::vector<sls::AutomationClip> clips;
+        bool added = true;
+        for (int i = 0; i < 6; ++i)
+            added = sls::addAuxBus (console) && added;
+        check (added && console.auxCount == 8 && console.aux[7].name == "Aux H" && ! sls::addAuxBus (console),
+               "aux buses are added one after the other up to eight (Aux C ... Aux H), not more");
+        tracks[3].name = "Bass";
+        tracks[3].sends[7] = 0.4f;
+        const auto sends = sls::whyKeepLastAuxBus (console, tracks, clips);
+        tracks[3].sends[7] = 0.0f;
+        console.aux[7].slots[0].type = sls::EffectType::Reverb;
+        const auto effects = sls::whyKeepLastAuxBus (console, tracks, clips);
+        console.aux[7].slots[0] = {};
+        sls::AutomationClip clip;
+        clip.target = { sls::AutomationKind::AuxPan, 0, 7, 0 };
+        clips.push_back (clip);
+        const auto automated = sls::whyKeepLastAuxBus (console, tracks, clips);
+        clips.clear();
+        check (sends == "Bass sends to it" && effects == "it has effects" && automated == "an automation clip controls it",
+               "the last aux bus is kept while a track sends to it, it has effects or an automation clip controls it");
+        console.aux[7].volume = 0.3f;
+        console.aux[7].name = "Reverb";
+        const bool removed = sls::whyKeepLastAuxBus (console, tracks, clips).empty() && sls::removeLastAuxBus (console);
+        check (removed && console.auxCount == 7 && console.aux[7].volume == 1.0f && console.aux[7].name == "Aux H",
+               "an unused last bus is removed and goes back to its defaults (a bus added later starts clean)");
+        while (sls::removeLastAuxBus (console)) {}
+        check (console.auxCount == 0 && ! sls::removeLastAuxBus (console) && sls::whyKeepLastAuxBus (console, tracks, clips) == "there is no aux bus"
+                   && sls::addAuxBus (console) && console.auxCount == 1 && console.aux[0].name == "Aux A",
+               "every bus can be removed (none left), and adding starts again from Aux A");
+    }
 }
 
 // Feeds `seconds` of a stereo sine to the meter (a different amplitude / frequency per call).
@@ -2803,6 +2856,8 @@ bool sameDocument (const sls::ProjectDocument& a, const sls::ProjectDocument& b)
             || x.mixerTrack != y.mixerTrack)
             return false;
     }
+    if (a.console.auxCount != b.console.auxCount) // 0.78.0
+        return false;
     for (size_t i = 0; i < a.console.aux.size(); ++i)
     {
         const auto &x = a.console.aux[i], &y = b.console.aux[i];
@@ -2944,6 +2999,32 @@ void testProjectFile()
 {
     std::cout << "Project files\n";
 
+    {
+        // 0.78.0: the number of aux buses is the length of the file's aux list (older files: two)
+        auto four = richDocument();
+        sls::addAuxBus (four.console);
+        sls::addAuxBus (four.console);
+        four.console.aux[3].name = "Delay bus";
+        four.console.aux[3].volume = 0.5f;
+        four.tracks[1].sends[3] = 0.7f;
+        const auto backFour = sls::ProjectDocument::fromJson (four.toJson());
+        auto none = richDocument();
+        none.console.auxCount = 0;
+        for (auto& t : none.tracks)
+            t.sends = {};
+        const auto noneJson = none.toJson();
+        const auto backNone = sls::ProjectDocument::fromJson (noneJson);
+        check (backFour.document.has_value() && backFour.document->console.auxCount == 4 && backFour.document->console.aux[3].name == "Delay bus"
+                   && backFour.document->console.aux[3].volume == 0.5f && backFour.document->tracks[1].sends[3] == 0.7f
+                   && backNone.document.has_value() && backNone.document->console.auxCount == 0 && ! noneJson.contains ("Aux A"),
+               "four aux buses, or none, survive a round trip with their names, faders and the tracks' sends to them");
+        auto old = juce::JSON::parse (richDocument().toJson());
+        if (auto* consoleObject = old.getProperty ("console", {}).getDynamicObject())
+            consoleObject->removeProperty ("aux");
+        const auto backOld = sls::ProjectDocument::fromJson (juce::JSON::toString (old));
+        check (backOld.document.has_value() && backOld.document->console.auxCount == 2,
+               "a file without an aux list (older versions) opens with the two aux buses as before");
+    }
     {
         const auto doc = richDocument();
         const auto back = sls::ProjectDocument::fromJson (doc.toJson());
@@ -4212,10 +4293,11 @@ void testMixAutomation047()
                                               {}).getRMSLevel (0, 24000, 96000);
     check (panned < 1.0e-4f, "the aux bus's balance automated fully right leaves its left side silent");
 
-    check (sls::automationTargetExists ({ K::TrackSend, 3, 1, 0 }, 1, 8) && ! sls::automationTargetExists ({ K::TrackSend, 3, 2, 0 }, 1, 8)
-               && ! sls::automationTargetExists ({ K::AuxVolume, 0, 2, 0 }, 1, 8) && sls::automationTargetExists ({ K::VcaLevel, 0, 1, 0 }, 1, 8)
+    check (sls::automationTargetExists ({ K::TrackSend, 3, 7, 0 }, 1, 8) && ! sls::automationTargetExists ({ K::TrackSend, 3, 8, 0 }, 1, 8)
+               && ! sls::automationTargetExists ({ K::AuxVolume, 0, 8, 0 }, 1, 8) && sls::automationTargetExists ({ K::VcaLevel, 0, 1, 0 }, 1, 8)
+               && ! sls::automationTargetExists ({ K::VcaLevel, 0, 2, 0 }, 1, 8)
                && sls::automationRange ({ K::TrackSend, 0, 0, 0 }).max == 1.5f && sls::automationRange ({ K::AuxPan, 0, 0, 0 }).min == -1.0f,
-           "the new targets: two aux buses and two VCA groups, in their controls' ranges");
+           "the new targets: up to eight aux buses (0.78.0; two before) and two VCA groups, in their controls' ranges");
     auto doc = sls::ProjectDocument::blank();
     doc.arrangement.automationClips = { sls::makeFlatAutomationClip ({ K::TrackSend, 2, 1, 0 }, 0, 0, 960, 0.7f),
                                         sls::makeFlatAutomationClip ({ K::AuxPan, 0, 1, 0 }, 1, 0, 960, -0.5f),

@@ -401,9 +401,9 @@ juce::String ProjectDocument::toJson() const
         for (size_t s = 0; s < t.slots.size(); ++s)
             slots.add (slotToVar (t.slots[s], findPlugin (PluginSpec::Place::Track, trackIndex, static_cast<int> (s))));
         o->setProperty ("effects", slots);
-        juce::Array<juce::var> sendList;
-        for (const auto send : t.sends)
-            sendList.add (number (static_cast<double> (send)));
+        juce::Array<juce::var> sendList; // (0.78.0: one per aux bus of the project)
+        for (size_t a = 0; a < static_cast<size_t> (std::clamp (console.auxCount, 0, kAuxBuses)); ++a)
+            sendList.add (number (static_cast<double> (t.sends[a])));
         o->setProperty ("sends", sendList);
         o->setProperty ("sendsPreFader", t.sendsPreFader);
         o->setProperty ("vca", static_cast<int> (t.vcaMask)); // bit n: member of VCA group n
@@ -446,9 +446,11 @@ juce::String ProjectDocument::toJson() const
 
     {
         auto* consoleObject = new juce::DynamicObject();
-        juce::Array<juce::var> auxList;
+        juce::Array<juce::var> auxList; // (0.78.0: the project's aux buses, 0 to 8; before, always two)
         for (const auto& a : console.aux)
         {
+            if (&a - console.aux.data() >= std::clamp (console.auxCount, 0, kAuxBuses))
+                break;
             auto* o = new juce::DynamicObject();
             o->setProperty ("name", juce::String (a.name));
             o->setProperty ("volume", number (static_cast<double> (a.volume)));
@@ -849,6 +851,8 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
     d.console = Console::defaults();
     if (auto* consoleObject = root->getProperty ("console").getDynamicObject())
     {
+        if (auto* auxList = consoleObject->getProperty ("aux").getArray())
+            d.console.auxCount = std::min (auxList->size(), kAuxBuses); // 0.78.0: as many as the file has (older files: two)
         if (auto* auxList = consoleObject->getProperty ("aux").getArray())
             for (int a = 0; a < std::min (auxList->size(), kAuxBuses); ++a)
             {

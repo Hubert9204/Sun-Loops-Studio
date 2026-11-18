@@ -123,7 +123,7 @@ Cosa è verificato e cosa no, funzione per funzione: [docs/roadmap.md](docs/road
   un kit di percussioni a mano ([licenze](resources/sounds/README.md)).
 - **Mixer** - da 8 a 500 tracce, ognuna con fader, pan, separazione stereo, polarità, mute / solo, misuratori, **10 slot di
   effetti** con manopola di mix, 8 mandate (pre o post fader), instradamento libero, un ritardo di traccia e la compensazione
-  della latenza dei plugin; due bus aux e due gruppi VCA; una striscia master.
+  della latenza dei plugin; fino a otto bus aux (+ e - nel mixer) e due gruppi VCA; una striscia master.
 - **36 effetti e controller integrati** - equalizzatori, filtri, compressori e un compressore multibanda, maximizer, gate,
   overdrive, wave shaper, chorus, flanger, phaser e le loro versioni vintage, delay, riverberi e un riverbero a convoluzione,
   vocoder, correttore di intonazione, time shaper, scratcher, granulare, frequency shifter, stereo imager, il **Patcher** (dieci

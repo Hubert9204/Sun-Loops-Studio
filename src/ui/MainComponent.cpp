@@ -2,6 +2,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include "audio/AuxBuses.h"
 #include "audio/TimeFormat.h"
 
 #include "ui/AssignTrackDialog.h"
@@ -118,6 +119,8 @@ MainComponent::MainComponent()
     mixerPanel.setTracks (tracks);
     mixerPanel.onAddTracks = [this] (int howMany) { addMixerTracks (howMany); };
     mixerPanel.onRemoveLastTrack = [this] { removeLastMixerTrack(); };
+    mixerPanel.onAddAuxBus = [this] { addAuxBus(); };
+    mixerPanel.onRemoveLastAuxBus = [this] { removeLastAuxBus(); };
     mixerPanel.setMaster (masterTrack);
     mixerPanel.setConsole (console);
     mixerPanel.onTrackChanged = [this] (int) { publishProject(); };
@@ -1542,6 +1545,40 @@ void MainComponent::removeLastMixerTrack()
     }
     setTrackCount (tracks.size() - 1);
     statusLabel.setText ("Track " + juce::String (last + 1) + " removed: " + juce::String (tracks.size()) + " tracks", juce::dontSendNotification);
+    publishProject();
+}
+
+void MainComponent::addAuxBus()
+{
+    if (! sls::addAuxBus (console))
+    {
+        statusLabel.setText ("The mixer already has " + juce::String (kAuxBuses) + " aux buses, the most it can have", juce::dontSendNotification);
+        return;
+    }
+    mixerPanel.refreshConsole();
+    statusLabel.setText (juce::String (console.aux[static_cast<size_t> (console.auxCount - 1)].name) + " added: every track has a send to it ("
+                             + juce::String (console.auxCount) + (console.auxCount == 1 ? " aux bus)" : " aux buses)"),
+                         juce::dontSendNotification);
+    publishProject();
+}
+
+void MainComponent::removeLastAuxBus()
+{
+    if (console.auxCount <= 0)
+    {
+        statusLabel.setText ("There is no aux bus to remove", juce::dontSendNotification);
+        return;
+    }
+    const juce::String name (console.aux[static_cast<size_t> (console.auxCount - 1)].name);
+    if (const auto reason = sls::whyKeepLastAuxBus (console, tracks, arrangement.automationClips); ! reason.empty())
+    {
+        statusLabel.setText (name + " was kept: " + juce::String (reason), juce::dontSendNotification);
+        return;
+    }
+    sls::removeLastAuxBus (console);
+    mixerPanel.refreshConsole();
+    statusLabel.setText (name + " removed: " + juce::String (console.auxCount) + (console.auxCount == 1 ? " aux bus" : " aux buses"),
+                         juce::dontSendNotification);
     publishProject();
 }
 

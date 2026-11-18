@@ -48,6 +48,8 @@ public:
     void setRoutedChannels (const juce::String& text);
     void setLevels (float peak, float rms) { meter.setLevels (peak, rms); }
     int getIndex() const noexcept { return index; }
+    // 0.78.0: how many aux buses the project has - a send for each (one per row for up to two, two per row beyond)
+    void setAuxCount (int count);
 
     std::function<void (int)> onSelect;                // the strip was clicked
     std::function<void (int)> onChanged;               // fader, balance, mute or solo changed
@@ -75,6 +77,7 @@ private:
     bool selected = false;
     bool isAux = false;
     int selectedSlot = -1;
+    int auxCount = kDefaultAuxBuses;
 
     juce::Label nameLabel;
     juce::Label routedLabel;
@@ -293,7 +296,7 @@ public:
     void setMaster (MixerTrack& masterTrack);
     // The aux buses and VCA groups; not owned. Call once, after setTracks().
     void setConsole (Console& consoleToControl);
-    void refreshConsole(); // after the console was replaced (a project was opened)
+    void refreshConsole(); // after the console was replaced (a project was opened) or its number of aux buses changed
     void setAuxLevels (int aux, float peak, float rms);
 
     // `index` is a track (0 .. kMaxTracks - 1) or kMasterIndex for the master bus, here and in the callbacks.
@@ -311,7 +314,9 @@ public:
 
     std::function<void (int)> onTrackChanged;       // anything that changes the sound (track index, or kMasterIndex)
     std::function<void (int)> onAddTracks;          // the "+" button: add this many tracks (0.29.0)
-    std::function<void()> onRemoveLastTrack;        // its menu: remove the last track
+    std::function<void()> onRemoveLastTrack;        // its menu, and (0.78.0) the "-" under it: remove the last track
+    std::function<void()> onAddAuxBus;              // 0.78.0: the "+" after the aux buses
+    std::function<void()> onRemoveLastAuxBus;       // 0.78.0: the "-" under it
     std::function<void (double)> onMasterVolumeChanged;
     // Right click on a track fader / balance or on an effect parameter. For the master bus: kind MasterEffect.
     std::function<void (const AutomationTarget&)> onAutomate;
@@ -337,6 +342,7 @@ private:
     void selectMaster();
     void selectAux (int aux);
     void updateVcaMembers();
+    void rebuildAuxStrips(); // 0.78.0: one strip per aux bus of the console
 
     int selectedTrack = 0;
     std::vector<MixerTrack>* trackData = nullptr;
@@ -361,6 +367,9 @@ private:
         }
     };
     AddTrackButton addTrackButton;
+    juce::TextButton removeTrackButton { "-" };  // 0.78.0: under the "+": remove the last track (when nothing uses it)
+    juce::TextButton addAuxButton { "+" };       // 0.78.0: after the aux buses: add one (up to kAuxBuses)
+    juce::TextButton removeAuxButton { "-" };    // ... and remove the last one (when nothing uses it)
     static constexpr int kAddButtonWidth = 28;
     MasterStrip masterStrip;
     FxPanel fxPanel;

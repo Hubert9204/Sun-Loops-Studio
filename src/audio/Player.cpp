@@ -1816,6 +1816,8 @@ void Player::render (const Project& project, double bpm, bool playing,
     const int loopLength = std::max (1, project.lengthTicks);
     const size_t numMixerChannels = std::min (project.channels.size(), static_cast<size_t> (kMaxChannels));
     const size_t numTracks = std::clamp (project.tracks.size(), static_cast<size_t> (1), static_cast<size_t> (kMaxTracks));
+    // 0.78.0: the aux buses the project has (the others are neither sent to nor mixed)
+    const auto auxCount = static_cast<size_t> (std::clamp (project.console.auxCount, 0, kAuxBuses));
 
     if (project.revision != projectRevision)
     {
@@ -2139,7 +2141,7 @@ void Player::render (const Project& project, double bpm, bool playing,
             masterLatency += slotLatency (masterEffects[s], project.masterSlots[s]);
         // 0.70.0: the aux buses' own effects
         int slowestAux = 0;
-        for (size_t a = 0; a < static_cast<size_t> (kAuxBuses); ++a)
+        for (size_t a = 0; a < static_cast<size_t> (std::clamp (project.console.auxCount, 0, kAuxBuses)); ++a) // (0.78.0: the project's)
         {
             int own = 0;
             for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
@@ -2983,7 +2985,7 @@ void Player::render (const Project& project, double bpm, bool playing,
 
                 // Sends to the aux buses: after the fader (or before it, if the track says so); a muted track sends nothing.
                 sendGate[t] += (gateTarget - sendGate[t]) * kGainSmoothing;
-                for (size_t a = 0; a < static_cast<size_t> (kAuxBuses); ++a)
+                for (size_t a = 0; a < auxCount; ++a)
                 {
                     sendGain[t][a] += (sendLevel[t][a] - sendGain[t][a]) * kGainSmoothing;
                     const float level = sendGain[t][a] * sendGate[t];
@@ -3030,7 +3032,7 @@ void Player::render (const Project& project, double bpm, bool playing,
         // sum and the faster buses wait for it.)
         if (auxComp > 0)
             throughAuxLine (0, mixL.data(), mixR.data(), n, auxComp);
-        for (size_t a = 0; a < static_cast<size_t> (kAuxBuses); ++a)
+        for (size_t a = 0; a < auxCount; ++a)
         {
             const auto& bus = project.console.aux[a];
             float* l = auxL[a].data();
