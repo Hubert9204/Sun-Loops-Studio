@@ -7,7 +7,7 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Oldest macOS the program r
 # Windows (0.75.0): the C and C++ runtime is linked into every program and plugin (/MT), so nothing has to be installed beside
 # them (no Visual C++ Redistributable). Must be set before project().
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "The MSVC runtime: static")
-project(SunLoopsStudio VERSION 0.78.0 LANGUAGES C CXX)
+project(SunLoopsStudio VERSION 0.79.0 LANGUAGES C CXX)
 # The assembler links the sound library in on Linux and macOS; Windows (0.75.0) uses a resource instead (see below).
 if(NOT WIN32)
     enable_language(ASM)
@@ -51,6 +51,28 @@ FetchContent_Declare(
     ${SLS_JUCE_FETCH_OPTIONS}
 )
 FetchContent_MakeAvailable(JUCE)
+# 0.79.0: JUCE 8.0.4's AudioPluginInstance has a constructor from a C array of channel layouts that cannot compile (no AudioProcessor
+# constructor takes that array); Clang 22, the one of Visual Studio 18, checks it even though nothing uses it ("no matching constructor
+# for initialization of 'AudioProcessor'"). The downloaded copy loses those two lines, as later JUCE versions did; a copy of JUCE given
+# with FETCHCONTENT_SOURCE_DIR_JUCE is left alone.
+set(SLS_JUCE_PLUGIN_INSTANCE "${juce_SOURCE_DIR}/modules/juce_audio_processors/processors/juce_AudioPluginInstance.h")
+if(EXISTS "${SLS_JUCE_PLUGIN_INSTANCE}")
+    file(READ "${SLS_JUCE_PLUGIN_INSTANCE}" SLS_JUCE_TEXT)
+    string(REPLACE "\r" "" SLS_JUCE_TEXT "${SLS_JUCE_TEXT}") # (its lines may end in CR LF)
+    set(SLS_JUCE_BROKEN "    template <size_t numLayouts>\n    AudioPluginInstance (const short channelLayoutList[numLayouts][2]) : AudioProcessor (channelLayoutList) {}\n")
+    string(FIND "${SLS_JUCE_TEXT}" "${SLS_JUCE_BROKEN}" SLS_JUCE_AT)
+    if(NOT SLS_JUCE_AT EQUAL -1)
+        string(FIND "${juce_SOURCE_DIR}" "${CMAKE_BINARY_DIR}" SLS_JUCE_IN_BUILD)
+        if(SLS_JUCE_IN_BUILD EQUAL 0)
+            string(REPLACE "${SLS_JUCE_BROKEN}" "" SLS_JUCE_TEXT "${SLS_JUCE_TEXT}")
+            file(WRITE "${SLS_JUCE_PLUGIN_INSTANCE}" "${SLS_JUCE_TEXT}")
+            message(STATUS "JUCE: removed AudioPluginInstance's array constructor (it does not compile with Clang 22)")
+        else()
+            message(WARNING "JUCE at ${juce_SOURCE_DIR} has AudioPluginInstance's array constructor, which Clang 22 refuses: "
+                            "remove its two lines in ${SLS_JUCE_PLUGIN_INSTANCE} if the build stops there")
+        endif()
+    endif()
+endif()
 
 # Session log, crash reports and the update check (0.43.0): spdlog (session log), nlohmann/json (GitHub API answers) and
 # libcurl (HTTPS; Fedora / Nobara: libcurl-devel). Both libraries are pinned and built in; their headers are SYSTEM so their

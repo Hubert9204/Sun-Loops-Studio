@@ -62,7 +62,8 @@ void MainComponent::importMidiFile (const juce::File& file)
 
     const int startTick = arrangement.songLengthTicks();
     const int unit = currentPatternTicks(); // the file is cut into patterns as long as the current one (0.56.0)
-    const int room = std::min (kMaxPatterns - static_cast<int> (arrangement.patterns.size()), (arrangement.timelineTicks() - startTick) / unit);
+    const int room = std::min ({ kMaxPatterns - static_cast<int> (arrangement.patterns.size()), (arrangement.timelineTicks() - startTick) / unit,
+                                 kMaxPlaylistTracks - arrangement.trackCount() }); // 0.79.0: each pattern needs its own track
     if (room <= 0)
         return fail ("there is no room left for new patterns on the playlist");
 
@@ -102,9 +103,10 @@ void MainComponent::importMidiFile (const juce::File& file)
         pattern.notes.resize (channels.size());
         for (size_t k = 0; k < newChannels.size() && k < plan.patternNotes[static_cast<size_t> (p)].size(); ++k)
             pattern.notes[static_cast<size_t> (newChannels[k])] = plan.patternNotes[static_cast<size_t> (p)][k];
-        arrangement.patterns.push_back (std::move (pattern));
         // Each new pattern gets its own playlist track (0.44.0), and its clip goes there.
-        const int own = arrangement.addPatternTrack (firstPattern + p);
+        if (arrangement.addPattern (std::move (pattern)) < 0)
+            break;
+        const int own = arrangement.dedicatedTrack (firstPattern + p);
         arrangement.clips.push_back ({ firstPattern + p, own >= 0 ? own : 0, startTick + p * unit, unit, 0 });
     }
 
@@ -184,9 +186,11 @@ void MainComponent::importMediaFiles (const juce::StringArray& allPaths, int tra
     library.ensureExists();
     const auto videoFolder = library.samples.getChildFile ("From videos");
 
-    // One file per track from the one dropped on; tracks are added at the end when the files need more (0.44.0).
+    // One file per track from the one dropped on; tracks are added when the files need more (0.44.0; since 0.79.0 audio tracks at the
+    // end of the Audio section, when the files were dropped there - the pattern section has one track per pattern and no other).
     const int firstTrack = std::clamp (track, 0, arrangement.trackCount() - 1);
-    while (firstTrack + paths.size() > arrangement.trackCount() && arrangement.addTrack() >= 0) {}
+    while (arrangement.trackSection (firstTrack) == TrackSection::Audio && firstTrack + paths.size() > arrangement.sectionEnd (TrackSection::Audio)
+           && insertAudioTrack() >= 0) {}
     playlistView.tracksChanged();
     for (int i = 0; i < paths.size(); ++i)
     {

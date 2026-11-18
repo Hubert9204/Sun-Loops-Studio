@@ -18,6 +18,7 @@
 
 #include <juce_audio_formats/juce_audio_formats.h>
 
+#include "audio/MixerEdit.h"
 #include "audio/AuxBuses.h"
 #include "audio/SpeechSynth.h"
 #include "support/CrashHandler.h"
@@ -4607,19 +4608,23 @@ void testPlaylistTracks()
     }
     check (a.trackCount() == 8 && a.dedicatedTrack (3) == 7, "with 4 patterns: 4 tracks for the patterns + the 4 free ones = 8");
     check (a.addPatternTrack (3) == 7 && a.trackCount() == 8, "a pattern never gets a second track");
-    check (a.addTrack() == 8 && a.trackCount() == 9 && a.playlistTracks[8].pattern == -1, "+ adds a free track at the end");
+    check (a.addTrack() == 4 && a.trackCount() == 9 && a.playlistTracks[4].pattern == -1 && a.trackSection (4) == sls::TrackSection::Audio
+               && a.dedicatedTrack (0) == 5,
+           "+ adds a free track at the end of the audio section (0.79.0: the patterns' tracks move down one place)");
 
     // Removing a track takes its clips with it; the tracks (and clips) after it move up.
-    a.clips = { { 0, 4, 0, 1920, 0 }, { 1, 5, 0, 1920, 0 }, { 3, 7, 1920, 1920, 0 } };
+    a.clips = { { 0, 5, 0, 1920, 0 }, { 1, 6, 0, 1920, 0 }, { 3, 8, 1920, 1920, 0 } };
     sls::AudioClip audio;
     audio.data = sls::makeMissingSample ("/x.wav");
-    audio.track = 6;
+    audio.track = 4;
     audio.lengthTicks = 960;
     a.audioClips = { audio };
-    check (a.clipsOnTrack (5) == 1 && a.clipsOnTrack (6) == 1 && a.clipsOnTrack (0) == 0, "clips are counted per track");
-    check (a.removeTrack (5) && a.trackCount() == 8 && a.clips.size() == 2 && a.clips[1].track == 6 && a.audioClips[0].track == 5
-               && a.playlistTracks[5].pattern == 2 && a.dedicatedTrack (1) == -1,
-           "- on a track: its clip goes, the clips and tracks below move up one place");
+    check (a.clipsOnTrack (6) == 1 && a.clipsOnTrack (4) == 1 && a.clipsOnTrack (0) == 0, "clips are counted per track");
+    check (a.removeTrack (4) && a.trackCount() == 8 && a.audioClips.empty() && a.clips[0].track == 4 && a.clips[2].track == 7 && a.dedicatedTrack (3) == 7,
+           "- on a free track: its clip goes, the clips and tracks below move up one place");
+    check (a.removeTrack (5) && a.patterns.size() == 3 && a.trackCount() == 7 && a.clips.size() == 2 && a.clips[1].pattern == 2 && a.clips[1].track == 6
+               && a.dedicatedTrack (1) == 5 && a.dedicatedTrack (2) == 6,
+           "0.79.0: deleting a pattern's own track deletes the pattern; the later patterns, their tracks and clips move up");
     check (! a.removeTrack (-1) && ! a.removeTrack (99), "a track that does not exist cannot be removed");
     sls::Arrangement one;
     one.playlistTracks.resize (1);
@@ -4627,8 +4632,9 @@ void testPlaylistTracks()
     sls::Arrangement full;
     while (full.addTrack() >= 0) {}
     check (full.trackCount() == sls::kMaxPlaylistTracks, "at most kMaxPlaylistTracks tracks");
+    check (! full.canAddPattern() && full.addPattern ({}) == -1 && full.patterns.empty(), "0.79.0: no new pattern when there is no room for its track");
 
-    // Deleting a pattern: its own track goes when empty, else it becomes a free track named after it; later patterns' tracks follow.
+    // Deleting a pattern: its own track goes with it (0.79.0; before, it stayed when it held something); later patterns' tracks follow.
     {
         auto d = sls::ProjectDocument::blank();
         auto& b = d.arrangement;
@@ -4640,15 +4646,20 @@ void testPlaylistTracks()
         check (b.removePattern (1) && b.trackCount() == 6 && b.dedicatedTrack (1) == 5 && b.clips[0].pattern == 1 && b.clips[0].track == 5,
                "deleting a pattern whose track is empty removes the track; the next pattern's track and clip move up");
         b.clips.push_back ({ 0, 4, 0, 1920, 0 });
+        b.clips.push_back ({ 1, 4, 1920, 1920, 0 }); // another pattern's clip on pattern 0's track
         sls::AudioClip take;
         take.data = sls::makeMissingSample ("/take.wav");
         take.track = 4;
         take.lengthTicks = 960;
         b.audioClips = { take };
-        b.patterns[0].name = "Intro";
-        check (b.removePattern (0) && b.trackCount() == 6 && b.playlistTracks[4].pattern == -1 && b.playlistTracks[4].name == "Intro"
-                   && b.audioClips.size() == 1 && b.dedicatedTrack (0) == 5,
-               "a pattern's track that still holds a recording stays, as a free track with the pattern's name");
+        const auto takes = b.whatRemovingPatternTakes (0);
+        check (takes.track == 4 && takes.clips == 1 && takes.audioClips == 1 && takes.movedClips == 1,
+               "what deleting a pattern takes is counted first: its clips, the audio on its track, the other clips there");
+        int removed = -1;
+        check (b.removePattern (0, &removed) && removed == 4 && b.trackCount() == 5 && b.audioClips.empty() && b.clips.size() == 2
+                   && b.clips[0].pattern == 0 && b.clips[0].track == 4 && b.clips[1].track == 4 && b.dedicatedTrack (0) == 4,
+               "0.79.0: a pattern's track goes with it whatever it holds: its audio is deleted, another pattern's clip moves to that pattern's track");
+        check (! b.removeTrack (4) && ! b.removePattern (0) && b.patterns.size() == 1 && b.trackCount() == 5, "the last pattern and its track stay");
     }
 
     // Saved and read back; older files had 8 tracks.
@@ -4691,6 +4702,141 @@ void testPlaylistTracks()
     check (setup.armedTracks() == std::vector<int> { 0 }, "removing the only armed track arms the first one");
 }
 
+// 0.79.0: patterns and pattern tracks one to one; any mixer track can be deleted.
+void testPatternTrackSync079()
+{
+    std::cout << "Patterns and their playlist tracks, one to one (0.79.0)\n";
+    {
+        // A project from before: two tracks claiming one pattern, one claiming a pattern that does not exist, a pattern without
+        // a track, free tracks among the pattern tracks (one with a recording on it, one with a clip).
+        sls::Arrangement b;
+        b.patterns.resize (3);
+        b.playlistTracks.assign (8, sls::PlaylistTrack {});
+        b.playlistTracks[4].pattern = 0;
+        b.playlistTracks[5].pattern = 0;
+        b.playlistTracks[6].pattern = 9;
+        b.assignTrackSectionsFromPatterns();
+        sls::AudioClip take;
+        take.data = sls::makeMissingSample ("/take.wav");
+        take.track = 5;
+        take.lengthTicks = 960;
+        b.audioClips = { take };
+        b.clips = { { 1, 7, 0, 960, 0 }, { 0, 4, 0, 960, 0 } };
+        const auto oldToNew = b.syncPatternTracks();
+        check (oldToNew.size() == 8 && b.trackCount() == 10 && b.sectionTrackCount (sls::TrackSection::Pattern) == 3
+                   && b.sectionTrackCount (sls::TrackSection::Audio) == 7,
+               "an older playlist: one track per pattern in the pattern section, every free track in the audio section");
+        check (b.dedicatedTrack (0) == 7 && b.dedicatedTrack (1) == 8 && b.dedicatedTrack (2) == 9 && oldToNew[4] == 7 && oldToNew[5] == 4,
+               "the patterns without a track get one at the end; the free tracks move up, in their order");
+        check (b.audioClips[0].track == 4 && b.mixerTrackOf (4) == 5 && b.clips[0].track == 6 && b.clips[1].track == 7,
+               "the clips go with their tracks, and a recording that moved keeps playing through its mixer track");
+        check (b.syncPatternTracks().empty(), "a playlist in step is left alone");
+        sls::Arrangement full;
+        full.patterns.resize (2);
+        full.playlistTracks.assign (sls::kMaxPlaylistTracks, sls::PlaylistTrack {});
+        full.playlistTracks[0].pattern = 0;
+        full.syncPatternTracks();
+        check (full.trackCount() == sls::kMaxPlaylistTracks && full.dedicatedTrack (1) >= 0 && full.dedicatedTrack (0) >= 0
+                   && full.sectionTrackCount (sls::TrackSection::Pattern) == 2,
+               "with a full playlist an empty free track becomes the track of a pattern that had none");
+    }
+    {
+        // a playlist track's own mixer track: saved and read back, used by the song
+        auto doc = sls::ProjectDocument::blank();
+        doc.tracks.resize (12);
+        doc.arrangement.playlistTracks[1].mixerTrack = 9;
+        const auto back = sls::ProjectDocument::fromJson (doc.toJson());
+        check (back.document && back.document->arrangement.playlistTracks[1].mixerTrack == 9 && back.document->arrangement.playlistTracks[0].mixerTrack == -1,
+               "the mixer track a playlist track's audio plays through is saved and read back");
+        sls::AudioClip clip;
+        clip.data = sineSample (440.0, 0.5, 48000.0); // (an empty clip would be left out of the song)
+        clip.track = 1;
+        clip.lengthTicks = 960;
+        sls::AudioClip other = clip;
+        other.track = 2;
+        doc.arrangement.audioClips = { clip, other };
+        const auto song = sls::compileSong ({}, doc.arrangement, doc.tracks);
+        bool nine = false, two = false;
+        for (const auto& e : song.audioEvents)
+        {
+            nine = nine || e.mixerTrack == 9;
+            two = two || e.mixerTrack == 2;
+        }
+        check (nine && two, "a playlist track's audio plays through the mixer track it names, the others through the one with their number");
+    }
+}
+
+void testMixerTrackDelete079()
+{
+    std::cout << "Deleting any mixer track (0.79.0)\n";
+    auto tracks = sls::Project::defaultTracks();
+    tracks.resize (10);
+    tracks[8].name = "Track 9";
+    tracks[9].name = "Track 10";
+    std::vector<sls::Channel> channels (3);
+    channels[0].name = "Kick";
+    channels[0].mixerTrack = 0;
+    channels[1].name = "Bass";
+    channels[1].mixerTrack = 3;
+    channels[2].mixerTrack = 6;
+    tracks[3].slots[0] = sls::EffectSlot::make (sls::EffectType::Reverb);
+    tracks[2].slots[0] = sls::EffectSlot::make (sls::EffectType::Delay);
+    tracks[2].toMaster = false;
+    tracks[2].trackSends[0] = { 3, 1.0f, false };
+    tracks[1].trackSends[0] = { 7, 0.5f, false };
+    tracks[1].slots[0] = sls::EffectSlot::make (sls::EffectType::Chorus);
+    tracks[5].slots[1] = sls::EffectSlot::make (sls::EffectType::Compressor);
+    tracks[5].slots[1].params[5] = 4.0f; // sidechain from track 3 (0-based; the parameter counts from 1, 0 = off)
+    tracks[6].slots[1] = sls::EffectSlot::make (sls::EffectType::Gate);
+    tracks[6].slots[1].params[5] = 8.0f; // from track 7
+    auto console = sls::Console::defaults();
+    console.aux[0].slots[0] = sls::EffectSlot::make (sls::EffectType::Compressor);
+    console.aux[0].slots[0].params[5] = 10.0f; // from track 9
+    std::array<sls::EffectSlot, sls::kSlotsPerTrack> master {};
+    sls::Arrangement a;
+    a.patterns.resize (1);
+    a.resetTracks();
+    sls::AudioClip clip;
+    clip.data = std::make_shared<sls::SampleData>();
+    clip.lengthTicks = 960;
+    clip.track = 3;
+    sls::AudioClip next = clip;
+    next.track = 4;
+    a.audioClips = { clip, next };
+    sls::AutomationClip volume;
+    volume.points = { sls::AutomationPoint {} };
+    volume.target = { sls::AutomationKind::TrackVolume, 3, 0, 0 };
+    sls::AutomationClip later = volume;
+    later.target.index = 6;
+    sls::AutomationClip channel = volume;
+    channel.target = { sls::AutomationKind::ChannelVolume, 3, 0, 0 };
+    a.automationClips = { volume, later, channel };
+
+    const auto use = sls::mixerTrackUse (tracks, channels, a, console, master, 3);
+    check (use.channels == std::vector<int> { 1 } && use.playlistTracks == std::vector<int> { 3 } && use.effects == 1 && use.automationClips == 1
+               && use.feeders == std::vector<int> { 2 } && use.listeners == 1 && ! use.empty(),
+           "what uses a track is listed first: channels, playlist audio, effects, automation, sends to it, sidechains");
+    const int heir = sls::mixerTrackHeir (tracks, channels, a, 3);
+    check (heir == 8, "its heir is the first track nothing uses (no channel, effect, audio or send)");
+    check (sls::deleteMixerTrack (tracks, channels, a, console, master, 3, heir) && tracks.size() == 9, "track 4 (index 3) is deleted");
+    check (channels[0].mixerTrack == 0 && channels[1].mixerTrack == 7 && channels[2].mixerTrack == 5,
+           "a channel on it goes to the heir (one place lower now), one after it moves down with its track");
+    check (tracks[2].toMaster && tracks[2].trackSends[0].target == -1 && tracks[1].trackSends[0].target == 6,
+           "a send to it is removed (a track that went only there goes to the master); a send to a later track follows it");
+    check (tracks[4].slots[1].params[5] == 0.0f && tracks[5].slots[1].params[5] == 7.0f && console.aux[0].slots[0].params[5] == 9.0f,
+           "a sidechain from it is switched off; one from a later track follows it (on the tracks and the aux buses)");
+    check (a.automationClips.size() == 2 && a.automationClips[0].target.index == 5 && a.automationClips[1].target.index == 3,
+           "its automation is deleted, the later tracks' follows them, a channel's is left alone");
+    check (a.mixerTrackOf (3) == 7 && a.mixerTrackOf (4) == 3 && a.mixerTrackOf (2) == 2 && a.playlistTracks[2].mixerTrack == -1,
+           "the playlist's audio keeps its effects: through the heir, or the same track one place lower; the rest unchanged");
+    check (tracks[7].name == "Track 8" && tracks[8].name == "Track 9" && tracks[3].slots[0].type == sls::EffectType::None,
+           "default names follow the numbers, and its effects went with it");
+
+    auto eight = sls::Project::defaultTracks();
+    check (! sls::deleteMixerTrack (eight, channels, a, console, master, 2, 0) && eight.size() == 8, "the mixer keeps at least 8 tracks");
+    check (! sls::deleteMixerTrack (tracks, channels, a, console, master, 3, 3) && tracks.size() == 9, "the heir cannot be the track itself");
+}
+
 void testPlaylistSections069()
 {
     std::cout << "Playlist sections: audio tracks, pattern tracks, automation lanes, each with - and + (0.69.0)\n";
@@ -4714,22 +4860,25 @@ void testPlaylistSections069()
     check (added == 4 && a.trackCount() == 8 && a.trackSection (4) == sls::TrackSection::Audio && a.playlistTracks[4].pattern == -1
                && a.clips[0].track == 5 && a.clips[1].track == 7 && a.audioClips[0].track == 1 && a.dedicatedTrack (0) == 5,
            "+ (audio): a track at the end of the audio section, the pattern tracks and their clips move down");
-    const int pattern = a.insertTrack (sls::TrackSection::Pattern);
-    check (pattern == 8 && a.trackSection (8) == sls::TrackSection::Pattern && a.sectionTrackCount (sls::TrackSection::Pattern) == 4,
-           "+ (patterns): a track at the end of the pattern section");
-    check (a.addTrack() == 9 && a.trackSection (9) == sls::TrackSection::Pattern, "a track added at the very end joins the pattern section");
+    check (a.insertTrack (sls::TrackSection::Pattern) == -1, "0.79.0: no free track in the pattern section");
+    const int pattern = a.addPattern ({});
+    check (pattern == 3 && a.dedicatedTrack (3) == 8 && a.trackSection (8) == sls::TrackSection::Pattern && a.sectionTrackCount (sls::TrackSection::Pattern) == 4,
+           "+ (patterns): a new pattern, with its track at the end of the pattern section");
+    check (a.addTrack() == 5 && a.trackSection (5) == sls::TrackSection::Audio && a.dedicatedTrack (0) == 6,
+           "0.79.0: a free track added goes to the end of the audio section");
 
     // Groups stay inside a section.
-    a.playlistTracks[5].grouped = true; // the first pattern track, "grouped" with the last audio track
+    a.playlistTracks[6].grouped = true; // the first pattern track, "grouped" with the last audio track
     a.tidyTrackSections();
-    check (! a.playlistTracks[5].grouped, "the first track of a section is never grouped with the one above");
-    a.playlistTracks[6].section = sls::TrackSection::Audio; // out of order
+    check (! a.playlistTracks[6].grouped, "the first track of a section is never grouped with the one above");
+    a.playlistTracks[7].section = sls::TrackSection::Audio; // out of order
     a.tidyTrackSections();
-    check (a.trackSection (6) == sls::TrackSection::Pattern, "the sections stay in order");
+    check (a.trackSection (7) == sls::TrackSection::Pattern, "the sections stay in order");
 
-    // Removing the first pattern track does not let the next one join the audio section's group.
-    a.playlistTracks[6].grouped = true;
-    check (a.removeTrack (5) && ! a.playlistTracks[5].grouped && a.sectionStart (sls::TrackSection::Pattern) == 5, "a track removed at a border");
+    // Removing the first pattern track (with its pattern) does not let the next one join the audio section's group.
+    a.playlistTracks[7].grouped = true;
+    check (a.removeTrack (6) && a.patterns.size() == 3 && ! a.playlistTracks[6].grouped && a.sectionStart (sls::TrackSection::Pattern) == 6,
+           "a track removed at a border");
 
     // Automation lanes: 4 to start with, + adds one, - removes one with its clips (the lanes under it move up).
     check (a.automationLanes == sls::kAutomationLanes, "4 automation lanes in a new project");
@@ -4766,7 +4915,7 @@ void testPlaylistSections069()
                 t.getDynamicObject()->removeProperty ("section");
         const auto old = sls::ProjectDocument::fromJson (juce::JSON::toString (v));
         check (old.document && old.document->arrangement.automationLanes == sls::kAutomationLanes
-                   && old.document->arrangement.sectionStart (sls::TrackSection::Pattern) == old.document->arrangement.dedicatedTrack (1)
+                   && old.document->arrangement.sectionStart (sls::TrackSection::Pattern) == old.document->arrangement.dedicatedTrack (0)
                    && old.document->arrangement.trackSection (old.document->arrangement.trackCount() - 1) == sls::TrackSection::Pattern,
                "an older file: the tracks from the first pattern's own track on are the pattern section, 4 lanes");
     }
@@ -14203,6 +14352,8 @@ int main (int argc, char** argv)
     testPianoRollSpareQuarter();
     testPlaylistTracks();
     testPlaylistSections069();
+    testPatternTrackSync079();
+    testMixerTrackDelete079();
     testMixerAndExport045();
     testTempoAndMeter046();
     testMixAutomation047();

@@ -2,6 +2,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include "audio/MixerEdit.h"
 #include "audio/AuxBuses.h"
 #include "audio/TimeFormat.h"
 
@@ -119,6 +120,7 @@ MainComponent::MainComponent()
     mixerPanel.setTracks (tracks);
     mixerPanel.onAddTracks = [this] (int howMany) { addMixerTracks (howMany); };
     mixerPanel.onRemoveLastTrack = [this] { removeLastMixerTrack(); };
+    mixerPanel.onDeleteTrack = [this] (int track) { deleteMixerTrack (track); }; // 0.79.0
     mixerPanel.onAddAuxBus = [this] { addAuxBus(); };
     mixerPanel.onRemoveLastAuxBus = [this] { removeLastAuxBus(); };
     mixerPanel.setMaster (masterTrack);
@@ -429,6 +431,7 @@ MainComponent::MainComponent()
     playlistView.onNewPattern = [this] { showNewPatternMenu (playlistView); };
     playlistView.onRenamePattern = [this] (int pattern) { renamePattern (pattern); };
     playlistView.onDeletePattern = [this] (int pattern) { deletePattern (pattern); };
+    playlistView.onAddEmptyPattern = [this] { addPattern (false); }; // 0.79.0: the pattern section's +
     playlistView.onItemDropped = [this] (const drag::Item& item, int track, int tick) { dropOnPlaylist (item, track, tick); };
     playlistView.onFilesDropped = [this] (const juce::StringArray& files, int track, int tick) { importMediaFiles (files, track, tick); };
     playlistView.setBpm (bpmSlider.getValue());
@@ -1546,6 +1549,104 @@ void MainComponent::removeLastMixerTrack()
     setTrackCount (tracks.size() - 1);
     statusLabel.setText ("Track " + juce::String (last + 1) + " removed: " + juce::String (tracks.size()) + " tracks", juce::dontSendNotification);
     publishProject();
+}
+
+// 0.79.0: deleting a mixer track in the middle. When nothing uses it, it goes at once; otherwise the question says what happens:
+// its channels and the playlist audio that played through it go to its heir (a track nothing uses, see mixerTrackHeir), the sends
+// to it, the sidechains listening to it and the automation clips moving it are removed, its effects go with it. The tracks after it
+// move down one place and everything that names them follows. Undo brings it all back.
+void MainComponent::deleteMixerTrack (int track)
+{
+    const int count = static_cast<int> (tracks.size());
+    if (track < 0 || track >= count)
+        return;
+    if (count <= kDefaultTracks)
+    {
+        statusLabel.setText ("Track " + juce::String (track + 1) + " was kept: the mixer keeps at least " + juce::String (kDefaultTracks)
+                                 + " tracks (add one first)",
+                             juce::dontSendNotification);
+        return;
+    }
+    commitCurrentPattern();
+    const auto use = sls::mixerTrackUse (tracks, channels, arrangement, console, masterTrack.slots, track);
+    const int heir = sls::mixerTrackHeir (tracks, channels, arrangement, track);
+    if (use.empty())
+    {
+        doDeleteMixerTrack (track, heir);
+        return;
+    }
+    const int heirAfter = heir < track ? heir : heir - 1;
+    const auto list = [] (const std::vector<int>& items, auto&& nameOf)
+    {
+        juce::StringArray names;
+        for (size_t i = 0; i < items.size() && i < 4; ++i)
+            names.add (nameOf (items[i]));
+        return names.joinIntoString (", ") + (items.size() > 4 ? " and " + juce::String (static_cast<int> (items.size()) - 4) + " more" : juce::String());
+    };
+    juce::String message = "Everything after it moves down one place, and what refers to those tracks follows them.";
+    if (! use.channels.empty())
+        message += "\n- " + list (use.channels, [this] (int c) { return juce::String (channels[static_cast<size_t> (c)].name); })
+                 + (use.channels.size() == 1 ? " plays" : " play") + " through it: from now on through Track " + juce::String (heirAfter + 1)
+                 + " (now Track " + juce::String (heir + 1) + ").";
+    if (! use.playlistTracks.empty())
+        message += "\n- The audio of playlist track " + list (use.playlistTracks, [] (int t) { return juce::String (t + 1); })
+                 + " plays through it: from now on through Track " + juce::String (heirAfter + 1) + ".";
+    if (use.effects > 0)
+        message += "\n- Its " + juce::String (use.effects) + (use.effects == 1 ? " effect is" : " effects are") + " deleted with it.";
+    if (! use.feeders.empty())
+        message += "\n- Track " + list (use.feeders, [] (int t) { return juce::String (t + 1); }) + (use.feeders.size() == 1 ? " sends" : " send")
+                 + " to it: the send is removed (a track that went only there goes to the master).";
+    if (use.listeners > 0)
+        message += "\n- " + juce::String (use.listeners) + (use.listeners == 1 ? " effect listens" : " effects listen") + " to it (sidechain): set to Off.";
+    if (use.automationClips > 0)
+        message += "\n- " + juce::String (use.automationClips) + (use.automationClips == 1 ? " automation clip moves" : " automation clips move")
+                 + " it: deleted.";
+    message += "\nUndo (Ctrl+Z) brings it all back.";
+    juce::AlertWindow::showOkCancelBox (juce::MessageBoxIconType::QuestionIcon, "Delete Track " + juce::String (track + 1) + "?", message,
+                                        "Delete the track", "Cancel", this,
+                                        juce::ModalCallbackFunction::create ([safe = juce::Component::SafePointer<MainComponent> (this), track, heir, count] (int result)
+                                        {
+                                            if (result != 0 && safe != nullptr && static_cast<int> (safe->tracks.size()) == count)
+                                                safe->doDeleteMixerTrack (track, heir);
+                                        }));
+}
+
+void MainComponent::doDeleteMixerTrack (int track, int heir)
+{
+    const int count = static_cast<int> (tracks.size());
+    if (track < 0 || track >= count || count <= kDefaultTracks || heir < 0 || heir >= count || heir == track)
+        return;
+    closeAutomationEditor(); // its clip index may change
+    mixerPanel.setTracks (tracks, tracks.size() - 1); // the last strip goes first (the strips refer to the tracks in place)
+    sls::deleteMixerTrack (tracks, channels, arrangement, console, masterTrack.slots, track, heir);
+    mixerPanel.setTracks (tracks);
+    for (int t = 0; t < static_cast<int> (tracks.size()); ++t)
+        mixerPanel.refreshTrack (t);
+    mixerPanel.refreshTrack (kMasterIndex);
+    mixerPanel.refreshConsole();
+    mixerPanel.setSelectedTrack (std::min (track, static_cast<int> (tracks.size()) - 1));
+    for (auto& strip : strips)
+    {
+        strip->setTrackCount (static_cast<int> (tracks.size()));
+        strip->refreshFromChannel();
+    }
+    updateTrackRouting();
+    playlistView.clearHistory(); // its own undo steps hold the old track numbers (the main Undo has everything)
+    playlistView.refreshTimeline();
+    statusLabel.setText ("Track " + juce::String (track + 1) + " deleted: " + juce::String (tracks.size()) + " tracks; the ones after it moved down one place",
+                         juce::dontSendNotification);
+    publishProject();
+}
+
+int MainComponent::insertAudioTrack()
+{
+    const int t = arrangement.insertTrack (TrackSection::Audio);
+    if (t >= 0)
+    {
+        recordSetup.insertTrack (t); // the tracks from there on moved down one place
+        applyRecordSetup();
+    }
+    return t;
 }
 
 void MainComponent::addAuxBus()

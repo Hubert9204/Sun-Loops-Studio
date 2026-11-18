@@ -57,6 +57,7 @@ public:
     std::function<void (int, int)> onSlotMenu;        // (track, slot): right click
     std::function<void (const AutomationTarget&)> onAutomate; // right click on the fader / balance
     std::function<void (int, juce::Component&)> onRouteMenu;  // 0.62.0: the routing button was clicked (track, the button)
+    std::function<void (int)> onStripMenu;                    // 0.79.0: right click on the strip (its name, its empty places)
 
     void paint (juce::Graphics&) override;
     void resized() override;
@@ -315,6 +316,7 @@ public:
     std::function<void (int)> onTrackChanged;       // anything that changes the sound (track index, or kMasterIndex)
     std::function<void (int)> onAddTracks;          // the "+" button: add this many tracks (0.29.0)
     std::function<void()> onRemoveLastTrack;        // its menu, and (0.78.0) the "-" under it: remove the last track
+    std::function<void (int)> onDeleteTrack;        // 0.79.0: a strip's right-click menu (or its routing menu): delete that track
     std::function<void()> onAddAuxBus;              // 0.78.0: the "+" after the aux buses
     std::function<void()> onRemoveLastAuxBus;       // 0.78.0: the "-" under it
     std::function<void (double)> onMasterVolumeChanged;
@@ -337,6 +339,7 @@ private:
     void layoutInner();
     void addStrip (size_t index);
     void showRouteMenu (int index, juce::Component& button); // 0.62.0
+    void showStripMenu (int index);                          // 0.79.0
     void askTrackDelay (int index); // 0.70.0
     void showAddTrackMenu();
     void selectMaster();

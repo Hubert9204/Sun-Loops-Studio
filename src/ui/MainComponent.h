@@ -210,6 +210,9 @@ private:
     void setTrackCount (size_t count);
     void addMixerTracks (int howMany);
     void removeLastMixerTrack(); // only when nothing uses it
+    int insertAudioTrack();      // 0.79.0: a free playlist track at the end of the Audio section (the record arms follow); -1 when full
+    void deleteMixerTrack (int track);  // 0.79.0: any track, after asking when something uses it (see audio/MixerEdit.h)
+    void doDeleteMixerTrack (int track, int heir);
     void addAuxBus();            // 0.78.0: the mixer's + after the aux buses
     void removeLastAuxBus();     // 0.78.0: its -, only when nothing uses the bus
     void drainScoreEvents();               // 0.28.0: into scoreLog

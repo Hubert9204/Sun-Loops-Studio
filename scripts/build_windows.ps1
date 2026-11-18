@@ -39,13 +39,22 @@ if (-not (Get-Command clang-cl -ErrorAction SilentlyContinue) -or -not $env:VCIN
         if ($_ -match '^([^=]+)=(.*)$') { Set-Item -Path "env:$($Matches[1])" -Value $Matches[2] }
     }
 }
-if (-not (Get-Command clang-cl -ErrorAction SilentlyContinue)) {
-    throw "clang-cl was not found: add the Visual Studio component 'C++ Clang Compiler for Windows'"
+# The clang-cl that comes with Visual Studio first: it matches Visual Studio's C++ library. Another LLVM earlier on the PATH may be
+# older than the library wants ("STL1000: Unexpected compiler version", 0.79.0); the library's check is then waived, as a fallback.
+$clang = if ($env:VCINSTALLDIR) { Join-Path $env:VCINSTALLDIR "Tools\Llvm\x64\bin\clang-cl.exe" } else { "" }
+if (-not $clang -or -not (Test-Path $clang)) {
+    $found = Get-Command clang-cl -ErrorAction SilentlyContinue
+    if (-not $found) { throw "clang-cl was not found: add the Visual Studio component 'C++ Clang Compiler for Windows'" }
+    $clang = $found.Source
 }
+Write-Host "Compiler: $clang"
+& $clang --version
+$env:CFLAGS = "/D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH"
+$env:CXXFLAGS = "/D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH"
 
 # --- configure and build ---
 $cmakeArgs = @("-S", $root, "-B", $BuildDir, "-G", "Ninja", "-DCMAKE_BUILD_TYPE=Release",
-               "-DCMAKE_C_COMPILER=clang-cl", "-DCMAKE_CXX_COMPILER=clang-cl", "-DSLS_BUILD_TEST_PLUGINS=OFF")
+               "-DCMAKE_C_COMPILER=$clang", "-DCMAKE_CXX_COMPILER=$clang", "-DSLS_BUILD_TEST_PLUGINS=OFF")
 if ($env:FETCHCONTENT_SOURCE_DIR_JUCE) { $cmakeArgs += "-DFETCHCONTENT_SOURCE_DIR_JUCE=$env:FETCHCONTENT_SOURCE_DIR_JUCE" }
 & cmake @cmakeArgs
 if ($LASTEXITCODE -ne 0) { throw "cmake configure failed" }

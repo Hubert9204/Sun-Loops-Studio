@@ -14,9 +14,12 @@ void MainComponent::makeClipUnique (int clipIndex)
 {
     if (clipIndex < 0 || clipIndex >= static_cast<int> (arrangement.clips.size()))
         return;
-    if (arrangement.patterns.size() >= static_cast<size_t> (kMaxPatterns))
+    if (! arrangement.canAddPattern()) // 0.79.0: a pattern comes with its own track
     {
-        statusLabel.setText ("Make unique: the project already has " + juce::String (kMaxPatterns) + " patterns", juce::dontSendNotification);
+        statusLabel.setText (arrangement.patterns.size() >= static_cast<size_t> (kMaxPatterns)
+                                 ? "Make unique: the project already has " + juce::String (kMaxPatterns) + " patterns"
+                                 : "Make unique: " + juce::String ("the playlist already has " + juce::String (kMaxPlaylistTracks) + " tracks: a new pattern needs one of its own"),
+                             juce::dontSendNotification);
         return;
     }
     commitCurrentPattern();
@@ -26,8 +29,10 @@ void MainComponent::makeClipUnique (int clipIndex)
     playlistView.pushUndoPoint();
     Pattern copy = arrangement.patterns[static_cast<size_t> (source)];
     copy.name = arrangement.newPatternName();
-    arrangement.patterns.push_back (std::move (copy));
-    const int made = static_cast<int> (arrangement.patterns.size()) - 1;
+    const int made = arrangement.addPattern (std::move (copy)); // with its own track (0.79.0; the clip stays where it is)
+    if (made < 0)
+        return;
+    playlistView.tracksChanged();
     arrangement.clips[static_cast<size_t> (clipIndex)].pattern = made;
     arrangement.ensureChannelCount (channels.size());
     refreshPatternBox();

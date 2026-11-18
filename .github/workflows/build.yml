@@ -64,8 +64,18 @@ jobs:
       - uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
+      # The clang-cl that comes with Visual Studio, which matches its C++ library (0.79.0: the image's own LLVM comes first on the PATH and
+      # can be older than the library wants - "STL1000: Unexpected compiler version"); the same choice as scripts/build_windows.ps1.
       - name: Configure (clang-cl, as the releases)
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl
+        shell: pwsh
+        run: |
+          $cc = Join-Path $env:VCINSTALLDIR "Tools\Llvm\x64\bin\clang-cl.exe"
+          if (-not (Test-Path $cc)) { $cc = (Get-Command clang-cl).Source }
+          & $cc --version
+          $env:CFLAGS = "/D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH"
+          $env:CXXFLAGS = "/D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH"
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release "-DCMAKE_C_COMPILER=$cc" "-DCMAKE_CXX_COMPILER=$cc"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build (warnings are reported in the log; every error is shown, not only the first)
         run: cmake --build build -- -k 0
       # 0.76.0: a real ASIO driver for the tests to find and load - FlexASIO (free, MIT), its installer pinned by SHA-256.

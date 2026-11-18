@@ -531,10 +531,12 @@ juce::String MixerStrip::routingText (const MixerTrack& track)
     return sends == 1 ? "> " + juce::String (first + 1) : "> " + juce::String (first + 1) + "+" + juce::String (sends - 1);
 }
 
-void MixerStrip::mouseDown (const juce::MouseEvent&)
+void MixerStrip::mouseDown (const juce::MouseEvent& e)
 {
     if (onSelect)
         onSelect (index);
+    if (e.mods.isPopupMenu() && onStripMenu) // 0.79.0
+        onStripMenu (index);
 }
 
 // ------------------------------------------------------------------------- VcaStrip
@@ -1720,6 +1722,30 @@ void MixerPanel::setTracks (std::vector<MixerTrack>& tracks, size_t stripCount)
     setSelectedTrack (selectedTrack);
 }
 
+// 0.79.0: a track strip's own menu (right click on its name or an empty place of it): delete that very track, or add one.
+void MixerPanel::showStripMenu (int index)
+{
+    if (trackData == nullptr || index < 0 || index >= static_cast<int> (trackData->size()))
+        return;
+    const int count = static_cast<int> (trackData->size());
+    juce::PopupMenu menu;
+    menu.addSectionHeader ("Track " + juce::String (index + 1));
+    menu.addItem (1, "Delete Track " + juce::String (index + 1) + "...", count > kDefaultTracks && onDeleteTrack != nullptr);
+    if (count <= kDefaultTracks)
+        menu.addItem (3, "(the mixer keeps at least " + juce::String (kDefaultTracks) + " tracks: add one to delete one)", false);
+    menu.addItem (2, "Add a track at the end", count < kMaxTracks && onAddTracks != nullptr);
+    menu.showMenuAsync (juce::PopupMenu::Options().withMousePosition(),
+                        [safe = juce::Component::SafePointer<MixerPanel> (this), index] (int result)
+                        {
+                            if (safe == nullptr || result == 0)
+                                return;
+                            if (result == 1 && safe->onDeleteTrack)
+                                safe->onDeleteTrack (index);
+                            else if (result == 2 && safe->onAddTracks)
+                                safe->onAddTracks (1);
+                        });
+}
+
 void MixerPanel::showAddTrackMenu()
 {
     juce::PopupMenu menu;
@@ -1753,6 +1779,7 @@ void MixerPanel::addStrip (size_t i)
         strip->onChanged = [this] (int idx) { updateVcaMembers(); if (onTrackChanged) onTrackChanged (idx); };
         strip->onAutomate = [this] (const AutomationTarget& t) { if (onAutomate) onAutomate (t); };
         strip->onRouteMenu = [this] (int idx, juce::Component& button) { showRouteMenu (idx, button); };
+        strip->onStripMenu = [this] (int idx) { showStripMenu (idx); }; // 0.79.0
         strip->onSlotClicked = [this] (int idx, int slot)
         {
             setSelectedTrack (idx);
@@ -1882,11 +1909,19 @@ void MixerPanel::showRouteMenu (int index, juce::Component& button)
     docks.addItem (9102, "On the right (before the + button)", true, track.dock == 2);
     menu.addSubMenu ("Dock", docks);
     menu.addItem (9110, "Separator before this strip", true, track.separator);
+    menu.addSeparator();
+    menu.addItem (9200, "Delete Track " + juce::String (index + 1) + "...", count > kDefaultTracks && onDeleteTrack != nullptr); // 0.79.0
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&button),
                         [safe = juce::Component::SafePointer<MixerPanel> (this), index] (int result)
                         {
                             if (safe == nullptr || result == 0 || safe->trackData == nullptr || index >= static_cast<int> (safe->trackData->size()))
                                 return;
+                            if (result == 9200) // 0.79.0
+                            {
+                                if (safe->onDeleteTrack)
+                                    safe->onDeleteTrack (index);
+                                return;
+                            }
                             auto& t = (*safe->trackData)[static_cast<size_t> (index)];
                             const auto freeSend = [&t] () -> TrackSend*
                             {

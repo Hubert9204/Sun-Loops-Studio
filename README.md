@@ -96,7 +96,7 @@ What is and is not verified, feature by feature: [docs/roadmap.md](docs/roadmap.
   strum, arpeggiate, chop, flip, glue, flam, claw machine, and **generators** of chord progressions and basslines. Typing keys
   and MIDI keyboards play and record into it.
 - **Patterns and Playlist** - patterns of their own length, arranged on a Playlist in three sections (**Audio**, **Patterns**,
-  **Automation**) with draw, paint, delete, mute, slip, slice, cut, select, playback and zoom tools, time markers, a loop region, track
+  **Automation**; one track per pattern, added and deleted with it) with draw, paint, delete, mute, slip, slice, cut, select, playback and zoom tools, time markers, a loop region, track
   mute / solo, icons and colours. *Pattern* or *Song* playback.
 - **Audio clips and recording** - drag audio (`.wav .aiff .flac .ogg .oga .mp3 .aac`) or the sound of a video onto the Playlist;
   stretch and pitch them (Signalsmith Stretch), edit them in the **sample editor** (cut, fades, reverse, normalise, noise
@@ -119,7 +119,7 @@ What is and is not verified, feature by feature: [docs/roadmap.md](docs/roadmap.
   processing.
 - **Built-in sounds** - a sampled Grand Piano and Electric Bass, two sampled acoustic drum kits, three electronic kits and a hand
   percussion kit ([licences](resources/sounds/README.md)).
-- **Mixer** - 8 to 500 tracks, each with fader, pan, stereo separation, polarity, mute / solo, meters, **10 effect slots** with a
+- **Mixer** - 8 to 500 tracks (add at the end, delete any one: everything routed to the others follows), each with fader, pan, stereo separation, polarity, mute / solo, meters, **10 effect slots** with a
   mix knob, 8 sends (pre or post fader), free routing, a track delay and plugin delay compensation; up to eight aux buses (+ and - in the mixer) and two VCA
   groups; a master strip.
 - **36 built-in effects and controllers** - EQs, filters, compressors and a multiband compressor, maximizer, gate, overdrive,
