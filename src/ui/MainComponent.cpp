@@ -292,7 +292,12 @@ MainComponent::MainComponent()
         engine.setGain (static_cast<float> (volumeSlider.getValue()));
         mixerPanel.setMasterVolume (volumeSlider.getValue());
         markDirty();
-        recordHistory();
+        // 0.80.0: master-volume automation plays against the knob: the engine gets the knob's new value with the project
+        if (std::any_of (arrangement.automationClips.begin(), arrangement.automationClips.end(),
+                         [] (const AutomationClip& c) { return c.target.kind == AutomationKind::MasterVolume; }))
+            publishProject();
+        else
+            recordHistory();
     };
     mixerPanel.setMasterVolume (volumeSlider.getValue());
 
@@ -560,6 +565,8 @@ MainComponent::MainComponent()
         masterPitch = static_cast<float> (pitchSlider.getValue());
         publishProject();
     };
+    pitchSlider.onAutomate = [this] { createAutomationFor ({ AutomationKind::MasterPitch, 0, 0, 0 }); }; // 0.80.0
+    volumeSlider.onAutomate = [this] { createAutomationFor ({ AutomationKind::MasterVolume, 0, 0, 0 }); };
     stepEditButton.setClickingTogglesState (false);
     stepEditButton.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xffd9433b));
     stepEditButton.setTooltip ("Step editing: while the song is stopped, each note you play (typing keys or a MIDI keyboard) is written into "

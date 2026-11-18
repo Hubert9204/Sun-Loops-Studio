@@ -30,17 +30,37 @@ inline double finiteOrZero (double v) noexcept { return std::isfinite (v) ? v : 
 // slot. Their values are the plugin's normalised 0..1 (what the plugin shows for them is the plugin's business).
 // 0.47.0: a track's send to an aux bus (`slot` = the bus), an aux bus's volume and balance (`slot` = the bus) and a VCA group's
 // level (`slot` = the group).
+// 0.80.0 (as FL Studio, where every knob and switch can be automated): a channel's pitch, swing, mute and solo; a mixer track's
+// mute and solo (switches: 0 off, 1 on, on from 0.5); the master volume and pitch; an effect or plugin on an aux bus (`index` = the
+// bus, `slot` and `param` as for a track).
 enum class AutomationKind : std::uint8_t { ChannelVolume, ChannelPan, TrackVolume, TrackPan, TrackEffect, MasterEffect,
-                                           ChannelPlugin, TrackPlugin, MasterPlugin, TrackSend, AuxVolume, AuxPan, VcaLevel };
-constexpr int kAutomationKindCount = 13;
+                                           ChannelPlugin, TrackPlugin, MasterPlugin, TrackSend, AuxVolume, AuxPan, VcaLevel,
+                                           ChannelPitch, ChannelSwing, ChannelMute, ChannelSolo, TrackMute, TrackSolo,
+                                           MasterVolume, MasterPitch, AuxEffect, AuxPlugin };
+constexpr int kAutomationKindCount = 23;
 constexpr int kMaxPluginParams = 65536; // a parameter number beyond this is not a plugin's
 constexpr int kAutomationAuxBuses = 8;  // = kAuxBuses and kVcaGroups (Project.h, which includes this file)
 constexpr int kAutomationVcaGroups = 2;
 
 inline bool isPluginAutomation (AutomationKind k) noexcept
 {
-    return k == AutomationKind::ChannelPlugin || k == AutomationKind::TrackPlugin || k == AutomationKind::MasterPlugin;
+    return k == AutomationKind::ChannelPlugin || k == AutomationKind::TrackPlugin || k == AutomationKind::MasterPlugin || k == AutomationKind::AuxPlugin;
 }
+// 0.80.0: the kinds whose `index` is a channel, and the switches (mute / solo: a value from 0.5 up is "on").
+inline bool isChannelAutomation (AutomationKind k) noexcept
+{
+    return k == AutomationKind::ChannelVolume || k == AutomationKind::ChannelPan || k == AutomationKind::ChannelPlugin || k == AutomationKind::ChannelPitch
+        || k == AutomationKind::ChannelSwing || k == AutomationKind::ChannelMute || k == AutomationKind::ChannelSolo;
+}
+inline bool isSwitchAutomation (AutomationKind k) noexcept
+{
+    return k == AutomationKind::ChannelMute || k == AutomationKind::ChannelSolo || k == AutomationKind::TrackMute || k == AutomationKind::TrackSolo;
+}
+inline bool isEffectAutomation (AutomationKind k) noexcept
+{
+    return k == AutomationKind::TrackEffect || k == AutomationKind::MasterEffect || k == AutomationKind::AuxEffect;
+}
+constexpr float kAutomationPitchRange = 12.0f; // the channel and master pitch controls: -12 .. +12 semitones
 
 // What an automation clip moves. `index` is the channel or the mixer track, `slot` and `param` apply to effects and plugins.
 struct AutomationTarget
@@ -91,6 +111,20 @@ inline AutomationRange automationRange (const AutomationTarget& t, EffectType ef
         case AutomationKind::AuxVolume:
         case AutomationKind::VcaLevel:      return { 0.0f, 1.5f, 1.0f };
         case AutomationKind::AuxPan:        return { -1.0f, 1.0f, 0.0f };
+        case AutomationKind::ChannelPitch:
+        case AutomationKind::MasterPitch:   return { -kAutomationPitchRange, kAutomationPitchRange, 0.0f };
+        case AutomationKind::ChannelSwing:  return { 0.0f, 1.0f, 0.0f };
+        case AutomationKind::ChannelMute:
+        case AutomationKind::ChannelSolo:
+        case AutomationKind::TrackMute:
+        case AutomationKind::TrackSolo:     return { 0.0f, 1.0f, 0.0f };
+        case AutomationKind::MasterVolume:  return { 0.0f, 1.0f, 0.8f };
+        case AutomationKind::AuxEffect:
+        {
+            const auto info = effectParamInfo (effectType, t.param);
+            return { info.min, info.max, info.def };
+        }
+        case AutomationKind::AuxPlugin:     return { 0.0f, 1.0f, 0.5f };
     }
     return {};
 }
@@ -115,6 +149,18 @@ inline bool automationTargetExists (const AutomationTarget& t, int numChannels, 
         case AutomationKind::AuxVolume:
         case AutomationKind::AuxPan:        return t.slot >= 0 && t.slot < kAutomationAuxBuses;
         case AutomationKind::VcaLevel:      return t.slot >= 0 && t.slot < kAutomationVcaGroups;
+        case AutomationKind::ChannelPitch:
+        case AutomationKind::ChannelSwing:
+        case AutomationKind::ChannelMute:
+        case AutomationKind::ChannelSolo:   return t.index >= 0 && t.index < numChannels;
+        case AutomationKind::TrackMute:
+        case AutomationKind::TrackSolo:     return t.index >= 0 && t.index < numTracks;
+        case AutomationKind::MasterVolume:
+        case AutomationKind::MasterPitch:   return true;
+        case AutomationKind::AuxEffect:     return t.index >= 0 && t.index < kAutomationAuxBuses && t.slot >= 0 && t.slot < kSlotsPerTrack
+                                                   && t.param >= 0 && t.param < kMaxEffectParams;
+        case AutomationKind::AuxPlugin:     return t.index >= 0 && t.index < kAutomationAuxBuses && t.slot >= 0 && t.slot < kSlotsPerTrack
+                                                   && t.param >= 0 && t.param < kMaxPluginParams;
     }
     return false;
 }
@@ -190,8 +236,7 @@ std::vector<AutomationEvent> makeAutomationEvents (const std::vector<AutomationC
     {
         if (c.startTick < 0 || c.lengthTicks < 1 || ! automationTargetExists (c.target, numChannels, numTracks))
             continue;
-        if ((c.target.kind == AutomationKind::TrackEffect || c.target.kind == AutomationKind::MasterEffect)
-            && (c.target.param >= effectParamCount (typeAt (c.target)) ))
+        if (isEffectAutomation (c.target.kind) && (c.target.param >= effectParamCount (typeAt (c.target))))
             continue; // no such parameter in the effect that sits there now
         if (isPluginAutomation (c.target.kind) && c.target.param >= pluginParams (c.target))
             continue; // no plugin there now, or one without that parameter
@@ -242,6 +287,21 @@ inline bool automationValueFor (const std::vector<AutomationEvent>& events, size
     value = automationValueAt (active->points, rel, 0.0f);
     return true;
 }
+// 0.80.0: the value of `target` at `songTick` from a list of events (any parameters, sorted as makeAutomationEvents leaves them),
+// or `fallback` when it has no clip that has started.
+inline float automatedValueAt (const std::vector<AutomationEvent>& events, const AutomationTarget& target, double songTick, float fallback) noexcept
+{
+    const auto key = target.key();
+    size_t first = 0;
+    while (first < events.size() && events[first].target.key() != key)
+        ++first;
+    size_t last = first;
+    while (last < events.size() && events[last].target.key() == key)
+        ++last;
+    float v = fallback;
+    return first < last && automationValueFor (events, first, last, songTick, v) ? v : fallback;
+}
+
 // ---- Editing (used by the automation editor; all of it works on plain data) -------------------------------------------
 
 // A clip that holds `value` all the way: two points, one at each end.

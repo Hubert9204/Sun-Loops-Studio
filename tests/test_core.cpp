@@ -4263,6 +4263,167 @@ void testRecording047()
     }
 }
 
+// 0.80.0: pitch, swing, mute / solo, master volume and pitch, aux-bus effects can be automated.
+void testAutomation080()
+{
+    std::cout << "Automation of pitch, swing, mute / solo, the master and the aux buses' effects (0.80.0)\n";
+    using K = sls::AutomationKind;
+    const int song = 8 * kBeat; // 4 s at 120 BPM
+    // a clip that holds `before` until `at`, then `after` (a jump, as a switch does)
+    const auto step = [song] (sls::AutomationTarget target, float before, int at, float after)
+    {
+        auto c = sls::makeFlatAutomationClip (target, 0, 0, song, before);
+        c.points = { { 0.0, before, sls::AutomationShape::Hold }, { static_cast<double> (at), after, sls::AutomationShape::Hold },
+                     { static_cast<double> (song), after, sls::AutomationShape::Hold } };
+        return c;
+    };
+    const auto make = [song] (std::vector<sls::Channel> channels, std::vector<sls::AutomationClip> clips, std::vector<sls::MixerTrack> tracks = {},
+                              sls::Console console = sls::Console::defaults(), float masterKnob = 0.8f)
+    {
+        if (tracks.empty())
+            tracks = sls::Project::defaultTracks();
+        auto p = sls::Project::make (std::move (channels), song, std::move (tracks), {}, {}, clips, std::move (console));
+        p.masterVolume = masterKnob;
+        return sls::renderToBuffer (p, {});
+    };
+    const auto rms = [] (const juce::AudioBuffer<float>& b, double from, double to)
+    { return b.getRMSLevel (0, static_cast<int> (from * 48000.0), static_cast<int> ((to - from) * 48000.0)); };
+    // the frequency of the left channel between two times, from its rising zero crossings
+    const auto hz = [] (const juce::AudioBuffer<float>& b, double from, double to)
+    {
+        const auto* x = b.getReadPointer (0);
+        int crossings = 0;
+        for (int i = static_cast<int> (from * 48000.0) + 1; i < static_cast<int> (to * 48000.0); ++i)
+            crossings += x[i - 1] < 0.0f && x[i] >= 0.0f ? 1 : 0;
+        return crossings / (to - from);
+    };
+    const auto held = [song] (int pitch, int track) { auto c = synthChannel ({ { pitch, 0, song, 0.6f } }, 0.6f); c.mixerTrack = track; return c; };
+
+    // ranges, existence
+    check (sls::automationRange ({ K::ChannelPitch, 0, 0, 0 }).min == -12.0f && sls::automationRange ({ K::MasterVolume, 0, 0, 0 }).max == 1.0f
+               && sls::automationRange ({ K::TrackMute, 0, 0, 0 }).max == 1.0f
+               && sls::automationRange ({ K::AuxEffect, 0, 0, 0 }, sls::EffectType::Panomatic).min == -48.0f,
+           "the new targets move in their controls' ranges (an aux effect in its parameter's)");
+    check (sls::automationTargetExists ({ K::ChannelSwing, 2, 0, 0 }, 3, 8) && ! sls::automationTargetExists ({ K::ChannelSwing, 3, 0, 0 }, 3, 8)
+               && sls::automationTargetExists ({ K::TrackSolo, 7, 0, 0 }, 1, 8) && ! sls::automationTargetExists ({ K::TrackSolo, 8, 0, 0 }, 1, 8)
+               && sls::automationTargetExists ({ K::MasterPitch, 0, 0, 0 }, 0, 8) && sls::automationTargetExists ({ K::AuxEffect, 7, 9, 3 }, 0, 8)
+               && ! sls::automationTargetExists ({ K::AuxEffect, 8, 0, 0 }, 0, 8) && ! sls::automationTargetExists ({ K::AuxPlugin, 0, 10, 0 }, 0, 8),
+           "and exist only for channels, tracks, buses and slots that are there");
+
+    // mute and solo, switched in the middle of the song
+    {
+        const auto plain = make ({ held (57, 0) }, {});
+        const auto muted = make ({ held (57, 0) }, { step ({ K::TrackMute, 0, 0, 0 }, 0.0f, 4 * kBeat, 1.0f) });
+        check (rms (plain, 0.5, 1.5) > 0.01f && std::abs (rms (muted, 0.5, 1.5) / rms (plain, 0.5, 1.5) - 1.0f) < 0.02f && rms (muted, 2.5, 3.5) < 1.0e-4f,
+               "a track's mute automated on at half time: the track plays, then is silent");
+        const auto channelMuted = make ({ held (57, 0) }, { step ({ K::ChannelMute, 0, 0, 0 }, 1.0f, 4 * kBeat, 0.0f) });
+        check (rms (channelMuted, 0.5, 1.5) < 1.0e-4f && rms (channelMuted, 2.5, 3.5) > rms (plain, 2.5, 3.5) * 0.9f,
+               "a channel's mute automated off at half time: silent, then it plays");
+        const auto bothOnly = make ({ held (57, 0), held (64, 1) }, {});
+        auto secondMuted = held (64, 1);
+        secondMuted.mute = true;
+        const auto firstOnly = make ({ held (57, 0), secondMuted }, {});
+        const auto soloed = make ({ held (57, 0), held (64, 1) }, { sls::makeFlatAutomationClip ({ K::ChannelSolo, 0, 0, 0 }, 0, 0, song, 1.0f) });
+        check (std::abs (rms (soloed, 0.5, 3.5) / rms (firstOnly, 0.5, 3.5) - 1.0f) < 0.02f && rms (bothOnly, 0.5, 3.5) > rms (firstOnly, 0.5, 3.5) * 1.1f,
+               "a channel's solo automated on: only that channel is heard");
+        const auto trackSolo = make ({ held (57, 0), held (64, 1) }, { sls::makeFlatAutomationClip ({ K::TrackSolo, 1, 0, 0 }, 0, 0, song, 1.0f) });
+        auto firstMuted = held (57, 0);
+        firstMuted.mute = true;
+        const auto secondOnly = make ({ firstMuted, held (64, 1) }, {});
+        check (std::abs (rms (trackSolo, 0.5, 3.5) / rms (secondOnly, 0.5, 3.5) - 1.0f) < 0.02f, "a track's solo automated on: only that track is heard");
+    }
+    // pitch: a sounding note bends with it, as in FL Studio
+    {
+        const auto plain = make ({ held (57, 0) }, {});
+        const auto bent = make ({ held (57, 0) }, { step ({ K::ChannelPitch, 0, 0, 0 }, 0.0f, 4 * kBeat, 12.0f) });
+        const double before = hz (bent, 0.5, 1.5), after = hz (bent, 2.5, 3.5);
+        check (std::abs (hz (plain, 0.5, 1.5) - 220.0) < 3.0 && std::abs (before - 220.0) < 3.0 && std::abs (after - 440.0) < 5.0,
+               "a channel's pitch automated up an octave at half time: the note that sounds (A3, 220 Hz) goes on at 440 Hz");
+        const auto master = make ({ held (57, 0) }, { sls::makeFlatAutomationClip ({ K::MasterPitch, 0, 0, 0 }, 0, 0, song, -12.0f) });
+        check (std::abs (hz (master, 0.5, 3.5) - 110.0) < 2.0, "the master pitch automated an octave down: 110 Hz");
+        const auto back = make ({ held (57, 0) }, { step ({ K::ChannelPitch, 0, 0, 0 }, 7.0f, 4 * kBeat, 0.0f) });
+        check (std::abs (hz (back, 0.5, 1.5) - 329.6) < 4.0 && std::abs (hz (back, 2.5, 3.5) - 220.0) < 3.0,
+               "a fifth up, then back to the channel's own pitch");
+    }
+    // the master volume plays against its knob; an effect on an aux bus
+    {
+        const auto plain = make ({ held (57, 0) }, {});
+        const auto half = make ({ held (57, 0) }, { sls::makeFlatAutomationClip ({ K::MasterVolume, 0, 0, 0 }, 0, 0, song, 0.4f) });
+        check (std::abs (rms (half, 1.0, 3.5) / rms (plain, 1.0, 3.5) - 0.5f) < 0.02f,
+               "the master volume automated to 0.4 with the knob at 0.8: half the level (the engine applies the knob)");
+        auto tracks = sls::Project::defaultTracks();
+        tracks[0].volume = 0.0f; // only what the bus gives back is heard
+        tracks[0].sendsPreFader = true;
+        tracks[0].sends[0] = 1.0f;
+        auto console = sls::Console::defaults();
+        console.aux[0].slots[0] = sls::EffectSlot::make (sls::EffectType::Panomatic);
+        const auto bus = make ({ held (57, 0) }, {}, tracks, console);
+        const auto busDown = make ({ held (57, 0) }, { sls::makeFlatAutomationClip ({ K::AuxEffect, 0, 0, 0 }, 0, 0, song, -48.0f) }, tracks, console);
+        check (rms (bus, 1.0, 3.5) > 0.01f && rms (busDown, 1.0, 3.5) < rms (bus, 1.0, 3.5) * 0.01f,
+               "an effect on an aux bus automated (the Panomatic's volume to -48 dB) takes the bus down");
+    }
+    // swing, per note at its place in the song
+    {
+        sls::Arrangement a;
+        a.patterns.resize (1);
+        a.resetTracks();
+        a.patterns[0].lengthTicks = 2 * kBeat;
+        a.patterns[0].notes = { std::vector<sls::Note> { sls::Note { 60, sls::kSixteenthTicks, 120, 0.8f } } }; // an off-beat 16th
+        a.clips = { { 0, a.dedicatedTrack (0), 0, 8 * kBeat, 0 } };        // played 4 times
+        a.automationClips = { step ({ K::ChannelSwing, 0, 0, 0 }, 1.0f, 4 * kBeat, 0.0f) };
+        std::vector<sls::Channel> channels (1);
+        const auto project = sls::compileSong (channels, a);
+        std::vector<int> starts;
+        for (const auto& n : project.channels[0].notes)
+            starts.push_back (n.startTick);
+        const int s = static_cast<int> (std::lround (sls::kMaxSwingShiftTicks));
+        const int x = sls::kSixteenthTicks;
+        check (starts == std::vector<int> ({ x + s, 2 * kBeat + x + s, 4 * kBeat + x, 6 * kBeat + x }),
+               "automated swing moves each off-beat 16th by the value at its place in the song (full, then none)");
+    }
+    // in the project file, and when channels, tracks or buses go
+    {
+        auto doc = sls::ProjectDocument::blank();
+        doc.channels.push_back (doc.channels[0]);
+        doc.sampleSources.resize (doc.channels.size());
+        const K kinds[] = { K::ChannelPitch, K::ChannelSwing, K::ChannelMute, K::ChannelSolo, K::TrackMute, K::TrackSolo, K::MasterVolume, K::MasterPitch,
+                            K::AuxEffect };
+        int lane = 0;
+        for (const auto kind : kinds)
+        {
+            auto c = sls::makeFlatAutomationClip ({ kind, 1, 0, 0 }, lane % sls::kAutomationLanes, (lane / sls::kAutomationLanes) * song, song, 0.0f);
+            doc.arrangement.automationClips.push_back (c);
+            ++lane;
+        }
+        doc.console.aux[1].slots[0] = sls::EffectSlot::make (sls::EffectType::Panomatic);
+        const auto back = sls::ProjectDocument::fromJson (doc.toJson());
+        bool all = back.document.has_value() && back.document->arrangement.automationClips.size() == std::size (kinds);
+        for (size_t i = 0; all && i < std::size (kinds); ++i)
+            all = back.document->arrangement.automationClips[i].target.kind == kinds[i] && back.document->arrangement.automationClips[i].target.index == 1;
+        check (all, "every new kind of automation clip is saved and read back");
+
+        sls::Arrangement a;
+        a.automationClips = { sls::makeFlatAutomationClip ({ K::ChannelPitch, 1, 0, 0 }, 0, 0, song, 3.0f),
+                              sls::makeFlatAutomationClip ({ K::ChannelMute, 0, 0, 0 }, 1, 0, song, 1.0f) };
+        sls::remapArrangementChannels (a, { 1 }, 2); // channel 0 deleted
+        check (a.automationClips.size() == 1 && a.automationClips[0].target.index == 0 && a.automationClips[0].target.kind == K::ChannelPitch,
+               "deleting a channel deletes its pitch / mute automation and renumbers the others'");
+        auto tracks = sls::Project::defaultTracks();
+        tracks.resize (10);
+        std::vector<sls::Channel> none;
+        auto console = sls::Console::defaults();
+        std::array<sls::EffectSlot, sls::kSlotsPerTrack> master {};
+        a.automationClips = { sls::makeFlatAutomationClip ({ K::TrackSolo, 6, 0, 0 }, 0, 0, song, 1.0f),
+                              sls::makeFlatAutomationClip ({ K::TrackMute, 2, 0, 0 }, 1, 0, song, 1.0f) };
+        sls::deleteMixerTrack (tracks, none, a, console, master, 2, 9);
+        check (a.automationClips.size() == 1 && a.automationClips[0].target.index == 5, "deleting a mixer track deletes its mute / solo automation, renumbers the later");
+        sls::Console buses = sls::Console::defaults();
+        std::vector<sls::MixerTrack> plainTracks = sls::Project::defaultTracks();
+        const std::vector<sls::AutomationClip> onBus { sls::makeFlatAutomationClip ({ K::AuxEffect, 1, 0, 0 }, 0, 0, song, 0.0f) };
+        check (sls::whyKeepLastAuxBus (buses, plainTracks, onBus) == "an automation clip controls it", "an aux bus whose effect is automated is kept");
+    }
+}
+
 void testMixAutomation047()
 {
     std::cout << "Automation of sends, aux buses and VCA groups (0.47.0)\n";
@@ -14367,6 +14528,7 @@ int main (int argc, char** argv)
     testMixerAndExport045();
     testTempoAndMeter046();
     testMixAutomation047();
+    testAutomation080();
     testRecording047();
     testSunBurst();
     testSunBurstInHost();

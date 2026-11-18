@@ -10,6 +10,7 @@
 #include "audio/Automation.h"
 #include "audio/Project.h"
 #include "ui/AutomatableSlider.h"
+#include "ui/RightClickButton.h"
 #include "ui/VuMeter.h"
 
 namespace sls
@@ -95,8 +96,8 @@ private:
     std::array<juce::TextButton, kVcaGroups> vcaButtons;
     AutomatableSlider panSlider { juce::Slider::LinearHorizontal, juce::Slider::NoTextBox };
     juce::Label panLabel;
-    juce::TextButton muteButton { "M" };
-    juce::TextButton soloButton { "S" };
+    RightClickButton muteButton { "M" }; // 0.80.0: a right click creates an automation clip (tracks)
+    RightClickButton soloButton { "S" };
     AutomatableSlider fader { juce::Slider::LinearVertical, juce::Slider::NoTextBox };
     juce::Label dbLabel;
     VuMeter meter;
@@ -201,6 +202,8 @@ public:
     // `trackIndex` == kMasterIndex shows the master bus (its title and help text change).
     void setTrack (MixerTrack* track, int trackIndex);
     void setSelectedSlot (int slot);
+    // 0.80.0: an automated parameter of the shown slot, as automation has it while the song plays
+    void showAutomated (const AutomationTarget& target, float value);
     // Time Shapers left without a recording in the whole project (0.41.0): told when one is selected.
     void setTimeShaperShortfall (int count);
     int getSelectedSlot() const noexcept { return selectedSlot; }
@@ -279,6 +282,7 @@ private:
     juce::Viewport paramsViewport;
     juce::Component paramsInner;
     void layoutParams();
+    AutomationTarget targetFor (int param, bool plugin) const; // 0.80.0
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (FxPanel)
 };

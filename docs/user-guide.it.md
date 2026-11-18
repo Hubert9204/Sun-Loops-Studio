@@ -1573,14 +1573,36 @@ L'automazione fa muovere un controllo da solo mentre il brano suona. Funziona su
 - ogni **parametro di un plugin** (VST3, LV2, LADSPA): di uno strumento plugin nel Channel Rack e di un effetto plugin in uno slot di
   traccia o del master (dalla 0.35.0, vedi *Parametri dei plugin* più sotto);
 - dalla 0.47.0: i **send** di una traccia verso Aux A e Aux B (i piccoli slider A / B), **fader** e **bilanciamento** di un bus aux e
-  il fader di un **gruppo VCA**.
+  il fader di un **gruppo VCA**;
+- dalla 0.80.0, come in FL Studio:
+  - le manopole **Pitch** e **Swing** di un canale e i suoi pulsanti **mute** e **solo** (Channel Rack);
+  - i pulsanti **mute** e **solo** di una traccia del mixer;
+  - il **volume master** e il **pitch master** (la barra degli strumenti);
+  - ogni parametro di un **effetto o plugin su un bus aux** (il pannello effetti con il bus selezionato).
+
+Come suonano i parametri nuovi della 0.80.0:
+- **Pitch**: le note che stanno già suonando **si piegano** con il valore, come in FL Studio, e le note nuove partono da esso. Su uno
+  strumento plugin il pitch del canale si manda come pitch bend, quindi decide l'escursione del bend del plugin (di solito due
+  semitoni). Il pitch master sposta le note nuove di un plugin di tasti interi.
+- **Mute e solo** sono interruttori: spenti fino a metà dell'escursione della clip, accesi da lì in su. Una clip nuova tiene il
+  valore fino al punto successivo (Hold) invece di scivolare.
+- **Swing**: si applica a ogni nota con il valore che la clip ha nel punto del brano in cui cade la nota.
+- **Volume master**: lavora rispetto alla manopola della barra. Con la manopola a 0,8 e la clip a 0,4 il brano suona alla metà. Le
+  esportazioni, che non applicano la manopola, ricevono lo stesso rapporto.
 
 Mentre il brano suona in modalità Song, i controlli che hanno un'automazione **si muovono con essa** (0.47.0): fader,
-bilanciamento e send del Mixer, volume e pan del Channel Rack. Quando il brano si ferma tornano a mostrare i propri valori
-(l'automazione non li cambia mai). Toccare un controllo mentre si muove ne imposta il valore, come sempre.
+bilanciamento e send del Mixer, volume e pan del Channel Rack. Dalla 0.80.0 si muovono anche:
+- gli **slider del pannello effetti** (dell'effetto mostrato);
+- le manopole Pitch e Swing;
+- i pulsanti mute e solo;
+- il fader master del Mixer;
+- il pitch della barra.
 
-**Non ancora automatizzabili:** le manopole Pitch e Swing, il volume master, mute e solo, i parametri degli effetti di un bus aux,
-il tempo (usa i cambi di tempo, 0.46.0) e tutto il resto.
+Quando il brano si ferma tornano a mostrare i propri valori (l'automazione non li cambia mai). Toccare un controllo mentre si muove
+ne imposta il valore, come sempre.
+
+**Non ancora automatizzabili:** il tempo (usa i cambi di tempo, 0.46.0), mute e bilanciamento di un bus aux, e i parametri degli
+effetti dentro un Patcher.
 
 **Creare una clip.** Tasto destro sul controllo e *Create automation clip*. Una clip lunga un pattern compare su una delle quattro
 **corsie di automazione** (*Auto 1*, *Auto 2*..., la sezione Automation della Playlist; 4 in un progetto nuovo, di più con il suo **+**) e si apre il suo editor. La clip è una linea piatta al

@@ -102,7 +102,8 @@ What is and is not verified, feature by feature: [docs/roadmap.md](docs/roadmap.
   stretch and pitch them (Signalsmith Stretch), edit them in the **sample editor** (cut, fades, reverse, normalise, noise
   reduction, slicing). **Record** several inputs at once into the playlist, with count-in, loop takes, punch in / out, and MIDI
   notes in overdub or replace.
-- **Automation** - clips for any volume, pan, fader, send, effect or plugin parameter, with a point editor; tempo changes and
+- **Automation** - clips for any volume, pan, fader, send, effect or plugin parameter (aux buses included), the channels' pitch and
+  swing, mute and solo, the master volume and pitch, with a point editor, the controls moving with it as the song plays; tempo changes and
   time signatures from 2/4 to 12/8.
 - **Performance mode** - the Playlist's clips as cells to launch live (loop, one shot, hold), from the mouse or MIDI pads.
 - **Loop Starter** - a starting loop in one of ten genres (drums, bass, chords and melody), made by rules and chance, offline.

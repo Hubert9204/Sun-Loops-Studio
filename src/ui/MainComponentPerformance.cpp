@@ -85,6 +85,7 @@ void MainComponent::consolidateClips (int track, int fromTick, int toTick)
     prepareConvolvers (tracks, masterTrack.slots, console.aux, engine.getSampleRate());
     auto project = compileSong (channels, only, tracks, {}, console);
     project.masterPitch = masterPitch;
+    project.masterVolume = static_cast<float> (volumeSlider.getValue()); // 0.80.0
 
     RenderOptions options;
     options.sampleRate = engine.getSampleRate() > 0.0 ? engine.getSampleRate() : 48000.0;

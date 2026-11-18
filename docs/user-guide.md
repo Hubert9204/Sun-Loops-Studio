@@ -1499,14 +1499,36 @@ Automation makes a control move by itself while the song plays. It works on:
 - every **parameter of a plugin** (VST3, LV2, LADSPA): of a plugin instrument in the Channel Rack and of a plugin effect in a track or
   master slot (since 0.35.0, see *Plugin parameters* below);
 - since 0.47.0: a track's **sends** to Aux A and Aux B (the small A / B sliders), an aux bus's **fader** and **balance**, and a
-  **VCA group's** fader.
+  **VCA group's** fader;
+- since 0.80.0, as in FL Studio:
+  - a channel's **pitch** and **swing** knobs and its **mute** and **solo** buttons (Channel Rack);
+  - a mixer track's **mute** and **solo** buttons;
+  - the **master volume** and the **master pitch** (the toolbar);
+  - every parameter of an **effect or plugin on an aux bus** (the effects panel with the bus selected).
+
+How the 0.80.0 targets play:
+- **Pitch**: the notes that are already sounding **bend** with it, as in FL Studio, and new notes start at its value. On a plugin
+  instrument the channel pitch is sent as pitch bend, so the plugin's own bend range decides how far it goes (two semitones by
+  default). The master pitch moves a plugin's new notes by whole keys.
+- **Mute and solo** are switches: off up to the middle of the clip's range, on from there. A new clip holds its value until the
+  next point (Hold) instead of sliding.
+- **Swing** is applied to each note by the value the clip has where the note falls in the song.
+- **Master volume** plays against the toolbar knob: with the knob at 0.8 and the clip at 0.4 the song is half as loud. Exports,
+  which do not apply the knob, get the same ratio.
 
 While the song plays in Song mode, the controls that have automation **move with it** (0.47.0): the faders, balance and send
-sliders of the Mixer and the volume and pan of the Channel Rack. When the song stops they show their own values again (the
-automation never changes them). Touching a control while it moves sets its own value, as usual.
+sliders of the Mixer and the volume and pan of the Channel Rack. Since 0.80.0 they also include:
+- the **sliders of the effects panel** (for the effect it shows);
+- the pitch and swing knobs;
+- the mute and solo buttons;
+- the master fader of the Mixer;
+- the toolbar's pitch.
 
-**Not automatable yet:** the pitch and swing knobs, the master volume, mute and solo, the parameters of effects on an aux bus,
-the tempo (use tempo changes, 0.46.0) and anything else.
+When the song stops they show their own values again (the automation never changes them). Touching a control while it moves
+sets its own value, as usual.
+
+**Not automatable yet:** the tempo (use tempo changes, 0.46.0), the mute and balance of an aux bus, and the parameters of the
+effects inside a Patcher.
 
 **Create a clip.** Right-click the control and choose *Create automation clip*. A clip one pattern long appears on one of the four
 **automation lanes** (*Auto 1*, *Auto 2*..., the Playlist's Automation section; 4 in a new project, more with its **+**) and its editor opens. The clip is a flat line at the

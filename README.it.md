@@ -103,7 +103,8 @@ Cosa è verificato e cosa no, funzione per funzione: [docs/roadmap.md](docs/road
   allungali e cambiane l'intonazione (Signalsmith Stretch), modificali nell'**editor dei campioni** (taglio, dissolvenze,
   inversione, normalizzazione, riduzione del rumore, slicing). **Registra** più ingressi insieme nella playlist, con conteggio,
   take in loop, punch in / out, e note MIDI in sovrapposizione o sostituzione.
-- **Automazione** - clip per qualsiasi volume, pan, fader, mandata, parametro di effetto o di plugin, con un editor a punti; cambi
+- **Automazione** - clip per qualsiasi volume, pan, fader, mandata, parametro di effetto o di plugin (anche sui bus aux), pitch e swing
+  dei canali, mute e solo, volume e pitch master, con un editor a punti e i controlli che la seguono durante la riproduzione; cambi
   di tempo e tempi in chiave da 2/4 a 12/8.
 - **Performance mode** - le clip della Playlist come celle da lanciare dal vivo (loop, one shot, hold), col mouse o con pad MIDI.
 - **Loop Starter** - un loop di partenza in uno di dieci generi (batteria, basso, accordi e melodia), fatto con regole e caso,

@@ -270,6 +270,11 @@ MixerStrip::MixerStrip (MixerTrack& trackToControl, int trackIndex, bool isAuxBu
     muteButton.setClickingTogglesState (true);
     muteButton.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xffd9534f));
     muteButton.setMouseClickGrabsKeyboardFocus (false);
+    if (! isAux) // 0.80.0: a track's mute and solo can be automated (right click)
+    {
+        muteButton.onRightClick = [this] { showCreateAutomationMenu ([this] { if (onAutomate) onAutomate ({ AutomationKind::TrackMute, index, 0, 0 }); }); };
+        soloButton.onRightClick = [this] { showCreateAutomationMenu ([this] { if (onAutomate) onAutomate ({ AutomationKind::TrackSolo, index, 0, 0 }); }); };
+    }
     muteButton.onClick = [this]
     {
         track.mute = muteButton.getToggleState();
@@ -344,14 +349,13 @@ void MixerStrip::showAutomated (AutomationKind kind, int slot, float value)
             if (slot >= 0 && slot < static_cast<int> (sendSliders.size()))
                 sendSliders[static_cast<size_t> (slot)].setValue (value, juce::dontSendNotification);
             break;
-        case AutomationKind::ChannelVolume:
-        case AutomationKind::ChannelPan:
-        case AutomationKind::TrackEffect:
-        case AutomationKind::MasterEffect:
-        case AutomationKind::ChannelPlugin:
-        case AutomationKind::TrackPlugin:
-        case AutomationKind::MasterPlugin:
-        case AutomationKind::VcaLevel: break;
+        case AutomationKind::TrackMute: // 0.80.0
+            muteButton.setToggleState (value >= 0.5f, juce::dontSendNotification);
+            break;
+        case AutomationKind::TrackSolo:
+            soloButton.setToggleState (value >= 0.5f, juce::dontSendNotification);
+            break;
+        default: break;
     }
 }
 
@@ -919,6 +923,33 @@ void FxPanel::openPatcher()
     patcherWindow->toFront (true);
 }
 
+// 0.80.0: what a parameter of the shown slot is, as an automation target: of the master, an aux bus or a track.
+AutomationTarget FxPanel::targetFor (int param, bool plugin) const
+{
+    if (trackIndex == kMasterIndex)
+        return { plugin ? AutomationKind::MasterPlugin : AutomationKind::MasterEffect, 0, selectedSlot, param };
+    if (trackIndex >= kAuxIndexBase)
+        return { plugin ? AutomationKind::AuxPlugin : AutomationKind::AuxEffect, trackIndex - kAuxIndexBase, selectedSlot, param };
+    return { plugin ? AutomationKind::TrackPlugin : AutomationKind::TrackEffect, trackIndex, selectedSlot, param };
+}
+
+// 0.80.0: while the song plays, the slider of an automated parameter of the shown slot moves with it (the slot keeps its value).
+void FxPanel::showAutomated (const AutomationTarget& target, float value)
+{
+    if (track == nullptr || nested || ! isEffectAutomation (target.kind))
+        return;
+    const auto shown = targetFor (target.param, false);
+    if (shown.kind != target.kind || shown.index != target.index || target.slot != selectedSlot || target.param < 0
+        || target.param >= kMaxEffectParams)
+        return;
+    const auto type = track->slots[static_cast<size_t> (selectedSlot)].type;
+    if (target.param >= effectParamCount (type))
+        return;
+    auto& row = params[static_cast<size_t> (target.param)];
+    if (row.slider.isVisible() && ! row.slider.isMouseButtonDown())
+        row.slider.setValue (value, juce::dontSendNotification);
+}
+
 void FxPanel::setSelectedSlot (int slot)
 {
     selectedSlot = std::clamp (slot, 0, kSlotsPerTrack - 1);
@@ -987,12 +1018,11 @@ void FxPanel::rebuildParameters()
     presetButton.onClick = [this] { showPresetMenu(); };
     if (isPlugin)
         pluginButton.onClick = [this, plugin = slot.plugin] { if (openPluginWindow) openPluginWindow (plugin); };
-    automatePluginButton.setVisible (isPlugin && trackIndex < kAuxIndexBase && slot.plugin->parameterCount() > 0);
+    automatePluginButton.setVisible (isPlugin && slot.plugin->parameterCount() > 0); // 0.80.0: on an aux bus too
     automatePluginButton.onClick = [this]
     {
-        if (onAutomate && trackIndex < kAuxIndexBase)
-            onAutomate (trackIndex == kMasterIndex ? AutomationTarget { AutomationKind::MasterPlugin, 0, selectedSlot, -1 }
-                                                   : AutomationTarget { AutomationKind::TrackPlugin, trackIndex, selectedSlot, -1 });
+        if (onAutomate)
+            onAutomate (targetFor (-1, true));
     };
 
     for (int i = 0; i < kMaxEffectParams; ++i)
@@ -1087,9 +1117,8 @@ void FxPanel::rebuildParameters()
         row.slider.updateText();
         row.slider.onAutomate = [this, i]
         {
-            if (onAutomate && trackIndex < kAuxIndexBase)
-                onAutomate (trackIndex == kMasterIndex ? AutomationTarget { AutomationKind::MasterEffect, 0, selectedSlot, i }
-                                                       : AutomationTarget { AutomationKind::TrackEffect, trackIndex, selectedSlot, i });
+            if (onAutomate)
+                onAutomate (targetFor (i, false)); // 0.80.0: on an aux bus too
         };
         row.slider.onValueChange = [this, i]
         {
@@ -2157,18 +2186,23 @@ void MixerPanel::showAutomated (const AutomationTarget& target, float value)
             if (in (vcaStrips, target.slot))
                 vcaStrips[static_cast<size_t> (target.slot)]->showAutomated (value);
             break;
-        case AutomationKind::ChannelVolume:
-        case AutomationKind::ChannelPan:
+        case AutomationKind::TrackMute: // 0.80.0
+        case AutomationKind::TrackSolo:
+            if (in (strips, target.index))
+                strips[static_cast<size_t> (target.index)]->showAutomated (target.kind, 0, value);
+            break;
         case AutomationKind::TrackEffect:
         case AutomationKind::MasterEffect:
-        case AutomationKind::ChannelPlugin:
-        case AutomationKind::TrackPlugin:
-        case AutomationKind::MasterPlugin: break;
+        case AutomationKind::AuxEffect:
+            fxPanel.showAutomated (target, value);
+            break;
+        default: break;
     }
 }
 
 void MixerPanel::refreshControls()
 {
+    fxPanel.refresh(); // 0.80.0: its sliders show the slot's own values again
     for (auto& s : strips)
         s->refreshFromTrack();
     for (auto& s : auxStrips)

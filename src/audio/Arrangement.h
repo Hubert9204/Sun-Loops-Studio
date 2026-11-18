@@ -1036,8 +1036,7 @@ inline void remapArrangementChannels (Arrangement& arrangement, const std::vecto
     clips.erase (std::remove_if (clips.begin(), clips.end(),
                                  [&] (AutomationClip& c)
                                  {
-                                     if (c.target.kind != AutomationKind::ChannelVolume && c.target.kind != AutomationKind::ChannelPan
-                                         && c.target.kind != AutomationKind::ChannelPlugin)
+                                     if (! isChannelAutomation (c.target.kind)) // 0.80.0: pitch, swing, mute and solo too
                                          return false;
                                      if (c.target.index < 0 || static_cast<size_t> (c.target.index) >= oldCount
                                          || oldToNew[static_cast<size_t> (c.target.index)] < 0)
@@ -1085,6 +1084,37 @@ inline Project compileSong (const std::vector<Channel>& channelSettings, const A
                     n.startTick = clip.startTick + at;
                     channels[c].notes.push_back (n);
                 }
+    }
+
+    // 0.80.0: a channel whose swing is automated swings each note by the value at the note's place in the song (Project::make
+    // then leaves it alone: its own swing is set to 0 here), as FL Studio's automated swing does.
+    {
+        std::vector<AutomationClip> swingClips;
+        for (const auto& c : arrangement.automationClips)
+            if (c.target.kind == AutomationKind::ChannelSwing && c.target.index >= 0 && c.target.index < static_cast<int> (channels.size()))
+                swingClips.push_back (c);
+        if (! swingClips.empty())
+        {
+            const auto events = makeAutomationEvents (swingClips, static_cast<int> (channels.size()), 1,
+                                                      [] (const AutomationTarget&) { return EffectType::None; },
+                                                      [] (const AutomationTarget&) { return 0; });
+            for (size_t c = 0; c < channels.size(); ++c)
+            {
+                const AutomationTarget target { AutomationKind::ChannelSwing, static_cast<int> (c), 0, 0 };
+                const auto key = target.key();
+                if (std::none_of (events.begin(), events.end(), [key] (const AutomationEvent& e) { return e.target.key() == key; }))
+                    continue;
+                const float own = std::clamp (finiteOr (channels[c].swing, 0.0f), 0.0f, 1.0f);
+                for (auto& n : channels[c].notes)
+                {
+                    const float swing = std::clamp (automatedValueAt (events, target, n.startTick, own), 0.0f, 1.0f);
+                    const int shift = static_cast<int> (std::lround (swing * kMaxSwingShiftTicks));
+                    if (shift > 0 && n.startTick >= 0 && (n.startTick / kSixteenthTicks) % 2 == 1 && n.startTick + shift < songTicks)
+                        n.startTick += shift;
+                }
+                channels[c].swing = 0.0f;
+            }
+        }
     }
 
     std::vector<AudioEvent> events;

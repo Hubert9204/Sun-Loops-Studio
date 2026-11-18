@@ -4,6 +4,8 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include "ui/AutomatableSlider.h"
+
 namespace sls
 {
 // A small rotary control with a caption underneath. While the mouse is over it (or it is being dragged)
@@ -20,6 +22,8 @@ public:
     void setTooltipText (const juce::String& text) { slider.setTooltip (text); }
 
     std::function<void (double)> onValueChange;
+    // 0.80.0: a right click offers "Create automation clip" (set it to make the knob automatable)
+    void setOnAutomate (std::function<void()> create) { slider.onAutomate = std::move (create); }
 
     void paint (juce::Graphics&) override;
     void resized() override;
@@ -35,6 +39,6 @@ private:
 
     juce::String caption;
     std::function<juce::String (double)> format;
-    juce::Slider slider { juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::NoTextBox };
+    AutomatableSlider slider { juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::NoTextBox };
 };
 } // namespace sls
