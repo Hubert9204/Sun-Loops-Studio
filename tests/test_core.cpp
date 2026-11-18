@@ -4789,6 +4789,13 @@ void testMixerTrackDelete079()
     tracks[5].slots[1].params[5] = 4.0f; // sidechain from track 3 (0-based; the parameter counts from 1, 0 = off)
     tracks[6].slots[1] = sls::EffectSlot::make (sls::EffectType::Gate);
     tracks[6].slots[1].params[5] = 8.0f; // from track 7
+    // controllers (on track 9, index 8: nothing else there): one drives an effect on the deleted track and another on track 10
+    tracks[8].slots[2] = sls::EffectSlot::make (sls::EffectType::PeakController);
+    tracks[8].slots[2].params[5] = 4.0f;  // Target track: index 3, the one deleted
+    tracks[8].slots[3] = sls::EffectSlot::make (sls::EffectType::PeakController);
+    tracks[8].slots[3].params[5] = 10.0f; // index 9
+    tracks[8].slots[3].params[9] = 4.0f;  // Target 2 track: the one deleted
+    tracks[8].slots[3].params[10] = 2.0f; // its slot
     auto console = sls::Console::defaults();
     console.aux[0].slots[0] = sls::EffectSlot::make (sls::EffectType::Compressor);
     console.aux[0].slots[0].params[5] = 10.0f; // from track 9
@@ -4814,12 +4821,12 @@ void testMixerTrackDelete079()
 
     const auto use = sls::mixerTrackUse (tracks, channels, a, console, master, 3);
     check (use.channels == std::vector<int> { 1 } && use.playlistTracks == std::vector<int> { 3 } && use.effects == 1 && use.automationClips == 1
-               && use.feeders == std::vector<int> { 2 } && use.listeners == 1 && ! use.empty(),
-           "what uses a track is listed first: channels, playlist audio, effects, automation, sends to it, sidechains");
+               && use.feeders == std::vector<int> { 2 } && use.listeners == 3 && ! use.empty(),
+           "what uses a track is listed first: channels, playlist audio, effects, automation, sends to it, sidechains and controllers");
     const int heir = sls::mixerTrackHeir (tracks, channels, a, 3);
-    check (heir == 8, "its heir is the first track nothing uses (no channel, effect, audio or send)");
+    check (heir == 9, "its heir is the first track nothing uses (no channel, effect, audio or send)");
     check (sls::deleteMixerTrack (tracks, channels, a, console, master, 3, heir) && tracks.size() == 9, "track 4 (index 3) is deleted");
-    check (channels[0].mixerTrack == 0 && channels[1].mixerTrack == 7 && channels[2].mixerTrack == 5,
+    check (channels[0].mixerTrack == 0 && channels[1].mixerTrack == 8 && channels[2].mixerTrack == 5,
            "a channel on it goes to the heir (one place lower now), one after it moves down with its track");
     check (tracks[2].toMaster && tracks[2].trackSends[0].target == -1 && tracks[1].trackSends[0].target == 6,
            "a send to it is removed (a track that went only there goes to the master); a send to a later track follows it");
@@ -4827,8 +4834,11 @@ void testMixerTrackDelete079()
            "a sidechain from it is switched off; one from a later track follows it (on the tracks and the aux buses)");
     check (a.automationClips.size() == 2 && a.automationClips[0].target.index == 5 && a.automationClips[1].target.index == 3,
            "its automation is deleted, the later tracks' follows them, a channel's is left alone");
-    check (a.mixerTrackOf (3) == 7 && a.mixerTrackOf (4) == 3 && a.mixerTrackOf (2) == 2 && a.playlistTracks[2].mixerTrack == -1,
+    check (a.mixerTrackOf (3) == 8 && a.mixerTrackOf (4) == 3 && a.mixerTrackOf (2) == 2 && a.playlistTracks[2].mixerTrack == -1,
            "the playlist's audio keeps its effects: through the heir, or the same track one place lower; the rest unchanged");
+    check (tracks[7].slots[2].bypass && tracks[7].slots[2].params[5] == 0.0f && ! tracks[7].slots[3].bypass && tracks[7].slots[3].params[5] == 9.0f
+               && tracks[7].slots[3].params[9] == 0.0f && tracks[7].slots[3].params[10] == 0.0f,
+           "a controller driving the deleted track is bypassed (not left on \"this track\"); another follows its target; a second target there is cleared");
     check (tracks[7].name == "Track 8" && tracks[8].name == "Track 9" && tracks[3].slots[0].type == sls::EffectType::None,
            "default names follow the numbers, and its effects went with it");
 

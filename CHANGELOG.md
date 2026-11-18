@@ -30,6 +30,11 @@ Patterns and playlist tracks in step; deleting any mixer track.
 - A free playlist track added by hand goes to the end of the Audio section, never among the pattern tracks.
 
 ### Fixed
+- Deleting a mixer track: the controllers' targets (Peak, Envelope and Formula Controller, both targets) follow the tracks like the
+  sidechains do; a controller that drove the deleted track is bypassed instead of falling back to "this track", and a second
+  target there is cleared. The mixer's selection stays on what was selected (the master, an aux bus, or the same track).
+- The playlist track menu's *Delete track* is off for the only track of the Audio section (each section keeps one track, as with
+  its - button).
 - **Building on Windows with Visual Studio 18** (the GitHub runners' new image): the build uses the clang-cl that comes with
   Visual Studio, which matches its C++ library; another LLVM earlier on the PATH can be too old for it ("STL1000"). JUCE 8.0.4
   loses a constructor of `AudioPluginInstance` that Clang 22 refuses and nothing uses (only in the copy CMake downloads).
