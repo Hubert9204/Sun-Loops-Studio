@@ -96,6 +96,23 @@ void MainComponent::moveChannel (int index, int delta)
     remapChannels (order, target);
 }
 
+// 0.82.0: a channel dragged to another place of the rack (as in FL Studio): the ones between move one place; its notes in every pattern,
+// its automation and the Layer channels that play it follow (remapChannels), and it stays selected.
+void MainComponent::moveChannelTo (int from, int to)
+{
+    const int count = static_cast<int> (channels.size());
+    if (from < 0 || from >= count || to < 0 || to >= count || from == to)
+        return;
+    std::vector<int> order;
+    for (int i = 0; i < count; ++i)
+        if (i != from)
+            order.push_back (i);
+    order.insert (order.begin() + to, from);
+    remapChannels (order, to);
+    statusLabel.setText ("Moved " + juce::String (channels[static_cast<size_t> (to)].name) + " to place " + juce::String (to + 1) + " of the rack",
+                         juce::dontSendNotification);
+}
+
 void MainComponent::cloneChannel (int index)
 {
     if (index < 0 || index >= static_cast<int> (channels.size()))

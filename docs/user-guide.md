@@ -484,6 +484,11 @@ strings, brass, vocal, FX, audio, pad, bell, star) shown on its button. Playlist
 The **graph editor** (*Graph*) has three more properties (0.71.0): **Shift** (the step starts up to a 16th later - a swing of
 its own), **Mod X** and **Mod Y** (the note's cutoff and resonance, as the Piano Roll's lanes).
 
+**Reordering channels (0.82.0).** Drag a channel's row (its name button or an empty place of it) up or down onto another channel:
+it takes that place, and the channels between move one place. Dropped on the empty area under the last channel, it goes to the end.
+Its steps, notes, mixer track and every reference (layers, playlist clips, automation) go with it, as with *Move up* / *Move down*.
+**Ctrl+Z** puts it back.
+
 ### Right-click menu on a channel
 
 | Item | Effect |
@@ -1092,6 +1097,10 @@ at a glance; on tall tracks the name sits in a title bar above the notes, on sho
   clips. Each section keeps at least one track (lane); there are at most 128 tracks and 32 lanes. To remove a particular track,
   right-click its name > *Delete track* (the menu also has *Add an audio track* / *Add a pattern*). **Ctrl+Z**
   brings everything back.
+- **Reordering tracks (0.82.0)**: drag a track's name up or down; a green line shows where it will go. It moves with its clips,
+  name, colour, mute and record settings, inside its own section (an audio track stays among the audio tracks, a pattern track
+  among the pattern tracks, which then follow the order you give them). An audio track keeps playing through the same mixer track.
+  **Ctrl+Z** puts it back.
 - **Patterns and pattern tracks go together, one to one** (0.79.0): the **Patterns** section always has exactly one track per
   pattern and nothing else.
   - A new pattern (*New*, *Clone*, *Make unique*, the Loop Starter, a MIDI import, or the **+** of the Patterns section, which
@@ -1606,6 +1615,12 @@ It has 8 vertical **tracks** to start with, a **master** strip on the right and 
 **More tracks (0.29.0).** The **+** button after the last track adds one; right-click it to add 10 or 100 at once. The **-** button
 under it (0.78.0; before, only in the right-click menu) removes the last track, only when no channel plays through it, it has no effects
 and no automation controls it - otherwise the status bar says why the track was kept. The mixer keeps at least 8 tracks.
+
+**Reordering tracks (0.82.0).** Drag a track strip (its name or an empty place of it) onto another track's strip, as in FL Studio:
+the track takes that place, with its effects, fader, sends and name, and the tracks between move one place. Everything that names
+tracks follows: the channels routed to them, the playlist's audio tracks, the sends, sidechain sources, the controllers' targets and
+the automation clips. Tracks still named "Track N" take the name of their new place. The master and the aux buses do not move.
+**Ctrl+Z** puts it back.
 
 **Deleting any track (0.79.0).** Right-click a track strip (its name or an empty place of it) > *Delete Track N...*, or choose it at
 the bottom of the strip's routing menu. That very track goes, not the last one. When nothing uses it, it goes at once. Otherwise a

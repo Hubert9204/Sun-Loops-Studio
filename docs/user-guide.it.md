@@ -525,6 +525,11 @@ strisce del mixer li hanno anche loro.
 L'**editor a barre** (*Graph*) ha tre proprietà in più (0.71.0): **Shift** (lo step parte fino a un sedicesimo dopo - uno swing
 tutto suo), **Mod X** e **Mod Y** (cutoff e risonanza della nota, come le corsie del Piano Roll).
 
+**Riordinare i canali (0.82.0).** Trascina la riga di un canale (il pulsante con il nome o un suo punto vuoto) in su o in giù sopra
+un altro canale: prende quel posto, e i canali in mezzo si spostano di un posto. Lasciato nell'area vuota sotto l'ultimo canale, va
+in fondo. Step, note, traccia del mixer e ogni riferimento (layer, clip della playlist, automazioni) vanno con lui, come con
+*Move up* / *Move down*. **Ctrl+Z** lo rimette a posto.
+
 ### Menu del tasto destro su un canale
 
 | Voce | Effetto |
@@ -1157,6 +1162,10 @@ colpo d'occhio; sulle tracce alte il nome sta in una barra sopra le note, su que
   clip. Ogni sezione tiene almeno una traccia (corsia); al massimo 128 tracce e 32 corsie. Per togliere una traccia precisa:
   tasto destro sul nome > *Delete track* (nello stesso menu ci sono *Add an audio track* / *Add a pattern*).
   **Ctrl+Z** riporta tutto.
+- **Riordinare le tracce (0.82.0)**: trascina il nome di una traccia in su o in giù; una linea verde mostra dove andrà. Si sposta
+  con clip, nome, colore, mute e impostazioni di registrazione, dentro la sua sezione (una traccia audio resta fra le tracce audio,
+  una traccia pattern fra le tracce pattern, che poi seguono l'ordine che dai loro). Una traccia audio continua a suonare nella
+  stessa traccia del mixer. **Ctrl+Z** la rimette a posto.
 - **Pattern e tracce dei pattern vanno insieme, uno a uno** (0.79.0): la sezione **Patterns** ha sempre esattamente una traccia
   per pattern e nient'altro.
   - Un pattern nuovo (*New*, *Clone*, *Make unique*, il Loop Starter, un'importazione MIDI, o il **+** della sezione Patterns, che
@@ -1678,6 +1687,12 @@ Premi **F9** o il pulsante **Mixer F9**. Il Mixer si apre grande sopra gli altri
 **Più tracce (0.29.0).** Il pulsante **+** dopo l'ultima traccia ne aggiunge una; con il tasto destro se ne aggiungono 10 o 100 alla
 volta. Il pulsante **-** sotto di esso (0.78.0; prima solo nel menu del tasto destro) toglie l'ultima traccia, solo se nessun canale ci
 suona, non ha effetti e nessuna automazione la controlla - altrimenti la barra di stato dice perché è rimasta. Il mixer tiene almeno 8 tracce.
+
+**Riordinare le tracce (0.82.0).** Trascina una strip (il suo nome o un suo punto vuoto) sopra la strip di un'altra traccia, come in
+FL Studio: la traccia prende quel posto, con effetti, fader, mandate e nome, e le tracce in mezzo si spostano di un posto. Tutto ciò
+che nomina le tracce le segue: i canali instradati, le tracce audio della playlist, le mandate, le sorgenti sidechain, i bersagli dei
+controller e le clip di automazione. Le tracce che si chiamano ancora "Track N" prendono il nome del nuovo posto. Il master e i bus
+aux non si spostano. **Ctrl+Z** la rimette a posto.
 
 **Eliminare una traccia qualsiasi (0.79.0).** Tasto destro su una strip (il suo nome o un suo punto vuoto) > *Delete Track N...*,
 oppure la stessa voce in fondo al menu di routing della strip. Se ne va proprio quella traccia, non l'ultima. Se niente la usa, se

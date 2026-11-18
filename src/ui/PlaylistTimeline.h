@@ -157,6 +157,8 @@ public:
     std::function<void()> onAddPattern;        // 0.79.0: the pattern section's + (a pattern and its track come together)
     std::function<void (int)> onDeletePattern; // 0.79.0: a pattern's own track is to be deleted: its pattern goes with it (index)
     std::function<void (int)> onTrackInserted; // 0.69.0: a track was inserted there; the ones from there on moved down one place
+    std::function<void (int, int)> onTrackMoved; // 0.82.0: track (first) was dragged to place (second); the ones between moved one place
+    void paintOverChildren (juce::Graphics&) override; // 0.82.0: where a dragged track would go
 
     // Tempo, to draw audio at its real length (an audio clip lasts a fixed time, not a fixed number of beats) and to
     // show times.
@@ -192,7 +194,8 @@ private:
                       Seek, LoopCreate, LoopPress, LoopMove, LoopResizeStart, LoopResizeEnd,
                       MoveGroup, RubberBand, RightPress, RightErase, // 0.57.0: the selection rectangle, the right-button eraser
                       MuteSweep, Slip,                               // 0.60.0
-                      PaintSweep };                                  // 0.61.0
+                      PaintSweep,                                    // 0.61.0
+                      TrackMove };                                   // 0.82.0: a track's name dragged up or down
     // After "Move" or "Resize" in the loop region's menu the region follows the mouse until a click (right click / Escape: back as it was).
     enum class LoopMode { None, Move, Resize };
     enum class Kind { None, Pattern, Audio, Automation };
@@ -310,6 +313,7 @@ private:
     int trackAtRow (int section, int row) const noexcept;
     // The y of a track's row; far off-screen for a track folded away or scrolled out of its section's sight.
     int trackTop (int track) const noexcept;
+    int trackMoveFrom = -1, trackMoveTo = -1; // 0.82.0: the track being dragged by its name, and where it would go
     juce::Rectangle<int> foldRect (int track) const noexcept; // the fold triangle of a group's head
     void toggleTrackFlag (int track, int which);              // 0 lock, 1 grouped with the track above, 2 folded
     bool inTracks (int y) const noexcept;          // over a track's row (in the audio or the pattern section)

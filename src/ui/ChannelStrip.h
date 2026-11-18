@@ -107,6 +107,7 @@ public:
     std::function<void (int)> onLoadSoundFont;   // context menu "Load SoundFont (.sf2)..."
     std::function<void (int)> onClone;         // context menu "Clone channel"
     std::function<void (int, int)> onMove;     // context menu "Move up" (-1) / "Move down" (+1)
+    std::function<void (int, int)> onChannelDropped; // 0.82.0: channel (first) dragged onto this strip (second): it moves here
     std::function<void (int)> onSavePreset;    // context menu "Save as preset..."
     std::function<void (int)> onAssignTrack;   // context menu "Assign free mixer track"
     std::function<void (int, const drag::Item&)> onItemDropped; // something was dropped from the browser
@@ -121,6 +122,7 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
     void mouseDown (const juce::MouseEvent&) override;
+    void mouseDrag (const juce::MouseEvent&) override; // 0.82.0: dragging the strip (its name, an empty place) moves the channel
     void mouseDoubleClick (const juce::MouseEvent&) override;
     void paintOverChildren (juce::Graphics&) override;
 

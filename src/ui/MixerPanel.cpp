@@ -535,6 +535,30 @@ juce::String MixerStrip::routingText (const MixerTrack& track)
     return sends == 1 ? "> " + juce::String (first + 1) : "> " + juce::String (first + 1) + "+" + juce::String (sends - 1);
 }
 
+void MixerStrip::mouseDrag (const juce::MouseEvent& e)
+{
+    if (isAux || e.mods.isPopupMenu() || e.getDistanceFromDragStart() < 6)
+        return;
+    if (auto* container = juce::DragAndDropContainer::findParentDragContainerFor (this); container != nullptr && ! container->isDragAndDropActive())
+        container->startDragging (drag::moveDescription ("mixertrack", index), this);
+}
+
+void MixerStrip::itemDropped (const SourceDetails& d)
+{
+    dropHighlight = false;
+    repaint();
+    if (const int from = drag::parseMove (d.description, "mixertrack"); from >= 0 && from != index && onTrackDropped)
+        onTrackDropped (from, index);
+}
+
+void MixerStrip::paintOverChildren (juce::Graphics& g)
+{
+    if (! dropHighlight)
+        return;
+    g.setColour (juce::Colour (0xff4cc38a));
+    g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (1.0f), 4.0f, 2.0f);
+}
+
 void MixerStrip::mouseDown (const juce::MouseEvent& e)
 {
     if (onSelect)
@@ -1809,6 +1833,7 @@ void MixerPanel::addStrip (size_t i)
         strip->onAutomate = [this] (const AutomationTarget& t) { if (onAutomate) onAutomate (t); };
         strip->onRouteMenu = [this] (int idx, juce::Component& button) { showRouteMenu (idx, button); };
         strip->onStripMenu = [this] (int idx) { showStripMenu (idx); }; // 0.79.0
+        strip->onTrackDropped = [this] (int from, int to) { if (onMoveTrack) onMoveTrack (from, to); }; // 0.82.0
         strip->onSlotClicked = [this] (int idx, int slot)
         {
             setSelectedTrack (idx);

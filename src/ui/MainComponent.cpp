@@ -119,11 +119,20 @@ MainComponent::MainComponent()
     };
 
     rackView.onItemDroppedOnEmptyArea = [this] (const drag::Item& item) { applyBrowserItem (-1, item); };
+    rackView.onChannelDroppedOnEmptyArea = [this] (int from) // 0.82.0
+    {
+        juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<MainComponent> (this), from]
+                                         { if (safe != nullptr) safe->moveChannelTo (from, static_cast<int> (safe->channels.size()) - 1); });
+    };
 
     mixerPanel.setTracks (tracks);
     mixerPanel.onAddTracks = [this] (int howMany) { addMixerTracks (howMany); };
     mixerPanel.onRemoveLastTrack = [this] { removeLastMixerTrack(); };
     mixerPanel.onDeleteTrack = [this] (int track) { deleteMixerTrack (track); }; // 0.79.0
+    mixerPanel.onMoveTrack = [this] (int from, int to) // 0.82.0 (after the drop has returned)
+    {
+        juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<MainComponent> (this), from, to] { if (safe != nullptr) safe->moveMixerTrackTo (from, to); });
+    };
     mixerPanel.onAddAuxBus = [this] { addAuxBus(); };
     mixerPanel.onRemoveLastAuxBus = [this] { removeLastAuxBus(); };
     mixerPanel.setMaster (masterTrack);
@@ -267,6 +276,11 @@ MainComponent::MainComponent()
     playlistView.onTrackInserted = [this] (int track) // 0.69.0: a section's + inserted a track there
     {
         recordSetup.insertTrack (track);
+        applyRecordSetup();
+    };
+    playlistView.onTrackMoved = [this] (int from, int to) // 0.82.0: a track dragged by its name: its recording settings go with it
+    {
+        recordSetup.moveTrack (from, to);
         applyRecordSetup();
     };
 
@@ -1287,6 +1301,11 @@ void MainComponent::createStrip (size_t channelIndex)
     strip->onDelete = [this] (int idx) { deleteChannel (idx); };
     strip->onClone = [this] (int idx) { cloneChannel (idx); };
     strip->onMove = [this] (int idx, int delta) { moveChannel (idx, delta); };
+    // 0.82.0 (after the drop has returned: moving rebuilds every strip, the one that took the drop too)
+    strip->onChannelDropped = [this] (int from, int to)
+    {
+        juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<MainComponent> (this), from, to] { if (safe != nullptr) safe->moveChannelTo (from, to); });
+    };
     strips.push_back (std::move (strip));
 }
 
@@ -1654,6 +1673,40 @@ void MainComponent::doDeleteMixerTrack (int track, int heir)
     playlistView.clearHistory(); // its own undo steps hold the old track numbers (the main Undo has everything)
     playlistView.refreshTimeline();
     statusLabel.setText ("Track " + juce::String (track + 1) + " deleted: " + juce::String (tracks.size()) + " tracks; the ones after it moved down one place",
+                         juce::dontSendNotification);
+    publishProject();
+}
+
+// 0.82.0: a mixer track dragged to another place: the tracks between move one place and everything that names tracks follows
+// (audio/MixerEdit.h). The strips refer to the tracks in place: the tracks change places in the vector and the strips show them again.
+void MainComponent::moveMixerTrackTo (int from, int to)
+{
+    const int count = static_cast<int> (tracks.size());
+    if (from < 0 || from >= count || to < 0 || to >= count || from == to)
+        return;
+    closeAutomationEditor();
+    const int selectedBefore = mixerPanel.getSelectedTrack();
+    if (! sls::moveMixerTrack (tracks, channels, arrangement, console, masterTrack.slots, from, to))
+        return;
+    for (int t = 0; t < count; ++t)
+        mixerPanel.refreshTrack (t);
+    mixerPanel.refreshTrack (kMasterIndex);
+    mixerPanel.refreshConsole();
+    // the selection stays on what was selected (the moved track goes with its strip)
+    int selected = selectedBefore;
+    if (selectedBefore == from)
+        selected = to;
+    else if (selectedBefore >= 0 && selectedBefore < kMaxTracks)
+        selected = from < to && selectedBefore > from && selectedBefore <= to ? selectedBefore - 1
+                 : to < from && selectedBefore >= to && selectedBefore < from ? selectedBefore + 1
+                                                                                : selectedBefore;
+    mixerPanel.setSelectedTrack (selected);
+    for (auto& strip : strips)
+        strip->refreshFromChannel();
+    updateTrackRouting();
+    playlistView.clearHistory(); // its own undo steps hold the old track numbers (the main Undo has everything)
+    playlistView.refreshTimeline();
+    statusLabel.setText ("Moved Track " + juce::String (from + 1) + " to place " + juce::String (to + 1) + ": what refers to the tracks followed them",
                          juce::dontSendNotification);
     publishProject();
 }

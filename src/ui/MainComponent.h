@@ -214,6 +214,7 @@ private:
     void removeLastMixerTrack(); // only when nothing uses it
     int insertAudioTrack();      // 0.79.0: a free playlist track at the end of the Audio section (the record arms follow); -1 when full
     void deleteMixerTrack (int track);  // 0.79.0: any track, after asking when something uses it (see audio/MixerEdit.h)
+    void moveMixerTrackTo (int from, int to); // 0.82.0: a strip dragged onto another
     void doDeleteMixerTrack (int track, int heir);
     void addAuxBus();            // 0.78.0: the mixer's + after the aux buses
     void removeLastAuxBus();     // 0.78.0: its -, only when nothing uses the bus
@@ -285,6 +286,7 @@ private:
     void remapChannels (const std::vector<int>& newToOld, int newSelected); // MainComponentChannels.cpp
     void deleteChannel (int channelIndex);
     void moveChannel (int channelIndex, int delta);
+    void moveChannelTo (int from, int to); // 0.82.0: dragged in the rack
     void cloneChannel (int channelIndex);
     // MainComponentSampler.cpp
     void openSamplerSettings (int channelIndex);

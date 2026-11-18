@@ -235,4 +235,56 @@ inline bool deleteMixerTrack (std::vector<MixerTrack>& tracks, std::vector<Chann
     tracks.erase (tracks.begin() + k);
     return true;
 }
+// 0.82.0: moves mixer track `from` to place `to` (dragging its strip, as in FL Studio): the tracks between move one place, and
+// everything that names tracks by number follows (channels, sends, the effects that point at tracks, automation, the playlist's
+// audio, default names). Nothing is lost. False (and nothing changes) for a bad index.
+inline bool moveMixerTrack (std::vector<MixerTrack>& tracks, std::vector<Channel>& channels, Arrangement& arrangement, Console& console,
+                            std::array<EffectSlot, kSlotsPerTrack>& masterSlots, int from, int to)
+{
+    const int count = static_cast<int> (tracks.size());
+    if (from < 0 || from >= count || to < 0 || to >= count || from == to)
+        return false;
+    const auto renumber = [from, to] (int t)
+    {
+        if (t == from)
+            return to;
+        if (from < to && t > from && t <= to)
+            return t - 1;
+        if (to < from && t >= to && t < from)
+            return t + 1;
+        return t;
+    };
+    for (auto& c : channels)
+        c.mixerTrack = renumber (std::clamp (c.mixerTrack, 0, count - 1));
+    const int last = count - 1;
+    for (int t = 0; t < arrangement.trackCount(); ++t)
+    {
+        auto& pt = arrangement.playlistTracks[static_cast<size_t> (t)];
+        const int now = renumber (std::clamp (arrangement.mixerTrackOf (t), 0, last));
+        pt.mixerTrack = std::clamp (t, 0, last) == now ? -1 : now;
+    }
+    for (auto& track : tracks)
+        for (auto& s : track.trackSends)
+            if (s.target >= 0 && s.target < count)
+                s.target = renumber (s.target);
+    detail::forEachSlot (tracks, console, masterSlots,
+                         [&renumber, count] (EffectSlot& slot)
+                         {
+                             for (int i = 0; i < effectParamCount (slot.type); ++i)
+                                 if (detail::isTrackParam (slot.type, i))
+                                     if (const int named = detail::trackParamValue (slot, i); named >= 0 && named < count)
+                                         slot.params[static_cast<size_t> (i)] = static_cast<float> (renumber (named) + 1);
+                         });
+    for (auto& c : arrangement.automationClips)
+        if (isTrackAutomation (c.target.kind) && c.target.index >= 0 && c.target.index < count)
+            c.target.index = renumber (c.target.index);
+    // default names follow the numbers ("Track 3" taken to the first place is "Track 1")
+    for (int t = 0; t < count; ++t)
+        if (tracks[static_cast<size_t> (t)].name == "Track " + std::to_string (t + 1))
+            tracks[static_cast<size_t> (t)].name = "Track " + std::to_string (renumber (t) + 1);
+    const auto moving = std::move (tracks[static_cast<size_t> (from)]);
+    tracks.erase (tracks.begin() + from);
+    tracks.insert (tracks.begin() + to, moving);
+    return true;
+}
 } // namespace sls
