@@ -236,7 +236,7 @@ void MainComponent::stepEditNote (const ScoreEvent& e)
     if (channel == selected)
         pianoRoll.setNotes (notes);
     publishProject();
-    statusLabel.setText ("Step edit: " + juce::String (theory::noteName (n.pitch)) + " at " + juce::String (formatBarsBeatsTicks (n.startTick)), juce::dontSendNotification);
+    statusLabel.setText ("Step edit: " + juce::String (theory::noteName (n.pitch)) + " at " + juce::String (formatBarsBeatsTicks (n.startTick, interfaceMeter())), juce::dontSendNotification); // (in the pattern)
 }
 
 // The score log's notes into the current pattern, each on the channel it was played on, from the pattern's start. The timing is

@@ -1338,6 +1338,22 @@ extremes (4x, an octave or more) sounds get smeared and a little metallic, espec
 notes, because there is no separate treatment of transients. It was measured on test tones (the length, the pitch and the timing are
 exact within a few milliseconds; a sharp attack is smeared by about 10 to 25 ms) and **not judged by ear on real music**.
 
+### Clips that follow the tempo (0.83.0)
+
+Right-click an audio clip > **Follow the song's tempo...** asks the tempo the audio was recorded at (read from the file's name when
+it says so, as "Drums 96 BPM.wav"; else the song's tempo). From then on the clip follows the song's tempo, as FL Studio's
+*Stretch* mode: it is **time-stretched while it plays**, keeping its pitch, so that each beat of the audio lasts a beat of the song.
+Change the BPM, add tempo changes or ramps: the clip stays in time, without rendering anything again. Its length in the playlist is
+counted in beats of its audio, its waveform is drawn on the song's beats, and cutting, splitting, trimming or slipping it counts
+its audio at its own tempo. The menu shows the tempo with a tick; choose it again to make the clip play at its own speed.
+
+- Up to **16** clips that follow the tempo sound at once (more play at their own speed until one ends); at most 8 times faster or
+  slower than their own tempo.
+- The stretch is the same method as *Stretch and pitch* (Signalsmith Stretch), in its lighter real-time setting: very large
+  changes of tempo smear the sound a little more than the offline one.
+- *Stretch and pitch* still works on such a clip: its audio is rendered again and its tempo changes with it (twice as long = half
+  the tempo), so the clip keeps the same beats.
+
 ### Sample editor
 
 Right-click an **audio clip** (playlist) or a **sampler channel** (Channel Rack) > **Edit sample...** opens the editor. For a clip it shows exactly the part
@@ -1514,10 +1530,21 @@ The button next to the BPM shows the **time signature** (4/4 to start with). Cli
   be given another tempo, moved to the song position or deleted; *Delete every tempo change* goes back to one tempo. A `*` on
   the button means the song has tempo changes.
 
-The changes are steps, as with FL Studio's tempo markers (no gradual ramps), and only **Song mode** plays them: a pattern
+- **Ramps (0.83.0)**: in a tempo change's submenu, *Ramp to it (glide from the tempo before)* turns the change into a ramp: the
+  tempo glides in a straight line from the tempo before (the change before it, or the song's start) and reaches the new tempo at
+  the flag, as a sloped tempo automation clip in FL Studio. The ruler draws the ramp as an orange slope. Click it again for a step.
+- **Time signature changes (0.83.0)**: *Add a time signature change at bar N* (the bar at the song position, or the next bar line)
+  makes the song change signature from that bar, as FL Studio's time signature markers. Each change is a blue flag with its
+  signature in the ruler. From there the bars of the Playlist have that length, the bar numbers count on across the changes,
+  the grid, the snap **Bar** / **Half bar** and the positions (bar.beat.tick) follow it, the metronome accents the first beat of
+  each of its bars and plugins are told the signature and where the bar started. In the menu each change can be given another
+  signature or deleted; *Delete every time signature change* goes back to one. A change always sits on a bar line: when the
+  signature before it changes, it moves to the nearest bar line. Patterns and the Piano Roll keep the project's signature.
+
+Without a ramp the changes are steps, as with FL Studio's tempo markers. Only **Song mode** plays them: a pattern
 plays at the toolbar's BPM, which is also the tempo the song starts with. Undo and redo include them, they are saved with the
-project, and exports take them into account. **Audio clips** are still drawn and stretched for the song's starting tempo:
-after a tempo change, an audio clip does not follow it (keep audio before the first change, or use patterns there).
+project, and exports take them into account. **Audio clips** play at their own speed unless they follow the tempo (below,
+*Clips that follow the tempo*): a clip that does not is not stretched by a tempo change.
 
 ## Automation
 

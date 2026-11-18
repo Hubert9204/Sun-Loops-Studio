@@ -103,8 +103,8 @@ What is and is not verified, feature by feature: [docs/roadmap.md](docs/roadmap.
   reduction, slicing). **Record** several inputs at once into the playlist, with count-in, loop takes, punch in / out, and MIDI
   notes in overdub or replace.
 - **Automation** - clips for any volume, pan, fader, send, effect or plugin parameter (aux buses included), the channels' pitch and
-  swing, mute and solo, the master volume and pitch, with a point editor, the controls moving with it as the song plays; tempo changes and
-  time signatures from 2/4 to 12/8.
+  swing, mute and solo, the master volume and pitch, with a point editor, the controls moving with it as the song plays; tempo changes, as steps or
+  ramps, and time signatures from 2/4 to 12/8 that can change during the song; audio clips that follow the tempo (stretched in real time).
 - **Performance mode** - the Playlist's clips as cells to launch live (loop, one shot, hold), from the mouse or MIDI pads.
 - **Loop Starter** - a starting loop in one of ten genres (drums, bass, chords and melody), made by rules and chance, offline.
 - **FL Studio and MIDI files** - open and export `.flp` projects (written for this program, no FL Studio code); import Standard

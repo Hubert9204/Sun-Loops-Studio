@@ -2,6 +2,20 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.83.0 - 2026-11-18
+
+Tempo (fourth block of the plan): ramps, time signature changes and audio that follows the tempo.
+
+### Added
+- **Tempo ramps**: a tempo change can glide from the tempo before (*Ramp to it* in its menu), in a straight line, as a sloped tempo
+  automation clip in FL Studio. Playback, exports, the ruler's seconds and recording follow the ramp exactly; the ruler draws it.
+- **Time signature changes in the song**, as FL Studio's time signature markers: from a bar, the song changes signature (blue flags
+  in the ruler). Bar numbers, grid, snap to bars, positions, the metronome's accent and the plugins' bar position follow them.
+- **Audio clips that follow the tempo** (*Follow the song's tempo...*, FL Studio's Stretch mode): the clip is time-stretched in
+  real time, keeping its pitch, so it stays in time at any BPM and through tempo changes and ramps. The audio's tempo is read from
+  the file name when it is there. Up to 16 such clips sound at once.
+- Plugins are told the time signature and where the bar started.
+
 ## 0.82.0 - 2026-11-18
 
 Drag & drop to reorder, as in FL Studio (third block of the plan).

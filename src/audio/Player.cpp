@@ -350,7 +350,8 @@ void Player::startClip (const AudioEvent& e, double extraSeconds) noexcept
 {
     if (e.data == nullptr || e.data->numFrames() < 2)
         return;
-    const double startFrame = (std::max (0.0, e.offsetSeconds) + std::max (0.0, extraSeconds)) * e.data->sampleRate;
+    // (0.83.0: a clip that follows the tempo finds its place from the song position itself, in startStretch)
+    const double startFrame = (std::max (0.0, e.offsetSeconds) + (e.tempoBpm > 0.0 ? 0.0 : std::max (0.0, extraSeconds))) * e.data->sampleRate;
     if (startFrame + 1.0 >= static_cast<double> (e.data->numFrames()))
         return; // the clip's sound has already ended at that point
 

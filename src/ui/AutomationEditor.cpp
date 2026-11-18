@@ -147,7 +147,7 @@ void AutomationEditor::paint (juce::Graphics& g)
     {
         const auto& p = clip->points[static_cast<size_t> (shown)];
         const char* shapes[] = { "linear", "hold", "smooth" };
-        readout = "Point " + juce::String (shown + 1) + "   " + juce::String (formatBarsBeatsTicks (std::llround (p.tick)))
+        readout = "Point " + juce::String (shown + 1) + "   " + juce::String (formatBarsBeatsTicks (std::llround (p.tick), interfaceMeter())) /* (inside the clip) */
                   + "   " + text (p.value) + "   line: " + shapes[std::min (2, static_cast<int> (p.shape))];
     }
     g.setColour (juce::Colours::white.withAlpha (0.6f));
