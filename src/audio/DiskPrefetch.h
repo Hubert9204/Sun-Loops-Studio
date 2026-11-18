@@ -24,6 +24,7 @@ public:
         int startTick = 0, endTick = 0;
         double offsetSeconds = 0.0;
         bool reverse = false;
+        double tempoBpm = 0.0; // 0.83.0: follows the song's tempo (its audio counts at this tempo), else 0
     };
 
     DiskPrefetch();

@@ -1410,6 +1410,23 @@ estremi (4x, un'ottava o più) il suono si impasta e diventa un po' metallico, s
 perché i transienti non hanno un trattamento separato. È stato misurato su toni di prova (lunghezza, intonazione e tempi sono
 esatti entro pochi millisecondi; un attacco netto si sfuma di circa 10-25 ms) e **non giudicato a orecchio su musica vera**.
 
+### Clip che seguono il tempo (0.83.0)
+
+Tasto destro su una clip audio > **Follow the song's tempo...** chiede il tempo a cui è stato registrato l'audio (letto dal nome
+del file quando lo dice, come "Drums 96 BPM.wav"; altrimenti il tempo del brano). Da quel momento la clip segue il tempo del
+brano, come il modo *Stretch* di FL Studio: viene **allungata o accorciata mentre suona**, mantenendo l'intonazione, in modo che
+ogni battito dell'audio duri un battito del brano. Cambia i BPM, aggiungi cambi di tempo o rampe: la clip resta a tempo, senza
+rielaborare nulla. La sua lunghezza nella playlist si conta in battiti del suo audio, la forma d'onda è disegnata sui battiti del
+brano, e tagliarla, dividerla, accorciarla o farla scorrere conta il suo audio al suo tempo. Il menu mostra il tempo con la
+spunta; sceglilo di nuovo perché la clip suoni alla sua velocità.
+
+- Suonano insieme fino a **16** clip che seguono il tempo (le altre suonano alla loro velocità finché una finisce); al massimo 8
+  volte più veloci o più lente del loro tempo.
+- Lo stretch è lo stesso metodo di *Stretch and pitch* (Signalsmith Stretch), nella sua impostazione leggera per il tempo reale:
+  cambi di tempo molto grandi impastano il suono un po' più di quella fuori linea.
+- *Stretch and pitch* funziona ancora su una clip così: il suo audio viene rielaborato e il suo tempo cambia con lui (lunga il
+  doppio = metà del tempo), quindi la clip tiene gli stessi battiti.
+
 ### Editor di campioni
 
 Tasto destro su una **clip audio** (playlist) o su un **canale sampler** (Channel Rack) > **Edit sample...** apre l'editor. Per una clip mostra esattamente la parte
@@ -1588,10 +1605,23 @@ Il pulsante accanto ai BPM mostra il **metro** (4/4 all'inizio). Cliccalo:
   modificare, spostare alla posizione del brano o eliminare; *Delete every tempo change* torna a un solo tempo. Un `*` sul
   pulsante indica che il brano ha cambi di tempo.
 
-I cambi sono a gradino, come i tempo marker di FL Studio (niente rampe graduali), e li suona solo la **modalità Song**: un
-pattern suona ai BPM della barra, che sono anche il tempo con cui parte il brano. Annulla e ripeti li comprendono, si salvano
-con il progetto e le esportazioni ne tengono conto. Le **clip audio** sono ancora disegnate e allungate per il tempo iniziale
-del brano: dopo un cambio di tempo una clip audio non lo segue (tieni l'audio prima del primo cambio, o usa lì dei pattern).
+- **Rampe (0.83.0)**: nel sottomenu di un cambio di tempo, *Ramp to it (glide from the tempo before)* lo trasforma in una rampa:
+  il tempo scivola in linea retta dal tempo precedente (il cambio prima, o l'inizio del brano) e arriva al nuovo tempo sulla
+  bandierina, come una clip di automazione del tempo inclinata in FL Studio. Il righello disegna la rampa come una salita (o
+  discesa) arancione. Cliccalo di nuovo per tornare al gradino.
+- **Cambi di metro (0.83.0)**: *Add a time signature change at bar N* (la battuta alla posizione del brano, o la stanghetta
+  successiva) fa cambiare metro al brano da quella battuta, come i time signature marker di FL Studio. Ogni cambio è una
+  bandierina blu con il suo metro nel righello. Da lì le battute della Playlist hanno quella lunghezza, i numeri di battuta
+  proseguono attraverso i cambi, la griglia, lo snap **Bar** / **Half bar** e le posizioni (battuta.battito.tick) lo seguono, il
+  metronomo accenta il primo battito di ogni sua battuta e i plugin ricevono il metro e l'inizio della battuta. Nel menu ogni
+  cambio si può impostare su un altro metro o eliminare; *Delete every time signature change* torna a uno solo. Un cambio sta
+  sempre su una stanghetta: se il metro prima di lui cambia, si sposta alla stanghetta più vicina. Pattern e Piano Roll tengono
+  il metro del progetto.
+
+Senza rampa i cambi sono a gradino, come i tempo marker di FL Studio. Li suona solo la **modalità Song**: un pattern suona ai BPM
+della barra, che sono anche il tempo con cui parte il brano. Annulla e ripeti li comprendono, si salvano con il progetto e le
+esportazioni ne tengono conto. Le **clip audio** suonano alla loro velocità, a meno che seguano il tempo (più avanti, *Clip che
+seguono il tempo*): una clip che non lo segue non viene allungata da un cambio di tempo.
 
 ## Automazione
 

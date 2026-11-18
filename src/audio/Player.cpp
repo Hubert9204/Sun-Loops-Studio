@@ -1,5 +1,7 @@
 #include "audio/Player.h"
 
+#include "signalsmith-stretch.h"
+
 #include <algorithm>
 #include <limits>
 #include <climits>
@@ -62,6 +64,27 @@ Player::Player()
     freeMemory.reserve (static_cast<size_t> (kMaxEffectMemories));
 }
 
+// 0.83.0: one real-time stretcher with its buffers (see Player.h).
+struct Player::ClipStretcher
+{
+    signalsmith::stretch::SignalsmithStretch<float> stretch;
+    std::array<float, kStretchBlock> outLeft {}, outRight {};
+    int outPos = kStretchBlock; // the next frame of outLeft / outRight to play (kStretchBlock: make more first)
+    std::vector<float> inLeft, inRight;
+    int lead = 0; // how far the input runs ahead of what is heard, in input frames (the stretcher's latency)
+};
+
+namespace
+{
+// Plain buffers as the stretcher's inputs and outputs: buffer[channel][index].
+struct StretchIo
+{
+    float* left;
+    float* right;
+    float* operator[] (int c) const noexcept { return c == 0 ? left : right; }
+};
+} // namespace
+
 Player::~Player()
 {
     EffectMemory* m = nullptr;
@@ -110,6 +133,26 @@ void Player::prepare (double newSampleRate) noexcept
     for (auto& v : clipVoices)
         v = ClipVoice {};
     nextClip = 0;
+
+    // 0.83.0: the stretchers for the clips that follow the tempo, made here once for this sample rate
+    if (stretchers.size() != static_cast<size_t> (kClipStretchers) || stretcherRate != sampleRate)
+    {
+        stretchers.clear();
+        int seekFrames = 0;
+        for (int k = 0; k < kClipStretchers; ++k)
+        {
+            auto s = std::make_unique<ClipStretcher>();
+            s->stretch.presetCheaper (2, static_cast<float> (sampleRate));
+            const auto in = static_cast<size_t> (std::ceil (kStretchBlock * kMaxStretchRate)) + 8;
+            s->inLeft.assign (in, 0.0f);
+            s->inRight.assign (in, 0.0f);
+            seekFrames = std::max (seekFrames, s->stretch.inputLatency() + static_cast<int> (std::ceil (kMaxStretchRate * s->stretch.outputLatency())) + 8);
+            stretchers.push_back (std::move (s));
+        }
+        stretchSeekLeft.assign (static_cast<size_t> (seekFrames), 0.0f);
+        stretchSeekRight.assign (static_cast<size_t> (seekFrames), 0.0f);
+        stretcherRate = sampleRate;
+    }
 
     pdcArena.assign (static_cast<size_t> (kPdcArena), 0.0f); // 0.62.0
     std::fill (pdcLine.begin(), pdcLine.end(), -1);
@@ -307,7 +350,8 @@ void Player::startClip (const AudioEvent& e, double extraSeconds) noexcept
 {
     if (e.data == nullptr || e.data->numFrames() < 2)
         return;
-    const double startFrame = (std::max (0.0, e.offsetSeconds) + std::max (0.0, extraSeconds)) * e.data->sampleRate;
+    // (0.83.0: a clip that follows the tempo finds its place from the song position itself, in startStretch)
+    const double startFrame = (std::max (0.0, e.offsetSeconds) + (e.tempoBpm > 0.0 ? 0.0 : std::max (0.0, extraSeconds))) * e.data->sampleRate;
     if (startFrame + 1.0 >= static_cast<double> (e.data->numFrames()))
         return; // the clip's sound has already ended at that point
 
@@ -327,6 +371,7 @@ void Player::startClip (const AudioEvent& e, double extraSeconds) noexcept
     v.data = e.data.get();
     v.step = e.data->sampleRate / sampleRate;
     v.pos = startFrame;
+    v.offsetSeconds = std::max (0.0, e.offsetSeconds);
     if (e.reverse)
     {
         // The audio backwards: position p of the reversed audio is frame (frames - 1 - p) of the audio.
@@ -345,7 +390,85 @@ void Player::startClip (const AudioEvent& e, double extraSeconds) noexcept
     v.track = std::clamp (e.mixerTrack, 0, kMaxTracks - 1);
     v.gain = e.gain;
     v.age = ++ageCounter;
+    if (e.tempoBpm > 0.0) // 0.83.0: through a free stretcher, from where the song is now
+    {
+        v.tempoBpm = std::clamp (e.tempoBpm, 20.0, 400.0);
+        for (int k = 0; k < static_cast<int> (stretchers.size()) && v.stretcher < 0; ++k)
+        {
+            bool used = false;
+            for (const auto& other : clipVoices)
+                used = used || (other.active && other.stretcher == k && &other != target);
+            if (! used)
+                v.stretcher = k;
+        }
+        if (v.stretcher >= 0 && ! startStretch (v, v.stretcher))
+            return; // (the song is already past the end of its audio)
+    }
     *target = v;
+}
+
+double Player::stretchFrameAt (const ClipVoice& v, double tick) noexcept
+{
+    const double seconds = v.offsetSeconds + (tick - v.startTick) * 60.0 / (kTicksPerBeat * v.tempoBpm);
+    return seconds * v.data->sampleRate;
+}
+
+// The stretcher starts with the audio from where the song is: what it needs to give out sound aligned to that point at once.
+bool Player::startStretch (ClipVoice& v, int index) noexcept
+{
+    auto& s = *stretchers[static_cast<size_t> (index)];
+    const int frames = v.data->numFrames();
+    const double ratio = v.data->sampleRate / sampleRate;
+    const double rate = std::clamp (ratio * ticksPerSampleNow * sampleRate * 60.0 / kTicksPerBeat / v.tempoBpm, 1.0 / kMaxStretchRate, kMaxStretchRate);
+    const double from = std::max (0.0, stretchFrameAt (v, tickPos));
+    if (from >= frames)
+        return false;
+    s.stretch.setTransposeFactor (static_cast<float> (ratio)); // (the audio's sample rate is not the output's)
+    const int length = std::min (static_cast<int> (stretchSeekLeft.size()), s.stretch.outputSeekLength (static_cast<float> (rate)));
+    const auto first = static_cast<long long> (std::floor (from));
+    const float* left = v.data->left.data();
+    const float* right = v.data->right.data();
+    for (int i = 0; i < length; ++i)
+    {
+        const long long f = first + i;
+        const bool inside = f >= 0 && f < frames;
+        const long long at = v.reverse ? frames - 1 - f : f;
+        stretchSeekLeft[static_cast<size_t> (i)] = inside ? left[at] : 0.0f;
+        stretchSeekRight[static_cast<size_t> (i)] = inside ? right[at] : 0.0f;
+    }
+    s.stretch.outputSeek (StretchIo { stretchSeekLeft.data(), stretchSeekRight.data() }, length);
+    s.lead = s.stretch.inputLatency();
+    v.fed = static_cast<double> (first + length);
+    s.outPos = kStretchBlock;
+    return true;
+}
+
+// The next kStretchBlock frames: the stretcher is given the audio up to where the song will be at the end of them (so it follows the
+// tempo, its ramps and changes, without drifting), plus its latency.
+void Player::fillStretchBlock (ClipVoice& v, ClipStretcher& s) noexcept
+{
+    const int frames = v.data->numFrames();
+    const double rate = std::clamp (v.data->sampleRate / sampleRate * ticksPerSampleNow * sampleRate * 60.0 / kTicksPerBeat / v.tempoBpm,
+                                    1.0 / kMaxStretchRate, kMaxStretchRate);
+    const double target = stretchFrameAt (v, tickPos + kStretchBlock * ticksPerSampleNow) + s.lead + rate * s.stretch.outputLatency();
+    const int count = std::clamp (static_cast<int> (std::llround (target - v.fed)), 0, static_cast<int> (s.inLeft.size()));
+    const auto first = static_cast<long long> (v.fed);
+    const float* left = v.data->left.data();
+    const float* right = v.data->right.data();
+    for (int i = 0; i < count; ++i)
+    {
+        const long long f = first + i;
+        const bool inside = f >= 0 && f < frames;
+        const long long at = v.reverse ? frames - 1 - f : f;
+        s.inLeft[static_cast<size_t> (i)] = inside ? left[at] : 0.0f;
+        s.inRight[static_cast<size_t> (i)] = inside ? right[at] : 0.0f;
+    }
+    s.stretch.process (StretchIo { s.inLeft.data(), s.inRight.data() }, count, StretchIo { s.outLeft.data(), s.outRight.data() }, kStretchBlock);
+    v.fed += count;
+    s.outPos = 0;
+    for (int i = 0; i < kStretchBlock; ++i)
+        if (! std::isfinite (s.outLeft[static_cast<size_t> (i)]) || ! std::isfinite (s.outRight[static_cast<size_t> (i)]))
+            s.outLeft[static_cast<size_t> (i)] = s.outRight[static_cast<size_t> (i)] = 0.0f;
 }
 
 void Player::releaseClips() noexcept
@@ -2399,9 +2522,13 @@ void Player::render (const Project& project, double bpm, bool playing,
 
         // 1. Sequencer, voices and channel strips: everything lands on the mixer tracks.
         std::array<float, kChunk> click {};
-        // The time signature (0.46.0): a beat is a quarter or an eighth, and the accent comes every `beatsPerBar` beats.
-        const int meterBeatTicks = kTicksPerBeat * 4 / (project.beatUnit == 8 ? 8 : 4);
-        const int meterBeats = std::clamp (project.beatsPerBar, 1, 16);
+        // The time signature (0.46.0): a beat is a quarter or an eighth, and the accent comes every `beatsPerBar` beats. 0.83.0: in
+        // the song, the signature where the song is (its changes start on bar lines); the beats count from the change.
+        const TimeSignature projectMeter = TimeSignature::valid (project.beatsPerBar, project.beatUnit);
+        MeterSegment meterSeg = project.meterMarkers.empty() ? MeterSegment { 0, INT_MAX, 0, projectMeter }
+                                                              : meterSegmentAt (project.meterMarkers, projectMeter, tickPos);
+        int meterBeatTicks = meterSeg.meter.beatTicks();
+        int meterBeats = std::clamp (meterSeg.meter.beats, 1, 16);
         const double samplesPerBeat = 60.0 * sampleRate / std::max (bpm, 1.0) * meterBeatTicks / kTicksPerBeat;
         if (pendingClickDelay >= 0.0)
         {
@@ -2416,14 +2543,22 @@ void Player::render (const Project& project, double bpm, bool playing,
             {
                 if (playing)
                 {
-                    const int beat = static_cast<int> (tickPos / meterBeatTicks);
+                    if (! project.meterMarkers.empty() && (tickPos >= meterSeg.endTick || tickPos < meterSeg.startTick))
+                    {
+                        meterSeg = meterSegmentAt (project.meterMarkers, projectMeter, tickPos);
+                        meterBeatTicks = meterSeg.meter.beatTicks();
+                        meterBeats = std::clamp (meterSeg.meter.beats, 1, 16);
+                    }
+                    const double inSegment = std::max (0.0, tickPos - meterSeg.startTick);
+                    const int beatInSegment = static_cast<int> (inSegment / meterBeatTicks);
+                    const int beat = meterSeg.startTick + beatInSegment * meterBeatTicks; // (the tick it starts on: one number per beat)
                     if (beat != lastClickBeat)
                     {
                         // switched on in the middle of a beat: wait for the next one instead of clicking off the beat
-                        const bool joinedMidBeat = lastClickBeat < 0 && std::fmod (tickPos, static_cast<double> (meterBeatTicks)) > 0.5;
+                        const bool joinedMidBeat = lastClickBeat < 0 && std::fmod (inSegment, static_cast<double> (meterBeatTicks)) > 0.5;
                         lastClickBeat = beat;
                         if (! joinedMidBeat)
-                            startClick (beat % meterBeats == 0);
+                            startClick (beatInSegment % meterBeats == 0);
                     }
                     freeBeatSamples = 1.0e18; // when it stops, the free-running click starts at once
                     freeBeatCount = 0;
@@ -2489,16 +2624,38 @@ void Player::render (const Project& project, double bpm, bool playing,
                     continue;
 
                 const int frames = v.data->numFrames();
-                if (v.pos < 0.0 || static_cast<int> (v.pos) + 1 >= frames + (v.reverse ? 1 : 0))
+                float sampleL = 0.0f, sampleR = 0.0f;
+                if (v.stretcher >= 0) // 0.83.0: following the tempo, through its stretcher
                 {
-                    v = ClipVoice {}; // the end of the audio (its beginning, played backwards)
-                    continue;
+                    auto& st = *stretchers[static_cast<size_t> (v.stretcher)];
+                    if (st.outPos >= kStretchBlock)
+                    {
+                        if (v.fed - st.lead - kMaxStretchRate * st.stretch.outputLatency() >= frames)
+                        {
+                            v = ClipVoice {}; // the end of its audio has been heard
+                            continue;
+                        }
+                        fillStretchBlock (v, st);
+                    }
+                    sampleL = st.outLeft[static_cast<size_t> (st.outPos)];
+                    sampleR = st.outRight[static_cast<size_t> (st.outPos)];
+                    ++st.outPos;
                 }
-                const int idx = static_cast<int> (v.pos);
-                const int next = std::min (idx + 1, frames - 1);
-                const float frac = static_cast<float> (v.pos - idx);
-                const float* sl = v.data->left.data();
-                const float* sr = v.data->right.data();
+                else
+                {
+                    if (v.pos < 0.0 || static_cast<int> (v.pos) + 1 >= frames + (v.reverse ? 1 : 0))
+                    {
+                        v = ClipVoice {}; // the end of the audio (its beginning, played backwards)
+                        continue;
+                    }
+                    const int idx = static_cast<int> (v.pos);
+                    const int next = std::min (idx + 1, frames - 1);
+                    const float frac = static_cast<float> (v.pos - idx);
+                    const float* sl = v.data->left.data();
+                    const float* sr = v.data->right.data();
+                    sampleL = sl[idx] + frac * (sl[next] - sl[idx]);
+                    sampleR = sr[idx] + frac * (sr[next] - sr[idx]);
+                }
                 if (playing && (v.fadeInSeconds > 0.0f || v.fadeOutSeconds > 0.0f))
                 {
                     // Sine fades over the clip's first and last seconds, from where the song is.
@@ -2514,8 +2671,8 @@ void Player::render (const Project& project, double bpm, bool playing,
                 else if (playing)
                     v.fade = 1.0f;
                 const float gain = v.env * v.gain * v.fade;
-                trackL[static_cast<size_t> (v.track)][static_cast<size_t> (i)] += (sl[idx] + frac * (sl[next] - sl[idx])) * gain * v.balanceLeft;
-                trackR[static_cast<size_t> (v.track)][static_cast<size_t> (i)] += (sr[idx] + frac * (sr[next] - sr[idx])) * gain * v.balanceRight;
+                trackL[static_cast<size_t> (v.track)][static_cast<size_t> (i)] += sampleL * gain * v.balanceLeft;
+                trackR[static_cast<size_t> (v.track)][static_cast<size_t> (i)] += sampleR * gain * v.balanceRight;
                 v.pos += v.step;
 
                 if (v.releasing)
@@ -2954,6 +3111,13 @@ void Player::render (const Project& project, double bpm, bool playing,
                 continue;
             std::fill_n (pluginL.begin(), n, 0.0f);
             std::fill_n (pluginR.begin(), n, 0.0f);
+            {
+                // 0.83.0: the signature and the start of the bar where the song is
+                const TimeSignature base = TimeSignature::valid (project.beatsPerBar, project.beatUnit);
+                const auto where = barPositionAt (project.meterMarkers, base, static_cast<long long> (tickPos));
+                const double barStart = tickPos - (where.beat * where.meter.beatTicks() + where.ticks);
+                c.plugin->setMeter (where.meter.beats, where.meter.unit, barStart / kTicksPerBeat);
+            }
             c.plugin->setTransport (ticksPerSample * sampleRate * 60.0 / kTicksPerBeat, tickPos / kTicksPerBeat, playing);
             c.plugin->process (pluginL.data(), pluginR.data(), n, pluginEvents[ch].data(), count);
             const float g = smoothedGain[ch];

@@ -65,7 +65,7 @@ public:
     PlaylistTool getTool() const noexcept { return tool; }
 
     // The grid that audio clips snap to while they are moved, trimmed, split or cut, in ticks (480 = one beat; 1 = none).
-    void setSnapTicks (int ticks);
+    void setSnapTicks (int ticks, int bars = 0); // bars: 1 = the snap is "bar", 2 = "half bar" (0.83.0: their length depends on where)
 
     // Zoom (horizontal). 1.0 means the whole song (or, when it is empty, the whole timeline) fills the view.
     void zoomBy (double factor, int anchorX = -1); // anchorX: view coordinate that stays put (default: the middle)
@@ -387,6 +387,7 @@ public:
 private:
     void editAudioProperties (int index);
     void editAudioStretch (int index);
+    void toggleFollowTempo (int index); // 0.83.0
     void toggleAudioReverse (int index); // 0.27.0
     void showAutomationMenu (int index);
     void duplicateSelected();
@@ -417,6 +418,7 @@ private:
 
     PlaylistTool tool = PlaylistTool::Draw;
     int snapTicks = kTicksPerBeat;
+    int snapBars = 0; // 0.83.0 (see setSnapTicks)
 
     Drag drag = Drag::None;
     int dragClip = -1;

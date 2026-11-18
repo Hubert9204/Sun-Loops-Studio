@@ -54,10 +54,11 @@ void MainComponent::updateToolbarReadouts()
 {
     // The time panel: where the playhead is while playing, where it will start otherwise.
     const int tick = engine.isPlaying() ? engine.getPlayheadTick() : (songMode ? songStartTick : patternStartTick);
-    const double seconds = tickToSeconds (arrangement.tempoMarkers, bpmSlider.getValue(), tick);
+    // (a pattern plays at one tempo and in the project's time signature; 0.83.0: the song's changes count only in Song mode)
+    const double seconds = songMode ? tickToSeconds (arrangement.tempoMarkers, bpmSlider.getValue(), tick) : tickToSeconds ({}, bpmSlider.getValue(), tick);
     const int ms = juce::roundToInt (seconds * 1000.0);
     const int minutes = ms / 60000, secs = (ms / 1000) % 60, millis = ms % 1000;
-    timePanel.set (juce::String (formatBarsBeatsTicks (tick)),
+    timePanel.set (juce::String (songMode ? formatBarsBeatsTicks (tick) : formatBarsBeatsTicks (tick, arrangement.meter)),
                    juce::String (minutes) + ":" + juce::String (secs).paddedLeft ('0', 2) + "." + juce::String (millis).paddedLeft ('0', 3));
 
     // The CPU panel: the share of each audio buffer's time the audio takes, a few times a second.

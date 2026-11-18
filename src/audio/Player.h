@@ -285,9 +285,27 @@ private:
         int startTick = 0;
         float fadeInSeconds = 0.0f, fadeOutSeconds = 0.0f;
         float fade = 1.0f; // the fades' gain at the last sample played (kept while the transport is stopped)
+        // 0.83.0: a clip that follows the song's tempo plays through one of the stretchers (-1: plays straight, as above)
+        int stretcher = -1;
+        double tempoBpm = 0.0;      // the audio's own tempo
+        double offsetSeconds = 0.0; // where in the audio the clip starts (seconds, from the end when reversed)
+        double fed = 0.0;           // the next frame (counted the way the clip plays) the stretcher is given
     };
 
     void startClip (const AudioEvent& e, double extraSeconds = 0.0) noexcept;
+
+    // 0.83.0: real-time time-stretching for the clips that follow the song's tempo (Signalsmith Stretch, MIT). The stretchers are made
+    // by prepare(), so the audio thread never allocates; a clip that finds none free plays at its own speed.
+    static constexpr int kClipStretchers = 16;
+    static constexpr int kStretchBlock = 64;      // frames made at a time
+    static constexpr double kMaxStretchRate = 8.0; // input frames per output frame, at most (and 1/8 at least)
+    struct ClipStretcher;
+    std::vector<std::unique_ptr<ClipStretcher>> stretchers;
+    std::vector<float> stretchSeekLeft, stretchSeekRight; // the audio a starting stretcher is given in one go
+    // The frame of the clip's audio (counted the way it plays) that sounds at song position `tick`.
+    static double stretchFrameAt (const ClipVoice& v, double tick) noexcept;
+    bool startStretch (ClipVoice& v, int stretcher) noexcept;
+    void fillStretchBlock (ClipVoice& v, ClipStretcher& s) noexcept;
 
     // Plugin instruments (0.17.0): notes become MIDI events at their sample in the 64-sample chunk; the plugin renders the chunk after
     // the voices, so it is as sample-accurate as the built-in instruments. The notes that are sounding are tracked to send their note-offs.
@@ -430,6 +448,7 @@ private:
     float rmsCoef = 0.0001f;
 
     double sampleRate = 48000.0;
+    double stretcherRate = 0.0; // 0.83.0: the sample rate the stretchers were made for
     double ticksPerSampleNow = 0.01; // of the block being rendered: converts a note's length to samples for slides
     double tickPos = 0.0;
     double startPosition = 0.0; // where Stop puts the transport (the last seek)

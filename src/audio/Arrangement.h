@@ -108,13 +108,22 @@ struct AudioClip
     bool muted = false; // 0.60.0: the Playlist's Mute tool
     std::uint8_t launchMode = 0; // 0.71.0: as a pattern clip's (performance mode)
     bool launchSync = false;
+    // 0.83.0: the tempo of the clip's audio (`data`, as it is). Above 0, the clip follows the song's tempo, as FL Studio's
+    // "Stretch" mode: it is time-stretched while it plays (the pitch stays) so that each beat of the audio lasts a beat of the
+    // song, tempo changes and ramps included; its length in ticks then holds the same music at any tempo. 0: it plays at its own
+    // speed, and a change of tempo moves the clip but not the sound in it.
+    double tempoBpm = 0.0;
 
     int endTick() const noexcept { return startTick + lengthTicks; }
+    bool followsTempo() const noexcept { return tempoBpm > 0.0; }
+    // The tempo that turns the audio's seconds into ticks: its own when it follows the song, else the song's (`songBpm`).
+    double audioBpm (double songBpm) const noexcept { return followsTempo() ? tempoBpm : songBpm; }
 
-    // How much audio there is from the clip's start to the end of the file, in ticks at `bpm`. A clip cannot be
-    // made longer than this.
-    int naturalLengthTicks (double bpm) const noexcept
+    // How much audio there is from the clip's start to the end of the file, in ticks at `bpm` (0.83.0: at its own tempo when it
+    // follows the song's). A clip cannot be made longer than this.
+    int naturalLengthTicks (double songBpm) const noexcept
     {
+        const double bpm = audioBpm (songBpm);
         if (data == nullptr || data->sampleRate <= 0.0 || bpm <= 0.0)
             return kTicksPerBeat;
         const double seconds = std::max (0.0, data->numFrames() / data->sampleRate - offsetSeconds);
@@ -239,6 +248,7 @@ struct Arrangement
     std::vector<TempoMarker> tempoMarkers;
     std::vector<TimeMarker> markers; // 0.61.0: sorted by tick (see tidyMarkers)
     TimeSignature meter; // the time signature (0.46.0)
+    std::vector<MeterMarker> meterMarkers; // 0.83.0: time signature changes in the song (see TimeSignature.h), tidy
     // The shortest pattern: 4 quarters, or one bar when the bar is shorter (2/4, 3/4, 6/8) (0.46.0).
     int minPatternBeats() const noexcept { return std::min (kMinPatternBeats, meter.barQuarters()); }
     // The playlist tracks, in order (0.44.0: as many as the project has; names and colours since 0.33.0).
@@ -1170,11 +1180,13 @@ inline Project compileSong (const std::vector<Channel>& channelSettings, const A
         e.reverse = a.reverse;
         e.fadeInSeconds = a.fadeInSeconds;
         e.fadeOutSeconds = a.fadeOutSeconds;
+        e.tempoBpm = a.tempoBpm; // 0.83.0
         events.push_back (std::move (e));
     }
     auto project = Project::make (std::move (channels), songTicks, std::move (tracks), masterSlots,
                                   std::move (events), arrangement.automationClips, std::move (console));
     project.tempoMarkers = tidyTempoMarkers (arrangement.tempoMarkers); // 0.46.0
+    project.meterMarkers = tidyMeterMarkers (arrangement.meterMarkers, arrangement.meter); // 0.83.0
     project.beatsPerBar = arrangement.meter.beats;
     project.beatUnit = arrangement.meter.unit;
     return project;

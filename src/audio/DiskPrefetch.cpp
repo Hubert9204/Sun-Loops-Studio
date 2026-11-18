@@ -17,7 +17,7 @@ void DiskPrefetch::setArrangement (const Arrangement& arrangement, double newBpm
     std::vector<Clip> mapped;
     for (const auto& a : arrangement.audioClips)
         if (a.data != nullptr && a.data->isMapped() && ! a.muted)
-            mapped.push_back ({ a.data, a.startTick, a.endTick(), a.offsetSeconds, a.reverse });
+            mapped.push_back ({ a.data, a.startTick, a.endTick(), a.offsetSeconds, a.reverse, a.tempoBpm });
     {
         const std::scoped_lock guard (lock);
         clips = std::move (mapped);
@@ -50,6 +50,13 @@ int DiskPrefetch::touchAhead (const std::vector<Clip>& list, const std::vector<T
         const double rate = c.data->sampleRate;
         const auto frames = static_cast<double> (c.data->numFrames());
         double f0 = (c.offsetSeconds + (a - start)) * rate, f1 = (c.offsetSeconds + (b - start)) * rate;
+        if (c.tempoBpm > 0.0) // 0.83.0: its audio goes by beats, at its own tempo (plus what its stretcher reads ahead)
+        {
+            const auto audioSeconds = [&] (double songSeconds)
+            { return c.offsetSeconds + (secondsToTick (tempoMarkers, baseBpm, songSeconds) - c.startTick) * 60.0 / (kTicksPerBeat * c.tempoBpm); };
+            f0 = audioSeconds (a) * rate;
+            f1 = (audioSeconds (b) + 0.5) * rate;
+        }
         if (c.reverse) // (the offset counts from the end of the audio)
         {
             const double r0 = frames - 1.0 - f1, r1 = frames - 1.0 - f0;
