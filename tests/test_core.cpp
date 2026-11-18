@@ -4744,24 +4744,30 @@ void testTempo083()
             return crossings / 2.0 / (to - from);
         };
         auto project = compileSong ({}, a);
+        project.lengthTicks = 16 * kBeat; // (longer than the clip: the song does not start again at its end)
         check (project.audioEvents.size() == 1 && project.audioEvents[0].tempoBpm == 120.0, "the song carries the clip's tempo");
         const auto slow = render (project, 60.0, 4.6);
         check (level (slow, 0.0, 0.1) > 0.1 && level (slow, 3.4, 3.8) > 0.1 && level (slow, 4.3, 4.6) < 0.01,
-               "at half the tempo the clip lasts its 4 beats: 4 s instead of 2, from its start, and stops at its end");
+               "at half the tempo the clip lasts its 4 beats: 4 s instead of 2, from its start, and stops at its end (levels "
+                   + std::to_string (level (slow, 0.0, 0.1)) + ", " + std::to_string (level (slow, 3.4, 3.8)) + ", " + std::to_string (level (slow, 4.3, 4.6)) + ")");
         const double f = frequency (slow, 1.0, 3.0);
         check (std::abs (f - 440.0) < 8.0, "and keeps its pitch (" + std::to_string (f) + " Hz)");
 
         a.audioClips[0].tempoBpm = 0.0;
-        const auto plain = render (compileSong ({}, a), 60.0, 3.0);
+        auto plainSong = compileSong ({}, a);
+        plainSong.lengthTicks = 16 * kBeat;
+        const auto plain = render (plainSong, 60.0, 3.0);
         check (level (plain, 2.3, 2.8) < 0.01, "a clip that does not follow plays its 2 s at any tempo, as before");
 
         a.audioClips[0].tempoBpm = 120.0;
         auto ramped = compileSong ({}, a);
+        ramped.lengthTicks = 16 * kBeat;
         ramped.tempoMarkers = { { 4 * kBeat, 60.0, true } }; // from 120 down to 60 BPM over the clip
         const double expected = tickToSeconds (ramped.tempoMarkers, 120.0, 4 * kBeat);
         const auto r = render (ramped, 120.0, expected + 0.6);
         check (level (r, expected - 0.25, expected - 0.05) > 0.1 && level (r, expected + 0.3, expected + 0.6) < 0.01,
-               "through a ramp it lasts exactly its beats (" + std::to_string (expected) + " s)");
+               "through a ramp it lasts exactly its beats (" + std::to_string (expected) + " s; levels "
+                   + std::to_string (level (r, expected - 0.25, expected - 0.05)) + ", " + std::to_string (level (r, expected + 0.3, expected + 0.6)) + ")");
     }
 }
 
@@ -13023,7 +13029,6 @@ void testSamplerPersistence()
 
 // ------------------------------------------------------------------------- 0.17.0: plugin hosting
 
-#ifdef SLS_TEST_PLUGIN_DIR
 const juce::PluginDescription* findPlugin (sls::PluginHost& host, const juce::String& name, const juce::String& format)
 {
     for (const auto& d : host.known().getTypes())
@@ -13035,6 +13040,8 @@ const juce::PluginDescription* findPlugin (sls::PluginHost& host, const juce::St
         }
     return nullptr;
 }
+
+#ifdef SLS_TEST_PLUGIN_DIR
 
 int firstNonZero (const std::vector<float>& x, float threshold = 1.0e-6f)
 {
@@ -14968,7 +14975,9 @@ int main (int argc, char** argv)
     testAutomation080();
     testRecording047();
     testSunBurst();
+#ifdef SLS_TEST_PLUGIN_DIR
     testSunBurstInHost();
+#endif
     testDemoSong();
     testDemoProjects();
     testHexForge();
