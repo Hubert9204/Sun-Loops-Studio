@@ -1403,8 +1403,8 @@ Finishing what earlier releases left half done.
   the file in seconds and samples, gain), zoom from the
   toolbar, Ctrl+wheel or a dragged range, **Fit**, and a horizontal scroll bar.
 - **Cyber-Hub sounds** built into the program (30 system sounds by Hubert, unchanged) in **Browser > Samples >
-  Cyber-Hub** and a **Cyber-Hub Kit** under Drum Kits; see [docs/cyber-hub.md](docs/cyber-hub.md) for the listening
-  analysis and the licence note.
+  Cyber-Hub** and a **Cyber-Hub Kit** under Drum Kits; see `docs/cyber-hub.md` for the listening
+  analysis and the licence note (removed with the theme in 0.22.0).
 - **New demo project** made of Cyber-Hub sounds (112 BPM, Cyber-Hub drums, Desktop login / logout as audio clips).
 - **Start-up sound:** `intro.wav` plays once when the program opens; switch off in *File > Play the start-up sound*.
 
