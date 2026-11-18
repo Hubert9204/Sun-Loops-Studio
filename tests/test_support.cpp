@@ -33,6 +33,7 @@
 #include <spdlog/spdlog.h>
 
 #include "support/CrashHandler.h"
+#include "audio/AsioDrivers.h"
 #include "support/CrashReport.h"
 #include "support/DesktopIntegration.h"
 
@@ -908,6 +909,15 @@ void testDesktopIntegration()
 // it is opened as a real driver would be (without sound hardware it may refuse to start: its answer is shown).
 void testAsioHost()
 {
+    {
+        // 0.77.0: the order ASIO drivers are tried in for the default device (on every system: a pure function)
+        const auto ranked = sls::rankAsioDrivers ({ "ASIO4ALL v2", "FlexASIO", "Focusrite USB ASIO", "Generic Low Latency ASIO Driver",
+                                                    "Voicemeeter AUX Virtual ASIO", "Yamaha Steinberg USB ASIO", "Realtek ASIO" });
+        supportCheck (ranked.joinIntoString ("|") == "Focusrite USB ASIO|Yamaha Steinberg USB ASIO|ASIO4ALL v2|FlexASIO|Generic Low Latency ASIO Driver"
+                                                     "|Voicemeeter AUX Virtual ASIO|Realtek ASIO"
+                          && sls::rankAsioDrivers ({}).isEmpty(),
+                      "the default ASIO driver: an audio interface's own first, generic and virtual ones after (each in installed order)");
+    }
 #if SLS_ASIO
     std::cout << "ASIO drivers (0.76.0)\n";
     const juce::ScopedJuceInitialiser_GUI juceInit;

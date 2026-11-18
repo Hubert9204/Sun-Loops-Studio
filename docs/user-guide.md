@@ -83,10 +83,15 @@ Sun Loops Studio runs on Windows 10 and Windows 11 (64-bit, on Intel and AMD pro
   protected your PC*: click **More info** > **Run anyway**. After that it starts normally.
 - **Shortcuts**: as on Linux (**Ctrl**+Z, **Ctrl**+S...).
 - **Audio**: *Windows Audio* (WASAPI), *DirectSound* and, since 0.76.0, **ASIO** devices in the audio settings (**Audio...**).
-  A new installation starts with *Windows Audio*; *Windows Audio (Exclusive Mode)* or *(Low Latency Mode)* lower the latency.
+  **ASIO is the default** (0.77.0): at the first start the program opens your audio interface's ASIO driver by itself, and only
+  without one (or if none starts) *Windows Audio*; *Windows Audio (Exclusive Mode)* or *(Low Latency Mode)* lower its latency.
   MIDI keyboards work through Windows's own MIDI.
 - **ASIO** (0.76.0): the low-latency driver that comes with most audio interfaces (Focusrite, Steinberg, RME, Behringer,
-  MOTU...). In **Audio...** choose *ASIO* as the audio device type, then your interface's driver as the device. Its **Control
+  MOTU...). At the first start the program tries the ASIO drivers installed on the computer - the interfaces' own first, the
+  generic ones (ASIO4ALL, FlexASIO, Generic Low Latency) and virtual mixers only after them - and uses the first that starts,
+  with the sample rate and buffer size set in the driver; the choice is remembered. If the interface is switched off at a later
+  start, that session uses Windows Audio (inputs closed, as always). To choose another driver, in **Audio...** choose *ASIO* as
+  the audio device type, then the driver as the device. Its **Control
   Panel** button opens the driver's own settings: many ASIO drivers set the buffer size there (the buffer menu and **Auto** then
   say so), and the change is picked up at once. An ASIO driver usually serves one program at a time, so other programs may go
   silent while Sun Loops Studio uses it (choose *Windows Audio* again to share the card). For a computer's built-in sound card,

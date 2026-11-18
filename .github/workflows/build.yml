@@ -122,6 +122,8 @@ jobs:
           Stop-Process -Id $p.Id -Force
           if (Test-Path "$state\crash_last_session.log") { Get-Content "$state\crash_last_session.log"; throw "a crash report was written" }
           if ($command -ne "`"$folder\Sun Loops Studio.exe`" `"%1`"") { throw ".slp files were not registered for the unpacked program" }
+          # 0.77.0: ASIO is tried first; FlexASIO (installed above) cannot start without sound hardware, so Windows Audio follows
+          if (-not (Select-String -Path "$state\logs\session.log" -SimpleMatch 'the ASIO driver "FlexASIO" did not start')) { throw "the ASIO driver was not tried first" }
       # The installer, silently for this user: the files in %LOCALAPPDATA%\Programs, the .slp files opening the installed program,
       # the program starting from there; then the uninstaller, which must take all of it away again.
       - name: Try the installer (install, start, uninstall)

@@ -3,7 +3,10 @@
 
 #include <cmath>
 
+#include "audio/AsioDrivers.h"
 #include "audio/BufferTuning.h"
+
+#include <spdlog/spdlog.h>
 
 namespace sls
 {
@@ -20,6 +23,36 @@ AudioEngine::~AudioEngine()
     deviceManager.closeAudioDevice();
 }
 
+#if JUCE_ASIO
+namespace
+{
+// The first ASIO driver (in rankAsioDrivers' order) that loads and opens: tried on its own, before the device manager opens
+// anything, so that a driver that is installed but not usable (its interface unplugged, say) leaves no trace in the settings.
+juce::String openableAsioDriver()
+{
+    std::unique_ptr<juce::AudioIODeviceType> asio (juce::AudioIODeviceType::createAudioIODeviceType_ASIO());
+    if (asio == nullptr)
+        return {};
+    asio->scanForDevices();
+    const auto drivers = asio->getDeviceNames();
+    if (drivers.isEmpty())
+        return {};
+    for (const auto& name : rankAsioDrivers (drivers))
+    {
+        std::unique_ptr<juce::AudioIODevice> device (asio->createDevice (name, name));
+        if (device == nullptr)
+            continue;
+        const auto error = device->open ({}, juce::BigInteger (3), 0.0, 0); // its own sample rate and buffer size
+        device->close();
+        if (error.isEmpty())
+            return name;
+        spdlog::info ("Audio: the ASIO driver \"{}\" did not start ({})", name.toStdString(), error.toStdString());
+    }
+    return {};
+}
+} // namespace
+#endif
+
 juce::String AudioEngine::initialise (const juce::XmlElement* savedState)
 {
     // 0 inputs, 2 outputs. JUCE picks ALSA or JACK on Linux; PipeWire is reached
@@ -28,7 +61,69 @@ juce::String AudioEngine::initialise (const juce::XmlElement* savedState)
     juce::AudioDeviceManager::AudioDeviceSetup preferred;
     preferred.bufferSize = kDefaultBufferSize;
     preferred.useDefaultInputChannels = false; // no input is opened until the user asks for one (privacy, and less to go wrong)
-    auto error = deviceManager.initialise (2, 2, savedState, true, {}, &preferred);
+    juce::String error;
+    bool opened = false;
+#if JUCE_ASIO
+    // Windows (0.77.0): ASIO is the default. The first start (no saved state) opens the first ASIO driver that works, with its own
+    // sample rate and buffer size (an ASIO driver's buffer is set in its Control Panel); its outputs only, as always. The choice
+    // is then saved like one made in the Audio dialog. Without a usable ASIO driver: Windows Audio, as before.
+    if (savedState == nullptr)
+    {
+        if (const auto driver = openableAsioDriver(); driver.isNotEmpty())
+        {
+            juce::XmlElement asio ("DEVICESETUP");
+            asio.setAttribute ("deviceType", "ASIO");
+            asio.setAttribute ("audioOutputDeviceName", driver);
+            asio.setAttribute ("audioInputDeviceName", driver);
+            asio.setAttribute ("audioDeviceInChans", "0");
+            auto asioSetup = preferred;
+            asioSetup.bufferSize = 0; // the driver's own
+            error = deviceManager.initialise (2, 2, &asio, false, {}, &asioSetup);
+            opened = error.isEmpty() && deviceManager.getCurrentAudioDevice() != nullptr
+                     && deviceManager.getCurrentAudioDeviceType() == "ASIO";
+            asioDefault = opened;
+            if (opened)
+                spdlog::info ("Audio: ASIO by default, driver \"{}\"", driver.toStdString());
+            else
+            {
+                spdlog::warn ("Audio: the ASIO driver \"{}\" did not start ({}): Windows Audio instead", driver.toStdString(), error.toStdString());
+                // Back to the first device type (Windows Audio) for the usual default below.
+                if (auto* type = deviceManager.getAvailableDeviceTypes().getFirst(); type != nullptr && type->getTypeName() != "ASIO")
+                    {
+                        type->scanForDevices();
+                        const auto outputs = type->getDeviceNames (false);
+                        const int index = type->getDefaultDeviceIndex (false);
+                        juce::XmlElement fallback ("DEVICESETUP");
+                        fallback.setAttribute ("deviceType", type->getTypeName());
+                        if (juce::isPositiveAndBelow (index, outputs.size()))
+                            fallback.setAttribute ("audioOutputDeviceName", outputs[index]);
+                        fallback.setAttribute ("audioDeviceInChans", "0");
+                        fallback.setAttribute ("audioDeviceBufferSize", kDefaultBufferSize);
+                        error = deviceManager.initialise (2, 2, &fallback, true, {}, &preferred);
+                        opened = true; // (whatever it answered: the usual path would not do better)
+                    }
+            }
+        }
+        else
+            spdlog::info ("Audio: no usable ASIO driver on this computer: Windows Audio");
+    }
+#endif
+    if (! opened)
+        error = deviceManager.initialise (2, 2, savedState, true, {}, &preferred);
+#if JUCE_ASIO
+    // A saved ASIO driver that does not start now (its interface switched off): JUCE falls back to the default device with its
+    // default inputs; they stay closed, as at a first start.
+    if (savedState != nullptr && savedState->getStringAttribute ("deviceType") == "ASIO" && deviceManager.getCurrentAudioDeviceType() != "ASIO"
+        && deviceManager.getCurrentAudioDevice() != nullptr)
+    {
+        spdlog::warn ("Audio: the saved ASIO driver did not start: {} instead", deviceManager.getCurrentAudioDeviceType().toStdString());
+        auto setup = deviceManager.getAudioDeviceSetup();
+        setup.useDefaultInputChannels = false;
+        setup.inputChannels.clear();
+        setup.bufferSize = kDefaultBufferSize;
+        deviceManager.setAudioDeviceSetup (setup, false);
+    }
+#endif
     if (error.isEmpty())
     {
         deviceManager.addAudioCallback (this);

@@ -103,11 +103,15 @@ Sun Loops Studio funziona su Windows 10 e Windows 11 (64 bit, processori Intel e
   *PC protetto da Windows*: fai clic su **Ulteriori informazioni** > **Esegui comunque**. Dopo si avvia normalmente.
 - **Scorciatoie**: come su Linux (**Ctrl**+Z, **Ctrl**+S...).
 - **Audio**: i dispositivi *Windows Audio* (WASAPI), *DirectSound* e, dalla 0.76.0, **ASIO** nelle impostazioni audio
-  (**Audio...**). Una nuova installazione parte con *Windows Audio*; *Windows Audio (Exclusive Mode)* o *(Low Latency Mode)*
+  (**Audio...**). **ASIO è il predefinito** (0.77.0): al primo avvio il programma apre da solo il driver ASIO della tua scheda
+  audio, e solo senza (o se nessuno parte) *Windows Audio*; *Windows Audio (Exclusive Mode)* o *(Low Latency Mode)* ne
   abbassano la latenza. Le tastiere MIDI funzionano tramite il MIDI di Windows.
 - **ASIO** (0.76.0): il driver a bassa latenza che accompagna la maggior parte delle schede audio (Focusrite, Steinberg, RME,
-  Behringer, MOTU...). In **Audio...** scegli *ASIO* come tipo di dispositivo audio, poi il driver della tua scheda come
-  dispositivo. Il pulsante **Control Panel** apre le impostazioni del driver: molti driver ASIO fissano lì la dimensione del
+  Behringer, MOTU...). Al primo avvio il programma prova i driver ASIO installati sul computer - prima quelli delle schede,
+  quelli generici (ASIO4ALL, FlexASIO, Generic Low Latency) e i mixer virtuali solo dopo - e usa il primo che parte, con la
+  frequenza e il buffer impostati nel driver; la scelta viene ricordata. Se a un avvio successivo la scheda è spenta, quella
+  sessione usa Windows Audio (ingressi chiusi, come sempre). Per scegliere un altro driver, in **Audio...** scegli *ASIO* come
+  tipo di dispositivo audio, poi il driver come dispositivo. Il pulsante **Control Panel** apre le impostazioni del driver: molti driver ASIO fissano lì la dimensione del
   buffer (il menu del buffer e **Auto** allora lo dicono), e la modifica è presa subito. Di solito un driver ASIO serve un solo
   programma alla volta, quindi gli altri programmi possono restare muti mentre Sun Loops Studio lo usa (scegli di nuovo
   *Windows Audio* per condividere la scheda). Per la scheda audio integrata del computer esistono driver ASIO generici gratuiti

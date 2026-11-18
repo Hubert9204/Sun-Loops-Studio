@@ -35,7 +35,11 @@ public:
     // Message thread.
     // Opens the audio device. `savedState` is what createStateXml() returned in an earlier run (or null); without
     // it the default device is used with a buffer of kDefaultBufferSize. Returns an error message, empty on success.
+    // Windows with ASIO (0.77.0): without a saved state, an ASIO driver that opens is the default (in the order of
+    // rankAsioDrivers, AsioDrivers.h); only when there is none, or none opens, the default device of Windows Audio.
     juce::String initialise (const juce::XmlElement* savedState = nullptr);
+    // True after initialise() opened an ASIO driver as the default (Windows).
+    bool startedWithAsioDefault() const noexcept { return asioDefault; }
     juce::AudioDeviceManager& getDeviceManager() noexcept { return deviceManager; }
     juce::String describeDevice() const;
 
@@ -268,6 +272,7 @@ private:
     MidiNoteMapper midiMapper;   // guarded by producerLock
     MidiReceiver midiReceiver { *this };
     juce::MidiDeviceListConnection midiDeviceWatch;
+    bool asioDefault = false; // 0.77.0
     juce::StringArray knownMidiInputs;
     std::array<InputRecorder, kMaxRecordStreams> recorders;
     std::atomic<bool> captureGate { false };      // set once every recorder of a take is armed: they all start in one block
