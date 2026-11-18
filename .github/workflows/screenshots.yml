@@ -21,7 +21,8 @@ jobs:
             pipewire-jack-audio-connection-kit-devel freetype-devel fontconfig-devel libX11-devel libXext-devel \
             libXinerama-devel libXrandr-devel libXcursor-devel libXrender-devel libXcomposite-devel mesa-libGL-devel \
             libcurl-devel ladspa-devel \
-            xorg-x11-server-Xvfb xdpyinfo openbox xdotool ImageMagick google-noto-sans-fonts
+            xorg-x11-server-Xvfb xdpyinfo openbox xdotool ImageMagick \
+            google-noto-sans-fonts google-noto-sans-symbols2-fonts dejavu-sans-fonts # (the symbols: ▾ ◂ ▸ ★)
       - uses: actions/checkout@v4
       # The build folder is kept between runs: only what changed is built again.
       - uses: actions/cache/restore@v4

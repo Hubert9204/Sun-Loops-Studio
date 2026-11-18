@@ -193,8 +193,13 @@ The tests are headless: no audio device and no display. The last line says `ALL 
 only then. See [architecture.md](architecture.md#testing) for what they cover.
 
 The user interface itself is not covered by automated tests. During development it was exercised in a virtual
-display (`Xvfb`) with `xdotool` for mouse and keys and ImageMagick's `import` for screenshots; this is a manual check,
-not part of the repository.
+display (`Xvfb`) with `xdotool` for mouse and keys and ImageMagick's `import` for screenshots; this is a manual check.
+
+**Screenshots** (0.77.1): `scripts/capture_screenshots.sh [build] [folder]` takes the README's pictures the same way - the
+program on a first start (the demo song), its Piano Roll and Mixer, and the four instruments' Standalone versions - from a build
+with `--target SunLoopsStudio SunBurst_Standalone HexForge_Standalone SunSymphony_Standalone SunRiff_Standalone`. It needs Xvfb,
+openbox, xdotool and ImageMagick. `.github/workflows/screenshots.yml` runs it on Fedora when the script changes, or by hand
+(*Actions > Screenshots*), and keeps the pictures as the run's artifact, to be copied into `docs/images/`.
 
 ## Troubleshooting
 
@@ -235,6 +240,12 @@ Since 0.63.0 a second job builds the macOS disk image on a GitHub Mac and adds i
 release; the program on a Mac offers that `.dmg` as its update. Since 0.75.0 a third job builds the Windows installer and zip on a
 GitHub Windows machine (`scripts/build_windows.ps1`) and adds them with `SHA256SUMS-Windows.txt`; the program on Windows offers the
 installer as its update.
+
+Since 0.77.1 every download is attached twice: with the version in its name and without it (`Sun-Loops-Studio-x86_64.AppImage`,
+`Sun-Loops-Studio-macOS.dmg`, `Sun-Loops-Studio-Windows-x64-Setup.exe`, `Sun-Loops-Studio-Windows-x64.zip`), so that
+`https://github.com/Hubert9204/Sun-Loops-Studio/releases/latest/download/<name>` - the README's download links - always gives the
+newest file. The checksum files list both names. For a release published before, *Actions > Release aliases > Run workflow* with
+its tag (`.github/workflows/release-aliases.yml`) adds the names without the version, without building anything.
 
 ## Crash reports and the update check (0.43.0)
 

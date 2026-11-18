@@ -2,196 +2,179 @@
 
 *[Italiano](README.it.md)*
 
-An open source, loop-based music production program for Linux, macOS and Windows, written in C++20 with JUCE 8. You build
-beats and melodies in a **Channel Rack**, write notes in a **Piano Roll**, arrange patterns on a
-**Playlist** (together with audio files and recordings), balance them in a **Mixer** with effects and export the result
-to WAV, MP3, Ogg, AAC, FLAC or AIFF. A **Browser** on the left
-holds your sounds; every other tool lives in a floating panel that you can move, resize, overlap, open and close.
+An open source, loop-based music production program for **Linux, macOS and Windows**, written in C++20 with JUCE 8. You build
+beats and melodies in a **Channel Rack**, write notes in a **Piano Roll**, arrange patterns, audio and automation on a
+**Playlist**, balance them in a **Mixer** with effects and export the result to WAV, MP3, Ogg, AAC, FLAC or AIFF. A **Browser**
+on the left holds your sounds; every other tool lives in a floating panel that you can move, resize, overlap, open and close.
+Four instruments come with it: the **SunBurst** and **HexForge** synthesizers, the **SunRiff** electric guitar and the
+**SunSymphony** orchestral sampler.
 
-![Sun Loops Studio: browser, channel rack and playlist](docs/images/overview.png)
+![Sun Loops Studio with the demo song: browser, Channel Rack and Playlist](docs/images/overview.png)
 
 | | |
 | --- | --- |
-| ![The Piano Roll with a chord progression in A minor](docs/images/pianoroll.png) | ![The mixer with an effect chain on a track](docs/images/mixer.png) |
-| **Piano Roll** - scales, chords, velocity lane, editing tools and generators | **Mixer** - up to 500 tracks, 10 effect slots each, sends, aux buses, VCA groups |
+| ![The Piano Roll](docs/images/pianoroll.png) | ![The Mixer](docs/images/mixer.png) |
+| **Piano Roll** - scales, chords, velocity and event lanes, editing tools, generators | **Mixer** - up to 500 tracks, 10 effect slots each, sends, aux buses, VCA groups |
 | ![SunBurst, the wavetable synthesizer](docs/images/sunburst.png) | ![HexForge, the FM synthesizer](docs/images/hexforge.png) |
-| **SunBurst** - wavetable synthesizer, 101 presets (VST3 and Standalone) | **HexForge** - hybrid FM + subtractive synthesizer, 40 presets (VST3 and Standalone) |
+| **SunBurst** - wavetable synthesizer, 101 presets | **HexForge** - hybrid FM + subtractive synthesizer, 40 presets |
+| ![SunSymphony, the orchestral sampler](docs/images/sunsymphony.png) | ![SunRiff, the electric guitar](docs/images/sunriff.png) |
+| **SunSymphony** - orchestral sampler, 16 parts, 29 downloadable instruments | **SunRiff** - modelled electric guitar with amp and effects, 34 presets |
 
 ## Download
 
-From the [Releases page](https://github.com/Hubert9204/Sun-Loops-Studio/releases/latest):
+The latest release for all three systems ([all files, checksums and older versions](https://github.com/Hubert9204/Sun-Loops-Studio/releases/latest)):
 
-- **Linux**: `Sun-Loops-Studio-<version>-x86_64.AppImage` (see below);
-- **macOS** (since 0.63.0): `Sun-Loops-Studio-<version>-macOS.dmg`, one app for Apple silicon and Intel Macs, macOS 10.15 Catalina or newer (so Intel Macs from 2012 on, such as the Mac mini 2012).
-  Open the disk image and drag **Sun Loops Studio** onto **Applications**. The app is not signed with an Apple Developer
-  certificate, so the first time macOS refuses to open it: right-click (or Control-click) the app > **Open** > **Open**, or
-  *System Settings > Privacy & Security > Open Anyway*. Recording asks once for the microphone.
-- **Windows** (since 0.75.0): `Sun-Loops-Studio-<version>-Windows-x64-Setup.exe`, for Windows 10 and 11 (64-bit). It installs for
-  you alone without an administrator password (or for everyone, if you choose so), adds a Start menu entry and opens `.slp`
-  projects with a double-click. `Sun-Loops-Studio-<version>-Windows-x64.zip` is the same program without installing: unpack it and
-  start `Sun Loops Studio.exe`. The program is not signed with a code-signing certificate, so SmartScreen may stop the first
-  start: **More info** > **Run anyway**. Audio interfaces work through their **ASIO** drivers, the default since 0.77.0 (or Windows Audio).
-  Details: [On Windows](docs/user-guide.md#on-windows-0750).
+| System | Download | Needs |
+| --- | --- | --- |
+| **Linux** | [Sun-Loops-Studio-x86_64.AppImage](https://github.com/Hubert9204/Sun-Loops-Studio/releases/latest/download/Sun-Loops-Studio-x86_64.AppImage) | 64-bit PC, glibc 2.40 or newer (Fedora / Nobara 41+, Ubuntu 24.10+, Debian 13+, Arch...) |
+| **macOS** | [Sun-Loops-Studio-macOS.dmg](https://github.com/Hubert9204/Sun-Loops-Studio/releases/latest/download/Sun-Loops-Studio-macOS.dmg) | macOS 10.15 Catalina or newer; one app for Apple silicon and Intel Macs (from 2012 on) |
+| **Windows** | [Sun-Loops-Studio-Windows-x64-Setup.exe](https://github.com/Hubert9204/Sun-Loops-Studio/releases/latest/download/Sun-Loops-Studio-Windows-x64-Setup.exe) (installer) or [Sun-Loops-Studio-Windows-x64.zip](https://github.com/Hubert9204/Sun-Loops-Studio/releases/latest/download/Sun-Loops-Studio-Windows-x64.zip) (no installation) | Windows 10 or 11, 64-bit |
 
-All of them contain the program, its sounds and its four instruments: the SunBurst and HexForge synthesizers, the SunRiff guitar and the
-SunSymphony orchestral sampler (its orchestra is downloaded from inside it). On Linux:
+These links always give the newest release. On the release page the same files carry the version in their name
+(`Sun-Loops-Studio-<version>-x86_64.AppImage`...), next to `SHA256SUMS*.txt` with their checksums. Every download holds the program,
+its sounds and its four instruments; SunSymphony's orchestra (3 GB) is downloaded from inside it.
+
+**Linux** - make the AppImage executable and start it:
 
 ```bash
-chmod +x Sun-Loops-Studio-*-x86_64.AppImage
-./Sun-Loops-Studio-*-x86_64.AppImage
+chmod +x Sun-Loops-Studio-x86_64.AppImage
+./Sun-Loops-Studio-x86_64.AppImage
 ```
 
-On Fedora / Nobara without FUSE 2, install it once (`sudo dnf install fuse-libs`) or start the AppImage with
-`--appimage-extract-and-run`. The program checks for a newer release a few seconds after it starts (*Help > Check for updates now*
-does it at once; the automatic check can be switched off) and its **Download** button fetches the new AppImage. Releases are
-published since 0.51.0; to build from source see [Quick start](#quick-start-nobara--fedora).
+Without FUSE 2 it does not start: install it once (Fedora / Nobara: `sudo dnf install fuse-libs`; Ubuntu / Debian: `sudo apt
+install libfuse2t64` or `libfuse2`) or start it with `--appimage-extract-and-run`. At its first start it adds itself to the
+applications menu and gives `.slp` project files its icon.
+
+**macOS** - open the disk image and drag **Sun Loops Studio** onto **Applications**. The app is not signed with an Apple Developer
+certificate, so the first time macOS refuses to open it: right-click (or Control-click) the app > **Open** > **Open**, or *System
+Settings > Privacy & Security > Open Anyway* (the only way on macOS 15 Sequoia and newer). Recording asks once for the microphone.
+More: [On a Mac](docs/user-guide.md#on-a-mac-0630).
+
+**Windows** - the installer installs for you alone without an administrator password (or for everyone, if you choose so), adds a
+Start menu entry, opens `.slp` projects with a double-click and can copy the four instruments into the VST3 folder for other
+music programs; *Settings > Apps* uninstalls it. The zip is the same program without installing: unpack it anywhere and start
+`Sun Loops Studio.exe`. The program is not signed with a code-signing certificate, so SmartScreen may stop the first start:
+**More info** > **Run anyway**. Audio interfaces are opened through their **ASIO** driver by default (Windows Audio when there is
+none). More: [On Windows](docs/user-guide.md#on-windows-0750).
+
+The program checks for a newer release a few seconds after it starts (*Help > Check for updates now* does it at once; the
+automatic check can be switched off) and offers the download for your system. To build it yourself see
+[Building from source](#building-from-source).
 
 **Community:** join the [Sun Loops Discord](https://discord.gg/VwzdD6tRNB) to ask questions, report problems and share your music
 (also from the program: *Help > Join the Sun Loops Discord*).
 
-Sun Loops Studio is inspired by the workflow of loop-based DAWs such as FL Studio. It is an independent project
-that uses no code, names, graphics or assets from other products, and it is not affiliated with or endorsed by
-their makers.
+Sun Loops Studio is inspired by the workflow of loop-based DAWs such as FL Studio. It is an independent project that uses no
+code, names, graphics or assets from other products, and it is not affiliated with or endorsed by their makers.
 
-**Status: alpha (0.63.0).** It builds, more than 1,800 automated checks pass and every feature has been exercised in a virtual
-display. The AppImage runs on Nobara; playback was first confirmed on a real Nobara machine with version 0.3. Most of what came
-later (recording, MIDI hardware, plugins, the synthesizers' sound) was tested headless and in a virtual display with a silent audio
-device, and is now being tried on real hardware. **Plugins (VST3, LV2, LADSPA)** work as instruments and as mixer effects since 0.17.0;
-they were tried with small test plugins, the LADSPA examples and the program's own SunBurst, HexForge, SunSymphony and SunRiff, not yet with commercial
-plugins. See [docs/roadmap.md](docs/roadmap.md) for exactly what is and is not verified and what is missing.
+## Status
+
+**Alpha - version 0.77** (November 2026). It is usable for making music, but not yet tried widely on real hardware.
+
+- **Automated tests**: about **2,130 checks** pass on every push on all three systems - Fedora 41, macOS (Apple silicon, and
+  Intel through Rosetta) and Windows - in GitHub Actions. On Windows the continuous integration also starts the program from the
+  zip, installs, starts and uninstalls it with the installer, and loads a real ASIO driver (FlexASIO).
+- **Linux** is where the program was made: the AppImage runs on Nobara and playback was confirmed on a real machine. Most later
+  features (recording, MIDI hardware, plugins, the instruments' sound) were tested headless and in a virtual display with a silent
+  audio device.
+- **macOS** (since 0.63.0) and **Windows** (since 0.75.0, ASIO since 0.76.0) are built from the same code and pass the same tests,
+  but have not yet been tried by hand on real computers; reports are welcome.
+- **Plugins** were tried with small test plugins, the LADSPA examples and the program's own four instruments, not yet with
+  commercial plugins.
+
+What is and is not verified, feature by feature: [docs/roadmap.md](docs/roadmap.md). Changes per version: [CHANGELOG.md](CHANGELOG.md).
 
 ## Features
 
-- **Demo song** (0.52.0) - on its first start the program opens with "Sunrise Drive", 44 bars of synthwave that use SunBurst and HexForge, the
-  sampled piano, bass and drums, the four synth engines, audio clips, insert effects, aux buses, VCA groups, a sidechain, automation
-  and tempo changes. Press Space; *File > Open the demo song* brings it back. What plays where: [the user guide](docs/user-guide.md#projects).
-- **Floating panels** - Channel Rack, Playlist, Piano Roll and Mixer. Drag by the title bar, resize from the
-  edges, close with the x, double-click the title to maximise. Panels overlap; clicking one raises it.
-  `F5` / `F6` / `F7` / `F9` open, raise or close the Playlist / Rack / Piano Roll / Mixer. The layout is remembered.
-- **Browser** (left sidebar, `F8` folds it away) - a tree with *Samples*, *Drum Kits*, *Instruments*, *Presets* and
-  *Plugin*, a quick-search box, and drag-and-drop (or double-click) of sounds onto a channel of the Channel Rack.
-  Your own files live in `~/Music/Sun Loops Studio/`.
-- **Channel Rack** - up to 32 channels, each a synth, a sampler or a drum machine. 16th-note step sequencer as in FL Studio
-  (0.31.0): every new channel starts with squares (left click writes, right click erases); the grid is exactly the pattern - one bar
-  of 4/4, 16 steps, in a new project - and the **-** / **+** buttons of the rack take away or add **one quarter** at a time (0.42.0); as soon as the Piano Roll
-  writes other notes the row shows their preview (a click opens the Piano Roll), and clearing them brings the squares back. Per channel: volume, pan, a **Pitch** knob (semitones) and a **Swing** knob, and a
-  **Track N** display that sends the channel to a mixer track. Right-click a channel for *Piano roll*, *Instrument*,
-  *Load sample...*, *Rename...*, *Clone*, *Move up / down*, *Delete*, *Assign free mixer track*, *Save as preset...*.
-- **Piano Roll** - for the selected channel: click to add a note, drag to move, drag the right edge to resize,
-  right-click to delete, scroll and zoom. Opens from a channel (menu or double-click), as in FL Studio. **Since 0.23.0**: selections
-  (a drag on empty cells draws a selection rectangle since 0.44.0; Ctrl+A), copy / paste / duplicate (also between channels' piano rolls), moving with the arrow keys, snap from bars to 1/32 and triplets, a **scale** shown on
-  the grid (with snap to scale), **chords placed with one click**, a **velocity lane**, editing tools (quantize, humanize, legato,
-  staccato, strum, arpeggiate, chop, flip, velocity ramps) and **generators** of chord progressions and basslines (also following the
-  chords of another channel).
-- **FL Studio projects** (0.34.0) - *File* opens a .flp as a new project (tempo, channels and their samples, pattern notes, the
-  playlist, track names and colours) and exports one; the native format stays .slp. Written for this program, no FL Studio code.
-- **Typing keyboard** (0.32.0) - the computer keyboard plays the selected channel: A S D F... from C5 (note names as in FL
-  Studio, MIDI 60 = C5), Z / X for the octave, C / V for the velocity; recorded by Rec notes like a MIDI keyboard.
-- **Loop Starter** (0.30.0) - a starting loop in one of ten genres (house, techno, hip-hop, trap, drum & bass, pop, lo-fi,
-  reggaeton, rock, synthwave): drums, bass, chords and a melody that fit together, in the key you choose, at the genre's tempo, with the
-  built-in sounds, as a new pattern. Made by rules and chance (no AI, nothing online); each variation is different.
-- **Patterns and Playlist** - several patterns (new, cloned, renamed or deleted from buttons above the playlist), arranged
-  as clips on tracks (0.44.0: 4 free tracks plus one per pattern, added automatically with each new pattern, and **-** / **+** to
-  remove or add tracks by hand, up to 128; each with its own name and colour, and clips may lie over each other: 0.33.0); patterns are 4 to 64 quarters long, each with its own length (0.56.0), and pattern clips move by grid squares (or freely with Alt), so they can start out of step with each other (0.42.0); the Select tool drags a rectangle that selects several clips (0.59.0) to move, copy or delete together, a right-button drag erases every clip it passes over (0.57.0), the Mute tool silences a clip without deleting it and the Slip tool moves what plays inside a clip (0.60.0); every track has M / S switches (0.60.0). A *Pattern / Song* switch chooses between looping the selected pattern and playing the whole
-  playlist. **Click the ruler to move the playhead, even while playing; right-drag on it to draw a loop region** (right-click it to move, resize or delete it).
-- **Audio in the Playlist** - drag audio files (`.wav .aiff .flac .ogg .oga .mp3 .aac`) or video files (their sound
-  track) from the file manager onto the Playlist: they become clips with a waveform. **Select, Split, Cut, Erase and Zoom
-  tools**, trimming from both edges, a grid down to one tick, undo/redo and a ruler in minutes:seconds.milliseconds
-  with a readout of the time under the mouse let you work on a take precisely. AAC and video sound need `ffmpeg` installed.
-- **Recording** - the **Record** button records a microphone or an instrument into the playlist track you choose, in
-  time with the song; **since 0.36.0** several tracks at once, each from its own input (mono or a stereo pair), and from the
-  start marker (punch-in); **since 0.47.0** with a count-in, one take per pass of a loop region, or punch-out. **MIDI keyboards** play the selected channel, and **Rec notes** writes what they play into the piano roll
-  (quantized) so you can make patterns; a take can also become a new sampler channel. Set up in **Audio...**.
-- **Built-in sounds** (0.22.0) - a sampled **Grand Piano** (Salamander, 4 velocity layers), a sampled **Electric Bass** (Growlybass,
-  4 velocity layers, plus a staccato version), two sampled **acoustic drum kits** (from the DrumGizmo recordings: Acoustic Studio and
-  Acoustic Rock, 16 pieces with up to 4 velocity layers), three **electronic kits** and a **hand percussion** kit made by the
-  program's code, all with velocity layers and in the General MIDI drum order. Presets > Factory > Keys / Bass; Drum Kits in the
-  browser and in the drum machine's *Load kit...* menu. The demo song plays them; a start-up sound plays when the program opens
-  (switch it off in the File menu). Licenses: [resources/sounds/README.md](resources/sounds/README.md).
-- **MIDI import, legato and slide, note undo** - a Standard MIDI File (File menu, or dropped on the Playlist) becomes new
-  channels and patterns; notes can be joined with **legato** or a pitch **slide** (Shift+click in the Piano Roll); **Ctrl+Z / Ctrl+Y**
-  undo and redo any edit (notes, channels, kits, mixer, patterns; the Playlist also has its own clip undo).
-- **Safety** - autosave every minute, recovery after a crash, a `.bak` of the previous version, and *Export project with samples* to move a
-  project to another computer.
-- **Metronome** - a click with adjustable tempo (and tap tempo) and volume, on its own button.
-- **Time signature and tempo changes** (0.46.0) - 2/4 to 7/4, 6/8 and 12/8 for the bars, the grid and the metronome's accent; tempo
-  changes in the song (steps, like FL Studio's tempo markers) shown as flags in the ruler and followed by Song mode and exports.
-- **Mixer** (`F9`) - 8 vertical tracks to start with and up to **500** (0.29.0: the **+** after the last track adds more), each with a fader and dB read-out, stereo balance, mute, solo, a Peak/RMS
-  meter and 10 insert-effect slots (0.45.0; with effect-chain presets) (14 built-in effects with presets: Equalizer, Parametric EQ, Filter, Compressor, Maximizer, Transient, Overdrive, Chorus, Phaser, Reverb with Hall/Room/Plate, Delay with Stereo/Ping-pong/Tape, Time Shaper (like Gross Beat), Pitch Corrector (like Pitcher), Stereo Imager; each with bypass), two **sends** (pre or post fader)
-  and two **VCA** switches. Two **aux buses** with their own effects and two **VCA groups** sit beside the tracks. The master strip on the
-  right has the same 10 effect slots, applied to the whole mix. The Compressor has a **sidechain** input from any track (0.45.0). Several channels can share a track.
-  **Since 0.70.0**: Frequency Shifter, Vintage Chorus, Vintage Phaser, Effector (ten effects on an X / Y pad), Grains (granular),
-  the Envelope and Formula Controllers (beside the Peak Controller), a **mix knob on every slot**, pre-fader sends, eight sends per
-  track, a track delay, strip colours and delay compensation on the aux buses too. **Since 0.74.0**: Hyper Chorus, Scratcher,
-  **Patcher** (ten effects in one slot, in series or in parallel), a second target for every controller, strip icons, docking
-  and separators.
-- **Synth** - every synth channel can switch from the classic sine to a **subtractive synth**: two band-limited oscillators and noise, a 12 or
-  24 dB filter with its own envelope, an amplitude envelope and an LFO, or to an **FM synth** with four operators and a modulation matrix
-  (feedback, eight classic algorithms), to an **additive synth** (0.24.0: up to 64 harmonics, two timbres with formants and a morph
-  between them, a filter acting on the harmonics so it never aliases) or to a **physical model** (0.24.0: a plucked string with damping,
-  stiffness and a wooden body; marimba, vibraphone, glass, bell, metal plate) or (0.74.0) to a **drum synth** (kick, snare, tom,
-  clap, hi-hat, cymbal: pitch sweep, noise, click, drive, playable on the keys, as Fruit Kick / Drumaxx); 38 ready-made sounds,
-  grouped by engine (also as browser presets). The sampler (0.74.0) also plays its sample as **grains** (as the Granulizer) or
-  along a **travel curve** (as Wave Traveller), has an envelope for each of pan, cutoff, resonance and pitch, and a **speech
-  synthesizer** turns a typed text into its sample.
-- **SunBurst** (0.48.0) - a polyphonic synthesizer plugin (VST3 and Standalone) included with the program: three oscillators with
-  band-limited wavetables and up to 16 unison voices ("fat saw"), sub and noise, a multimode filter, three envelopes, three LFOs,
-  a 16-slot modulation matrix, four macros, distortion / EQ / filter / chorus / delay / reverb, an arpeggiator, a hardware-style
-  window and 101 presets (leads, pads, strings, basses, arps, plucks, keys, FX). Browser > Instruments > SunBurst.
-- **HexForge** (0.50.0) - a hybrid FM + subtractive synthesizer plugin (VST3 and Standalone) for aggressive, metallic sounds:
-  six operators with 32 band-limited waves and two drawable / loadable spectral waves, a 6 x 6 FM matrix in one panel, a
-  Moog-style ladder filter with its own envelope and LFO, unison, pitch drop, effects and 40 presets (neuro, reese, dubstep,
-  DnB, cyberpunk, dark synth, industrial, metal FX). Browser > Instruments > HexForge.
-- **SunSymphony** (0.66.0, preview) - the orchestral sampler plugin (VST3 and Standalone) in the making: 16 parts on the 16 MIDI
-  channels, 128 voices, SFZ instruments (zones, velocity layers, round robins, loops), Hermite interpolation. Its Library page (0.67.0)
-  downloads 29 orchestral instruments (3 GB, free CC0 sounds from Versilian Studios) with one click. Browser > Instruments > SunSymphony.
-- **SunRiff** (0.68.0) - an electric guitar plugin (VST3 and Standalone) with FL Slayer's controls: physically modelled strings
-  (electric, slap, bass, fretless), a pickup you drag between bridge and neck, chord, strum, power-chord and solo-slide modes, a
-  tube amp with feedback into the strings, four cabinets, 15 effects and 34 presets. Browser > Instruments > SunRiff.
-- **Plugins** - VST3, LV2 and LADSPA instruments and effects: scan them from the browser, double-click or drag an instrument for a channel,
-  pick an effect in a mixer slot, open the plugin's own window; their settings are saved in the project, and a missing plugin keeps them.
-- **Automation** - right-click a volume, pan, fader or effect parameter > *Create automation clip*; clips live on the automation lanes
-  under the playlist tracks (4 to start with, up to 32 since 0.69.0) and have a point editor (linear / hold / smooth lines). Song mode only. **Since 0.35.0** also the parameters of
-  VST3 / LV2 / LADSPA plugins, chosen from a filterable list with the one last moved in the plugin's window already selected.
-  **Since 0.47.0** also sends, aux buses and VCA groups, and the controls move with their automation while the song plays.
-- **Stretch and pitch** - right-click an audio clip: make it longer or shorter without changing its pitch, shift its pitch without changing its length,
-  or match a loop to the project tempo (Signalsmith Stretch).
-- **Sampler and SoundFonts** - envelope (ADSR), loop, low / high / band-pass filter and root key per sampler channel; **SoundFont 2 (.sf2)** presets and (since 0.41.0) **SFZ** instruments
-  played as multi-sample zones; the sample editor's slices become a sampler channel with one note per slice.
-- **Slicer** (0.37.0) - a loop cut into slices as in Slicex (by sound, by grid or in equal parts), one key per slice, each with its
-  own pitch, level, pan and direction, and the notes that play it following the project's tempo.
-- **Pitch editor** (0.38.0) - a sung or played line as notes over its pitch curve (as Newtone): move notes, tune them to the key
-  or a scale, save the tuned audio, or turn the line into notes of a channel.
-- **Stems** (0.39.0) - a mix split into drums, bass and the rest by signal processing (no AI), the three adding up to the original.
-- **Helios** (0.40.0) - F1: ask how to do something in English or Italian; it searches the built-in manual and runs commands, offline.
-- **Helios LLM mode** (0.64.0) - tick *LLM mode* and Helios becomes a chat: a language model (Google's Gemma 4, downloaded once,
-  2.8 or 4.6 GB) that runs on your computer, answers from the manual in your language and never touches the project.
-- **Demo projects** (0.65.0) - three finished songs in the browser's *Demo Projects* folder (synthwave, melodic techno, lo-fi hip hop),
-  each a complete arrangement with its mix, effects and automation to take apart; project files show the program's icon.
-- **Crash reports and updates** (0.43.0) - a session log (spdlog, rotated at 5 MB); after a crash (SIGSEGV, SIGABRT, SIGFPE...) the next start
-  offers to send an anonymous report with the stack trace and system to GitHub as an issue (or to show it first, or to delete it); a
-  background check for a newer release (Semantic Versioning), which can be switched off. Nothing is sent without a click.
-- **Drum machine** - a channel with 16 pads (notes 36 to 51): up to four sound layers per pad chosen by velocity, level, pan, tuning, swing and
-  choke groups per pad, a step sequencer with a row per pad, drag-and-drop from the browser, and kits saved as folders (`kit.json` + sounds).
-- **Sample editor** - right-click an audio clip or a sampler channel > *Edit sample...*: waveform with zoom and selection, preview with a live spectrum,
-  cut / crop / silence / reverse / invert / gain / normalise / fades / DC removal with undo, noise reduction (spectral gating), and slicing a clip at detected hits
-  or equal parts. The result is saved as a new WAV file; the original is never touched.
-- **Meters** - loudness in LUFS (momentary, short-term, integrated, range; EBU R128), true peak, spectrum analyser, goniometer and correlation.
-- **Sampler** - loads WAV, FLAC, OGG and AIFF files (up to 30 s), plays them one-shot, repitched by note.
-  Kick, snare and hat are synthesised, so you need no sample files to start.
-- **Projects** - `File` menu and `Ctrl+N` / `Ctrl+O` / `Ctrl+S` / `Ctrl+Shift+S`: *Save* writes a named project;
-  a project that has no name yet is saved at once under an automatic name (`Untitled <date time>.slp`) in
-  `~/Music/Sun Loops Studio/Projects`, so nothing is lost; *Save as...* asks for a name. Open recent, a title bar
-  that shows the name and `*` for unsaved changes, and a prompt before closing with unsaved work. Samples are
-  referenced by path, not copied into the file.
-- **Export** - *File > Export audio*: the pattern or the song as WAV, AIFF, FLAC (lossless) or MP3, Ogg Vorbis
-  (`.ogg` / `.oga`), AAC (lossy), rendered by the same engine that plays it; since 0.45.0 with a choice of sample rate (44.1 - 96 kHz),
-  bit depth (16 dithered, 24, 32 float) or bit rate, title and artist tags, and **stems** (one file per mixer track). MP3 and AAC need `ffmpeg`.
-- **Audio** - device selection, an adjustable **buffer size** (default 1024 samples) and an **Auto** button that tests
-  your computer and picks a size that does not crackle, plus a read-out of load and dropped blocks. The choice is
-  remembered.
+### Making music
 
-## Quick start (Nobara / Fedora)
+- **Channel Rack** - up to 32 channels, each a synth, a sampler, a drum machine, a layer of other channels or a plugin. A
+  16th-note step sequencer as in FL Studio, with a graph editor per step (velocity, pan, release, fine pitch, mod X / Y, shift), groups,
+  colours, icons, per-channel volume, pan, pitch, swing and a mixer track.
+- **Piano Roll** - draw, paint, mute, slice and playback tools, selections; snap from bars to 1/32 and triplets; a **scale** on the grid,
+  **chords** in one click, **velocity** and event lanes (pan, release, fine pitch, mod X / Y), quantize, humanize, legato,
+  strum, arpeggiate, chop, flip, glue, flam, claw machine, and **generators** of chord progressions and basslines. Typing keys
+  and MIDI keyboards play and record into it.
+- **Patterns and Playlist** - patterns of their own length, arranged on a Playlist in three sections (**Audio**, **Patterns**,
+  **Automation**) with draw, paint, delete, mute, slip, slice, cut, select, playback and zoom tools, time markers, a loop region, track
+  mute / solo, icons and colours. *Pattern* or *Song* playback.
+- **Audio clips and recording** - drag audio (`.wav .aiff .flac .ogg .oga .mp3 .aac`) or the sound of a video onto the Playlist;
+  stretch and pitch them (Signalsmith Stretch), edit them in the **sample editor** (cut, fades, reverse, normalise, noise
+  reduction, slicing). **Record** several inputs at once into the playlist, with count-in, loop takes, punch in / out, and MIDI
+  notes in overdub or replace.
+- **Automation** - clips for any volume, pan, fader, send, effect or plugin parameter, with a point editor; tempo changes and
+  time signatures from 2/4 to 12/8.
+- **Performance mode** - the Playlist's clips as cells to launch live (loop, one shot, hold), from the mouse or MIDI pads.
+- **Loop Starter** - a starting loop in one of ten genres (drums, bass, chords and melody), made by rules and chance, offline.
+- **FL Studio and MIDI files** - open and export `.flp` projects (written for this program, no FL Studio code); import Standard
+  MIDI Files. The native format is `.slp`.
+
+### Sound
+
+- **Built-in synth engines** - subtractive, 4-operator FM, additive, physical modelling (strings, mallets, bells) and a **drum
+  synth** (kick, snare, tom, clap, hi-hat, cymbal), with ready-made sounds.
+- **Sampler** - ADSR and per-target envelopes, two LFOs, filters, loops, reverse, **granular** and **travel-curve** play modes, a
+  **speech synthesizer** that turns typed text into a sample; **SoundFont 2** and **SFZ** instruments; a **slicer**; a **drum
+  machine** with 16 pads and velocity layers; a **pitch editor** for sung lines; **stems** (drums, bass, the rest) by signal
+  processing.
+- **Built-in sounds** - a sampled Grand Piano and Electric Bass, two sampled acoustic drum kits, three electronic kits and a hand
+  percussion kit ([licences](resources/sounds/README.md)).
+- **Mixer** - 8 to 500 tracks, each with fader, pan, stereo separation, polarity, mute / solo, meters, **10 effect slots** with a
+  mix knob, 8 sends (pre or post fader), free routing, a track delay and plugin delay compensation; two aux buses and two VCA
+  groups; a master strip.
+- **36 built-in effects and controllers** - EQs, filters, compressors and a multiband compressor, maximizer, gate, overdrive,
+  wave shaper, chorus, flanger, phaser and their vintage versions, delays, reverbs and a convolution reverb, vocoder, pitch
+  corrector, time shaper, scratcher, granular, frequency shifter, stereo imager, the **Patcher** (ten effects in one slot) and
+  peak, envelope and formula controllers. With presets and chain presets.
+- **Meters** - loudness in LUFS (EBU R128), true peak, spectrum, goniometer and correlation.
+- **Export** - the pattern or the song as WAV, AIFF, FLAC, MP3, Ogg Vorbis or AAC, 44.1 - 96 kHz, 16 / 24 / 32-bit, with tags,
+  and **stems** (one file per mixer track). MP3 and AAC need `ffmpeg`.
+
+### The four instruments
+
+| Instrument | What it is |
+| --- | --- |
+| **SunBurst** (0.48.0) | Polyphonic wavetable synthesizer: 3 oscillators with up to 16 unison voices, sub and noise, multimode filter, 3 envelopes, 3 LFOs, a 16-slot modulation matrix, 4 macros, effects, arpeggiator, 101 presets |
+| **HexForge** (0.50.0) | Hybrid FM + subtractive synthesizer for aggressive, metallic sounds: 6 operators, 32 waves plus 2 drawable spectral waves, a 6 x 6 FM matrix, ladder filter, unison, effects, 40 presets |
+| **SunSymphony** (0.66.0, preview) | Multitimbral orchestral sampler: 16 parts on the 16 MIDI channels, 128 voices, SFZ instruments; its Library page downloads 29 orchestral instruments (3 GB, CC0 sounds by Versilian Studios) with one click |
+| **SunRiff** (0.68.0) | Electric guitar with FL Slayer's controls: physically modelled strings, a movable pickup, chord, strum, power-chord and slide modes, a tube amp, 4 cabinets, 15 effects, 34 presets |
+
+**How they are built.** Each instrument is a plugin of its own, not code compiled into the program: `CMakeLists.txt` makes each
+with `juce_add_plugin(... FORMATS VST3 Standalone)`, which gives two CMake targets per instrument - `SunBurst_VST3` and
+`SunBurst_Standalone` (likewise `HexForge_*`, `SunSymphony_*`, `SunRiff_*`) - switched on by default with `SLS_BUILD_SUNBURST`,
+`SLS_BUILD_HEXFORGE`, `SLS_BUILD_SUNSYMPHONY` and `SLS_BUILD_SUNRIFF`. Building the program (`SunLoopsStudio`) builds the four
+**VST3** plugins too, and the program loads them like any other VST3 plugin, from next to itself and without a scan (Browser >
+Instruments). Their DSP code is also compiled into the test program, to be tested headless.
+
+- **In the downloads**: the four **VST3** plugins - inside the AppImage (`usr/lib/vst3`), inside the Mac app
+  (`Contents/PlugIns/VST3`) and in the Windows program's `VST3` folder (the installer can also copy them into the system's VST3
+  folder for other music programs). The **Standalone** versions are not in the downloads.
+- **From source**: `cmake --build build --target SunBurst_Standalone` (or `HexForge_Standalone`...) makes the Standalone program,
+  in `build/SunBurst_artefacts/Release/Standalone/`; the VST3 bundles are in `build/<Instrument>_artefacts/Release/VST3/`, ready
+  to copy into another program's VST3 folder (`~/.vst3` on Linux).
+
+### Help, safety and the rest
+
+- **Helios** (F1) - ask how to do something in English or Italian: it searches the built-in manual and runs commands, offline.
+  **LLM mode** turns it into a chat with a language model (Google's Gemma 4, downloaded once) that runs on your computer and
+  never touches the project.
+- **Demo song and demo projects** - "Sunrise Drive" opens on the first start; three more finished songs are in the browser.
+- **Plugins** - hosts VST3 and LV2 on every system, LADSPA on Linux and Audio Units on macOS, as instruments and as effects, with
+  a Plugin picker and their settings saved in the project.
+- **Safety** - autosave every minute, recovery after a crash, a `.bak` of the previous version, *Export project with samples*.
+- **Crash reports and updates** - after a crash the next start offers to send an anonymous report (stack trace and system) as a
+  GitHub issue; a background check for newer releases. Nothing is sent without a click.
+- **Audio** - ALSA, JACK and PipeWire on Linux, Core Audio on macOS, ASIO, Windows Audio (WASAPI) and DirectSound on Windows; an
+  adjustable buffer with an **Auto** button that finds a size that does not crackle; MIDI keyboards switched on as they are
+  plugged in.
+- **Interface** - FL Studio's layout of menus, toolbar and panels; F5 / F6 / F7 / F8 / F9 for Playlist, Channel Rack, Piano Roll,
+  Browser and Mixer; the computer keyboard as a piano; a saved layout.
+
+Everything above is described in detail in the [user guide](docs/user-guide.md) ([Italiano](docs/user-guide.it.md)).
+
+## Building from source
+
+On Nobara / Fedora:
 
 ```bash
 git clone https://github.com/Hubert9204/Sun-Loops-Studio.git
@@ -202,10 +185,11 @@ cmake --build build
 ./build/SunLoopsStudio_artefacts/Release/"Sun Loops Studio"
 ```
 
-The first configure downloads JUCE 8.0.4 (needs network once). To install into your menu:
-`cmake --install build --prefix ~/.local`. To make a single-file **AppImage** (`dist/Sun-Loops-Studio-<version>-x86_64.AppImage`):
-`./scripts/build_appimage.sh`. More detail, other distributions and troubleshooting:
-[docs/building.md](docs/building.md).
+The first configure downloads JUCE 8.0.4, spdlog, nlohmann/json and llama.cpp (needs network once). `cmake --install build
+--prefix ~/.local` installs it into your menu; `./scripts/build_appimage.sh` makes the AppImage. On a Mac
+`./scripts/build_macos.sh` makes the universal `.dmg`; on Windows `scripts\build_windows.ps1` makes the installer and the zip
+(Visual Studio with its Clang, and Inno Setup). Every dependency, other distributions, the CMake options and troubleshooting:
+[docs/building.md](docs/building.md) ([macOS](docs/building.md#macos-0630), [Windows](docs/building.md#windows-0750)).
 
 Press **Space** to play, **F5 / F6 / F7 / F9** to show panels and **F8** for the browser. A guided tour is in
 [docs/user-guide.md](docs/user-guide.md).
@@ -215,10 +199,14 @@ Press **Space** to play, **F5 / F6 / F7 / F9** to show panels and **F8** for the
 | Document | Contents |
 | --- | --- |
 | [docs/user-guide.md](docs/user-guide.md) | How to use every panel, shortcuts, limits ([Italiano](docs/user-guide.it.md)) |
-| [docs/building.md](docs/building.md) | Dependencies, build, install, tests, troubleshooting |
+| [docs/building.md](docs/building.md) | Dependencies, build on Linux, macOS and Windows, install, tests, releases, troubleshooting |
 | [docs/architecture.md](docs/architecture.md) | Threads, real-time rules, data flow, patterns and playlist, panels, tests |
 | [docs/roadmap.md](docs/roadmap.md) | What is verified, what is not, what comes next |
+| [docs/fl-studio-alignment.md](docs/fl-studio-alignment.md) | Every module compared with its FL Studio counterpart |
 | [CHANGELOG.md](CHANGELOG.md) | Changes per version |
+
+The screenshots on this page are made by [scripts/capture_screenshots.sh](scripts/capture_screenshots.sh) in a virtual display
+(the *Screenshots* workflow runs it).
 
 ## Tests
 
@@ -226,27 +214,35 @@ Press **Space** to play, **F5 / F6 / F7 / F9** to show panels and **F8** for the
 ./build/SunLoopsStudioTests_artefacts/Release/SunLoopsStudioTests
 ```
 
-Headless (no audio device or display needed), more than 2,100 checks at 0.74.0. They cover, among other things, synth pitch and
-sample-exact timing, every instrument and effect, that `Player::render` never allocates (effects included), a concurrent stress test of
-the UI-to-audio hand-over, the project file (round trip, damaged and hostile files, missing samples, atomic writing), FL Studio and MIDI
-import, export to every format, recording, automation, tempo changes, the plugin host, SunBurst and HexForge (presets, voices,
-filters, effects, saved state), SunSymphony (engine, library catalog and downloads), SunRiff (tuning, playing modes, amp and effects) and the update check. GitHub Actions builds the program on Fedora and runs them on every push.
+Headless (no audio device or display needed); about 2,130 checks at 0.77.0. They cover, among other things, synth pitch and
+sample-exact timing, every instrument and effect, that `Player::render` never allocates, a concurrent stress test of the
+UI-to-audio hand-over, the project file (round trip, damaged and hostile files, missing samples, atomic writing), FL Studio and
+MIDI import, export to every format, recording, automation, tempo changes, the plugin host, the four instruments, crash reports
+(in a child process, on each system), the update check and, on Windows, ASIO. GitHub Actions runs them on every push on Fedora,
+macOS and Windows.
 
 ## License
 
 Since 0.34.0 Sun Loops Studio is free software under the **GNU Affero General Public License, version 3** (AGPLv3,
 [LICENSE](LICENSE)); versions 0.17.0 to 0.33.0 were published under the GNU GPL version 3 and versions up to 0.16.0 under MIT.
-JUCE 8, which the program is built on, is itself offered for free under the AGPLv3, so the two now match. The program and its
-AppImage can be shared as long as the source comes with them; if you change the program and let people use it over a network
+JUCE 8, which the program is built on, is itself offered for free under the AGPLv3, so the two match. The program and its
+downloads can be shared as long as the source comes with them; if you change the program and let people use it over a network
 (for example a remote control), you must offer them the source of your version too (section 13 of the license).
 
 The FL Studio project support (`src/library/FlpFile.*`, `FlpProject.*`) is code written for this program under the same
 license; it uses no FL Studio code or library, only the file layout as documented by the free-software community.
 
-`third_party/signalsmith` holds Signalsmith Stretch and Signalsmith Linear, both MIT-licensed (their licences and the exact revisions are in that folder).
-`third_party/tinysoundfont` holds TinySoundFont's `tsf.h` (MIT), used only to read SoundFont files.
-Helios's helper `sun-loops-helios` is built with llama.cpp (MIT; its licence is in `third_party/llama.cpp` and goes with every copy of the
-helper). The Gemma 4 models (Google, Apache License 2.0) are not part of the program: LLM mode downloads them from Hugging Face when asked.
-The built-in recordings keep their own licenses: Salamander Grand Piano by Alexander Holm (CC BY 3.0), Growlybass by Karoryfer Lecolds
-(CC0), DrumGizmo MuldjordKit by Lars Muldjord and DRSKit by the DrumGizmo team (CC BY 4.0); see
+Third-party code:
+
+- `third_party/signalsmith` - Signalsmith Stretch and Signalsmith Linear (MIT; licences and revisions in that folder).
+- `third_party/tinysoundfont` - TinySoundFont's `tsf.h` (MIT), used only to read SoundFont files.
+- Helios's helper `sun-loops-helios` is built with llama.cpp (MIT; its licence is in `third_party/llama.cpp` and goes with every
+  copy of the helper). The Gemma 4 models (Google, Apache License 2.0) are not part of the program: LLM mode downloads them
+  from Hugging Face when asked.
+- Windows only: Steinberg's **ASIO SDK** (used under the GPLv3; ASIO is a trademark of Steinberg Media Technologies GmbH) and
+  **libcurl** (curl licence) are built in; their licences are shipped next to the program (`LICENSE-ASIO-SDK.txt`,
+  `LICENSE-curl.txt`).
+
+The built-in recordings keep their own licenses: Salamander Grand Piano by Alexander Holm (CC BY 3.0), Growlybass by Karoryfer
+Lecolds (CC0), DrumGizmo MuldjordKit by Lars Muldjord and DRSKit by the DrumGizmo team (CC BY 4.0); see
 [resources/sounds/README.md](resources/sounds/README.md) and [tools/sounds](tools/sounds/README.md) for how they were prepared.

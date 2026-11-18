@@ -58,8 +58,8 @@ shot() {
     echo "wrote $out/$2 ($(identify -format '%wx%h' "$out/$2"))"
 }
 key() { xdotool key --clearmodifiers "$@"; sleep 1; }
-click() { xdotool mousemove "$1" "$2" click "${3:-1}"; sleep 1; }
-doubleclick() { xdotool mousemove "$1" "$2" click --repeat 2 --delay 120 1; sleep 1; }
+# A click at $2, $3 inside window $1.
+click_in() { xdotool mousemove --window "$1" "$2" "$3" click 1; sleep 1; }
 
 # --- Sun Loops Studio ---------------------------------------------------------------------------------------------------
 "$app" >/dev/null 2>&1 &
@@ -71,15 +71,18 @@ sleep 6 # the demo song, the built-in plugins and the sounds load
 # The main window as it opens: browser, Channel Rack and Playlist with the demo song.
 shot "$main" overview.png
 
-# The Piano Roll (F7) on the demo's "Pad" pattern, which holds SunBurst Pad's chords.
-key F7
-shot "$main" pianoroll.png
-key F7
-
-# The Mixer (F9) with the demo's mix.
+# The Mixer (F9) with the demo's mix: the selected channel (Drums) shows its track's three effects on the right.
 key F9
 shot "$main" mixer.png
 key F9
+
+# The Piano Roll (F7) on the Piano channel's own pattern: select the Piano channel (a click on its strip's left edge in the
+# Channel Rack), go to the previous pattern ("Piano", the arrow left of the pattern box) and open the Piano Roll.
+click_in "$main" 284 342
+click_in "$main" 377 58
+key F7
+shot "$main" pianoroll.png
+key F7
 
 kill "${pids[-1]}" 2>/dev/null || true
 sleep 2
@@ -96,8 +99,11 @@ for plugin in SunBurst HexForge SunSymphony SunRiff; do
     win="$(window "$plugin")"
     xdotool windowmove "$win" 0 0
     xdotool windowactivate --sync "$win" 2>/dev/null || true
+    sleep 4
+    # SunSymphony opens its Library page while no orchestra is installed: its Close button shows the instrument itself.
+    [ "$plugin" = SunSymphony ] && click_in "$win" 705 50
     name="$(echo "$plugin" | tr '[:upper:]' '[:lower:]').png"
-    shot "$win" "$name" 4
+    shot "$win" "$name" 2
     kill "$pid" 2>/dev/null || true
     sleep 1
 done
