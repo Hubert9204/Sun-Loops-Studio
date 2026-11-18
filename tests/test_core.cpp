@@ -4293,10 +4293,11 @@ void testMixAutomation047()
                                               {}).getRMSLevel (0, 24000, 96000);
     check (panned < 1.0e-4f, "the aux bus's balance automated fully right leaves its left side silent");
 
-    check (sls::automationTargetExists ({ K::TrackSend, 3, 1, 0 }, 1, 8) && ! sls::automationTargetExists ({ K::TrackSend, 3, 2, 0 }, 1, 8)
-               && ! sls::automationTargetExists ({ K::AuxVolume, 0, 2, 0 }, 1, 8) && sls::automationTargetExists ({ K::VcaLevel, 0, 1, 0 }, 1, 8)
+    check (sls::automationTargetExists ({ K::TrackSend, 3, 7, 0 }, 1, 8) && ! sls::automationTargetExists ({ K::TrackSend, 3, 8, 0 }, 1, 8)
+               && ! sls::automationTargetExists ({ K::AuxVolume, 0, 8, 0 }, 1, 8) && sls::automationTargetExists ({ K::VcaLevel, 0, 1, 0 }, 1, 8)
+               && ! sls::automationTargetExists ({ K::VcaLevel, 0, 2, 0 }, 1, 8)
                && sls::automationRange ({ K::TrackSend, 0, 0, 0 }).max == 1.5f && sls::automationRange ({ K::AuxPan, 0, 0, 0 }).min == -1.0f,
-           "the new targets: two aux buses and two VCA groups, in their controls' ranges");
+           "the new targets: up to eight aux buses (0.78.0; two before) and two VCA groups, in their controls' ranges");
     auto doc = sls::ProjectDocument::blank();
     doc.arrangement.automationClips = { sls::makeFlatAutomationClip ({ K::TrackSend, 2, 1, 0 }, 0, 0, 960, 0.7f),
                                         sls::makeFlatAutomationClip ({ K::AuxPan, 0, 1, 0 }, 1, 0, 960, -0.5f),
