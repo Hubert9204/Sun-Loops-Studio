@@ -89,6 +89,40 @@ void MainComponent::endSession()
     }
 }
 
+// 0.81.0: as exportProjectFolder, packed into one file (FL Studio's "zipped loop package").
+void MainComponent::exportProjectArchive()
+{
+    library.ensureExists();
+    const auto suggested = library.projects.getChildFile ((currentProjectFile != juce::File() ? currentProjectFile.getFileNameWithoutExtension()
+                                                                                              : juce::String ("My Project")) + kProjectArchiveExtension);
+    fileChooser = std::make_unique<juce::FileChooser> ("Save as a single file with samples", suggested, juce::String ("*") + kProjectArchiveExtension);
+    fileChooser->launchAsync (juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles
+                                  | juce::FileBrowserComponent::warnAboutOverwriting,
+                              [safe = juce::Component::SafePointer<MainComponent> (this)] (const juce::FileChooser& chooser)
+    {
+        if (safe == nullptr || chooser.getResult() == juce::File())
+            return;
+        auto archive = chooser.getResult();
+        if (! hasProjectArchiveExtension (archive))
+            archive = archive.getSiblingFile (archive.getFileName() + kProjectArchiveExtension);
+        juce::StringArray notes;
+        juce::MouseCursor::showWaitCursor();
+        const auto error = writeProjectArchive (safe->makeDocument(), archive, notes);
+        juce::MouseCursor::hideWaitCursor();
+        if (error.isNotEmpty())
+        {
+            juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Could not save the project", error);
+            return;
+        }
+        safe->statusLabel.setText ("Saved the project and its samples in " + archive.getFullPathName(), juce::dontSendNotification);
+        juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::InfoIcon, "Project saved in one file",
+                                                archive.getFileName() + " holds the project and a copy of every sound it uses ("
+                                                    + juce::File::descriptionOfSizeInBytes (archive.getSize()) + "). Open it with File > Open "
+                                                    + "on any computer: it is unpacked into a folder of My Projects."
+                                                    + (notes.isEmpty() ? juce::String() : "\n\n" + notes.joinIntoString ("\n")));
+    });
+}
+
 void MainComponent::exportProjectFolder()
 {
     library.ensureExists();

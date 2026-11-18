@@ -45,7 +45,7 @@ Stems splitStems (const SampleData& in, const StemSettings& settingsIn, const st
     // Padded by a frame on each side, so every sample is covered by four frames.
     const int padded = total + 2 * kSize;
     const int frames = (padded - kSize) / kHop + 1;
-    const auto sampleAt = [&] (const std::vector<float>& x, int i) -> double
+    const auto sampleAt = [&] (const SampleBuffer& x, int i) -> double
     {
         const int j = i - kSize;
         return j >= 0 && j < total ? x[static_cast<size_t> (j)] : 0.0;

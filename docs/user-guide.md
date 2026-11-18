@@ -200,8 +200,17 @@ or be empty) and writes `<name>.slp` into it plus a `Samples` folder with a copy
 layers and audio clips. The project refers to the copies by **relative paths**, so the whole folder can be moved, zipped or copied to another
 computer and opens there with its sounds. Built-in sounds stay built-in; a file that cannot be found is listed and keeps its old path.
 
-**Backup, autosave and recovery.** Saving over an existing project first keeps the previous version next to it as `<name>.slp.bak` (one
-generation). While there are unsaved changes the project is also written **once a minute** to `~/Music/Sun Loops Studio/Autosave/Autosave.slp`.
+**In a single file (0.81.0).** *File > Save as a single file with samples (.slpz)...* (also in the TOOLS menu) packs the same thing - the
+project and a copy of every sound - into **one `.slpz` file**, like FL Studio's zipped loop package. Send it, keep it, open it on any
+computer:
+- *File > Open* opens a `.slpz` (also double-clicked or given on the command line);
+- it is unpacked into a **new folder** of My Projects (never over an existing one) and the project opens from there, its sounds included;
+- an archive with a file that would land outside its folder is refused.
+
+**Backup, autosave and recovery.** Saving over an existing project first keeps the previous version in a **`Backups`** folder next to
+it, named by date and time (`Song (2026-11-18 18-40-05.123).slp`). The **10 newest** of each project stay, so you can go back
+several saves; the folder shows under My Projects in the browser, and a backup opens like any project (since 0.81.0; before, a single
+`<name>.slp.bak` was kept). While there are unsaved changes the project is also written **once a minute** to `~/Music/Sun Loops Studio/Autosave/Autosave.slp`.
 That file is deleted when the program closes normally; if the program crashed (or was killed), the next start asks **Recover your work?**
 (after the crash report question, see *Crash reports* below) and
 *Open the recovered project* opens it (marked as not saved, under its old name if it had one: `Ctrl+S` puts it back where it belongs).
@@ -1274,8 +1283,20 @@ Supported files: `.wav`, `.aiff` / `.aif`, `.flac`, `.ogg`, `.oga` and `.mp3` ar
 `.ogv`, `.3gp`) need the **ffmpeg** program: Nobara normally has it; otherwise install it with `sudo dnf install ffmpeg` (on stock
 Fedora that is the RPM Fusion package; the `ffmpeg-free` package may lack the MP3 encoder). The sound of a video is extracted into
 `~/Music/Sun Loops Studio/Samples/From videos/<name>.wav` (never replacing a file) and that WAV is what the clip uses.
-Decoding runs in the background; the status line says when the clips are in. A file longer than 5 minutes is cut at 5
-minutes (with a message), and a clip longer than the free space is cut to fit.
+Decoding runs in the background; the status line says when the clips are in. A clip longer than the free space is cut to fit.
+
+**Long files (0.81.0).** A file up to 5 minutes long is kept in memory, as before. A **longer one (up to 4 hours)** is played **from the
+disk**, as FL Studio's "keep on disk" does:
+- it is decoded once into the audio cache (`Sun Loops Studio/Cache/Audio` in your application data folder), and opening the project again
+  uses that cache at once;
+- while the song plays, a background thread reads the next three seconds of every such clip ahead of the playhead, so the playback does
+  not wait for the disk;
+- its waveform is made while it is decoded;
+- the cache keeps the 16 GB used last.
+
+Before 0.81.0 a file was cut at 5 minutes. A file longer than 4 hours is cut there (with a message). The sample editor, the pitch
+editor and the stem split work on audio in memory, so they refuse a file played from the disk. A playlist holds up to **1024 audio
+clips** (64 before), and **64** of them can sound at the same moment (16 before).
 
 An audio clip plays in **Song mode** (the program switches to it when you add the first clip) through the mixer track
 with the same number as its playlist track: **Track 3** of the playlist plays through **mixer track 3**, so its fader,
@@ -1417,7 +1438,7 @@ The arrow next to Record also has:
 
 All the takes start in the same audio block, so they line up with each other, and they are shifted by the round-trip latency
 that the audio device reports so that they line up with what was playing. A take stops by itself at the end of the playlist
-(with loop takes: after 5 minutes), or at the end of the loop region with *punch out*. An input the device does not have is
+(with loop takes: after 4 hours, 0.81.0; 5 minutes before), or at the end of the loop region with *punch out*. An input the device does not have is
 reported and nothing is recorded.
 
 ### MIDI keyboards and other devices
@@ -1891,7 +1912,7 @@ a heavier song or a plugin-heavy mixer can still need a bigger size.
   the sixteenth (more at higher sample rates). Memory made for them stays until the audio device restarts.
 - Patterns are 4 to 64 quarters long (each its own; 2 or 3 in a short time signature); one time signature for the whole song; up to 256 tempo changes, in steps, played in Song mode only; audio clips do not follow them.
 - Samples are mono or stereo, at most 30 seconds. The sampler has one envelope and one filter per channel (no filter envelope, LFO or modulation);
-  at most four zones sound per note. Audio clips: up to 5 minutes per file, 64 clips.
+  at most four zones sound per note. Audio clips: up to 4 hours per file (from 5 minutes on, played from the disk), 1024 clips, 64 sounding at once.
 - The synth: one LFO and one filter per channel, two oscillators, no unison, no additive engine yet, no modulation of the envelopes by
   velocity; the LFO is restarted with every note. The FM engine has four operators, sine waves only, no filter, and its matrix is evaluated
   with a delay of one sample (as in most matrix FM synths).

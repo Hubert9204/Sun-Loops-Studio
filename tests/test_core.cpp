@@ -18,6 +18,7 @@
 
 #include <juce_audio_formats/juce_audio_formats.h>
 
+#include "audio/DiskPrefetch.h"
 #include "audio/MixerEdit.h"
 #include "audio/AuxBuses.h"
 #include "audio/SpeechSynth.h"
@@ -2680,7 +2681,7 @@ void testLiveNoteQueue()
 void testLiveNotes()
 {
     std::cout << "Live notes (played by hand)\n";
-    const auto rms = [] (const std::vector<float>& x, double fromS, double toS)
+    const auto rms = [] (const auto& x, double fromS, double toS)
     {
         return rmsOf (x, static_cast<int> (fromS * kSr), static_cast<int> (toS * kSr));
     };
@@ -3699,7 +3700,7 @@ void testAudioClips()
         }
         return all;
     };
-    const auto peak = [] (const std::vector<float>& x, int from, int to)
+    const auto peak = [] (const auto& x, int from, int to)
     {
         float m = 0.0f;
         for (int i = from; i < to && i < static_cast<int> (x.size()); ++i)
@@ -4552,7 +4553,7 @@ void testTempoAndMeter046()
         }
         return all;
     };
-    const auto peak = [] (const std::vector<float>& x, int from, int to)
+    const auto peak = [] (const auto& x, int from, int to)
     {
         float p = 0.0f;
         for (int i = std::max (0, from); i < std::min (to, static_cast<int> (x.size())); ++i)
@@ -5664,7 +5665,7 @@ void testClipPanReverseFades()
         }
         return std::make_pair (allL, allR);
     };
-    const auto peakIn = [] (const std::vector<float>& x, double fromSeconds, double toSeconds)
+    const auto peakIn = [] (const auto& x, double fromSeconds, double toSeconds)
     {
         const int size = static_cast<int> (x.size());
         return peakOf (x.data(), std::min (size, static_cast<int> (fromSeconds * kSr)), std::min (size, static_cast<int> (toSeconds * kSr)));
@@ -5851,6 +5852,110 @@ void testClipPanReverseFades()
     }
 }
 
+// 0.81.0: audio read from the disk (the audio cache), more audio clips, more of them sounding together.
+void testDiskAudio081()
+{
+    std::cout << "Long audio from the disk, 1024 audio clips, 64 sounding together (0.81.0)\n";
+    // SampleBuffer: reading a mapped buffer, and a change copying it into memory
+    {
+        auto keep = std::make_shared<std::vector<float>> (std::vector<float> { 1.0f, 2.0f, 3.0f, 4.0f, 5.0f });
+        auto mapped = sls::SampleBuffer::mapped (keep, keep->data(), keep->size());
+        const auto& view = mapped;
+        check (mapped.isMapped() && view.size() == 5 && view[2] == 3.0f && view.data() == keep->data()
+                   && std::accumulate (view.begin(), view.end(), 0.0f) == 15.0f,
+               "a mapped buffer reads the mapped samples where they are (no copy)");
+        auto shorter = mapped;
+        shorter.resize (2);
+        auto changed = mapped;
+        changed[0] = 9.0f;
+        auto grown = mapped;
+        grown.insert (grown.begin() + 1, 2, 0.5f);
+        grown.erase (grown.begin(), grown.begin() + 1);
+        check (! shorter.isMapped() && shorter.size() == 2 && shorter[1] == 2.0f && ! changed.isMapped() && changed[0] == 9.0f
+                   && (*keep)[0] == 1.0f && mapped.isMapped() && grown.size() == 6 && grown[0] == 0.5f && grown[2] == 2.0f,
+               "a change (resize, write, insert, erase) works on a copy in memory; the mapped samples and the other buffers stay");
+    }
+    const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getNonexistentChildFile ("sls-disk-audio", "", false);
+    dir.createDirectory();
+    sls::setAudioCacheFolder (dir.getChildFile ("cache"));
+    const auto file = dir.getChildFile ("tone.wav");
+    {
+        juce::WavAudioFormat wav;
+        std::unique_ptr<juce::AudioFormatWriter> writer (wav.createWriterFor (new juce::FileOutputStream (file), 48000.0, 2, 24, {}, 0));
+        juce::AudioBuffer<float> b (2, 48000);
+        for (int i = 0; i < 48000; ++i)
+        {
+            b.setSample (0, i, 0.3f * std::sin (0.0575f * static_cast<float> (i)));
+            b.setSample (1, i, 0.2f * std::sin (0.031f * static_cast<float> (i)));
+        }
+        for (int k = 0; k < 3; ++k)
+            writer->writeFromAudioSampleBuffer (b, 0, 48000);
+    }
+    juce::AudioFormatManager formats;
+    formats.registerBasicFormats();
+    std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (file));
+    const auto inMemory = sls::readSampleData (*reader, 3 * 48000, "tone", file.getFullPathName().toStdString());
+    juce::String error;
+    const auto onDisk = sls::readSampleDataToCache (*reader, 3 * 48000, "tone", file.getFullPathName().toStdString(), "tone-key", error);
+    check (inMemory != nullptr && onDisk != nullptr && onDisk->isMapped() && ! inMemory->isMapped() && error.isEmpty()
+               && onDisk->left == inMemory->left && onDisk->right == inMemory->right && onDisk->sampleRate == 48000.0,
+           "decoded into the cache in blocks and mapped: the same samples as in memory, left and right");
+    {
+        const auto render = [] (std::shared_ptr<const sls::SampleData> data)
+        {
+            sls::Arrangement a;
+            a.patterns.resize (1);
+            a.resetTracks();
+            sls::AudioClip clip;
+            clip.data = std::move (data);
+            clip.track = 0;
+            clip.startTick = 0;
+            clip.lengthTicks = 4 * kBeat;
+            clip.offsetSeconds = 0.25;
+            a.audioClips = { clip };
+            return sls::renderToBuffer (sls::compileSong ({}, a), {});
+        };
+        const auto x = render (inMemory), y = render (onDisk);
+        bool same = x.getNumSamples() == y.getNumSamples() && x.getMagnitude (0, 0, x.getNumSamples()) > 0.1f;
+        for (int c = 0; same && c < 2; ++c)
+            for (int i = 0; same && i < x.getNumSamples(); ++i)
+                same = x.getSample (c, i) == y.getSample (c, i);
+        check (same, "a clip of a file read from the disk plays exactly as one in memory");
+
+        std::vector<sls::DiskPrefetch::Clip> clips { { onDisk, 4 * kBeat, 8 * kBeat, 0.0, false } };
+        // the clip plays from 2 s to 4 s; from 1.5 s the next 3 s cover all of it: 96000 frames, 94 pages of 1024 per side
+        const int ahead = sls::DiskPrefetch::touchAhead (clips, {}, 120.0, 3 * kBeat);
+        const int part = sls::DiskPrefetch::touchAhead (clips, {}, 120.0, 0.0);    // from 0 s: its first second
+        const int far = sls::DiskPrefetch::touchAhead (clips, {}, 120.0, 40 * kBeat);
+        check (ahead >= 2 * 94 && ahead <= 2 * 95 && part >= 2 * 47 && part <= 2 * 48 && far == 0,
+               "the prefetch touches what the clips play in the next 3 s (both sides), nothing beyond them");
+    }
+    // 30 clips at once (16 sounded before)
+    {
+        auto quiet = std::make_shared<sls::SampleData>();
+        quiet->left.assign (48000, 0.01f);
+        quiet->right.assign (48000, 0.01f);
+        quiet->sampleRate = 48000.0;
+        sls::Arrangement a;
+        a.patterns.resize (1);
+        a.resetTracks();
+        for (int k = 0; k < 30; ++k)
+        {
+            sls::AudioClip clip;
+            clip.data = quiet;
+            clip.track = 0;
+            clip.lengthTicks = 2 * kBeat;
+            a.audioClips.push_back (clip);
+        }
+        const auto out = sls::renderToBuffer (sls::compileSong ({}, a), {});
+        const float level = out.getSample (0, 12000);
+        check (std::abs (level - 0.30f) < 0.01f, "30 audio clips at the same moment are all heard (16 before 0.81.0)");
+        check (sls::kMaxAudioClips == 1024, "a playlist holds up to 1024 audio clips (64 before)");
+    }
+    sls::setAudioCacheFolder ({});
+    dir.deleteRecursively();
+}
+
 void testAudioImport()
 {
     std::cout << "Audio import\n";
@@ -5904,18 +6009,49 @@ void testAudioImport()
         check (r.data != nullptr && r.data->left == r.data->right && r.data->sampleRate == 44100.0 && r.data->numFrames() == 4410,
                "a mono file becomes the same sound on both sides");
     }
-    {   // very long files are cut, with a warning
+    {   // 0.81.0: a file longer than 5 minutes is read whole, from the audio cache; one longer than 4 hours is cut, with a warning
+        const auto cache = dir.getChildFile ("cache");
+        sls::setAudioCacheFolder (cache);
         const auto file = dir.getChildFile ("long.wav");
         juce::WavAudioFormat wav;
         std::unique_ptr<juce::AudioFormatWriter> writer (wav.createWriterFor (new juce::FileOutputStream (file), 8000.0, 1, 16, {}, 0));
         juce::AudioBuffer<float> b (1, 8000);
-        b.clear();
+        for (int i = 0; i < 8000; ++i)
+            b.setSample (0, i, 0.25f * std::sin (0.01f * static_cast<float> (i)));
         for (int s = 0; s < 310; ++s)
             writer->writeFromAudioSampleBuffer (b, 0, 8000);
         writer.reset();
         const auto r = sls::importAudioFile (file);
-        check (r.data != nullptr && r.data->numFrames() == static_cast<int> (8000 * sls::kMaxImportSeconds) && r.warning.isNotEmpty(),
-               "a file longer than the limit is cut and the result says so");
+        const bool whole = r.data != nullptr && r.data->numFrames() == 8000 * 310 && r.warning.isEmpty() && r.data->isMapped();
+        bool same = whole;
+        for (int i = 0; same && i < r.data->numFrames(); i += 7919)
+            same = std::abs (r.data->left[static_cast<size_t> (i)] - 0.25f * std::sin (0.01f * static_cast<float> (i % 8000))) < 1.0e-3f
+                && r.data->right[static_cast<size_t> (i)] == r.data->left[static_cast<size_t> (i)];
+        check (whole && same, "a 310 s file is read whole (no more 5 minute limit), from the audio cache on the disk, sample for sample");
+        check (r.data != nullptr && r.data->overview != nullptr && r.data->overview->lows.size() == static_cast<size_t> ((8000 * 310 + 255) / 256)
+                   && r.data->overview->highs[0] > 0.2f && r.data->overview->lows[100] < -0.2f,
+               "its waveform overview is made while it is decoded");
+        const auto again = sls::importAudioFile (file);
+        check (again.data != nullptr && again.data->isMapped() && again.data->overview != nullptr
+                   && cache.findChildFiles (juce::File::findFiles, false, "*.f32").size() == 1,
+               "importing it again uses the same cache file (and its overview)");
+        sls::pruneAudioCache (0);
+        check (cache.findChildFiles (juce::File::findFiles, false, "*.f32").size() <= 1, "the cache can be pruned (a file still in use may stay)");
+
+        const auto huge = dir.getChildFile ("huge.wav"); // 4 hours and 1 s at 1 kHz
+        std::unique_ptr<juce::AudioFormatWriter> w2 (wav.createWriterFor (new juce::FileOutputStream (huge), 1000.0, 1, 16, {}, 0));
+        juce::AudioBuffer<float> q (1, 60000);
+        q.clear();
+        for (int m = 0; m < 240; ++m)
+            w2->writeFromAudioSampleBuffer (q, 0, 60000);
+        w2->writeFromAudioSampleBuffer (q, 0, 1000);
+        w2.reset();
+        auto cut = sls::importAudioFile (huge);
+        check (cut.data != nullptr && cut.data->numFrames() == static_cast<int> (1000 * sls::kMaxImportSeconds) && cut.warning.isNotEmpty(),
+               "a file longer than 4 hours is cut there and the result says so");
+        cut.data.reset();
+        huge.deleteFile();
+        sls::setAudioCacheFolder ({});
     }
     {   // failures
         const auto bogus = dir.getChildFile ("bogus.wav");
@@ -8617,7 +8753,7 @@ void testMixer062()
         auto dark = hall, bright = hall;
         dark.brightness = 0.0f;
         bright.brightness = 1.0f;
-        const auto highShare = [] (const std::vector<float>& x)
+        const auto highShare = [] (const auto& x)
         {
             double diff = 0.0, total = 0.0;
             for (size_t i = 1; i < x.size(); ++i)
@@ -8888,7 +9024,7 @@ void testFlParity070()
 {
     std::cout << "FL Studio parity (0.70.0)\n";
     const auto leftOf = [] (const juce::AudioBuffer<float>& b) { return std::vector<float> (b.getReadPointer (0), b.getReadPointer (0) + b.getNumSamples()); };
-    const auto finiteAndBounded = [] (const std::vector<float>& x, float limit)
+    const auto finiteAndBounded = [] (const auto& x, float limit)
     {
         for (const float v : x)
             if (! std::isfinite (v) || std::abs (v) > limit)
@@ -9564,7 +9700,7 @@ void testEffects073()
 {
     std::cout << "Hyper Chorus, Scratcher, Patcher (0.73.0)\n";
     const auto leftOf = [] (const juce::AudioBuffer<float>& b) { return std::vector<float> (b.getReadPointer (0), b.getReadPointer (0) + b.getNumSamples()); };
-    const auto bounded = [] (const std::vector<float>& x, float limit)
+    const auto bounded = [] (const auto& x, float limit)
     {
         for (const float v : x)
             if (! std::isfinite (v) || std::abs (v) > limit)
@@ -10508,7 +10644,7 @@ void testSoundLibrary()
         p2.prepare (kSr);
         const auto soft = renderBlocks (p1, softProject, true, 0.6);
         const auto loud = renderBlocks (p2, loudProject, true, 0.6);
-        const auto roughness = [] (const std::vector<float>& x, double from, double to)
+        const auto roughness = [] (const auto& x, double from, double to)
         {
             double d = 0.0, e = 0.0;
             for (auto i = static_cast<size_t> (from * kSr) + 1; i < static_cast<size_t> (to * kSr) && i < x.size(); ++i)
@@ -10733,7 +10869,7 @@ std::shared_ptr<sls::SampleData> makeTone (double hz, double seconds, double sr,
 }
 
 // Frequency of a steady tone from the rising zero crossings between two frames.
-double zeroCrossingHz (const std::vector<float>& x, double sr, int from, int to)
+double zeroCrossingHz (const sls::SampleBuffer& x, double sr, int from, int to)
 {
     int crossings = 0, first = -1, last = -1;
     for (int i = std::max (1, from); i < to && i < static_cast<int> (x.size()); ++i)
@@ -10747,7 +10883,7 @@ double zeroCrossingHz (const std::vector<float>& x, double sr, int from, int to)
     return crossings > 1 ? (crossings - 1) * sr / (last - first) : 0.0;
 }
 
-double stretchRms (const std::vector<float>& x, int from, int to)
+double stretchRms (const sls::SampleBuffer& x, int from, int to)
 {
     double sum = 0.0;
     to = std::min (to, static_cast<int> (x.size()));
@@ -11140,7 +11276,7 @@ void testSampleEditing()
         check (clean != nullptr && clean->numFrames() == n && clean->sampleRate == sr, "noise reduction keeps the length and the rate");
         if (clean != nullptr)
         {
-            auto rms = [] (const std::vector<float>& x, int a, int b)
+            auto rms = [] (const auto& x, int a, int b)
             {
                 double sum = 0.0;
                 for (int i = a; i < b; ++i)
@@ -11873,6 +12009,62 @@ void testProjectWithSamples()
                && parsed.document->arrangement.audioClips[0].data->source == moved.getChildFile ("Samples/clip.wav").getFullPathName().toStdString(),
            "after moving the folder, relative paths are read as paths inside it (samples, kit layers, audio clips)");
     check (sls::exportProjectWithSamples (doc, moved, "Again", notes).isNotEmpty(), "exporting into a folder that is not empty is refused");
+
+    // 0.81.0: the same in a single file (.slpz), unpacked on another computer
+    {
+        juce::StringArray archiveNotes;
+        const auto archive = dir.getChildFile ("Packed Song.slpz");
+        check (sls::writeProjectArchive (doc, archive, archiveNotes).isEmpty() && archive.existsAsFile() && sls::hasProjectArchiveExtension (archive)
+                   && ! dir.getChildFile ("Packed Song.slpz.part").exists(),
+               "a project and its samples are saved in one .slpz file");
+        juce::File unpacked;
+        const auto into = dir.getChildFile ("Unpacked");
+        check (sls::extractProjectArchive (archive, into, unpacked).isEmpty() && unpacked == into.getChildFile ("Packed Song.slp"),
+               "opening it unpacks it into a new folder and finds its project");
+        const auto back = sls::readProjectFile (unpacked);
+        check (back.document && back.document->sampleSources[0] == into.getChildFile ("Samples/kick.wav").getFullPathName().toStdString()
+                   && into.getChildFile ("Samples/kick.wav").loadFileAsString() == "RIFF not really a wav, but a file"
+                   && back.document->arrangement.audioClips.size() == 1
+                   && back.document->arrangement.audioClips[0].data->source == into.getChildFile ("Samples/clip.wav").getFullPathName().toStdString(),
+               "the unpacked project plays its own copies of the sounds");
+        check (sls::extractProjectArchive (archive, into, unpacked).isNotEmpty(), "it is never unpacked over a folder that exists");
+        // a file that tries to escape its folder ("zip slip") is refused before anything is written
+        const auto evil = dir.getChildFile ("evil.slpz");
+        {
+            juce::ZipFile::Builder zip;
+            zip.addEntry (new juce::MemoryInputStream ("x", 1, false), 0, "../escaped.txt", juce::Time::getCurrentTime());
+            zip.addEntry (new juce::MemoryInputStream ("{}", 2, false), 0, "Evil.slp", juce::Time::getCurrentTime());
+            juce::FileOutputStream out (evil);
+            zip.writeToStream (out, nullptr);
+        }
+        check (sls::extractProjectArchive (evil, dir.getChildFile ("EvilOut"), unpacked).contains ("outside")
+                   && ! dir.getChildFile ("escaped.txt").exists() && ! dir.getChildFile ("EvilOut").exists(),
+               "an archive with a file outside its folder is refused and nothing is written");
+        const auto notZip = dir.getChildFile ("not.slpz");
+        notZip.replaceWithText ("hello");
+        check (sls::extractProjectArchive (notZip, dir.getChildFile ("NotOut"), unpacked).isNotEmpty(), "a damaged archive is reported");
+    }
+    // 0.81.0: backups, the 10 newest kept
+    {
+        const auto song = dir.getChildFile ("Backed/Song.slp");
+        song.getParentDirectory().createDirectory();
+        check (! sls::backupProjectFile (song, juce::Time::getCurrentTime()).exists(), "a project not saved yet has no backup");
+        const auto base = juce::Time (2026, 10, 18, 18, 0, 0);
+        for (int i = 0; i < 12; ++i)
+        {
+            song.replaceWithText ("version " + juce::String (i));
+            sls::backupProjectFile (song, base + juce::RelativeTime::minutes (i));
+        }
+        const auto kept = sls::projectBackups (song);
+        check (kept.size() == sls::kProjectBackupsKept && kept[0].loadFileAsString() == "version 11" && kept[9].loadFileAsString() == "version 2"
+                   && kept[0].getParentDirectory() == song.getSiblingFile ("Backups") && kept[0].getFileName().startsWith ("Song (2026-11-18 18-11-00"),
+               "every save keeps the version before it in Backups, named by date and time; the 10 newest stay");
+        const auto other = dir.getChildFile ("Backed/Song 2.slp");
+        other.replaceWithText ("other");
+        sls::backupProjectFile (other, base);
+        check (sls::projectBackups (song).size() == sls::kProjectBackupsKept && sls::projectBackups (other).size() == 1,
+               "each project has its own backups");
+    }
     dir.deleteRecursively();
 }
 
@@ -12633,7 +12825,7 @@ void testSubtractiveSynth()
         p.prepare (kSr);
         return renderBlocks (p, sls::Project::make ({ c }, 16 * kBeat), true, seconds);
     };
-    const auto finite = [] (const std::vector<float>& x) { return std::all_of (x.begin(), x.end(), [] (float v) { return std::isfinite (v); }); };
+    const auto finite = [] (const auto& x) { return std::all_of (x.begin(), x.end(), [] (float v) { return std::isfinite (v); }); };
 
     sls::SynthPatch raw;
     raw.engine = sls::SynthEngine::Subtractive;
@@ -13028,7 +13220,7 @@ void testPitchCorrector()
     // Vibrato survives a slow speed and is flattened by a fast one.
     {
         const auto vibrato = toneOf ([] (double t) { return 440.0 * std::pow (2.0, 0.3 / 12.0 * std::sin (6.283185307179586 * 5.5 * t)); }, 2.0);
-        const auto spread = [] (const std::vector<float>& y)
+        const auto spread = [] (const auto& y)
         {
             // the pitch every 20 ms from zero crossings: its range in cents
             double lo = 1e9, hi = -1e9;
@@ -13141,8 +13333,8 @@ void testAdditiveAndPhysical()
         p.prepare (kSr);
         return renderBlocks (p, sls::Project::make ({ c }, 16 * kBeat), true, seconds);
     };
-    const auto finite = [] (const std::vector<float>& x) { return std::all_of (x.begin(), x.end(), [] (float v) { return std::isfinite (v); }); };
-    const auto rms = [] (const std::vector<float>& x, double from, double to)
+    const auto finite = [] (const auto& x) { return std::all_of (x.begin(), x.end(), [] (float v) { return std::isfinite (v); }); };
+    const auto rms = [] (const auto& x, double from, double to)
     {
         double e = 0.0;
         const auto a = static_cast<size_t> (from * kSr), b = std::min (x.size(), static_cast<size_t> (to * kSr));
@@ -13360,7 +13552,7 @@ void testFmSynth()
         p.prepare (kSr);
         return renderBlocks (p, sls::Project::make ({ c }, 16 * kBeat), true, seconds);
     };
-    const auto finite = [] (const std::vector<float>& x) { return std::all_of (x.begin(), x.end(), [] (float v) { return std::isfinite (v); }); };
+    const auto finite = [] (const auto& x) { return std::all_of (x.begin(), x.end(), [] (float v) { return std::isfinite (v); }); };
 
     sls::SynthPatch pure;
     pure.engine = sls::SynthEngine::FM;
@@ -14508,6 +14700,7 @@ int main (int argc, char** argv)
     testFlpFiles();
     testPluginAutomationFile();
     testAudioImport();
+    testDiskAudio081();
     testInputRecorder();
     testRecordSetup();
     testMultitrackRecorders();

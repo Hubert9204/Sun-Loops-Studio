@@ -49,7 +49,7 @@ std::shared_ptr<const SampleData> stretchSample (const std::shared_ptr<const Sam
 
     // The exact recipe for a fixed-length sound (the library's README): give the first `inLatency` samples with seek(),
     // process the rest followed by `inLatency` samples of silence, then flush. The result starts `outLatency` early.
-    std::vector<float> inL (input->left), inR (input->right);
+    std::vector<float> inL (input->left.toVector()), inR (input->right.toVector());
     inL.resize (static_cast<size_t> (frames + inLatency), 0.0f);
     inR.resize (static_cast<size_t> (frames + inLatency), 0.0f);
 

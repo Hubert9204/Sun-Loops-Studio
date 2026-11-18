@@ -13,9 +13,20 @@ namespace sls
 //
 // WAV, AIFF, FLAC, Ogg Vorbis (.ogg / .oga) and MP3 are decoded by the program itself. AAC (.aac, .m4a) and the audio
 // of video files need the `ffmpeg` program (JUCE has no decoder for them on Linux); without it the import fails with
-// a message that says so. The audio is kept in memory, so at most kMaxImportSeconds are read from a file; a longer
-// file is cut there and the result says so in `warning`.
-constexpr double kMaxImportSeconds = 300.0;
+// a message that says so. At most kMaxImportSeconds are read from a file; a longer file is cut there and the result says so in
+// `warning`.
+// 0.81.0: audio up to kMaxInMemorySeconds is kept in memory, as before; a longer file (up to kMaxImportSeconds, 4 hours; before
+// 0.81.0 five minutes was the limit) is decoded once into the audio cache (audioCacheFolder: a file of floats, found again by
+// the file's path, size and date) and read from there, its pages coming from the disk as they are needed (see DiskPrefetch).
+constexpr double kMaxInMemorySeconds = 300.0;
+constexpr double kMaxImportSeconds = 4.0 * 3600.0;
+
+// 0.81.0: where long files are decoded to (by default "Sun Loops Studio/Cache/Audio" in the user's application data). Set it
+// before importing (the program sets it at start; the tests use a folder of their own).
+void setAudioCacheFolder (const juce::File& folder);
+juce::File audioCacheFolder();
+// Deletes the least recently used cache files until the folder holds at most `maxBytes` (the program: at start, 16 GB).
+void pruneAudioCache (juce::int64 maxBytes);
 
 enum class FileKind { Unsupported, Audio, Video };
 
@@ -35,6 +46,10 @@ struct ImportResult
 // Reads the first `frames` frames of `reader` as stereo audio (mono is copied to both sides); null when reading fails (0.51.0:
 // the import, the sound library and the built-in sounds share it).
 std::shared_ptr<SampleData> readSampleData (juce::AudioFormatReader& reader, int frames, std::string name, std::string source);
+// 0.81.0: the same, decoded in pieces into the audio cache under `key` (a cache file of that key is used again) and mapped from
+// there; null with `error` set when it fails (a damaged file, no room on the disk...).
+std::shared_ptr<SampleData> readSampleDataToCache (juce::AudioFormatReader& reader, int frames, std::string name, std::string source,
+                                                   const juce::String& key, juce::String& error);
 
 // Decodes an audio file (stereo, at its own sample rate; mono is copied to both sides). `source` of the result is the
 // file's absolute path.

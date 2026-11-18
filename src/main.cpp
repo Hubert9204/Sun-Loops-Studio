@@ -51,7 +51,7 @@ public:
         for (const auto& argument : getCommandLineParameterArray())
         {
             const auto file = juce::File::getCurrentWorkingDirectory().getChildFile (argument.unquoted());
-            if (file.existsAsFile() && sls::hasProjectExtension (file))
+            if (file.existsAsFile() && (sls::hasProjectExtension (file) || sls::hasProjectArchiveExtension (file)))
             {
                 if (auto* main = mainWindow->getMainComponent())
                     main->openProjectFile (file);
@@ -64,7 +64,7 @@ public:
     void anotherInstanceStarted (const juce::String& commandLine) override
     {
         const juce::File file (commandLine.unquoted());
-        if (mainWindow != nullptr && file.existsAsFile() && sls::hasProjectExtension (file))
+        if (mainWindow != nullptr && file.existsAsFile() && (sls::hasProjectExtension (file) || sls::hasProjectArchiveExtension (file)))
             if (auto* main = mainWindow->getMainComponent())
                 main->openProjectFile (file);
     }

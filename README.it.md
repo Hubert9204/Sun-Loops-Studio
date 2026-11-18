@@ -164,8 +164,8 @@ Instruments). Il loro codice DSP è compilato anche nel programma dei test, per 
 - **Brano e progetti dimostrativi** - "Sunrise Drive" si apre al primo avvio; altri tre brani finiti sono nel browser.
 - **Plugin** - ospita VST3 e LV2 su ogni sistema, LADSPA su Linux e Audio Unit su macOS, come strumenti e come effetti, con un
   Plugin picker e le loro impostazioni salvate nel progetto.
-- **Sicurezza** - salvataggio automatico ogni minuto, recupero dopo un crash, un `.bak` della versione precedente, *Export project
-  with samples*.
+- **Sicurezza** - salvataggio automatico ogni minuto, recupero dopo un crash, le 10 versioni precedenti in una cartella `Backups`,
+  *Export project with samples* come cartella o come file unico `.slpz`.
 - **Report dei crash e aggiornamenti** - dopo un crash l'avvio successivo propone di inviare un report anonimo (stack trace e
   sistema) come issue di GitHub; un controllo in sottofondo delle release più recenti. Niente viene inviato senza un clic.
 - **Audio** - ALSA, JACK e PipeWire su Linux, Core Audio su macOS, ASIO, Windows Audio (WASAPI) e DirectSound su Windows; un

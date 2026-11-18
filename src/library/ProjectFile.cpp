@@ -1349,6 +1349,11 @@ bool hasProjectExtension (const juce::File& file)
     return file.getFileName().endsWithIgnoreCase (kProjectExtension);
 }
 
+bool hasProjectArchiveExtension (const juce::File& file)
+{
+    return file.getFileName().endsWithIgnoreCase (kProjectArchiveExtension);
+}
+
 juce::File withProjectExtension (const juce::File& file)
 {
     // Not withFileExtension(): "My.Song" must become "My.Song.slp", not "My.slp".
@@ -1407,4 +1412,101 @@ std::optional<std::array<EffectSlot, kSlotsPerTrack>> effectChainFromJson (const
     return slots;
 }
 
+} // namespace sls
+
+// ---- 0.81.0: the project in a single file, and backups ---------------------------------------------------------------
+
+namespace sls
+{
+juce::String writeProjectArchive (ProjectDocument d, const juce::File& archive, juce::StringArray& notes)
+{
+    const auto name = archive.getFileNameWithoutExtension();
+    const auto staging = juce::File::getSpecialLocation (juce::File::tempDirectory).getNonexistentChildFile ("sls-archive", "", false);
+    const auto folder = staging.getChildFile (juce::File::createLegalFileName (name));
+    if (! staging.createDirectory())
+        return "Cannot create a temporary folder in " + staging.getParentDirectory().getFullPathName();
+    auto error = exportProjectWithSamples (std::move (d), folder, name, notes);
+    if (error.isEmpty())
+    {
+        juce::ZipFile::Builder zip;
+        for (const auto& f : folder.findChildFiles (juce::File::findFiles, true))
+            zip.addFile (f, f.getFileExtension().equalsIgnoreCase (kProjectExtension) ? 9 : 5, f.getRelativePathFrom (folder).replaceCharacter ('\\', '/'));
+        const auto part = archive.getSiblingFile (archive.getFileName() + ".part");
+        {
+            juce::FileOutputStream out (part);
+            if (! out.openedOk() || ! out.setPosition (0) || ! out.truncate().wasOk() || ! zip.writeToStream (out, nullptr))
+                error = "Cannot write " + archive.getFullPathName();
+            out.flush();
+            if (error.isEmpty() && out.getStatus().failed())
+                error = "Cannot write " + archive.getFullPathName() + ": " + out.getStatus().getErrorMessage();
+        }
+        if (error.isEmpty() && ! part.moveFileTo (archive))
+            error = "Cannot write " + archive.getFullPathName();
+        if (error.isNotEmpty())
+            part.deleteFile();
+    }
+    staging.deleteRecursively();
+    return error;
+}
+
+juce::String extractProjectArchive (const juce::File& archive, const juce::File& folder, juce::File& projectFile)
+{
+    projectFile = juce::File();
+    juce::ZipFile zip (archive);
+    if (zip.getNumEntries() == 0)
+        return archive.getFileName() + " is not a Sun Loops Studio project archive (or it is damaged).";
+    if (folder.exists())
+        return folder.getFullPathName() + " exists already.";
+    for (int i = 0; i < zip.getNumEntries(); ++i)
+    {
+        const auto entry = zip.getEntry (i)->filename.replaceCharacter ('\\', '/');
+        if (entry.startsWithChar ('/') || entry.contains (":") || entry == ".." || entry.startsWith ("../") || entry.contains ("/../") || entry.endsWith ("/.."))
+            return archive.getFileName() + " holds a file outside its folder (" + entry + "): it was not opened.";
+    }
+    if (! folder.createDirectory())
+        return "Cannot create " + folder.getFullPathName();
+    const auto result = zip.uncompressTo (folder, false);
+    if (result.failed())
+    {
+        folder.deleteRecursively();
+        return "Cannot unpack " + archive.getFileName() + ": " + result.getErrorMessage();
+    }
+    for (const auto& f : folder.findChildFiles (juce::File::findFiles, false, juce::String ("*") + kProjectExtension))
+    {
+        projectFile = f;
+        return {};
+    }
+    folder.deleteRecursively();
+    return archive.getFileName() + " holds no project file.";
+}
+
+juce::Array<juce::File> projectBackups (const juce::File& project)
+{
+    const auto prefix = project.getFileNameWithoutExtension() + " (";
+    juce::Array<juce::File> out;
+    for (const auto& f : project.getSiblingFile ("Backups").findChildFiles (juce::File::findFiles, false, juce::String ("*") + kProjectExtension))
+        if (f.getFileName().startsWith (prefix) && f.getFileNameWithoutExtension().endsWithChar (')'))
+            out.add (f);
+    std::sort (out.begin(), out.end(), [] (const juce::File& a, const juce::File& b) { return a.getFileName() > b.getFileName(); }); // (the date sorts)
+    return out;
+}
+
+juce::File backupProjectFile (const juce::File& project, juce::Time now, int keep)
+{
+    if (! project.existsAsFile())
+        return {};
+    const auto folder = project.getSiblingFile ("Backups");
+    if (! folder.createDirectory())
+        return {};
+    const auto stamp = now.formatted ("%Y-%m-%d %H-%M-%S") + juce::String::formatted (".%03d", now.getMilliseconds()); // (names sort by time)
+    auto copy = folder.getChildFile (project.getFileNameWithoutExtension() + " (" + stamp + ")" + kProjectExtension);
+    for (int n = 2; copy.exists(); ++n) // two saves in the same second
+        copy = folder.getChildFile (project.getFileNameWithoutExtension() + " (" + stamp + " " + juce::String (n) + ")" + kProjectExtension);
+    if (! project.copyFileTo (copy))
+        return {};
+    const auto all = projectBackups (project);
+    for (int i = std::max (1, keep); i < all.size(); ++i)
+        all[i].deleteFile();
+    return copy;
+}
 } // namespace sls

@@ -2,6 +2,27 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.81.0 - 2026-11-18
+
+Long audio from the disk, more clips, backups and a single-file project (second block of the plan).
+
+### Added
+- **Long audio files from the disk** (as FL Studio's "keep on disk"): a file over 5 minutes, up to **4 hours** (before: cut at 5
+  minutes), is decoded once, in blocks, into an audio cache and played from there. The cache keeps the 16 GB used last.
+  - The cache is found again by the file's path, size and date, so a project opens at once the next time.
+  - A background thread reads the next 3 seconds of those clips ahead of the playhead.
+  - Their waveform is made while they are decoded and kept next to the cache file.
+  - Recordings can be 4 hours long.
+- **Single-file project**: *Save as a single file with samples (.slpz)...* packs the project and a copy of every sound into one
+  ZIP. Opening a `.slpz` (File > Open, double-click, command line) unpacks it into a new folder of My Projects. Entries outside the
+  folder are refused.
+- **Backups**: each save keeps the previous version in a `Backups` folder next to the project, named by date and time. The 10
+  newest of each project are kept (before: one `.slp.bak`).
+
+### Changed
+- Up to **1024 audio clips** in a playlist (64 before), **64** sounding at once (16 before).
+- The sample editor, pitch editor and stem split refuse a clip played from the disk (they work on audio in memory).
+
 ## 0.80.0 - 2026-11-18
 
 Automation of every knob and switch, as in FL Studio (first block of the plan in the project's notes).
