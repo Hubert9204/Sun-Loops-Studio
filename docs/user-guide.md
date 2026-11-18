@@ -637,6 +637,21 @@ Besides the volume envelope, the sampler has an envelope of its own for each of 
 negative turns the envelope upside down) and its **A D S R**. They need no volume envelope; the cutoff and resonance envelopes
 need the filter.
 
+### Three LFOs, their shapes and tempo sync, and the modulation matrix (0.84.0)
+
+As in FL Studio's sampler and DirectWave:
+
+- **LFO 3**, a third LFO with its own target (pitch, cutoff, pan, volume, resonance), rate and depth.
+- **LFO shapes**: for each of the three, *Sine*, *Triangle*, *Square*, *Saw up*, *Saw down* or *Random* (a new value at each cycle, as
+  a sample and hold). Each note starts its LFOs from the beginning of their cycle.
+- **Tempo sync**: an LFO can make one cycle per note value or number of bars (1/32 to 8 bars) at the song's tempo instead of its
+  rate in Hz (which is then greyed).
+- **MOD MATRIX**: four rows, each **source** -> **target** with an **amount** (-100 to +100 %). The sources are the note's
+  **velocity**, its **key** (from C4, up to four octaves away), its **Mod X** / **Mod Y** (the Piano Roll's lanes) and a **random**
+  amount new for each note; the targets are the **pitch** (up to 12 semitones), the **cutoff** (up to 5 octaves), the **resonance**,
+  the **volume** (velocity -> volume: the hardest hit at full level, softer ones quieter), the **pan** and the **sample start** (up to
+  half the sample, for softer attacks on soft notes). They act as each note starts. They are saved with the channel and its presets.
+
 ### Play modes: Granulizer and Wave Traveller (0.74.0)
 
 *PLAY MODE* at the bottom of the sampler window says how the channel's own sample is played (not a SoundFont or a slice program):
@@ -739,7 +754,18 @@ name. *Empty kit* clears all pads after asking.
 **In a project.** The project file stores each drum channel's kit: the pads' names and settings and where every sound comes from (a file path, or a built-in sound), not the audio. When a project is opened
 the sounds are read again; a file that is gone leaves a silent layer that keeps its path (and a message), so saving again does not lose the reference. Save the kit as a folder to make it portable.
 
-Not available: undo of kit edits (the steps can be undone), an output or effects per pad (the whole channel goes to one mixer track), round-robin layers, editing a pad's sound in the sample editor (edit it
+**FPC-style outputs, round robin, MIDI notes, flashes (0.84.0).** The selected pad has three more settings:
+
+| Control | Meaning |
+| --- | --- |
+| Output | *Channel's track* (with the other pads, through the channel), or a mixer track of its own (Track 1 ... N): the pad goes there, through the channel's volume and pan, and gets that track's effects and fader, as FL Studio's FPC outputs. A pad with its own track shows `> N`. The kit menu's *Each pad with a sound on its own mixer track* gives every pad with a sound a free track (nothing playing through it, no effects; new tracks are added when there are not enough), named after the pad. Deleting a pad's track sends it back through the channel; moving tracks moves the pads' outputs with them. |
+| Round robin | *Off*; *Cycle*: the layers with the same lowest velocity take turns at each hit; *Random*: one of them at random, never the same twice in a row. Put two to four takes of a sound on layers with the same minimum velocity, and repeated hits stop sounding like a machine gun. The pad shows `rr` / `rnd`. |
+| MIDI note | The note a MIDI keyboard or pad controller plays this pad with (*Its own*: C3 for pad 1, C#3 for pad 2...). A pad given another note answers to it, and the notes are recorded as that pad; the pad shows its note. |
+
+**Pads flash** when they play: from the steps, the Piano Roll, the song, a MIDI controller or a click. Loading another kit keeps the
+pads' outputs (they belong to the project).
+
+Not available: undo of kit edits (the steps can be undone), effects inside the drum machine itself (use the pads' own mixer tracks), editing a pad's sound in the sample editor (edit it
 on a sampler channel, then load the saved file), more than 16 pads or 4 layers, sounds longer than 30 seconds, saving a drum channel as a channel preset (save the kit), mapping imported MIDI percussion to pads.
 Projects that contain a drum machine cannot be opened by versions older than 0.14.
 
@@ -896,6 +922,14 @@ The gold **Library / Download sounds** button opens the Library page (it opens b
 2. Press **Download**. The bar shows the progress; you can keep playing meanwhile. **Stop** pauses: Download again continues
    where it stopped. Every file is checked (SHA-256) before it is kept.
 3. Double-click a part > **Orchestra** > family > instrument > articulation. The first instrument that arrives goes to part 1.
+
+**All the articulations of an instrument in one part (0.84.0).** An instrument with several articulations has, at the top of its
+submenu, **All articulations (keyswitches)**: the part then plays them all, and **keyswitches** choose which, as in orchestral
+libraries. The keyswitches are the keys just below the instrument's lowest note, from C1 (MIDI 24) upwards in the order of the
+submenu (Violins: C1 sustain, C#1 pizzicato, D1 spiccato, D#1 tremolo); a keyswitch sounds nothing, and the notes after it play
+that articulation, so a Piano Roll part switches articulations with short notes on those keys. The part's line shows the
+articulation playing now and its keyswitches. SFZ files with keyswitches of their own (`sw_last`, `sw_label`, `sw_default`) work
+the same way.
 
 **Remove** deletes the ticked instruments from the disk; **Open folder** shows `~/Music/Sun Loops Studio/Orchestral`, which every
 SunSymphony shares. The sounds are VSCO 2 Community Edition and VCSL by Versilian Studios, CC0 (public domain): free for any use.

@@ -130,7 +130,7 @@ DrumMachineView::DrumMachineView (AudioEngine& engineToUse) : engine (engineToUs
     midiNoteBox.addItem ("Its own", 1);
     for (int n = 0; n < 128; ++n)
         midiNoteBox.addItem (juce::MidiMessage::getMidiNoteName (n, true, true, 5) + "  (" + juce::String (n) + ")", n + 2);
-    midiNoteBox.setTooltip ("The note a MIDI keyboard or pad controller plays this pad with (\"Its own\": C2 for pad 1, C#2 for pad 2...). "
+    midiNoteBox.setTooltip ("The note a MIDI keyboard or pad controller plays this pad with (\"Its own\": C3 for pad 1, C#3 for pad 2...). "
                             "Played notes are recorded as this pad.");
     midiNoteBox.onChange = [this] { if (! updating) editPad ([this] (DrumPad& p) { p.midiNote = midiNoteBox.getSelectedId() - 2; }); };
     addAndMakeVisible (midiNoteBox);

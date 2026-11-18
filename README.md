@@ -114,9 +114,9 @@ What is and is not verified, feature by feature: [docs/roadmap.md](docs/roadmap.
 
 - **Built-in synth engines** - subtractive, 4-operator FM, additive, physical modelling (strings, mallets, bells) and a **drum
   synth** (kick, snare, tom, clap, hi-hat, cymbal), with ready-made sounds.
-- **Sampler** - ADSR and per-target envelopes, two LFOs, filters, loops, reverse, **granular** and **travel-curve** play modes, a
+- **Sampler** - ADSR and per-target envelopes, three LFOs with shapes and tempo sync, a modulation matrix, filters, loops, reverse, **granular** and **travel-curve** play modes, a
   **speech synthesizer** that turns typed text into a sample; **SoundFont 2** and **SFZ** instruments; a **slicer**; a **drum
-  machine** with 16 pads and velocity layers; a **pitch editor** for sung lines; **stems** (drums, bass, the rest) by signal
+  machine** with 16 pads, velocity layers, round robin, a mixer track per pad and MIDI notes per pad; a **pitch editor** for sung lines; **stems** (drums, bass, the rest) by signal
   processing.
 - **Built-in sounds** - a sampled Grand Piano and Electric Bass, two sampled acoustic drum kits, three electronic kits and a hand
   percussion kit ([licences](resources/sounds/README.md)).
@@ -137,7 +137,7 @@ What is and is not verified, feature by feature: [docs/roadmap.md](docs/roadmap.
 | --- | --- |
 | **SunBurst** (0.48.0) | Polyphonic wavetable synthesizer: 3 oscillators with up to 16 unison voices, sub and noise, multimode filter, 3 envelopes, 3 LFOs, a 16-slot modulation matrix, 4 macros, effects, arpeggiator, 101 presets |
 | **HexForge** (0.50.0) | Hybrid FM + subtractive synthesizer for aggressive, metallic sounds: 6 operators, 32 waves plus 2 drawable spectral waves, a 6 x 6 FM matrix, ladder filter, unison, effects, 40 presets |
-| **SunSymphony** (0.66.0, preview) | Multitimbral orchestral sampler: 16 parts on the 16 MIDI channels, 128 voices, SFZ instruments; its Library page downloads 29 orchestral instruments (3 GB, CC0 sounds by Versilian Studios) with one click |
+| **SunSymphony** (0.66.0, preview) | Multitimbral orchestral sampler: 16 parts on the 16 MIDI channels, 128 voices, SFZ instruments, articulations chosen by keyswitches; its Library page downloads 29 orchestral instruments (3 GB, CC0 sounds by Versilian Studios) with one click |
 | **SunRiff** (0.68.0) | Electric guitar with FL Slayer's controls: physically modelled strings, a movable pickup, chord, strum, power-chord and slide modes, a tube amp, 4 cabinets, 15 effects, 34 presets |
 
 **How they are built.** Each instrument is a plugin of its own, not code compiled into the program: `CMakeLists.txt` makes each

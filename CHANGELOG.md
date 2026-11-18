@@ -2,6 +2,24 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.84.0 - 2026-11-19
+
+Instruments (fifth block of the plan): the drum machine as FL Studio's FPC, the sampler's modulation, SunSymphony's keyswitches.
+
+### Added
+- **Drum machine**:
+  - **Output per pad**: a pad can play into a mixer track of its own (through the channel's volume and pan), with its effects and
+    fader; *Each pad with a sound on its own mixer track* in the kit menu sets them all up. Deleting or moving mixer tracks takes the
+    pads' outputs into account.
+  - **Round robin**: layers with the same velocity minimum take turns (Cycle) or one is picked at random (never twice in a row).
+  - **MIDI note per pad**: a pad answers to the note a controller sends; played notes are recorded as that pad.
+  - **Pads flash** when they play.
+- **Sampler**: a **third LFO**; **LFO shapes** (sine, triangle, square, saw up / down, random); **tempo sync** (1/32 to 8 bars);
+  a **modulation matrix** of four rows (velocity, key, mod X, mod Y, random -> pitch, cutoff, resonance, volume, pan, sample start).
+- **SunSymphony**: **keyswitches**. *All articulations (keyswitches)* puts every articulation of an instrument in one part, chosen
+  by the keys from C1 below its range; SFZ keyswitches (`sw_last`, `sw_label`, `sw_default`) are read. The part shows the
+  articulation playing.
+
 ## 0.83.0 - 2026-11-18
 
 Tempo (fourth block of the plan): ramps, time signature changes and audio that follows the tempo.
