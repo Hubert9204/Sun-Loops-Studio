@@ -48,6 +48,7 @@ public:
     LibraryManager& library() noexcept { return *sharedLibrary; }
 
     int activeVoices() const noexcept { return engine.activeVoices(); }
+    int partArticulation (int part) const noexcept { return engine.articulation (part); } // 0.84.0
     float masterGain() const noexcept { return master->get(); }
     juce::MidiKeyboardState& keyboardState() noexcept { return keyboard; }
 

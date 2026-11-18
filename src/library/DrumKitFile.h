@@ -31,6 +31,7 @@ struct PadSpec
     float volume = 1.0f, pan = 0.0f, pitch = 0.0f, swing = 0.0f;
     int chokeGroup = 0;
     bool mute = false, solo = false;
+    int outputTrack = -1, roundRobin = 0, midiNote = -1; // 0.84.0 (see DrumPad)
 };
 
 struct KitSpec

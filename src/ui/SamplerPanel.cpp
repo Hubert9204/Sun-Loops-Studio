@@ -4,6 +4,13 @@ namespace sls
 {
 namespace
 {
+// 0.84.0: an LFO's tempo sync choices: its period in beats (0: free, in Hz) and their names
+constexpr float kLfoSyncBeats[] = { 0.0f, 0.125f, 0.25f, 0.5f, 1.0f, 2.0f, 4.0f, 8.0f, 16.0f, 32.0f };
+const char* const kLfoSyncNames[] = { "free (Hz)", "1/32", "1/16", "1/8", "1/4 (a beat)", "1/2", "1 bar", "2 bars", "4 bars", "8 bars" };
+} // namespace
+
+namespace
+{
 const juce::Colour kPanelBackground { 0xff22252b };
 const juce::Colour kPanelText { 0xffd5d9e0 };
 const juce::Colour kPanelDim { 0xff8a919d };
@@ -234,7 +241,63 @@ SamplerPanel::SamplerPanel()
         l->setBorderSize (juce::BorderSize<int> (0, 2, 0, 2));
         l->setMinimumHorizontalScale (0.7f);
     }
-    setSize (600, 924);
+    // 0.84.0: the third LFO, the LFOs' shapes and tempo sync, the modulation matrix
+    for (auto* l : { &lfo3Label, &lfo3RateLabel, &lfo3DepthLabel, &lfoShapeLabel, &lfoSyncLabel })
+    {
+        l->setColour (juce::Label::textColourId, kPanelText);
+        addAndMakeVisible (*l);
+    }
+    for (const char* name : { "Off", "Pitch (vibrato)", "Cutoff", "Pan", "Volume (tremolo)", "Resonance" })
+        lfo3Box.addItem (name, lfo3Box.getNumItems() + 1);
+    lfo3Box.setTooltip ("A third LFO with its own target, rate and depth (a slow one, by default)");
+    addAndMakeVisible (lfo3Box);
+    lfo3Box.onChange = [this] { write ([this] (Channel& c) { c.sampler.lfo3Target = static_cast<SamplerLfoTarget> (std::clamp (lfo3Box.getSelectedId() - 1, 0, 5)); }); };
+    slider (lfo3RateSlider, 0.05, 20.0, 0.05, " Hz");
+    lfo3RateSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.lfo3Rate = static_cast<float> (lfo3RateSlider.getValue()); }); };
+    slider (lfo3DepthSlider, 0.0, 100.0, 1.0, " %");
+    lfo3DepthSlider.onValueChange = [this] { write ([this] (Channel& c) { c.sampler.lfo3Depth = static_cast<float> (lfo3DepthSlider.getValue() / 100.0); }); };
+    for (size_t l = 0; l < lfoShapeBoxes.size(); ++l)
+    {
+        auto& shape = lfoShapeBoxes[l];
+        for (const char* name : { "Sine", "Triangle", "Square", "Saw up", "Saw down", "Random" })
+            shape.addItem (juce::String (static_cast<int> (l) + 1) + ": " + name, shape.getNumItems() + 1);
+        shape.setTooltip ("The shape of LFO " + juce::String (static_cast<int> (l) + 1) + " (Random: a new value each cycle, as a sample and hold)");
+        shape.onChange = [this, l, &shape] { write ([l, &shape] (Channel& c) { c.sampler.lfoShapes[l] = shape.getSelectedId() - 1; }); };
+        addAndMakeVisible (shape);
+        auto& sync = lfoSyncBoxes[l];
+        sync.addItem (juce::String (static_cast<int> (l) + 1) + ": free (Hz)", 1);
+        for (size_t k = 1; k < std::size (kLfoSyncBeats); ++k)
+            sync.addItem (juce::String (static_cast<int> (l) + 1) + ": " + kLfoSyncNames[k], static_cast<int> (k) + 1);
+        sync.setTooltip ("LFO " + juce::String (static_cast<int> (l) + 1) + " follows the tempo: one cycle per note value or bars "
+                                                                              "(its rate in Hz is then not used)");
+        sync.onChange = [this, l, &sync] { write ([l, &sync] (Channel& c) { c.sampler.lfoBeats[l] = kLfoSyncBeats[static_cast<size_t> (std::max (0, sync.getSelectedId() - 1))]; }); };
+        addAndMakeVisible (sync);
+    }
+    for (size_t r = 0; r < modSourceBoxes.size(); ++r)
+    {
+        auto& source = modSourceBoxes[r];
+        for (const char* name : { "None", "Velocity", "Key", "Mod X", "Mod Y", "Random" })
+            source.addItem (name, source.getNumItems() + 1);
+        source.setTooltip ("What moves it, as each note starts: its velocity, its key (from C4, up to four octaves away), its mod X or mod Y "
+                           "(the Piano Roll's lanes), or a new random amount for each note");
+        source.onChange = [this, r, &source] { write ([r, &source] (Channel& c) { c.sampler.modRoutes[r].source = source.getSelectedId() - 1; }); };
+        addAndMakeVisible (source);
+        auto& target = modTargetBoxes[r];
+        for (const char* name : { "None", "Pitch", "Cutoff", "Resonance", "Volume", "Pan", "Sample start" })
+            target.addItem (name, target.getNumItems() + 1);
+        target.setTooltip ("What it moves, at most: the pitch by 12 semitones, the cutoff by 5 octaves, the resonance and the pan their whole range, "
+                           "the volume to silence (or double), the start half the sample");
+        target.onChange = [this, r, &target] { write ([r, &target] (Channel& c) { c.sampler.modRoutes[r].target = target.getSelectedId() - 1; }); };
+        addAndMakeVisible (target);
+        auto& amount = modAmountSliders[r];
+        slider (amount, -100.0, 100.0, 1.0, " %");
+        amount.setDoubleClickReturnValue (true, 0.0);
+        amount.onValueChange = [this, r, &amount] { write ([r, &amount] (Channel& c) { c.sampler.modRoutes[r].amount = static_cast<float> (amount.getValue() / 100.0); }); };
+        modRouteLabels[r].setText (juce::String (static_cast<int> (r) + 1), juce::dontSendNotification);
+        modRouteLabels[r].setColour (juce::Label::textColourId, kPanelDim);
+        addAndMakeVisible (modRouteLabels[r]);
+    }
+    setSize (600, 1200);
 }
 
 juce::Slider& SamplerPanel::slider (juce::Slider& s, double lo, double hi, double step, const juce::String& suffix)
@@ -347,7 +410,7 @@ void SamplerPanel::refresh()
     cutoffEnvSlider.setEnabled (s.filter != SamplerFilter::Off && s.envelope);
     cutoffEnvSlider.setValue (s.cutoffEnv, juce::dontSendNotification);
     lfoBox.setSelectedId (static_cast<int> (s.lfoTarget) + 1, juce::dontSendNotification);
-    lfoRateSlider.setEnabled (s.lfoTarget != SamplerLfoTarget::Off);
+    lfoRateSlider.setEnabled (s.lfoTarget != SamplerLfoTarget::Off && ! (s.lfoBeats[0] > 0.0f));
     lfoDepthSlider.setEnabled (s.lfoTarget != SamplerLfoTarget::Off);
     lfoRateSlider.setValue (s.lfoRate, juce::dontSendNotification);
     delaySlider.setEnabled (s.envelope); // 0.70.0
@@ -355,6 +418,26 @@ void SamplerPanel::refresh()
     delaySlider.setValue (s.delay, juce::dontSendNotification);
     holdSlider.setValue (s.hold, juce::dontSendNotification);
     lfo2Box.setSelectedId (static_cast<int> (s.lfo2Target) + 1, juce::dontSendNotification);
+    // 0.84.0
+    lfo3Box.setSelectedId (static_cast<int> (s.lfo3Target) + 1, juce::dontSendNotification);
+    lfo3RateSlider.setValue (s.lfo3Rate, juce::dontSendNotification);
+    lfo3DepthSlider.setValue (s.lfo3Depth * 100.0, juce::dontSendNotification);
+    lfo3DepthSlider.setEnabled (s.lfo3Target != SamplerLfoTarget::Off);
+    for (size_t l = 0; l < lfoShapeBoxes.size(); ++l)
+    {
+        lfoShapeBoxes[l].setSelectedId (s.lfoShapes[l] + 1, juce::dontSendNotification);
+        int sync = 0;
+        for (size_t k = 1; k < std::size (kLfoSyncBeats); ++k)
+            if (std::abs (kLfoSyncBeats[k] - s.lfoBeats[l]) < 1.0e-4f)
+                sync = static_cast<int> (k);
+        lfoSyncBoxes[l].setSelectedId (sync + 1, juce::dontSendNotification);
+    }
+    for (size_t r = 0; r < modSourceBoxes.size(); ++r)
+    {
+        modSourceBoxes[r].setSelectedId (s.modRoutes[r].source + 1, juce::dontSendNotification);
+        modTargetBoxes[r].setSelectedId (s.modRoutes[r].target + 1, juce::dontSendNotification);
+        modAmountSliders[r].setValue (s.modRoutes[r].amount * 100.0, juce::dontSendNotification);
+    }
     {
         const auto& env = s.modEnvelopes[static_cast<size_t> (std::clamp (envShown, 0, 3))]; // 0.71.0
         envTargetBox.setSelectedId (envShown + 1, juce::dontSendNotification);
@@ -367,7 +450,8 @@ void SamplerPanel::refresh()
         envReleaseSlider.setValue (env.release, juce::dontSendNotification);
         envAmountSlider.setValue (env.amount * 100.0, juce::dontSendNotification);
     }
-    lfo2RateSlider.setEnabled (s.lfo2Target != SamplerLfoTarget::Off);
+    lfo2RateSlider.setEnabled (s.lfo2Target != SamplerLfoTarget::Off && ! (s.lfoBeats[1] > 0.0f));
+    lfo3RateSlider.setEnabled (s.lfo3Target != SamplerLfoTarget::Off && ! (s.lfoBeats[2] > 0.0f));
     lfo2DepthSlider.setEnabled (s.lfo2Target != SamplerLfoTarget::Off);
     lfo2RateSlider.setValue (s.lfo2Rate, juce::dontSendNotification);
     lfo2DepthSlider.setValue (s.lfo2Depth * 100.0, juce::dontSendNotification);
@@ -392,7 +476,7 @@ void SamplerPanel::paint (juce::Graphics& g)
     g.fillAll (kPanelBackground);
     g.setColour (kPanelDim);
     g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
-    const char* names[] = { "SOUND", "ENVELOPE", "LOOP", "FILTER", "MODULATION", "PLAY MODE" };
+    const char* names[] = { "SOUND", "ENVELOPE", "LOOP", "FILTER", "MODULATION", "PLAY MODE", "MOD MATRIX" };
     for (size_t i = 0; i < headers.size(); ++i)
     {
         g.drawText (names[i], headers[i], juce::Justification::centredLeft);
@@ -526,6 +610,27 @@ void SamplerPanel::resized()
         lfo2DepthSlider.setBounds (r);
     }
     {
+        auto r = area.removeFromTop (26); // 0.84.0
+        area.removeFromTop (6);
+        lfo3Label.setBounds (r.removeFromLeft (100));
+        lfo3Box.setBounds (r.removeFromLeft (120));
+        r.removeFromLeft (8);
+        lfo3RateLabel.setBounds (r.removeFromLeft (36));
+        lfo3RateSlider.setBounds (r.removeFromLeft ((r.getWidth() - 52) / 2));
+        r.removeFromLeft (8);
+        lfo3DepthLabel.setBounds (r.removeFromLeft (44));
+        lfo3DepthSlider.setBounds (r);
+    }
+    for (auto [label, boxes] : { std::pair { &lfoShapeLabel, &lfoShapeBoxes }, std::pair { &lfoSyncLabel, &lfoSyncBoxes } })
+    {
+        auto r = area.removeFromTop (26);
+        area.removeFromTop (6);
+        label->setBounds (r.removeFromLeft (100));
+        const int w = r.getWidth() / 3;
+        for (auto& b : *boxes)
+            b.setBounds (r.removeFromLeft (w).reduced (2, 0));
+    }
+    {
         auto r = area.removeFromTop (26); // 0.71.0: the envelope chosen, on / off, its amount
         area.removeFromTop (6);
         envLabel.setBounds (r.removeFromLeft (100));
@@ -555,6 +660,21 @@ void SamplerPanel::resized()
         r.removeFromLeft (8);
         pitchEnvTimeLabel.setBounds (r.removeFromLeft (70));
         pitchEnvTimeSlider.setBounds (r);
+    }
+    // 0.84.0: the modulation matrix
+    area.removeFromTop (10);
+    headers[6] = area.removeFromTop (18);
+    area.removeFromTop (4);
+    for (size_t m = 0; m < modSourceBoxes.size(); ++m)
+    {
+        auto r = area.removeFromTop (26);
+        area.removeFromTop (6);
+        modRouteLabels[m].setBounds (r.removeFromLeft (20));
+        modSourceBoxes[m].setBounds (r.removeFromLeft (120));
+        r.removeFromLeft (8);
+        modTargetBoxes[m].setBounds (r.removeFromLeft (130));
+        r.removeFromLeft (8);
+        modAmountSliders[m].setBounds (r);
     }
     // 0.74.0: the play mode
     area.removeFromTop (10);

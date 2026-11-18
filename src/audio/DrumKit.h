@@ -38,6 +38,11 @@ struct DrumPad
     int chokeGroup = 0;  // 0..kChokeGroups
     bool mute = false;
     bool solo = false;
+    // 0.84.0, as FL Studio's FPC:
+    int outputTrack = -1; // the mixer track the pad plays into (0-based); -1: the channel's own track
+    enum RoundRobin { RoundRobinOff, RoundRobinCycle, RoundRobinRandom };
+    int roundRobin = RoundRobinOff; // layers with the same velocity minimum take turns (Cycle) or one is picked at random (Random)
+    int midiNote = -1;    // the note a MIDI keyboard or pad controller plays it with (-1: its own, kDrumFirstPitch + pad)
 
     bool hasSample() const noexcept
     {
@@ -64,6 +69,25 @@ struct DrumPad
         }
         return best != nullptr ? best : lowest;
     }
+
+    // 0.84.0: every layer that answers to `velocity` (those with the minimum layerFor picks: with round robin they take turns).
+    // Returns how many were written to `out`.
+    int layersFor (int velocity, std::array<const PadLayer*, kPadLayers>& out) const noexcept
+    {
+        const auto* chosen = layerFor (velocity);
+        if (chosen == nullptr)
+            return 0;
+        if (roundRobin == RoundRobinOff)
+        {
+            out[0] = chosen;
+            return 1;
+        }
+        int n = 0;
+        for (const auto& l : layers)
+            if (l.sample != nullptr && l.sample->numFrames() >= 2 && l.minVelocity == chosen->minVelocity)
+                out[static_cast<size_t> (n++)] = &l;
+        return n;
+    }
 };
 
 struct DrumKit
@@ -77,6 +101,24 @@ struct DrumKit
         return pad >= 0 && pad < kDrumPads ? pad : -1;
     }
     static int pitchForPad (int pad) noexcept { return kDrumFirstPitch + pad; }
+
+    // 0.84.0: the note a MIDI controller plays pad `pad` with, and the pad a played note is for (-1: none). A pad given a note of its
+    // own answers to it; the others to their usual note, unless a pad took it.
+    int midiNoteOf (int pad) const noexcept
+    {
+        const int own = pads[static_cast<size_t> (pad)].midiNote;
+        return own >= 0 && own <= 127 ? own : pitchForPad (pad);
+    }
+    int padForMidiNote (int note) const noexcept
+    {
+        for (int p = 0; p < kDrumPads; ++p)
+            if (pads[static_cast<size_t> (p)].midiNote == note)
+                return p;
+        for (int p = 0; p < kDrumPads; ++p)
+            if (pads[static_cast<size_t> (p)].midiNote < 0 && pitchForPad (p) == note)
+                return p;
+        return -1;
+    }
 
     bool anySolo() const noexcept
     {
@@ -115,6 +157,9 @@ struct DrumKit
             p.pitch = std::clamp (finiteOr (p.pitch, 0.0f), -24.0f, 24.0f);
             p.swing = std::clamp (finiteOr (p.swing, 0.0f), 0.0f, 1.0f);
             p.chokeGroup = std::clamp (p.chokeGroup, 0, kChokeGroups);
+            p.outputTrack = std::clamp (p.outputTrack, -1, 499); // (0.84.0; kMaxTracks - 1)
+            p.roundRobin = std::clamp (p.roundRobin, 0, 2);
+            p.midiNote = std::clamp (p.midiNote, -1, 127);
             for (auto& l : p.layers)
                 l.minVelocity = std::clamp (l.minVelocity, 1, 127);
         }

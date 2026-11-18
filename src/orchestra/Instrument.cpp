@@ -51,6 +51,7 @@ std::shared_ptr<const Instrument> Instrument::fromSfz (const std::string& sfzTex
 {
     const auto parsed = sls::sfz::parse (sfzText);
     auto inst = std::make_shared<Instrument>();
+    int defaultKeyswitch = -1;
     inst->id = id;
     inst->name = name;
     std::map<std::string, std::shared_ptr<const SampleBuffer>> loaded; // a sample used by several zones is read once
@@ -80,6 +81,20 @@ std::shared_ptr<const Instrument> Instrument::fromSfz (const std::string& sfzTex
         r.keytrack = static_cast<float> (z.keytrack);
         r.oneShot = z.oneShot;
         r.releaseSeconds = static_cast<float> (z.ampRelease);
+        if (z.swLast >= 0) // 0.84.0: an SFZ keyswitch: the zone belongs to the articulation that key chooses
+        {
+            int found = inst->keyswitchArticulation (z.swLast);
+            if (found < 0)
+            {
+                inst->articulations.push_back ({ z.swLabel.empty() ? "Keyswitch " + std::to_string (z.swLast) : z.swLabel, z.swLast });
+                found = static_cast<int> (inst->articulations.size()) - 1;
+            }
+            else if (! z.swLabel.empty() && inst->articulations[static_cast<size_t> (found)].name.rfind ("Keyswitch ", 0) == 0)
+                inst->articulations[static_cast<size_t> (found)].name = z.swLabel;
+            r.articulation = found;
+        }
+        if (z.swDefault >= 0)
+            defaultKeyswitch = z.swDefault;
         if (z.loop && z.loopEnd > z.loopStart && z.loopStart >= 0)
         {
             r.loop = LoopMode::Forward;
@@ -95,6 +110,52 @@ std::shared_ptr<const Instrument> Instrument::fromSfz (const std::string& sfzTex
     }
     if (missing > 0)
         error = std::to_string (missing) + " sample(s) could not be read; their zones are left out.";
+    if (const int a = inst->keyswitchArticulation (defaultKeyswitch); a >= 0)
+        inst->defaultArticulation = a;
+    return inst;
+}
+
+std::shared_ptr<const Instrument> Instrument::combine (const std::string& id, const std::string& name,
+                                                       const std::vector<std::pair<std::string, std::shared_ptr<const Instrument>>>& parts)
+{
+    std::vector<std::pair<std::string, std::shared_ptr<const Instrument>>> given;
+    for (const auto& p : parts)
+        if (p.second != nullptr)
+            given.push_back (p);
+    if (given.empty())
+        return nullptr;
+    auto inst = std::make_shared<Instrument>();
+    inst->id = id;
+    inst->name = name;
+    inst->attackSeconds = given.front().second->attackSeconds;
+    inst->releaseSeconds = given.front().second->releaseSeconds;
+    int lowest = 127, lo = 127, hi = 0;
+    for (const auto& [n, part] : given)
+    {
+        lo = std::min (lo, part->playableLo);
+        hi = std::max (hi, part->playableHi);
+        for (const auto& r : part->regions)
+            lowest = std::min (lowest, r.loKey);
+    }
+    const int count = static_cast<int> (given.size());
+    const int first = std::clamp (std::min (24, std::max (lowest, lo) - count), 0, 127 - count);
+    for (int a = 0; a < count; ++a)
+    {
+        const auto& part = *given[static_cast<size_t> (a)].second;
+        inst->articulations.push_back ({ given[static_cast<size_t> (a)].first, first + a });
+        for (auto r : part.regions)
+        {
+            r.articulation = a;
+            if (r.releaseSeconds < 0.0f)
+                r.releaseSeconds = part.releaseSeconds;
+            if (r.loKey <= first + count - 1 && r.hiKey >= first) // (a zone over the keyswitches would never be heard there)
+                r.loKey = std::min (r.hiKey, first + count);
+            inst->regions.push_back (std::move (r));
+        }
+    }
+    // the keyswitches must be playable keys of the instrument (they sound nothing)
+    inst->playableLo = std::min (lo, first);
+    inst->playableHi = hi;
     return inst;
 }
 } // namespace orchestra

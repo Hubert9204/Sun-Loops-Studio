@@ -23,7 +23,7 @@ const juce::Colour kDim { 0xff8a93a3 };
 constexpr int kTopBar = 34;
 constexpr int kHeaderRow = 16;
 constexpr int kMargin = 8;
-constexpr int kInspectorRowTop = 64;
+constexpr int kInspectorRowTop = 94; // (0.84.0: one more row of settings above the layers)
 constexpr int kLayerRowHeight = 30;
 constexpr int kLayerRowStep = 32;
 constexpr std::array<int, kPadLayers> kDefaultLayerVelocity { 1, 64, 96, 112 };
@@ -111,6 +111,31 @@ DrumMachineView::DrumMachineView (AudioEngine& engineToUse) : engine (engineToUs
     chokeBox.onChange = [this] { if (! updating) editPad ([this] (DrumPad& p) { p.chokeGroup = chokeBox.getSelectedId() - 1; }); };
     addAndMakeVisible (chokeBox);
 
+    // 0.84.0
+    outputBox.setTooltip ("The mixer track this pad plays into, through the channel's volume and pan (as FL Studio's FPC outputs): "
+                          "its own effects and fader. \"Channel's track\": with the other pads, through the channel.");
+    outputBox.onChange = [this]
+    {
+        if (! updating)
+            editPad ([this] (DrumPad& p) { p.outputTrack = outputBox.getSelectedId() - 2; });
+    };
+    addAndMakeVisible (outputBox);
+    roundRobinBox.addItem ("Off", 1);
+    roundRobinBox.addItem ("Cycle", 2);
+    roundRobinBox.addItem ("Random", 3);
+    roundRobinBox.setTooltip ("Layers with the same velocity minimum take turns (Cycle) or one is picked at random (never the same twice in a row), "
+                              "so repeated hits do not sound like a machine gun");
+    roundRobinBox.onChange = [this] { if (! updating) editPad ([this] (DrumPad& p) { p.roundRobin = roundRobinBox.getSelectedId() - 1; }); };
+    addAndMakeVisible (roundRobinBox);
+    midiNoteBox.addItem ("Its own", 1);
+    for (int n = 0; n < 128; ++n)
+        midiNoteBox.addItem (juce::MidiMessage::getMidiNoteName (n, true, true, 5) + "  (" + juce::String (n) + ")", n + 2);
+    midiNoteBox.setTooltip ("The note a MIDI keyboard or pad controller plays this pad with (\"Its own\": C3 for pad 1, C#3 for pad 2...). "
+                            "Played notes are recorded as this pad.");
+    midiNoteBox.onChange = [this] { if (! updating) editPad ([this] (DrumPad& p) { p.midiNote = midiNoteBox.getSelectedId() - 2; }); };
+    addAndMakeVisible (midiNoteBox);
+    startTimerHz (30);
+
     for (size_t l = 0; l < kPadLayers; ++l)
     {
         auto& name = layerNames[l];
@@ -164,7 +189,7 @@ DrumMachineView::DrumMachineView (AudioEngine& engineToUse) : engine (engineToUs
     pitchSlider.setDoubleClickReturnValue (true, 0.0);
     swingSlider.setDoubleClickReturnValue (true, 0.0);
 
-    for (auto* l : { &volumeLabel, &panLabel, &pitchLabel, &swingLabel, &chokeLabel })
+    for (auto* l : { &volumeLabel, &panLabel, &pitchLabel, &swingLabel, &chokeLabel, &outputLabel, &roundRobinLabel, &midiNoteLabel })
     {
         l->setColour (juce::Label::textColourId, kDim);
         addAndMakeVisible (*l);
@@ -265,8 +290,12 @@ void DrumMachineView::loadKitFromSpec (const KitSpec& spec)
 {
     juce::StringArray problems;
     juce::MouseCursor::showWaitCursor();
-    const auto loaded = loadKit (spec, problems);
+    auto loaded = loadKit (spec, problems);
     juce::MouseCursor::hideWaitCursor();
+    // 0.84.0: the pads' mixer tracks belong to the project, not to the kit: they stay as they were
+    if (const auto* now = kit())
+        for (size_t p = 0; p < loaded.pads.size(); ++p)
+            loaded.pads[p].outputTrack = now->pads[p].outputTrack;
     editKit ([&loaded] (DrumKit& k) { k = loaded; });
     say ("Loaded the kit \"" + juce::String (spec.name) + "\"" + (problems.isEmpty() ? juce::String() : " (" + problems.joinIntoString ("; ") + ")"));
 }
@@ -281,6 +310,7 @@ void DrumMachineView::showKitMenu()
         menu.addItem (1000 + static_cast<int> (i), builtin[i].name);
     menu.addSeparator();
     menu.addItem (3, "From a folder...");
+    menu.addItem (4, "Each pad with a sound on its own mixer track", onPadsToFreeTracks != nullptr); // 0.84.0
     juce::Array<juce::File> folders;
     if (kitsFolder != juce::File())
         folders = kitsFolder.findChildFiles (juce::File::findDirectories, false);
@@ -301,6 +331,11 @@ void DrumMachineView::showKitMenu()
                                 return;
                             if (result >= 1000 && result < 1000 + static_cast<int> (builtinKits().size()))
                                 safe->loadKitFromSpec (builtinKitSpec (builtinKits()[static_cast<size_t> (result - 1000)].id));
+                            else if (result == 4)
+                            {
+                                if (safe->onPadsToFreeTracks)
+                                    safe->onPadsToFreeTracks();
+                            }
                             else if (result == 3)
                             {
                                 safe->chooser = std::make_unique<juce::FileChooser> ("Choose a kit folder (with a kit.json, or a folder of sounds)",
@@ -380,7 +415,8 @@ void DrumMachineView::updateInspector()
     const juce::ScopedValueSetter<bool> guard (updating, true);
     const auto* k = kit();
     const bool have = k != nullptr;
-    for (auto* c : std::initializer_list<juce::Component*> { &nameEditor, &muteButton, &soloButton, &previewButton, &chokeBox, &volumeSlider, &panSlider,
+    for (auto* c : std::initializer_list<juce::Component*> { &nameEditor, &muteButton, &soloButton, &previewButton, &chokeBox, &outputBox, &roundRobinBox,
+                                                              &midiNoteBox, &volumeSlider, &panSlider,
                                                               &pitchSlider, &swingSlider, &saveKitButton, &clearKitButton, &loadKitButton })
         c->setEnabled (have);
     kitLabel.setText (have ? "Kit: " + juce::String (k->name) : juce::String ("No drum kit"), juce::dontSendNotification);
@@ -393,6 +429,10 @@ void DrumMachineView::updateInspector()
     muteButton.setToggleState (p.mute, juce::dontSendNotification);
     soloButton.setToggleState (p.solo, juce::dontSendNotification);
     chokeBox.setSelectedId (p.chokeGroup + 1, juce::dontSendNotification);
+    fillOutputBox(); // 0.84.0
+    outputBox.setSelectedId (p.outputTrack + 2, juce::dontSendNotification);
+    roundRobinBox.setSelectedId (p.roundRobin + 1, juce::dontSendNotification);
+    midiNoteBox.setSelectedId (p.midiNote + 2, juce::dontSendNotification);
     volumeSlider.setValue (p.volume * 100.0, juce::dontSendNotification);
     panSlider.setValue (p.pan * 100.0, juce::dontSendNotification);
     pitchSlider.setValue (p.pitch, juce::dontSendNotification);
@@ -421,7 +461,7 @@ void DrumMachineView::resized()
     loadKitButton.setBounds (top.removeFromRight (100));
     kitLabel.setBounds (top);
 
-    const int padsH = 288;
+    const int padsH = 318; // (0.84.0: 288 before the row of output, round robin and MIDI note)
     padsArea = { kMargin, kTopBar + 6, 344, padsH };
     inspectorArea = { padsArea.getRight() + 12, padsArea.getY(), std::max (300, getWidth() - padsArea.getRight() - 12 - kMargin), padsH };
     stepsArea = { kMargin, padsArea.getBottom() + 10, getWidth() - 2 * kMargin, std::max (60, getHeight() - padsArea.getBottom() - 10 - kMargin) };
@@ -436,6 +476,13 @@ void DrumMachineView::resized()
     y += 30;
     chokeLabel.setBounds (x0, y, 90, 24);
     chokeBox.setBounds (x0 + 94, y, 130, 24);
+    outputLabel.setBounds (x0 + 234, y, 56, 24); // 0.84.0
+    outputBox.setBounds (x0 + 292, y, std::max (120, std::min (200, w - 292)), 24);
+    y += 30;
+    roundRobinLabel.setBounds (x0, y, 90, 24);
+    roundRobinBox.setBounds (x0 + 94, y, 130, 24);
+    midiNoteLabel.setBounds (x0 + 234, y, 56, 24);
+    midiNoteBox.setBounds (x0 + 292, y, std::max (120, std::min (200, w - 292)), 24);
 
     for (size_t l = 0; l < kPadLayers; ++l)
     {
@@ -700,6 +747,11 @@ void DrumMachineView::paint (juce::Graphics& g)
         const bool muted = k != nullptr && k->pads[static_cast<size_t> (i)].mute;
         g.setColour (has ? kPadOn : kPadOff);
         g.fillRoundedRectangle (r, 6.0f);
+        if (flash[static_cast<size_t> (i)] > 0.0f) // 0.84.0: it just played
+        {
+            g.setColour (kAccent.withAlpha (0.65f * flash[static_cast<size_t> (i)]));
+            g.fillRoundedRectangle (r, 6.0f);
+        }
         if (i == selected)
         {
             g.setColour (kAccent);
@@ -713,8 +765,19 @@ void DrumMachineView::paint (juce::Graphics& g)
         g.drawFittedText (juce::String (p.name), r.reduced (6.0f, 18.0f).toNearestInt(), juce::Justification::centred, 2);
         g.setColour (kDim);
         g.setFont (juce::FontOptions (10.0f));
-        g.drawText (juce::String (i + 1) + "  " + juce::MidiMessage::getMidiNoteName (DrumKit::pitchForPad (i), true, true, 5), r.reduced (6.0f, 3.0f).toNearestInt(),
+        g.drawText (juce::String (i + 1) + "  " + juce::MidiMessage::getMidiNoteName (k->midiNoteOf (i), true, true, 5), r.reduced (6.0f, 3.0f).toNearestInt(),
                     juce::Justification::topLeft);
+        if (p.outputTrack >= 0) // 0.84.0: its own mixer track
+        {
+            g.setColour (kText.withAlpha (0.85f));
+            g.drawText ("> " + juce::String (p.outputTrack + 1), r.reduced (6.0f, 3.0f).withTrimmedBottom (10.0f).toNearestInt(), juce::Justification::bottomRight);
+        }
+        if (p.roundRobin != DrumPad::RoundRobinOff)
+        {
+            g.setColour (kDim);
+            g.drawText (p.roundRobin == DrumPad::RoundRobinCycle ? "rr" : "rnd", r.reduced (6.0f, 3.0f).withTrimmedBottom (10.0f).toNearestInt(),
+                        juce::Justification::bottomLeft);
+        }
         if (muted)
             g.drawText ("M", r.reduced (6.0f, 3.0f).toNearestInt(), juce::Justification::topRight);
         else if (p.solo)
@@ -801,6 +864,43 @@ void DrumMachineView::paint (juce::Graphics& g)
 }
 
 // -------------------------------------------------------------------------------------------------------------- window
+
+// 0.84.0: a pad that has played since the last look flashes, and fades in about a third of a second.
+void DrumMachineView::timerCallback()
+{
+    bool changed = false;
+    for (int p = 0; p < kDrumPads; ++p)
+    {
+        auto& f = flash[static_cast<size_t> (p)];
+        const auto hits = engine.padHitCount (channelIndex, p);
+        if (hits != seenHits[static_cast<size_t> (p)])
+        {
+            seenHits[static_cast<size_t> (p)] = hits;
+            f = 1.0f;
+            changed = true;
+        }
+        else if (f > 0.0f)
+        {
+            f = std::max (0.0f, f - 0.1f);
+            changed = true;
+        }
+    }
+    if (changed)
+        for (int p = 0; p < kDrumPads; ++p)
+            repaint (padRect (p));
+}
+
+void DrumMachineView::fillOutputBox()
+{
+    const int tracks = std::clamp (getTrackCount ? getTrackCount() : 8, 1, kMaxTracks);
+    if (tracks == outputBoxTracks)
+        return;
+    outputBoxTracks = tracks;
+    outputBox.clear (juce::dontSendNotification);
+    outputBox.addItem ("Channel's track", 1);
+    for (int t = 0; t < tracks; ++t)
+        outputBox.addItem ("Track " + juce::String (t + 1), t + 2);
+}
 
 DrumMachineWindow::DrumMachineWindow (AudioEngine& engine)
     : juce::DocumentWindow ("Drum machine", juce::Colour (0xff1b1e24), juce::DocumentWindow::closeButton), content (engine)

@@ -447,6 +447,42 @@ juce::var samplerSettingsToVar (const SamplerSettings& s)
         o->setProperty ("lfo2Rate", s.lfo2Rate);
         o->setProperty ("lfo2Depth", s.lfo2Depth);
     }
+    if (s.lfo3Target != SamplerLfoTarget::Off) // 0.84.0
+    {
+        o->setProperty ("lfo3Target", lfoTargetKey (s.lfo3Target));
+        o->setProperty ("lfo3Rate", s.lfo3Rate);
+        o->setProperty ("lfo3Depth", s.lfo3Depth);
+    }
+    {
+        static const char* const shapeKeys[] = { "sine", "triangle", "square", "saw-up", "saw-down", "random" };
+        juce::Array<juce::var> shapes, beats;
+        bool any = false;
+        for (int l = 0; l < SamplerSettings::kLfos; ++l)
+        {
+            shapes.add (juce::String (shapeKeys[std::clamp (s.lfoShapes[static_cast<size_t> (l)], 0, 5)]));
+            beats.add (static_cast<double> (s.lfoBeats[static_cast<size_t> (l)]));
+            any = any || s.lfoShapes[static_cast<size_t> (l)] != SamplerSettings::LfoSine || s.lfoBeats[static_cast<size_t> (l)] > 0.0f;
+        }
+        if (any)
+        {
+            o->setProperty ("lfoShapes", shapes);
+            o->setProperty ("lfoBeats", beats);
+        }
+        static const char* const sourceKeys[] = { "", "velocity", "key", "modx", "mody", "random" };
+        static const char* const targetKeys[] = { "", "pitch", "cutoff", "resonance", "volume", "pan", "start" };
+        juce::Array<juce::var> routes;
+        for (const auto& r : s.modRoutes)
+            if (r.source != SamplerSettings::SrcNone && r.target != SamplerSettings::DstNone && r.amount != 0.0f)
+            {
+                auto* m = new juce::DynamicObject();
+                m->setProperty ("source", juce::String (sourceKeys[std::clamp (r.source, 0, 5)]));
+                m->setProperty ("target", juce::String (targetKeys[std::clamp (r.target, 0, 6)]));
+                m->setProperty ("amount", static_cast<double> (r.amount));
+                routes.add (juce::var (m));
+            }
+        if (! routes.isEmpty())
+            o->setProperty ("modulation", routes);
+    }
     if (s.delay > 0.0f)
         o->setProperty ("delay", s.delay);
     if (s.hold > 0.0f)
@@ -523,6 +559,29 @@ SamplerSettings samplerSettingsFromVar (const juce::var& v)
     s.lfo2Target = lfoTargetFromKey (o->getProperty ("lfo2Target").toString()); // 0.70.0
     s.lfo2Rate = static_cast<float> (readNumber (o->getProperty ("lfo2Rate"), 1.0, 0.05, 20.0));
     s.lfo2Depth = static_cast<float> (readNumber (o->getProperty ("lfo2Depth"), 0.5, 0.0, 1.0));
+    s.lfo3Target = lfoTargetFromKey (o->getProperty ("lfo3Target").toString()); // 0.84.0
+    s.lfo3Rate = static_cast<float> (readNumber (o->getProperty ("lfo3Rate"), 0.25, 0.05, 20.0));
+    s.lfo3Depth = static_cast<float> (readNumber (o->getProperty ("lfo3Depth"), 0.5, 0.0, 1.0));
+    {
+        static const juce::StringArray shapeKeys { "sine", "triangle", "square", "saw-up", "saw-down", "random" };
+        static const juce::StringArray sourceKeys { "", "velocity", "key", "modx", "mody", "random" };
+        static const juce::StringArray targetKeys { "", "pitch", "cutoff", "resonance", "volume", "pan", "start" };
+        if (auto* shapes = o->getProperty ("lfoShapes").getArray())
+            for (int l = 0; l < std::min (shapes->size(), SamplerSettings::kLfos); ++l)
+                s.lfoShapes[static_cast<size_t> (l)] = std::max (0, shapeKeys.indexOf ((*shapes)[l].toString()));
+        if (auto* beats = o->getProperty ("lfoBeats").getArray())
+            for (int l = 0; l < std::min (beats->size(), SamplerSettings::kLfos); ++l)
+                s.lfoBeats[static_cast<size_t> (l)] = static_cast<float> (readNumber ((*beats)[l], 0.0, 0.0, 32.0));
+        if (auto* routes = o->getProperty ("modulation").getArray())
+            for (int r = 0, k = 0; r < routes->size() && k < SamplerSettings::kModRoutes; ++r)
+                if (auto* m = (*routes)[r].getDynamicObject())
+                {
+                    auto& route = s.modRoutes[static_cast<size_t> (k++)];
+                    route.source = std::max (0, sourceKeys.indexOf (m->getProperty ("source").toString()));
+                    route.target = std::max (0, targetKeys.indexOf (m->getProperty ("target").toString()));
+                    route.amount = static_cast<float> (readNumber (m->getProperty ("amount"), 0.0, -1.0, 1.0));
+                }
+    }
     s.delay = static_cast<float> (readNumber (o->getProperty ("delay"), 0.0, 0.0, 5.0));
     s.hold = static_cast<float> (readNumber (o->getProperty ("hold"), 0.0, 0.0, 5.0));
     if (auto* g = o->getProperty ("granular").getDynamicObject()) // 0.74.0

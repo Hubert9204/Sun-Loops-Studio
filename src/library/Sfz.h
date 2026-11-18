@@ -26,6 +26,11 @@ struct Region
     double keytrack = 100.0;            // pitch_keytrack: cents per key (0: every key plays the sample at its own pitch)
     bool oneShot = false;               // loop_mode=one_shot: the sample plays to its end whatever the key does
     double ampRelease = -1.0;           // ampeg_release in seconds (-1: not given)
+    // 0.84.0, keyswitches (for SunSymphony): the region plays only after the key `swLast` was pressed (-1: always); `swLabel` names
+    // that articulation; `swDefault` is the keyswitch that holds before any is pressed (-1: not given).
+    int swLast = -1;
+    std::string swLabel;
+    int swDefault = -1;
 };
 
 struct Instrument

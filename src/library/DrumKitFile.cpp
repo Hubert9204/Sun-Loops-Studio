@@ -35,6 +35,9 @@ KitSpec specFromKit (const DrumKit& kit)
         out.chokeGroup = p.chokeGroup;
         out.mute = p.mute;
         out.solo = p.solo;
+        out.outputTrack = p.outputTrack; // 0.84.0
+        out.roundRobin = p.roundRobin;
+        out.midiNote = p.midiNote;
         for (size_t l = 0; l < p.layers.size(); ++l)
         {
             out.sources[l] = p.layers[l].sample != nullptr ? p.layers[l].sample->source : std::string();
@@ -71,6 +74,12 @@ juce::var kitSpecToVar (const KitSpec& spec)
         o->setProperty ("choke", p.chokeGroup);
         o->setProperty ("mute", p.mute);
         o->setProperty ("solo", p.solo);
+        if (p.outputTrack >= 0) // 0.84.0 (older versions leave them out)
+            o->setProperty ("output", p.outputTrack + 1);
+        if (p.roundRobin != 0)
+            o->setProperty ("roundRobin", p.roundRobin == DrumPad::RoundRobinRandom ? "random" : "cycle");
+        if (p.midiNote >= 0)
+            o->setProperty ("midiNote", p.midiNote);
         pads.add (juce::var (o));
     }
     root->setProperty ("pads", pads);
@@ -101,6 +110,10 @@ KitSpec kitSpecFromVar (const juce::var& v)
         p.chokeGroup = readInt (o->getProperty ("choke"), 0, 0, kChokeGroups);
         p.mute = readBool (o->getProperty ("mute"), false);
         p.solo = readBool (o->getProperty ("solo"), false);
+        p.outputTrack = readInt (o->getProperty ("output"), 0, 0, kMaxTracks) - 1; // 0.84.0
+        const auto roundRobin = o->getProperty ("roundRobin").toString();
+        p.roundRobin = roundRobin == "random" ? DrumPad::RoundRobinRandom : roundRobin == "cycle" ? DrumPad::RoundRobinCycle : DrumPad::RoundRobinOff;
+        p.midiNote = readInt (o->getProperty ("midiNote"), -1, -1, 127);
         if (auto* layers = o->getProperty ("layers").getArray())
             for (int l = 0; l < std::min (layers->size(), kPadLayers); ++l)
                 if (auto* lo = (*layers)[l].getDynamicObject())
@@ -162,6 +175,9 @@ DrumKit loadKit (const KitSpec& spec, juce::StringArray& problems)
         pad.chokeGroup = p.chokeGroup;
         pad.mute = p.mute;
         pad.solo = p.solo;
+        pad.outputTrack = p.outputTrack; // 0.84.0
+        pad.roundRobin = p.roundRobin;
+        pad.midiNote = p.midiNote;
         for (size_t l = 0; l < p.sources.size(); ++l)
         {
             const auto& source = p.sources[l];

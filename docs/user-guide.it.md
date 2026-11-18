@@ -683,6 +683,22 @@ controlli alla sua destra: **On**, **Amount** (pan: fino a tutto a sinistra o a 
 la sua escursione; intonazione: fino a 2 ottave; negativo capovolge l'inviluppo) e i suoi **A D S R**. Non serve l'inviluppo del
 volume; quelli di cutoff e risonanza richiedono il filtro.
 
+### Tre LFO, forme e sincronizzazione al tempo, matrice di modulazione (0.84.0)
+
+Come nel sampler di FL Studio e in DirectWave:
+
+- **LFO 3**, un terzo LFO con la sua destinazione (intonazione, cutoff, pan, volume, risonanza), velocità e profondità.
+- **Forme degli LFO**: per ciascuno dei tre, *Sine*, *Triangle*, *Square*, *Saw up*, *Saw down* o *Random* (un valore nuovo a ogni
+  ciclo, come un sample and hold). Ogni nota fa partire i suoi LFO dall'inizio del ciclo.
+- **Sincronizzazione al tempo**: un LFO può fare un ciclo per valore di nota o numero di battute (da 1/32 a 8 battute) al tempo del
+  brano invece della sua velocità in Hz (che allora è disattivata).
+- **MOD MATRIX**: quattro righe, ognuna **sorgente** -> **destinazione** con una **quantità** (da -100 a +100 %). Le sorgenti sono la
+  **velocità** della nota, il suo **tasto** (dal Do4, fino a quattro ottave di distanza), il suo **Mod X** / **Mod Y** (le corsie del
+  Piano Roll) e una quantità **casuale** nuova per ogni nota; le destinazioni sono l'**intonazione** (fino a 12 semitoni), il
+  **cutoff** (fino a 5 ottave), la **risonanza**, il **volume** (velocità -> volume: il colpo più forte a pieno volume, i più
+  deboli più piano), il **pan** e l'**inizio del campione** (fino a metà campione, per attacchi più morbidi sulle note piano).
+  Agiscono all'inizio di ogni nota. Si salvano con il canale e i suoi preset.
+
 ### Modi di riproduzione: Granulizer e Wave Traveller (0.74.0)
 
 *PLAY MODE*, in fondo alla finestra del sampler, dice come suona il campione del canale (non un SoundFont o un programma di slice):
@@ -790,7 +806,18 @@ nome, con `kit.json` e copie dei suoni in `samples/` (i suoni inclusi nel progra
 **Nel progetto.** Il file di progetto salva il kit di ogni canale drum: nomi e impostazioni dei pad e da dove viene ogni suono (un percorso di file, o un suono interno), non l'audio. All'apertura i suoni vengono riletti;
 un file sparito lascia un layer silenzioso che ricorda il percorso (e un messaggio), così salvando di nuovo il riferimento non si perde. Salva il kit come cartella per renderlo portabile.
 
-Non disponibili: annulla per le modifiche al kit (gli step si annullano), un'uscita o effetti per pad (tutto il canale va su una traccia del mixer), layer round-robin, modificare il suono di un pad nell'editor di
+**Uscite come l'FPC, round robin, note MIDI, lampeggi (0.84.0).** Il pad selezionato ha tre impostazioni in più:
+
+| Controllo | Significato |
+| --- | --- |
+| Output | *Channel's track* (con gli altri pad, attraverso il canale), oppure una traccia del mixer tutta sua (Track 1 ... N): il pad va lì, attraverso volume e pan del canale, e prende effetti e fader di quella traccia, come le uscite dell'FPC di FL Studio. Un pad con la sua traccia mostra `> N`. La voce del menu dei kit *Each pad with a sound on its own mixer track* dà a ogni pad con un suono una traccia libera (niente che ci suona, nessun effetto; se non bastano se ne aggiungono di nuove), con il nome del pad. Eliminando la traccia di un pad, il pad torna a suonare attraverso il canale; spostando le tracce le uscite dei pad le seguono. |
+| Round robin | *Off*; *Cycle*: i layer con la stessa velocità minima si alternano a ogni colpo; *Random*: uno di loro a caso, mai lo stesso due volte di fila. Metti da due a quattro registrazioni di un suono su layer con la stessa velocità minima e i colpi ripetuti non suonano più come una mitragliatrice. Il pad mostra `rr` / `rnd`. |
+| MIDI note | La nota con cui una tastiera MIDI o un controller a pad suona questo pad (*Its own*: Do3 per il pad 1, Do#3 per il pad 2...). Un pad con un'altra nota risponde a quella, e le note si registrano come quel pad; il pad mostra la sua nota. |
+
+**I pad lampeggiano** quando suonano: dagli step, dal Piano Roll, dal brano, da un controller MIDI o da un clic. Caricando un altro kit
+le uscite dei pad restano (appartengono al progetto).
+
+Non disponibili: annulla per le modifiche al kit (gli step si annullano), effetti dentro la drum machine stessa (usa le tracce del mixer dei pad), modificare il suono di un pad nell'editor di
 campioni (modificalo su un canale sampler e poi carica il file salvato), più di 16 pad o 4 layer, suoni più lunghi di 30 secondi, salvare un canale drum come preset (salva il kit), assegnare ai pad le percussioni
 di un MIDI importato. I progetti con una drum machine non si aprono con versioni precedenti alla 0.14.
 
@@ -948,6 +975,14 @@ Il pulsante dorato **Library / Download sounds** apre la pagina Libreria (si apr
 2. Premi **Download**. La barra mostra l'avanzamento; intanto puoi continuare a suonare. **Stop** mette in pausa: Download di nuovo
    riprende da dove si era fermato. Ogni file viene controllato (SHA-256) prima di essere tenuto.
 3. Doppio clic su una parte > **Orchestra** > famiglia > strumento > articolazione. Il primo strumento che arriva va nella parte 1.
+
+**Tutte le articolazioni di uno strumento in una parte (0.84.0).** Uno strumento con più articolazioni ha, in cima al suo
+sottomenu, **All articulations (keyswitches)**: la parte allora le suona tutte, e i **keyswitch** scelgono quale, come nelle
+librerie orchestrali. I keyswitch sono i tasti appena sotto la nota più bassa dello strumento, dal Do1 (MIDI 24) in su nell'ordine
+del sottomenu (Violini: Do1 sustain, Do#1 pizzicato, Re1 spiccato, Re#1 tremolo); un keyswitch non suona, e le note dopo di lui
+suonano quell'articolazione, quindi una parte nel Piano Roll cambia articolazione con note brevi su quei tasti. La riga della
+parte mostra l'articolazione che suona adesso e i suoi keyswitch. I file SFZ con keyswitch propri (`sw_last`, `sw_label`,
+`sw_default`) funzionano allo stesso modo.
 
 **Remove** cancella dal disco gli strumenti spuntati; **Open folder** mostra `~/Music/Sun Loops Studio/Orchestral`, condivisa da
 tutti i SunSymphony. I suoni sono VSCO 2 Community Edition e VCSL di Versilian Studios, CC0 (pubblico dominio): liberi per qualsiasi

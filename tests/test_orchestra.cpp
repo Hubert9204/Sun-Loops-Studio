@@ -303,6 +303,63 @@ void testRealTime()
     e.collectRetired();
     supportCheck (keptWhileFading && old.expired(), "SunSymphony: a replaced instrument is freed later, off the audio thread");
 }
+
+// 0.84.0: articulations in one instrument, chosen by keyswitches (SFZ sw_last, or several instruments combined)
+void testKeyswitches()
+{
+    auto low = sine (261.6255653, 48000), high = sine (523.2511306, 48000);
+    const std::string sfz = "<global> sw_lokey=c1 sw_hikey=d1 sw_default=c#1\n"
+                            "<group> sw_last=c1 sw_label=Sustain\n<region> sample=low.wav lokey=c4 hikey=c5 pitch_keycenter=c4\n"
+                            "<group> sw_last=c#1 sw_label=Pizzicato\n<region> sample=high.wav lokey=c4 hikey=c5 pitch_keycenter=c4\n";
+    std::string error;
+    const auto inst = Instrument::fromSfz (sfz, "ks", "KS", [&] (const std::string& path) -> std::shared_ptr<const SampleBuffer>
+    { return path == "low.wav" ? low : path == "high.wav" ? high : nullptr; }, error);
+    supportCheck (inst != nullptr && inst->articulations.size() == 2 && inst->articulations[0].name == "Sustain" && inst->articulations[0].keyswitch == 24
+                      && inst->articulations[1].keyswitch == 25 && inst->defaultArticulation == 1,
+                  "SunSymphony: SFZ keyswitches (sw_last, sw_label, sw_default) become articulations");
+    if (inst == nullptr)
+        return;
+    const Region* picked[4];
+    supportCheck (inst->pick (60, 100, picked, 4, 0, 0) == 1 && picked[0]->sample == low && inst->pick (60, 100, picked, 4, 0, 1) == 1
+                      && picked[0]->sample == high,
+                  "SunSymphony: a note plays the zones of the articulation chosen");
+
+    Engine e;
+    e.prepare (kRate);
+    e.setInstrument (0, inst);
+    e.noteOn (0, 60, 100);
+    auto o = render (e, 9600);
+    supportCheck (std::abs (cents (frequency (o.left, 1200), 523.2511306)) < 2.0 && e.articulation (0) == 1,
+                  "SunSymphony: before any keyswitch the default articulation plays");
+    e.noteOff (0, 60);
+    render (e, 48000);
+    e.noteOn (0, 24, 100); // the keyswitch C1: no sound
+    o = render (e, 4800);
+    supportCheck (o.peak() == 0.0f && e.articulation (0) == 0, "SunSymphony: a keyswitch sounds nothing and changes the articulation");
+    e.noteOn (0, 60, 100);
+    o = render (e, 9600);
+    supportCheck (std::abs (cents (frequency (o.left, 1200), 261.6255653)) < 2.0, "SunSymphony: the next notes play the new articulation");
+
+    // several instruments in one (a library instrument's SFZ files), keyswitched below its lowest key
+    auto a = std::make_shared<Instrument>(), b = std::make_shared<Instrument>();
+    Region ra;
+    ra.sample = low;
+    ra.loKey = 51;
+    ra.hiKey = 90;
+    ra.rootKey = 60;
+    a->regions.push_back (ra);
+    a->releaseSeconds = 0.4f;
+    Region rb = ra;
+    rb.sample = high;
+    b->regions.push_back (rb);
+    b->releaseSeconds = 0.25f;
+    const auto both = Instrument::combine ("violins", "Violins - all articulations", { { "sustain", a }, { "pizzicato", b } });
+    supportCheck (both != nullptr && both->articulations.size() == 2 && both->articulations[0].keyswitch == 24 && both->articulations[1].keyswitch == 25
+                      && both->regions.size() == 2 && both->regions[1].articulation == 1 && std::abs (both->regions[0].releaseSeconds - 0.4f) < 1.0e-6f
+                      && both->defaultArticulation == 0,
+                  "SunSymphony: instruments combine into one with an articulation each, keyswitched from C1, each keeping its release");
+    supportCheck (Instrument::combine ("x", "x", {}) == nullptr, "SunSymphony: nothing to combine gives no instrument");
+}
 } // namespace
 
 void testOrchestra()
@@ -311,6 +368,7 @@ void testOrchestra()
     testPitch();
     testZonesFromSfz();
     testRoundRobinAndPercussion();
+    testKeyswitches();
     testVoicesAndParts();
     testRealTime();
 }

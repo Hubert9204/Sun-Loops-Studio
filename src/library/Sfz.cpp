@@ -175,6 +175,12 @@ Instrument parse (const std::string& textIn)
             r.oneShot = lower (*s) == "one_shot";
         if (const auto* s = get ({ "ampeg_release" }); s != nullptr && number (*s, v))
             r.ampRelease = std::clamp (v, 0.0, 100.0);
+        if (const auto* s = get ({ "sw_last" })) // 0.84.0: keyswitches
+            r.swLast = keyFromText (*s);
+        if (const auto* s = get ({ "sw_label" }))
+            r.swLabel = s->substr (0, 48);
+        if (const auto* s = get ({ "sw_default" }))
+            r.swDefault = keyFromText (*s);
         if (r.hiKey < r.loKey)
             std::swap (r.loKey, r.hiKey);
         if (r.hiVel < r.loVel)
@@ -184,7 +190,8 @@ Instrument parse (const std::string& textIn)
 
     static const char* known[] = { "sample", "key", "lokey", "hikey", "pitch_keycenter", "lovel", "hivel", "tune", "pitch", "transpose",
                                    "volume", "pan", "loop_mode", "loopmode", "loop_start", "loopstart", "loop_end", "loopend", "default_path" };
-    static const char* extra[] = { "seq_length", "seq_position", "pitch_keytrack", "ampeg_release" };
+    static const char* extra[] = { "seq_length", "seq_position", "pitch_keytrack", "ampeg_release", "sw_last", "sw_label", "sw_default",
+                                   "sw_lokey", "sw_hikey" };
 
     size_t pos = 0;
     while (pos < text.size())

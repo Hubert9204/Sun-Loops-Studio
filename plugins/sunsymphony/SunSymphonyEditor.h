@@ -35,5 +35,6 @@ private:
     juce::TextButton libraryButton { "Library / Download sounds" };
     std::unique_ptr<LibraryPanel> libraryPanel;
     int lastGeneration = -1;
+    std::array<int, orchestra::kParts> shownArticulations {}; // 0.84.0
 };
 } // namespace sunsymphony

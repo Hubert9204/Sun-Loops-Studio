@@ -71,7 +71,16 @@ private:
     juce::Label playModeLabel { {}, "Play mode" }, grainLabel { {}, "Grain" }, densityLabel { {}, "Density" }, curveLabel { {}, "Curve" },
         travelTimeLabel { {}, "Time" }, grainPositionLabel { {}, "Pos" }, grainSpeedLabel { {}, "Speed" }, grainSpreadLabel { {}, "Spread" },
         grainPanLabel { {}, "Pan" };
-    std::array<juce::Rectangle<int>, 6> headers; // SOUND, ENVELOPE, LOOP, FILTER, MODULATION (0.62.0), PLAY MODE (0.74.0)
+    // 0.84.0: a third LFO, each LFO's shape and tempo sync, and the modulation matrix
+    juce::ComboBox lfo3Box;
+    juce::Slider lfo3RateSlider, lfo3DepthSlider;
+    juce::Label lfo3Label { {}, "LFO 3" }, lfo3RateLabel { {}, "Rate" }, lfo3DepthLabel { {}, "Depth" }, lfoShapeLabel { {}, "LFO shapes" },
+        lfoSyncLabel { {}, "Tempo sync" };
+    std::array<juce::ComboBox, SamplerSettings::kLfos> lfoShapeBoxes, lfoSyncBoxes;
+    std::array<juce::ComboBox, SamplerSettings::kModRoutes> modSourceBoxes, modTargetBoxes;
+    std::array<juce::Slider, SamplerSettings::kModRoutes> modAmountSliders;
+    std::array<juce::Label, SamplerSettings::kModRoutes> modRouteLabels;
+    std::array<juce::Rectangle<int>, 7> headers; // SOUND, ENVELOPE, LOOP, FILTER, MODULATION (0.62.0), PLAY MODE (0.74.0), MOD MATRIX (0.84.0)
     bool updating = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SamplerPanel)

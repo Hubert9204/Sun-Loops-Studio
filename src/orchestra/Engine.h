@@ -43,6 +43,11 @@ public:
     void render (float* left, float* right, int numSamples) noexcept;
 
     int activeVoices() const noexcept { return sounding.load (std::memory_order_relaxed); }
+    // 0.84.0: the articulation a part plays now (chosen by its keyswitches), -1 when its instrument has none. Any thread.
+    int articulation (int part) const noexcept
+    {
+        return part >= 0 && part < kParts ? shownArticulation[static_cast<size_t> (part)].load (std::memory_order_relaxed) : -1;
+    }
     int voicesStolen() const noexcept { return stolen.load (std::memory_order_relaxed); }
 
 private:
@@ -78,6 +83,7 @@ private:
         float volume = 1.0f, pan = 0.0f, expression = 1.0f;
         bool pedal = false;
         unsigned roundRobin = 0; // notes played (round-robin zones take turns)
+        int articulation = -1;   // 0.84.0: chosen by the last keyswitch (-1: the instrument has none)
     };
 
     Voice* startVoice() noexcept;
@@ -91,6 +97,7 @@ private:
     std::uint64_t counter = 0;
     std::atomic<int> sounding { 0 }, stolen { 0 };
     std::atomic<std::uint64_t> samplesDone { 0 };
+    std::array<std::atomic<int>, kParts> shownArticulation {}; // 0.84.0: for the editor
 
     // Shared between the threads, under `lock`.
     std::atomic<bool> lock { false };
