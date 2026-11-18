@@ -4749,7 +4749,7 @@ void testPatternTrackSync079()
         check (back.document && back.document->arrangement.playlistTracks[1].mixerTrack == 9 && back.document->arrangement.playlistTracks[0].mixerTrack == -1,
                "the mixer track a playlist track's audio plays through is saved and read back");
         sls::AudioClip clip;
-        clip.data = std::make_shared<sls::SampleData>();
+        clip.data = sineSample (440.0, 0.5, 48000.0); // (an empty clip would be left out of the song)
         clip.track = 1;
         clip.lengthTicks = 960;
         sls::AudioClip other = clip;
