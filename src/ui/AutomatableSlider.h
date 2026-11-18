@@ -6,6 +6,18 @@
 
 namespace sls
 {
+// 0.80.0: the same one-item menu for any control (buttons, knobs): "Create automation clip" runs `create`.
+inline void showCreateAutomationMenu (std::function<void()> create)
+{
+    juce::PopupMenu menu;
+    menu.addItem (1, "Create automation clip");
+    menu.showMenuAsync (juce::PopupMenu::Options(), [create = std::move (create)] (int result)
+                        {
+                            if (result == 1 && create)
+                                create();
+                        });
+}
+
 // A slider with one extra: a right click offers "Create automation clip", which hands the request to `onAutomate`
 // (the owner knows which parameter the slider stands for). Everything else is juce::Slider.
 class AutomatableSlider : public juce::Slider

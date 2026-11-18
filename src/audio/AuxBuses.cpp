@@ -34,7 +34,8 @@ std::string whyKeepLastAuxBus (const Console& console, const std::vector<MixerTr
             return "it has effects";
     for (const auto& c : clips)
         if (((c.target.kind == AutomationKind::AuxVolume || c.target.kind == AutomationKind::AuxPan || c.target.kind == AutomationKind::TrackSend)
-             && c.target.slot == last))
+             && c.target.slot == last)
+            || ((c.target.kind == AutomationKind::AuxEffect || c.target.kind == AutomationKind::AuxPlugin) && c.target.index == last)) // 0.80.0
             return "an automation clip controls it";
     return {};
 }

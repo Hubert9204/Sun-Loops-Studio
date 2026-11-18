@@ -536,7 +536,7 @@ private:
     // 0.62.0: the master pitch and step editing (notes played while the song is stopped are written at the pattern's start
     // marker, which then moves on by the snap)
     juce::Label pitchLabel { {}, "Pitch" };
-    juce::Slider pitchSlider { juce::Slider::LinearBar, juce::Slider::NoTextBox };
+    AutomatableSlider pitchSlider { juce::Slider::LinearBar, juce::Slider::NoTextBox }; // 0.80.0: automatable (right click)
     juce::TextButton stepEditButton { "Step edit" };
     bool stepEditOn = false;
     bool performanceOn = false; // 0.62.0: the performance mode plays its own schedule of clips (see MainComponentPerformance.cpp)
@@ -600,7 +600,7 @@ private:
     juce::TextButton recordMenuButton { juce::String::fromUTF8 ("\xe2\x96\xbe") };
     juce::TextButton deviceButton { "Audio..." };
     juce::Slider bpmSlider { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
-    juce::Slider volumeSlider { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
+    AutomatableSlider volumeSlider { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight }; // 0.80.0: automatable (right click)
     juce::Label bpmLabel { {}, "BPM" };
     juce::TextButton meterButton { "4/4" }; // the time signature and the tempo changes (0.46.0)
     juce::Label volumeLabel { {}, "Master" };

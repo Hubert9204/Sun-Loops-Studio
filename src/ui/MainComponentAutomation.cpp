@@ -22,6 +22,8 @@ EffectType MainComponent::effectTypeFor (const AutomationTarget& t) const
         return masterTrack.slots[static_cast<size_t> (t.slot)].type;
     if (t.kind == AutomationKind::TrackEffect && t.index >= 0 && t.index < static_cast<int> (tracks.size()))
         return tracks[static_cast<size_t> (t.index)].slots[static_cast<size_t> (t.slot)].type;
+    if (t.kind == AutomationKind::AuxEffect && t.index >= 0 && t.index < kAuxBuses) // 0.80.0
+        return console.aux[static_cast<size_t> (t.index)].slots[static_cast<size_t> (t.slot)].type;
     return EffectType::None;
 }
 
@@ -41,6 +43,12 @@ std::shared_ptr<HostedPlugin> MainComponent::pluginFor (const AutomationTarget& 
         case AutomationKind::MasterPlugin:
             if (slotOk)
                 return masterTrack.slots[static_cast<size_t> (t.slot)].plugin;
+            break;
+        case AutomationKind::AuxPlugin: // 0.80.0
+            if (slotOk && t.index >= 0 && t.index < kAuxBuses)
+                return console.aux[static_cast<size_t> (t.index)].slots[static_cast<size_t> (t.slot)].plugin;
+            break;
+        default:
             break;
         case AutomationKind::ChannelVolume:
         case AutomationKind::ChannelPan:
@@ -88,6 +96,20 @@ float MainComponent::currentValueOf (const AutomationTarget& t) const
         case AutomationKind::AuxVolume: if (t.slot >= 0 && t.slot < kAuxBuses) return console.aux[static_cast<size_t> (t.slot)].volume; break;
         case AutomationKind::AuxPan:    if (t.slot >= 0 && t.slot < kAuxBuses) return console.aux[static_cast<size_t> (t.slot)].pan; break;
         case AutomationKind::VcaLevel:  if (t.slot >= 0 && t.slot < kVcaGroups) return console.vcaLevel[static_cast<size_t> (t.slot)]; break;
+        // 0.80.0
+        case AutomationKind::ChannelPitch: if (at (channels, t.index)) return channels[static_cast<size_t> (t.index)].pitch; break;
+        case AutomationKind::ChannelSwing: if (at (channels, t.index)) return channels[static_cast<size_t> (t.index)].swing; break;
+        case AutomationKind::ChannelMute:  if (at (channels, t.index)) return channels[static_cast<size_t> (t.index)].mute ? 1.0f : 0.0f; break;
+        case AutomationKind::ChannelSolo:  if (at (channels, t.index)) return channels[static_cast<size_t> (t.index)].solo ? 1.0f : 0.0f; break;
+        case AutomationKind::TrackMute:    if (at (tracks, t.index)) return tracks[static_cast<size_t> (t.index)].mute ? 1.0f : 0.0f; break;
+        case AutomationKind::TrackSolo:    if (at (tracks, t.index)) return tracks[static_cast<size_t> (t.index)].solo ? 1.0f : 0.0f; break;
+        case AutomationKind::MasterVolume: return static_cast<float> (volumeSlider.getValue());
+        case AutomationKind::MasterPitch:  return masterPitch;
+        case AutomationKind::AuxEffect:
+            if (t.index >= 0 && t.index < kAuxBuses && t.slot >= 0 && t.slot < kSlotsPerTrack && t.param >= 0 && t.param < kMaxEffectParams)
+                return console.aux[static_cast<size_t> (t.index)].slots[static_cast<size_t> (t.slot)].params[static_cast<size_t> (t.param)];
+            break;
+        case AutomationKind::AuxPlugin: break; // handled above
     }
     return automationRange (t, effectTypeFor (t)).def;
 }
@@ -114,6 +136,19 @@ juce::String MainComponent::automationLabelFor (const AutomationTarget& t) const
         case AutomationKind::AuxVolume:     return auxName (t.slot) + " volume";
         case AutomationKind::AuxPan:        return auxName (t.slot) + " balance";
         case AutomationKind::VcaLevel:      return "VCA " + juce::String (t.slot + 1) + " level";
+        case AutomationKind::ChannelPitch:  return channelName (t.index) + " pitch"; // 0.80.0
+        case AutomationKind::ChannelSwing:  return channelName (t.index) + " swing";
+        case AutomationKind::ChannelMute:   return channelName (t.index) + " mute";
+        case AutomationKind::ChannelSolo:   return channelName (t.index) + " solo";
+        case AutomationKind::TrackMute:     return "Track " + juce::String (t.index + 1) + " mute";
+        case AutomationKind::TrackSolo:     return "Track " + juce::String (t.index + 1) + " solo";
+        case AutomationKind::MasterVolume:  return "Master volume";
+        case AutomationKind::MasterPitch:   return "Master pitch";
+        case AutomationKind::AuxEffect:
+        {
+            const auto type = effectTypeFor (t);
+            return auxName (t.index) + " " + effectName (type) + " " + effectParamNameFor (type, t.param);
+        }
         case AutomationKind::TrackEffect:
         {
             const auto type = effectTypeFor (t);
@@ -127,10 +162,12 @@ juce::String MainComponent::automationLabelFor (const AutomationTarget& t) const
         case AutomationKind::ChannelPlugin:
         case AutomationKind::TrackPlugin:
         case AutomationKind::MasterPlugin:
+        case AutomationKind::AuxPlugin:
         {
             const auto plugin = pluginFor (t);
             const juce::String where = t.kind == AutomationKind::ChannelPlugin ? channelName (t.index)
                                      : t.kind == AutomationKind::TrackPlugin   ? "Track " + juce::String (t.index + 1)
+                                     : t.kind == AutomationKind::AuxPlugin     ? auxName (t.index)
                                                                                : juce::String ("Master");
             if (plugin == nullptr)
                 return where + " plugin parameter " + juce::String (t.param + 1) + " (no plugin there)";
@@ -152,12 +189,21 @@ juce::String MainComponent::automationValueText (const AutomationTarget& t, floa
         case AutomationKind::TrackVolume:
         case AutomationKind::TrackSend:
         case AutomationKind::AuxVolume:
+        case AutomationKind::MasterVolume:
         case AutomationKind::VcaLevel:      return MixerStrip::volumeToText (v);
         case AutomationKind::ChannelPan:
         case AutomationKind::TrackPan:
         case AutomationKind::AuxPan:        return MixerStrip::panToText (v);
+        case AutomationKind::ChannelPitch:
+        case AutomationKind::MasterPitch:   return (v > 0.0f ? "+" : "") + juce::String (v, 2) + " st"; // 0.80.0
+        case AutomationKind::ChannelSwing:  return juce::String (juce::roundToInt (v * 100.0f)) + " %";
+        case AutomationKind::ChannelMute:
+        case AutomationKind::TrackMute:     return v >= 0.5f ? "Muted" : "On";
+        case AutomationKind::ChannelSolo:
+        case AutomationKind::TrackSolo:     return v >= 0.5f ? "Solo" : "Off";
         case AutomationKind::TrackEffect:
         case AutomationKind::MasterEffect:
+        case AutomationKind::AuxEffect:
         {
             const auto info = effectParamInfo (effectTypeFor (t), t.param);
             const double range = static_cast<double> (info.max) - static_cast<double> (info.min);
@@ -168,6 +214,7 @@ juce::String MainComponent::automationValueText (const AutomationTarget& t, floa
         case AutomationKind::ChannelPlugin:
         case AutomationKind::TrackPlugin:
         case AutomationKind::MasterPlugin:
+        case AutomationKind::AuxPlugin:
         {
             const auto plugin = pluginFor (t);
             const auto text = plugin != nullptr && t.param < plugin->parameterCount() ? juce::String (plugin->parameterText (t.param, v)) : juce::String();
@@ -207,8 +254,7 @@ void MainComponent::createAutomationFor (const AutomationTarget& target)
     }
 
     const auto type = effectTypeFor (target);
-    if ((target.kind == AutomationKind::TrackEffect || target.kind == AutomationKind::MasterEffect)
-        && (type == EffectType::None || target.param >= effectParamCount (type)))
+    if (isEffectAutomation (target.kind) && (type == EffectType::None || target.param >= effectParamCount (type)))
     {
         statusLabel.setText ("There is no effect parameter to automate here.", juce::dontSendNotification);
         return;
@@ -221,7 +267,11 @@ void MainComponent::createAutomationFor (const AutomationTarget& target)
     const auto range = automationRange (target, type);
     const float value = std::clamp (currentValueOf (target), range.min, range.max);
 
-    const int index = playlistView.addAutomationClip (makeFlatAutomationClip (target, 0, start, unit, value), start);
+    auto clip = makeFlatAutomationClip (target, 0, start, unit, value);
+    if (isSwitchAutomation (target.kind)) // 0.80.0: a switch jumps, it does not slide between on and off
+        for (auto& p : clip.points)
+            p.shape = AutomationShape::Hold;
+    const int index = playlistView.addAutomationClip (clip, start);
     if (index < 0)
     {
         statusLabel.setText ("No room for another automation clip (the four lanes are full there, or the limit of "
@@ -299,6 +349,8 @@ void MainComponent::followAutomation()
         {
             followingAutomation = false;
             mixerPanel.refreshControls();
+            mixerPanel.setMasterVolume (volumeSlider.getValue()); // 0.80.0: the master strip and the toolbar's pitch show their own again
+            pitchSlider.setValue (masterPitch, juce::dontSendNotification);
             for (auto& strip : strips)
                 strip->refreshFromChannel();
         }
@@ -315,12 +367,16 @@ void MainComponent::followAutomation()
         float v = 0.0f;
         if (automationValueFor (followEvents, first, last, tick, v))
         {
-            if (target.kind == AutomationKind::ChannelVolume || target.kind == AutomationKind::ChannelPan)
+            if (isChannelAutomation (target.kind))
             {
                 for (auto& strip : strips)
                     if (strip->getIndex() == target.index)
                         strip->showAutomated (target.kind, v);
             }
+            else if (target.kind == AutomationKind::MasterVolume) // 0.80.0: on the master strip (the toolbar knob keeps the setting)
+                mixerPanel.setMasterVolume (v);
+            else if (target.kind == AutomationKind::MasterPitch)
+                pitchSlider.setValue (v, juce::dontSendNotification);
             else
                 mixerPanel.showAutomated (target, v);
         }

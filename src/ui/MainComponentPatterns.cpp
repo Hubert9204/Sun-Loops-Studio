@@ -372,6 +372,7 @@ Project MainComponent::compileCurrent()
                  : songMode ? compileSong (channels, arrangement, tracks, masterTrack.slots, console)
                             : compilePattern (channels, arrangement, currentPattern, tracks, masterTrack.slots, console);
     project.masterPitch = masterPitch; // 0.62.0
+    project.masterVolume = static_cast<float> (volumeSlider.getValue()); // 0.80.0: what master-volume automation plays against
     return project;
 }
 

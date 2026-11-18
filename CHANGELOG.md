@@ -2,6 +2,26 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.80.0 - 2026-11-18
+
+Automation of every knob and switch, as in FL Studio (first block of the plan in the project's notes).
+
+### Added
+- **New automation targets** (right-click > *Create automation clip*):
+  - a channel's **pitch** and **swing** knobs, **mute** and **solo** (Channel Rack);
+  - a mixer track's **mute** and **solo**;
+  - the **master volume** and **master pitch** (toolbar);
+  - every parameter of an **effect or plugin on an aux bus**.
+- **How they play**:
+  - Pitch bends the notes that are already sounding; plugin instruments get it as pitch bend.
+  - Mute and solo switch at the clip's middle value, and their clips hold each value (Hold) instead of sliding.
+  - Swing is applied per note, by the value where the note falls in the song.
+  - Master-volume automation plays against the toolbar knob, and exports get the same ratio.
+  - All of it is saved in the project, follows deleted channels and mixer tracks, and keeps an aux bus whose effects are
+    automated.
+- **Controls follow the automation while the song plays**: the effects panel's sliders, the pitch and swing knobs, the mute and
+  solo buttons, the Mixer's master fader and the toolbar's pitch (the faders, pans and sends already did).
+
 ## 0.79.0 - 2026-11-18
 
 Patterns and playlist tracks in step; deleting any mixer track.

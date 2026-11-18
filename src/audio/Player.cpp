@@ -588,14 +588,24 @@ void Player::noteOn (const Channel& channel, int channelIndex, const Note& n, in
 {
     if (channel.instrument == Instrument::Layer)
         return; // (liveNoteOn plays the children: it has the project)
-    if (std::abs (masterPitch) > 0.0 && channel.instrument != Instrument::Drums && channel.instrument != Instrument::Plugin)
+    // The master pitch (0.62.0) and, 0.80.0, the automated channel pitch move the note as cents (synths and samplers; a plugin gets
+    // the master pitch as a key in pluginNoteOn and the channel pitch as pitch bend; a drum voice is retuned at the next chunk).
+    const bool moves = channel.instrument != Instrument::Drums && channel.instrument != Instrument::Plugin;
+    const float offset = channelIndex >= 0 && channelIndex < kMaxChannels ? channelPitchOffset[static_cast<size_t> (channelIndex)] : 0.0f;
+    const float applied = moves ? static_cast<float> (masterPitch) + offset : 0.0f;
+    const auto before = ageCounter;
+    if (std::abs (applied) > 0.0f)
     {
         Note moved = n;
-        moved.finePitch += static_cast<float> (masterPitch * 100.0);
+        moved.finePitch += applied * 100.0f;
         startNote (channel, channelIndex, moved, loopLength, live);
-        return;
     }
-    startNote (channel, channelIndex, n, loopLength, live);
+    else
+        startNote (channel, channelIndex, n, loopLength, live);
+    // what the new voice (or the held voice a mono note slid on) plays at, for the automation's later bends
+    for (auto& v : voices)
+        if (v.state != State::Idle && v.channel == channelIndex && (v.age > before || (moves && v.livePitch == n.pitch)))
+            v.bendSemis = applied;
 }
 
 void Player::startNote (const Channel& channel, int channelIndex, const Note& n, int loopLength, bool live) noexcept
@@ -1727,9 +1737,10 @@ namespace
 // Sets every automated parameter to its value at song position `tick`. Parameters without a clip that has started are left as
 // they are. Channel and track gains go through `setChannel` / `setTrack` (which know the current volume and pan), effect
 // parameters are written into the slot copies.
-template <typename SetChannel, typename SetTrack, typename SetMix>
+template <typename SetChannel, typename SetTrack, typename SetMix, typename SetMore>
 void applyAutomation (const Project& project, double tick, size_t numChannels, size_t numTracks, SetChannel& setChannel, SetTrack& setTrack,
-                      SetMix& setMix,
+                      SetMix& setMix, SetMore& setMore,
+                      std::array<std::array<EffectSlot, kSlotsPerTrack>, kAuxBuses>& auxSlots,
                       const std::array<float, kMaxChannels>& channelVolume, const std::array<float, kMaxChannels>& channelPan,
                       const std::array<float, kMaxTracks>& trackVolume, const std::array<float, kMaxTracks>& trackPan,
                       std::vector<std::array<EffectSlot, kSlotsPerTrack>>& trackSlots,
@@ -1798,6 +1809,32 @@ void applyAutomation (const Project& project, double tick, size_t numChannels, s
                 case AutomationKind::VcaLevel:
                     setMix (target.kind, idx, static_cast<size_t> (target.slot), v);
                     break;
+                // 0.80.0
+                case AutomationKind::AuxEffect:
+                    if (idx < static_cast<size_t> (kAuxBuses))
+                        auxSlots[idx][static_cast<size_t> (target.slot)].params[static_cast<size_t> (target.param)] = v;
+                    break;
+                case AutomationKind::AuxPlugin:
+                    if (idx < static_cast<size_t> (kAuxBuses))
+                        if (auto& plugin = auxSlots[idx][static_cast<size_t> (target.slot)].plugin; plugin != nullptr)
+                            plugin->setParameter (target.param, v);
+                    break;
+                case AutomationKind::ChannelPitch:
+                case AutomationKind::ChannelMute:
+                case AutomationKind::ChannelSolo:
+                    if (idx < numChannels)
+                        setMore (target.kind, idx, v);
+                    break;
+                case AutomationKind::TrackMute:
+                case AutomationKind::TrackSolo:
+                    if (idx < numTracks)
+                        setMore (target.kind, idx, v);
+                    break;
+                case AutomationKind::MasterVolume:
+                case AutomationKind::MasterPitch:
+                    setMore (target.kind, 0, v);
+                    break;
+                case AutomationKind::ChannelSwing: break; // (applied to the notes when the song is compiled: see compileSong)
             }
         }
         first = last;
@@ -1841,6 +1878,7 @@ void Player::render (const Project& project, double bpm, bool playing,
 
     // 0.62.0: the master pitch, and the marker action the transport meets next (see Project::jumps).
     masterPitch = std::clamp (static_cast<double> (finiteOr (project.masterPitch, 0.0f)), -24.0, 24.0);
+    channelPitchOffset.fill (0.0f); // 0.80.0: set again by the automation of each chunk below
     if (! playing)
         halted = false;
     double nextJumpAt = 1.0e300;
@@ -1999,6 +2037,76 @@ void Player::render (const Project& project, double bpm, bool playing,
                     trackVca[t] = level;
                     setTrack (t, trackVolume[t], trackPan[t]);
                 }
+        }
+    };
+
+    // 0.80.0: the switches (mute / solo of the channels and tracks: the audibility of every one is worked out again when one moves,
+    // as for the project's own switches above), the channel pitch, and the master volume and pitch as automation has them.
+    std::array<bool, kMaxChannels> channelMuteNow {}, channelSoloNow {};
+    for (size_t ch = 0; ch < numMixerChannels; ++ch)
+    {
+        channelMuteNow[ch] = project.channels[ch].mute;
+        channelSoloNow[ch] = project.channels[ch].solo;
+    }
+    std::array<bool, kMaxTracks> trackMuteNow {}, trackSoloNow {};
+    for (size_t t = 0; t < numTracks; ++t)
+    {
+        trackMuteNow[t] = trackAt (t).mute;
+        trackSoloNow[t] = trackAt (t).solo;
+    }
+    const float masterKnob = std::clamp (finiteOr (project.masterVolume, 0.8f), 0.0f, 1.0f);
+    float masterAutoTarget = 1.0f;
+    const auto setMore = [&] (AutomationKind kind, size_t index, float v)
+    {
+        const bool on = v >= 0.5f;
+        switch (kind)
+        {
+            case AutomationKind::ChannelMute:
+            case AutomationKind::ChannelSolo:
+            {
+                auto& sw = kind == AutomationKind::ChannelMute ? channelMuteNow[index] : channelSoloNow[index];
+                if (sw == on)
+                    return;
+                sw = on;
+                anySolo = false;
+                for (size_t ch = 0; ch < numMixerChannels; ++ch)
+                    anySolo = anySolo || channelSoloNow[ch];
+                for (size_t ch = 0; ch < numMixerChannels; ++ch)
+                {
+                    channelAudible[ch] = anySolo ? channelSoloNow[ch] : ! channelMuteNow[ch];
+                    setChannel (ch, channelVolume[ch], channelPan[ch]);
+                }
+                return;
+            }
+            case AutomationKind::TrackMute:
+            case AutomationKind::TrackSolo:
+            {
+                auto& sw = kind == AutomationKind::TrackMute ? trackMuteNow[index] : trackSoloNow[index];
+                if (sw == on)
+                    return;
+                sw = on;
+                anyTrackSolo = false;
+                for (size_t t = 0; t < numTracks; ++t)
+                    anyTrackSolo = anyTrackSolo || trackSoloNow[t];
+                for (size_t t = 0; t < numTracks; ++t)
+                {
+                    trackAudible[t] = anyTrackSolo ? trackSoloNow[t] : ! trackMuteNow[t];
+                    setTrack (t, trackVolume[t], trackPan[t]);
+                }
+                return;
+            }
+            case AutomationKind::ChannelPitch:
+                channelPitchOffset[index] = std::clamp (v, -kAutomationPitchRange, kAutomationPitchRange)
+                                          - std::clamp (finiteOr (project.channels[index].pitch, 0.0f), -24.0f, 24.0f);
+                return;
+            case AutomationKind::MasterPitch:
+                masterPitch = std::clamp (static_cast<double> (v), -24.0, 24.0);
+                return;
+            case AutomationKind::MasterVolume:
+                masterAutoTarget = masterKnob > 1.0e-4f ? std::clamp (v, 0.0f, 1.0f) / masterKnob : 0.0f;
+                return;
+            default:
+                return;
         }
     };
 
@@ -2184,7 +2292,11 @@ void Player::render (const Project& project, double bpm, bool playing,
         for (size_t t = 0; t < numTracks; ++t)
             trackSlotsNow[t] = trackAt (t).slots;
     if (automated)
+    {
         masterSlotsNow = project.masterSlots;
+        for (size_t a = 0; a < auxCount; ++a) // 0.80.0
+            auxSlotsNow[a] = project.console.aux[a].slots;
+    }
     if (! anyPeak)
         numPeakMods = 0;
 
@@ -2216,8 +2328,40 @@ void Player::render (const Project& project, double bpm, bool playing,
         const EffectTransport transport { playing ? tickPos : -1.0, ticksPerSample, heldNotes.data(), kMaxChannels }; // where the song is at this chunk's start
 
         if (automated)
-            applyAutomation (project, tickPos, numMixerChannels, numTracks, setChannel, setTrack, setMix, channelVolume, channelPan, trackVolume, trackPan,
-                             trackSlotsNow, masterSlotsNow);
+            applyAutomation (project, tickPos, numMixerChannels, numTracks, setChannel, setTrack, setMix, setMore, auxSlotsNow, channelVolume, channelPan,
+                             trackVolume, trackPan, trackSlotsNow, masterSlotsNow);
+
+        // 0.80.0: the sounding notes follow the channel pitch and the master pitch as they are now (a ratio on their rate, so a
+        // glide, a vibrato or an envelope on the pitch goes on around it); a plugin channel gets the channel pitch as pitch bend
+        // (its bend range decides how far: two semitones by default).
+        for (auto& v : voices)
+        {
+            if (v.state == State::Idle || v.channel < 0 || static_cast<size_t> (v.channel) >= numMixerChannels)
+                continue;
+            const auto& owner = project.channels[static_cast<size_t> (v.channel)];
+            const float target = channelPitchOffset[static_cast<size_t> (v.channel)]
+                               + (owner.instrument == Instrument::Drums ? 0.0f : static_cast<float> (masterPitch));
+            if (std::abs (target - v.bendSemis) < 1.0e-4f)
+                continue;
+            const double ratio = std::pow (2.0, static_cast<double> (target - v.bendSemis) / 12.0);
+            v.bendSemis = target;
+            (v.sampler ? v.step : v.increment) *= ratio;
+            if (v.glideLeft > 0)
+                v.glideTarget *= ratio;
+            for (auto& inc : v.drumInc)
+                inc *= ratio;
+        }
+        for (size_t ch = 0; ch < numMixerChannels; ++ch)
+        {
+            const auto& c = project.channels[ch];
+            if (c.instrument != Instrument::Plugin || c.plugin == nullptr)
+                continue;
+            const int bend = std::clamp (8192 + static_cast<int> (std::lround (channelPitchOffset[ch] / 2.0f * 8191.0f)), 0, 16383);
+            if (bend == pluginBendSent[ch] || (pluginBendSent[ch] == 0 && bend == 8192))
+                continue;
+            pluginBendSent[ch] = bend;
+            pluginEvent (static_cast<int> (ch), 0xE0, bend & 127, bend >> 7);
+        }
 
         // What the Peak Controllers said after the last chunk goes into the parameters they drive (0.62.0).
         for (int m = 0; m < numPeakMods; ++m)
@@ -3038,7 +3182,7 @@ void Player::render (const Project& project, double bpm, bool playing,
             float* l = auxL[a].data();
             float* r = auxR[a].data();
             for (size_t s = 0; s < static_cast<size_t> (kSlotsPerTrack); ++s)
-                auxEffects[a][s].process (bus.slots[s], l, r, n, trackTransport);
+                auxEffects[a][s].process (automated ? auxSlotsNow[a][s] : bus.slots[s], l, r, n, trackTransport); // 0.80.0: automated
             if (auxComp > 0)
                 throughAuxLine (1 + a, l, r, n, auxComp - auxOwn[a]);
 
@@ -3073,8 +3217,9 @@ void Player::render (const Project& project, double bpm, bool playing,
         };
         for (int i = 0; i < n; ++i)
         {
-            const float outL = limit (mixL[static_cast<size_t> (i)]);
-            const float outR = limit (mixR[static_cast<size_t> (i)]);
+            masterAutoGain += (masterAutoTarget - masterAutoGain) * kGainSmoothing; // 0.80.0: master-volume automation (1: none)
+            const float outL = limit (mixL[static_cast<size_t> (i)]) * masterAutoGain;
+            const float outR = limit (mixR[static_cast<size_t> (i)]) * masterAutoGain;
             const float clickSample = click[static_cast<size_t> (i)];
             for (int ch = 0; ch < numChannels; ++ch)
                 if (out[ch] != nullptr)

@@ -12,6 +12,7 @@
 #include "ui/AutomatableSlider.h"
 #include "ui/AudioMeter.h"
 #include "ui/DragItems.h"
+#include "ui/RightClickButton.h"
 #include "ui/Knob.h"
 #include "ui/TrackSelector.h"
 
@@ -83,7 +84,7 @@ public:
     void repaintGrid() { grid.repaint(); }
     void setMeterLevel (float level) { meter.setLevel (level); }
     void refreshFromChannel();
-    void showAutomated (AutomationKind kind, float value); // volume or pan as automation has it while the song plays (0.47.0)
+    void showAutomated (AutomationKind kind, float value); // volume or pan as automation has it while the song plays (0.47.0; 0.80.0: pitch, swing, mute, solo)
     void setTrackCount (int mixerTracks) { trackSelector.setNumTracks (mixerTracks); } // the project's (0.29.0)
 
     int getIndex() const noexcept { return index; }
@@ -109,7 +110,7 @@ public:
     std::function<void (int)> onSavePreset;    // context menu "Save as preset..."
     std::function<void (int)> onAssignTrack;   // context menu "Assign free mixer track"
     std::function<void (int, const drag::Item&)> onItemDropped; // something was dropped from the browser
-    std::function<void (int, AutomationKind)> onAutomate;       // right click on volume / pan: create an automation clip
+    std::function<void (int, AutomationKind)> onAutomate;       // right click on volume / pan (0.80.0: pitch, swing, mute, solo): create an automation clip
     // 0.62.0: the rack's filter groups, the channel's colour and the Layer channel
     std::function<juce::StringArray()> listGroups;              // the groups the project's channels are in
     std::function<void (int)> onNewGroup;                       // "New group...": ask for a name and put the channel there
@@ -138,8 +139,8 @@ private:
     bool selected = false;
 
     juce::Label nameLabel;
-    juce::TextButton muteButton { "M" };
-    juce::TextButton soloButton { "S" };
+    RightClickButton muteButton { "M" }; // 0.80.0: a right click creates an automation clip for it
+    RightClickButton soloButton { "S" };
     AutomatableSlider volumeSlider { juce::Slider::LinearHorizontal, juce::Slider::NoTextBox };
     AutomatableSlider panSlider { juce::Slider::LinearHorizontal, juce::Slider::NoTextBox };
     TrackSelector trackSelector { kDefaultTracks };

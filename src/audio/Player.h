@@ -137,6 +137,7 @@ private:
         double pos = 0.0;
         double step = 1.0;
         std::uint64_t age = 0;
+        float bendSemis = 0.0f;             // 0.80.0: the pitch it plays at beyond its channel's own (automated channel pitch + master pitch)
         int glideLeft = 0;                  // samples left of a pitch slide (multiplies increment / step by glideRatio each sample)
         double glideRatio = 1.0;
         double glideTarget = 0.0;           // the exact rate at the end of the slide
@@ -439,7 +440,13 @@ private:
     float releaseStep = 0.001f;
     std::array<std::uint8_t, kMaxChannels> channelCutBy {}; // 0.62.0: each channel's cutBy in this block
     std::array<std::uint32_t, kMaxChannels> layerChildren {}; // 0.62.0: a Layer channel's children (0 for the other channels)
-    double masterPitch = 0.0;                                // 0.62.0: the project's, in semitones
+    double masterPitch = 0.0;                                // 0.62.0: the project's, in semitones (0.80.0: as automation has it now)
+    // 0.80.0, automation of the channels' pitch (semitones on top of each channel's own), of the master volume (a factor on the
+    // engine's, smoothed) and of the aux buses' effects (copies of their slots, as for the tracks)
+    std::array<float, kMaxChannels> channelPitchOffset {};
+    std::array<int, kMaxChannels> pluginBendSent {};         // the pitch bend last sent to a plugin channel (8192 = centre; 0 = none yet)
+    float masterAutoGain = 1.0f;
+    std::array<std::array<EffectSlot, kSlotsPerTrack>, kAuxBuses> auxSlotsNow {};
     bool halted = false;                                     // 0.62.0: stopped at a Pause marker until the transport is stopped
     std::atomic<bool> markerPause { false };
     std::atomic<int> markerPauseTick { 0 };

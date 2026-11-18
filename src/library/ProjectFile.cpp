@@ -32,6 +32,16 @@ const char* automationKindName (AutomationKind k)
         case AutomationKind::AuxVolume:     return "auxVolume";
         case AutomationKind::AuxPan:        return "auxPan";
         case AutomationKind::VcaLevel:      return "vcaLevel";
+        case AutomationKind::ChannelPitch:  return "channelPitch"; // 0.80.0
+        case AutomationKind::ChannelSwing:  return "channelSwing";
+        case AutomationKind::ChannelMute:   return "channelMute";
+        case AutomationKind::ChannelSolo:   return "channelSolo";
+        case AutomationKind::TrackMute:     return "trackMute";
+        case AutomationKind::TrackSolo:     return "trackSolo";
+        case AutomationKind::MasterVolume:  return "masterVolume";
+        case AutomationKind::MasterPitch:   return "masterPitch";
+        case AutomationKind::AuxEffect:     return "auxEffect";
+        case AutomationKind::AuxPlugin:     return "auxPlugin";
     }
     return "trackVolume";
 }

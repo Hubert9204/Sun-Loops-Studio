@@ -23,7 +23,7 @@ namespace sls
 inline bool isTrackAutomation (AutomationKind k) noexcept
 {
     return k == AutomationKind::TrackVolume || k == AutomationKind::TrackPan || k == AutomationKind::TrackEffect
-        || k == AutomationKind::TrackPlugin || k == AutomationKind::TrackSend;
+        || k == AutomationKind::TrackPlugin || k == AutomationKind::TrackSend || k == AutomationKind::TrackMute || k == AutomationKind::TrackSolo;
 }
 
 // What uses mixer track `k`: the question asked before it is deleted lists these.

@@ -193,6 +193,9 @@ struct Project
     // channels are not). And the time markers' actions (live playback only): when the transport reaches `atTick` it goes on from
     // `toTick`, or stops there (toTick -1). Sorted by atTick.
     float masterPitch = 0.0f;
+    // 0.80.0: the master volume knob (the engine applies it after the player). Master-volume automation plays its value against
+    // this one (the player scales by automated / knob), so the knob and the automation never multiply each other.
+    float masterVolume = 0.8f;
     struct Jump
     {
         int atTick = 0, toTick = 0;
@@ -344,6 +347,8 @@ struct Project
                                                      return p.tracks[static_cast<size_t> (t.index)].slots[static_cast<size_t> (t.slot)].type;
                                                  if (t.kind == AutomationKind::MasterEffect)
                                                      return p.masterSlots[static_cast<size_t> (t.slot)].type;
+                                                 if (t.kind == AutomationKind::AuxEffect) // 0.80.0
+                                                     return p.console.aux[static_cast<size_t> (t.index)].slots[static_cast<size_t> (t.slot)].type;
                                                  return EffectType::None;
                                              },
                                              [&p] (const AutomationTarget& t)
@@ -356,6 +361,8 @@ struct Project
                                                      plugin = p.tracks[static_cast<size_t> (t.index)].slots[static_cast<size_t> (t.slot)].plugin.get();
                                                  else if (t.kind == AutomationKind::MasterPlugin)
                                                      plugin = p.masterSlots[static_cast<size_t> (t.slot)].plugin.get();
+                                                 else if (t.kind == AutomationKind::AuxPlugin) // 0.80.0
+                                                     plugin = p.console.aux[static_cast<size_t> (t.index)].slots[static_cast<size_t> (t.slot)].plugin.get();
                                                  return plugin != nullptr ? plugin->parameterCount() : 0;
                                              });
         return p;

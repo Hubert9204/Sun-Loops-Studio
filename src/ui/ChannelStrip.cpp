@@ -261,6 +261,11 @@ ChannelStrip::ChannelStrip (Channel& channelToControl, int channelIndex)
     panSlider.setDoubleClickReturnValue (true, 0.0);
     panSlider.setTooltip ("Pan (right click: automate)");
     panSlider.onAutomate = [this] { if (onAutomate) onAutomate (index, AutomationKind::ChannelPan); };
+    // 0.80.0: pitch, swing, mute and solo can be automated too
+    pitchKnob.setOnAutomate ([this] { if (onAutomate) onAutomate (index, AutomationKind::ChannelPitch); });
+    swingKnob.setOnAutomate ([this] { if (onAutomate) onAutomate (index, AutomationKind::ChannelSwing); });
+    muteButton.onRightClick = [this] { showCreateAutomationMenu ([this] { if (onAutomate) onAutomate (index, AutomationKind::ChannelMute); }); };
+    soloButton.onRightClick = [this] { showCreateAutomationMenu ([this] { if (onAutomate) onAutomate (index, AutomationKind::ChannelSolo); }); };
     panSlider.onValueChange = [this]
     {
         channel.pan = static_cast<float> (panSlider.getValue());
@@ -313,6 +318,14 @@ void ChannelStrip::showAutomated (AutomationKind kind, float value)
         volumeSlider.setValue (value, juce::dontSendNotification);
     else if (kind == AutomationKind::ChannelPan)
         panSlider.setValue (value, juce::dontSendNotification);
+    else if (kind == AutomationKind::ChannelPitch) // 0.80.0 (the knobs' setValue does not notify)
+        pitchKnob.setValue (value);
+    else if (kind == AutomationKind::ChannelSwing)
+        swingKnob.setValue (value);
+    else if (kind == AutomationKind::ChannelMute)
+        muteButton.setToggleState (value >= 0.5f, juce::dontSendNotification);
+    else if (kind == AutomationKind::ChannelSolo)
+        soloButton.setToggleState (value >= 0.5f, juce::dontSendNotification);
 }
 
 void ChannelStrip::refreshFromChannel()
