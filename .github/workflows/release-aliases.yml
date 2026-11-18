@@ -1,0 +1,45 @@
+# Adds the downloads of an existing release a second time under names without the version (0.77.1) - what the release workflow
+# now does for every new release - so that the README's links (.../releases/latest/download/Sun-Loops-Studio-x86_64.AppImage,
+# -macOS.dmg, -Windows-x64-Setup.exe, -Windows-x64.zip) work for a release published before it. Nothing is built: the files are
+# downloaded from the release and attached again, with the checksum files rewritten to list both names.
+# Actions > Release aliases > Run workflow, with the tag (v0.77.0).
+name: Release aliases
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'The release to complete, such as v0.77.0'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  aliases:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Download the release's files
+        run: |
+          mkdir dist && cd dist
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern 'Sun-Loops-Studio-*'
+          ls -l
+      - name: Attach them under names without the version
+        run: |
+          cd dist
+          version="${TAG#v}"
+          upload=()
+          declare -A sums=([x86_64.AppImage]=SHA256SUMS.txt [macOS.dmg]=SHA256SUMS-macOS.txt
+                           [Windows-x64-Setup.exe]=SHA256SUMS-Windows.txt [Windows-x64.zip]=SHA256SUMS-Windows.txt)
+          for suffix in x86_64.AppImage macOS.dmg Windows-x64-Setup.exe Windows-x64.zip; do
+            versioned="Sun-Loops-Studio-$version-$suffix"
+            [ -f "$versioned" ] || { echo "not in $TAG: $versioned"; continue; }
+            cp "$versioned" "Sun-Loops-Studio-$suffix"
+            sha256sum "$versioned" "Sun-Loops-Studio-$suffix" >> "${sums[$suffix]}.new"
+            upload+=("Sun-Loops-Studio-$suffix")
+          done
+          for f in *.new; do mv "$f" "${f%.new}"; upload+=("${f%.new}"); cat "${f%.new}"; done
+          gh release upload "$TAG" "${upload[@]}" --clobber --repo "$GITHUB_REPOSITORY"

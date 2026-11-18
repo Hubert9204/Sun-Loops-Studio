@@ -41,8 +41,16 @@ def main() -> None:
     version = sys.argv[1].lstrip("vV")
     root = pathlib.Path(__file__).resolve().parent.parent
     notes = unwrap(section((root / "CHANGELOG.md").read_text(encoding="utf-8"), version))
-    notes += ["", f"Download `Sun-Loops-Studio-{version}-x86_64.AppImage` below, make it executable (`chmod +x`) and run it. "
-              "SunBurst and HexForge are inside it. `SHA256SUMS.txt` holds its checksum."]
+    notes += ["", "### Downloads", "",
+              f"- **Linux** (x86_64, glibc 2.40 or newer): `Sun-Loops-Studio-{version}-x86_64.AppImage` - make it executable "
+              "(`chmod +x`) and run it.",
+              f"- **macOS** (10.15 or newer, Apple silicon and Intel): `Sun-Loops-Studio-{version}-macOS.dmg` - drag the app to "
+              "Applications; the first time, right-click it > Open.",
+              f"- **Windows** (10 and 11, 64-bit): `Sun-Loops-Studio-{version}-Windows-x64-Setup.exe` (installer) or "
+              f"`Sun-Loops-Studio-{version}-Windows-x64.zip` (no installation); SmartScreen: More info > Run anyway.",
+              "",
+              "Each contains the program, its sounds and its four instruments (SunBurst, HexForge, SunSymphony, SunRiff). The same "
+              "files without the version in their name are the README's permanent links; `SHA256SUMS*.txt` hold the checksums."]
     print("\n".join(notes))
 
 

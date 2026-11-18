@@ -1,0 +1,51 @@
+# Takes the README's screenshots (scripts/capture_screenshots.sh, 0.77.1): builds the program and the four instruments'
+# Standalone versions on Fedora, starts them in a virtual display and keeps the pictures as the run's artifact
+# "screenshots" (to be copied into docs/images/). Runs when the script or this file changes, or by hand (Actions > Screenshots).
+name: Screenshots
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/capture_screenshots.sh'
+      - '.github/workflows/screenshots.yml'
+
+jobs:
+  screenshots:
+    runs-on: ubuntu-latest
+    container: fedora:41
+    steps:
+      - name: Install the build dependencies, a virtual display and the screenshot tools
+        run: |
+          dnf install -y gcc-c++ cmake ninja-build git pkgconf-pkg-config alsa-lib-devel \
+            pipewire-jack-audio-connection-kit-devel freetype-devel fontconfig-devel libX11-devel libXext-devel \
+            libXinerama-devel libXrandr-devel libXcursor-devel libXrender-devel libXcomposite-devel mesa-libGL-devel \
+            libcurl-devel ladspa-devel \
+            xorg-x11-server-Xvfb xdpyinfo openbox xdotool ImageMagick google-noto-sans-fonts
+      - uses: actions/checkout@v4
+      # The build folder is kept between runs: only what changed is built again.
+      - uses: actions/cache/restore@v4
+        with:
+          path: build
+          key: screenshots-build-${{ github.sha }}
+          restore-keys: screenshots-build-
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSLS_HELIOS_LLM=OFF -DSLS_BUILD_TEST_PLUGINS=OFF
+      - name: Build the program and the Standalone instruments
+        run: cmake --build build --target SunLoopsStudio SunBurst_Standalone HexForge_Standalone SunSymphony_Standalone SunRiff_Standalone
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: build
+          key: screenshots-build-${{ github.sha }}
+      - name: Take the screenshots
+        run: scripts/capture_screenshots.sh build screenshots
+      - name: Show them in the log (base64, between IMG-BEGIN and IMG-END)
+        if: always()
+        run: |
+          for f in screenshots/*.png; do echo "IMG-BEGIN $(basename "$f")"; base64 -w 100 "$f"; echo "IMG-END"; done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: screenshots/*.png
