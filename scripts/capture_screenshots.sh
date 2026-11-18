@@ -81,7 +81,9 @@ key F9
 click_in "$main" 284 342
 click_in "$main" 377 58
 key F7
-shot "$main" pianoroll.png
+# The piano's chords lie above the keys it opens on: the mouse wheel over the notes scrolls up to them.
+xdotool mousemove --window "$main" 760 640 click --repeat 8 --delay 80 4
+shot "$main" pianoroll.png 2.5
 key F7
 
 kill "${pids[-1]}" 2>/dev/null || true
