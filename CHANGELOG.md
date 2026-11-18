@@ -2,6 +2,29 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.77.1 - 2026-11-18
+
+Documentation and downloads.
+
+### Changed
+- **README** (English and Italian) rewritten for 0.77.0: a download table for Linux, macOS and Windows with direct links, what
+  each system needs and how to start the program on it; the status (tests on three systems, what was tried on real hardware);
+  the features grouped as they are now (the Playlist's sections, Performance mode, the drum synth and speech, the 36 effects and
+  controllers, the four instruments, ASIO); and how the four instruments are built - each its own plugin with `_VST3` and
+  `_Standalone` CMake targets, the VST3 in every download, the Standalone from source only.
+- **New screenshots** for the README, taken by a script (below): the main window, Piano Roll and Mixer with the demo song, and the
+  four instruments, SunSymphony and SunRiff for the first time.
+- The release notes end with the downloads of all three systems (they named only the AppImage, with two instruments).
+
+### Added
+- **Download links that do not change**: every release also carries its downloads under names without the version
+  (`Sun-Loops-Studio-x86_64.AppImage`, `-macOS.dmg`, `-Windows-x64-Setup.exe`, `-Windows-x64.zip`), so
+  `.../releases/latest/download/<name>` always gives the newest. *Release aliases* (a workflow run by hand) adds them to a release
+  published before.
+- `scripts/capture_screenshots.sh` and the *Screenshots* workflow: the README's pictures made in a virtual display (Xvfb, openbox,
+  xdotool, ImageMagick).
+- Windows: curl's licence (`LICENSE-curl.txt`) next to the program, as libcurl is built into it there.
+
 ## 0.77.0 - 2026-11-18
 
 ASIO by default on Windows.
@@ -1380,8 +1403,8 @@ Finishing what earlier releases left half done.
   the file in seconds and samples, gain), zoom from the
   toolbar, Ctrl+wheel or a dragged range, **Fit**, and a horizontal scroll bar.
 - **Cyber-Hub sounds** built into the program (30 system sounds by Hubert, unchanged) in **Browser > Samples >
-  Cyber-Hub** and a **Cyber-Hub Kit** under Drum Kits; see [docs/cyber-hub.md](docs/cyber-hub.md) for the listening
-  analysis and the licence note.
+  Cyber-Hub** and a **Cyber-Hub Kit** under Drum Kits; see `docs/cyber-hub.md` for the listening
+  analysis and the licence note (removed with the theme in 0.22.0).
 - **New demo project** made of Cyber-Hub sounds (112 BPM, Cyber-Hub drums, Desktop login / logout as audio clips).
 - **Start-up sound:** `intro.wav` plays once when the program opens; switch off in *File > Play the start-up sound*.
 

@@ -80,6 +80,10 @@ Copy-Item "$root\LICENSE" (Join-Path $stage "LICENSE.txt")
 $asioLicense = Get-ChildItem (Join-Path $BuildDir "_deps\asiosdk-src") -Filter "LICENSE*.txt" -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($asioLicense) { Copy-Item $asioLicense.FullName (Join-Path $stage "LICENSE-ASIO-SDK.txt") }
 else { Write-Warning "no ASIO SDK licence found (built without ASIO?)" }
+# 0.77.1: libcurl is linked into the program on Windows; its licence asks for its notice to go with every copy
+$curlLicense = Join-Path $BuildDir "_deps\curl-src\COPYING"
+if (Test-Path $curlLicense) { Copy-Item $curlLicense (Join-Path $stage "LICENSE-curl.txt") }
+else { Write-Warning "no curl licence found" }
 
 # --- the zip ---
 New-Item -ItemType Directory -Force -Path $DistDir | Out-Null
