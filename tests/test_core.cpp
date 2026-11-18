@@ -12170,6 +12170,124 @@ void testReorder082()
     check (! drag::Item::parse (desc, item), "a move is not a browser item");
 }
 
+// 0.84.0: the drum machine's own outputs, round robin, MIDI notes and hit counts; the sampler's LFO shapes and modulation matrix
+void testInstruments084()
+{
+    std::cout << "\n[0.84.0 instruments: drum pads' outputs, round robin, MIDI notes; sampler LFOs and modulation matrix]\n";
+    using namespace sls;
+    const auto crossingsHz = [] (const std::vector<float>& x, double from, double to)
+    {
+        int n = 0;
+        const auto a = static_cast<size_t> (from * kSr), b = std::min (x.size(), static_cast<size_t> (to * kSr));
+        for (size_t i = a + 1; i < b; ++i)
+            n += (x[i - 1] < 0.0f) != (x[i] < 0.0f) ? 1 : 0;
+        return n / 2.0 / (to - from);
+    };
+    // a kit whose pad 1 has two layers at the same velocity: 440 Hz and 880 Hz, 0.3 s each
+    DrumKit kit = DrumKit::empty();
+    kit.pads[0].layers[0].sample = sineSample (440.0, 0.3, kSr);
+    kit.pads[0].layers[1].sample = sineSample (880.0, 0.3, kSr);
+    const auto hits = [&] (int mode, int count)
+    {
+        auto k = kit;
+        k.pads[0].roundRobin = mode;
+        Channel drums;
+        drums.instrument = Instrument::Drums;
+        drums.volume = 1.0f;
+        drums.kit = std::make_shared<const DrumKit> (k);
+        for (int i = 0; i < count; ++i)
+            drums.notes.push_back ({ 36, i * kTicksPerBeat, kTicksPerBeat / 4, 1.0f });
+        auto project = Project::make ({ drums }, count * kTicksPerBeat);
+        Player player;
+        player.prepare (kSr);
+        const auto out = renderBlocks (player, project, true, count * 0.5);
+        std::vector<int> picked;
+        for (int i = 0; i < count; ++i)
+            picked.push_back (crossingsHz (out, i * 0.5 + 0.05, i * 0.5 + 0.25) > 660.0 ? 1 : 0);
+        return std::make_pair (picked, player.padHitCount (0, 0));
+    };
+    {
+        const auto [off, offHits] = hits (DrumPad::RoundRobinOff, 4);
+        const auto [cycle, cycleHits] = hits (DrumPad::RoundRobinCycle, 4);
+        check (off == std::vector<int> { 0, 0, 0, 0 } && cycle == std::vector<int> { 0, 1, 0, 1 } && cycleHits == 4u && offHits == 4u,
+               "round robin: the layers with the same velocity take turns (off: always the first); every hit is counted for the pad's flash");
+        const auto [random, randomHits] = hits (DrumPad::RoundRobinRandom, 12);
+        bool repeats = false;
+        for (size_t i = 1; i < random.size(); ++i)
+            repeats = repeats || random[i] == random[i - 1];
+        check (! repeats && randomHits == 12u, "round robin at random: never the same layer twice in a row (of two, they alternate)");
+    }
+    {   // a pad into its own mixer track
+        auto k = kit;
+        k.pads[0].outputTrack = 3;
+        Channel drums;
+        drums.instrument = Instrument::Drums;
+        drums.volume = 1.0f;
+        drums.kit = std::make_shared<const DrumKit> (k);
+        drums.notes = { { 36, 0, kTicksPerBeat / 4, 1.0f } };
+        auto project = Project::make ({ drums }, 4 * kTicksPerBeat);
+        Player player;
+        player.prepare (kSr);
+        renderBlocks (player, project, true, 0.05);
+        check (player.getTrackPeak (3) > 0.05f && player.getTrackPeak (0) == 0.0f && player.getChannelPeak (0) > 0.05f,
+               "a pad with its own output plays into that mixer track, not the channel's (the channel's meter still shows it)");
+    }
+    {   // MIDI notes, and what the mixer does with the pads' tracks
+        auto k = DrumKit::empty();
+        k.pads[2].midiNote = 60;
+        k.pads[5].midiNote = 36; // takes pad 1's note
+        check (k.padForMidiNote (60) == 2 && k.padForMidiNote (38) == -1 && k.padForMidiNote (36) == 5 && k.padForMidiNote (37) == 1
+                   && k.midiNoteOf (2) == 60 && k.midiNoteOf (3) == 39,
+               "a pad answers to its own MIDI note; the others to theirs, unless a pad took it");
+        k.pads[0].outputTrack = 3;
+        k.pads[1].outputTrack = 5;
+        k.pads[1].roundRobin = DrumPad::RoundRobinRandom;
+        const auto back = kitSpecFromVar (kitSpecToVar (specFromKit (k)));
+        check (back.pads[0].outputTrack == 3 && back.pads[1].roundRobin == DrumPad::RoundRobinRandom && back.pads[2].midiNote == 60
+                   && back.pads[3].outputTrack == -1 && back.pads[3].midiNote == -1,
+               "the pads' outputs, round robin and MIDI notes are saved and loaded");
+        std::vector<MixerTrack> tracks = Project::defaultTracks();
+        tracks.resize (10);
+        std::vector<Channel> channels (1);
+        channels[0].instrument = Instrument::Drums;
+        channels[0].kit = std::make_shared<const DrumKit> (k);
+        Arrangement a;
+        Console console = Console::defaults();
+        std::array<EffectSlot, kSlotsPerTrack> master {};
+        check (mixerTrackUse (tracks, channels, a, console, master, 3).pads == 1 && ! mixerTrackUse (tracks, channels, a, console, master, 3).empty(),
+               "a track a pad plays into is in use");
+        const auto before = channels[0].kit;
+        check (moveMixerTrack (tracks, channels, a, console, master, 3, 7) && channels[0].kit->pads[0].outputTrack == 7
+                   && channels[0].kit->pads[1].outputTrack == 4 && before->pads[0].outputTrack == 3,
+               "moving mixer tracks moves the pads' outputs with them (on a copy of the kit)");
+        check (deleteMixerTrack (tracks, channels, a, console, master, 7, 0) && channels[0].kit->pads[0].outputTrack == -1
+                   && channels[0].kit->pads[1].outputTrack == 4,
+               "deleting a pad's track sends it back through its channel");
+    }
+    {   // the sampler: LFO shapes, and the modulation matrix
+        check (SamplerSettings::lfoValue (SamplerSettings::LfoTriangle, 0.5f, 0.0f) == 1.0f && SamplerSettings::lfoValue (SamplerSettings::LfoSquare, 0.75f, 0.0f) == -1.0f
+                   && SamplerSettings::lfoValue (SamplerSettings::LfoSawUp, 0.0f, 0.0f) == -1.0f && SamplerSettings::lfoValue (SamplerSettings::LfoRandom, 0.3f, 0.42f) == 0.42f,
+               "the LFO shapes");
+        auto c = samplerChannel (sineSample (440.0, 1.0, kSr), { { 60, 0, kTicksPerBeat, 1.0f }, { 60, 2 * kTicksPerBeat, kTicksPerBeat, 0.5f } });
+        c.sampler.modRoutes[0] = { SamplerSettings::SrcVelocity, SamplerSettings::DstPitch, 1.0f }; // velocity 1 = an octave up
+        Player player;
+        player.prepare (kSr);
+        const auto out = renderBlocks (player, Project::make ({ c }, 4 * kTicksPerBeat), true, 1.4);
+        const double hard = crossingsHz (out, 0.05, 0.35), soft = crossingsHz (out, 1.05, 1.35);
+        check (std::abs (hard - 880.0) < 10.0 && std::abs (soft - 440.0 * std::pow (2.0, 0.5)) < 10.0,
+               "the modulation matrix: velocity moves the pitch (" + std::to_string (hard) + " / " + std::to_string (soft) + " Hz)");
+        SamplerSettings s;
+        s.lfo3Target = SamplerLfoTarget::Pan;
+        s.lfoShapes[1] = SamplerSettings::LfoRandom;
+        s.lfoBeats[2] = 4.0f;
+        s.modRoutes[3] = { SamplerSettings::SrcRandom, SamplerSettings::DstCutoff, -0.5f };
+        const auto again = samplerSettingsFromVar (samplerSettingsToVar (s));
+        check (again.lfo3Target == SamplerLfoTarget::Pan && again.lfoShapes[1] == SamplerSettings::LfoRandom && again.lfoBeats[2] == 4.0f
+                   && again.modRoutes[0] == s.modRoutes[3] && samplerSettingsFromVar (samplerSettingsToVar ({})).modRoutes[0].source == SamplerSettings::SrcNone,
+               "the third LFO, the shapes, the tempo sync and the matrix are saved and loaded");
+    }
+}
+
 void testChannelRemap()
 {
     std::cout << "Deleting, moving and cloning channels\n";
@@ -15021,6 +15139,7 @@ int main (int argc, char** argv)
     testChannelRemap();
     testReorder082();
     testTempo083();
+    testInstruments084();
     testProjectWithSamples();
     testPatternLength();
     testAdvancedSampler();

@@ -45,6 +45,7 @@ struct Region
     float keytrack = 100.0f;  // cents per key away from rootKey (0: unpitched, every key plays the sample as recorded)
     bool oneShot = false;     // the key's release does not stop it: it plays to its end (percussion)
     float releaseSeconds = -1.0f; // its own release time (-1: the instrument's)
+    int articulation = -1;        // 0.84.0: the articulation it belongs to (-1: it plays in every one)
 
     bool answers (int key, int velocity, unsigned roundRobin = 0) const noexcept
     {
@@ -54,7 +55,15 @@ struct Region
     bool loops() const noexcept { return loop != LoopMode::Off && loopEnd > loopStart + 1 && sample != nullptr && loopEnd <= sample->frames(); }
 };
 
-// An instrument (M0: one articulation): its zones, the keys a real player can play, its amplitude envelope.
+// 0.84.0: one articulation of an instrument (sustain, pizzicato, staccato...) and the key that chooses it (a keyswitch, as in
+// orchestral libraries: a key outside the instrument's range that sounds nothing and makes the next notes use this articulation).
+struct Articulation
+{
+    std::string name;
+    int keyswitch = -1;
+};
+
+// An instrument: its zones, the keys a real player can play, its amplitude envelope; 0.84.0: its articulations, if it has several.
 struct Instrument
 {
     std::string id;          // "test-tone", "strings/violins-1"... (what a saved state refers to)
@@ -63,19 +72,37 @@ struct Instrument
     int playableLo = 0, playableHi = 127; // outside the real range a key is silent
     float attackSeconds = 0.002f;
     float releaseSeconds = 0.25f;
+    std::vector<Articulation> articulations; // 0.84.0: empty when it has one (every zone plays)
+    int defaultArticulation = 0;             // the one that plays before a keyswitch is pressed
 
     // The zones a note plays (several when zones overlap, e.g. a left and a right channel). At most `max` are written to `out`.
     // `roundRobin` counts the notes played (the engine keeps one count per part); zones in a round-robin sequence take turns.
-    int pick (int key, int velocity, const Region** out, int max, unsigned roundRobin = 0) const noexcept
+    // `articulation`: the one chosen (zones of the others are left out).
+    int pick (int key, int velocity, const Region** out, int max, unsigned roundRobin = 0, int articulation = -1) const noexcept
     {
         int n = 0;
         if (key < playableLo || key > playableHi)
             return 0;
         for (const auto& r : regions)
-            if (n < max && r.answers (key, velocity, roundRobin))
+            if (n < max && r.answers (key, velocity, roundRobin) && (r.articulation < 0 || articulation < 0 || r.articulation == articulation))
                 out[n++] = &r;
         return n;
     }
+
+    // The articulation `key` switches to, or -1 when it is not a keyswitch.
+    int keyswitchArticulation (int key) const noexcept
+    {
+        for (size_t a = 0; a < articulations.size(); ++a)
+            if (articulations[a].keyswitch == key)
+                return static_cast<int> (a);
+        return -1;
+    }
+
+    // 0.84.0: one instrument made of several (each an articulation, e.g. the SFZ files of a library instrument), chosen by keyswitches
+    // on the keys just below the lowest key any of them plays (at most C1, MIDI 24, as most orchestral libraries have them). Each
+    // keeps its own release. nullptr when none is given.
+    static std::shared_ptr<const Instrument> combine (const std::string& id, const std::string& name,
+                                                      const std::vector<std::pair<std::string, std::shared_ptr<const Instrument>>>& parts);
 
     // A built-in instrument that needs no library: a soft organ-like tone (a few harmonics), one looped sample per octave. It lets
     // the plugin make a sound before the orchestral library is installed, and the tests check the engine against a known pitch.

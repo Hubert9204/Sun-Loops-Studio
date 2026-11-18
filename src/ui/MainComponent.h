@@ -170,6 +170,7 @@ private:
     float masterPitch = 0.0f;
     void applyMetronome();                                  // button state, engine and saved settings
     void openAssignTrack (int channelIndex);                 // the "Assign free mixer track" window
+    void drumPadsToFreeTracks (int channelIndex);            // 0.84.0: each pad with a sound on its own mixer track
     void assignChannelToTrack (int channelIndex, int track); // puts the instrument on that mixer track
     void exportAs (ExportFormat format);                    // File > Export
     void chooseSampleFor (int channelIndex);

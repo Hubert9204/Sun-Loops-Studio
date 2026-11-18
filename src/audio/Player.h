@@ -90,6 +90,13 @@ public:
     }
     void liveNoteOff (int channel, int pitch) noexcept;
 
+    // 0.84.0: how many times pad `pad` of channel `channel` has been hit (any thread; the drum machine flashes a pad when it changes).
+    std::uint32_t padHitCount (int channel, int pad) const noexcept
+    {
+        return channel >= 0 && channel < kMaxChannels && pad >= 0 && pad < kDrumPads
+                   ? padHits[static_cast<size_t> (channel * kDrumPads + pad)].load (std::memory_order_relaxed) : 0u;
+    }
+
     // Peak (after volume and pan) of mixer channel `channel` in the last rendered block.
     float getChannelPeak (int channel) const noexcept
     {
@@ -142,6 +149,7 @@ private:
         double glideRatio = 1.0;
         double glideTarget = 0.0;           // the exact rate at the end of the slide
         int pad = -1;                       // drum voices: the pad (0..15) and its choke group; -1 for every other voice
+        int outTrack = -1;                  // 0.84.0: a drum pad with its own mixer track plays there (-1: through its channel)
         int choke = 0;
         // 0.61.0: the sampler channel's reverse, and its fades as frames of the sample (0 = none)
         bool mirror = false;
@@ -151,15 +159,15 @@ private:
         bool pingPong = false, backwards = false;
         float xfade = 0.0f;                 // frames of loop crossfade (0 = none)
         bool mods = false;                  // any of the modulations below is on
-        std::uint8_t smpLfoTarget = 0;      // SamplerLfoTarget
-        float smpLfoPhase = 0.0f, smpLfoStep = 0.0f, smpLfoDepth = 0.0f;
+        // the sampler's LFOs (0.62.0 one, 0.70.0 two, 0.84.0 three with shapes): target (SamplerLfoTarget), shape, phase, step, depth,
+        // and the random shape's held value
+        std::array<std::uint8_t, 3> smpLfoTarget {}, smpLfoShape {};
+        std::array<float, 3> smpLfoPhase {}, smpLfoStep {}, smpLfoDepth {}, smpLfoHeld {};
         float pitchEnv = 0.0f, pitchEnvMul = 1.0f; // semitones left, and their decay every kModStep samples
         float cutoffBase = 0.0f, cutoffEnv = 0.0f; // Hz, octaves
         float noteOctaves = 0.0f, noteResonance = 0.0f; // 0.71.0: the note's mod X and mod Y (synths; the sampler applies them at the start)
         // 0.70.0: the envelope's delay and hold (samples left), the second LFO, the filter's resonance as set (for an LFO on it)
         int delayLeft = 0, holdLeft = 0;
-        std::uint8_t smpLfo2Target = 0;
-        float smpLfo2Phase = 0.0f, smpLfo2Step = 0.0f, smpLfo2Depth = 0.0f;
         float resonanceBase = 0.0f;
         // 0.71.0: the envelopes of pan, cutoff, resonance and pitch (level, stage 0 attack / 1 decay-sustain / 2 release / 3 done,
         // the steps per kModStep samples, the sustain and the amount; amount 0: off)
@@ -356,6 +364,10 @@ private:
     std::array<std::size_t, kMaxChannels> nextEvent {};
     std::array<float, kMaxChannels> smoothedGain {};
     std::array<float, kMaxChannels> peaks {};
+    // 0.84.0: drum pads: the hits (for the flashes), and each pad's turn in its round robin
+    std::array<std::atomic<std::uint32_t>, static_cast<size_t> (kMaxChannels * kDrumPads)> padHits {};
+    std::array<std::uint32_t, static_cast<size_t> (kMaxChannels * kDrumPads)> padTurns {};
+    std::uint32_t padRandom = 0x9e3779b9u;
 
     // Mixer tracks (up to kMaxTracks; the project says how many are in use). The big per-track parts live on the heap.
     std::vector<std::array<float, kChunk>> trackL, trackR;

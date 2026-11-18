@@ -1561,8 +1561,14 @@ void MainComponent::removeLastMixerTrack()
     if (last < kDefaultTracks)
         reason = "the mixer keeps at least " + juce::String (kDefaultTracks) + " tracks";
     for (const auto& c : channels)
+    {
         if (reason.isEmpty() && c.mixerTrack == last)
             reason = juce::String (c.name) + " plays through it";
+        if (c.kit != nullptr) // 0.84.0
+            for (const auto& p : c.kit->pads)
+                if (reason.isEmpty() && p.outputTrack == last)
+                    reason = "a pad of " + juce::String (c.name) + " plays into it";
+    }
     for (const auto& s : tracks.back().slots)
         if (reason.isEmpty() && s.type != EffectType::None)
             reason = "it has effects";
@@ -1622,6 +1628,9 @@ void MainComponent::deleteMixerTrack (int track)
     if (! use.playlistTracks.empty())
         message += "\n- The audio of playlist track " + list (use.playlistTracks, [] (int t) { return juce::String (t + 1); })
                  + " plays through it: from now on through Track " + juce::String (heirAfter + 1) + ".";
+    if (use.pads > 0) // 0.84.0
+        message += "\n- " + juce::String (use.pads) + (use.pads == 1 ? " drum pad plays" : " drum pads play")
+                 + " into it: from now on through their drum channel's track.";
     if (use.effects > 0)
         message += "\n- Its " + juce::String (use.effects) + (use.effects == 1 ? " effect is" : " effects are") + " deleted with it.";
     if (! use.feeders.empty())

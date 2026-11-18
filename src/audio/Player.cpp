@@ -673,9 +673,29 @@ void Player::drumNoteOn (const Channel& channel, int channelIndex, const Note& n
     if (padIndex < 0 || ! kit.padAudible (padIndex, kit.anySolo()))
         return;
     const DrumPad& pad = kit.pads[static_cast<size_t> (padIndex)];
-    const auto* layer = pad.layerFor (std::clamp (static_cast<int> (std::lround (n.velocity * 127.0f)), 1, 127));
-    if (layer == nullptr)
+    // 0.84.0: the layers that answer to the velocity; with round robin they take turns, or one is picked at random (never the
+    // same twice in a row when there are several)
+    std::array<const PadLayer*, kPadLayers> candidates {};
+    const int count = pad.layersFor (std::clamp (static_cast<int> (std::lround (n.velocity * 127.0f)), 1, 127), candidates);
+    if (count <= 0)
         return;
+    const auto slot = static_cast<size_t> (std::clamp (channelIndex, 0, kMaxChannels - 1) * kDrumPads + padIndex);
+    int pick = 0;
+    if (count > 1 && pad.roundRobin == DrumPad::RoundRobinCycle)
+        pick = static_cast<int> (padTurns[slot]++ % static_cast<std::uint32_t> (count));
+    else if (count > 1 && pad.roundRobin == DrumPad::RoundRobinRandom)
+    {
+        padRandom ^= padRandom << 13;
+        padRandom ^= padRandom >> 17;
+        padRandom ^= padRandom << 5;
+        pick = static_cast<int> (padRandom % static_cast<std::uint32_t> (count - 1));
+        const int last = static_cast<int> (padTurns[slot] % static_cast<std::uint32_t> (count));
+        if (pick >= last)
+            ++pick;
+        padTurns[slot] = static_cast<std::uint32_t> (pick);
+    }
+    const auto* layer = candidates[static_cast<size_t> (pick)];
+    padHits[slot].fetch_add (1, std::memory_order_relaxed);
 
     if (pad.chokeGroup > 0)
         for (auto& other : voices)
@@ -696,6 +716,7 @@ void Player::drumNoteOn (const Channel& channel, int channelIndex, const Note& n
     v.step = std::pow (2.0, (static_cast<double> (pad.pitch) + static_cast<double> (channel.pitch)) / 12.0) * v.sample->sampleRate / sampleRate;
     v.attackStep = static_cast<float> (1.0 / (0.0005 * sampleRate));
     v.pad = padIndex;
+    v.outTrack = pad.outputTrack; // 0.84.0
     v.choke = pad.chokeGroup;
     const double angle = (static_cast<double> (pad.pan) + 1.0) * kTwoPi / 8.0;
     v.padGain = pad.volume;
@@ -1742,6 +1763,49 @@ void Player::samplerVoiceOn (const Channel& channel, int channelIndex, const Not
     v.fadeInFrames = static_cast<float> (static_cast<double> (set.fadeIn) * frames);
     v.fadeOutFrames = loops ? 0.0f : static_cast<float> (static_cast<double> (set.fadeOut) * frames);
     v.step = std::pow (2.0, ((n.pitch - rootKey) * keyTrack + tune + static_cast<double> (channel.pitch) + n.finePitch / 100.0) / 12.0) * sample->sampleRate / sampleRate;
+
+    // 0.84.0: the modulation matrix, as the note starts: its velocity, key, mod X / mod Y or a random amount move its pitch, cutoff,
+    // resonance, volume, pan or start (velocity counts from 0, the others are -1..1 around their middle)
+    double matrixSemitones = 0.0, matrixOctaves = 0.0;
+    float matrixResonance = 0.0f;
+    std::uint32_t seed = 0x2545f491u ^ static_cast<std::uint32_t> (v.age * 2654435761u);
+    for (const auto& route : set.modRoutes)
+    {
+        if (route.source == SamplerSettings::SrcNone || route.target == SamplerSettings::DstNone || route.amount == 0.0f)
+            continue;
+        float value = 0.0f;
+        switch (route.source)
+        {
+            case SamplerSettings::SrcVelocity: value = std::clamp (n.velocity, 0.0f, 1.0f); break;
+            case SamplerSettings::SrcKey:      value = std::clamp ((n.pitch - 60) / 48.0f, -1.0f, 1.0f); break;
+            case SamplerSettings::SrcModX:     value = (std::clamp (n.modX, 0.0f, 1.0f) - 0.5f) * 2.0f; break;
+            case SamplerSettings::SrcModY:     value = (std::clamp (n.modY, 0.0f, 1.0f) - 0.5f) * 2.0f; break;
+            case SamplerSettings::SrcRandom:
+                seed = seed * 1664525u + 1013904223u;
+                value = static_cast<float> (seed >> 8) / 8388608.0f - 1.0f;
+                break;
+            default: break;
+        }
+        const float a = route.amount;
+        switch (route.target)
+        {
+            case SamplerSettings::DstPitch:     matrixSemitones += 12.0 * a * value; break;
+            case SamplerSettings::DstCutoff:    matrixOctaves += 5.0 * a * value; break;
+            case SamplerSettings::DstResonance: matrixResonance += a * value; break;
+            case SamplerSettings::DstVolume:    // (velocity: full at the hardest hit, quieter below it; the others around the middle)
+                gain *= std::clamp (1.0f + a * (route.source == SamplerSettings::SrcVelocity ? value - 1.0f : value), 0.0f, 2.0f);
+                break;
+            case SamplerSettings::DstPan:       pan = std::clamp (pan + a * value, -1.0f, 1.0f); break;
+            case SamplerSettings::DstStart:
+                if (! loops && ! granular)
+                    v.pos = std::clamp (v.pos + std::floor (0.5 * static_cast<double> (std::max (0.0f, a * value)) * frames), 0.0, std::max (0.0, frames - 2.0));
+                break;
+            default: break;
+        }
+    }
+    if (matrixSemitones != 0.0)
+        v.step *= std::pow (2.0, matrixSemitones / 12.0);
+    v.fadeFrom = static_cast<float> (v.pos);
     if (loops && ! granular)
     {
         v.loopStart = loopStart;
@@ -1797,9 +1861,10 @@ void Player::samplerVoiceOn (const Channel& channel, int channelIndex, const Not
     {
         // Topology-preserving state-variable filter (Simper): fixed for the note.
         // (0.71.0: the note's mod X moves the cutoff, its mod Y the resonance)
-        const double fc = std::clamp (SamplerSettings::cutoffHz (set.cutoff) * std::pow (2.0, static_cast<double> (n.cutoffOctaves())), 20.0, 0.45 * sampleRate);
+        const double fc = std::clamp (SamplerSettings::cutoffHz (set.cutoff) * std::pow (2.0, static_cast<double> (n.cutoffOctaves()) + matrixOctaves),
+                                      20.0, 0.45 * sampleRate);
         const double g = std::tan (kTwoPi * 0.5 * fc / sampleRate);
-        const float resonance = std::clamp (set.resonance + n.resonanceShift(), 0.0f, 1.0f);
+        const float resonance = std::clamp (set.resonance + n.resonanceShift() + matrixResonance, 0.0f, 1.0f);
         const double k = 2.0 - 1.94 * static_cast<double> (resonance); // Q from 0.5 to about 16
         const double a1 = 1.0 / (1.0 + g * (g + k));
         v.filter = set.filter;
@@ -1815,21 +1880,31 @@ void Player::samplerVoiceOn (const Channel& channel, int channelIndex, const Not
     const bool ownSample = sample == channel.sample.get();
     v.pingPong = loops && ownSample && set.loop == LoopMode::PingPong;
     v.xfade = loops && ! v.pingPong && ownSample ? static_cast<float> (std::min (static_cast<double> (set.crossfade) * (v.loopEnd - v.loopStart), v.loopStart)) : 0.0f;
-    v.smpLfoTarget = set.lfoDepth > 0.0f ? static_cast<std::uint8_t> (set.lfoTarget) : std::uint8_t { 0 };
-    // (0.70.0: a second LFO; an LFO on the cutoff or the resonance needs a filter)
+    // The LFOs (0.70.0: a second; 0.84.0: a third, shapes and tempo sync). An LFO on the cutoff or the resonance needs a filter.
     const auto needsFilter = [] (std::uint8_t lfoTo) noexcept
     {
         return lfoTo == static_cast<std::uint8_t> (SamplerLfoTarget::Cutoff) || lfoTo == static_cast<std::uint8_t> (SamplerLfoTarget::Resonance);
     };
-    if (needsFilter (v.smpLfoTarget) && set.filter == SamplerFilter::Off)
-        v.smpLfoTarget = 0;
-    v.smpLfo2Target = set.lfo2Depth > 0.0f ? static_cast<std::uint8_t> (set.lfo2Target) : std::uint8_t { 0 };
-    if (needsFilter (v.smpLfo2Target) && set.filter == SamplerFilter::Off)
-        v.smpLfo2Target = 0;
-    v.smpLfo2Step = static_cast<float> (static_cast<double> (set.lfo2Rate) * kModStep / sampleRate);
-    v.smpLfo2Depth = set.lfo2Depth;
-    v.smpLfoStep = static_cast<float> (static_cast<double> (set.lfoRate) * kModStep / sampleRate);
-    v.smpLfoDepth = set.lfoDepth;
+    const double bpmNow = ticksPerSampleNow * sampleRate * 60.0 / kTicksPerBeat;
+    const SamplerLfoTarget lfoTargets[3] = { set.lfoTarget, set.lfo2Target, set.lfo3Target };
+    const float lfoRates[3] = { set.lfoRate, set.lfo2Rate, set.lfo3Rate }, lfoDepths[3] = { set.lfoDepth, set.lfo2Depth, set.lfo3Depth };
+    bool anyLfo = false;
+    for (size_t l = 0; l < 3; ++l)
+    {
+        auto target = lfoDepths[l] > 0.0f ? static_cast<std::uint8_t> (lfoTargets[l]) : std::uint8_t { 0 };
+        if (needsFilter (target) && set.filter == SamplerFilter::Off)
+            target = 0;
+        const double hz = set.lfoBeats[l] > 0.0f && bpmNow > 0.0 ? bpmNow / 60.0 / static_cast<double> (set.lfoBeats[l]) : static_cast<double> (lfoRates[l]);
+        v.smpLfoTarget[l] = target;
+        v.smpLfoShape[l] = static_cast<std::uint8_t> (std::clamp (set.lfoShapes[l], 0, SamplerSettings::kLfoShapes - 1));
+        v.smpLfoStep[l] = static_cast<float> (hz * kModStep / sampleRate);
+        v.smpLfoDepth[l] = lfoDepths[l];
+        v.smpLfoPhase[l] = 0.0f;
+        v.smpLfoHeld[l] = 0.0f;
+        anyLfo = anyLfo || target != 0;
+    }
+    if (! granular)
+        v.noise = 0x2545f491u ^ static_cast<std::uint32_t> (v.age * 7919u); // (the random LFO shape: each note its own values)
     v.pitchEnv = set.pitchEnv;
     v.pitchEnvMul = static_cast<float> (std::pow (0.001, kModStep / (std::max (0.005, static_cast<double> (set.pitchEnvTime)) * sampleRate)));
     v.cutoffEnv = set.envelope && set.filter != SamplerFilter::Off ? set.cutoffEnv : 0.0f;
@@ -1849,7 +1924,7 @@ void Player::samplerVoiceOn (const Channel& channel, int channelIndex, const Not
         v.menvSustain[e] = env.sustain;
         envelopes = envelopes || on;
     }
-    v.mods = v.smpLfoTarget != 0 || v.smpLfo2Target != 0 || std::abs (v.pitchEnv) > 0.0f || std::abs (v.cutoffEnv) > 0.0f || envelopes;
+    v.mods = anyLfo || std::abs (v.pitchEnv) > 0.0f || std::abs (v.cutoffEnv) > 0.0f || envelopes;
 
     applyNoteProperties (v, n, releaseStep);
     *target = v;
@@ -2730,14 +2805,20 @@ void Player::render (const Project& project, double bpm, bool playing,
                     if (v.mods && --v.modCount <= 0) // 0.62.0: the LFO, the pitch envelope and the moving cutoff, every kModStep samples
                     {
                         v.modCount = kModStep;
-                        const float lfo = v.smpLfoTarget != 0 ? std::sin (6.2831853f * v.smpLfoPhase) : 0.0f;
-                        v.smpLfoPhase += v.smpLfoStep;
-                        if (v.smpLfoPhase >= 1.0f)
-                            v.smpLfoPhase -= 1.0f;
-                        const float lfo2 = v.smpLfo2Target != 0 ? std::sin (6.2831853f * v.smpLfo2Phase) : 0.0f; // 0.70.0
-                        v.smpLfo2Phase += v.smpLfo2Step;
-                        if (v.smpLfo2Phase >= 1.0f)
-                            v.smpLfo2Phase -= 1.0f;
+                        std::array<float, 3> lfoNow {};
+                        for (size_t l = 0; l < 3; ++l)
+                        {
+                            if (v.smpLfoTarget[l] == 0)
+                                continue;
+                            lfoNow[l] = SamplerSettings::lfoValue (v.smpLfoShape[l], v.smpLfoPhase[l], v.smpLfoHeld[l]);
+                            v.smpLfoPhase[l] += v.smpLfoStep[l];
+                            if (v.smpLfoPhase[l] >= 1.0f)
+                            {
+                                v.smpLfoPhase[l] -= 1.0f;
+                                v.noise = v.noise * 1664525u + 1013904223u; // (the random shape: a new value each cycle)
+                                v.smpLfoHeld[l] = static_cast<float> (v.noise >> 8) / 8388608.0f - 1.0f;
+                            }
+                        }
                         float semitones = v.pitchEnv;
                         v.pitchEnv = std::abs (v.pitchEnv) > 0.002f ? v.pitchEnv * v.pitchEnvMul : 0.0f;
                         v.modLeft = v.modRight = 1.0f;
@@ -2771,8 +2852,8 @@ void Player::render (const Project& project, double bpm, bool playing,
                                 case SamplerLfoTarget::Off:    break;
                             }
                         };
-                        applyLfo (v.smpLfoTarget, v.smpLfoDepth, lfo);
-                        applyLfo (v.smpLfo2Target, v.smpLfo2Depth, lfo2);
+                        for (size_t l = 0; l < 3; ++l)
+                            applyLfo (v.smpLfoTarget[l], v.smpLfoDepth[l], lfoNow[l]);
                         // 0.71.0: the envelopes of pan, cutoff, resonance and pitch, as FL Studio's
                         for (size_t e = 0; e < 4; ++e)
                         {
@@ -3021,8 +3102,20 @@ void Player::render (const Project& project, double bpm, bool playing,
                         rate *= v.glideRatio;
                 }
 
-                busL[static_cast<size_t> (v.channel)] += l * v.noteLeft;
-                busR[static_cast<size_t> (v.channel)] += r * v.noteRight;
+                if (v.outTrack >= 0 && v.outTrack < static_cast<int> (numTracks) && v.channel >= 0 && v.channel < static_cast<int> (numMixerChannels))
+                {
+                    // 0.84.0: a drum pad with its own mixer track: through the channel's volume and pan, straight to that track
+                    const auto ch = static_cast<size_t> (v.channel);
+                    const float pl = l * v.noteLeft * smoothedGain[ch] * panLeft[ch], pr = r * v.noteRight * smoothedGain[ch] * panRight[ch];
+                    peaks[ch] = std::max ({ peaks[ch], std::fabs (pl), std::fabs (pr) });
+                    trackL[static_cast<size_t> (v.outTrack)][static_cast<size_t> (i)] += pl;
+                    trackR[static_cast<size_t> (v.outTrack)][static_cast<size_t> (i)] += pr;
+                }
+                else
+                {
+                    busL[static_cast<size_t> (v.channel)] += l * v.noteLeft;
+                    busR[static_cast<size_t> (v.channel)] += r * v.noteRight;
+                }
 
                 if (v.state == State::Attack)
                 {

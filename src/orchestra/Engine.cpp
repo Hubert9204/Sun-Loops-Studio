@@ -35,7 +35,11 @@ inline float velocityGain (int velocity) noexcept
 }
 } // namespace
 
-Engine::Engine() = default;
+Engine::Engine()
+{
+    for (auto& a : shownArticulation)
+        a.store (-1, std::memory_order_relaxed);
+}
 
 void Engine::prepare (double sampleRate) noexcept
 {
@@ -104,6 +108,9 @@ void Engine::swapInstruments() noexcept
         retired[p] = std::move (parts[p].active); // never freed on this thread
         retiredAt[p] = samplesDone.load (std::memory_order_relaxed);
         parts[p].active = requested[p];           // a copy: the message thread keeps its own reference
+        // 0.84.0: a new instrument starts on its default articulation
+        parts[p].articulation = parts[p].active != nullptr && ! parts[p].active->articulations.empty() ? parts[p].active->defaultArticulation : -1;
+        shownArticulation[p].store (parts[p].articulation, std::memory_order_relaxed);
         pending[p] = false;
     }
     anyPending.store (waiting, std::memory_order_relaxed);
@@ -156,6 +163,13 @@ void Engine::noteOn (int channel, int key, int velocity) noexcept
     auto& part = parts[static_cast<size_t> (channel)];
     if (part.active == nullptr)
         return;
+    // 0.84.0: a keyswitch chooses the articulation of the notes that follow, and sounds nothing
+    if (const int switched = part.active->keyswitchArticulation (key); switched >= 0)
+    {
+        part.articulation = switched;
+        shownArticulation[static_cast<size_t> (channel)].store (switched, std::memory_order_relaxed);
+        return;
+    }
     // The same key again on this part: the old note is released (repeated notes overlap only by their release).
     for (auto& v : voices)
         if (v.part == channel && v.key == key && v.state == Voice::State::Playing)
@@ -165,7 +179,7 @@ void Engine::noteOn (int channel, int key, int velocity) noexcept
             v.release();
         }
     const Region* zones[kZonesPerNote];
-    const int n = part.active->pick (key, velocity, zones, kZonesPerNote, part.roundRobin++);
+    const int n = part.active->pick (key, velocity, zones, kZonesPerNote, part.roundRobin++, part.articulation);
     const float level = velocityGain (velocity);
     for (int z = 0; z < n; ++z)
     {

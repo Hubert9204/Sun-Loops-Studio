@@ -80,6 +80,38 @@ bool SunSymphonyProcessor::loadInstrument (int part, const juce::String& source,
     {
         inst = orchestra::Instrument::makeTestTone();
     }
+    else if (source.startsWith ("library:")) // 0.84.0: a library instrument with all its articulations, chosen by keyswitches
+    {
+        const auto id = source.fromFirstOccurrenceOf ("library:", false, false);
+        const LibraryManager::Item* found = nullptr;
+        for (const auto& item : library().items())
+            if (item.id == id)
+                found = &item;
+        if (found == nullptr || ! library().isInstalled (*found))
+        {
+            error = "Not installed: " + id;
+            return false;
+        }
+        std::vector<std::pair<std::string, std::shared_ptr<const orchestra::Instrument>>> articulations;
+        auto& fmts = formats;
+        const auto folder = library().instrumentFolder (*found);
+        juce::StringArray problems;
+        for (const auto& a : found->articulations)
+        {
+            const auto file = library().sfzFile (*found, a);
+            std::string message;
+            auto one = orchestra::Instrument::fromSfz (file.loadFileAsString().toStdString(), a.name.toStdString(), a.name.toStdString(),
+                                                       [&fmts, &folder] (const std::string& path) { return readSample (fmts, folder.getChildFile (juce::String (path))); },
+                                                       message);
+            if (! message.empty())
+                problems.add (a.name + ": " + juce::String (message));
+            articulations.emplace_back (a.name.toStdString(), std::move (one));
+        }
+        inst = orchestra::Instrument::combine (id.toStdString(), (found->name + " - all articulations").toStdString(), articulations);
+        error = problems.joinIntoString ("\n");
+        if (inst == nullptr)
+            return false;
+    }
     else
     {
         const juce::File file (source);
@@ -134,7 +166,15 @@ void SunSymphonyProcessor::timerCallback()
 juce::String SunSymphonyProcessor::partName (int part) const
 {
     const auto inst = engine.instrument (part);
-    return inst != nullptr ? juce::String (inst->name) : juce::String ("(empty)");
+    if (inst == nullptr)
+        return "(empty)";
+    // 0.84.0: the articulation it plays now, and the keys that choose them
+    const int a = engine.articulation (part);
+    if (inst->articulations.empty() || a < 0 || a >= static_cast<int> (inst->articulations.size()))
+        return juce::String (inst->name);
+    const auto keyName = [] (int key) { return juce::MidiMessage::getMidiNoteName (key, true, true, 4); };
+    return juce::String (inst->name) + "  [" + juce::String (inst->articulations[static_cast<size_t> (a)].name) + "]  keyswitches "
+         + keyName (inst->articulations.front().keyswitch) + "-" + keyName (inst->articulations.back().keyswitch);
 }
 
 void SunSymphonyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)

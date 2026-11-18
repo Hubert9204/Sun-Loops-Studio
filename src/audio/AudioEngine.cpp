@@ -475,6 +475,11 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* in, int 
     LiveNoteEvent live;
     while (liveNotes.pop (live))
     {
+        // 0.84.0: on a drum channel a MIDI note plays the pad that answers to it (its own note, as FL Studio's FPC), recorded as that pad
+        if (live.fromMidi && live.channel >= 0 && static_cast<size_t> (live.channel) < project->channels.size())
+            if (const auto& kit = project->channels[static_cast<size_t> (live.channel)].kit; kit != nullptr)
+                if (const int pad = kit->padForMidiNote (live.pitch); pad >= 0)
+                    live.pitch = DrumKit::pitchForPad (pad);
         if (takeNotes && live.fromMidi)
             midiTakes.push (makeTake (live, blockStartTick, latencyTicks, project->lengthTicks));
         if (live.fromMidi)

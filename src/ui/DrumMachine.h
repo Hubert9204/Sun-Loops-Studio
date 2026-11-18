@@ -20,7 +20,7 @@ namespace sls
 //
 // The view never keeps a copy of the channel: `getChannel` returns the live channel (nullptr when it is gone or no longer a drum channel),
 // edits to a kit are made on a copy that replaces `Channel::kit`, and the host is told through the callbacks.
-class DrumMachineView : public juce::Component, public juce::DragAndDropTarget
+class DrumMachineView : public juce::Component, public juce::DragAndDropTarget, private juce::Timer
 {
 public:
     explicit DrumMachineView (AudioEngine& engineToUse);
@@ -29,8 +29,15 @@ public:
     std::function<void()> onKitChanged;  // pads or the kit changed: publish the project
     std::function<void()> onNotesChanged; // steps changed: publish the project, update the piano roll, undo
     std::function<void (const juce::String&)> onStatus;
+    std::function<int()> getTrackCount;        // 0.84.0: how many mixer tracks there are (for a pad's output)
+    std::function<void()> onPadsToFreeTracks;  // 0.84.0: the kit menu's "each pad on its own mixer track"
 
-    void setChannelIndex (int index) noexcept { channelIndex = index; }
+    void setChannelIndex (int index) noexcept
+    {
+        channelIndex = index;
+        for (int p = 0; p < kDrumPads; ++p) // (0.84.0: the other channel's hits are no reason to flash)
+            seenHits[static_cast<size_t> (p)] = engine.padHitCount (index, p);
+    }
     void setLoopTicks (int ticks);
     void setPlayheadTick (int tick);
     void setKitsFolder (const juce::File& folder) { kitsFolder = folder; }
@@ -59,6 +66,8 @@ private:
     void showKitMenu();
     void saveKit();
     void say (const juce::String& text) const { if (onStatus) onStatus (text); }
+    void timerCallback() override; // 0.84.0: the pads flash when they play
+    void fillOutputBox();
 
     // geometry
     juce::Rectangle<int> padRect (int pad) const;
@@ -95,6 +104,12 @@ private:
     juce::TextEditor nameEditor;
     juce::TextButton muteButton { "Mute" }, soloButton { "Solo" }, previewButton { "Play pad" };
     juce::ComboBox chokeBox;
+    // 0.84.0, as FL Studio's FPC: the pad's own mixer track, round robin, the MIDI note a controller plays it with; the flashes
+    juce::ComboBox outputBox, roundRobinBox, midiNoteBox;
+    juce::Label outputLabel { {}, "Output" }, roundRobinLabel { {}, "Round robin" }, midiNoteLabel { {}, "MIDI note" };
+    std::array<std::uint32_t, kDrumPads> seenHits {};
+    std::array<float, kDrumPads> flash {};
+    int outputBoxTracks = -1;
     std::array<juce::Label, kPadLayers> layerNames;
     std::array<juce::TextButton, kPadLayers> layerLoad, layerClear;
     std::array<juce::Slider, kPadLayers> layerVelocity;

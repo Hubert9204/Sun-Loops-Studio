@@ -145,6 +145,15 @@ void SunSymphonyEditor::timerCallback()
     }
     status.setText (juce::String (processor.activeVoices()) + " / " + juce::String (orchestra::kMaxVoices) + " voices",
                     juce::dontSendNotification);
+    // 0.84.0: a keyswitch changes what a part shows
+    std::array<int, orchestra::kParts> now {};
+    for (int p = 0; p < orchestra::kParts; ++p)
+        now[static_cast<size_t> (p)] = processor.partArticulation (p);
+    if (now != shownArticulations)
+    {
+        shownArticulations = now;
+        refreshParts();
+    }
 }
 
 void SunSymphonyEditor::refreshParts()
@@ -179,6 +188,13 @@ void SunSymphonyEditor::choose (int part)
             family = item.family;
         }
         juce::PopupMenu arts;
+        if (item.articulations.size() > 1) // 0.84.0: every articulation in one, chosen by keyswitches
+        {
+            const auto all = "library:" + item.id;
+            choices->add (all);
+            arts.addItem (1000 + choices->size() - 1, "All articulations (keyswitches)", true, processor.partSource (part) == all);
+            arts.addSeparator();
+        }
         for (const auto& a : item.articulations)
         {
             const auto path = lib.sfzFile (item, a).getFullPathName();

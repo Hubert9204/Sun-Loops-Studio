@@ -69,6 +69,45 @@ struct SamplerSettings
     float lfo2Rate = 1.0f;                        // Hz, 0.05..20
     float lfo2Depth = 0.5f;                       // 0..1 (the resonance: up to half its range)
 
+    // 0.84.0, as the LFOs of FL Studio's sampler and DirectWave: a third LFO, a shape for each, and tempo sync (the period in beats
+    // instead of the rate in Hz); and a modulation matrix that moves pitch, cutoff, resonance, volume, pan or the start of the sample
+    // by the note's velocity, key, mod X / mod Y or a random amount, as a note starts.
+    SamplerLfoTarget lfo3Target = SamplerLfoTarget::Off;
+    float lfo3Rate = 0.25f;                       // Hz, 0.05..20
+    float lfo3Depth = 0.5f;                       // 0..1
+    enum LfoShape { LfoSine, LfoTriangle, LfoSquare, LfoSawUp, LfoSawDown, LfoRandom };
+    static constexpr int kLfoShapes = 6;
+    static constexpr int kLfos = 3;
+    std::array<int, kLfos> lfoShapes { LfoSine, LfoSine, LfoSine };
+    std::array<float, kLfos> lfoBeats { 0.0f, 0.0f, 0.0f }; // > 0: the LFO's period in beats (tempo sync), 1/16 .. 32; 0: its rate in Hz
+    enum ModSource { SrcNone, SrcVelocity, SrcKey, SrcModX, SrcModY, SrcRandom };
+    enum ModTarget { DstNone, DstPitch, DstCutoff, DstResonance, DstVolume, DstPan, DstStart };
+    static constexpr int kModSources = 6, kModTargets = 7, kModRoutes = 4;
+    struct ModRoute
+    {
+        int source = SrcNone;
+        int target = DstNone;
+        float amount = 0.0f; // -1..1: pitch up to 12 semitones, cutoff 5 octaves, resonance and pan their whole range, volume 100 %,
+                             // start half the sample
+        bool operator== (const ModRoute&) const = default;
+    };
+    std::array<ModRoute, kModRoutes> modRoutes {};
+
+    // An LFO's value (-1..1) at `phase` (0..1); `held` is the random shape's value, drawn again when the phase wraps.
+    static float lfoValue (int shape, float phase, float held) noexcept
+    {
+        switch (shape)
+        {
+            case LfoTriangle: return 1.0f - 4.0f * std::fabs (phase - 0.5f);
+            case LfoSquare:   return phase < 0.5f ? 1.0f : -1.0f;
+            case LfoSawUp:    return 2.0f * phase - 1.0f;
+            case LfoSawDown:  return 1.0f - 2.0f * phase;
+            case LfoRandom:   return held;
+            default:          break;
+        }
+        return std::sin (6.2831853f * phase);
+    }
+
     // 0.74.0: how the channel's own sample is played. Normal; in grains (as FL Studio's Fruity Granulizer: short windowed grains,
     // overlapping, read from a position that moves through the sample at its own speed, the key setting their pitch only); or along
     // a travel curve (as Wave Traveller: the place in the sample follows a curve over `travelTime` — a tape stop, a spin back, a
@@ -139,6 +178,20 @@ struct SamplerSettings
             s.lfo2Target = SamplerLfoTarget::Off;
         s.lfo2Rate = std::clamp (finiteOr (s.lfo2Rate, 1.0f), 0.05f, 20.0f);
         s.lfo2Depth = std::clamp (finiteOr (s.lfo2Depth, 0.5f), 0.0f, 1.0f);
+        if (static_cast<int> (s.lfo3Target) > static_cast<int> (SamplerLfoTarget::Resonance)) // 0.84.0
+            s.lfo3Target = SamplerLfoTarget::Off;
+        s.lfo3Rate = std::clamp (finiteOr (s.lfo3Rate, 0.25f), 0.05f, 20.0f);
+        s.lfo3Depth = std::clamp (finiteOr (s.lfo3Depth, 0.5f), 0.0f, 1.0f);
+        for (auto& shape : s.lfoShapes)
+            shape = std::clamp (shape, 0, kLfoShapes - 1);
+        for (auto& beats : s.lfoBeats)
+            beats = finiteOr (beats, 0.0f) > 0.0f ? std::clamp (beats, 1.0f / 16.0f, 32.0f) : 0.0f;
+        for (auto& r : s.modRoutes)
+        {
+            r.source = std::clamp (r.source, 0, kModSources - 1);
+            r.target = std::clamp (r.target, 0, kModTargets - 1);
+            r.amount = std::clamp (finiteOr (r.amount, 0.0f), -1.0f, 1.0f);
+        }
         s.delay = std::clamp (finiteOr (s.delay, 0.0f), 0.0f, 5.0f);
         s.hold = std::clamp (finiteOr (s.hold, 0.0f), 0.0f, 5.0f);
         for (auto& e : s.modEnvelopes) // 0.71.0

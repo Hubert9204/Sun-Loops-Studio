@@ -35,12 +35,39 @@ struct MixerTrackUse
     int automationClips = 0;          // automation clips that move it
     std::vector<int> feeders;         // other mixer tracks sending to it
     int listeners = 0;                // effects (anywhere) pointing at this track: a sidechain, a controller's target
+    int pads = 0;                     // 0.84.0: drum pads with it as their own output
 
     bool empty() const noexcept
     {
-        return channels.empty() && playlistTracks.empty() && effects == 0 && automationClips == 0 && feeders.empty() && listeners == 0;
+        return channels.empty() && playlistTracks.empty() && effects == 0 && automationClips == 0 && feeders.empty() && listeners == 0 && pads == 0;
     }
 };
+
+namespace detail
+{
+// 0.84.0: gives every drum pad with its own mixer track the track `renumber` says (-1: back to its channel's track). A kit is shared
+// and never changed in place: a channel whose pads change gets a copy.
+template <typename Renumber>
+void renumberPadOutputs (std::vector<Channel>& channels, Renumber renumber)
+{
+    for (auto& c : channels)
+    {
+        if (c.kit == nullptr)
+            continue;
+        auto kit = *c.kit;
+        bool changed = false;
+        for (auto& p : kit.pads)
+            if (p.outputTrack >= 0)
+            {
+                const int now = renumber (p.outputTrack);
+                changed = changed || now != p.outputTrack;
+                p.outputTrack = now;
+            }
+        if (changed)
+            c.kit = std::make_shared<const DrumKit> (std::move (kit));
+    }
+}
+} // namespace detail
 
 namespace detail
 {
@@ -104,8 +131,13 @@ inline MixerTrackUse mixerTrackUse (const std::vector<MixerTrack>& tracks, const
     if (k < 0 || k >= count)
         return use;
     for (size_t c = 0; c < channels.size(); ++c)
+    {
         if (std::clamp (channels[c].mixerTrack, 0, count - 1) == k)
             use.channels.push_back (static_cast<int> (c));
+        if (channels[c].kit != nullptr)
+            for (const auto& p : channels[c].kit->pads)
+                use.pads += p.outputTrack == k ? 1 : 0;
+    }
     for (int t = 0; t < arrangement.trackCount(); ++t)
         if (std::clamp (arrangement.mixerTrackOf (t), 0, count - 1) == k
             && std::any_of (arrangement.audioClips.begin(), arrangement.audioClips.end(), [t] (const AudioClip& a) { return a.track == t; }))
@@ -136,7 +168,12 @@ inline int mixerTrackHeir (const std::vector<MixerTrack>& tracks, const std::vec
         bool used = std::any_of (tracks[static_cast<size_t> (t)].slots.begin(), tracks[static_cast<size_t> (t)].slots.end(),
                                  [] (const EffectSlot& s) { return s.type != EffectType::None; });
         for (const auto& c : channels)
+        {
             used = used || std::clamp (c.mixerTrack, 0, count - 1) == t;
+            if (c.kit != nullptr)
+                for (const auto& p : c.kit->pads)
+                    used = used || p.outputTrack == t; // (0.84.0)
+        }
         for (int p = 0; p < arrangement.trackCount() && ! used; ++p)
             used = std::clamp (arrangement.mixerTrackOf (p), 0, count - 1) == t
                 && std::any_of (arrangement.audioClips.begin(), arrangement.audioClips.end(), [p] (const AudioClip& a) { return a.track == p; });
@@ -160,6 +197,8 @@ inline bool deleteMixerTrack (std::vector<MixerTrack>& tracks, std::vector<Chann
 
     for (auto& c : channels)
         c.mixerTrack = renumber (std::clamp (c.mixerTrack, 0, count - 1));
+    // 0.84.0: a pad whose own track goes plays through its channel again
+    detail::renumberPadOutputs (channels, [k, count] (int old) { return old == k || old >= count ? -1 : (old < k ? old : old - 1); });
 
     // the playlist's audio: each playlist track keeps its mixer track (named when the same number no longer gives it)
     const int newLast = count - 2;
@@ -256,6 +295,7 @@ inline bool moveMixerTrack (std::vector<MixerTrack>& tracks, std::vector<Channel
     };
     for (auto& c : channels)
         c.mixerTrack = renumber (std::clamp (c.mixerTrack, 0, count - 1));
+    detail::renumberPadOutputs (channels, [&renumber, count] (int old) { return old >= count ? -1 : renumber (old); }); // 0.84.0
     const int last = count - 1;
     for (int t = 0; t < arrangement.trackCount(); ++t)
     {

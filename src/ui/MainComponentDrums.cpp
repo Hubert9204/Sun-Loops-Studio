@@ -1,6 +1,7 @@
 #include "ui/MainComponent.h"
 
 #include "library/DrumKitFile.h"
+#include "audio/MixerEdit.h"
 
 namespace sls
 {
@@ -66,6 +67,13 @@ void MainComponent::openDrumMachine (int channelIndex)
             if (safe != nullptr)
                 safe->statusLabel.setText (text, juce::dontSendNotification);
         };
+        view.getTrackCount = [safe = juce::Component::SafePointer<MainComponent> (this)]
+        { return safe != nullptr ? static_cast<int> (safe->tracks.size()) : 8; }; // 0.84.0
+        view.onPadsToFreeTracks = [safe = juce::Component::SafePointer<MainComponent> (this)]
+        {
+            if (safe != nullptr)
+                safe->drumPadsToFreeTracks (safe->drumWindowChannel);
+        };
         view.setKitsFolder (library.drumKits);
         view.setLoopTicks (currentPatternTicks());
     }
@@ -84,5 +92,51 @@ void MainComponent::closeDrumMachine()
 {
     drumWindow.reset();
     drumWindowChannel = -1;
+}
+// 0.84.0, as FL Studio's FPC with its outputs: every pad of the channel's kit that has a sound and no mixer track of its own gets a free one
+// (nothing plays through it, no effects, nothing sent to it; new tracks are added at the end when there are not enough), named after the pad.
+void MainComponent::drumPadsToFreeTracks (int channelIndex)
+{
+    if (channelIndex < 0 || channelIndex >= static_cast<int> (channels.size()) || channels[static_cast<size_t> (channelIndex)].kit == nullptr)
+        return;
+    auto kit = *channels[static_cast<size_t> (channelIndex)].kit;
+    std::vector<int> wanting;
+    for (int p = 0; p < kDrumPads; ++p)
+        if (kit.pads[static_cast<size_t> (p)].hasSample() && kit.pads[static_cast<size_t> (p)].outputTrack < 0)
+            wanting.push_back (p);
+    if (wanting.empty())
+    {
+        statusLabel.setText ("Every pad with a sound already has its own mixer track", juce::dontSendNotification);
+        return;
+    }
+    std::vector<int> free;
+    for (int t = 1; t < static_cast<int> (tracks.size()) && free.size() < wanting.size(); ++t)
+        if (mixerTrackUse (tracks, channels, arrangement, console, masterTrack.slots, t).empty())
+            free.push_back (t);
+    const int missing = static_cast<int> (wanting.size() - free.size());
+    if (missing > 0)
+    {
+        const int room = kMaxTracks - static_cast<int> (tracks.size());
+        const int first = static_cast<int> (tracks.size());
+        setTrackCount (tracks.size() + static_cast<size_t> (std::clamp (missing, 0, room)));
+        for (int t = first; t < static_cast<int> (tracks.size()); ++t)
+            free.push_back (t);
+    }
+    int given = 0;
+    for (size_t i = 0; i < wanting.size() && i < free.size(); ++i)
+    {
+        auto& pad = kit.pads[static_cast<size_t> (wanting[i])];
+        pad.outputTrack = free[i];
+        tracks[static_cast<size_t> (free[i])].name = pad.name.substr (0, 24);
+        mixerPanel.refreshTrack (free[i]);
+        ++given;
+    }
+    channels[static_cast<size_t> (channelIndex)].kit = std::make_shared<const DrumKit> (std::move (kit));
+    if (drumWindow != nullptr)
+        drumWindow->view().refresh();
+    statusLabel.setText (juce::String (given) + (given == 1 ? " pad plays" : " pads play") + " into a mixer track of its own"
+                             + (given < static_cast<int> (wanting.size()) ? " (the mixer is full: the others still play through the channel)" : juce::String()),
+                         juce::dontSendNotification);
+    publishProject();
 }
 } // namespace sls
