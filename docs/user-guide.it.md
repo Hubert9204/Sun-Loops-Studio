@@ -223,8 +223,17 @@ layer dei kit di batteria e clip audio. Il progetto si riferisce alle copie con 
 comprimere o copiare su un altro computer e lì si apre con i suoi suoni. I suoni inclusi restano inclusi; un file che non si trova viene elencato e
 mantiene il vecchio percorso.
 
-**Copia di sicurezza, salvataggio automatico e recupero.** Salvando sopra un progetto esistente, la versione precedente resta accanto come
-`<nome>.slp.bak` (una sola generazione). Finché ci sono modifiche non salvate, il progetto viene anche scritto **una volta al minuto** in
+**In un file unico (0.81.0).** *File > Save as a single file with samples (.slpz)...* (anche nel menu TOOLS) mette la stessa cosa - il
+progetto e una copia di ogni suono - in **un solo file `.slpz`**, come lo zipped loop package di FL Studio. Lo puoi mandare, conservare e
+aprire su qualsiasi computer:
+- *File > Open* apre un `.slpz` (anche con un doppio clic o dalla riga di comando);
+- viene estratto in una **cartella nuova** di My Projects (mai sopra una esistente) e il progetto si apre da lì, con i suoi suoni;
+- un archivio con un file che finirebbe fuori dalla sua cartella viene rifiutato.
+
+**Copia di sicurezza, salvataggio automatico e recupero.** Salvando sopra un progetto esistente, la versione precedente va in una cartella
+**`Backups`** accanto al progetto, con data e ora nel nome (`Song (2026-11-18 18-40-05.123).slp`). Restano le **10 più recenti** di ogni
+progetto, quindi si può tornare indietro di più salvataggi; la cartella compare sotto My Projects nel browser, e una copia si apre come
+qualsiasi progetto (dalla 0.81.0; prima c'era un solo `<nome>.slp.bak`). Finché ci sono modifiche non salvate, il progetto viene anche scritto **una volta al minuto** in
 `~/Music/Sun Loops Studio/Autosave/Autosave.slp`. Quel file viene cancellato quando il programma si chiude normalmente; se il programma si è
 bloccato (o è stato terminato), al prossimo avvio compare **Recover your work?** (dopo la domanda sul report del crash, vedi *Report dei crash* sotto) e *Open the recovered project* lo apre (segnato come non salvato,
 con il vecchio nome se ne aveva uno: `Ctrl+S` lo rimette al suo posto).
@@ -1346,8 +1355,20 @@ File supportati: `.wav`, `.aiff` / `.aif`, `.flac`, `.ogg`, `.oga` e `.mp3` sono
 `sudo dnf install ffmpeg` (su Fedora normale è il pacchetto di RPM Fusion; il pacchetto `ffmpeg-free` potrebbe non avere
 l'encoder MP3). L'audio di un video viene estratto in `~/Music/Sun Loops Studio/Samples/From videos/<nome>.wav` (senza mai
 sostituire un file) e la clip usa quel WAV. La decodifica avviene in background; la riga di stato dice quando le clip sono
-dentro. Un file più lungo di 5 minuti viene tagliato a 5 minuti (con un messaggio) e una clip più lunga dello spazio libero
-viene tagliata per entrarci.
+dentro. Una clip più lunga dello spazio libero viene tagliata per entrarci.
+
+**File lunghi (0.81.0).** Un file fino a 5 minuti resta in memoria, come prima. Uno **più lungo (fino a 4 ore)** viene suonato **dal disco**,
+come fa il "keep on disk" di FL Studio:
+- viene decodificato una volta nella cache audio (`Sun Loops Studio/Cache/Audio` nella cartella dei dati delle applicazioni), e riaprendo il
+  progetto la cache si usa subito;
+- mentre il brano suona, un thread in background legge in anticipo i tre secondi successivi di ogni clip di questo tipo, quindi la
+  riproduzione non aspetta il disco;
+- la sua forma d'onda si prepara durante la decodifica;
+- la cache tiene i 16 GB usati più di recente.
+
+Prima della 0.81.0 un file veniva tagliato a 5 minuti. Un file più lungo di 4 ore viene tagliato lì (con un messaggio). Editor dei sample,
+editor del pitch e separazione in stem lavorano su audio in memoria, quindi rifiutano un file suonato dal disco. Una playlist contiene fino a
+**1024 clip audio** (prima 64), e **64** possono suonare nello stesso momento (prima 16).
 
 Una clip audio suona in **modalità Song** (il programma ci passa quando aggiungi la prima clip) attraverso la traccia del
 mixer con lo stesso numero della sua traccia di playlist: la **Track 3** della playlist suona sulla **traccia 3 del mixer**,
@@ -1492,7 +1513,7 @@ La freccia accanto a Record offre anche:
 
 Tutte le riprese partono nello stesso blocco audio, quindi sono allineate tra loro, e sono spostate della latenza di andata e
 ritorno dichiarata dal dispositivo, per allinearle a ciò che suonava. Una ripresa si ferma da sola alla fine della playlist (con
-le take in loop: dopo 5 minuti), o alla fine della regione di loop con il *punch out*. Un ingresso che il dispositivo non ha
+le take in loop: dopo 4 ore, 0.81.0; prima 5 minuti), o alla fine della regione di loop con il *punch out*. Un ingresso che il dispositivo non ha
 viene segnalato e non si registra nulla.
 
 ### Tastiere MIDI e altri dispositivi
@@ -1971,7 +1992,7 @@ occupato più tardi, un brano più pesante o un mixer pieno di effetti possono r
   il sedicesimo (di più a frequenze di campionamento maggiori). La memoria preparata resta finché il dispositivo audio non riparte.
 - I pattern durano da 4 a 64 quarti (ognuno la sua; 2 o 3 con un metro corto); un solo metro per tutto il brano; fino a 256 cambi di tempo, a gradino, suonati solo in modalità Song; le clip audio non li seguono.
 - I sample sono mono o stereo, al massimo 30 secondi. Il sampler ha un inviluppo e un filtro per canale (niente inviluppo del filtro, LFO o
-  modulazione); al massimo quattro zone suonano per nota. Clip audio: fino a 5 minuti per file, 64 clip.
+  modulazione); al massimo quattro zone suonano per nota. Clip audio: fino a 4 ore per file (oltre i 5 minuti suonate dal disco), 1024 clip, 64 suonate insieme.
 - Il synth: un LFO e un filtro per canale, due oscillatori, niente unisono, ancora niente motore additivo, la velocity non modula gli
   inviluppi; l'LFO riparte a ogni nota. Il motore FM ha quattro operatori, solo sinusoidi, nessun filtro, e la sua matrice è calcolata con un
   ritardo di un campione (come nella maggior parte dei synth FM a matrice).

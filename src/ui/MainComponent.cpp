@@ -2,6 +2,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include "audio/DiskPrefetch.h"
 #include "audio/MixerEdit.h"
 #include "audio/AuxBuses.h"
 #include "audio/TimeFormat.h"
@@ -48,8 +49,9 @@ std::shared_ptr<const SampleData> decodeSample (juce::AudioFormatManager&, const
     if (sample->numFrames() > maxFrames)
     {
         auto cut = std::make_shared<SampleData> (*sample);
-        cut->left.resize (static_cast<size_t> (maxFrames));
+        cut->left.resize (static_cast<size_t> (maxFrames)); // (0.81.0: from a long file read from the disk, only these frames are copied)
         cut->right.resize (static_cast<size_t> (maxFrames));
+        cut->overview = nullptr;
         sample = cut;
     }
     return sample;
@@ -81,6 +83,7 @@ MainComponent::MainComponent()
         channels[i].mixerTrack = static_cast<int> (i);
 
     library.ensureExists(); // ~/Music/Sun Loops Studio/{Samples,Drum Kits,Presets}: where the browser looks
+    pruneAudioCache (static_cast<juce::int64> (16) << 30); // 0.81.0: the long files' audio cache keeps the 16 GB used last
     arrangement = blank.arrangement;
 
     for (size_t i = 0; i < channels.size(); ++i)
@@ -1031,6 +1034,7 @@ void MainComponent::timerCallback()
     }
 
     followAutomation();
+    diskPrefetch.setPosition (engine.getPlayheadTick()); // 0.81.0: long files are read ahead of where the song is
     const float masterPeak = engine.consumePeak();
     meter.setLevel (masterPeak);
 
@@ -1369,6 +1373,7 @@ void MainComponent::openPianoRoll (int channelIndex)
 void MainComponent::publishProject()
 {
     markDirty();
+    diskPrefetch.setArrangement (arrangement, bpmSlider.getValue()); // 0.81.0
     if (drumWindow != nullptr)
         drumWindow->view().refresh(); // notes or kit may have changed from somewhere else (piano roll, another pattern, undo)
     if (samplerWindow != nullptr)

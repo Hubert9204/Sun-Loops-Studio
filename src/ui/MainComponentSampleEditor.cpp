@@ -33,6 +33,13 @@ void MainComponent::openSampleEditorForClip (int index)
         juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Sample editor", "This clip has no audio (its file is missing).");
         return;
     }
+    if (clip.data->isMapped()) // 0.81.0: a long file, read from the disk
+    {
+        juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::InfoIcon, "Sample editor", juce::String ("This clip's file is longer than ") + juce::String (static_cast<int> (kMaxInMemorySeconds / 60.0))
+                         + " minutes: it is played from the disk, while this tool works on audio it keeps in memory. To edit part of it, "
+                           "save that part as a shorter file (in an audio editor) and import it.");
+        return;
+    }
     if (! clip.stretch.isNeutral())
     {
         juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::InfoIcon, "Sample editor",

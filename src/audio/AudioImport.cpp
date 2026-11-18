@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <map>
 #include <tuple>
 
@@ -62,7 +63,7 @@ ImportResult decodeNative (const juce::File& file)
         return result;
     }
 
-    const auto maxFrames = static_cast<juce::int64> (reader->sampleRate * kMaxImportSeconds);
+    const auto maxFrames = std::min (static_cast<juce::int64> (reader->sampleRate * kMaxImportSeconds), static_cast<juce::int64> (std::numeric_limits<int>::max() - 1));
     const int frames = static_cast<int> (std::min (reader->lengthInSamples, maxFrames));
     if (frames < 2)
     {
@@ -70,22 +71,39 @@ ImportResult decodeNative (const juce::File& file)
         return result;
     }
     if (reader->lengthInSamples > maxFrames)
-        result.warning = file.getFileName() + " is longer than " + juce::String (static_cast<int> (kMaxImportSeconds / 60.0))
-                       + " minutes: only the first " + juce::String (static_cast<int> (kMaxImportSeconds / 60.0)) + " minutes were read.";
+        result.warning = file.getFileName() + " is longer than " + juce::String (static_cast<int> (kMaxImportSeconds / 3600.0))
+                       + " hours: only the first " + juce::String (static_cast<int> (kMaxImportSeconds / 3600.0)) + " hours were read.";
 
-    auto data = readSampleData (*reader, frames, file.getFileNameWithoutExtension().toStdString(), file.getFullPathName().toStdString());
-    if (data == nullptr)
+    const auto name = file.getFileNameWithoutExtension().toStdString();
+    const auto source = file.getFullPathName().toStdString();
+    std::shared_ptr<SampleData> data;
+    if (frames > reader->sampleRate * kMaxInMemorySeconds) // 0.81.0: a long file is read from the audio cache
     {
-        result.error = "Could not decode " + file.getFileName();
-        return result;
-    }
-
-    for (float s : data->left)
-        if (! std::isfinite (s))
+        const juce::String key = file.getFullPathName() + "|" + juce::String (file.getSize()) + "|"
+                               + juce::String (file.getLastModificationTime().toMilliseconds()) + "|" + juce::String (frames);
+        juce::String error;
+        data = readSampleDataToCache (*reader, frames, name, source, key, error);
+        if (data == nullptr)
         {
-            result.error = file.getFileName() + " contains damaged audio";
-            return {};
+            result.error = error.isNotEmpty() ? error : "Could not decode " + file.getFileName();
+            return result;
         }
+    }
+    else
+    {
+        data = readSampleData (*reader, frames, name, source);
+        if (data == nullptr)
+        {
+            result.error = "Could not decode " + file.getFileName();
+            return result;
+        }
+        for (float s : data->left)
+            if (! std::isfinite (s))
+            {
+                result.error = file.getFileName() + " contains damaged audio";
+                return {};
+            }
+    }
 
     result.data = std::move (data);
     result.file = file;
@@ -162,6 +180,213 @@ std::shared_ptr<SampleData> readSampleData (juce::AudioFormatReader& reader, int
     auto data = std::make_shared<SampleData>();
     data->left.assign (buffer.getReadPointer (0), buffer.getReadPointer (0) + frames);
     data->right.assign (buffer.getReadPointer (1), buffer.getReadPointer (1) + frames);
+    data->sampleRate = reader.sampleRate;
+    data->name = std::move (name);
+    data->source = std::move (source);
+    return data;
+}
+
+// ---- 0.81.0: the audio cache ------------------------------------------------------------------------------------------
+
+namespace
+{
+juce::CriticalSection cacheLock;
+juce::File cacheFolderSetting;
+
+// A cache file mapped into memory, kept alive by the buffers that read it.
+std::shared_ptr<const void> mapFloatFile (const juce::File& file, juce::int64 expectedBytes, const float*& samples)
+{
+    samples = nullptr;
+    auto map = std::make_shared<juce::MemoryMappedFile> (file, juce::MemoryMappedFile::readOnly);
+    if (map->getData() == nullptr || static_cast<juce::int64> (map->getSize()) != expectedBytes)
+        return nullptr;
+    samples = static_cast<const float*> (map->getData());
+    return map;
+}
+
+// The overview of `frames` frames of a left and a right channel (the same for mono), into `o` from bin `firstBin` on.
+void addOverview (SampleOverview& o, const float* l, const float* r, int frames, size_t firstBin)
+{
+    for (int start = 0; start < frames; start += kOverviewFramesPerPeak)
+    {
+        float lo = 0.0f, hi = 0.0f;
+        const int end = std::min (frames, start + kOverviewFramesPerPeak);
+        for (int i = start; i < end; ++i)
+        {
+            const float v = 0.5f * (l[i] + r[i]);
+            lo = std::min (lo, v);
+            hi = std::max (hi, v);
+        }
+        const auto b = firstBin + static_cast<size_t> (start / kOverviewFramesPerPeak);
+        o.lows[b] = lo;
+        o.highs[b] = hi;
+    }
+}
+
+bool readOverview (const juce::File& file, size_t bins, SampleOverview& o)
+{
+    if (file.getSize() != static_cast<juce::int64> (bins * 2 * sizeof (float)))
+        return false;
+    juce::FileInputStream in (file);
+    o.lows.assign (bins, 0.0f);
+    o.highs.assign (bins, 0.0f);
+    const auto bytes = static_cast<int> (bins * sizeof (float));
+    return in.openedOk() && in.read (o.lows.data(), bytes) == bytes && in.read (o.highs.data(), bytes) == bytes;
+}
+
+void writeOverview (const juce::File& file, const SampleOverview& o)
+{
+    const auto part = file.withFileExtension (".peaks-part");
+    {
+        juce::FileOutputStream out (part);
+        if (! out.openedOk() || ! out.setPosition (0) || ! out.truncate().wasOk())
+            return;
+        out.write (o.lows.data(), o.lows.size() * sizeof (float));
+        out.write (o.highs.data(), o.highs.size() * sizeof (float));
+        out.flush();
+        if (out.getStatus().failed())
+            return;
+    }
+    part.moveFileTo (file);
+}
+} // namespace
+
+void setAudioCacheFolder (const juce::File& folder)
+{
+    const juce::ScopedLock lock (cacheLock);
+    cacheFolderSetting = folder;
+}
+
+juce::File audioCacheFolder()
+{
+    const juce::ScopedLock lock (cacheLock);
+    if (cacheFolderSetting != juce::File())
+        return cacheFolderSetting;
+    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Sun Loops Studio").getChildFile ("Cache").getChildFile ("Audio");
+}
+
+void pruneAudioCache (juce::int64 maxBytes)
+{
+    auto files = audioCacheFolder().findChildFiles (juce::File::findFiles, false, "*.f32");
+    std::sort (files.begin(), files.end(), [] (const juce::File& a, const juce::File& b) { return a.getLastModificationTime() > b.getLastModificationTime(); });
+    juce::int64 total = 0;
+    for (const auto& f : files)
+    {
+        total += f.getSize();
+        if (total > maxBytes && f.deleteFile()) // (a file still mapped stays, where the system does not allow deleting it)
+            f.withFileExtension (".peaks").deleteFile();
+    }
+}
+
+std::shared_ptr<SampleData> readSampleDataToCache (juce::AudioFormatReader& reader, int frames, std::string name, std::string source,
+                                                   const juce::String& key, juce::String& error)
+{
+    const bool mono = reader.numChannels == 1;
+    const int channels = mono ? 1 : 2;
+    const auto bytes = static_cast<juce::int64> (frames) * channels * static_cast<juce::int64> (sizeof (float));
+    const auto folder = audioCacheFolder();
+    const auto file = folder.getChildFile (juce::String::toHexString (key.hashCode64()) + (mono ? ".m" : ".s") + ".f32");
+
+    const float* samples = nullptr;
+    auto map = file.existsAsFile() ? mapFloatFile (file, bytes, samples) : nullptr;
+    const auto bins = static_cast<size_t> ((frames + kOverviewFramesPerPeak - 1) / kOverviewFramesPerPeak);
+    auto overview = std::make_shared<SampleOverview>();
+    const auto overviewFile = file.withFileExtension (".peaks");
+    if (map == nullptr)
+    {
+        overview->lows.assign (bins, 0.0f);
+        overview->highs.assign (bins, 0.0f);
+        if (! folder.createDirectory())
+        {
+            error = "Cannot create the audio cache folder " + folder.getFullPathName();
+            return nullptr;
+        }
+        if (folder.getBytesFreeOnVolume() < bytes + (64 << 20))
+        {
+            error = "Not enough room on the disk for the audio cache of " + juce::String (name) + " ("
+                  + juce::String (static_cast<double> (bytes) / (1 << 30), 1) + " GB are needed in " + folder.getFullPathName() + ")";
+            return nullptr;
+        }
+        // Left then right, each in one piece: written in blocks, so the whole file is never in memory.
+        const auto part = file.withFileExtension (".part");
+        {
+            juce::FileOutputStream out (part);
+            if (! out.openedOk() || ! out.setPosition (0) || ! out.truncate().wasOk())
+            {
+                error = "Cannot write the audio cache file " + part.getFullPathName();
+                return nullptr;
+            }
+            constexpr int kBlock = 1 << 16;
+            juce::AudioBuffer<float> buffer (2, kBlock);
+            for (int done = 0; done < frames; done += kBlock)
+            {
+                const int n = std::min (kBlock, frames - done);
+                buffer.clear();
+                if (! reader.read (&buffer, 0, n, done, true, ! mono))
+                {
+                    error = "Could not decode " + juce::String (name);
+                    break;
+                }
+                for (int c = 0; c < channels; ++c)
+                {
+                    const float* x = buffer.getReadPointer (c);
+                    for (int i = 0; i < n; ++i)
+                        if (! std::isfinite (x[i]))
+                        {
+                            error = juce::String (name) + " contains damaged audio";
+                            break;
+                        }
+                    if (error.isNotEmpty())
+                        break;
+                    if (! out.setPosition ((static_cast<juce::int64> (c) * frames + done) * static_cast<juce::int64> (sizeof (float)))
+                        || ! out.write (x, static_cast<size_t> (n) * sizeof (float)))
+                    {
+                        error = "Could not write the audio cache file (is the disk full?)";
+                        break;
+                    }
+                }
+                if (error.isNotEmpty())
+                    break;
+                addOverview (*overview, buffer.getReadPointer (0), buffer.getReadPointer (mono ? 0 : 1), n,
+                             static_cast<size_t> (done / kOverviewFramesPerPeak));
+            }
+            out.flush();
+            if (error.isEmpty() && out.getStatus().failed())
+                error = "Could not write the audio cache file: " + out.getStatus().getErrorMessage();
+        }
+        if (error.isNotEmpty() || ! part.moveFileTo (file))
+        {
+            part.deleteFile();
+            if (error.isEmpty())
+                error = "Could not write the audio cache file " + file.getFullPathName();
+            return nullptr;
+        }
+        map = mapFloatFile (file, bytes, samples);
+        if (map == nullptr)
+        {
+            error = "Could not read the audio cache file " + file.getFullPathName();
+            return nullptr;
+        }
+        writeOverview (overviewFile, *overview);
+    }
+    else if (! readOverview (overviewFile, bins, *overview)) // (a cache file whose overview is missing: made again, once)
+    {
+        overview->lows.assign (bins, 0.0f);
+        overview->highs.assign (bins, 0.0f);
+        const auto n = static_cast<size_t> (frames);
+        constexpr int kBlock = 1 << 16;
+        for (int done = 0; done < frames; done += kBlock)
+            addOverview (*overview, samples + done, (mono ? samples : samples + n) + done, std::min (kBlock, frames - done),
+                         static_cast<size_t> (done / kOverviewFramesPerPeak));
+        writeOverview (overviewFile, *overview);
+    }
+    file.setLastModificationTime (juce::Time::getCurrentTime()); // (recently used: pruneAudioCache keeps it)
+
+    auto data = std::make_shared<SampleData>();
+    const auto n = static_cast<size_t> (frames);
+    data->left = SampleBuffer::mapped (map, samples, n);
+    data->right = SampleBuffer::mapped (map, mono ? samples : samples + n, n);
+    data->overview = std::move (overview);
     data->sampleRate = reader.sampleRate;
     data->name = std::move (name);
     data->source = std::move (source);

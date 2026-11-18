@@ -319,9 +319,9 @@ void MainComponent::openBrowserProject (const juce::String& payload)
 
 bool MainComponent::saveProjectTo (const juce::File& file)
 {
-    // The previous version stays next to it as "<name>.slp.bak" (one generation).
-    if (file.existsAsFile())
-        file.copyFileTo (file.getSiblingFile (file.getFileName() + ".bak"));
+    // 0.81.0: the previous version goes to "Backups/<name> (<date and time>).slp" next to it, the 10 newest kept (before: one
+    // "<name>.slp.bak").
+    backupProjectFile (file, juce::Time::getCurrentTime());
     const auto error = writeProjectFile (file, makeDocument());
     if (error.isNotEmpty())
     {
@@ -400,8 +400,8 @@ void MainComponent::openProject()
 
         safe->library.ensureExists();
         const auto start = safe->currentProjectFile != juce::File() ? safe->currentProjectFile.getParentDirectory() : safe->library.projects;
-        safe->fileChooser = std::make_unique<juce::FileChooser> ("Open a project", start,
-                                                                         juce::String ("*") + kProjectExtension);
+        safe->fileChooser = std::make_unique<juce::FileChooser> ("Open a project", start, // 0.81.0: or a single-file project
+                                                                         juce::String ("*") + kProjectExtension + ";*" + kProjectArchiveExtension);
         safe->fileChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
                                         [safe] (const juce::FileChooser& chooser)
         {
@@ -413,6 +413,28 @@ void MainComponent::openProject()
 
 bool MainComponent::openProjectFile (const juce::File& file)
 {
+    // 0.81.0: a single-file project is unpacked into a new folder of the Projects folder, and the project there is opened
+    if (hasProjectArchiveExtension (file))
+    {
+        library.ensureExists();
+        const auto folder = library.projects.getNonexistentChildFile (juce::File::createLegalFileName (file.getFileNameWithoutExtension()), "", false);
+        juce::File unpacked;
+        juce::MouseCursor::showWaitCursor();
+        const auto error = extractProjectArchive (file, folder, unpacked);
+        juce::MouseCursor::hideWaitCursor();
+        if (error.isNotEmpty())
+        {
+            statusLabel.setText ("Could not open " + file.getFileName(), juce::dontSendNotification);
+            juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Could not open " + file.getFileName(), error);
+            return false;
+        }
+        const bool opened = openProjectFile (unpacked);
+        rebuildBrowser(); // (the new folder under My Projects)
+        if (opened)
+            statusLabel.setText ("Unpacked " + file.getFileName() + " into " + folder.getFullPathName() + " and opened it", juce::dontSendNotification);
+        return opened;
+    }
+
     auto parsed = readProjectFile (file);
     if (! parsed.document.has_value())
     {
@@ -517,6 +539,7 @@ void MainComponent::showFileMenu()
     menu.addItem (item (3, "Save", "Ctrl+S"));
     menu.addItem (item (4, "Save As...", "Ctrl+Shift+S"));
     menu.addItem (item (11, "Export project with samples...", ""));
+    menu.addItem (item (14, "Save as a single file with samples (.slpz)...", "")); // 0.81.0
     menu.addItem (item (9, "Undo", "Ctrl+Z", ! undoHistory.empty()));
     menu.addItem (item (10, "Redo", "Ctrl+Y", ! redoHistory.empty()));
     menu.addSeparator();
@@ -563,6 +586,7 @@ void MainComponent::showFileMenu()
                                 case 8: safe->chooseMidiToImport(); break;
                                 case 9: safe->undoEdit(); break;
                                 case 11: safe->exportProjectFolder(); break;
+                                case 14: safe->exportProjectArchive(); break;
                                 case 12: safe->openFlpProject(); break;
                                 case 13: safe->exportFlpProject(); break;
                                 case 10: safe->redoEdit(); break;

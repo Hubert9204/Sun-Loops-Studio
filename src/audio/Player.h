@@ -329,7 +329,7 @@ private:
     void releaseVoices (bool includeSamplers) noexcept;
     void onProjectChanged (const Project& project) noexcept;
 
-    static constexpr int kMaxClipVoices = 16;
+    static constexpr int kMaxClipVoices = 64; // audio clips sounding at once (0.81.0; 16 before)
     std::array<ClipVoice, kMaxClipVoices> clipVoices {};
     size_t nextClip = 0;
 

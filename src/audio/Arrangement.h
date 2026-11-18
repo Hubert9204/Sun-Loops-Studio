@@ -80,7 +80,7 @@ struct Clip
     int endTick() const noexcept { return startTick + lengthTicks; }
 };
 
-constexpr int kMaxAudioClips = 64;
+constexpr int kMaxAudioClips = 1024; // 0.81.0 (64 before)
 
 // A recording or an imported audio file on a playlist track. Unlike a pattern clip its position (`startTick`) and
 // length are in ticks, not in whole patterns: it plays the audio once and is cut at its end.

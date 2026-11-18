@@ -19,6 +19,10 @@ void MainComponent::openPitchEditorForClip (int index)
     };
     if (clip.data == nullptr || clip.data->numFrames() < 2)
         return refuse ("This clip has no audio (its file is missing).");
+    if (clip.data->isMapped()) // 0.81.0: a long file, read from the disk
+        return refuse (juce::String ("This clip's file is longer than ") + juce::String (static_cast<int> (kMaxInMemorySeconds / 60.0))
+                         + " minutes: it is played from the disk, while this tool works on audio it keeps in memory. To edit part of it, "
+                           "save that part as a shorter file (in an audio editor) and import it.");
     if (! clip.stretch.isNeutral())
         return refuse ("This clip is stretched or pitch-shifted. Choose Stretch and pitch... > Back to the original, edit the pitch here, "
                        "then stretch it again.");

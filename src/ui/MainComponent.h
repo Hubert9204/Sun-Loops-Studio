@@ -39,6 +39,7 @@
 #include "ui/RightClickButton.h"
 #include "ui/PianoRoll.h"
 #include "ui/PianoRollToolbar.h"
+#include "audio/DiskPrefetch.h"
 #include "ui/PluginWindow.h"
 #include "plugins/PluginHost.h"
 #include "ui/PlaylistView.h"
@@ -158,6 +159,7 @@ private:
     void noteAudioDevice();
     void logStatusChanges();
     void exportProjectFolder();
+    void exportProjectArchive(); // 0.81.0: the project and its samples in one .slpz file
     juce::uint32 lastAutosaveMs = 0;
 
     void refreshRackStrips();
@@ -443,6 +445,7 @@ private:
     PluginScanState pluginScanState = PluginScanState::NotScanned;
     std::unique_ptr<juce::Thread> pluginScanThread;
     std::vector<std::unique_ptr<PluginWindow>> pluginWindows;
+    DiskPrefetch diskPrefetch; // 0.81.0: reads long files ahead of the playhead
     int pluginPollTicks = 0;
     bool browserOpen = true;
 

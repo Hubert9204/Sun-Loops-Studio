@@ -796,6 +796,15 @@ const PlaylistTimeline::Peaks& PlaylistTimeline::peaksFor (const std::shared_ptr
     p.data = data;
     const int frames = data->numFrames();
     const int bins = (frames + kFramesPerPeak - 1) / kFramesPerPeak;
+    // 0.81.0: a long file brings its overview (made while it was decoded): its pages are not all read again from the disk here
+    static_assert (kFramesPerPeak == kOverviewFramesPerPeak);
+    if (data->overview != nullptr && static_cast<int> (data->overview->lows.size()) == bins && static_cast<int> (data->overview->highs.size()) == bins)
+    {
+        p.lows = data->overview->lows;
+        p.highs = data->overview->highs;
+        waveformCache.push_back (std::move (p));
+        return waveformCache.back();
+    }
     p.lows.resize (static_cast<size_t> (bins));
     p.highs.resize (static_cast<size_t> (bins));
     for (int b = 0; b < bins; ++b)

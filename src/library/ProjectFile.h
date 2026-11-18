@@ -99,12 +99,29 @@ void resolveRelativeSources (ProjectDocument& d, const juce::File& projectFolder
 // Returns an error message, empty on success.
 juce::String exportProjectWithSamples (ProjectDocument d, const juce::File& folder, const juce::String& name, juce::StringArray& notes);
 
+// 0.81.0, the project in a single file (".slpz", a ZIP): what exportProjectWithSamples writes into a folder - the project and a copy
+// of every sound it uses - packed into `archive` (written under a temporary name and moved into place). Returns an error, empty
+// on success.
+constexpr const char* kProjectArchiveExtension = ".slpz";
+juce::String writeProjectArchive (ProjectDocument d, const juce::File& archive, juce::StringArray& notes);
+// Unpacks `archive` into `folder` (which must not exist yet) and finds its project file (`projectFile`). Entries that would land
+// outside the folder (absolute paths, "..") are refused. Returns an error, empty on success.
+juce::String extractProjectArchive (const juce::File& archive, const juce::File& folder, juce::File& projectFile);
+
+// 0.81.0, backups: before a project file is saved over, its previous version is copied to "Backups/<name> (<date and time>).slp"
+// next to it; only the `keep` newest backups of that project are kept. Returns the copy (none: the file did not exist yet).
+constexpr int kProjectBackupsKept = 10;
+juce::File backupProjectFile (const juce::File& project, juce::Time now, int keep = kProjectBackupsKept);
+// The backups of `project`, newest first.
+juce::Array<juce::File> projectBackups (const juce::File& project);
+
 // Writes the project so that an existing file is never left half-written: the text goes to a temporary file
 // next to the target, which then replaces it. Returns an error message, empty on success.
 juce::String writeProjectFile (const juce::File& file, const ProjectDocument& document);
 
 // True for a name ending in .slp (0.44.0: the .slsproj of versions before 0.8 is no longer recognised).
 bool hasProjectExtension (const juce::File& file);
+bool hasProjectArchiveExtension (const juce::File& file); // 0.81.0: ".slpz"
 
 // "My Song" -> "My Song.slp"; names that already end in .slp are left alone.
 juce::File withProjectExtension (const juce::File& file);

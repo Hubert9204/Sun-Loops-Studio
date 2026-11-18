@@ -356,6 +356,7 @@ void MainComponent::showToolsMenu()
     menu.addItem (6, "Open an FL Studio project (.flp)...");
     menu.addItem (7, "Export as FL Studio project (.flp)...");
     menu.addItem (8, "Export project with samples...");
+    menu.addItem (10, "Save as a single file with samples (.slpz)..."); // 0.81.0
     menu.addSeparator();
     menu.addItem (9, "Scan for plugins");
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&toolsButton),
@@ -374,6 +375,7 @@ void MainComponent::showToolsMenu()
                                 case 7: safe->exportFlpProject(); break;
                                 case 8: safe->exportProjectFolder(); break;
                                 case 9: safe->startPluginScan(); break;
+                                case 10: safe->exportProjectArchive(); break;
                                 default: break;
                             }
                         });

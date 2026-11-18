@@ -54,7 +54,7 @@ std::vector<double> hann (int n)
 }
 
 // Magnitudes of the Hann-windowed frames of `x` starting at begin, begin + hop, ... while a whole frame fits before `end`.
-std::vector<std::vector<double>> frameMagnitudes (const std::vector<float>& x, int begin, int end, int fftSize, int hop, const Fft& fft,
+std::vector<std::vector<double>> frameMagnitudes (const SampleBuffer& x, int begin, int end, int fftSize, int hop, const Fft& fft,
                                                   const std::vector<double>& window)
 {
     std::vector<std::vector<double>> frames;
