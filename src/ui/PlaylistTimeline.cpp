@@ -68,8 +68,11 @@ PlaylistTimeline::PlaylistTimeline (Arrangement& arrangementToEdit) : arrangemen
         auto& add = addButtons[static_cast<size_t> (s)];
         remove.setButtonText ("-");
         add.setButtonText ("+");
-        remove.setTooltip (juce::String ("Remove the last empty ") + what[s] + " of this section (when every one holds clips, the last one, after asking)");
-        add.setTooltip (juce::String (s == kPatternSection ? "Add a " : "Add an ") + what[s] + " at the end of this section");
+        remove.setTooltip (s == kPatternSection
+                               ? juce::String ("Delete a pattern with its track (the last one with no clips and no notes, else the last one; after asking)")
+                               : juce::String ("Remove the last empty ") + what[s] + " of this section (when every one holds clips, the last one, after asking)");
+        add.setTooltip (s == kPatternSection ? juce::String ("Add a new empty pattern, with its own track at the end of this section")
+                                             : juce::String ("Add an ") + what[s] + " at the end of this section");
         remove.onClick = [this, s] { removeFromSection (s); };
         add.onClick = [this, s] { addToSection (s); };
         for (auto* b : { &remove, &add })
@@ -363,8 +366,9 @@ void PlaylistTimeline::updateSectionButtons()
         const bool lanes = s == kAutomationSection;
         const int count = lanes ? arrangement.automationLanes : sectionEndTrack (s) - sectionFirstTrack (s);
         removeButtons[static_cast<size_t> (s)].setEnabled (count > 1 && (lanes || arrangement.trackCount() > 1));
-        addButtons[static_cast<size_t> (s)].setEnabled (lanes ? arrangement.automationLanes < kMaxAutomationLanes
-                                                              : arrangement.trackCount() < kMaxPlaylistTracks);
+        addButtons[static_cast<size_t> (s)].setEnabled (lanes                  ? arrangement.automationLanes < kMaxAutomationLanes
+                                                        : s == kPatternSection ? arrangement.canAddPattern() && onAddPattern != nullptr // 0.79.0
+                                                                               : arrangement.trackCount() < kMaxPlaylistTracks);
     }
 }
 
@@ -429,6 +433,12 @@ void PlaylistTimeline::addToSection (int section)
         notifyChanged();
         return;
     }
+    if (section == kPatternSection) // 0.79.0: a pattern track comes with its pattern
+    {
+        if (onAddPattern != nullptr && arrangement.canAddPattern())
+            onAddPattern();
+        return;
+    }
     if (arrangement.trackCount() >= kMaxPlaylistTracks)
         return;
     beginEdit();
@@ -472,8 +482,17 @@ void PlaylistTimeline::removeFromSection (int section)
     if (end - first <= 1 || arrangement.trackCount() <= 1)
         return;
     int track = end - 1;
+    const auto patternIsEmpty = [this] (int t) // 0.79.0: a pattern track goes with its pattern: one with no notes is picked first
+    {
+        const int p = arrangement.playlistTracks[static_cast<size_t> (t)].pattern;
+        if (p < 0 || p >= static_cast<int> (arrangement.patterns.size()))
+            return true;
+        const auto& notes = arrangement.patterns[static_cast<size_t> (p)].notes;
+        return std::all_of (notes.begin(), notes.end(), [] (const auto& list) { return list.empty(); })
+            && std::none_of (arrangement.clips.begin(), arrangement.clips.end(), [p] (const Clip& c) { return c.pattern == p; });
+    };
     for (int t = end - 1; t >= first; --t)
-        if (arrangement.clipsOnTrack (t) == 0)
+        if (arrangement.clipsOnTrack (t) == 0 && patternIsEmpty (t))
         {
             track = t;
             break;
@@ -517,6 +536,13 @@ void PlaylistTimeline::removeTrack (int track)
 {
     if (track < 0 || track >= arrangement.trackCount() || arrangement.trackCount() <= 1)
         return;
+    // 0.79.0: a pattern's own track is deleted with its pattern (the program asks first and keeps everything in step)
+    if (const int p = arrangement.playlistTracks[static_cast<size_t> (track)].pattern; p >= 0 && p < static_cast<int> (arrangement.patterns.size()))
+    {
+        if (onDeletePattern != nullptr)
+            onDeletePattern (p);
+        return;
+    }
     const auto doRemove = [safe = juce::Component::SafePointer<PlaylistTimeline> (this), track]
     {
         if (safe == nullptr || track >= safe->arrangement.trackCount())
@@ -1902,8 +1928,20 @@ void PlaylistTimeline::showTrackMenu (int track)
     menu.addItem (3, "Record on this track", onTrackArmToggled != nullptr, recordArms[static_cast<size_t> (track)]);
     menu.addItem (4, "Recording input...", onTrackInputMenu != nullptr);
     menu.addSeparator();
-    menu.addItem (5, sectionOfTrack (track) == kPatternSection ? "Add a pattern track" : "Add an audio track", arrangement.trackCount() < kMaxPlaylistTracks);
-    menu.addItem (6, "Delete this track", arrangement.trackCount() > 1);
+    {
+        const auto& t = arrangement.playlistTracks[static_cast<size_t> (track)];
+        const bool ofPattern = t.pattern >= 0 && t.pattern < static_cast<int> (arrangement.patterns.size()); // 0.79.0
+        if (sectionOfTrack (track) == kPatternSection)
+            menu.addItem (5, "Add a pattern (with its own track)", arrangement.canAddPattern() && onAddPattern != nullptr);
+        else
+            menu.addItem (5, "Add an audio track", arrangement.trackCount() < kMaxPlaylistTracks);
+        if (ofPattern)
+            menu.addItem (6, "Delete track (and its pattern, " + juce::String (arrangement.patterns[static_cast<size_t> (t.pattern)].name) + ")...",
+                          arrangement.patterns.size() > 1 && onDeletePattern != nullptr);
+        else
+            menu.addItem (6, "Delete track", arrangement.trackCount() > 1);
+        menu.addItem (13, "Audio plays through mixer track " + juce::String (arrangement.mixerTrackOf (track) + 1), false); // 0.79.0
+    }
     menu.showMenuAsync (juce::PopupMenu::Options().withMousePosition(),
                         [safe = juce::Component::SafePointer<PlaylistTimeline> (this), track] (int choice)
                         {
@@ -2014,6 +2052,8 @@ void PlaylistTimeline::restore (const Snapshot& s)
     arrangement.automationClips = s.automationClips;
     arrangement.playlistTracks = s.tracks.empty() ? std::vector<PlaylistTrack> (1) : s.tracks;
     arrangement.automationLanes = std::clamp (s.automationLanes, 1, kMaxAutomationLanes);
+    arrangement.syncPatternTracks(); // 0.79.0: a step from before a pattern was added still gives every pattern its track
+    arrangement.dropInvalidClips();
     tracksChanged();
 }
 

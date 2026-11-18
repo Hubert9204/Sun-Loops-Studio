@@ -66,8 +66,14 @@ void MainComponent::selectPattern (int index)
 
 void MainComponent::addPattern (bool cloneCurrent)
 {
-    if (arrangement.patterns.size() >= static_cast<size_t> (kMaxPatterns))
+    if (! arrangement.canAddPattern())
+    {
+        statusLabel.setText (arrangement.patterns.size() >= static_cast<size_t> (kMaxPatterns)
+                                 ? "The project already has " + juce::String (kMaxPatterns) + " patterns, the most it can have"
+                                 : "No new pattern: " + juce::String ("the playlist already has " + juce::String (kMaxPlaylistTracks) + " tracks: a new pattern needs one of its own"),
+                             juce::dontSendNotification);
         return;
+    }
 
     commitCurrentPattern();
 
@@ -84,9 +90,9 @@ void MainComponent::addPattern (bool cloneCurrent)
         pattern.loopStartTick = source.loopStartTick;
         pattern.loopEndTick = source.loopEndTick;
     }
-    arrangement.patterns.push_back (std::move (pattern));
-    const int ownTrack = arrangement.addPatternTrack (static_cast<int> (arrangement.patterns.size()) - 1); // its own playlist track (0.44.0)
-    playlistView.showTrack (ownTrack);
+    const int made = arrangement.addPattern (std::move (pattern)); // with its own playlist track (0.44.0, always since 0.79.0)
+    playlistView.tracksChanged();
+    playlistView.showTrack (arrangement.dedicatedTrack (made));
     arrangement.ensureChannelCount (channels.size());
 
     refreshPatternBox();
@@ -235,16 +241,20 @@ void MainComponent::deletePattern (int index)
 
     commitCurrentPattern();
     const auto name = juce::String (arrangement.patterns[static_cast<size_t> (index)].name);
-    int used = 0;
-    for (const auto& c : arrangement.clips)
-        used += c.pattern == index ? 1 : 0;
+    const auto takes = arrangement.whatRemovingPatternTakes (index);
 
-    auto message = "Delete \"" + name + "\" with all its notes?";
-    if (used > 0)
-        message += " The " + juce::String (used) + (used == 1 ? " clip" : " clips") + " that play it on the playlist will be removed too.";
-    message += "\nThis cannot be undone.";
+    // 0.79.0: the pattern and its playlist track go together
+    auto message = "Delete \"" + name + "\" with all its notes and its playlist track?";
+    if (takes.clips > 0)
+        message += "\n- The " + juce::String (takes.clips) + (takes.clips == 1 ? " clip" : " clips") + " that play it on the playlist are removed too.";
+    if (takes.audioClips > 0)
+        message += "\n- The " + juce::String (takes.audioClips) + (takes.audioClips == 1 ? " audio clip" : " audio clips") + " on its track are removed too.";
+    if (takes.movedClips > 0)
+        message += "\n- " + juce::String (takes.movedClips) + (takes.movedClips == 1 ? " clip of another pattern on its track moves" : " clips of other patterns on its track move")
+                 + " to the track of its pattern.";
+    message += "\nUndo (Ctrl+Z) brings it back.";
 
-    juce::AlertWindow::showOkCancelBox (juce::MessageBoxIconType::WarningIcon, "Delete pattern", message, "Delete", "Cancel", nullptr,
+    juce::AlertWindow::showOkCancelBox (juce::MessageBoxIconType::WarningIcon, "Delete pattern and track", message, "Delete", "Cancel", nullptr,
                                         juce::ModalCallbackFunction::create (
                                             [safe = juce::Component::SafePointer<MainComponent> (this), index, name] (int result)
                                             {
@@ -252,13 +262,12 @@ void MainComponent::deletePattern (int index)
                                                     return;
 
                                                 safe->commitCurrentPattern();
-                                                const int ownTrack = safe->arrangement.dedicatedTrack (index);
-                                                const int tracksBefore = safe->arrangement.trackCount();
-                                                if (! safe->arrangement.removePattern (index))
+                                                int ownTrack = -1;
+                                                if (! safe->arrangement.removePattern (index, &ownTrack))
                                                     return;
-                                                if (safe->arrangement.trackCount() < tracksBefore && ownTrack >= 0)
+                                                if (ownTrack >= 0)
                                                 {
-                                                    safe->recordSetup.removeTrack (ownTrack); // its own track went with it (0.44.0)
+                                                    safe->recordSetup.removeTrack (ownTrack); // its own track went with it (0.44.0; always since 0.79.0)
                                                     safe->applyRecordSetup();
                                                 }
                                                 safe->playlistView.tracksChanged();
@@ -275,7 +284,7 @@ void MainComponent::deletePattern (int index)
                                                 safe->playlistView.clearHistory();
                                                 safe->refreshPatternBox();
                                                 safe->playlistView.setSelectedPattern (now);
-                                                safe->statusLabel.setText ("Deleted pattern " + name, juce::dontSendNotification);
+                                                safe->statusLabel.setText ("Deleted pattern " + name + " and its playlist track", juce::dontSendNotification);
                                                 safe->publishProject();
                                             }));
 }

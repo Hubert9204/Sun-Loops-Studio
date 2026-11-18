@@ -111,8 +111,10 @@ void MainComponent::useStems (int index, const AudioClip& clip, Stems stems)
     }
 
     // The clips: Drums replaces the original on its track, Bass and Other below it (above it at the bottom of the playlist).
-    // Tracks are added at the end of the playlist when there are not two below it (0.44.0).
-    while (clip.track + 2 >= arrangement.trackCount() && arrangement.addTrack() >= 0) {}
+    // Tracks are added when there are not two below it (0.44.0); since 0.79.0 only audio tracks, at the end of the Audio section
+    // (after the clip's track, so it does not move), and only for a clip in that section.
+    while (arrangement.trackSection (clip.track) == TrackSection::Audio && clip.track + 2 >= arrangement.sectionEnd (TrackSection::Audio)
+           && insertAudioTrack() >= 0) {}
     playlistView.tracksChanged();
     const int count = arrangement.trackCount();
     const int targets[3] = { clip.track, clip.track + 1 < count ? clip.track + 1 : clip.track - 2,

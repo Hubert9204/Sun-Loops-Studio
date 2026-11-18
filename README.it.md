@@ -97,7 +97,7 @@ Cosa è verificato e cosa no, funzione per funzione: [docs/roadmap.md](docs/road
   X / Y), quantizzazione, humanize, legato, strum, arpeggio, chop, flip, glue, flam, claw machine e **generatori** di giri di
   accordi e linee di basso. La tastiera del computer e le tastiere MIDI suonano e registrano.
 - **Pattern e Playlist** - pattern ognuno della sua lunghezza, disposti su una Playlist in tre sezioni (**Audio**, **Pattern**,
-  **Automazione**) con gli strumenti disegno, pittura, cancella, mute, slip, taglio, cut, selezione, riproduzione e zoom, marker
+  **Automazione**; una traccia per pattern, aggiunta ed eliminata con lui) con gli strumenti disegno, pittura, cancella, mute, slip, taglio, cut, selezione, riproduzione e zoom, marker
   di tempo, una regione di loop, mute / solo per traccia, icone e colori. Riproduzione *Pattern* o *Song*.
 - **Clip audio e registrazione** - trascina audio (`.wav .aiff .flac .ogg .oga .mp3 .aac`) o il suono di un video sulla Playlist;
   allungali e cambiane l'intonazione (Signalsmith Stretch), modificali nell'**editor dei campioni** (taglio, dissolvenze,
@@ -121,7 +121,7 @@ Cosa è verificato e cosa no, funzione per funzione: [docs/roadmap.md](docs/road
   cantate; **stem** (batteria, basso, il resto) con l'elaborazione del segnale.
 - **Suoni integrati** - un Grand Piano e un basso elettrico campionati, due batterie acustiche campionate, tre kit elettronici e
   un kit di percussioni a mano ([licenze](resources/sounds/README.md)).
-- **Mixer** - da 8 a 500 tracce, ognuna con fader, pan, separazione stereo, polarità, mute / solo, misuratori, **10 slot di
+- **Mixer** - da 8 a 500 tracce (si aggiungono in fondo, se ne elimina una qualsiasi: tutto ciò che va alle altre le segue), ognuna con fader, pan, separazione stereo, polarità, mute / solo, misuratori, **10 slot di
   effetti** con manopola di mix, 8 mandate (pre o post fader), instradamento libero, un ritardo di traccia e la compensazione
   della latenza dei plugin; fino a otto bus aux (+ e - nel mixer) e due gruppi VCA; una striscia master.
 - **36 effetti e controller integrati** - equalizzatori, filtri, compressori e un compressore multibanda, maximizer, gate,

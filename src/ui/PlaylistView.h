@@ -58,6 +58,7 @@ public:
     std::function<void()> onNewPattern;
     std::function<void (int)> onRenamePattern;
     std::function<void (int)> onDeletePattern;
+    std::function<void()> onAddEmptyPattern; // 0.79.0: the pattern section's + (a new empty pattern with its track)
 
     // As PlaylistTimeline.
     std::function<void()> onChanged;

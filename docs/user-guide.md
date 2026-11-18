@@ -1081,13 +1081,30 @@ at a glance; on tall tracks the name sits in a title bar above the notes, on sho
   audio track goes under the last audio track, and the pattern tracks below move down with their clips. **-** removes the
   **last empty** track (lane) of its section; when every one holds clips it removes the last one, after a question, with its
   clips. Each section keeps at least one track (lane); there are at most 128 tracks and 32 lanes. To remove a particular track,
-  right-click its name > *Delete this track* (the menu also has *Add an audio track* / *Add a pattern track*). **Ctrl+Z**
+  right-click its name > *Delete track* (the menu also has *Add an audio track* / *Add a pattern*). **Ctrl+Z**
   brings everything back.
+- **Patterns and pattern tracks go together, one to one** (0.79.0): the **Patterns** section always has exactly one track per
+  pattern and nothing else.
+  - A new pattern (*New*, *Clone*, *Make unique*, the Loop Starter, a MIDI import, or the **+** of the Patterns section, which
+    makes a new empty pattern) adds its track at the end of the section. When the playlist already has 128 tracks, no pattern can
+    be added (the status bar says so).
+  - Deleting a pattern (the **Delete** button of the pattern menu) deletes its track. **Right-click a pattern track's name >
+    *Delete track (and its pattern, ...)*** deletes the track and its pattern together. So does the **-** of the Patterns
+    section, which picks the last pattern with no clips and no notes (else the last one). Every time, a question first says
+    what goes: the pattern's notes, the clips that play it anywhere on the playlist, and the audio clips on its track. Clips of
+    other patterns that were on its track move to their own patterns' tracks. The later patterns and their tracks move up one
+    place. The last pattern (and its track) always stays. **Ctrl+Z** brings everything back.
+  - A free track added by hand always goes to the Audio section.
+  - A project made before 0.79.0 (or opened from FL Studio) is put in step when it opens, and a note says so. A pattern without
+    a track gets one, a second track claiming the same pattern becomes free, and the free tracks that were in the Patterns
+    section move to the end of the Audio section with their clips. A recording that moves keeps playing through the mixer track
+    it played through.
+- **Which mixer track a playlist track's audio plays through**: the one with its number (playlist track 3 through mixer track
+  3), unless a mixer track before it was deleted (0.79.0). The track then keeps playing through the same mixer track, now one
+  number lower. The track menu shows it (*Audio plays through mixer track N*).
 - The **borders between the sections** can be dragged up and down (the pointer becomes a vertical double arrow over them, and
   the border lights up): the two sections beside it share their height anew, the track names and the clips together, and no
   section gets lower than one row. A group of tracks (*Group with the track above*) stays inside its section.
-- Deleting a pattern removes its track too when nothing else is on it; a track that still holds clips (a recording, say) stays,
-  as a free track with the pattern's old name.
 - Each section scrolls on its own when its rows do not fit: its scroll bar on the right, the **mouse wheel over the names** of
   the section, or **Alt + wheel** anywhere over it.
 - Projects saved before 0.44.0 open with their 8 tracks as they were. Projects saved before 0.69.0 open with the tracks above
@@ -1545,7 +1562,21 @@ It has 8 vertical **tracks** to start with, a **master** strip on the right and 
 
 **More tracks (0.29.0).** The **+** button after the last track adds one; right-click it to add 10 or 100 at once. The **-** button
 under it (0.78.0; before, only in the right-click menu) removes the last track, only when no channel plays through it, it has no effects
-and no automation controls it - otherwise the status bar says why the track was kept. The mixer keeps at least 8 tracks. A project can have up to
+and no automation controls it - otherwise the status bar says why the track was kept. The mixer keeps at least 8 tracks.
+
+**Deleting any track (0.79.0).** Right-click a track strip (its name or an empty place of it) > *Delete Track N...*, or choose it at
+the bottom of the strip's routing menu. That very track goes, not the last one. When nothing uses it, it goes at once. Otherwise a
+question lists what happens:
+- the channels that play through it, and the playlist audio that plays through it, go to its **heir**: the first track nothing
+  uses (no channel, no effect, no audio, nothing sent to it), else the track before it. The question names the heir;
+- its effects are deleted with it;
+- other tracks' sends to it are removed. A track that went only there now goes to the master;
+- effects listening to it (a compressor's, gate's or vocoder's sidechain) are set to Off;
+- automation clips that move it are deleted.
+
+The tracks after it move down one place, and everything that names them follows: the channels routed to them, the sends, the
+sidechains, the automation clips and the playlist's audio (it keeps playing through the same effects). Default names (*Track 9*)
+follow the new numbers. The mixer keeps at least 8 tracks. **Ctrl+Z** brings everything back. A project can have up to
 **500** tracks; scroll the mixer sideways to reach them (adding scrolls to the new one). Adding and removing can be undone, and
 the project file keeps the number. Tracks with no sound and no effect cost almost no processing. Reverbs, delays, choruses and
 Pitch Correctors need about 0.8 MB of memory each, which is made for them as they are added: the very first moment after adding

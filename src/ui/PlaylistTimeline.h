@@ -154,6 +154,8 @@ public:
     void tracksChanged();
     void showTrack (int track) { tracksChanged(); scrollToTrack (track); } // scrolls the tracks so that `track` can be seen
     std::function<void (int)> onTrackRemoved; // the tracks after it moved up one place: what refers to tracks by number follows
+    std::function<void()> onAddPattern;        // 0.79.0: the pattern section's + (a pattern and its track come together)
+    std::function<void (int)> onDeletePattern; // 0.79.0: a pattern's own track is to be deleted: its pattern goes with it (index)
     std::function<void (int)> onTrackInserted; // 0.69.0: a track was inserted there; the ones from there on moved down one place
 
     // Tempo, to draw audio at its real length (an audio clip lasts a fixed time, not a fixed number of beats) and to

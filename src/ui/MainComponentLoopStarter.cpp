@@ -142,9 +142,12 @@ void MainComponent::openLoopStarter()
 
 void MainComponent::applyLoop (const loopstarter::Loop& loop, std::uint32_t variation, bool setTempo)
 {
-    if (arrangement.patterns.size() >= static_cast<size_t> (kMaxPatterns))
+    if (! arrangement.canAddPattern()) // 0.79.0: a pattern comes with its own track
     {
-        statusLabel.setText ("Loop Starter: the project already has " + juce::String (kMaxPatterns) + " patterns", juce::dontSendNotification);
+        statusLabel.setText (arrangement.patterns.size() >= static_cast<size_t> (kMaxPatterns)
+                                 ? "Loop Starter: the project already has " + juce::String (kMaxPatterns) + " patterns"
+                                 : "Loop Starter: " + juce::String ("the playlist already has " + juce::String (kMaxPlaylistTracks) + " tracks: a new pattern needs one of its own"),
+                             juce::dontSendNotification);
         return;
     }
 
@@ -207,9 +210,9 @@ void MainComponent::applyLoop (const loopstarter::Loop& loop, std::uint32_t vari
     pattern.notes.resize (channels.size());
     for (size_t p = 0; p < loop.parts.size(); ++p)
         pattern.notes[static_cast<size_t> (target[p])] = loop.parts[p].notes;
-    arrangement.patterns.push_back (std::move (pattern));
-    const int ownTrack = arrangement.addPatternTrack (static_cast<int> (arrangement.patterns.size()) - 1); // its own playlist track (0.44.0)
-    playlistView.showTrack (ownTrack);
+    const int made = arrangement.addPattern (std::move (pattern)); // with its own playlist track (0.44.0; checked above, 0.79.0)
+    playlistView.tracksChanged();
+    playlistView.showTrack (arrangement.dedicatedTrack (made));
     arrangement.ensureChannelCount (channels.size());
 
     if (setTempo)

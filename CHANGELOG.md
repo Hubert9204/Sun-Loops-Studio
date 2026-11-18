@@ -2,6 +2,33 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.79.0 - 2026-11-18
+
+Patterns and playlist tracks in step; deleting any mixer track.
+
+### Added
+- **Patterns and pattern tracks, one to one**: the Patterns section of the playlist holds exactly one track per pattern.
+  - A new pattern always brings its track: *New*, *Clone*, *Make unique* (which before made none), the Loop Starter, a MIDI
+    import, and the **+** of the Patterns section, which now makes a new empty pattern.
+  - Deleting a pattern always deletes its track. Before, the track stayed as a free track when it held something.
+  - Deleting a pattern's track deletes its pattern. Ways to do it: right-click the track's name > *Delete track (and its
+    pattern, ...)*, or the section's **-**, which picks the last pattern with no clips and no notes.
+  - A question first says what goes: the notes, the clips that play the pattern, and the audio on its track. Other patterns'
+    clips on the track move to their own patterns' tracks. The last pattern stays. Undo brings everything back.
+  - A project made before is put in step when it opens, and a note says so. Free tracks go to the Audio section, and patterns
+    without a track get one.
+- **Deleting any mixer track**, not only the last one: right-click a strip > *Delete Track N...*, or the strip's routing menu.
+  - Its channels and the playlist audio that played through it go to a track nothing uses (named in the question).
+  - Its effects, the sends to it, the sidechains from it and its automation clips go.
+  - The tracks after it move down one place, and everything that names them follows: channels, sends, sidechains (also inside
+    a Patcher), automation clips and the playlist's audio.
+  - The mixer keeps at least 8 tracks.
+- A playlist track can name the mixer track its audio plays through (saved in the project). It is set when a mixer track before
+  it is deleted, so its audio keeps its effects; the track menu shows it.
+
+### Changed
+- A free playlist track added by hand goes to the end of the Audio section, never among the pattern tracks.
+
 ## 0.78.0 - 2026-11-18
 
 Adding and removing in the mixer.

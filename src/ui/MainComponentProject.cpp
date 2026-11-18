@@ -195,6 +195,9 @@ void MainComponent::applyDocument (ProjectDocument doc, const juce::File& file, 
     closeAutomationEditor(); // its clip index would point into the old arrangement
     arrangement = std::move (doc.arrangement);
     arrangement.ensureChannelCount (channels.size());
+    if (! arrangement.syncPatternTracks().empty()) // 0.79.0: one track per pattern (a project from before, or from FL Studio)
+        problems.add ("The playlist was put in step with the patterns: every pattern has its own track in the pattern section, and the "
+                      "other tracks are in the audio section.");
     loadAudioClipFiles (problems);
     currentPattern = std::clamp (doc.currentPattern, 0, static_cast<int> (arrangement.patterns.size()) - 1);
 

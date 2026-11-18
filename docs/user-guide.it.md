@@ -1146,13 +1146,31 @@ colpo d'occhio; sulle tracce alte il nome sta in una barra sopra le note, su que
   nuova traccia audio va sotto l'ultima traccia audio, e le tracce dei pattern più sotto scendono con le loro clip. **-** toglie
   l'**ultima traccia vuota** (corsia) della sua sezione; se tutte contengono clip toglie l'ultima, dopo una domanda, con le sue
   clip. Ogni sezione tiene almeno una traccia (corsia); al massimo 128 tracce e 32 corsie. Per togliere una traccia precisa:
-  tasto destro sul nome > *Delete this track* (nello stesso menu ci sono *Add an audio track* / *Add a pattern track*).
+  tasto destro sul nome > *Delete track* (nello stesso menu ci sono *Add an audio track* / *Add a pattern*).
   **Ctrl+Z** riporta tutto.
+- **Pattern e tracce dei pattern vanno insieme, uno a uno** (0.79.0): la sezione **Patterns** ha sempre esattamente una traccia
+  per pattern e nient'altro.
+  - Un pattern nuovo (*New*, *Clone*, *Make unique*, il Loop Starter, un'importazione MIDI, o il **+** della sezione Patterns, che
+    crea un pattern vuoto) aggiunge la sua traccia in fondo alla sezione. Quando la playlist ha già 128 tracce non si possono
+    aggiungere pattern (la barra di stato lo dice).
+  - Eliminando un pattern (il pulsante **Delete** del menu dei pattern) se ne va la sua traccia. **Tasto destro sul nome di una
+    traccia pattern > *Delete track (and its pattern, ...)*** elimina insieme la traccia e il suo pattern. Lo fa anche il **-**
+    della sezione Patterns, che sceglie l'ultimo pattern senza clip e senza note (altrimenti l'ultimo). Ogni volta una domanda
+    dice prima cosa se ne va: le note del pattern, le clip che lo suonano in qualsiasi punto della playlist e le clip audio sulla
+    sua traccia. Le clip di altri pattern che stavano sulla sua traccia passano alle tracce dei loro pattern. I pattern
+    successivi e le loro tracce salgono di un posto. L'ultimo pattern (con la sua traccia) resta sempre. **Ctrl+Z** riporta tutto.
+  - Una traccia libera aggiunta a mano va sempre nella sezione Audio.
+  - Un progetto creato prima della 0.79.0 (o aperto da FL Studio) viene messo in ordine all'apertura, e una nota lo dice. Un
+    pattern senza traccia ne riceve una, una seconda traccia che reclama lo stesso pattern diventa libera, e le tracce libere che
+    stavano nella sezione Patterns vanno in fondo alla sezione Audio con le loro clip. Una registrazione che si sposta continua a
+    suonare attraverso la stessa traccia del mixer.
+- **Attraverso quale traccia del mixer suona l'audio di una traccia della playlist**: quella con il suo numero (traccia 3 della
+  playlist attraverso la traccia 3 del mixer), a meno che sia stata eliminata una traccia del mixer prima di essa (0.79.0). La
+  traccia continua allora a suonare attraverso la stessa traccia del mixer, ora con un numero in meno. Il menu della traccia lo
+  mostra (*Audio plays through mixer track N*).
 - I **bordi tra le sezioni** si trascinano in su e in giù (sopra di loro il puntatore diventa una doppia freccia verticale e il
   bordo si illumina): le due sezioni accanto si dividono di nuovo l'altezza, nomi delle tracce e clip insieme, e nessuna scende
   sotto una riga. Un gruppo di tracce (*Group with the track above*) resta dentro la sua sezione.
-- Eliminando un pattern se ne va anche la sua traccia, se non contiene altro; una traccia che contiene ancora clip (una
-  registrazione, per esempio) resta, come traccia libera con il vecchio nome del pattern.
 - Ogni sezione scorre per conto suo quando le sue righe non ci stanno: la sua barra a destra, la **rotella sopra i nomi** della
   sezione, o **Alt + rotella** in qualsiasi punto sopra di lei.
 - I progetti salvati prima della 0.44.0 si aprono con le loro 8 tracce com'erano. Quelli salvati prima della 0.69.0 si aprono con
@@ -1616,7 +1634,22 @@ Premi **F9** o il pulsante **Mixer F9**. Il Mixer si apre grande sopra gli altri
 
 **Più tracce (0.29.0).** Il pulsante **+** dopo l'ultima traccia ne aggiunge una; con il tasto destro se ne aggiungono 10 o 100 alla
 volta. Il pulsante **-** sotto di esso (0.78.0; prima solo nel menu del tasto destro) toglie l'ultima traccia, solo se nessun canale ci
-suona, non ha effetti e nessuna automazione la controlla - altrimenti la barra di stato dice perché è rimasta. Il mixer tiene almeno 8 tracce. Un progetto può
+suona, non ha effetti e nessuna automazione la controlla - altrimenti la barra di stato dice perché è rimasta. Il mixer tiene almeno 8 tracce.
+
+**Eliminare una traccia qualsiasi (0.79.0).** Tasto destro su una strip (il suo nome o un suo punto vuoto) > *Delete Track N...*,
+oppure la stessa voce in fondo al menu di routing della strip. Se ne va proprio quella traccia, non l'ultima. Se niente la usa, se
+ne va subito. Altrimenti una domanda elenca cosa succede:
+- i canali che suonano attraverso di lei, e l'audio della playlist che passa da lei, vanno alla sua **erede**: la prima traccia che
+  niente usa (nessun canale, nessun effetto, nessun audio, niente mandato a lei), altrimenti la traccia prima di lei. La domanda
+  dice quale;
+- i suoi effetti se ne vanno con lei;
+- le mandate di altre tracce verso di lei vengono tolte. Una traccia che andava solo lì ora va al master;
+- gli effetti che la ascoltano (sidechain di compressore, gate o vocoder) vengono messi su Off;
+- le clip di automazione che la muovono vengono eliminate.
+
+Le tracce dopo di lei scendono di un posto, e tutto ciò che le nomina le segue: i canali instradati su di loro, le mandate, i
+sidechain, le clip di automazione e l'audio della playlist (che continua a passare dagli stessi effetti). I nomi predefiniti
+(*Track 9*) seguono i nuovi numeri. Il mixer tiene almeno 8 tracce. **Ctrl+Z** riporta tutto. Un progetto può
 avere fino a **500** tracce; scorri il mixer in orizzontale per raggiungerle (aggiungendo, il mixer scorre a quella nuova). Aggiungere
 e togliere si annulla con Annulla, e il file del progetto ricorda il numero. Le tracce senza suono e senza effetti non costano quasi
 nulla. Riverberi, delay, chorus e Pitch Corrector hanno bisogno di circa 0,8 MB di memoria ciascuno, che viene preparata man mano che

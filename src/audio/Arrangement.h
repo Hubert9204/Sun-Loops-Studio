@@ -25,6 +25,9 @@ namespace sls
 // Playlist tracks (0.44.0): a project starts with kDefaultGenericTracks free tracks (recordings, audio, anything) plus one track
 // dedicated to each pattern; every new pattern adds its own; the - and + buttons remove and add tracks by hand, up to
 // kMaxPlaylistTracks. Before 0.44.0 there were always 8.
+// 0.79.0: patterns and pattern tracks go together, one to one: the pattern section holds exactly one track per pattern (and no free
+// track), a new pattern adds its track, deleting a pattern deletes its track and deleting a pattern's track deletes the pattern
+// (see Arrangement::removePattern, removeTrack and syncPatternTracks).
 constexpr int kMaxPlaylistTracks = 128;
 constexpr int kDefaultGenericTracks = 4;
 constexpr int kLegacyPlaylistTracks = 8;
@@ -216,6 +219,9 @@ struct PlaylistTrack
     std::uint8_t icon = 0;
     std::uint8_t height = 1;
     TrackSection section = TrackSection::Audio; // 0.69.0
+    // 0.79.0: the mixer track the audio clips of this track play through; -1 (the default): the one with the same number (playlist
+    // track n through mixer track n, as before). Set when a mixer track before it is deleted, so its audio keeps its effects.
+    int mixerTrack = -1;
     bool operator== (const PlaylistTrack&) const = default;
 };
 
@@ -420,6 +426,15 @@ struct Arrangement
         return longest;
     }
 
+    // 0.79.0: the mixer track the audio clips of playlist track `t` play through (before Project::make limits it to the tracks there are).
+    int mixerTrackOf (int t) const noexcept
+    {
+        if (t < 0 || t >= trackCount())
+            return std::max (0, t);
+        const int m = playlistTracks[static_cast<size_t> (t)].mixerTrack;
+        return m >= 0 ? m : t;
+    }
+
     // The track dedicated to `pattern`, or -1.
     int dedicatedTrack (int pattern) const noexcept
     {
@@ -437,24 +452,30 @@ struct Arrangement
             addPatternTrack (p);
     }
 
-    // Adds a track at the end (a free one unless `track.pattern` says otherwise). Returns its index, or -1 when there are
-    // kMaxPlaylistTracks already. 0.69.0: after a pattern-section track it belongs to the pattern section too (the sections
-    // stay in order, and no track moves).
+    // Adds a track. A pattern's own track (`track.pattern` set) goes at the very end, in the pattern section; since 0.79.0 a free
+    // track goes at the end of the audio section (the pattern section holds only the patterns' tracks), the pattern tracks and
+    // their clips moving down one place. Returns its index, or -1 when there are kMaxPlaylistTracks already.
     int addTrack (PlaylistTrack track = {})
     {
         if (trackCount() >= kMaxPlaylistTracks)
             return -1;
-        if (! playlistTracks.empty() && playlistTracks.back().section == TrackSection::Pattern)
-            track.section = TrackSection::Pattern;
+        if (track.pattern < 0)
+            return insertTrack (TrackSection::Audio, std::move (track));
+        track.section = TrackSection::Pattern;
+        if (! playlistTracks.empty() && playlistTracks.back().section != TrackSection::Pattern)
+            track.grouped = false; // the first track of the pattern section
         playlistTracks.push_back (std::move (track));
         return trackCount() - 1;
     }
 
     // 0.69.0: adds a track at the end of `section` (the playlist's + buttons). The tracks after it move down one place, their
-    // clips with them. Returns its index, or -1 when there are kMaxPlaylistTracks already.
+    // clips with them. Returns its index, or -1 when there are kMaxPlaylistTracks already. 0.79.0: a track of the pattern
+    // section must belong to a pattern (-1 otherwise: a new pattern track comes with its pattern, see addPattern).
     int insertTrack (TrackSection section, PlaylistTrack track = {})
     {
         if (trackCount() >= kMaxPlaylistTracks)
+            return -1;
+        if ((section == TrackSection::Pattern) != (track.pattern >= 0))
             return -1;
         const int at = sectionEnd (section);
         track.section = section;
@@ -507,8 +528,19 @@ struct Arrangement
     }
 
     // Removes track `t` with every clip on it; the tracks after it move up one place (their clips follow). The last track is
-    // kept. Returns false (and changes nothing) for a bad index or the only track.
+    // kept. Returns false (and changes nothing) for a bad index or the only track. 0.79.0: a pattern's own track goes with its
+    // pattern (removePattern: false for the last pattern).
     bool removeTrack (int t)
+    {
+        if (t < 0 || t >= trackCount() || trackCount() <= 1)
+            return false;
+        if (const int p = playlistTracks[static_cast<size_t> (t)].pattern; p >= 0 && p < static_cast<int> (patterns.size()))
+            return removePattern (p);
+        return eraseTrack (t);
+    }
+
+    // The track itself, whatever it holds (removeTrack and removePattern keep the patterns and their tracks together).
+    bool eraseTrack (int t)
     {
         if (t < 0 || t >= trackCount() || trackCount() <= 1)
             return false;
@@ -763,36 +795,176 @@ struct Arrangement
         return "Pattern";
     }
 
+    // 0.79.0: can a pattern be added? Not past kMaxPatterns, and not when the playlist has no room for its track.
+    bool canAddPattern() const noexcept
+    {
+        return patterns.size() < static_cast<size_t> (kMaxPatterns) && trackCount() < kMaxPlaylistTracks;
+    }
+
+    // 0.79.0: adds `pattern` at the end with its own track (at the end of the pattern section). Returns its index, or -1 (and
+    // changes nothing) when canAddPattern() says no.
+    int addPattern (Pattern pattern)
+    {
+        if (! canAddPattern())
+            return -1;
+        patterns.push_back (std::move (pattern));
+        const int index = static_cast<int> (patterns.size()) - 1;
+        addPatternTrack (index);
+        return index;
+    }
+
+    // What deleting pattern `index` takes away besides its notes (0.79.0, for the question asked first): the clips that play it
+    // (wherever they are), and on its own track the audio clips (deleted with the track) and other patterns' clips (moved to
+    // their own patterns' tracks).
+    struct PatternRemoval
+    {
+        int track = -1;      // its own track
+        int clips = 0;       // clips playing it
+        int audioClips = 0;  // audio clips on its track
+        int movedClips = 0;  // other patterns' clips on its track
+    };
+    PatternRemoval whatRemovingPatternTakes (int index) const
+    {
+        PatternRemoval r;
+        r.track = dedicatedTrack (index);
+        for (const auto& c : clips)
+        {
+            if (c.pattern == index)
+                ++r.clips;
+            else if (r.track >= 0 && c.track == r.track)
+                ++r.movedClips;
+        }
+        for (const auto& c : audioClips)
+            r.audioClips += r.track >= 0 && c.track == r.track ? 1 : 0;
+        return r;
+    }
+
     // Deletes a pattern together with the playlist clips that play it; later patterns move up one place (clips
     // follow). The last pattern cannot be deleted. Returns false (and changes nothing) for a bad index or the last pattern.
-    bool removePattern (int index)
+    // 0.79.0: its own track always goes with it (the tracks after it move up, `removedTrack` gets its index, -1 when it had none):
+    // the audio clips on it are deleted, other patterns' clips on it move to their own patterns' tracks.
+    bool removePattern (int index, int* removedTrack = nullptr)
     {
+        if (removedTrack != nullptr)
+            *removedTrack = -1;
         if (index < 0 || index >= static_cast<int> (patterns.size()) || patterns.size() <= 1)
             return false;
 
-        const auto oldName = patterns[static_cast<size_t> (index)].name;
+        const int own = dedicatedTrack (index);
+        if (own >= 0)
+            for (auto& c : clips)
+                if (c.track == own && c.pattern != index)
+                    if (const int home = dedicatedTrack (c.pattern); home >= 0)
+                        c.track = home;
         patterns.erase (patterns.begin() + index);
         clips.erase (std::remove_if (clips.begin(), clips.end(), [index] (const Clip& c) { return c.pattern == index; }), clips.end());
         for (auto& c : clips)
             if (c.pattern > index)
                 --c.pattern;
-        // Its own track goes too when nothing else is on it (0.44.0); otherwise it stays as a free track.
-        if (const int t = dedicatedTrack (index); t >= 0)
+        if (own >= 0)
         {
-            if (clipsOnTrack (t) == 0 && trackCount() > 1)
-                removeTrack (t);
-            else
-            {
-                auto& track = playlistTracks[static_cast<size_t> (t)];
-                track.pattern = -1;
-                if (track.name.empty())
-                    track.name = oldName.substr (0, 32);
-            }
+            playlistTracks[static_cast<size_t> (own)].pattern = -1;
+            if (eraseTrack (own) && removedTrack != nullptr)
+                *removedTrack = own;
         }
         for (auto& track : playlistTracks)
             if (track.pattern > index)
                 --track.pattern;
         return true;
+    }
+
+    // 0.79.0: puts the tracks in line with the patterns, one track per pattern in the pattern section and every free track in the
+    // audio section (for a project made before, or by another program): a second track claiming a pattern, or one claiming a
+    // pattern that does not exist, becomes free; a pattern without a track gets one (at the end; when the playlist is full, an
+    // empty free track becomes its track); then the free tracks move to the end of the audio section, in their order, their
+    // clips with them, and the audio of a track that moves keeps playing through the mixer track it played through. Returns
+    // the new place of every track (oldToNew[old]), or an empty list when nothing changed.
+    std::vector<int> syncPatternTracks()
+    {
+        bool changed = false;
+        const int patternCount = static_cast<int> (patterns.size());
+        std::vector<char> claimed (patterns.size(), 0);
+        for (auto& t : playlistTracks)
+        {
+            if (t.pattern >= patternCount || (t.pattern >= 0 && claimed[static_cast<size_t> (t.pattern)] != 0))
+            {
+                t.pattern = -1;
+                changed = true;
+            }
+            else if (t.pattern < -1)
+                t.pattern = -1;
+            if (t.pattern >= 0)
+                claimed[static_cast<size_t> (t.pattern)] = 1;
+        }
+        std::vector<int> order;
+        order.reserve (playlistTracks.size() + patterns.size());
+        for (int t = 0; t < trackCount(); ++t)
+            order.push_back (t);
+        for (int p = 0; p < patternCount; ++p)
+        {
+            if (claimed[static_cast<size_t> (p)] != 0)
+                continue;
+            changed = true;
+            if (trackCount() < kMaxPlaylistTracks)
+            {
+                PlaylistTrack track;
+                track.pattern = p;
+                track.section = TrackSection::Pattern;
+                playlistTracks.push_back (std::move (track));
+                order.push_back (-1); // new: no old place
+                continue;
+            }
+            for (int t = trackCount() - 1; t >= 0; --t)
+                if (playlistTracks[static_cast<size_t> (t)].pattern < 0 && clipsOnTrack (t) == 0)
+                {
+                    playlistTracks[static_cast<size_t> (t)].pattern = p;
+                    break;
+                }
+        }
+        // The new order: the free tracks, then the patterns' tracks, each in their order.
+        std::vector<int> newOrder; // newOrder[new] = current index
+        for (int t = 0; t < trackCount(); ++t)
+            if (playlistTracks[static_cast<size_t> (t)].pattern < 0)
+                newOrder.push_back (t);
+        const int freeCount = static_cast<int> (newOrder.size());
+        for (int t = 0; t < trackCount(); ++t)
+            if (playlistTracks[static_cast<size_t> (t)].pattern >= 0)
+                newOrder.push_back (t);
+        bool moved = false;
+        for (int n = 0; n < trackCount(); ++n)
+        {
+            const auto want = n < freeCount ? TrackSection::Audio : TrackSection::Pattern;
+            moved = moved || newOrder[static_cast<size_t> (n)] != n;
+            changed = changed || playlistTracks[static_cast<size_t> (newOrder[static_cast<size_t> (n)])].section != want;
+        }
+        if (! changed && ! moved)
+            return {};
+        std::vector<int> currentToNew (playlistTracks.size(), 0);
+        for (size_t n = 0; n < newOrder.size(); ++n)
+            currentToNew[static_cast<size_t> (newOrder[n])] = static_cast<int> (n);
+        std::vector<PlaylistTrack> tracksNow;
+        tracksNow.reserve (playlistTracks.size());
+        for (size_t n = 0; n < newOrder.size(); ++n)
+        {
+            auto track = playlistTracks[static_cast<size_t> (newOrder[n])];
+            const int was = newOrder[n];
+            track.section = static_cast<int> (n) < freeCount ? TrackSection::Audio : TrackSection::Pattern;
+            const bool hasAudio = std::any_of (audioClips.begin(), audioClips.end(), [was] (const AudioClip& c) { return c.track == was; });
+            if (was != static_cast<int> (n) && track.mixerTrack < 0 && hasAudio)
+                track.mixerTrack = was; // its audio keeps its mixer track
+            tracksNow.push_back (std::move (track));
+        }
+        for (auto& c : clips)
+            c.track = currentToNew[static_cast<size_t> (std::clamp (c.track, 0, trackCount() - 1))];
+        for (auto& c : audioClips)
+            c.track = currentToNew[static_cast<size_t> (std::clamp (c.track, 0, trackCount() - 1))];
+        playlistTracks = std::move (tracksNow);
+        tidyTrackSections();
+        std::vector<int> oldToNew;
+        for (size_t i = 0; i < order.size(); ++i)
+            if (order[i] >= 0)
+                oldToNew.push_back (currentToNew[i]);
+        return oldToNew;
     }
 
     // Remove clips that refer to a pattern that no longer exists.
@@ -924,7 +1096,7 @@ inline Project compileSong (const std::vector<Channel>& channelSettings, const A
         e.data = a.data;
         e.startTick = a.startTick;
         e.endTick = a.endTick();
-        e.mixerTrack = a.track; // playlist track n plays through mixer track n
+        e.mixerTrack = arrangement.mixerTrackOf (a.track); // playlist track n plays through mixer track n (0.79.0: unless it names another)
         e.gain = a.gain;
         e.offsetSeconds = a.offsetSeconds;
         e.pan = a.pan;

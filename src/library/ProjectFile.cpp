@@ -566,6 +566,8 @@ juce::String ProjectDocument::toJson() const
             o->setProperty ("collapsed", true);
         if (pt.section == TrackSection::Pattern) // 0.69.0: the playlist section it belongs to (audio when not given)
             o->setProperty ("section", "pattern");
+        if (pt.mixerTrack >= 0) // 0.79.0: the mixer track its audio plays through, when not the one with its number
+            o->setProperty ("mixerTrack", pt.mixerTrack);
         playlistTrackList.add (juce::var (o));
     }
     if (! playlistTrackList.isEmpty())
@@ -1004,6 +1006,7 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
                 pt.grouped = t > 0 && readBool (o->getProperty ("grouped"), false);
                 pt.collapsed = readBool (o->getProperty ("collapsed"), false);
                 pt.section = o->getProperty ("section").toString() == "pattern" ? TrackSection::Pattern : TrackSection::Audio; // 0.69.0
+                pt.mixerTrack = readInt (o->getProperty ("mixerTrack"), -1, -1, kMaxTracks - 1); // 0.79.0
             }
     // 0.69.0: the playlist's sections. A file from before has none: the tracks from the first pattern's own track on go to the
     // pattern section, the ones above it to the audio section (no track moves).
