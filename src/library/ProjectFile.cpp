@@ -1364,7 +1364,7 @@ juce::File withProjectExtension (const juce::File& file)
 
 juce::File automaticProjectFile (const juce::File& folder, juce::Time now)
 {
-    const auto stamp = now.formatted ("%Y-%m-%d %H-%M-%S") + juce::String::formatted (".%03d", now.getMilliseconds()); // (names sort by time)
+    const auto stamp = now.formatted ("%Y-%m-%d %H-%M-%S");
     auto file = folder.getChildFile ("Untitled " + stamp + kProjectExtension);
     for (int n = 2; file.exists(); ++n)
         file = folder.getChildFile ("Untitled " + stamp + " (" + juce::String (n) + ")" + kProjectExtension);
@@ -1498,7 +1498,7 @@ juce::File backupProjectFile (const juce::File& project, juce::Time now, int kee
     const auto folder = project.getSiblingFile ("Backups");
     if (! folder.createDirectory())
         return {};
-    const auto stamp = now.formatted ("%Y-%m-%d %H-%M-%S");
+    const auto stamp = now.formatted ("%Y-%m-%d %H-%M-%S") + juce::String::formatted (".%03d", now.getMilliseconds()); // (names sort by time)
     auto copy = folder.getChildFile (project.getFileNameWithoutExtension() + " (" + stamp + ")" + kProjectExtension);
     for (int n = 2; copy.exists(); ++n) // two saves in the same second
         copy = folder.getChildFile (project.getFileNameWithoutExtension() + " (" + stamp + " " + juce::String (n) + ")" + kProjectExtension);
