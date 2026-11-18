@@ -76,13 +76,12 @@ key F9
 shot "$main" mixer.png
 key F9
 
-# The Piano Roll (F7) on the Piano channel's own pattern: select the Piano channel (a click on its strip's left edge in the
-# Channel Rack), go to the previous pattern ("Piano", the arrow left of the pattern box) and open the Piano Roll.
-click_in "$main" 284 342
-click_in "$main" 377 58
+# The Piano Roll (F7) on the Piano channel's own pattern: open it, go to the previous pattern ("Piano", the arrow left of the
+# pattern box), then select the Piano channel (a click on its strip's left edge in the Channel Rack), which scrolls the roll to
+# its notes.
 key F7
-# The piano's chords lie above the keys it opens on: the mouse wheel over the notes scrolls up to them.
-xdotool mousemove --window "$main" 760 640 click --repeat 8 --delay 80 4
+click_in "$main" 377 58
+click_in "$main" 284 342
 shot "$main" pianoroll.png 2.5
 key F7
 

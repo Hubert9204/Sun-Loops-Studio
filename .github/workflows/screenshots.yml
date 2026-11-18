@@ -22,7 +22,7 @@ jobs:
             libXinerama-devel libXrandr-devel libXcursor-devel libXrender-devel libXcomposite-devel mesa-libGL-devel \
             libcurl-devel ladspa-devel \
             xorg-x11-server-Xvfb xdpyinfo openbox xdotool ImageMagick \
-            google-noto-sans-fonts google-noto-sans-symbols2-fonts # (Noto Sans, and its symbols: ▾ ◂ ▸ ★)
+            google-noto-sans-fonts dejavu-sans-fonts # (as on Fedora / Nobara; DejaVu has the symbols ▾ ◂ ▸ ★)
       - uses: actions/checkout@v4
       # The build folder is kept between runs: only what changed is built again.
       - uses: actions/cache/restore@v4
