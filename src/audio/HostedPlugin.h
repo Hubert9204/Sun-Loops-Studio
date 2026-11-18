@@ -34,6 +34,8 @@ public:
     // Audio thread, before process(): the song's tempo, its position in quarter notes and whether it plays (0.48.0), for plugins that
     // follow the tempo (synced LFOs, delays, arpeggiators).
     virtual void setTransport (double /*bpm*/, double /*quarters*/, bool /*playing*/) noexcept {}
+    // 0.83.0, before setTransport: the time signature where the song is and where its bar started (in quarter notes).
+    virtual void setMeter (int /*numerator*/, int /*denominator*/, double /*barStartQuarters*/) noexcept {}
 
     // Parameters (0.35.0), for automation. Values are the plugin's normalised 0..1. setParameter is for the audio thread (it does
     // nothing when the value is the one it set last); the others are for the message thread. A placeholder has none.

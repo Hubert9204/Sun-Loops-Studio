@@ -196,7 +196,9 @@ Arrangement MainComponent::performanceArrangement()
             if (s.audio)
             {
                 AudioClip c = s.audioClip;
-                c.offsetSeconds += (from - start) * secondsPerTick * (c.reverse ? -1.0 : 1.0);
+                // (0.83.0: a clip that follows the tempo counts its audio at its own tempo)
+                const double perTick = c.followsTempo() ? 60.0 / (c.tempoBpm * kTicksPerBeat) : secondsPerTick;
+                c.offsetSeconds += (from - start) * perTick * (c.reverse ? -1.0 : 1.0);
                 c.offsetSeconds = std::max (0.0, c.offsetSeconds);
                 c.startTick = from;
                 c.lengthTicks = to - from;

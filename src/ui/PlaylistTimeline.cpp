@@ -635,7 +635,24 @@ int PlaylistTimeline::snapTick (int tick, bool noSnap) const noexcept
     const int step = effectiveSnap (noSnap);
     if (step <= 1)
         return tick;
-    return static_cast<int> (std::lround (static_cast<double> (tick) / step)) * step;
+    if (arrangement.meterMarkers.empty())
+        return static_cast<int> (std::lround (static_cast<double> (tick) / step)) * step;
+    // 0.83.0: with time signature changes the grid starts again at each change, and "bar" means the bar where the tick is
+    const auto seg = meterSegmentAt (arrangement.meterMarkers, interfaceMeter(), std::max (0, tick));
+    const int unit = snapBars == 1 ? seg.meter.barTicks() : snapBars == 2 ? std::max (1, seg.meter.barTicks() / 2) : step;
+    const long long inside = static_cast<long long> (std::llround (static_cast<double> (tick - seg.startTick) / unit)) * unit;
+    long long snapped = seg.startTick + inside;
+    if (seg.endTick != INT_MAX && snapped > seg.endTick)
+        snapped = seg.endTick; // (the next change is a bar line too)
+    if (seg.startTick > 0 && tick - seg.startTick < unit) // (the bar line before a change belongs to the segment before)
+    {
+        const auto prev = meterSegmentAt (arrangement.meterMarkers, interfaceMeter(), seg.startTick - 1);
+        const int prevUnit = snapBars == 1 ? prev.meter.barTicks() : snapBars == 2 ? std::max (1, prev.meter.barTicks() / 2) : step;
+        const long long candidate = seg.startTick - prevUnit;
+        if (std::llabs (candidate - tick) < std::llabs (snapped - tick) && candidate >= prev.startTick)
+            snapped = candidate;
+    }
+    return static_cast<int> (snapped);
 }
 
 juce::Rectangle<int> PlaylistTimeline::audioClipRect (const AudioClip& c) const noexcept
@@ -750,9 +767,10 @@ void PlaylistTimeline::setTool (PlaylistTool newTool)
     repaint();
 }
 
-void PlaylistTimeline::setSnapTicks (int ticks)
+void PlaylistTimeline::setSnapTicks (int ticks, int bars)
 {
     snapTicks = std::max (1, ticks);
+    snapBars = bars;
     repaint();
 }
 
@@ -863,8 +881,9 @@ void PlaylistTimeline::paintAudioClip (juce::Graphics& g, const AudioClip& clip,
         // at the current tempo (the clip may be shorter: it is cut there). Zoomed in far enough, the samples themselves are drawn.
         const auto& peaks = peaksFor (clip.data);
         const double pxPerTick = getPixelsPerTick();
-        const double framesPerPixel = (bpm > 0.0 && pxPerTick > 0.0)
-                                          ? clip.data->sampleRate * 60.0 / (bpm * kTicksPerBeat * pxPerTick)
+        const double audioBpm = clip.audioBpm (bpm); // 0.83.0: a clip that follows the tempo shows its beats on the song's
+        const double framesPerPixel = (audioBpm > 0.0 && pxPerTick > 0.0)
+                                          ? clip.data->sampleRate * 60.0 / (audioBpm * kTicksPerBeat * pxPerTick)
                                           : 1.0;
         const double firstFrame = clip.offsetSeconds * clip.data->sampleRate;
         const int frames = clip.data->numFrames();
@@ -1022,9 +1041,29 @@ void PlaylistTimeline::paintGrid (juce::Graphics& g)
     lines (60, kGridFine);
     lines (120, kGridFine.brighter (0.05f));
     lines (240, kGridBeat);
-    lines (interfaceMeter().beatTicks(), kGridBeat.brighter (0.1f));
-    lines (interfaceMeter().barTicks(), kGridBar);
-    lines (4 * interfaceMeter().barTicks(), kGridUnit); // every 4 bars (before 0.56.0: every pattern length, when all were one)
+    // 0.83.0: beats and bars stretch by stretch of the song, each in its own time signature (the bars count on across them)
+    for (const auto& seg : meterSegments (arrangement.meterMarkers, interfaceMeter()))
+    {
+        if (seg.endTick <= firstTick || seg.startTick > lastTick)
+            continue;
+        const auto segmentLines = [&] (int step, juce::Colour colour, long long barPhase)
+        {
+            if (step * ppt < 9.0)
+                return;
+            g.setColour (colour);
+            const int from = std::max (firstTick, seg.startTick), to = std::min (lastTick, seg.endTick == INT_MAX ? lastTick : seg.endTick);
+            // every 4 bars counts from bar 1 of the song, not from the change
+            const long long phase = barPhase > 0 ? (4 - seg.firstBar % 4) % 4 * seg.meter.barTicks() : 0;
+            long long t = seg.startTick + phase;
+            if (from > t)
+                t += (from - t) / step * step;
+            for (; t <= to; t += step)
+                g.drawVerticalLine (tickToX (static_cast<int> (t)), static_cast<float> (top), static_cast<float> (bottom));
+        };
+        segmentLines (seg.meter.beatTicks(), kGridBeat.brighter (0.1f), 0);
+        segmentLines (seg.meter.barTicks(), kGridBar, 0);
+        segmentLines (4 * seg.meter.barTicks(), kGridUnit, 1); // every 4 bars (before 0.56.0: every pattern length, when all were one)
+    }
 }
 
 void PlaylistTimeline::paintRuler (juce::Graphics& g)
@@ -1051,24 +1090,65 @@ void PlaylistTimeline::paintRuler (juce::Graphics& g)
     };
     marks (30, 3, kTextDim.darker (0.4f));
     marks (120, 5, kTextDim.darker (0.2f));
-    const int beatTicks = interfaceMeter().beatTicks(), barTicks = interfaceMeter().barTicks(); // the time signature (0.46.0)
-    marks (beatTicks, 8, kTextDim);
-    marks (barTicks, rowH - 2, kText);
-
-    const double pxPerBar = barTicks * ppt;
-    const int every = barLabelEvery (pxPerBar, 34.0);
-    g.setColour (kText);
-    for (int bar = (firstTick / barTicks / every) * every; bar * barTicks <= lastTick; bar += every)
-        g.drawText (juce::String (bar + 1), tickToX (bar * barTicks) + 3, 0, 42, rowH, juce::Justification::centredLeft);
-
-    if (beatTicks * ppt >= 44.0) // beat numbers "bar.beat" when there is room
+    // The time signature (0.46.0); 0.83.0: segment by segment, with the song's time signature changes (numbered on across them)
+    for (const auto& seg : meterSegments (arrangement.meterMarkers, interfaceMeter()))
     {
-        g.setColour (kTextDim);
-        g.setFont (juce::FontOptions (10.0f));
-        for (int t = (firstTick / beatTicks) * beatTicks; t <= lastTick; t += beatTicks)
-            if (t % barTicks != 0)
-                g.drawText (juce::String (t / barTicks + 1) + "." + juce::String ((t % barTicks) / beatTicks + 1),
-                            tickToX (t) + 3, 0, 36, rowH, juce::Justification::centredLeft);
+        if (seg.endTick <= firstTick || seg.startTick > lastTick)
+            continue;
+        const int beatTicks = seg.meter.beatTicks(), barTicks = seg.meter.barTicks();
+        const int segEnd = seg.endTick == INT_MAX ? lastTick : std::min (lastTick, seg.endTick - 1);
+        const auto segmentMarks = [&] (int step, int height, juce::Colour colour)
+        {
+            if (step * ppt < 6.0)
+                return;
+            g.setColour (colour);
+            for (long long t = seg.startTick + std::max (0, firstTick - seg.startTick) / step * step; t <= segEnd; t += step)
+                g.drawVerticalLine (tickToX (static_cast<int> (t)), static_cast<float> (rowH - height), static_cast<float> (rowH));
+        };
+        segmentMarks (beatTicks, 8, kTextDim);
+        segmentMarks (barTicks, rowH - 2, kText);
+
+        const double pxPerBar = barTicks * ppt;
+        const int every = barLabelEvery (pxPerBar, 34.0);
+        g.setColour (kText);
+        const long long firstInside = std::max (0, firstTick - seg.startTick) / barTicks;
+        for (long long b = firstInside; seg.startTick + b * barTicks <= segEnd; ++b)
+        {
+            const long long bar = seg.firstBar + b;
+            if (bar % every != 0 && b != 0)
+                continue;
+            g.drawText (juce::String (bar + 1), tickToX (static_cast<int> (seg.startTick + b * barTicks)) + 3, 0, 42, rowH,
+                        juce::Justification::centredLeft);
+        }
+
+        if (beatTicks * ppt >= 44.0) // beat numbers "bar.beat" when there is room
+        {
+            g.setColour (kTextDim);
+            g.setFont (juce::FontOptions (10.0f));
+            for (long long t = seg.startTick + std::max (0, firstTick - seg.startTick) / beatTicks * beatTicks; t <= segEnd; t += beatTicks)
+            {
+                const long long inside = t - seg.startTick;
+                if (inside % barTicks != 0)
+                    g.drawText (juce::String (seg.firstBar + inside / barTicks + 1) + "." + juce::String ((inside % barTicks) / beatTicks + 1),
+                                tickToX (static_cast<int> (t)) + 3, 0, 36, rowH, juce::Justification::centredLeft);
+            }
+            g.setFont (juce::FontOptions (11.0f));
+        }
+    }
+
+    // 0.83.0: time signature changes: a blue flag with the new signature at the top right of its bar line
+    g.setFont (juce::FontOptions (10.5f, juce::Font::bold));
+    for (const auto& m : arrangement.meterMarkers)
+    {
+        if (m.tick < firstTick || m.tick > lastTick)
+            continue;
+        const int x = tickToX (m.tick);
+        const auto box = juce::Rectangle<int> (x + 2, 1, 30, rowH - 2);
+        g.setColour (juce::Colour (0xff5aa0e8));
+        g.fillRect (x, 0, 2, rowH);
+        g.fillRect (box);
+        g.setColour (juce::Colours::black);
+        g.drawText (juce::String (m.meter.text()), box, juce::Justification::centred, false);
     }
 
     // Lower row: time in minutes:seconds.milliseconds, with marks at a round step that fits the zoom; with tempo changes
@@ -1092,10 +1172,20 @@ void PlaylistTimeline::paintRuler (juce::Graphics& g)
         g.drawText (jstr (formatSeconds (t)), x + 3, rowH, 70, rowH, juce::Justification::centredLeft);
     }
 
-    // Tempo changes (0.46.0): an orange flag with the new tempo.
+    // Tempo changes (0.46.0): an orange flag with the new tempo. 0.83.0: a ramp is drawn as a slope from the marker before.
     g.setFont (juce::FontOptions (10.5f, juce::Font::bold));
-    for (const auto& m : tempos)
+    for (size_t i = 0; i < tempos.size(); ++i)
     {
+        const auto& m = tempos[i];
+        const int before = i == 0 ? 0 : tempos[i - 1].tick;
+        if (m.ramp && m.tick >= firstTick && before <= lastTick)
+        {
+            const double from = i == 0 ? bpm : tempos[i - 1].bpm;
+            const float yFrom = m.bpm >= from ? static_cast<float> (kRulerHeight - 2) : static_cast<float> (rowH + 2);
+            const float yTo = m.bpm >= from ? static_cast<float> (rowH + 2) : static_cast<float> (kRulerHeight - 2);
+            g.setColour (juce::Colour (0xfff0a33a).withAlpha (0.85f));
+            g.drawLine (static_cast<float> (tickToX (before)), yFrom, static_cast<float> (tickToX (m.tick)), yTo, 2.0f);
+        }
         if (m.tick < firstTick || m.tick > lastTick)
             continue;
         const int x = tickToX (m.tick);
@@ -2639,8 +2729,9 @@ void PlaylistTimeline::applySlip (int deltaTicks)
         if (a.data == nullptr || a.data->sampleRate <= 0.0 || bpm <= 0.0)
             return;
         const double fileSeconds = a.data->numFrames() / a.data->sampleRate;
-        const double clipSeconds = a.lengthTicks * 60.0 / (bpm * kTicksPerBeat);
-        const double deltaSeconds = deltaTicks * 60.0 / (bpm * kTicksPerBeat);
+        const double audioBpm = a.audioBpm (bpm); // 0.83.0
+        const double clipSeconds = a.lengthTicks * 60.0 / (audioBpm * kTicksPerBeat);
+        const double deltaSeconds = deltaTicks * 60.0 / (audioBpm * kTicksPerBeat);
         const double wanted = std::clamp (slipOriginalOffsetSeconds - deltaSeconds, 0.0, std::max (0.0, fileSeconds - clipSeconds));
         if (std::abs (wanted - a.offsetSeconds) > 1.0e-9)
         {
@@ -2993,6 +3084,44 @@ void PlaylistTimeline::toggleAudioReverse (int index)
     notifyChanged();
 }
 
+// 0.83.0: a clip that follows the song's tempo (FL Studio's "Stretch" mode): the tempo of its audio is asked (guessed from the name, or
+// the song's), after which it is stretched as it plays; a second time it plays at its own speed again.
+void PlaylistTimeline::toggleFollowTempo (int index)
+{
+    if (index < 0 || index >= static_cast<int> (arrangement.audioClips.size()))
+        return;
+    const auto apply = [this] (int which, double tempo)
+    {
+        if (which >= static_cast<int> (arrangement.audioClips.size()))
+            return;
+        auto edited = arrangement.audioClips[static_cast<size_t> (which)];
+        if (! setFollowTempo (edited, tempo, bpm) || ! arrangement.canPlaceAudio (edited, which))
+            return;
+        beginEdit();
+        commitPendingUndo();
+        arrangement.audioClips[static_cast<size_t> (which)] = edited;
+        notifyChanged();
+    };
+    const auto& clip = arrangement.audioClips[static_cast<size_t> (index)];
+    if (clip.followsTempo())
+    {
+        apply (index, 0.0);
+        return;
+    }
+    const double guess = tempoFromName (clip.name);
+    promptForText (*this, "Follow the song's tempo",
+                   "The tempo the audio was recorded at (BPM, 20 - 400)" + juce::String (guess > 0.0 ? ", read from its name" : "")
+                       + ". The clip is stretched as it plays, keeping its pitch, so that it stays in time with the song at any tempo, "
+                         "through tempo changes and ramps too.",
+                   juce::String (guess > 0.0 ? guess : bpm, 2), "Follow",
+                   [safe = juce::Component::SafePointer<PlaylistTimeline> (this), index, apply] (const juce::String& typed)
+                   {
+                       const double tempo = typed.trim().getDoubleValue();
+                       if (safe != nullptr && tempo >= kMinBpm && tempo <= kMaxBpm)
+                           apply (index, tempo);
+                   });
+}
+
 // Time-stretch and pitch-shift of one audio clip: the settings are typed in, the audio is rendered again at once (a few
 // seconds for a long file) and the clip gets longer or shorter by the same factor.
 void PlaylistTimeline::editAudioStretch (int index)
@@ -3128,6 +3257,8 @@ void PlaylistTimeline::showClipMenu (int x, int y)
         menu.addItem (4, "Position, gain, pan and fades...");
         menu.addItem (9, "Reverse", true, clip.reverse);
         menu.addItem (7, "Stretch and pitch...");
+        menu.addItem (15, clip.followsTempo() ? "Follow the song's tempo (audio at " + juce::String (clip.tempoBpm, 1) + " BPM)"
+                                              : juce::String ("Follow the song's tempo..."), true, clip.followsTempo()); // 0.83.0
         menu.addItem (8, "Edit sample...");
         menu.addItem (10, "Edit pitch...", onEditPitch != nullptr);
         menu.addItem (11, "Split into stems...", onSplitStems != nullptr);
@@ -3181,6 +3312,7 @@ void PlaylistTimeline::showClipMenu (int x, int y)
                                 case 3: safe->copySelected(); break;
                                 case 4: safe->editAudioProperties (audio); break;
                                 case 7: safe->editAudioStretch (audio); break;
+                                case 15: safe->toggleFollowTempo (audio); break; // 0.83.0
                                 case 9: safe->toggleAudioReverse (audio); break;
                                 case 8: if (safe->onEditSample) safe->onEditSample (audio); break;
                                 case 10: if (safe->onEditPitch) safe->onEditPitch (audio); break;

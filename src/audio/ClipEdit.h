@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <string>
 
 #include "audio/Arrangement.h"
@@ -11,7 +12,8 @@ namespace sls
 // Editing the playlist's clips: the arithmetic behind the Split, Cut and Trim tools, kept free of the GUI so it can
 // be tested. Audio clips are positioned in ticks but their audio lasts a fixed time, so cutting one at a tick moves the
 // start of the right-hand piece into the audio by the time those ticks last at the tempo `bpm` of the moment.
-// (Cut audio at the tempo you will keep: changing the tempo afterwards moves the pieces but not the audio in them.)
+// (Cut audio at the tempo you will keep: changing the tempo afterwards moves the pieces but not the audio in them.) 0.83.0: a clip
+// that follows the song's tempo counts its audio at its own tempo instead (AudioClip::audioBpm), so it is cut exactly anywhere.
 
 inline double ticksToSeconds (double ticks, double bpm) noexcept
 {
@@ -33,6 +35,7 @@ inline int splitAudioClip (Arrangement& a, int index, int tick, double bpm)
     auto& left = a.audioClips[static_cast<size_t> (index)];
     if (tick <= left.startTick || tick >= left.endTick())
         return -1;
+    bpm = left.audioBpm (bpm);
 
     AudioClip right = left;
     right.startTick = tick;
@@ -56,6 +59,7 @@ inline int cutAudioRange (Arrangement& a, int index, int from, int to, double bp
         return -1;
 
     auto clip = a.audioClips[static_cast<size_t> (index)];
+    bpm = clip.audioBpm (bpm);
     from = std::max (from, clip.startTick);
     to = std::min (to, clip.endTick());
     if (to <= from)
@@ -101,6 +105,7 @@ inline void setAudioReverse (AudioClip& clip, bool reverse, double bpm) noexcept
     if (clip.reverse == reverse)
         return;
     clip.reverse = reverse;
+    bpm = clip.audioBpm (bpm);
     if (clip.data == nullptr || clip.data->sampleRate <= 0.0 || bpm <= 0.0)
         return;
     const double duration = clip.data->numFrames() / clip.data->sampleRate;
@@ -128,6 +133,7 @@ inline void limitFades (AudioClip& clip, double bpm) noexcept
 inline AudioClip trimmedAudioStart (const AudioClip& clip, int newStart, double bpm)
 {
     AudioClip out = clip;
+    bpm = clip.audioBpm (bpm);
     if (bpm <= 0.0)
         return out;
 
@@ -226,7 +232,10 @@ inline bool restretchClip (AudioClip& clip, const StretchSettings& wanted, doubl
 
     const double change = settings.lengthRatio / clip.stretch.sanitised().lengthRatio;
     clip.offsetSeconds *= change;
-    clip.lengthTicks = std::max (1, static_cast<int> (std::lround (clip.lengthTicks * change)));
+    if (clip.followsTempo()) // 0.83.0: the audio is slower or faster, the music in the clip the same: its tempo changes, its ticks stay
+        clip.tempoBpm = std::clamp (clip.tempoBpm / change, kMinBpm, kMaxBpm);
+    else
+        clip.lengthTicks = std::max (1, static_cast<int> (std::lround (clip.lengthTicks * change)));
     clip.data = processed;
     clip.original = settings.isNeutral() ? nullptr : base;
     clip.stretch = settings;
@@ -241,6 +250,44 @@ inline double lengthRatioForTempo (double sourceBpm, double projectBpm) noexcept
     if (! (sourceBpm > 0.0) || ! (projectBpm > 0.0) || ! std::isfinite (sourceBpm) || ! std::isfinite (projectBpm))
         return 1.0;
     return std::clamp (sourceBpm / projectBpm, kMinStretchRatio, kMaxStretchRatio);
+}
+
+// 0.83.0: makes the clip follow the song's tempo, its audio being at `audioTempo` BPM (or, with 0, play at its own speed again). The
+// clip keeps covering the same audio: its length in ticks becomes that audio's beats at the new tempo (`songBpm`: the song's
+// tempo now, which the clip played at so far) and stays within the audio. Returns false (nothing changed) for a tempo out of range.
+inline bool setFollowTempo (AudioClip& clip, double audioTempo, double songBpm) noexcept
+{
+    if (! (songBpm > 0.0) || (audioTempo != 0.0 && ! (audioTempo >= kMinBpm && audioTempo <= kMaxBpm)))
+        return false;
+    const double before = clip.audioBpm (songBpm), after = audioTempo > 0.0 ? audioTempo : songBpm;
+    clip.tempoBpm = audioTempo;
+    clip.lengthTicks = std::max (1, static_cast<int> (std::lround (clip.lengthTicks * after / before)));
+    clip.lengthTicks = std::min (clip.lengthTicks, std::max (1, clip.naturalLengthTicks (songBpm)));
+    return true;
+}
+
+// A tempo written in a file name, as loops are often named ("Funk Drums 96 BPM.wav", "bass_loop_120bpm", "pad-140-Am"):
+// a number from 40 to 300 followed by "bpm", else 0.
+inline double tempoFromName (const std::string& name)
+{
+    std::string lower;
+    for (const char c : name)
+        lower += static_cast<char> (c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c);
+    for (size_t at = lower.find ("bpm"); at != std::string::npos; at = lower.find ("bpm", at + 1))
+    {
+        size_t end = at;
+        while (end > 0 && (lower[end - 1] == ' ' || lower[end - 1] == '_' || lower[end - 1] == '-'))
+            --end;
+        size_t begin = end;
+        while (begin > 0 && ((lower[begin - 1] >= '0' && lower[begin - 1] <= '9') || lower[begin - 1] == '.'))
+            --begin;
+        if (begin == end)
+            continue;
+        const double v = std::atof (lower.substr (begin, end - begin).c_str());
+        if (v >= 40.0 && v <= 300.0)
+            return v;
+    }
+    return 0.0;
 }
 
 // The sample editor saved an edited copy of an audio clip's audio. Clip `index` (found again by its audio, `expected`, if the list changed)
@@ -290,7 +337,7 @@ inline std::string useEditedAudio (Arrangement& a, int index, const std::shared_
     {
         if (! std::isfinite (seconds))
             continue;
-        const int tick = clip.startTick + static_cast<int> (std::lround (secondsToTicks (seconds, bpm)));
+        const int tick = clip.startTick + static_cast<int> (std::lround (secondsToTicks (seconds, clip.audioBpm (bpm))));
         if (tick <= last || tick >= clip.endTick())
             continue;
         const int piece = a.audioClipAt (clip.track, tick);

@@ -244,7 +244,7 @@ void PlaylistView::applySnap()
     if (index < 0 || index >= static_cast<int> (snapValues.size()))
         return;
     const int v = snapValues[static_cast<size_t> (index)] == -2 ? mainSnapCode : snapValues[static_cast<size_t> (index)]; // "Main" (0.60.0)
-    timeline.setSnapTicks (v == 0 ? interfaceMeter().barTicks() : v == -1 ? interfaceMeter().barTicks() / 2 : std::max (1, v));
+    timeline.setSnapTicks (v == 0 ? interfaceMeter().barTicks() : v == -1 ? interfaceMeter().barTicks() / 2 : std::max (1, v), v == 0 ? 1 : v == -1 ? 2 : 0);
 }
 
 void PlaylistView::setMainSnap (int code)

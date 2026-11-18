@@ -4592,6 +4592,179 @@ void testTempoAndMeter046()
     }
 }
 
+// 0.83.0: tempo ramps, time signature changes in the song, audio clips that follow the tempo
+void testTempo083()
+{
+    std::cout << "\n[0.83.0 tempo ramps, time signature changes, clips that follow the tempo]\n";
+    using namespace sls;
+    constexpr int kBeat = kTicksPerBeat;
+    {   // a ramp from 120 to 180 BPM over 8 beats
+        const std::vector<TempoMarker> ramp { { 8 * kBeat, 180.0, true } };
+        double numeric = 0.0;
+        for (int t = 0; t < 8 * kBeat; ++t)
+            numeric += 60.0 / ((120.0 + 60.0 * (t + 0.5) / (8 * kBeat)) * kBeat);
+        check (std::abs (tickToSeconds (ramp, 120.0, 8 * kBeat) - numeric) < 1.0e-6, "a ramp lasts what its tempos add up to");
+        check (std::abs (tempoAt (ramp, 120.0, 4 * kBeat) - 150.0) < 1.0e-9 && tempoAt (ramp, 120.0, 9 * kBeat) == 180.0,
+               "half way through the ramp the tempo is half way; after it, the marker's");
+        bool inverse = true;
+        for (const double t : { 0.0, 100.5, 1000.0, 8.0 * kBeat, 12.25 * kBeat })
+            inverse = inverse && std::abs (secondsToTick (ramp, 120.0, tickToSeconds (ramp, 120.0, t)) - t) < 1.0e-6;
+        check (inverse, "seconds and ticks convert back and forth through a ramp");
+        const std::vector<TempoMarker> step { { 8 * kBeat, 180.0, false } };
+        check (std::abs (tickToSeconds (step, 120.0, 8 * kBeat) - 4.0) < 1.0e-9 && tempoAt (step, 120.0, 8 * kBeat - 1) == 120.0,
+               "without the ramp the tempo changes at the marker, as before");
+        check (! tempoIsConstant (ramp, 120.0) && tempoIsConstant ({ { 960, 120.0, true } }, 120.0), "a song keeps one tempo when every marker keeps it");
+        const std::vector<TempoMarker> down { { 4 * kBeat, 60.0, false }, { 8 * kBeat, 120.0, true } };
+        check (std::abs (tempoAt (down, 120.0, 6 * kBeat) - 90.0) < 1.0e-9, "a ramp starts from the marker before it");
+        auto project = Project::make ({}, 16 * kBeat);
+        project.tempoMarkers = ramp;
+        RenderOptions options;
+        const auto out = renderToBuffer (project, options);
+        const double expected = tickToSeconds (ramp, 120.0, 16 * kBeat) + 1.0; // (the 1 s tail)
+        check (std::abs (out.getNumSamples() - expected * 48000.0) < 2.0, "an export lasts as long as the ramp says");
+    }
+    {   // time signature changes
+        const TimeSignature four;
+        const auto markers = tidyMeterMarkers ({ { 2 * 1920 + 100, { 3, 4 } }, { 2 * 1920 + 2 * 1440, { 6, 8 } }, { 9 * 1920, { 6, 8 } } }, four);
+        check (markers.size() == 2 && markers[0].tick == 3840 && markers[1].tick == 3840 + 2880 && markers[1].meter == TimeSignature { 6, 8 },
+               "changes go on bar lines, and one that repeats the signature before it goes");
+        const auto p = barPositionAt (markers, four, 6720 + 1440 + 240);
+        check (p.bar == 5 && p.beat == 1 && p.ticks == 0 && p.meter == TimeSignature { 6, 8 }, "the bars count on across the changes");
+        check (barStartTick (markers, four, 3) == 5280 && barStartTick (markers, four, 5) == 8160 && barStartTick (markers, four, 1) == 1920,
+               "where each bar starts");
+        const auto savedMeter = interfaceMeter();
+        const auto savedMarkers = interfaceMeterMarkers();
+        interfaceMeter() = four;
+        interfaceMeterMarkers() = markers;
+        check (formatBarsBeatsTicks (5280) == "4.1.000" && formatBarsBeatsTicks (8400) == "6.2.000" && formatBarsBeatsTicks (8400, four) == "5.3.000",
+               "positions are written as the song counts its bars");
+        interfaceMeter() = savedMeter;
+        interfaceMeterMarkers() = savedMarkers;
+        const auto segments = meterSegments (markers, four);
+        check (segments.size() == 3 && segments[1].firstBar == 2 && segments[2].firstBar == 4 && segments[2].endTick == INT_MAX, "the song's stretches in one signature");
+
+        // the metronome accents the first beat of each bar of the signature where the song is
+        auto project = Project::make ({}, 16 * kBeat);
+        project.meterMarkers = { { 1920, { 3, 4 } } }; // a bar of 4, then bars of 3: accents at beats 0, 4, 7, 10
+        Player player;
+        player.prepare (48000.0);
+        player.setMetronome (true, 0.8f);
+        std::vector<float> l (256), r (256), all;
+        float* ch[2] = { l.data(), r.data() };
+        while (all.size() < static_cast<size_t> (6 * 24000))
+        {
+            std::fill (l.begin(), l.end(), 0.0f);
+            std::fill (r.begin(), r.end(), 0.0f);
+            player.render (project, 120.0, true, ch, 2, 256);
+            all.insert (all.end(), l.begin(), l.end());
+        }
+        const auto peakAt = [&all] (int beat)
+        {
+            float v = 0.0f;
+            for (int i = beat * 24000; i < beat * 24000 + 1500; ++i)
+                v = std::max (v, std::abs (all[static_cast<size_t> (i)]));
+            return v;
+        };
+        check (peakAt (4) > peakAt (3) * 1.2f && peakAt (4) > peakAt (5) * 1.2f && std::abs (peakAt (5) - peakAt (6)) < 1.0e-4f,
+               "after a change to 3/4 the accent comes every third beat from the change");
+
+        auto doc = ProjectDocument::blank();
+        doc.arrangement.tempoMarkers = { { 4 * kBeat, 90.0, false }, { 12 * kBeat, 150.0, true } };
+        doc.arrangement.meterMarkers = markers;
+        const auto back = ProjectDocument::fromJson (doc.toJson());
+        check (back.document.has_value() && back.document->arrangement.tempoMarkers == doc.arrangement.tempoMarkers
+                   && back.document->arrangement.meterMarkers == markers,
+               "ramps and time signature changes are saved and loaded");
+        check (doc.toJson().indexOf ("\"tempoChanges\"") >= 0, "the tempo changes are still saved where older versions read them");
+    }
+    {   // clips that follow the tempo: what they hold, and how they are cut
+        check (tempoFromName ("Funk Drums 96 BPM.wav") == 96.0 && tempoFromName ("bass_loop_120bpm") == 120.0 && tempoFromName ("pad-140-Am") == 0.0
+                   && tempoFromName ("take 2") == 0.0 && tempoFromName ("x 1000bpm") == 0.0,
+               "a tempo is read from a loop's name");
+        AudioClip clip;
+        clip.data = sineSample (440.0, 4.0, 48000.0);
+        clip.lengthTicks = 4 * kBeat; // 2 s at 120
+        check (setFollowTempo (clip, 120.0, 120.0) && clip.followsTempo() && clip.lengthTicks == 4 * kBeat,
+               "a clip at the song's own tempo keeps its length");
+        check (clip.naturalLengthTicks (60.0) == 8 * kBeat, "the audio of a clip that follows is counted at its own tempo, whatever the song's");
+        auto other = clip;
+        other.tempoBpm = 0.0;
+        check (setFollowTempo (other, 60.0, 120.0) && other.lengthTicks == 2 * kBeat, "the same audio at half the tempo covers half the beats");
+        check (setFollowTempo (other, 0.0, 120.0) && ! other.followsTempo() && other.lengthTicks == 4 * kBeat && ! setFollowTempo (other, 500.0, 120.0),
+               "it can stop following; a tempo out of range is refused");
+        Arrangement a;
+        a.audioClips = { clip };
+        const int right = splitAudioClip (a, 0, 2 * kBeat, 60.0);
+        check (right == 1 && std::abs (a.audioClips[1].offsetSeconds - 1.0) < 1.0e-9 && a.audioClips[1].followsTempo(),
+               "a clip that follows is cut by its own tempo (2 beats at 120 = 1 s), whatever the song's");
+        auto stretched = clip;
+        check (restretchClip (stretched, { 2.0, 0.0, false }, 120.0) && stretched.lengthTicks == clip.lengthTicks && std::abs (stretched.tempoBpm - 60.0) < 1.0e-9,
+               "stretched twice as long, its audio has half the tempo and the clip the same beats");
+        auto doc = ProjectDocument::blank();
+        doc.arrangement.audioClips = { clip };
+        doc.arrangement.audioClips[0].data = nullptr;
+        check (doc.toJson().indexOf ("\"tempo\"") >= 0, "a clip's tempo is saved");
+    }
+    {   // and how they sound: 2 s of 440 Hz recorded at 120 BPM, in a song at 60 BPM
+        Arrangement a;
+        AudioClip clip;
+        clip.data = sineSample (440.0, 2.0, 44100.0); // (another sample rate than the output's: the pitch must stay)
+        clip.lengthTicks = 4 * kBeat;
+        clip.tempoBpm = 120.0;
+        a.audioClips = { clip };
+        const auto render = [] (const Project& project, double bpm, double seconds)
+        {
+            Player player;
+            player.prepare (48000.0);
+            std::vector<float> l (256), r (256), all;
+            float* ch[2] = { l.data(), r.data() };
+            while (all.size() < static_cast<size_t> (seconds * 48000.0))
+            {
+                std::fill (l.begin(), l.end(), 0.0f);
+                std::fill (r.begin(), r.end(), 0.0f);
+                player.render (project, bpm, true, ch, 2, 256);
+                all.insert (all.end(), l.begin(), l.end());
+            }
+            return all;
+        };
+        const auto level = [] (const std::vector<float>& x, double from, double to)
+        {
+            double sum = 0.0;
+            const auto a0 = static_cast<size_t> (from * 48000.0), a1 = static_cast<size_t> (to * 48000.0);
+            for (size_t i = a0; i < a1 && i < x.size(); ++i)
+                sum += x[i] * x[i];
+            return std::sqrt (sum / std::max<size_t> (1, a1 - a0));
+        };
+        const auto frequency = [] (const std::vector<float>& x, double from, double to)
+        {
+            int crossings = 0;
+            const auto a0 = static_cast<size_t> (from * 48000.0), a1 = static_cast<size_t> (to * 48000.0);
+            for (size_t i = a0 + 1; i < a1 && i < x.size(); ++i)
+                crossings += (x[i - 1] < 0.0f) != (x[i] < 0.0f) ? 1 : 0;
+            return crossings / 2.0 / (to - from);
+        };
+        auto project = compileSong ({}, a);
+        check (project.audioEvents.size() == 1 && project.audioEvents[0].tempoBpm == 120.0, "the song carries the clip's tempo");
+        const auto slow = render (project, 60.0, 4.6);
+        check (level (slow, 0.0, 0.1) > 0.1 && level (slow, 3.4, 3.8) > 0.1 && level (slow, 4.3, 4.6) < 0.01,
+               "at half the tempo the clip lasts its 4 beats: 4 s instead of 2, from its start, and stops at its end");
+        const double f = frequency (slow, 1.0, 3.0);
+        check (std::abs (f - 440.0) < 8.0, "and keeps its pitch (" + std::to_string (f) + " Hz)");
+
+        a.audioClips[0].tempoBpm = 0.0;
+        const auto plain = render (compileSong ({}, a), 60.0, 3.0);
+        check (level (plain, 2.3, 2.8) < 0.01, "a clip that does not follow plays its 2 s at any tempo, as before");
+
+        a.audioClips[0].tempoBpm = 120.0;
+        auto ramped = compileSong ({}, a);
+        ramped.tempoMarkers = { { 4 * kBeat, 60.0, true } }; // from 120 down to 60 BPM over the clip
+        const double expected = tickToSeconds (ramped.tempoMarkers, 120.0, 4 * kBeat);
+        const auto r = render (ramped, 120.0, expected + 0.6);
+        check (level (r, expected - 0.25, expected - 0.05) > 0.1 && level (r, expected + 0.3, expected + 0.6) < 0.01,
+               "through a ramp it lasts exactly its beats (" + std::to_string (expected) + " s)");
+    }
+}
+
 void testMixerAndExport045()
 {
     std::cout << "Mixer and export: sidechain, 10 slots, effect chains, export options and stems (0.45.0)\n";
@@ -14838,6 +15011,7 @@ int main (int argc, char** argv)
     testPatternLoopRegion();
     testChannelRemap();
     testReorder082();
+    testTempo083();
     testProjectWithSamples();
     testPatternLength();
     testAdvancedSampler();

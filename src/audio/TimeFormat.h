@@ -11,14 +11,23 @@ namespace sls
 {
 // Positions as the playlist's ruler and readouts show them, in the project's time signature (0.46.0; 4/4 before).
 
-// "3.2.120": bar 3, beat 2, 120 ticks past the beat (all counting from 1 except the ticks).
-inline std::string formatBarsBeatsTicks (long long tick, const TimeSignature& meter = interfaceMeter())
+// "3.2.120": bar 3, beat 2, 120 ticks past the beat (all counting from 1 except the ticks), in one signature.
+inline std::string formatBarsBeatsTicks (long long tick, const TimeSignature& meter)
 {
     if (tick < 0)
         tick = 0;
     const long long bar = meter.barTicks(), beat = meter.beatTicks();
     char buffer[48];
     std::snprintf (buffer, sizeof buffer, "%lld.%lld.%03lld", tick / bar + 1, (tick % bar) / beat + 1, tick % beat);
+    return buffer;
+}
+
+// The same, as the song counts its bars: the interface's signature and its changes in the song (0.83.0).
+inline std::string formatBarsBeatsTicks (long long tick)
+{
+    const auto p = barPositionAt (interfaceMeterMarkers(), interfaceMeter(), tick);
+    char buffer[48];
+    std::snprintf (buffer, sizeof buffer, "%lld.%d.%03d", p.bar + 1, p.beat + 1, p.ticks);
     return buffer;
 }
 

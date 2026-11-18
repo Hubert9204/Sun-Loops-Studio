@@ -36,6 +36,12 @@ public:
         head.quarters = quarters;
         head.playing = playing;
     }
+    void setMeter (int numerator, int denominator, double barStartQuarters) noexcept override
+    {
+        head.numerator = numerator;
+        head.denominator = denominator;
+        head.barStart = barStartQuarters;
+    }
     bool isLoaded() const noexcept override { return instance != nullptr; }
     const std::string& displayName() const noexcept override { return name; }
 
@@ -80,13 +86,16 @@ private:
     {
         double bpm = 120.0, quarters = 0.0;
         bool playing = false;
+        int numerator = 4, denominator = 4; // 0.83.0
+        double barStart = 0.0;
         juce::Optional<PositionInfo> getPosition() const override
         {
             PositionInfo info;
             info.setBpm (bpm);
             info.setPpqPosition (quarters);
             info.setIsPlaying (playing);
-            info.setTimeSignature (juce::AudioPlayHead::TimeSignature {});
+            info.setTimeSignature (juce::AudioPlayHead::TimeSignature { numerator, denominator });
+            info.setPpqPositionOfLastBarStart (barStart);
             return info;
         }
     } head;

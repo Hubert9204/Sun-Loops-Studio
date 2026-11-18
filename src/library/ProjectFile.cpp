@@ -616,6 +616,8 @@ juce::String ProjectDocument::toJson() const
             o->setProperty ("launchMode", static_cast<int> (a.launchMode));
         if (a.launchSync)
             o->setProperty ("launchSync", true);
+        if (a.followsTempo()) // 0.83.0
+            o->setProperty ("tempo", number (a.tempoBpm));
         if (! a.stretch.isNeutral())
         {
             // Only the settings: the audio is stretched again when the project is opened.
@@ -669,9 +671,23 @@ juce::String ProjectDocument::toJson() const
     if (! arrangement.tempoMarkers.empty())
     {
         juce::Array<juce::var> tempos;
+        juce::Array<juce::var> ramps; // 0.83.0: the ticks of the markers reached by a ramp (older versions read them as steps)
         for (const auto& m : tidyTempoMarkers (arrangement.tempoMarkers))
+        {
             tempos.add (juce::Array<juce::var> { m.tick, number (m.bpm) });
+            if (m.ramp)
+                ramps.add (m.tick);
+        }
         root->setProperty ("tempoChanges", tempos);
+        if (! ramps.isEmpty())
+            root->setProperty ("tempoRamps", ramps);
+    }
+    if (const auto meters = tidyMeterMarkers (arrangement.meterMarkers, arrangement.meter); ! meters.empty()) // 0.83.0
+    {
+        juce::Array<juce::var> list;
+        for (const auto& m : meters)
+            list.add (juce::Array<juce::var> { m.tick, juce::String (m.meter.text()) });
+        root->setProperty ("timeSignatureChanges", list);
     }
     if (! arrangement.markers.empty()) // 0.61.0: time markers
     {
@@ -1086,6 +1102,7 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
                 clip.muted = readBool (o->getProperty ("muted"), false); // 0.60.0
                 clip.launchMode = static_cast<std::uint8_t> (readInt (o->getProperty ("launchMode"), 0, 0, 2)); // 0.71.0
                 clip.launchSync = readBool (o->getProperty ("launchSync"), false);
+                clip.tempoBpm = o->hasProperty ("tempo") ? readNumber (o->getProperty ("tempo"), 0.0, kMinBpm, kMaxBpm) : 0.0; // 0.83.0
                 if (auto* st = o->getProperty ("stretch").getDynamicObject())
                 {
                     clip.stretch.lengthRatio = readNumber (st->getProperty ("lengthRatio"), 1.0, kMinStretchRatio, kMaxStretchRatio);
@@ -1168,7 +1185,25 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
         for (const auto& t : *tempos)
             if (auto* pair = t.getArray(); pair != nullptr && pair->size() == 2)
                 markers.push_back ({ readInt ((*pair)[0], 0, 0, d.arrangement.timelineTicks()), readNumber ((*pair)[1], 120.0, kMinBpm, kMaxBpm) });
+        if (auto* ramps = root->getProperty ("tempoRamps").getArray()) // 0.83.0
+            for (const auto& t : *ramps)
+                for (auto& m : markers)
+                    if (m.tick == readInt (t, -1, -1, d.arrangement.timelineTicks()))
+                        m.ramp = true;
         d.arrangement.tempoMarkers = tidyTempoMarkers (std::move (markers));
+    }
+    if (auto* meters = root->getProperty ("timeSignatureChanges").getArray()) // 0.83.0
+    {
+        std::vector<MeterMarker> markers;
+        for (const auto& t : *meters)
+            if (auto* pair = t.getArray(); pair != nullptr && pair->size() >= 2)
+            {
+                const auto text = (*pair)[1].toString();
+                markers.push_back ({ readInt ((*pair)[0], 0, 0, d.arrangement.timelineTicks()),
+                                     TimeSignature::valid (text.upToFirstOccurrenceOf ("/", false, false).getIntValue(),
+                                                           text.fromFirstOccurrenceOf ("/", false, false).getIntValue()) });
+            }
+        d.arrangement.meterMarkers = tidyMeterMarkers (std::move (markers), d.arrangement.meter);
     }
     if (auto* list = root->getProperty ("markers").getArray()) // 0.61.0
     {
