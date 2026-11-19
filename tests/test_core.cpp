@@ -2490,7 +2490,7 @@ void testManyTracks()
         // (under emulation - the Intel build under Rosetta in CI - the limit is scaled by SLS_TIMING_SCALE)
         const char* scaleText = std::getenv ("SLS_TIMING_SCALE");
         const double limit = 0.5 * (scaleText != nullptr ? std::clamp (std::atof (scaleText), 1.0, 10.0) : 1.0);
-        check (seconds < limit, "and 2 s of it render in under 0.5 s (silent tracks cost almost nothing)");
+        check (seconds < limit, "and 2 s of it render in under 0.5 s (silent tracks cost almost nothing; " + std::to_string (seconds) + " s)");
     }
 
     // The pool: 16 memories at the start; a 20th reverb waits until memory is offered, then works; none of it allocates.
