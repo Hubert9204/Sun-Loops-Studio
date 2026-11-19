@@ -7,7 +7,7 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Oldest macOS the program r
 # Windows (0.75.0): the C and C++ runtime is linked into every program and plugin (/MT), so nothing has to be installed beside
 # them (no Visual C++ Redistributable). Must be set before project().
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "The MSVC runtime: static")
-project(SunLoopsStudio VERSION 0.84.0 LANGUAGES C CXX)
+project(SunLoopsStudio VERSION 0.85.0 LANGUAGES C CXX)
 # The assembler links the sound library in on Linux and macOS; Windows (0.75.0) uses a resource instead (see below).
 if(NOT WIN32)
     enable_language(ASM)
@@ -202,6 +202,7 @@ set(SLS_CORE_SOURCES
     src/assistant/HeliosChat.cpp
     src/plugins/PluginScanner.cpp
     src/plugins/PluginHost.cpp
+    src/plugins/PluginSandbox.cpp
     src/support/Logging.cpp
     src/support/CrashHandler.cpp
     src/support/CrashHandlerWindows.cpp # 0.75.0 (empty elsewhere)
@@ -308,6 +309,7 @@ target_sources(SunLoopsStudio PRIVATE
     src/ui/StepGraph.cpp
     src/ui/PanelWindow.cpp
     src/ui/MixerPanel.cpp
+    src/ui/PluginWindow.cpp
     src/ui/Icons.cpp
     src/ui/PatcherWindow.cpp
     src/ui/PlaylistTimeline.cpp
@@ -730,6 +732,7 @@ if(SLS_BUILD_TEST_PLUGINS)
             PLUGIN_CODE ${code}
             IS_SYNTH ${isSynth}
             NEEDS_MIDI_INPUT ${isSynth}
+            NEEDS_MIDI_OUTPUT ${isSynth}
             FORMATS VST3 LV2
             LV2URI "urn:sun-loops-studio:test-${kind}"
             COPY_PLUGIN_AFTER_BUILD FALSE)

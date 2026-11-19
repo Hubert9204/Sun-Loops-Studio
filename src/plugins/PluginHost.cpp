@@ -30,8 +30,62 @@ JucePlugin::JucePlugin (std::unique_ptr<juce::AudioPluginInstance> instanceToUse
     }
 }
 
+juce::StringArray JucePlugin::programNames() const
+{
+    if (bridge != nullptr)
+    {
+        int current = -1;
+        return bridge->programNames (current);
+    }
+    juce::StringArray names;
+    if (instance != nullptr)
+        for (int i = 0; i < instance->getNumPrograms(); ++i)
+            names.add (instance->getProgramName (i));
+    return names;
+}
+
+int JucePlugin::currentProgram() const
+{
+    if (bridge != nullptr)
+    {
+        int current = -1;
+        bridge->programNames (current);
+        return current;
+    }
+    return instance != nullptr ? instance->getCurrentProgram() : -1;
+}
+
+bool JucePlugin::setProgram (int index)
+{
+    if (bridge != nullptr)
+        return bridge->setProgram (index);
+    if (instance == nullptr || index < 0 || index >= instance->getNumPrograms())
+        return false;
+    instance->setCurrentProgram (index);
+    markChanged();
+    return true;
+}
+
+JucePlugin::JucePlugin (std::unique_ptr<SandboxClient> sandboxed, const juce::PluginDescription& d)
+    : bridge (std::move (sandboxed)), description (d)
+{
+    name = bridge->pluginName().isNotEmpty() ? bridge->pluginName().toStdString() : d.name.toStdString();
+    instrument = d.isInstrument;
+    const auto count = std::max<size_t> (1, bridge->parameters().size());
+    automated = std::make_unique<std::atomic<float>[]> (count);
+    for (size_t i = 0; i < count; ++i)
+        automated[i].store (std::numeric_limits<float>::quiet_NaN(), std::memory_order_relaxed);
+}
+
 bool JucePlugin::selectProgram (const std::string& programName)
 {
+    if (bridge != nullptr)
+    {
+        int current = -1;
+        const auto names = bridge->programNames (current);
+        const int index = names.indexOf (juce::String (programName));
+        return index >= 0 && bridge->setProgram (index);
+    }
     if (instance == nullptr)
         return false;
     for (int i = 0; i < instance->getNumPrograms(); ++i)
@@ -45,6 +99,21 @@ bool JucePlugin::selectProgram (const std::string& programName)
 
 void JucePlugin::setParameter (int index, float value) noexcept
 {
+    if (bridge != nullptr) // (sent with its next chunk; the same value twice is sent once)
+    {
+        if (index < 0 || index >= parameterCount() || ! std::isfinite (value))
+            return;
+        value = std::clamp (value, 0.0f, 1.0f);
+        if (automated == nullptr)
+            return;
+        auto& last = automated[static_cast<size_t> (index)];
+        const float previous = last.load (std::memory_order_relaxed);
+        if (std::isfinite (previous) && std::abs (previous - value) < 1.0e-6f)
+            return;
+        last.store (value, std::memory_order_relaxed);
+        bridge->setParameter (index, value);
+        return;
+    }
     if (index < 0 || index >= static_cast<int> (parameters.size()) || ! std::isfinite (value))
         return;
     value = std::clamp (value, 0.0f, 1.0f);
@@ -61,16 +130,27 @@ void JucePlugin::setParameter (int index, float value) noexcept
 
 float JucePlugin::parameterValue (int index) const noexcept
 {
+    if (bridge != nullptr)
+        return bridge->parameterValue (index);
     return index >= 0 && index < static_cast<int> (parameters.size()) ? parameters[static_cast<size_t> (index)]->getValue() : 0.0f;
 }
 
 float JucePlugin::parameterDefault (int index) const noexcept
 {
+    if (bridge != nullptr)
+        return index >= 0 && index < parameterCount() ? bridge->parameters()[static_cast<size_t> (index)].second : 0.0f;
     return index >= 0 && index < static_cast<int> (parameters.size()) ? parameters[static_cast<size_t> (index)]->getDefaultValue() : 0.0f;
 }
 
 std::string JucePlugin::parameterName (int index) const
 {
+    if (bridge != nullptr)
+    {
+        if (index < 0 || index >= parameterCount())
+            return {};
+        const auto& n = bridge->parameters()[static_cast<size_t> (index)].first;
+        return n.empty() ? "Parameter " + std::to_string (index + 1) : n;
+    }
     if (index < 0 || index >= static_cast<int> (parameters.size()))
         return {};
     const auto n = parameters[static_cast<size_t> (index)]->getName (64).trim();
@@ -79,6 +159,8 @@ std::string JucePlugin::parameterName (int index) const
 
 std::string JucePlugin::parameterText (int index, float value) const
 {
+    if (bridge != nullptr)
+        return bridge->parameterText (index, std::clamp (value, 0.0f, 1.0f)).toStdString();
     if (index < 0 || index >= static_cast<int> (parameters.size()))
         return {};
     auto* p = parameters[static_cast<size_t> (index)];
@@ -110,18 +192,37 @@ void JucePlugin::prepare (double sampleRate, int maxBlock)
 {
     rate = sampleRate;
     block = std::max (1, maxBlock);
+    if (bridge != nullptr)
+    {
+        bridge->prepare (sampleRate, block);
+        return;
+    }
     if (instance == nullptr)
         return;
     instance->releaseResources();
     instance->enableAllBuses();
+    // 0.85.0: the main pair, a sidechain (the second input bus) and the outputs after the main pair
+    mainIns = instance->getMainBusNumInputChannels();
+    mainOuts = instance->getMainBusNumOutputChannels();
+    sideChannels = instance->getBusCount (true) > 1 && ! instance->isMidiEffect() ? std::min (2, instance->getChannelCountOfBus (true, 1)) : 0;
+    extraOuts = std::max (0, instance->getTotalNumOutputChannels() - mainOuts);
+    makesMidi = instance->producesMidi();
     const int channels = std::max ({ 2, instance->getTotalNumInputChannels(), instance->getTotalNumOutputChannels() });
     buffer.setSize (channels, block, false, true, false);
     instance->setRateAndBufferSizeDetails (sampleRate, block);
     instance->prepareToPlay (sampleRate, block);
 }
 
-void JucePlugin::process (float* left, float* right, int numSamples, const PluginMidiEvent* events, int numEvents) noexcept
+void JucePlugin::process (float* left, float* right, int numSamples, const PluginMidiEvent* events, int numEvents, PluginIo* io) noexcept
 {
+    if (io != nullptr)
+        io->numMidiOut = 0;
+    if (bridge != nullptr) // 0.85.0
+    {
+        if (numSamples > 0)
+            bridge->process (left, right, std::min (numSamples, sandbox::kMaxBlock), events, numEvents, io, ! instrument);
+        return;
+    }
     if (instance == nullptr || numSamples <= 0 || rate <= 0.0)
         return; // a placeholder: an effect leaves the signal alone, an instrument stays silent
     numSamples = std::min (numSamples, block);
@@ -133,13 +234,18 @@ void JucePlugin::process (float* left, float* right, int numSamples, const Plugi
 
     const juce::ScopedNoDenormals noDenormals;
     const int channels = buffer.getNumChannels();
+    // The input channels in bus order: the main pair (a mono plugin: the left), then the sidechain (0.85.0); the rest silent.
+    const int mainIn = mainIns > 0 ? std::min (mainIns, 2) : 0;
     for (int ch = 0; ch < channels; ++ch)
     {
         auto* d = buffer.getWritePointer (ch);
-        if (ch == 0)
-            std::copy (left, left + numSamples, d);
-        else if (ch == 1)
-            std::copy (right, right + numSamples, d);
+        const float* from = nullptr;
+        if (ch < mainIn || (mainIns == 0 && ch < 2)) // (an instrument with no input: its output channels start as they came, zeros)
+            from = ch == 0 ? left : right;
+        else if (ch >= mainIns && ch < mainIns + sideChannels && io != nullptr)
+            from = ch == mainIns ? io->sideLeft : (io->sideRight != nullptr ? io->sideRight : io->sideLeft);
+        if (from != nullptr)
+            std::copy (from, from + numSamples, d);
         else
             std::fill (d, d + numSamples, 0.0f);
     }
@@ -151,13 +257,35 @@ void JucePlugin::process (float* left, float* right, int numSamples, const Plugi
 
     instance->processBlock (view, midi);
 
-    const int outs = instance->getTotalNumOutputChannels();
+    const int outs = std::max (1, mainOuts);
     std::copy (view.getReadPointer (0), view.getReadPointer (0) + numSamples, left);
     std::copy (view.getReadPointer (outs >= 2 ? 1 : 0), view.getReadPointer (outs >= 2 ? 1 : 0) + numSamples, right);
+    if (io == nullptr)
+        return;
+    // 0.85.0: the outputs after the main pair, and the MIDI it sent (a plugin that sends none leaves the input's notes in the buffer)
+    for (int e = 0; e < std::min (io->extraChannels, extraOuts); ++e)
+        if (io->extraOut != nullptr && io->extraOut[e] != nullptr && mainOuts + e < channels)
+            std::copy (view.getReadPointer (mainOuts + e), view.getReadPointer (mainOuts + e) + numSamples, io->extraOut[e]);
+    if (makesMidi && io->midiOut != nullptr)
+        for (const auto meta : midi)
+        {
+            if (io->numMidiOut >= io->maxMidiOut)
+                break;
+            const auto* raw = meta.data;
+            if (meta.numBytes < 1 || meta.numBytes > 3 || raw[0] < 0x80 || raw[0] >= 0xF0)
+                continue; // (channel messages only)
+            auto& out = io->midiOut[io->numMidiOut++];
+            out.offset = meta.samplePosition;
+            out.bytes[0] = raw[0];
+            out.bytes[1] = meta.numBytes > 1 ? raw[1] : 0;
+            out.bytes[2] = meta.numBytes > 2 ? raw[2] : 0;
+        }
 }
 
 juce::MemoryBlock JucePlugin::getState() const
 {
+    if (bridge != nullptr)
+        return bridge->crashed() ? bridge->lastKnownState() : bridge->getState();
     if (instance == nullptr)
         return keptState;
     juce::MemoryBlock state;
@@ -167,6 +295,12 @@ juce::MemoryBlock JucePlugin::getState() const
 
 bool JucePlugin::setState (const juce::MemoryBlock& state)
 {
+    if (bridge != nullptr)
+    {
+        const bool ok = state.getSize() == 0 || bridge->setState (state);
+        takenChanges = bridge->changeCount(); // what was just loaded is not an edit
+        return ok;
+    }
     if (instance == nullptr)
     {
         keptState = state;
@@ -364,8 +498,60 @@ void PluginHost::saveKnownList (const juce::File& file) const
     }
 }
 
-std::shared_ptr<JucePlugin> PluginHost::create (const juce::PluginDescription& description, double sampleRate, int maxBlock, juce::String& error)
+// 0.85.0: plugin presets of this program (".slsplugin": JSON with the plugin's name, format, id and state in base64), a folder per plugin.
+juce::File PluginHost::presetsFolder (const juce::File& root, const juce::PluginDescription& d)
 {
+    return root.getChildFile (juce::File::createLegalFileName (d.name + " (" + d.pluginFormatName + ")"));
+}
+
+juce::Result PluginHost::savePreset (const JucePlugin& p, const juce::File& file)
+{
+    auto* o = new juce::DynamicObject();
+    o->setProperty ("format", "sun-loops-studio-plugin-preset");
+    o->setProperty ("version", 1);
+    o->setProperty ("plugin", p.getDescription().name);
+    o->setProperty ("pluginFormat", p.getDescription().pluginFormatName);
+    o->setProperty ("uid", p.getDescription().uniqueId);
+    o->setProperty ("state", p.getState().toBase64Encoding());
+    file.getParentDirectory().createDirectory();
+    if (! file.replaceWithText (juce::JSON::toString (juce::var (o))))
+        return juce::Result::fail ("The preset could not be written to " + file.getFullPathName());
+    return juce::Result::ok();
+}
+
+juce::Result PluginHost::loadPreset (JucePlugin& p, const juce::File& file)
+{
+    const auto v = juce::JSON::parse (file);
+    auto* o = v.getDynamicObject();
+    if (o == nullptr || o->getProperty ("format").toString() != "sun-loops-studio-plugin-preset")
+        return juce::Result::fail (file.getFileName() + " is not a plugin preset of this program.");
+    if (o->getProperty ("plugin").toString() != p.getDescription().name)
+        return juce::Result::fail (file.getFileName() + " is a preset of " + o->getProperty ("plugin").toString() + ", not of " + p.getDescription().name + ".");
+    juce::MemoryBlock state;
+    if (! state.fromBase64Encoding (o->getProperty ("state").toString()) || state.getSize() == 0)
+        return juce::Result::fail (file.getFileName() + " holds no settings.");
+    p.setState (state);
+    return juce::Result::ok();
+}
+
+juce::File& PluginHost::sandboxExecutable()
+{
+    static juce::File executable = juce::File::getSpecialLocation (juce::File::currentExecutableFile);
+    return executable;
+}
+
+std::shared_ptr<JucePlugin> PluginHost::create (const juce::PluginDescription& description, double sampleRate, int maxBlock, juce::String& error,
+                                                bool sandboxed)
+{
+    if (sandboxed) // 0.85.0
+    {
+        auto client = SandboxClient::start (sandboxExecutable(), description, sampleRate, maxBlock, error);
+        if (client == nullptr)
+            return nullptr;
+        auto plugin = std::make_shared<JucePlugin> (std::move (client), description);
+        registerPlugin (plugin);
+        return plugin;
+    }
     if (description.pluginFormatName == "LV2")
         readLv2Folders();
     auto instance = formatManager.createPluginInstance (description, sampleRate, maxBlock, error);

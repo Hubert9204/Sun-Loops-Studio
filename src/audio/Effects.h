@@ -614,7 +614,8 @@ struct EffectSlot
 // The parameter that names the mixer track an effect listens to (a compressor's or gate's sidechain, a vocoder's modulator), or -1.
 inline int effectSidechainParam (EffectType t) noexcept
 {
-    return t == EffectType::Compressor || t == EffectType::Gate ? 5 : (t == EffectType::Vocoder ? 0 : -1);
+    // (0.85.0: a plugin's slot keeps its sidechain source in params[0], when the plugin has a sidechain input)
+    return t == EffectType::Compressor || t == EffectType::Gate ? 5 : (t == EffectType::Vocoder || t == EffectType::Plugin ? 0 : -1);
 }
 
 // Message thread (0.62.0): gives a Convolver slot the impulse response its settings ask for at this sample rate; a new one (which

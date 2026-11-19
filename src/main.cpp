@@ -8,6 +8,7 @@
 #include "support/CrashReport.h"
 #include "support/DesktopIntegration.h"
 #include "support/Logging.h"
+#include "plugins/PluginSandbox.h"
 #include "ui/MainComponent.h"
 
 class SunLoopsStudioApplication : public juce::JUCEApplication
@@ -19,6 +20,20 @@ public:
 
     void initialise (const juce::String&) override
     {
+        // 0.85.0: started again by the program to run one plugin in a sandbox: that is all this process does (no window, no log of its own)
+        if (sls::PluginSandboxWorker::isSandboxCommandLine (getCommandLineParameterArray()))
+        {
+           #if JUCE_MAC
+            juce::Process::setDockIconVisible (false);
+           #endif
+            sandbox = sls::PluginSandboxWorker::start (getCommandLineParameterArray(), [] { juce::JUCEApplication::quit(); });
+            if (sandbox == nullptr)
+            {
+                setApplicationReturnValue (1);
+                quit();
+            }
+            return;
+        }
         // 0.43.0: the session log and the crash handler come first, so everything after them is covered. A crash file left by
         // the last session gets that session's last log lines before the new session starts writing to the log.
         const auto state = sls::logging::stateDirectory();
@@ -71,6 +86,11 @@ public:
 
     void shutdown() override
     {
+        if (sandbox != nullptr)
+        {
+            sandbox = nullptr;
+            return;
+        }
         mainWindow = nullptr;
         spdlog::info ("Closed normally");
         sls::logging::stop(); // the crash handler stays: a crash while closing is still reported
@@ -79,6 +99,11 @@ public:
     // Closing the window (or the session ending) first asks about unsaved changes.
     void systemRequestedQuit() override
     {
+        if (sandbox != nullptr)
+        {
+            quit();
+            return;
+        }
         if (auto* main = mainWindow != nullptr ? mainWindow->getMainComponent() : nullptr)
             main->confirmDiscardChanges ([] { juce::JUCEApplication::quit(); });
         else
@@ -109,6 +134,7 @@ private:
     };
 
     std::unique_ptr<MainWindow> mainWindow;
+    std::unique_ptr<sls::PluginSandboxWorker> sandbox; // 0.85.0
 };
 
 START_JUCE_APPLICATION (SunLoopsStudioApplication)

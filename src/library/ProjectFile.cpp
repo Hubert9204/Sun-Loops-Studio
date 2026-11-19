@@ -150,6 +150,8 @@ juce::var pluginToVar (const PluginSpec& spec)
     auto* o = new juce::DynamicObject();
     o->setProperty ("description", juce::String (spec.description));
     o->setProperty ("state", juce::String (spec.state));
+    if (spec.sandboxed) // 0.85.0
+        o->setProperty ("sandboxed", true);
     return juce::var (o);
 }
 
@@ -165,6 +167,8 @@ juce::var slotToVar (const EffectSlot& slot, const PluginSpec* plugin)
             o->setProperty ("mix", number (static_cast<double> (std::clamp (slot.mix, 0.0f, 1.0f))));
         if (plugin != nullptr)
             o->setProperty ("plugin", pluginToVar (*plugin));
+        if (std::isfinite (slot.params[0]) && slot.params[0] >= 1.0f) // 0.85.0: its sidechain source (1-based)
+            o->setProperty ("sidechain", static_cast<int> (std::lround (slot.params[0])));
         return juce::var (o);
     }
     const auto s = slot.sanitised();
@@ -220,9 +224,11 @@ EffectSlot readSlot (const juce::var& v, std::vector<PluginSpec>& plugins, Plugi
         spec.slot = slotIndex;
         spec.description = p->getProperty ("description").toString().toStdString();
         spec.state = p->getProperty ("state").toString().toStdString();
+        spec.sandboxed = readBool (p->getProperty ("sandboxed"), false); // 0.85.0
         plugins.push_back (std::move (spec));
         EffectSlot slot;
         slot.type = EffectType::Plugin;
+        slot.params[0] = static_cast<float> (readInt (o->getProperty ("sidechain"), 0, 0, kMaxTracks)); // 0.85.0
         slot.bypass = readBool (o->getProperty ("bypass"), false);
         slot.mix = static_cast<float> (readNumber (o->getProperty ("mix"), 1.0, 0.0, 1.0));
         return slot;
@@ -393,6 +399,20 @@ juce::String ProjectDocument::toJson() const
             o->setProperty ("cutGroup", c.cutGroup);
         if (c.cutBy > 0)
             o->setProperty ("cutBy", c.cutBy);
+        if (c.instrument == Instrument::Plugin) // 0.85.0: the plugin's other outputs, its MIDI out
+        {
+            juce::Array<juce::var> outs;
+            int last = -1;
+            for (int p = 0; p < Channel::kPluginOutputPairs; ++p)
+                if (c.pluginOutputs[static_cast<size_t> (p)] >= 0)
+                    last = p;
+            for (int p = 0; p <= last; ++p)
+                outs.add (c.pluginOutputs[static_cast<size_t> (p)] + 1);
+            if (! outs.isEmpty())
+                o->setProperty ("pluginOutputs", outs);
+            if (c.midiOutChannel >= 0)
+                o->setProperty ("midiOut", c.midiOutChannel + 1);
+        }
         channelList.add (juce::var (o));
     }
     root->setProperty ("channels", channelList);
@@ -788,6 +808,7 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
                 spec.instrument = true;
                 spec.description = p->getProperty ("description").toString().toStdString();
                 spec.state = p->getProperty ("state").toString().toStdString();
+                spec.sandboxed = readBool (p->getProperty ("sandboxed"), false); // 0.85.0
                 if (! spec.description.empty())
                     d.pluginSpecs.push_back (std::move (spec));
             }
@@ -811,6 +832,10 @@ ProjectParseResult ProjectDocument::fromJson (const juce::String& text)
         c.portamento = static_cast<float> (readNumber (o->getProperty ("portamento"), 0.0, 0.0, 2.0));
         c.cutGroup = readInt (o->getProperty ("cutGroup"), 0, 0, 99);
         c.cutBy = readInt (o->getProperty ("cutBy"), 0, 0, 99);
+        if (auto* outs = o->getProperty ("pluginOutputs").getArray()) // 0.85.0
+            for (int p = 0; p < std::min (outs->size(), Channel::kPluginOutputPairs); ++p)
+                c.pluginOutputs[static_cast<size_t> (p)] = readInt ((*outs)[p], 0, 0, kMaxTracks) - 1;
+        c.midiOutChannel = readInt (o->getProperty ("midiOut"), 0, 0, kMaxChannels) - 1;
 
         d.kitSpecs.push_back (c.instrument == Instrument::Drums ? kitSpecFromVar (o->getProperty ("kit")) : KitSpec::empty());
         c.sampler = samplerSettingsFromVar (o->getProperty ("sampler")); // older files: the defaults (one-shot)

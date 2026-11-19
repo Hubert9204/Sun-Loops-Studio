@@ -34,6 +34,7 @@ struct PluginSpec
     std::string description; // XML text
     std::string state;       // base64
     bool instrument = false;
+    bool sandboxed = false;  // 0.85.0: it runs in a process of its own
 
     bool sameSpot (Place p, int i, int s) const noexcept { return place == p && index == i && (p == Place::Channel || slot == s); }
 };

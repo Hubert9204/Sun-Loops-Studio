@@ -262,6 +262,12 @@ private:
     void setPluginInstrument (int channelIndex, const juce::String& identifier); // -1: a new channel
     void addPluginEffectForChannel (int channelIndex, const juce::String& identifier); // first free slot of the channel's track
     void openPluginWindow (const std::shared_ptr<HostedPlugin>& plugin);
+    // 0.85.0: plugins in a sandbox, their routing, crashes
+    bool newPluginsSandboxed() const { return settings != nullptr && settings->getBoolValue ("plugins.sandbox", false); }
+    void swapPlugin (const std::shared_ptr<JucePlugin>& from, bool sandboxed, const juce::MemoryBlock& state);
+    void showPluginRouting (const std::shared_ptr<JucePlugin>& plugin, juce::Component& anchor);
+    void checkPluginSandboxes();
+    std::vector<const HostedPlugin*> reportedCrashes;
     void openChannelPlugin (int channelIndex);
     void closeUnusedPluginWindows();              // after every edit: a plugin that left the project loses its window
     bool projectUsesPlugin (const HostedPlugin* plugin) const;

@@ -3212,7 +3212,57 @@ void Player::render (const Project& project, double bpm, bool playing,
                 c.plugin->setMeter (where.meter.beats, where.meter.unit, barStart / kTicksPerBeat);
             }
             c.plugin->setTransport (ticksPerSample * sampleRate * 60.0 / kTicksPerBeat, tickPos / kTicksPerBeat, playing);
-            c.plugin->process (pluginL.data(), pluginR.data(), n, pluginEvents[ch].data(), count);
+            // 0.85.0: its other outputs (to the mixer tracks the channel names) and its MIDI out (to the channel it names)
+            const int extra = std::min (c.plugin->extraOutputChannels(), kPluginExtraChannels);
+            bool anyExtra = false;
+            for (int p = 0; p < Channel::kPluginOutputPairs && 2 * p < extra; ++p)
+                anyExtra = anyExtra || (c.pluginOutputs[static_cast<size_t> (p)] >= 0 && c.pluginOutputs[static_cast<size_t> (p)] < static_cast<int> (numTracks));
+            const bool midiOut = c.midiOutChannel >= 0 && c.midiOutChannel < static_cast<int> (numMixerChannels) && c.midiOutChannel != static_cast<int> (ch)
+                                 && c.plugin->sendsMidi();
+            if (anyExtra || midiOut)
+            {
+                std::array<float*, kPluginExtraChannels> extraPtr {};
+                for (int e = 0; e < extra; ++e)
+                    extraPtr[static_cast<size_t> (e)] = pluginExtra[static_cast<size_t> (e)].data();
+                PluginIo io;
+                io.extraOut = anyExtra ? extraPtr.data() : nullptr;
+                io.extraChannels = anyExtra ? extra : 0;
+                io.midiOut = midiOut ? pluginMidiOut.data() : nullptr;
+                io.maxMidiOut = midiOut ? kMaxPluginEvents : 0;
+                c.plugin->process (pluginL.data(), pluginR.data(), n, pluginEvents[ch].data(), count, &io);
+                const float g = smoothedGain[ch];
+                for (int p = 0; anyExtra && p < Channel::kPluginOutputPairs && 2 * p < extra; ++p)
+                {
+                    const int to = c.pluginOutputs[static_cast<size_t> (p)];
+                    if (to < 0 || to >= static_cast<int> (numTracks))
+                        continue;
+                    const float* l = pluginExtra[static_cast<size_t> (2 * p)].data();
+                    const float* r = 2 * p + 1 < extra ? pluginExtra[static_cast<size_t> (2 * p + 1)].data() : l;
+                    for (int i = 0; i < n; ++i)
+                    {
+                        trackL[static_cast<size_t> (to)][static_cast<size_t> (i)] += l[i] * g * panLeft[ch];
+                        trackR[static_cast<size_t> (to)][static_cast<size_t> (i)] += r[i] * g * panRight[ch];
+                    }
+                }
+                for (int m = 0; midiOut && m < std::min (io.numMidiOut, kMaxPluginEvents); ++m)
+                {
+                    const auto& e = pluginMidiOut[static_cast<size_t> (m)];
+                    const int target = c.midiOutChannel;
+                    const auto& to = project.channels[static_cast<size_t> (target)];
+                    const int type = e.bytes[0] & 0xF0;
+                    if (to.instrument == Instrument::Plugin) // a plugin there gets the messages as they are (in the next chunk, or this one)
+                    {
+                        chunkSample = std::clamp (e.offset, 0, n - 1);
+                        pluginEvent (target, static_cast<std::uint8_t> (type), e.bytes[1], e.bytes[2]);
+                    }
+                    else if (type == 0x90 && e.bytes[2] > 0)
+                        liveNoteOn (project, target, e.bytes[1], e.bytes[2] / 127.0f);
+                    else if (type == 0x80 || type == 0x90)
+                        liveNoteOff (target, e.bytes[1]);
+                }
+            }
+            else
+                c.plugin->process (pluginL.data(), pluginR.data(), n, pluginEvents[ch].data(), count);
             const float g = smoothedGain[ch];
             for (int i = 0; i < n; ++i)
             {

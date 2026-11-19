@@ -44,6 +44,11 @@ struct Channel
     SamplerSettings sampler;                  // Sampler only: envelope, loop, filter (0.16.0)
     SynthPatch synth;                         // Synth only: the engine (Classic = the original sound) and the subtractive synth's settings (0.18.0)
     std::shared_ptr<HostedPlugin> plugin;     // Plugin only: a third-party instrument (0.17.0); it gets the notes as MIDI
+    // 0.85.0, Plugin only: where the plugin's outputs after its main pair go, a stereo pair at a time (outputs 3-4, 5-6...): a mixer track
+    // (0-based), or -1: not heard; and the channel its MIDI out plays (-1: none), as FL Studio's MIDI out port
+    static constexpr int kPluginOutputPairs = 8;
+    std::array<int, kPluginOutputPairs> pluginOutputs { -1, -1, -1, -1, -1, -1, -1, -1 };
+    int midiOutChannel = -1;
     std::shared_ptr<const DrumKit> kit;       // Drums only: the 16 pads (see DrumKit.h). Never null for a Drums channel after Project::make().
     int rootPitch = 60;                       // Sampler: pitch at which the sample plays unchanged
     float volume = 0.8f;                      // 0..1.5
