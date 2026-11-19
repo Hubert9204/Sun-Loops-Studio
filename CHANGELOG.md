@@ -2,6 +2,21 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.85.0 - 2026-11-19
+
+Plugins (sixth and last block of the plan).
+
+### Added
+- **Plugins in a sandbox** (FL Studio's "bridged" plugins): a plugin can run in a process of its own (this program started again
+  with `--plugin-sandbox`), sharing memory with the program for audio, MIDI, automation and transport. If it crashes, the program
+  goes on (the effect lets the sound through, the instrument is silent), says so, and *Reload* starts it again with its settings;
+  a plugin that does not answer in time is skipped instead of stopping the sound. Per plugin (the window's *Sandbox* button), with
+  *OPTIONS > Run new plugins in a sandbox* for new ones; saved in the project.
+- **Plugin window bar**: the plugin's presets and your own (`.slsplugin` files in *Plugin Presets*), previous / next, **Undo / Redo**
+  of the changes made in the plugin (whole states, 50 steps), routing, sandbox.
+- **Sidechain input** for effect plugins (a mixer track's sound), **more outputs** for instrument plugins (each stereo pair to a
+  mixer track), **MIDI out** to another channel. Mixer tracks moved or deleted are followed.
+
 ## 0.84.0 - 2026-11-19
 
 Instruments (fifth block of the plan): the drum machine as FL Studio's FPC, the sampler's modulation, SunSymphony's keyswitches.

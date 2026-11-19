@@ -849,9 +849,42 @@ non installato su questo computer si apre lo stesso: il plugin resta muto (un ef
 impostazioni sono conservate e salvando il progetto restano per il computer che lo ha. Le esportazioni usano gli stessi
 plugin; mentre un'esportazione è in corso, l'audio dal vivo è muto.
 
-I plugin girano dentro Sun Loops Studio: **un plugin che va in crash chiude il programma** (il salvataggio automatico e il
-recupero conservano il lavoro). Un plugin che ha mandato in crash la scansione viene saltato alla scansione successiva.
-Clonare un canale plugin crea una seconda copia del plugin con le stesse impostazioni.
+Un plugin che ha mandato in crash la scansione viene saltato alla scansione successiva. Clonare un canale plugin crea una
+seconda copia del plugin con le stesse impostazioni.
+
+### La barra della finestra del plugin, la sandbox e il routing (0.85.0)
+
+Sopra la finestra di ogni plugin c'è una barra, come il wrapper dei plugin di FL Studio:
+
+| Pulsante | Cosa fa |
+| --- | --- |
+| Presets | I preset del plugin (i suoi programmi) e **i tuoi preset**: *Save preset...* scrive le impostazioni del plugin in un file `.slsplugin` in `~/Music/Sun Loops Studio/Plugin Presets/<plugin> (<formato>)`; qui sono elencati per caricarli con un clic. Ci sono anche *Load a preset file...* e *Open the presets folder*. |
+| < > | Il preset precedente / successivo: quelli del plugin se ne ha più d'uno, altrimenti i tuoi. |
+| Undo, Redo | Annulla e ripristina ciò che hai cambiato nella finestra del plugin (Ctrl+Z, Ctrl+Y o Ctrl+Maiusc+Z quando la finestra ha il fuoco): lo stato intero del plugin viene conservato dopo ogni modifica, quando niente si muove da mezzo secondo, fino a 50 passi. |
+| Routing | Compare quando il plugin ha un ingresso sidechain, altre uscite o un MIDI out (più sotto). |
+| Sandbox: off / on | Fa girare il plugin dentro il programma, oppure in una **sandbox**: un processo tutto suo (i plugin "bridged" di FL Studio). Il plugin tiene le sue impostazioni quando si sposta. |
+
+**La sandbox.** Un plugin in sandbox che va in crash si porta via solo il suo processo: il programma continua (un effetto lascia
+passare il suono, uno strumento tace), la barra di stato lo dice e il pulsante diventa **Reload**, che lo riavvia con le
+impostazioni che aveva. Un plugin che non risponde in tempo viene saltato per quel momento invece di fermare l'audio. La sua
+finestra è sua (accanto alla barra, nell'altro processo); *Show its window* la riporta in vista. La sandbox costa un po' di CPU e
+memoria e una frazione di millisecondo per blocco. *OPTIONS > Run new plugins in a sandbox* fa partire ogni nuovo plugin in una
+sandbox; il progetto ricorda la scelta di ogni plugin. I plugin in sandbox sono questo stesso programma avviato di nuovo (con
+`--plugin-sandbox`): non serve nessun altro file.
+
+**Routing.**
+
+- **Ingresso sidechain** (un effetto plugin con un secondo ingresso, come la chiave di un compressore): *Routing > Sidechain input
+  from > Track N* gli manda il suono di quella traccia del mixer prima dei suoi effetti. Segue le tracce quando vengono spostate o
+  eliminate.
+- **Altre uscite** (uno strumento che ne ha diverse, come le uscite per tamburo di un plugin di batteria): *Routing > Outputs 3-4
+  to > Track N*, e così via per ogni coppia (fino a 8 coppie), attraverso volume e pan del canale. *Not heard* (il predefinito) le
+  lascia fuori, come prima.
+- **MIDI out** (un arpeggiatore, un plugin di accordi o un effetto MIDI): *Routing > MIDI out plays channel* manda le note che
+  produce a un altro canale, che le suona (un canale plugin riceve ogni messaggio così com'è).
+
+Non disponibili: VST2 (mai compilato, come prima); la cronologia di annullamento propria del plugin (la barra conserva invece
+stati interi).
 
 ### SunBurst, il synth plugin incluso (0.48.0)
 

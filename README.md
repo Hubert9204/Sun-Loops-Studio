@@ -161,7 +161,8 @@ Instruments). Their DSP code is also compiled into the test program, to be teste
   never touches the project.
 - **Demo song and demo projects** - "Sunrise Drive" opens on the first start; three more finished songs are in the browser.
 - **Plugins** - hosts VST3 and LV2 on every system, LADSPA on Linux and Audio Units on macOS, as instruments and as effects, with
-  a Plugin picker and their settings saved in the project.
+  a Plugin picker and their settings saved in the project; each can run in a **sandbox** (a process of its own: a crash takes only
+  the plugin), with presets, undo, sidechain input, more outputs and MIDI out.
 - **Safety** - autosave every minute, recovery after a crash, the 10 previous versions in a `Backups` folder, *Export project with samples*
   as a folder or a single `.slpz` file.
 - **Crash reports and updates** - after a crash the next start offers to send an anonymous report (stack trace and system) as a
