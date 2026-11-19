@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <vector>
 
 #include <juce_audio_formats/juce_audio_formats.h>
 
@@ -69,4 +70,11 @@ ImportResult importMediaFile (const juce::File& file, const juce::File& videoDes
 // file and settings share one rendering). A file that is gone leaves a silent clip that keeps the path, so saving the
 // project again does not lose it; every problem is added to `problems`.
 void loadAudioForClips (Arrangement& arrangement, juce::StringArray& problems);
+
+// 0.86.0: the audio files of `arrangement`'s clips that opening would first decode into the audio cache (long files not decoded yet,
+// read only from their headers): the program decodes them behind a progress window before the project opens, instead of keeping
+// the window frozen while it opens.
+std::vector<juce::File> clipFilesNeedingAudioCache (const Arrangement& arrangement);
+// ... and decodes one of them into the cache (on any thread); false with `error` set when it fails.
+bool decodeIntoAudioCache (const juce::File& file, juce::String& error);
 } // namespace sls

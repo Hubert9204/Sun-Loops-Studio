@@ -278,9 +278,9 @@ MainComponent::MainComponent()
         recordSetup.insertTrack (track);
         applyRecordSetup();
     };
-    playlistView.onTrackMoved = [this] (int from, int to) // 0.82.0: a track dragged by its name: its recording settings go with it
+    playlistView.onTrackMoved = [this] (const std::vector<int>& newIndex) // 0.82.0: a track dragged by its name: its recording settings go with it
     {
-        recordSetup.moveTrack (from, to);
+        recordSetup.reorderTracks (newIndex);
         applyRecordSetup();
     };
 

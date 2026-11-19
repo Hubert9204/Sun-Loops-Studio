@@ -70,7 +70,7 @@ public:
     std::function<void (int)> onTrackInputMenu;  // the track menu's "Recording input..."
     std::function<void (int)> onTrackRemoved;    // the - button removed this track (0.44.0): what refers to tracks by number follows
     std::function<void (int)> onTrackInserted;   // 0.69.0: a section's + inserted a track there (the ones from there on moved down)
-    std::function<void (int, int)> onTrackMoved; // 0.82.0: a track dragged by its name from one place to another
+    std::function<void (const std::vector<int>&)> onTrackMoved; // 0.82.0: a track dragged by its name; newIndex[old track] = its new place (0.86.0)
     std::function<void (int)> onEditSample; // an audio clip's "Edit sample..." was chosen: its index
     std::function<void (int)> onEditPitch;  // ... "Edit pitch..."
     std::function<void (int)> onSplitStems; // ... "Split into stems..."

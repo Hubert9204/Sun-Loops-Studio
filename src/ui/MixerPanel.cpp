@@ -275,6 +275,8 @@ MixerStrip::MixerStrip (MixerTrack& trackToControl, int trackIndex, bool isAuxBu
         muteButton.onRightClick = [this] { showCreateAutomationMenu ([this] { if (onAutomate) onAutomate ({ AutomationKind::TrackMute, index, 0, 0 }); }); };
         soloButton.onRightClick = [this] { showCreateAutomationMenu ([this] { if (onAutomate) onAutomate ({ AutomationKind::TrackSolo, index, 0, 0 }); }); };
     }
+    else // 0.86.0: an aux bus's mute too
+        muteButton.onRightClick = [this] { showCreateAutomationMenu ([this] { if (onAutomate) onAutomate ({ AutomationKind::AuxMute, 0, index - kAuxIndexBase, 0 }); }); };
     muteButton.onClick = [this]
     {
         track.mute = muteButton.getToggleState();
@@ -350,6 +352,7 @@ void MixerStrip::showAutomated (AutomationKind kind, int slot, float value)
                 sendSliders[static_cast<size_t> (slot)].setValue (value, juce::dontSendNotification);
             break;
         case AutomationKind::TrackMute: // 0.80.0
+        case AutomationKind::AuxMute:   // 0.86.0
             muteButton.setToggleState (value >= 0.5f, juce::dontSendNotification);
             break;
         case AutomationKind::TrackSolo:
@@ -927,6 +930,16 @@ void FxPanel::openPatcher()
     inner.trackNameOf = trackNameOf;
     inner.trackCount = trackCount;
     inner.trackAt = trackAt;
+    // 0.86.0: a parameter of an effect in the Patcher is automated as a parameter of the Patcher's slot (patcherParam)
+    inner.onAutomate = [this, slotIndex = selectedSlot, owner = trackIndex] (const AutomationTarget& t)
+    {
+        if (! onAutomate || track == nullptr || trackIndex != owner || isPluginAutomation (t.kind) || t.param < 0 || t.param >= kMaxEffectParams
+            || t.slot < 0 || t.slot >= kPatcherSlots)
+            return;
+        auto target = targetFor (patcherParam (t.slot, t.param), false);
+        target.slot = slotIndex;
+        onAutomate (target);
+    };
     inner.refresh();
     patcherWindow->onEdited = [this, slotIndex = selectedSlot, owner = trackIndex]
     {
@@ -943,6 +956,8 @@ void FxPanel::openPatcher()
     {
         juce::MessageManager::callAsync ([safe] { if (safe != nullptr) safe->patcherWindow.reset(); });
     };
+    patcherSlot = selectedSlot;
+    patcherOwner = trackIndex;
     patcherWindow->setVisible (true);
     patcherWindow->toFront (true);
 }
@@ -962,6 +977,13 @@ void FxPanel::showAutomated (const AutomationTarget& target, float value)
 {
     if (track == nullptr || nested || ! isEffectAutomation (target.kind))
         return;
+    if (isPatcherParam (target.param)) // 0.86.0: an effect inside a Patcher, in the Patcher's window
+    {
+        const auto owner = targetFor (0, false);
+        if (patcherWindow != nullptr && trackIndex == patcherOwner && target.slot == patcherSlot && owner.kind == target.kind && owner.index == target.index)
+            patcherWindow->panel().showAutomatedInner (patcherInner (target.param), effectParamIndex (target.param), value);
+        return;
+    }
     const auto shown = targetFor (target.param, false);
     if (shown.kind != target.kind || shown.index != target.index || target.slot != selectedSlot || target.param < 0
         || target.param >= kMaxEffectParams)
@@ -970,6 +992,16 @@ void FxPanel::showAutomated (const AutomationTarget& target, float value)
     if (target.param >= effectParamCount (type))
         return;
     auto& row = params[static_cast<size_t> (target.param)];
+    if (row.slider.isVisible() && ! row.slider.isMouseButtonDown())
+        row.slider.setValue (value, juce::dontSendNotification);
+}
+
+void FxPanel::showAutomatedInner (int inner, int param, float value)
+{
+    if (track == nullptr || inner != selectedSlot || param < 0 || param >= kMaxEffectParams
+        || param >= effectParamCount (track->slots[static_cast<size_t> (selectedSlot)].type))
+        return;
+    auto& row = params[static_cast<size_t> (param)];
     if (row.slider.isVisible() && ! row.slider.isMouseButtonDown())
         row.slider.setValue (value, juce::dontSendNotification);
 }
@@ -2204,6 +2236,7 @@ void MixerPanel::showAutomated (const AutomationTarget& target, float value)
             break;
         case AutomationKind::AuxVolume:
         case AutomationKind::AuxPan:
+        case AutomationKind::AuxMute: // 0.86.0
             if (in (auxStrips, target.slot))
                 auxStrips[static_cast<size_t> (target.slot)]->showAutomated (target.kind, 0, value);
             break;

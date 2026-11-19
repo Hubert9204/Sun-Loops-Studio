@@ -69,9 +69,9 @@ code, names, graphics or assets from other products, and it is not affiliated wi
 
 ## Status
 
-**Alpha - version 0.77** (November 2026). It is usable for making music, but not yet tried widely on real hardware.
+**Alpha - version 0.86** (November 2026). It is usable for making music, but not yet tried widely on real hardware.
 
-- **Automated tests**: about **2,130 checks** pass on every push on all three systems - Fedora 41, macOS (Apple silicon, and
+- **Automated tests**: about **2,330 checks** pass on every push on all three systems - Fedora 41, macOS (Apple silicon, and
   Intel through Rosetta) and Windows - in GitHub Actions. On Windows the continuous integration also starts the program from the
   zip, installs, starts and uninstalls it with the installer, and loads a real ASIO driver (FlexASIO).
 - **Linux** is where the program was made: the AppImage runs on Nobara and playback was confirmed on a real machine. Most later
@@ -80,9 +80,27 @@ code, names, graphics or assets from other products, and it is not affiliated wi
 - **macOS** (since 0.63.0) and **Windows** (since 0.75.0, ASIO since 0.76.0) are built from the same code and pass the same tests,
   but have not yet been tried by hand on real computers; reports are welcome.
 - **Plugins** were tried with small test plugins, the LADSPA examples and the program's own four instruments, not yet with
-  commercial plugins.
+  commercial plugins. The plugin sandbox runs in the tests on all three systems, started from the test program and from the
+  program itself.
 
 What is and is not verified, feature by feature: [docs/roadmap.md](docs/roadmap.md). Changes per version: [CHANGELOG.md](CHANGELOG.md).
+
+## What's new (0.78 - 0.86)
+
+The features still missing were added in six blocks, as close to FL Studio as possible, then reviewed together:
+
+| Version | What it brings |
+| --- | --- |
+| **0.86** | Automation of the **effects inside a Patcher** and of an **aux bus's mute**; **playlist groups move whole** when dragged; long audio files decoded behind a **progress window** when a project opens; the **count-in** in the meter and tempo where the take starts; a clip switched to follow the tempo while it plays changes at once |
+| **0.85** | **Plugins in a sandbox** (a process of their own: a crash takes only the plugin, *Reload* starts it again); the plugin window's bar with **presets**, **undo / redo** and routing; **sidechain input**, **more outputs** and **MIDI out** |
+| **0.84** | **Drum machine**: a mixer track per pad, round robin, a MIDI note per pad, pads that flash. **Sampler**: three LFOs with shapes and tempo sync, a modulation matrix. **SunSymphony**: keyswitches |
+| **0.83** | **Tempo ramps**, **time signature changes** during the song, **audio clips that follow the tempo** (stretched in real time) |
+| **0.82** | **Drag & drop** to reorder channels, mixer tracks and playlist tracks |
+| **0.81** | Audio files up to **4 hours** played from the disk, 1024 clips (64 at once), **backups** (10 versions) and **single-file projects** (`.slpz`) |
+| **0.80** | **Automation of every control**: channel pitch and swing, mute and solo, master volume and pitch, effects on aux buses; the controls move with it |
+| **0.78 - 0.79** | Aux buses added and removed (up to 8), any mixer track deleted, patterns and pattern tracks one to one |
+
+Every change, version by version: [CHANGELOG.md](CHANGELOG.md).
 
 ## Features
 
@@ -98,12 +116,13 @@ What is and is not verified, feature by feature: [docs/roadmap.md](docs/roadmap.
 - **Patterns and Playlist** - patterns of their own length, arranged on a Playlist in three sections (**Audio**, **Patterns**,
   **Automation**; one track per pattern, added and deleted with it) with draw, paint, delete, mute, slip, slice, cut, select, playback and zoom tools, time markers, a loop region, track
   mute / solo, icons and colours. *Pattern* or *Song* playback.
-- **Audio clips and recording** - drag audio (`.wav .aiff .flac .ogg .oga .mp3 .aac`) or the sound of a video onto the Playlist;
+- **Audio clips and recording** - drag audio (`.wav .aiff .flac .ogg .oga .mp3 .aac`, up to 4 hours per file, long ones played from
+  the disk) or the sound of a video onto the Playlist;
   stretch and pitch them (Signalsmith Stretch), edit them in the **sample editor** (cut, fades, reverse, normalise, noise
   reduction, slicing). **Record** several inputs at once into the playlist, with count-in, loop takes, punch in / out, and MIDI
   notes in overdub or replace.
-- **Automation** - clips for any volume, pan, fader, send, effect or plugin parameter (aux buses included), the channels' pitch and
-  swing, mute and solo, the master volume and pitch, with a point editor, the controls moving with it as the song plays; tempo changes, as steps or
+- **Automation** - clips for any volume, pan, fader, send, effect or plugin parameter (aux buses and the effects inside a Patcher
+  included), the channels' pitch and swing, mute and solo of channels, tracks and aux buses, the master volume and pitch, with a point editor, the controls moving with it as the song plays; tempo changes, as steps or
   ramps, and time signatures from 2/4 to 12/8 that can change during the song; audio clips that follow the tempo (stretched in real time).
 - **Performance mode** - the Playlist's clips as cells to launch live (loop, one shot, hold), from the mouse or MIDI pads.
 - **Loop Starter** - a starting loop in one of ten genres (drums, bass, chords and melody), made by rules and chance, offline.
@@ -171,8 +190,8 @@ Instruments). Their DSP code is also compiled into the test program, to be teste
   adjustable buffer with an **Auto** button that finds a size that does not crackle; MIDI keyboards switched on as they are
   plugged in.
 - **Interface** - FL Studio's layout of menus, toolbar and panels; F5 / F6 / F7 / F8 / F9 for Playlist, Channel Rack, Piano Roll,
-  Browser and Mixer; the computer keyboard as a piano; a saved layout; channels, mixer tracks and playlist tracks reordered by
-  dragging them.
+  Browser and Mixer; the computer keyboard as a piano; a saved layout; channels, mixer tracks and playlist tracks (groups whole)
+  reordered by dragging them.
 
 Everything above is described in detail in the [user guide](docs/user-guide.md) ([Italiano](docs/user-guide.it.md)).
 
@@ -218,10 +237,10 @@ The screenshots on this page are made by [scripts/capture_screenshots.sh](script
 ./build/SunLoopsStudioTests_artefacts/Release/SunLoopsStudioTests
 ```
 
-Headless (no audio device or display needed); about 2,130 checks at 0.77.0. They cover, among other things, synth pitch and
+Headless (no audio device or display needed); about 2,330 checks at 0.86.0. They cover, among other things, synth pitch and
 sample-exact timing, every instrument and effect, that `Player::render` never allocates, a concurrent stress test of the
 UI-to-audio hand-over, the project file (round trip, damaged and hostile files, missing samples, atomic writing), FL Studio and
-MIDI import, export to every format, recording, automation, tempo changes, the plugin host, the four instruments, crash reports
+MIDI import, export to every format, recording, automation, tempo changes and ramps, the plugin host and its sandbox, the four instruments, crash reports
 (in a child process, on each system), the update check and, on Windows, ASIO. GitHub Actions runs them on every push on Fedora,
 macOS and Windows.
 

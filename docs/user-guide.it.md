@@ -697,7 +697,8 @@ Come nel sampler di FL Studio e in DirectWave:
   Piano Roll) e una quantità **casuale** nuova per ogni nota; le destinazioni sono l'**intonazione** (fino a 12 semitoni), il
   **cutoff** (fino a 5 ottave), la **risonanza**, il **volume** (velocità -> volume: il colpo più forte a pieno volume, i più
   deboli più piano), il **pan** e l'**inizio del campione** (fino a metà campione, per attacchi più morbidi sulle note piano).
-  Agiscono all'inizio di ogni nota. Si salvano con il canale e i suoi preset.
+  Agiscono all'inizio di ogni nota: ogni sorgente è un valore della nota stessa (Mod X e Mod Y sono i valori della nota, come nel
+  Piano Roll di FL Studio, non manopole). Si salvano con il canale e i suoi preset.
 
 ### Modi di riproduzione: Granulizer e Wave Traveller (0.74.0)
 
@@ -817,7 +818,8 @@ un file sparito lascia un layer silenzioso che ricorda il percorso (e un messagg
 **I pad lampeggiano** quando suonano: dagli step, dal Piano Roll, dal brano, da un controller MIDI o da un clic. Caricando un altro kit
 le uscite dei pad restano (appartengono al progetto).
 
-Non disponibili: annulla per le modifiche al kit (gli step si annullano), effetti dentro la drum machine stessa (usa le tracce del mixer dei pad), modificare il suono di un pad nell'editor di
+Ogni modifica del kit (suono di un pad, layer, impostazioni, uscita, nota MIDI) si annulla con **Ctrl+Z**, come gli step.
+Non disponibili: effetti dentro la drum machine stessa (usa le tracce del mixer dei pad), modificare il suono di un pad nell'editor di
 campioni (modificalo su un canale sampler e poi carica il file salvato), più di 16 pad o 4 layer, suoni più lunghi di 30 secondi, salvare un canale drum come preset (salva il kit), assegnare ai pad le percussioni
 di un MIDI importato. I progetti con una drum machine non si aprono con versioni precedenti alla 0.14.
 
@@ -1233,7 +1235,10 @@ colpo d'occhio; sulle tracce alte il nome sta in una barra sopra le note, su que
 - **Riordinare le tracce (0.82.0)**: trascina il nome di una traccia in su o in giù; una linea verde mostra dove andrà. Si sposta
   con clip, nome, colore, mute e impostazioni di registrazione, dentro la sua sezione (una traccia audio resta fra le tracce audio,
   una traccia pattern fra le tracce pattern, che poi seguono l'ordine che dai loro). Una traccia audio continua a suonare nella
-  stessa traccia del mixer. **Ctrl+Z** la rimette a posto.
+  stessa traccia del mixer. **Ctrl+Z** la rimette a posto. **Gruppi (0.86.0)**, come in FL Studio: trascinando la traccia capo di un
+  gruppo si sposta tutto il gruppo; un gruppo va subito prima o subito dopo un altro gruppo, mai dentro; una traccia singola lasciata
+  dentro un gruppo ne entra a far parte, trascinata fuori ne esce, e lasciata scendendo su un gruppo chiuso va dopo il gruppo. La linea
+  verde mostra dove andranno davvero le tracce.
 - **Pattern e tracce dei pattern vanno insieme, uno a uno** (0.79.0): la sezione **Patterns** ha sempre esattamente una traccia
   per pattern e nient'altro.
   - Un pattern nuovo (*New*, *Clone*, *Make unique*, il Loop Starter, un'importazione MIDI, o il **+** della sezione Patterns, che
@@ -1438,6 +1443,8 @@ dentro. Una clip più lunga dello spazio libero viene tagliata per entrarci.
 come fa il "keep on disk" di FL Studio:
 - viene decodificato una volta nella cache audio (`Sun Loops Studio/Cache/Audio` nella cartella dei dati delle applicazioni), e riaprendo il
   progetto la cache si usa subito;
+- 0.86.0: quando si apre un progetto con un file così non ancora decodificato, prima viene decodificato dietro una finestra di
+  avanzamento (con *Cancel*), poi il progetto si apre: la finestra non resta più bloccata nel frattempo;
 - mentre il brano suona, un thread in background legge in anticipo i tre secondi successivi di ogni clip di questo tipo, quindi la
   riproduzione non aspetta il disco;
 - la sua forma d'onda si prepara durante la decodifica;
@@ -1486,7 +1493,8 @@ brano, come il modo *Stretch* di FL Studio: viene **allungata o accorciata mentr
 ogni battito dell'audio duri un battito del brano. Cambia i BPM, aggiungi cambi di tempo o rampe: la clip resta a tempo, senza
 rielaborare nulla. La sua lunghezza nella playlist si conta in battiti del suo audio, la forma d'onda è disegnata sui battiti del
 brano, e tagliarla, dividerla, accorciarla o farla scorrere conta il suo audio al suo tempo. Il menu mostra il tempo con la
-spunta; sceglilo di nuovo perché la clip suoni alla sua velocità.
+spunta; sceglilo di nuovo perché la clip suoni alla sua velocità. Dalla 0.86.0 una modifica fatta mentre la clip suona (comincia o
+smette di seguire il tempo, o riceve un altro tempo) si sente subito.
 
 - Suonano insieme fino a **16** clip che seguono il tempo (le altre suonano alla loro velocità finché una finisce); al massimo 8
   volte più veloci o più lente del loro tempo.
@@ -1593,8 +1601,9 @@ La freccia accanto a Record offre anche:
 - **The takes start**: *At the start of the song* (il brano riparte dall'inizio), o *Where the song is (punch in)*: dal
   marcatore di inizio della playlist, o da dove il brano sta suonando se è già in riproduzione. Le riprese vengono messe dove
   sono partite.
-- **Count-in** (0.47.0): *None*, *1 bar* o *2 bars* di metronomo (nel metro del brano, al tempo iniziale) prima che partano brano e
-  riprese; il metronomo non deve essere acceso. La riga di stato dice *Count-in...*; Record o Stop lo annullano.
+- **Count-in** (0.47.0): *None*, *1 bar* o *2 bars* di metronomo prima che partano brano e riprese; il metronomo non deve essere
+  acceso. Dalla 0.86.0 conta nel metro e al tempo della battuta dove parte la ripresa (un brano che cambia metro o tempo prima di
+  quel punto conta in quello che lì suona). La riga di stato dice *Count-in...*; Record o Stop lo annullano.
 - **With a loop region in Song mode** (0.47.0):
   - *Keep recording: every pass is a take* (predefinito): il brano gira nella regione e la registrazione continua. Alla fine la
     clip copre la regione e suona l'**ultimo passaggio completo**; tasto destro sulla clip > **Take** ne sceglie un altro
@@ -1729,8 +1738,11 @@ bilanciamento e send del Mixer, volume e pan del Channel Rack. Dalla 0.80.0 si m
 Quando il brano si ferma tornano a mostrare i propri valori (l'automazione non li cambia mai). Toccare un controllo mentre si muove
 ne imposta il valore, come sempre.
 
-**Non ancora automatizzabili:** il tempo (usa i cambi di tempo, 0.46.0), mute e bilanciamento di un bus aux, e i parametri degli
-effetti dentro un Patcher.
+Dalla 0.86.0 si automatizzano anche il **mute di un bus aux** (tasto destro sulla sua **M**) e i **parametri degli effetti dentro un
+Patcher** (tasto destro su un cursore nella finestra del Patcher: la clip si chiama, per esempio, *Track 3 Patcher 2 > Reverb Decay*);
+i cursori della finestra del Patcher seguono la loro automazione mentre il brano suona, quando il pannello effetti mostra la traccia
+del Patcher. Il **tempo** si automatizza con i cambi di tempo e le rampe sul righello (0.46.0, 0.83.0), come la clip di automazione
+del tempo di FL Studio.
 
 **Creare una clip.** Tasto destro sul controllo e *Create automation clip*. Una clip lunga un pattern compare su una delle quattro
 **corsie di automazione** (*Auto 1*, *Auto 2*..., la sezione Automation della Playlist; 4 in un progetto nuovo, di più con il suo **+**) e si apre il suo editor. La clip è una linea piatta al

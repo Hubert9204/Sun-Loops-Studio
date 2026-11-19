@@ -1493,12 +1493,24 @@ void PlaylistTimeline::paintLoopRegion (juce::Graphics& g)
 void PlaylistTimeline::paintOverChildren (juce::Graphics& g)
 {
     // 0.82.0: a track dragged by its name: a line where it would go (above the track it is over when moving up, under it moving down)
+    // (0.86.0: where it really goes - a group moves whole and lands beside another group, not inside it)
     if (drag != Drag::TrackMove || trackMoveFrom < 0 || trackMoveTo < 0 || trackMoveTo == trackMoveFrom)
         return;
-    const int top = trackTop (trackMoveTo);
-    if (top < -1000)
+    const int before = arrangement.trackMoveLandsBefore (trackMoveFrom, trackMoveTo);
+    if (before < 0)
         return;
-    const int y = trackMoveTo < trackMoveFrom ? top : top + trackHeight (trackMoveTo);
+    int y = 0;
+    if (before < arrangement.trackCount() && sectionOfTrack (before) == sectionOfTrack (trackMoveFrom))
+        y = trackTop (before);
+    else
+    {
+        int last = before - 1; // after the last track of the section (a hidden one: after the visible track it is folded under)
+        while (last > 0 && arrangement.trackHidden (last))
+            --last;
+        y = trackTop (last) + trackHeight (last);
+    }
+    if (y < -1000)
+        return;
     g.setColour (juce::Colour (0xff4cc38a));
     g.fillRect (0, y - 1, getWidth(), 3);
 }
@@ -4258,28 +4270,25 @@ void PlaylistTimeline::mouseUp (const juce::MouseEvent& e)
         if (from >= 0 && to >= 0 && from != to)
         {
             beginEdit();
-            if (! arrangement.moveTrack (from, to))
+            const auto newIndex = arrangement.moveTracks (from, to); // (a group's head takes its group along: 0.86.0)
+            if (newIndex.empty())
             {
                 pendingUndoValid = false;
                 return;
             }
             commitPendingUndo();
-            // its record switch and the selected track go with it (the ones between move one place)
-            const auto moving = recordArms[static_cast<size_t> (from)];
-            if (from < to)
-                for (int t = from; t < to; ++t)
-                    recordArms[static_cast<size_t> (t)] = recordArms[static_cast<size_t> (t + 1)];
-            else
-                for (int t = from; t > to; --t)
-                    recordArms[static_cast<size_t> (t)] = recordArms[static_cast<size_t> (t - 1)];
-            recordArms[static_cast<size_t> (to)] = moving;
+            // the record switches and the selected track go with their tracks
+            const auto arms = recordArms;
+            for (size_t t = 0; t < newIndex.size() && t < arms.size(); ++t)
+                recordArms[static_cast<size_t> (newIndex[t])] = arms[t];
+            const int landed = newIndex[static_cast<size_t> (from)];
             clearSelection(); // (the clips' indices did not change, but a group may now span other tracks)
             tracksChanged();
-            setSelectedTrack (to);
+            setSelectedTrack (landed);
             if (onTrackMoved)
-                onTrackMoved (from, to);
+                onTrackMoved (newIndex);
             if (onTrackSelected)
-                onTrackSelected (to);
+                onTrackSelected (landed);
             notifyChanged();
         }
         return;

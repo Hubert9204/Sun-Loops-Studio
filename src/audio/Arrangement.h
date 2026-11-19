@@ -571,38 +571,97 @@ struct Arrangement
     // 0.82.0: moves track `from` to place `to` inside its section (dragging its name, as in FL Studio); the tracks between move one
     // place, every clip goes with its track, and a track's audio keeps playing through the mixer track it played through (it names
     // it when its number changes). False (and nothing changes) for a bad index or a place in another section.
-    bool moveTrack (int from, int to)
+    // Groups (0.86.0, as in FL Studio): the head of a group moves with the tracks grouped under it, and a group lands whole - never
+    // inside another group (dropped there, it goes just before that group, or just after it when moving down). A single track
+    // dropped inside a group joins it; one dropped outside leaves its group.
+    bool moveTrack (int from, int to) { return ! moveTracks (from, to).empty(); }
+
+    // ... the same, giving where every track went (newIndex[old track] = its new place), for what follows the tracks (record
+    // switches, recording settings, the selection); empty when nothing moved.
+    // Where dragging track `from` onto track `to` puts it (and its group): false when it does not move; else `count` tracks move
+    // (from `from` on), `rest` are the others in order, and they go before rest[at] (at == rest.size(): after the last).
+    bool trackMovePlan (int from, int to, int& count, std::vector<int>& rest, int& at) const
     {
         if (from < 0 || from >= trackCount() || to < 0 || to >= trackCount() || from == to || trackSection (from) != trackSection (to))
             return false;
-        const auto newIndex = [from, to] (int t)
+        count = playlistTracks[static_cast<size_t> (from)].grouped ? 1 : groupEnd (from) - from + 1;
+        if (to >= from && to < from + count)
+            return false; // (dropped on its own group)
+        rest.clear();
+        for (int t = 0; t < trackCount(); ++t)
+            if (t < from || t >= from + count)
+                rest.push_back (t);
+        at = to < from ? to : to - count + 1; // where the moved tracks go among the others
+        // a group lands beside another group, never inside it; so does a track dropped down onto a folded group (its tracks are hidden)
+        if (count > 1 || (to > from && playlistTracks[static_cast<size_t> (to)].collapsed))
         {
-            if (t == from)
-                return to;
-            if (from < to && t > from && t <= to)
-                return t - 1;
-            if (to < from && t >= to && t < from)
-                return t + 1;
-            return t;
-        };
+            if (to < from)
+                while (at > 0 && trackMoveGroupedAt (rest, at))
+                    --at;
+            else
+                while (trackMoveGroupedAt (rest, at))
+                    ++at;
+        }
+        return at != from; // (else every track stays where it was)
+    }
+    bool trackMoveGroupedAt (const std::vector<int>& rest, int p) const noexcept
+    {
+        return p >= 0 && p < static_cast<int> (rest.size()) && playlistTracks[static_cast<size_t> (rest[static_cast<size_t> (p)])].grouped;
+    }
+    // ... for the line the Playlist draws while a track is dragged: the track the moved ones would go just above (trackCount(): after
+    // the last track), or -1 when nothing would move.
+    int trackMoveLandsBefore (int from, int to) const
+    {
+        int count = 1, at = 0;
+        std::vector<int> rest;
+        if (! trackMovePlan (from, to, count, rest, at))
+            return -1;
+        return at < static_cast<int> (rest.size()) ? rest[static_cast<size_t> (at)] : trackCount();
+    }
+
+    std::vector<int> moveTracks (int from, int to)
+    {
+        int count = 1, at = 0;
+        std::vector<int> rest;
+        if (! trackMovePlan (from, to, count, rest, at))
+            return {};
+        const bool joins = count == 1 && trackMoveGroupedAt (rest, at);
+        std::vector<int> order (rest.begin(), rest.begin() + at); // old indices in their new order
+        for (int t = from; t < from + count; ++t)
+            order.push_back (t);
+        order.insert (order.end(), rest.begin() + at, rest.end());
+        std::vector<int> newIndex (order.size());
+        for (size_t i = 0; i < order.size(); ++i)
+            newIndex[static_cast<size_t> (order[i])] = static_cast<int> (i);
+        bool changed = false;
+        for (size_t i = 0; i < newIndex.size(); ++i)
+            changed = changed || newIndex[i] != static_cast<int> (i);
+        if (! changed)
+            return {};
+
         for (int t = 0; t < trackCount(); ++t)
         {
             auto& track = playlistTracks[static_cast<size_t> (t)];
+            const int now = newIndex[static_cast<size_t> (t)];
             const bool hasAudio = std::any_of (audioClips.begin(), audioClips.end(), [t] (const AudioClip& c) { return c.track == t; });
-            if (newIndex (t) != t && track.mixerTrack < 0 && hasAudio)
+            if (now != t && track.mixerTrack < 0 && hasAudio)
                 track.mixerTrack = t;
-            else if (track.mixerTrack == newIndex (t))
+            else if (track.mixerTrack == now)
                 track.mixerTrack = -1; // (its number gives that track now)
         }
-        const auto moving = playlistTracks[static_cast<size_t> (from)];
-        playlistTracks.erase (playlistTracks.begin() + from);
-        playlistTracks.insert (playlistTracks.begin() + to, moving);
+        std::vector<PlaylistTrack> moved;
+        moved.reserve (order.size());
+        for (const int t : order)
+            moved.push_back (playlistTracks[static_cast<size_t> (t)]);
+        if (count == 1)
+            moved[static_cast<size_t> (newIndex[static_cast<size_t> (from)])].grouped = joins;
+        playlistTracks = std::move (moved);
         for (auto& c : clips)
-            c.track = newIndex (c.track);
+            c.track = newIndex[static_cast<size_t> (c.track)];
         for (auto& c : audioClips)
-            c.track = newIndex (c.track);
+            c.track = newIndex[static_cast<size_t> (c.track)];
         tidyTrackSections();
-        return true;
+        return newIndex;
     }
 
     // How many clips (pattern and audio) are on track `t`.

@@ -25,6 +25,8 @@ jobs:
       - name: Build (warnings are reported in the log)
         run: cmake --build build
       - name: Run the tests
+        env: # 0.86.0: the program itself also runs a plugin in its sandbox
+          SLS_SANDBOX_APP: ${{ github.workspace }}/build/SunLoopsStudio_artefacts/Release/Sun Loops Studio
         run: ./build/SunLoopsStudioTests_artefacts/Release/SunLoopsStudioTests
 
   macos:
@@ -38,6 +40,8 @@ jobs:
       - name: Build (warnings are reported in the log; every error is shown, not only the first)
         run: cmake --build build -- -k 0
       - name: Run the tests
+        env: # 0.86.0: the program itself (the executable inside the .app) also runs a plugin in its sandbox
+          SLS_SANDBOX_APP: ${{ github.workspace }}/build/SunLoopsStudio_artefacts/Release/Sun Loops Studio.app/Contents/MacOS/Sun Loops Studio
         run: ./build/SunLoopsStudioTests_artefacts/Release/SunLoopsStudioTests
       # The Intel half on its own, under Rosetta: its code is the one built for macOS 10.15 (the Apple silicon half starts at 11).
       - name: Build and run the tests on Intel (x86_64 under Rosetta)
@@ -90,6 +94,7 @@ jobs:
       - name: Run the tests
         env:
           SLS_EXPECT_ASIO_DRIVER: FlexASIO
+          SLS_SANDBOX_APP: ${{ github.workspace }}\build\SunLoopsStudio_artefacts\Release\Sun Loops Studio.exe # 0.86.0
         run: .\build\SunLoopsStudioTests_artefacts\Release\SunLoopsStudioTests.exe
       - name: Show the tests' crash report, if they crashed
         if: failure()

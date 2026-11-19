@@ -318,8 +318,12 @@ void MainComponent::startRecording()
     recordLoopEnd = loops ? arrangement.loopEndTick : -1;
     punchedOut = false;
 
-    const int countInBeats = countInBars * arrangement.meter.beats;
-    if (const auto error = engine.startRecording (streams, ! recordFromPlayhead, countInBeats); error.isNotEmpty())
+    // 0.86.0: the count-in clicks in the meter and tempo of the bar the take starts in (the song may change them)
+    const auto startMeter = meterSegmentAt (tidyMeterMarkers (arrangement.meterMarkers, arrangement.meter), arrangement.meter, from).meter;
+    const double startBpm = tempoAt (tidyTempoMarkers (arrangement.tempoMarkers), bpmSlider.getValue(), from);
+    const int countInBeats = countInBars * startMeter.beats;
+    if (const auto error = engine.startRecording (streams, ! recordFromPlayhead, countInBeats, startMeter.beats, startMeter.unit, startBpm);
+        error.isNotEmpty())
     {
         fail (error);
         return;

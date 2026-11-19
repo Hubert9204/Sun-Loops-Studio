@@ -69,9 +69,9 @@ grafica o risorse di altri prodotti e non è affiliato né approvato dai loro pr
 
 ## Stato
 
-**Alpha - versione 0.77** (novembre 2026). Si può usare per fare musica, ma non è ancora stato provato a fondo su hardware vero.
+**Alpha - versione 0.86** (novembre 2026). Si può usare per fare musica, ma non è ancora stato provato a fondo su hardware vero.
 
-- **Test automatici**: circa **2.130 controlli** passano a ogni push su tutti e tre i sistemi - Fedora 41, macOS (Apple silicon, e
+- **Test automatici**: circa **2.330 controlli** passano a ogni push su tutti e tre i sistemi - Fedora 41, macOS (Apple silicon, e
   Intel tramite Rosetta) e Windows - in GitHub Actions. Su Windows l'integrazione continua avvia anche il programma dallo zip, lo
   installa, avvia e disinstalla con l'installer, e carica un vero driver ASIO (FlexASIO).
 - **Linux** è il sistema su cui il programma è nato: l'AppImage gira su Nobara e la riproduzione è stata confermata su un PC vero.
@@ -80,10 +80,28 @@ grafica o risorse di altri prodotti e non è affiliato né approvato dai loro pr
 - **macOS** (dalla 0.63.0) e **Windows** (dalla 0.75.0, ASIO dalla 0.76.0) nascono dallo stesso codice e passano gli stessi test,
   ma non sono ancora stati provati a mano su computer veri; le segnalazioni sono benvenute.
 - **I plugin** sono stati provati con piccoli plugin di prova, con gli esempi LADSPA e con i quattro strumenti del programma, non
-  ancora con plugin commerciali.
+  ancora con plugin commerciali. La sandbox dei plugin gira nei test su tutti e tre i sistemi, avviata dal programma dei test e dal
+  programma stesso.
 
 Cosa è verificato e cosa no, funzione per funzione: [docs/roadmap.md](docs/roadmap.md). Le modifiche di ogni versione:
 [CHANGELOG.md](CHANGELOG.md).
+
+## Novità (0.78 - 0.86)
+
+Le funzioni che ancora mancavano sono arrivate in sei blocchi, il più possibile come in FL Studio, poi ricontrollate insieme:
+
+| Versione | Cosa porta |
+| --- | --- |
+| **0.86** | Automazione degli **effetti dentro un Patcher** e del **mute di un bus aux**; i **gruppi della playlist si spostano interi** trascinandoli; i file audio lunghi decodificati dietro una **finestra di avanzamento** quando si apre un progetto; il **count-in** nel metro e al tempo dove parte la ripresa; una clip che inizia a seguire il tempo mentre suona cambia subito |
+| **0.85** | **Plugin in una sandbox** (un processo tutto loro: un crash si porta via solo il plugin, *Reload* lo riavvia); la barra della finestra del plugin con **preset**, **annulla / ripeti** e instradamento; **ingresso sidechain**, **più uscite** e **MIDI out** |
+| **0.84** | **Drum machine**: una traccia del mixer per pad, round robin, una nota MIDI per pad, pad che lampeggiano. **Sampler**: tre LFO con forme e sync al tempo, una matrice di modulazione. **SunSymphony**: keyswitch |
+| **0.83** | **Rampe di tempo**, **cambi di metro** durante il brano, **clip audio che seguono il tempo** (allungate in tempo reale) |
+| **0.82** | **Trascina e rilascia** per riordinare canali, tracce del mixer e tracce della playlist |
+| **0.81** | File audio fino a **4 ore** letti dal disco, 1024 clip (64 insieme), **backup** (10 versioni) e **progetti in un solo file** (`.slpz`) |
+| **0.80** | **Automazione di ogni controllo**: pitch e swing dei canali, mute e solo, volume e pitch master, effetti sui bus aux; i controlli la seguono |
+| **0.78 - 0.79** | Bus aux aggiunti e tolti (fino a 8), qualsiasi traccia del mixer eliminata, pattern e tracce dei pattern uno a uno |
+
+Ogni modifica, versione per versione: [CHANGELOG.md](CHANGELOG.md).
 
 ## Funzioni
 
@@ -99,13 +117,15 @@ Cosa è verificato e cosa no, funzione per funzione: [docs/roadmap.md](docs/road
 - **Pattern e Playlist** - pattern ognuno della sua lunghezza, disposti su una Playlist in tre sezioni (**Audio**, **Pattern**,
   **Automazione**; una traccia per pattern, aggiunta ed eliminata con lui) con gli strumenti disegno, pittura, cancella, mute, slip, taglio, cut, selezione, riproduzione e zoom, marker
   di tempo, una regione di loop, mute / solo per traccia, icone e colori. Riproduzione *Pattern* o *Song*.
-- **Clip audio e registrazione** - trascina audio (`.wav .aiff .flac .ogg .oga .mp3 .aac`) o il suono di un video sulla Playlist;
+- **Clip audio e registrazione** - trascina audio (`.wav .aiff .flac .ogg .oga .mp3 .aac`, fino a 4 ore per file, quelli lunghi
+  letti dal disco) o il suono di un video sulla Playlist;
   allungali e cambiane l'intonazione (Signalsmith Stretch), modificali nell'**editor dei campioni** (taglio, dissolvenze,
   inversione, normalizzazione, riduzione del rumore, slicing). **Registra** più ingressi insieme nella playlist, con conteggio,
   take in loop, punch in / out, e note MIDI in sovrapposizione o sostituzione.
-- **Automazione** - clip per qualsiasi volume, pan, fader, mandata, parametro di effetto o di plugin (anche sui bus aux), pitch e swing
-  dei canali, mute e solo, volume e pitch master, con un editor a punti e i controlli che la seguono durante la riproduzione; cambi
-  di tempo e tempi in chiave da 2/4 a 12/8.
+- **Automazione** - clip per qualsiasi volume, pan, fader, mandata, parametro di effetto o di plugin (anche sui bus aux e negli effetti
+  dentro un Patcher), pitch e swing dei canali, mute e solo di canali, tracce e bus aux, volume e pitch master, con un editor a punti e
+  i controlli che la seguono durante la riproduzione; cambi di tempo, a gradini o in rampa, e tempi in chiave da 2/4 a 12/8 che possono
+  cambiare durante il brano; clip audio che seguono il tempo (allungate in tempo reale).
 - **Performance mode** - le clip della Playlist come celle da lanciare dal vivo (loop, one shot, hold), col mouse o con pad MIDI.
 - **Loop Starter** - un loop di partenza in uno di dieci generi (batteria, basso, accordi e melodia), fatto con regole e caso,
   senza rete.
@@ -116,9 +136,10 @@ Cosa è verificato e cosa no, funzione per funzione: [docs/roadmap.md](docs/road
 
 - **Motori di sintesi integrati** - sottrattivo, FM a 4 operatori, additivo, modelli fisici (corde, percussioni a lamine,
   campane) e un **synth di batteria** (cassa, rullante, tom, clap, hi-hat, piatto), con suoni pronti.
-- **Sampler** - inviluppi ADSR e per destinazione, due LFO, filtri, loop, reverse, modi di riproduzione **granulare** e **a
-  curva di percorso**, un **sintetizzatore vocale** che trasforma un testo scritto in un campione; strumenti **SoundFont 2** e
-  **SFZ**; uno **slicer**; una **drum machine** con 16 pad e livelli di velocity; un **editor di intonazione** per le linee
+- **Sampler** - inviluppi ADSR e per destinazione, tre LFO con forme e sync al tempo, una matrice di modulazione, filtri, loop,
+  reverse, modi di riproduzione **granulare** e **a curva di percorso**, un **sintetizzatore vocale** che trasforma un testo scritto
+  in un campione; strumenti **SoundFont 2** e **SFZ**; uno **slicer**; una **drum machine** con 16 pad, livelli di velocity, round
+  robin, una traccia del mixer per pad e una nota MIDI per pad; un **editor di intonazione** per le linee
   cantate; **stem** (batteria, basso, il resto) con l'elaborazione del segnale.
 - **Suoni integrati** - un Grand Piano e un basso elettrico campionati, due batterie acustiche campionate, tre kit elettronici e
   un kit di percussioni a mano ([licenze](resources/sounds/README.md)).
@@ -163,7 +184,8 @@ Instruments). Il loro codice DSP è compilato anche nel programma dei test, per 
   tuo computer e non tocca mai il progetto.
 - **Brano e progetti dimostrativi** - "Sunrise Drive" si apre al primo avvio; altri tre brani finiti sono nel browser.
 - **Plugin** - ospita VST3 e LV2 su ogni sistema, LADSPA su Linux e Audio Unit su macOS, come strumenti e come effetti, con un
-  Plugin picker e le loro impostazioni salvate nel progetto.
+  Plugin picker e le loro impostazioni salvate nel progetto; ognuno può girare in una **sandbox** (un processo tutto suo: un crash
+  si porta via solo il plugin), con preset, annulla, ingresso sidechain, più uscite e MIDI out.
 - **Sicurezza** - salvataggio automatico ogni minuto, recupero dopo un crash, le 10 versioni precedenti in una cartella `Backups`,
   *Export project with samples* come cartella o come file unico `.slpz`.
 - **Report dei crash e aggiornamenti** - dopo un crash l'avvio successivo propone di inviare un report anonimo (stack trace e
@@ -172,7 +194,8 @@ Instruments). Il loro codice DSP è compilato anche nel programma dei test, per 
   buffer regolabile con un pulsante **Auto** che trova una dimensione senza crepitii; le tastiere MIDI si accendono appena
   collegate.
 - **Interfaccia** - la disposizione di menu, barra degli strumenti e pannelli di FL Studio; F5 / F6 / F7 / F8 / F9 per Playlist,
-  Channel Rack, Piano Roll, Browser e Mixer; la tastiera del computer come pianoforte; una disposizione salvata.
+  Channel Rack, Piano Roll, Browser e Mixer; la tastiera del computer come pianoforte; una disposizione salvata; canali, tracce del
+  mixer e tracce della playlist (i gruppi interi) riordinati trascinandoli.
 
 Tutto questo è descritto in dettaglio nella [guida utente](docs/user-guide.it.md) ([English](docs/user-guide.md)).
 
@@ -219,11 +242,11 @@ virtuale (lo esegue il workflow *Screenshots*).
 ./build/SunLoopsStudioTests_artefacts/Release/SunLoopsStudioTests
 ```
 
-Senza interfaccia (non servono dispositivo audio né display); circa 2.130 controlli alla 0.77.0. Coprono, tra l'altro,
+Senza interfaccia (non servono dispositivo audio né display); circa 2.330 controlli alla 0.86.0. Coprono, tra l'altro,
 l'intonazione dei synth e la temporizzazione al campione, ogni strumento ed effetto, che `Player::render` non allochi mai
 memoria, uno stress test concorrente del passaggio dall'interfaccia all'audio, il file di progetto (andata e ritorno, file
 danneggiati e ostili, campioni mancanti, scrittura atomica), l'importazione da FL Studio e MIDI, l'esportazione in ogni formato,
-la registrazione, l'automazione, i cambi di tempo, l'host dei plugin, i quattro strumenti, i report dei crash (in un processo
+la registrazione, l'automazione, i cambi e le rampe di tempo, l'host dei plugin e la sua sandbox, i quattro strumenti, i report dei crash (in un processo
 figlio, su ogni sistema), il controllo degli aggiornamenti e, su Windows, ASIO. GitHub Actions li esegue a ogni push su Fedora,
 macOS e Windows.
 

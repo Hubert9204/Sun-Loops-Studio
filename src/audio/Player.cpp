@@ -579,6 +579,22 @@ void Player::onProjectChanged (const Project& project) noexcept
             if (! stillValid)
                 v = ClipVoice {};
         }
+        // 0.86.0: a clip switched to follow the tempo (or back), or given another tempo, while it plays starts again at once
+        // from where the song is, the new way (before, it went on the old way until it started again)
+        for (auto& v : clipVoices)
+        {
+            if (! v.active || v.releasing || ! wasPlaying)
+                continue;
+            for (const auto& e : events)
+                if (e.data.get() == v.data && e.startTick == v.startTick
+                    && std::abs ((e.tempoBpm > 0.0 ? std::clamp (e.tempoBpm, 20.0, 400.0) : 0.0) - v.tempoBpm) > 1.0e-6
+                    && static_cast<double> (e.startTick) < tickPos && tickPos < static_cast<double> (e.endTick))
+                {
+                    v = ClipVoice {};
+                    startClip (e, (tickPos - e.startTick) / std::max (1.0e-9, ticksPerSampleNow * sampleRate));
+                    break;
+                }
+        }
     }
 
     // Sample data belongs to the snapshot and may be freed once we have moved on, so a sampler
@@ -1942,7 +1958,7 @@ void applyAutomation (const Project& project, double tick, size_t numChannels, s
                       const std::array<float, kMaxChannels>& channelVolume, const std::array<float, kMaxChannels>& channelPan,
                       const std::array<float, kMaxTracks>& trackVolume, const std::array<float, kMaxTracks>& trackPan,
                       std::vector<std::array<EffectSlot, kSlotsPerTrack>>& trackSlots,
-                      std::array<EffectSlot, kSlotsPerTrack>& masterSlots) noexcept
+                      std::array<EffectSlot, kSlotsPerTrack>& masterSlots, std::uint64_t chunk) noexcept
 {
     const auto& events = project.automation;
     size_t first = 0;
@@ -1975,12 +1991,22 @@ void applyAutomation (const Project& project, double tick, size_t numChannels, s
                     if (idx < numTracks)
                         setTrack (idx, trackVolume[idx], v);
                     break;
+                // (0.86.0: a parameter of an effect inside a Patcher is held by the Patcher for this chunk)
                 case AutomationKind::TrackEffect:
                     if (idx < numTracks)
-                        trackSlots[idx][static_cast<size_t> (target.slot)].params[static_cast<size_t> (target.param)] = v;
+                    {
+                        auto& slot = trackSlots[idx][static_cast<size_t> (target.slot)];
+                        if (isPatcherParam (target.param))
+                            automatePatcher (slot, target.param, v, chunk);
+                        else
+                            slot.params[static_cast<size_t> (target.param)] = v;
+                    }
                     break;
                 case AutomationKind::MasterEffect:
-                    masterSlots[static_cast<size_t> (target.slot)].params[static_cast<size_t> (target.param)] = v;
+                    if (isPatcherParam (target.param))
+                        automatePatcher (masterSlots[static_cast<size_t> (target.slot)], target.param, v, chunk);
+                    else
+                        masterSlots[static_cast<size_t> (target.slot)].params[static_cast<size_t> (target.param)] = v;
                     break;
                 // Plugin parameters (0.35.0): the plugin takes the value before it processes this chunk. setParameter() skips a
                 // value that did not change, so a held value costs nothing.
@@ -2004,13 +2030,20 @@ void applyAutomation (const Project& project, double tick, size_t numChannels, s
                     break;
                 case AutomationKind::AuxVolume:
                 case AutomationKind::AuxPan:
+                case AutomationKind::AuxMute: // 0.86.0
                 case AutomationKind::VcaLevel:
                     setMix (target.kind, idx, static_cast<size_t> (target.slot), v);
                     break;
                 // 0.80.0
                 case AutomationKind::AuxEffect:
                     if (idx < static_cast<size_t> (kAuxBuses))
-                        auxSlots[idx][static_cast<size_t> (target.slot)].params[static_cast<size_t> (target.param)] = v;
+                    {
+                        auto& slot = auxSlots[idx][static_cast<size_t> (target.slot)];
+                        if (isPatcherParam (target.param))
+                            automatePatcher (slot, target.param, v, chunk);
+                        else
+                            slot.params[static_cast<size_t> (target.param)] = v;
+                    }
                     break;
                 case AutomationKind::AuxPlugin:
                     if (idx < static_cast<size_t> (kAuxBuses))
@@ -2193,11 +2226,14 @@ void Player::render (const Project& project, double bpm, bool playing,
 
     // Aux buses: fader, balance, mute.
     std::array<float, kAuxBuses> auxTarget {}, auxBalanceLeft {}, auxBalanceRight {}, auxVolume {}, auxPan {};
+    std::array<bool, kAuxBuses> auxMuteNow {}; // 0.86.0: an aux bus's mute, as automation has it
+    for (size_t a = 0; a < static_cast<size_t> (kAuxBuses); ++a)
+        auxMuteNow[a] = project.console.aux[a].mute;
     const auto setAux = [&] (size_t a, float volume, float pan)
     {
         auxVolume[a] = volume;
         auxPan[a] = pan;
-        auxTarget[a] = project.console.aux[a].mute ? 0.0f : std::clamp (volume, 0.0f, 1.5f);
+        auxTarget[a] = auxMuteNow[a] ? 0.0f : std::clamp (volume, 0.0f, 1.5f);
         const float p = std::clamp (pan, -1.0f, 1.0f);
         auxBalanceLeft[a] = p > 0.0f ? 1.0f - p : 1.0f;
         auxBalanceRight[a] = p < 0.0f ? 1.0f + p : 1.0f;
@@ -2222,6 +2258,11 @@ void Player::render (const Project& project, double bpm, bool playing,
             setAux (slot, v, auxPan[slot]);
         else if (kind == AutomationKind::AuxPan && slot < static_cast<size_t> (kAuxBuses))
             setAux (slot, auxVolume[slot], v);
+        else if (kind == AutomationKind::AuxMute && slot < static_cast<size_t> (kAuxBuses) && auxMuteNow[slot] != (v >= 0.5f)) // 0.86.0
+        {
+            auxMuteNow[slot] = v >= 0.5f;
+            setAux (slot, auxVolume[slot], auxPan[slot]);
+        }
         else if (kind == AutomationKind::VcaLevel && slot < static_cast<size_t> (kVcaGroups) && std::abs (vcaLevel[slot] - v) > 1.0e-6f)
         {
             vcaLevel[slot] = v;
@@ -2523,11 +2564,12 @@ void Player::render (const Project& project, double bpm, bool playing,
         for (const auto& v : voices)
             if ((v.state == State::Attack || v.state == State::Sustain) && v.channel >= 0 && v.channel < kMaxChannels)
                 heldNotes[static_cast<size_t> (v.channel)] = std::max (heldNotes[static_cast<size_t> (v.channel)], v.livePitch);
-        const EffectTransport transport { playing ? tickPos : -1.0, ticksPerSample, heldNotes.data(), kMaxChannels }; // where the song is at this chunk's start
+        EffectTransport transport { playing ? tickPos : -1.0, ticksPerSample, heldNotes.data(), kMaxChannels }; // where the song is at this chunk's start
+        transport.chunk = ++effectChunk; // 0.86.0 (what automation gives the effects inside a Patcher holds for this chunk)
 
         if (automated)
             applyAutomation (project, tickPos, numMixerChannels, numTracks, setChannel, setTrack, setMix, setMore, auxSlotsNow, channelVolume, channelPan,
-                             trackVolume, trackPan, trackSlotsNow, masterSlotsNow);
+                             trackVolume, trackPan, trackSlotsNow, masterSlotsNow, transport.chunk);
 
         // 0.80.0: the sounding notes follow the channel pitch and the master pitch as they are now (a ratio on their rate, so a
         // glide, a vibrato or an envelope on the pitch goes on around it); a plugin channel gets the channel pitch as pitch bend
@@ -2604,7 +2646,14 @@ void Player::render (const Project& project, double bpm, bool playing,
                                                               : meterSegmentAt (project.meterMarkers, projectMeter, tickPos);
         int meterBeatTicks = meterSeg.meter.beatTicks();
         int meterBeats = std::clamp (meterSeg.meter.beats, 1, 16);
-        const double samplesPerBeat = 60.0 * sampleRate / std::max (bpm, 1.0) * meterBeatTicks / kTicksPerBeat;
+        // (0.86.0: a count-in clicks in the meter and tempo of the bar the take starts in)
+        const bool countInMeter = freeClickBeats > 0 && ! playing;
+        const double samplesPerBeat = countInMeter ? 60.0 * sampleRate / freeClickBpm * freeClickBeatTicks / kTicksPerBeat
+                                                   : 60.0 * sampleRate / std::max (bpm, 1.0) * meterBeatTicks / kTicksPerBeat;
+        if (countInMeter)
+            meterBeats = freeClickBeats;
+        if (playing)
+            freeClickBeats = 0;
         if (pendingClickDelay >= 0.0)
         {
             freeBeatSamples = pendingClickDelay > 0.0 ? samplesPerBeat - pendingClickDelay : 1.0e18;

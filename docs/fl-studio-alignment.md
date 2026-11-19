@@ -1,4 +1,4 @@
-# FL Studio ↔ Sun Loops Studio: review and gap analysis (0.74.0)
+# FL Studio ↔ Sun Loops Studio: review and gap analysis (0.74.0, updated for 0.86.0)
 
 Written on 2026-11-12 from Image-Line's online manual (*Basics > Workflow*, *Toolbar panels*, *Channel Rack*, *Piano Roll*,
 *Playlist*, *Mixer*, *Plugin picker*, *Browser*, and the pages of the native instruments and effects) and from the code of this
@@ -7,7 +7,7 @@ repository. Every module is compared control by control with its FL Studio count
 Status: **✔** present and equivalent · **◐** present but narrower than FL Studio's · **✘** missing. "0.60" ... "0.74"
 mark what those releases added. Section 12 lists what 0.62.0 implemented (the whole "still open" list of 0.61.0), section 13
 what 0.70.0 implemented, section 14 what 0.71.0 - 0.74.0 implemented (the whole list still open after 0.70.0: nothing in the
-tables is ✘ any more), section 15 the rows that remain narrower than FL Studio's.
+tables is ✘ any more), section 15 the rows that remain narrower than FL Studio's, section 16 what 0.80.0 - 0.86.0 implemented.
 
 This is not full parity: FL Studio is two decades of work by a large team. The aim of 0.60 - 0.62 was that every window has
 the same layout, tools and connections, that every *category* of native effect has a counterpart, and that the engine can do
@@ -134,7 +134,7 @@ Browser / Plugin picker ──drag──▶ Channel Rack (instruments, one row p
 | Clip types: pattern, audio, automation | Same three | ✔ |
 | Track headers: name, colour, mute, solo | Same; M / S (0.60), record dot | ✔ |
 | Track lock, group with the track above, resize, icons | Lock, group, fold a group (0.62); four row heights and an icon per track (0.72) | ✔ |
-| Time markers (named), jump to marker, marker actions | Markers, ◂ ▸ (0.61); actions Loop, Skip, Pause, Start (0.62), Punch in / out (0.71) | ◐ no time-signature markers |
+| Time markers (named), jump to marker, marker actions | Markers, ◂ ▸ (0.61); actions Loop, Skip, Pause, Start (0.62), Punch in / out (0.71); time-signature changes on the ruler (0.83) | ✔ |
 | Loop region, tempo and time-signature changes | Same | ✔ |
 | Picker panel | The *Pattern* box and the browser | ◐ |
 | Clip menu: make unique, consolidate / bounce, chop | Make unique, Consolidate to audio (clip or track) (0.62), Chop into pieces (0.70), mute, split, takes | ✔ |
@@ -280,5 +280,22 @@ operators, more editing), not because a tool is missing:
 2. **Effects**: fixed band types and curves (Parametric EQ 2, WaveShaper), no per-band envelopes in the multiband compressor,
    Convolver responses up to 4 s, Vocoder without its noise path.
 3. **Sampler channel**: no time stretching on the channel (it is on audio clips), the arpeggiator is a Piano Roll tool.
-4. **Editing**: no Slip tool, no time-signature markers as actions, note colours are not MIDI channels; controllers drive two
-   targets each; drag from the plugin picker onto a slot.
+4. **Editing**: no Slip tool, note colours are not MIDI channels; controllers drive two targets each; drag from the plugin picker
+   onto a slot.
+
+## 16. What 0.80.0 - 0.86.0 implemented
+
+Six blocks asked for on 2026-11-18 ("as close to FL Studio as possible"), then a review of all six:
+
+1. **Automation (0.80, 0.86)**: every control FL Studio lets you automate - the channels' pitch and swing, mute and solo of channels,
+   tracks and aux buses, the master volume and pitch, the effects and plugins on aux buses, the effects inside a Patcher; the
+   controls (also the effects panel's and the Patcher window's sliders) move with it.
+2. **Audio and projects (0.81, 0.86)**: audio files up to 4 hours played from the disk ("keep on disk"), decoded behind a progress
+   window when a project opens; 1024 clips; backups (10 versions); a single-file project with its samples (`.slpz`).
+3. **Drag & drop (0.82, 0.86)**: channels, mixer tracks and playlist tracks reordered by dragging; a playlist group moves whole.
+4. **Tempo (0.83, 0.86)**: tempo ramps (a sloped tempo automation), time-signature changes on the ruler, audio clips in *Stretch*
+   mode (time-stretched in real time); the count-in in the meter and tempo where the take starts.
+5. **Instruments (0.84)**: the drum machine as the FPC (an output per pad, round robin, a MIDI note per pad, pads that flash), the
+   sampler's three LFOs with shapes and tempo sync and a modulation matrix, SunSymphony's keyswitches.
+6. **Plugins (0.85)**: plugins in a process of their own (FL Studio's *bridged* plugins), presets and undo in the plugin window,
+   sidechain input, more outputs and MIDI out (the *Processing* / *Routing* parts of FL Studio's wrapper).

@@ -7,7 +7,7 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Oldest macOS the program r
 # Windows (0.75.0): the C and C++ runtime is linked into every program and plugin (/MT), so nothing has to be installed beside
 # them (no Visual C++ Redistributable). Must be set before project().
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "The MSVC runtime: static")
-project(SunLoopsStudio VERSION 0.85.0 LANGUAGES C CXX)
+project(SunLoopsStudio VERSION 0.86.0 LANGUAGES C CXX)
 # The assembler links the sound library in on Linux and macOS; Windows (0.75.0) uses a resource instead (see below).
 if(NOT WIN32)
     enable_language(ASM)

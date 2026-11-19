@@ -650,7 +650,8 @@ As in FL Studio's sampler and DirectWave:
   **velocity**, its **key** (from C4, up to four octaves away), its **Mod X** / **Mod Y** (the Piano Roll's lanes) and a **random**
   amount new for each note; the targets are the **pitch** (up to 12 semitones), the **cutoff** (up to 5 octaves), the **resonance**,
   the **volume** (velocity -> volume: the hardest hit at full level, softer ones quieter), the **pan** and the **sample start** (up to
-  half the sample, for softer attacks on soft notes). They act as each note starts. They are saved with the channel and its presets.
+  half the sample, for softer attacks on soft notes). They act as each note starts: every source is a value of the note itself (Mod X
+  and Mod Y are the note's own values, as in FL Studio's Piano Roll, not knobs). They are saved with the channel and its presets.
 
 ### Play modes: Granulizer and Wave Traveller (0.74.0)
 
@@ -765,7 +766,8 @@ the sounds are read again; a file that is gone leaves a silent layer that keeps 
 **Pads flash** when they play: from the steps, the Piano Roll, the song, a MIDI controller or a click. Loading another kit keeps the
 pads' outputs (they belong to the project).
 
-Not available: undo of kit edits (the steps can be undone), effects inside the drum machine itself (use the pads' own mixer tracks), editing a pad's sound in the sample editor (edit it
+Every edit of the kit (a pad's sound, layers, settings, output, MIDI note) is undone with **Ctrl+Z**, as the steps are.
+Not available: effects inside the drum machine itself (use the pads' own mixer tracks), editing a pad's sound in the sample editor (edit it
 on a sampler channel, then load the saved file), more than 16 pads or 4 layers, sounds longer than 30 seconds, saving a drum channel as a channel preset (save the kit), mapping imported MIDI percussion to pads.
 Projects that contain a drum machine cannot be opened by versions older than 0.14.
 
@@ -1164,7 +1166,9 @@ at a glance; on tall tracks the name sits in a title bar above the notes, on sho
 - **Reordering tracks (0.82.0)**: drag a track's name up or down; a green line shows where it will go. It moves with its clips,
   name, colour, mute and record settings, inside its own section (an audio track stays among the audio tracks, a pattern track
   among the pattern tracks, which then follow the order you give them). An audio track keeps playing through the same mixer track.
-  **Ctrl+Z** puts it back.
+  **Ctrl+Z** puts it back. **Groups (0.86.0)**, as in FL Studio: dragging a group's head moves the whole group; a group lands just
+  before or after another group, never inside it; a single track dropped inside a group joins it, dragged out of it leaves it, and
+  dropped down onto a folded group goes after the group. The green line shows where the tracks will really go.
 - **Patterns and pattern tracks go together, one to one** (0.79.0): the **Patterns** section always has exactly one track per
   pattern and nothing else.
   - A new pattern (*New*, *Clone*, *Make unique*, the Loop Starter, a MIDI import, or the **+** of the Patterns section, which
@@ -1362,6 +1366,8 @@ Decoding runs in the background; the status line says when the clips are in. A c
 disk**, as FL Studio's "keep on disk" does:
 - it is decoded once into the audio cache (`Sun Loops Studio/Cache/Audio` in your application data folder), and opening the project again
   uses that cache at once;
+- 0.86.0: when a project is opened with such a file not decoded yet, it is decoded first behind a progress window (with *Cancel*), then
+  the project opens: the window no longer stays frozen while it happens;
 - while the song plays, a background thread reads the next three seconds of every such clip ahead of the playhead, so the playback does
   not wait for the disk;
 - its waveform is made while it is decoded;
@@ -1410,6 +1416,7 @@ it says so, as "Drums 96 BPM.wav"; else the song's tempo). From then on the clip
 Change the BPM, add tempo changes or ramps: the clip stays in time, without rendering anything again. Its length in the playlist is
 counted in beats of its audio, its waveform is drawn on the song's beats, and cutting, splitting, trimming or slipping it counts
 its audio at its own tempo. The menu shows the tempo with a tick; choose it again to make the clip play at its own speed.
+Since 0.86.0 a change made while the clip plays (it starts or stops following the tempo, or gets another tempo) is heard at once.
 
 - Up to **16** clips that follow the tempo sound at once (more play at their own speed until one ends); at most 8 times faster or
   slower than their own tempo.
@@ -1514,8 +1521,9 @@ The arrow next to Record also has:
   roll).
 - **The takes start**: *At the start of the song* (the song is rewound), or *Where the song is (punch in)*: from the playlist's
   start marker, or from where the song is playing if it already is. The takes are placed where they started.
-- **Count-in** (0.47.0): *None*, *1 bar* or *2 bars* of metronome (in the time signature, at the starting tempo) before the song
-  and the takes start; the metronome need not be on. The status line says *Count-in...*; Record or Stop cancels it.
+- **Count-in** (0.47.0): *None*, *1 bar* or *2 bars* of metronome before the song and the takes start; the metronome need not be
+  on. Since 0.86.0 it counts in the time signature and at the tempo of the bar where the take starts (a song that changes signature
+  or tempo before that point counts in what is played there). The status line says *Count-in...*; Record or Stop cancels it.
 - **With a loop region in Song mode** (0.47.0):
   - *Keep recording: every pass is a take* (the default): the song goes round the region and the recording goes on. At the end
     the clip covers the region and plays the **last whole pass**; right-click it > **Take** chooses another (*Take 1*, *Take 2*...).
@@ -1648,8 +1656,10 @@ sliders of the Mixer and the volume and pan of the Channel Rack. Since 0.80.0 th
 When the song stops they show their own values again (the automation never changes them). Touching a control while it moves
 sets its own value, as usual.
 
-**Not automatable yet:** the tempo (use tempo changes, 0.46.0), the mute and balance of an aux bus, and the parameters of the
-effects inside a Patcher.
+Since 0.86.0 the **mute of an aux bus** (right-click its **M**) and the **parameters of the effects inside a Patcher** (right-click a
+slider in the Patcher's window: the clip is named, for example, *Track 3 Patcher 2 > Reverb Decay*) can be automated too; the
+Patcher window's sliders move with their automation while the song plays, when the effects panel shows the Patcher's track. The
+**tempo** is automated with tempo changes and ramps on the ruler (0.46.0, 0.83.0), as FL Studio's tempo automation clip.
 
 **Create a clip.** Right-click the control and choose *Create automation clip*. A clip one pattern long appears on one of the four
 **automation lanes** (*Auto 1*, *Auto 2*..., the Playlist's Automation section; 4 in a new project, more with its **+**) and its editor opens. The clip is a flat line at the

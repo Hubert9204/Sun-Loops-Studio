@@ -270,7 +270,8 @@ juce::String AudioEngine::enableInputChannels (const std::vector<int>& channels)
     return {};
 }
 
-juce::String AudioEngine::startRecording (const std::vector<RecordStream>& streams, bool fromSongStart, int countInBeats)
+juce::String AudioEngine::startRecording (const std::vector<RecordStream>& streams, bool fromSongStart, int countInBeats, int countInBeatsPerBar,
+                                          int countInBeatUnit, double countInBpm)
 {
     auto* device = deviceManager.getCurrentAudioDevice();
     if (device == nullptr)
@@ -314,6 +315,9 @@ juce::String AudioEngine::startRecording (const std::vector<RecordStream>& strea
     {
         // The audio thread counts in and then opens the gate itself (see audioDeviceIOCallbackWithContext).
         countInCancel.store (false, std::memory_order_seq_cst);
+        countInBar.store (countInBeatsPerBar, std::memory_order_seq_cst);
+        countInUnit.store (countInBeatUnit, std::memory_order_seq_cst);
+        countInTempo.store (countInBpm, std::memory_order_seq_cst);
         countingIn.store (true, std::memory_order_seq_cst);
         playing.store (false, std::memory_order_seq_cst);
         countInRequest.store (std::min (countInBeats, 64), std::memory_order_seq_cst);
@@ -418,12 +422,17 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* in, int 
     }
     if (const int beats = countInRequest.exchange (0, std::memory_order_acq_rel); beats > 0 && numSamples > 0)
     {
-        const int beatTicks = kTicksPerBeat * 4 / (project->beatUnit == 8 ? 8 : 4);
-        const double perBeat = 60.0 * sampleRateHz / std::max (1.0, bpm.load (std::memory_order_relaxed)) * beatTicks / kTicksPerBeat;
+        // 0.86.0: in the meter and tempo of the bar the take starts in
+        const int unit = countInUnit.load (std::memory_order_relaxed) > 0 ? countInUnit.load (std::memory_order_relaxed) : project->beatUnit;
+        const int perBar = countInBar.load (std::memory_order_relaxed) > 0 ? countInBar.load (std::memory_order_relaxed) : project->beatsPerBar;
+        const double tempo = countInTempo.load (std::memory_order_relaxed) > 0.0 ? countInTempo.load (std::memory_order_relaxed)
+                                                                                 : bpm.load (std::memory_order_relaxed);
+        const int beatTicks = kTicksPerBeat * 4 / (unit == 8 ? 8 : 4);
+        const double perBeat = 60.0 * sampleRateHz / std::max (1.0, tempo) * beatTicks / kTicksPerBeat;
         const double total = beats * perBeat;
         const auto blocks = static_cast<long long> (std::ceil (total / numSamples));
         countInLeft = blocks * numSamples;
-        player.delayFreeClick (static_cast<double> (countInLeft) - total);
+        player.delayFreeClick (static_cast<double> (countInLeft) - total, perBar, beatTicks, std::max (1.0, tempo));
     }
     if (countInLeft > 0)
     {
