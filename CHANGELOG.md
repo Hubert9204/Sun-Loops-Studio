@@ -6,6 +6,22 @@ All notable changes to Sun Loops Studio. Newest first.
 
 A review of the six blocks of 0.80.0 - 0.85.0: what they had left out is done, and what was found is fixed.
 
+### New since 0.77.0 (the last published release)
+- **Automation of every control** (0.80.0 - 0.86.0): channel pitch and swing, mute and solo of channels, tracks and aux buses, the
+  master volume and pitch, the effects and plugins on aux buses and the effects inside a Patcher; the controls move with it.
+- **Long audio from the disk** (0.81.0): files up to 4 hours, 1024 clips, 64 at once; **backups** (10 versions) and **single-file
+  projects** (`.slpz`).
+- **Drag & drop** (0.82.0): channels, mixer tracks and playlist tracks reordered by dragging (groups whole since 0.86.0).
+- **Tempo** (0.83.0): tempo ramps, time signature changes during the song, audio clips that follow the tempo.
+- **Instruments** (0.84.0): the drum machine's outputs per pad, round robin and MIDI notes; the sampler's three LFOs and modulation
+  matrix; SunSymphony's keyswitches.
+- **Plugins** (0.85.0): a sandbox in a process of its own, presets and undo in the plugin window, sidechain input, more outputs,
+  MIDI out.
+- **Mixer** (0.78.0 - 0.79.0): up to eight aux buses added and removed, any mixer track deleted; patterns and pattern tracks one to
+  one.
+
+The details of each version are below.
+
 ### Added
 - **Automation of the effects inside a Patcher**: right-click a slider in the Patcher's window > *Create automation clip* (the clip
   is named *Track N Patcher K > Effect parameter*); the window's sliders follow it while the song plays.
