@@ -9,6 +9,9 @@
 #else
  #include <unistd.h>
 #endif
+#if defined(__APPLE__)
+ #include <CoreFoundation/CoreFoundation.h>
+#endif
 
 #include "plugins/PluginSandbox.h"
 
@@ -461,9 +464,12 @@ struct PluginSandboxWorker::Impl : private juce::Timer, private juce::Thread
         shared->childHeartbeat.fetch_add (1, std::memory_order_relaxed);
         if (++ticks % 40 == 0 && ! parent.alive())
         {
+            note ("the parent is gone");
             finish();
             return;
         }
+        if (ticks == 1)
+            note ("its message loop runs");
         if (const auto serial = shared->requestSerial.load (std::memory_order_acquire); serial != handled)
         {
             handled = serial;
@@ -735,10 +741,20 @@ PluginSandboxWorker::~PluginSandboxWorker() = default;
 int runPluginSandbox (const juce::StringArray& arguments)
 {
     juce::ScopedJuceInitialiser_GUI gui;
+#if defined(__APPLE__)
+    // macOS: JUCE's runDispatchLoop is [NSApp run], which in a program without a bundle can end at once (AppKit's exception is
+    // swallowed). JUCE's messages and timers are served by the main run loop, so that is run instead.
+    auto worker = PluginSandboxWorker::start (arguments, [] { CFRunLoopStop (CFRunLoopGetMain()); });
+    if (worker == nullptr)
+        return 1;
+    CFRunLoopRun();
+#else
     auto worker = PluginSandboxWorker::start (arguments, [] { juce::MessageManager::getInstance()->stopDispatchLoop(); });
     if (worker == nullptr)
         return 1;
     juce::MessageManager::getInstance()->runDispatchLoop();
+#endif
+    note ("the dispatch loop ended");
     worker.reset();
     return 0;
 }
