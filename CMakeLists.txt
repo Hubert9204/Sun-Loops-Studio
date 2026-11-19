@@ -732,6 +732,7 @@ if(SLS_BUILD_TEST_PLUGINS)
             PLUGIN_CODE ${code}
             IS_SYNTH ${isSynth}
             NEEDS_MIDI_INPUT ${isSynth}
+            NEEDS_MIDI_OUTPUT ${isSynth}
             FORMATS VST3 LV2
             LV2URI "urn:sun-loops-studio:test-${kind}"
             COPY_PLUGIN_AFTER_BUILD FALSE)

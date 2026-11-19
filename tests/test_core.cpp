@@ -14362,26 +14362,44 @@ void testPlugins085()
                "moving tracks moves a plugin's outputs and sidechain source with them");
         check (sls::deleteMixerTrack (tracks, channels, a, console, master, 2, 0) && channels[0].pluginOutputs[0] == -1, "a deleted output track: not heard");
     }
+    const auto gainIndex = [] (sls::HostedPlugin& p) // (VST3 adds parameters of its own, such as a bypass)
+    {
+        for (int i = 0; i < p.parameterCount(); ++i)
+            if (p.parameterName (i) == "Gain")
+                return i;
+        return -1;
+    };
     {   // presets
         const auto folder = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("sls-test-plugin-presets");
         folder.deleteRecursively();
-        gain->setParameter (0, 0.9f);
+        const int g = std::max (0, gainIndex (*gain));
+        gain->setParameter (g, 0.9f);
         const auto file = sls::PluginHost::presetsFolder (folder, gainDesc).getChildFile ("Loud.slsplugin");
         check (sls::PluginHost::savePreset (*gain, file).wasOk() && file.existsAsFile(), "a plugin preset is saved in the plugin's folder");
-        gain->setParameter (0, 0.1f);
-        check (sls::PluginHost::loadPreset (*gain, file).wasOk() && std::abs (gain->parameterValue (0) - 0.9f) < 1.0e-4f, "and loaded back");
+        gain->setParameter (g, 0.1f);
+        check (sls::PluginHost::loadPreset (*gain, file).wasOk() && std::abs (gain->parameterValue (g) - 0.9f) < 1.0e-4f, "and loaded back");
         check (sls::PluginHost::loadPreset (*synth, file).failed(), "a preset of another plugin is refused");
         folder.deleteRecursively();
     }
 
     // --- in a sandbox
     sls::PluginHost::sandboxExecutable() = juce::File::getSpecialLocation (juce::File::currentExecutableFile);
+    // The sandbox's own notes, printed if it fails (its output goes nowhere otherwise).
+    const auto sandboxLog = juce::File::getSpecialLocation (juce::File::tempDirectory).getNonexistentChildFile ("sls-sandbox-test", ".log");
+#if JUCE_WINDOWS
+    _putenv_s ("SLS_SANDBOX_LOG", sandboxLog.getFullPathName().toRawUTF8());
+#else
+    setenv ("SLS_SANDBOX_LOG", sandboxLog.getFullPathName().toRawUTF8(), 1);
+#endif
     auto boxed = host.create (gainDesc, kSr, n, error, true);
     check (boxed != nullptr && boxed->isSandboxed() && boxed->isLoaded() && boxed->sandboxState() == sls::JucePlugin::SandboxState::Running,
            "a plugin starts in a sandbox (" + error.toStdString() + ")");
     if (boxed == nullptr)
+        std::cout << "  sandbox log:\n" << sandboxLog.loadFileAsString() << std::endl;
+    if (boxed == nullptr)
         return;
-    check (boxed->displayName() == "SLS Test Gain" && boxed->parameterCount() == 1 && boxed->parameterName (0) == "Gain" && boxed->hasSidechain(),
+    const int boxedGain = gainIndex (*boxed);
+    check (boxed->displayName() == "SLS Test Gain" && boxedGain >= 0 && boxed->parameterCount() == gain->parameterCount() && boxed->hasSidechain(),
            "the program knows its name, its parameters and its sidechain");
     std::fill (l.begin(), l.end(), 1.0f);
     std::fill (r.begin(), r.end(), 1.0f);
@@ -14391,14 +14409,18 @@ void testPlugins085()
     std::fill (r.begin(), r.end(), 1.0f);
     boxed->process (l.data(), r.data(), n, nullptr, 0, &sideIo);
     check (plain && std::abs (l[10] - 0.75f) < 1.0e-6f, "it processes the sound in its own process, sidechain included");
-    boxed->setParameter (0, 1.0f);
-    std::fill (l.begin(), l.end(), 1.0f);
-    boxed->process (l.data(), r.data(), n, nullptr, 0);
-    check (std::abs (l[10] - 1.0f) < 1.0e-6f, "automation reaches it with the next chunk");
+    boxed->setParameter (std::max (0, boxedGain), 1.0f);
+    for (int chunk = 0; chunk < 2; ++chunk) // (a VST3 plugin takes a parameter's change in the block it comes with, or the next)
+    {
+        std::fill (l.begin(), l.end(), 1.0f);
+        boxed->process (l.data(), r.data(), n, nullptr, 0);
+    }
+    check (std::abs (l[10] - 1.0f) < 1.0e-6f, "automation reaches it");
     const auto state = boxed->getState();
     auto inside = host.create (gainDesc, kSr, n, error);
-    check (inside != nullptr && inside->setState (state) && std::abs (inside->parameterValue (0) - 1.0f) < 1.0e-4f, "its state comes back from the sandbox");
-    check (boxed->setState (inside != nullptr ? (inside->setParameter (0, 0.25f), inside->getState()) : state), "and goes into it");
+    check (inside != nullptr && inside->setState (state) && std::abs (inside->parameterValue (std::max (0, gainIndex (*inside))) - 1.0f) < 1.0e-4f,
+           "its state comes back from the sandbox");
+    check (boxed->setState (inside != nullptr ? (inside->setParameter (std::max (0, gainIndex (*inside)), 0.25f), inside->getState()) : state), "and goes into it");
     std::fill (l.begin(), l.end(), 1.0f);
     boxed->process (l.data(), r.data(), n, nullptr, 0);
     check (std::abs (l[10] - 0.25f) < 1.0e-5f, "a state given to it is used");
@@ -14445,6 +14467,11 @@ void testPlugins085()
         again->process (l.data(), r.data(), n, nullptr, 0);
         check (std::abs (l[10] - 0.25f) < 1.0e-5f, "and sounds as it did");
     }
+    else
+        std::cout << "  sandbox log:\n" << sandboxLog.loadFileAsString() << std::endl;
+    again.reset();
+    boxed.reset();
+    sandboxLog.deleteFile();
 }
 
 void testPluginHosting()

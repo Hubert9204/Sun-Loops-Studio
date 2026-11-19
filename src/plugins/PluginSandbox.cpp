@@ -73,6 +73,15 @@ private:
 
 double nowSeconds() { return juce::Time::getMillisecondCounterHiRes() * 0.001; }
 
+// The worker's own notes, when SLS_SANDBOX_LOG names a file (its output goes nowhere otherwise): what it was asked, what went wrong.
+void note (const juce::String& text)
+{
+    static const auto path = juce::SystemStats::getEnvironmentVariable ("SLS_SANDBOX_LOG", {});
+    if (path.isNotEmpty())
+        juce::File (path).appendText (juce::Time::getCurrentTime().toString (false, true, true, true) + " [" + juce::String (currentProcessId()) + "] "
+                                      + text + "\n");
+}
+
 void putText (Shared& s, const juce::String& text)
 {
     const auto utf8 = text.toRawUTF8();
@@ -154,9 +163,13 @@ std::unique_ptr<SandboxClient> SandboxClient::start (const juce::File& executabl
     }
     c->name = getText (*c->shared);
     if (c->request (ParameterInfo, 10000))
-        if (auto* list = juce::JSON::parse (getText (*c->shared)).getArray())
+    {
+        // Keep the parsed var alive: getArray() points into it.
+        const auto parsed = juce::JSON::parse (getText (*c->shared));
+        if (auto* list = parsed.getArray())
             for (const auto& p : *list)
                 c->params.emplace_back (p.getProperty ("name", "").toString().toStdString(), static_cast<float> (p.getProperty ("default", 0.0)));
+    }
     c->lastState = c->getState();
     return c;
 }
@@ -341,7 +354,8 @@ juce::StringArray SandboxClient::programNames (int& current)
     if (request (Programs, 2000))
     {
         const auto v = juce::JSON::parse (getText (*shared));
-        if (auto* list = v.getProperty ("names", {}).getArray())
+        const auto namesVar = v.getProperty ("names", {});
+        if (auto* list = namesVar.getArray())
             for (const auto& n : *list)
                 names.add (n.toString());
         current = static_cast<int> (v.getProperty ("current", -1));
@@ -402,12 +416,17 @@ struct PluginSandboxWorker::Impl : private juce::Timer, private juce::Thread
     Impl (const juce::File& sharedFile, juce::int64 parentPid, std::function<void()> finished)
         : juce::Thread ("Plugin sandbox audio"), parent (parentPid), onFinished (std::move (finished))
     {
+        note ("worker for " + sharedFile.getFullPathName() + ", parent " + juce::String (parentPid));
         map = std::make_unique<juce::MemoryMappedFile> (sharedFile, juce::MemoryMappedFile::readWrite, false);
         if (map->getData() == nullptr || map->getSize() < sizeof (Shared))
+        {
+            note ("the shared file could not be mapped");
             return;
+        }
         shared = static_cast<Shared*> (map->getData());
         if (shared->magic != kMagic || shared->version != kVersion)
         {
+            note ("the shared file is not one of this version");
             shared = nullptr;
             return;
         }
@@ -429,6 +448,7 @@ struct PluginSandboxWorker::Impl : private juce::Timer, private juce::Thread
 
     void finish()
     {
+        note ("finishing");
         stopTimer();
         live.store (nullptr, std::memory_order_release);
         if (onFinished)
@@ -448,6 +468,7 @@ struct PluginSandboxWorker::Impl : private juce::Timer, private juce::Thread
         {
             handled = serial;
             const bool quit = shared->command == Quit;
+            note ("request " + juce::String (shared->command));
             handle (static_cast<Command> (shared->command));
             shared->doneSerial.store (serial, std::memory_order_release);
             if (quit)
@@ -504,9 +525,11 @@ struct PluginSandboxWorker::Impl : private juce::Timer, private juce::Thread
                 plugin = host.create (d, s.rate, s.block, error);
                 if (plugin == nullptr)
                 {
+                    note ("load failed: " + error);
                     putText (s, error);
                     break;
                 }
+                note ("loaded " + juce::String (plugin->displayName()));
                 describe();
                 live.store (plugin.get(), std::memory_order_release);
                 putText (s, juce::String (plugin->displayName()));
