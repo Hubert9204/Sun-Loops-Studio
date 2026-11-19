@@ -42,6 +42,7 @@ const char* automationKindName (AutomationKind k)
         case AutomationKind::MasterPitch:   return "masterPitch";
         case AutomationKind::AuxEffect:     return "auxEffect";
         case AutomationKind::AuxPlugin:     return "auxPlugin";
+        case AutomationKind::AuxMute:       return "auxMute"; // 0.86.0
     }
     return "trackVolume";
 }

@@ -122,7 +122,7 @@ PlaylistView::PlaylistView (Arrangement& arrangementToEdit) : timeline (arrangem
     timeline.onTrackInputMenu = [this] (int track) { if (onTrackInputMenu) onTrackInputMenu (track); };
     timeline.onTrackRemoved = [this] (int track) { if (onTrackRemoved) onTrackRemoved (track); };
     timeline.onTrackInserted = [this] (int track) { if (onTrackInserted) onTrackInserted (track); };
-    timeline.onTrackMoved = [this] (int from, int to) { if (onTrackMoved) onTrackMoved (from, to); }; // 0.82.0
+    timeline.onTrackMoved = [this] (const std::vector<int>& newIndex) { if (onTrackMoved) onTrackMoved (newIndex); }; // 0.82.0
     timeline.onAddPattern = [this] { if (onAddEmptyPattern) onAddEmptyPattern(); }; // 0.79.0
     timeline.onDeletePattern = [this] (int pattern) { if (onDeletePattern) onDeletePattern (pattern); };
     timeline.onEditSample = [this] (int index) { if (onEditSample) onEditSample (index); };

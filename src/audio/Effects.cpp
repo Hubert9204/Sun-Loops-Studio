@@ -2420,11 +2420,29 @@ void EffectUnit::runPatcher (const EffectSlot& s, float* l, float* r, int n, con
         auto later = transport;
         if (later.tick >= 0.0)
             later.tick += done * later.ticksPerSample;
+        // 0.86.0: an effect whose parameters automation moves in this chunk plays a copy with those values
+        const auto withAutomation = [state, &transport] (size_t k, const EffectSlot& sub, EffectSlot& held) -> const EffectSlot&
+        {
+            if (transport.chunk == 0)
+                return sub;
+            bool any = false;
+            for (size_t p = 0; p < static_cast<size_t> (kMaxEffectParams); ++p)
+                if (state->automatedAt[k][p] == transport.chunk)
+                {
+                    if (! any)
+                        held = sub;
+                    any = true;
+                    const auto info = effectParamInfo (sub.type, static_cast<int> (p));
+                    held.params[p] = std::clamp (state->automated[k][p], info.min, info.max);
+                }
+            return any ? held : sub;
+        };
+        EffectSlot held;
         if (! parallel)
         {
             for (size_t k = 0; k < count; ++k)
                 if ((*chain)[k].type != EffectType::None && state->types[k] == (*chain)[k].type)
-                    state->units[k].process ((*chain)[k], cl, cr, m, later);
+                    state->units[k].process (withAutomation (k, (*chain)[k], held), cl, cr, m, later);
         }
         else
         {
@@ -2440,7 +2458,7 @@ void EffectUnit::runPatcher (const EffectSlot& s, float* l, float* r, int n, con
                     continue;
                 std::copy_n (state->dryL.begin(), m, cl);
                 std::copy_n (state->dryR.begin(), m, cr);
-                state->units[k].process (sub, cl, cr, m, later);
+                state->units[k].process (withAutomation (k, sub, held), cl, cr, m, later);
                 for (int i = 0; i < m; ++i)
                 {
                     state->accL[static_cast<size_t> (i)] += cl[i];

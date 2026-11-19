@@ -215,6 +215,8 @@ public:
     void setSelectedSlot (int slot);
     // 0.80.0: an automated parameter of the shown slot, as automation has it while the song plays
     void showAutomated (const AutomationTarget& target, float value);
+    // 0.86.0 (inside a Patcher's window): parameter `param` of its effect `inner`, as automation has it
+    void showAutomatedInner (int inner, int param, float value);
     // Time Shapers left without a recording in the whole project (0.41.0): told when one is selected.
     void setTimeShaperShortfall (int count);
     int getSelectedSlot() const noexcept { return selectedSlot; }
@@ -268,6 +270,7 @@ private:
     juce::TextButton irButton { "Load IR..." };     // 0.62.0, the Convolver: an audio file as the impulse response
     juce::TextButton patchButton { "Edit..." };     // 0.73.0, the Patcher: its window
     std::unique_ptr<PatcherWindow> patcherWindow;
+    int patcherSlot = -1, patcherOwner = -1; // 0.86.0: the slot and track whose Patcher the window shows
     bool nested = false;
     void openPatcher();
     juce::Label hintLabel;                          // 0.62.0: what a Peak Controller drives, which file a Convolver uses

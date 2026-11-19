@@ -36,8 +36,8 @@ inline double finiteOrZero (double v) noexcept { return std::isfinite (v) ? v : 
 enum class AutomationKind : std::uint8_t { ChannelVolume, ChannelPan, TrackVolume, TrackPan, TrackEffect, MasterEffect,
                                            ChannelPlugin, TrackPlugin, MasterPlugin, TrackSend, AuxVolume, AuxPan, VcaLevel,
                                            ChannelPitch, ChannelSwing, ChannelMute, ChannelSolo, TrackMute, TrackSolo,
-                                           MasterVolume, MasterPitch, AuxEffect, AuxPlugin };
-constexpr int kAutomationKindCount = 23;
+                                           MasterVolume, MasterPitch, AuxEffect, AuxPlugin, AuxMute };
+constexpr int kAutomationKindCount = 24; // 0.86.0: AuxMute (an aux bus's mute)
 constexpr int kMaxPluginParams = 65536; // a parameter number beyond this is not a plugin's
 constexpr int kAutomationAuxBuses = 8;  // = kAuxBuses and kVcaGroups (Project.h, which includes this file)
 constexpr int kAutomationVcaGroups = 2;
@@ -54,7 +54,8 @@ inline bool isChannelAutomation (AutomationKind k) noexcept
 }
 inline bool isSwitchAutomation (AutomationKind k) noexcept
 {
-    return k == AutomationKind::ChannelMute || k == AutomationKind::ChannelSolo || k == AutomationKind::TrackMute || k == AutomationKind::TrackSolo;
+    return k == AutomationKind::ChannelMute || k == AutomationKind::ChannelSolo || k == AutomationKind::TrackMute || k == AutomationKind::TrackSolo
+        || k == AutomationKind::AuxMute;
 }
 inline bool isEffectAutomation (AutomationKind k) noexcept
 {
@@ -101,7 +102,7 @@ inline AutomationRange automationRange (const AutomationTarget& t, EffectType ef
         case AutomationKind::TrackEffect:
         case AutomationKind::MasterEffect:
         {
-            const auto info = effectParamInfo (effectType, t.param);
+            const auto info = effectParamInfo (effectType, effectParamIndex (t.param)); // (0.86.0: the effect inside a Patcher for its parameters)
             return { info.min, info.max, info.def };
         }
         case AutomationKind::ChannelPlugin:
@@ -121,10 +122,11 @@ inline AutomationRange automationRange (const AutomationTarget& t, EffectType ef
         case AutomationKind::MasterVolume:  return { 0.0f, 1.0f, 0.8f };
         case AutomationKind::AuxEffect:
         {
-            const auto info = effectParamInfo (effectType, t.param);
+            const auto info = effectParamInfo (effectType, effectParamIndex (t.param));
             return { info.min, info.max, info.def };
         }
         case AutomationKind::AuxPlugin:     return { 0.0f, 1.0f, 0.5f };
+        case AutomationKind::AuxMute:       return { 0.0f, 1.0f, 0.0f }; // 0.86.0
     }
     return {};
 }
@@ -139,8 +141,8 @@ inline bool automationTargetExists (const AutomationTarget& t, int numChannels, 
         case AutomationKind::TrackVolume:
         case AutomationKind::TrackPan:      return t.index >= 0 && t.index < numTracks;
         case AutomationKind::TrackEffect:   return t.index >= 0 && t.index < numTracks && t.slot >= 0 && t.slot < kSlotsPerTrack
-                                                   && t.param >= 0 && t.param < kMaxEffectParams;
-        case AutomationKind::MasterEffect:  return t.slot >= 0 && t.slot < kSlotsPerTrack && t.param >= 0 && t.param < kMaxEffectParams;
+                                                   && ((t.param >= 0 && t.param < kMaxEffectParams) || isPatcherParam (t.param));
+        case AutomationKind::MasterEffect:  return t.slot >= 0 && t.slot < kSlotsPerTrack && ((t.param >= 0 && t.param < kMaxEffectParams) || isPatcherParam (t.param));
         case AutomationKind::ChannelPlugin: return t.index >= 0 && t.index < numChannels && t.param >= 0 && t.param < kMaxPluginParams;
         case AutomationKind::TrackPlugin:   return t.index >= 0 && t.index < numTracks && t.slot >= 0 && t.slot < kSlotsPerTrack
                                                    && t.param >= 0 && t.param < kMaxPluginParams;
@@ -158,9 +160,10 @@ inline bool automationTargetExists (const AutomationTarget& t, int numChannels, 
         case AutomationKind::MasterVolume:
         case AutomationKind::MasterPitch:   return true;
         case AutomationKind::AuxEffect:     return t.index >= 0 && t.index < kAutomationAuxBuses && t.slot >= 0 && t.slot < kSlotsPerTrack
-                                                   && t.param >= 0 && t.param < kMaxEffectParams;
+                                                   && ((t.param >= 0 && t.param < kMaxEffectParams) || isPatcherParam (t.param));
         case AutomationKind::AuxPlugin:     return t.index >= 0 && t.index < kAutomationAuxBuses && t.slot >= 0 && t.slot < kSlotsPerTrack
                                                    && t.param >= 0 && t.param < kMaxPluginParams;
+        case AutomationKind::AuxMute:       return t.slot >= 0 && t.slot < kAutomationAuxBuses; // 0.86.0 (the bus in `slot`, as its volume)
     }
     return false;
 }
@@ -225,7 +228,8 @@ struct AutomationEvent
 };
 
 // Sorts by parameter and start, drops what cannot play (missing parameter, no usable point, no length), keeps the points
-// in range and in order. `typeAt` says which effect sits in a slot (it gives the range of an effect parameter);
+// in range and in order. `typeAt` says which effect a parameter belongs to (the effect in its slot; for a Patcher parameter, the
+// effect inside the Patcher: see effectTypeOfParam) - it gives the parameter's range;
 // `pluginParams` how many parameters the plugin a plugin target points at has (0: no plugin there).
 template <typename SlotTypeFn, typename PluginParamsFn>
 std::vector<AutomationEvent> makeAutomationEvents (const std::vector<AutomationClip>& clips, int numChannels, int numTracks,
@@ -236,8 +240,8 @@ std::vector<AutomationEvent> makeAutomationEvents (const std::vector<AutomationC
     {
         if (c.startTick < 0 || c.lengthTicks < 1 || ! automationTargetExists (c.target, numChannels, numTracks))
             continue;
-        if (isEffectAutomation (c.target.kind) && (c.target.param >= effectParamCount (typeAt (c.target))))
-            continue; // no such parameter in the effect that sits there now
+        if (isEffectAutomation (c.target.kind) && (effectParamIndex (c.target.param) >= effectParamCount (typeAt (c.target))))
+            continue; // no such parameter in the effect that sits there now (0.86.0: or in the Patcher's effect it names)
         if (isPluginAutomation (c.target.kind) && c.target.param >= pluginParams (c.target))
             continue; // no plugin there now, or one without that parameter
 

@@ -56,6 +56,14 @@ enum class EffectType : std::uint8_t
 constexpr int kEffectTypeCount = 38;
 constexpr int kPatcherSlots = 10;
 constexpr int kMaxEffectParams = 24; // 0.61.0: 24 (the 7-band EQ has 22); 8 before
+// 0.86.0: the parameters of the effects inside a Patcher, for automation: from kPatcherParamBase on, an effect slot's parameter
+// number names effect `inner` (0 .. kPatcherSlots - 1) of the Patcher in that slot and that effect's parameter `p`.
+constexpr int kPatcherParamBase = 1000;
+constexpr int patcherParam (int inner, int p) noexcept { return kPatcherParamBase + inner * kMaxEffectParams + p; }
+constexpr bool isPatcherParam (int param) noexcept { return param >= kPatcherParamBase && param < kPatcherParamBase + kPatcherSlots * kMaxEffectParams; }
+constexpr int patcherInner (int param) noexcept { return (param - kPatcherParamBase) / kMaxEffectParams; }
+// The parameter's number in its own effect (a Patcher's inner effect for a Patcher parameter).
+constexpr int effectParamIndex (int param) noexcept { return isPatcherParam (param) ? (param - kPatcherParamBase) % kMaxEffectParams : param; }
 constexpr int kSlotsPerTrack = 10; // insert effects per mixer track, aux bus and master (0.45.0: 10, as in FL Studio; 4 before)
 
 // The built-in effects in the order of the slot menu, grouped (the group starts where `group` is set).
@@ -645,6 +653,7 @@ struct EffectTransport
     const float* const* keyLeft = nullptr;
     const float* const* keyRight = nullptr;
     int numKeys = 0;
+    std::uint64_t chunk = 0; // 0.86.0: which chunk of the song this is (0: none), for the automation of the effects in a Patcher
 };
 
 // The big buffers some effects need (0.29.0): the reverb's combs and all-passes, the pre-delay, the delay lines (also the chorus's
@@ -916,7 +925,41 @@ struct PatcherState
     std::array<std::unique_ptr<EffectMemory>, kPatcherSlots> memories;
     std::array<EffectType, kPatcherSlots> types {};
     std::vector<float> dryL, dryR, accL, accR;
+    // 0.86.0: values automation gives the effects' parameters, each held for the chunk (EffectTransport::chunk) it was given for
+    std::array<std::array<float, kMaxEffectParams>, kPatcherSlots> automated {};
+    std::array<std::array<std::uint64_t, kMaxEffectParams>, kPatcherSlots> automatedAt {};
 };
+
+// 0.86.0, audio thread: automation sets parameter `param` (a Patcher parameter, see patcherParam) of the Patcher in `slot` for chunk
+// `chunk` (nothing when the slot holds no Patcher).
+inline void automatePatcher (const EffectSlot& slot, int param, float value, std::uint64_t chunk) noexcept
+{
+    if (slot.type != EffectType::Patcher || slot.patcherState == nullptr || ! isPatcherParam (param) || chunk == 0)
+        return;
+    const auto k = static_cast<size_t> (patcherInner (param));
+    const auto p = static_cast<size_t> (effectParamIndex (param));
+    slot.patcherState->automated[k][p] = value;
+    slot.patcherState->automatedAt[k][p] = chunk;
+}
+
+// 0.86.0: the value parameter `param` of `slot` has (for a Patcher parameter, in the effect inside the Patcher); 0 when there is none.
+inline float effectParamValueOf (const EffectSlot& slot, int param) noexcept
+{
+    if (! isPatcherParam (param))
+        return param >= 0 && param < kMaxEffectParams ? slot.params[static_cast<size_t> (param)] : 0.0f;
+    const auto k = static_cast<size_t> (patcherInner (param));
+    return slot.type == EffectType::Patcher && slot.patch != nullptr && k < slot.patch->size()
+               ? (*slot.patch)[k].params[static_cast<size_t> (effectParamIndex (param))] : 0.0f;
+}
+
+// 0.86.0: the effect a parameter of `slot` belongs to (for a Patcher parameter, the effect inside the Patcher; None when there is none).
+inline EffectType effectTypeOfParam (const EffectSlot& slot, int param) noexcept
+{
+    if (! isPatcherParam (param))
+        return slot.type;
+    const auto k = static_cast<size_t> (patcherInner (param));
+    return slot.type == EffectType::Patcher && slot.patch != nullptr && k < slot.patch->size() ? (*slot.patch)[k].type : EffectType::None;
+}
 
 // Message thread (0.73.0): a Patcher slot gets the state its effects need at this rate (its convolvers their responses too).
 void preparePatcher (EffectSlot& slot, double sampleRate, bool fresh = false);

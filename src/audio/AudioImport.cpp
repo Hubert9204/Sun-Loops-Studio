@@ -4,6 +4,7 @@
 #include <cmath>
 #include <limits>
 #include <map>
+#include <set>
 #include <tuple>
 
 #include "audio/AudioExport.h"
@@ -34,10 +35,9 @@ bool hasExtensionIn (const juce::File& file, const juce::StringArray& extensions
 }
 
 // Plain decoding with JUCE's own readers.
-ImportResult decodeNative (const juce::File& file)
+// The built-in reader for `file` (null when it cannot read it).
+std::unique_ptr<juce::AudioFormatReader> openNativeReader (const juce::File& file)
 {
-    ImportResult result;
-
     std::unique_ptr<juce::AudioFormatReader> reader;
     if (file.hasFileExtension ("oga")) // the format manager only knows .ogg; the content is the same
     {
@@ -51,6 +51,33 @@ ImportResult decodeNative (const juce::File& file)
         manager.registerBasicFormats();
         reader.reset (manager.createReaderFor (file));
     }
+    return reader;
+}
+
+// The key a long file's cache is found by (its path, size, date and length) and the cache file of a key.
+juce::String audioCacheKey (const juce::File& file, int frames)
+{
+    return file.getFullPathName() + "|" + juce::String (file.getSize()) + "|" + juce::String (file.getLastModificationTime().toMilliseconds())
+         + "|" + juce::String (frames);
+}
+
+juce::File audioCacheFileFor (const juce::String& key, bool mono)
+{
+    return audioCacheFolder().getChildFile (juce::String::toHexString (key.hashCode64()) + (mono ? ".m" : ".s") + ".f32");
+}
+
+// How many frames of `reader` are read (at most kMaxImportSeconds).
+int framesToRead (const juce::AudioFormatReader& reader)
+{
+    const auto maxFrames = std::min (static_cast<juce::int64> (reader.sampleRate * kMaxImportSeconds), static_cast<juce::int64> (std::numeric_limits<int>::max() - 1));
+    return static_cast<int> (std::min (reader.lengthInSamples, maxFrames));
+}
+
+ImportResult decodeNative (const juce::File& file)
+{
+    ImportResult result;
+
+    auto reader = openNativeReader (file);
 
     if (reader == nullptr)
     {
@@ -79,8 +106,7 @@ ImportResult decodeNative (const juce::File& file)
     std::shared_ptr<SampleData> data;
     if (frames > reader->sampleRate * kMaxInMemorySeconds) // 0.81.0: a long file is read from the audio cache
     {
-        const juce::String key = file.getFullPathName() + "|" + juce::String (file.getSize()) + "|"
-                               + juce::String (file.getLastModificationTime().toMilliseconds()) + "|" + juce::String (frames);
+        const juce::String key = audioCacheKey (file, frames);
         juce::String error;
         data = readSampleDataToCache (*reader, frames, name, source, key, error);
         if (data == nullptr)
@@ -285,7 +311,7 @@ std::shared_ptr<SampleData> readSampleDataToCache (juce::AudioFormatReader& read
     const int channels = mono ? 1 : 2;
     const auto bytes = static_cast<juce::int64> (frames) * channels * static_cast<juce::int64> (sizeof (float));
     const auto folder = audioCacheFolder();
-    const auto file = folder.getChildFile (juce::String::toHexString (key.hashCode64()) + (mono ? ".m" : ".s") + ".f32");
+    const auto file = audioCacheFileFor (key, mono);
 
     const float* samples = nullptr;
     auto map = file.existsAsFile() ? mapFloatFile (file, bytes, samples) : nullptr;
@@ -551,4 +577,31 @@ void loadAudioForClips (Arrangement& arrangement, juce::StringArray& problems)
     }
 }
 
+std::vector<juce::File> clipFilesNeedingAudioCache (const Arrangement& arrangement)
+{
+    std::vector<juce::File> files;
+    std::set<std::string> seen;
+    for (const auto& clip : arrangement.audioClips)
+    {
+        if (clip.data == nullptr || clip.data->numFrames() > 0 || clip.data->source.rfind ("builtin:", 0) == 0 || ! seen.insert (clip.data->source).second)
+            continue;
+        const juce::File file (juce::String (clip.data->source));
+        if (! file.existsAsFile() || ! file.hasFileExtension ("wav;aiff;aif;flac;ogg;oga;mp3"))
+            continue;
+        const auto reader = openNativeReader (file);
+        if (reader == nullptr || reader->numChannels < 1 || reader->sampleRate < 1000.0)
+            continue;
+        const int frames = framesToRead (*reader);
+        if (frames > reader->sampleRate * kMaxInMemorySeconds && ! audioCacheFileFor (audioCacheKey (file, frames), reader->numChannels == 1).existsAsFile())
+            files.push_back (file);
+    }
+    return files;
+}
+
+bool decodeIntoAudioCache (const juce::File& file, juce::String& error)
+{
+    const auto result = importAudioFile (file);
+    error = result.error;
+    return result.data != nullptr;
+}
 } // namespace sls

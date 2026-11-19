@@ -123,7 +123,10 @@ public:
     static constexpr int kMaxRecordStreams = 8;
     // `countInBeats` (0.47.0): the metronome counts that many beats first (with the transport stopped), then the song and the
     // takes start together, on the beat after the last click. stopRecording() during the count-in cancels it.
-    juce::String startRecording (const std::vector<RecordStream>& streams, bool fromSongStart, int countInBeats = 0);
+    // 0.86.0: `countInBeatsPerBar`, `countInBeatUnit` and `countInBpm` are the meter and tempo of the bar the take starts in (0: the
+    // project's): the count-in clicks in them.
+    juce::String startRecording (const std::vector<RecordStream>& streams, bool fromSongStart, int countInBeats = 0, int countInBeatsPerBar = 0,
+                                 int countInBeatUnit = 0, double countInBpm = 0.0);
     bool isCountingIn() const noexcept { return countingIn.load (std::memory_order_relaxed); }
     std::vector<InputRecorder::Take> stopRecording(); // in the order of the streams; the transport keeps running
     double getRecordedSeconds() const noexcept { return recorders[0].getSecondsRecorded(); }
@@ -282,6 +285,8 @@ private:
     bool captureStarted = false; // audio thread only: the take has started (and the song was rewound for it if asked)
     // Count-in (0.47.0): beats asked for by startRecording, a cancel from stopRecording, and the audio thread's own countdown.
     std::atomic<int> countInRequest { 0 };
+    std::atomic<int> countInBar { 0 }, countInUnit { 0 }; // 0.86.0: the count-in's meter (0: the project's) ...
+    std::atomic<double> countInTempo { 0.0 };            // ... and tempo (0: the current one)
     std::atomic<bool> countInCancel { false };
     std::atomic<bool> countingIn { false };
     long long countInLeft = 0; // audio thread only: samples of count-in still to play

@@ -8,6 +8,12 @@ namespace sls
 {
 namespace
 {
+// 0.86.0: "Patcher 3 > " for a parameter of the third effect inside a Patcher
+juce::String patcherPrefix (int param)
+{
+    return isPatcherParam (param) ? "Patcher " + juce::String (patcherInner (param) + 1) + " > " : juce::String();
+}
+
 const char* effectParamNameFor (EffectType type, int param)
 {
     return param >= 0 && param < effectParamCount (type) ? effectParamInfo (type, param).name : "parameter";
@@ -18,12 +24,13 @@ EffectType MainComponent::effectTypeFor (const AutomationTarget& t) const
 {
     if (t.slot < 0 || t.slot >= kSlotsPerTrack)
         return EffectType::None;
+    // (0.86.0: for a parameter of an effect inside a Patcher, that effect)
     if (t.kind == AutomationKind::MasterEffect)
-        return masterTrack.slots[static_cast<size_t> (t.slot)].type;
+        return effectTypeOfParam (masterTrack.slots[static_cast<size_t> (t.slot)], t.param);
     if (t.kind == AutomationKind::TrackEffect && t.index >= 0 && t.index < static_cast<int> (tracks.size()))
-        return tracks[static_cast<size_t> (t.index)].slots[static_cast<size_t> (t.slot)].type;
+        return effectTypeOfParam (tracks[static_cast<size_t> (t.index)].slots[static_cast<size_t> (t.slot)], t.param);
     if (t.kind == AutomationKind::AuxEffect && t.index >= 0 && t.index < kAuxBuses) // 0.80.0
-        return console.aux[static_cast<size_t> (t.index)].slots[static_cast<size_t> (t.slot)].type;
+        return effectTypeOfParam (console.aux[static_cast<size_t> (t.index)].slots[static_cast<size_t> (t.slot)], t.param);
     return EffectType::None;
 }
 
@@ -79,12 +86,12 @@ float MainComponent::currentValueOf (const AutomationTarget& t) const
         case AutomationKind::TrackVolume:   if (at (tracks, t.index)) return tracks[static_cast<size_t> (t.index)].volume; break;
         case AutomationKind::TrackPan:      if (at (tracks, t.index)) return tracks[static_cast<size_t> (t.index)].pan; break;
         case AutomationKind::TrackEffect:
-            if (at (tracks, t.index) && t.slot >= 0 && t.slot < kSlotsPerTrack && t.param >= 0 && t.param < kMaxEffectParams)
-                return tracks[static_cast<size_t> (t.index)].slots[static_cast<size_t> (t.slot)].params[static_cast<size_t> (t.param)];
+            if (at (tracks, t.index) && t.slot >= 0 && t.slot < kSlotsPerTrack && ((t.param >= 0 && t.param < kMaxEffectParams) || isPatcherParam (t.param)))
+                return effectParamValueOf (tracks[static_cast<size_t> (t.index)].slots[static_cast<size_t> (t.slot)], t.param);
             break;
         case AutomationKind::MasterEffect:
-            if (t.slot >= 0 && t.slot < kSlotsPerTrack && t.param >= 0 && t.param < kMaxEffectParams)
-                return masterTrack.slots[static_cast<size_t> (t.slot)].params[static_cast<size_t> (t.param)];
+            if (t.slot >= 0 && t.slot < kSlotsPerTrack && ((t.param >= 0 && t.param < kMaxEffectParams) || isPatcherParam (t.param)))
+                return effectParamValueOf (masterTrack.slots[static_cast<size_t> (t.slot)], t.param);
             break;
         case AutomationKind::ChannelPlugin:
         case AutomationKind::TrackPlugin:
@@ -95,6 +102,7 @@ float MainComponent::currentValueOf (const AutomationTarget& t) const
             break;
         case AutomationKind::AuxVolume: if (t.slot >= 0 && t.slot < kAuxBuses) return console.aux[static_cast<size_t> (t.slot)].volume; break;
         case AutomationKind::AuxPan:    if (t.slot >= 0 && t.slot < kAuxBuses) return console.aux[static_cast<size_t> (t.slot)].pan; break;
+        case AutomationKind::AuxMute:   if (t.slot >= 0 && t.slot < kAuxBuses) return console.aux[static_cast<size_t> (t.slot)].mute ? 1.0f : 0.0f; break; // 0.86.0
         case AutomationKind::VcaLevel:  if (t.slot >= 0 && t.slot < kVcaGroups) return console.vcaLevel[static_cast<size_t> (t.slot)]; break;
         // 0.80.0
         case AutomationKind::ChannelPitch: if (at (channels, t.index)) return channels[static_cast<size_t> (t.index)].pitch; break;
@@ -106,8 +114,8 @@ float MainComponent::currentValueOf (const AutomationTarget& t) const
         case AutomationKind::MasterVolume: return static_cast<float> (volumeSlider.getValue());
         case AutomationKind::MasterPitch:  return masterPitch;
         case AutomationKind::AuxEffect:
-            if (t.index >= 0 && t.index < kAuxBuses && t.slot >= 0 && t.slot < kSlotsPerTrack && t.param >= 0 && t.param < kMaxEffectParams)
-                return console.aux[static_cast<size_t> (t.index)].slots[static_cast<size_t> (t.slot)].params[static_cast<size_t> (t.param)];
+            if (t.index >= 0 && t.index < kAuxBuses && t.slot >= 0 && t.slot < kSlotsPerTrack && ((t.param >= 0 && t.param < kMaxEffectParams) || isPatcherParam (t.param)))
+                return effectParamValueOf (console.aux[static_cast<size_t> (t.index)].slots[static_cast<size_t> (t.slot)], t.param);
             break;
         case AutomationKind::AuxPlugin: break; // handled above
     }
@@ -135,6 +143,7 @@ juce::String MainComponent::automationLabelFor (const AutomationTarget& t) const
         case AutomationKind::TrackSend:     return "Track " + juce::String (t.index + 1) + " send to " + auxName (t.slot);
         case AutomationKind::AuxVolume:     return auxName (t.slot) + " volume";
         case AutomationKind::AuxPan:        return auxName (t.slot) + " balance";
+        case AutomationKind::AuxMute:       return auxName (t.slot) + " mute"; // 0.86.0
         case AutomationKind::VcaLevel:      return "VCA " + juce::String (t.slot + 1) + " level";
         case AutomationKind::ChannelPitch:  return channelName (t.index) + " pitch"; // 0.80.0
         case AutomationKind::ChannelSwing:  return channelName (t.index) + " swing";
@@ -147,17 +156,17 @@ juce::String MainComponent::automationLabelFor (const AutomationTarget& t) const
         case AutomationKind::AuxEffect:
         {
             const auto type = effectTypeFor (t);
-            return auxName (t.index) + " " + effectName (type) + " " + effectParamNameFor (type, t.param);
+            return auxName (t.index) + " " + patcherPrefix (t.param) + effectName (type) + " " + effectParamNameFor (type, effectParamIndex (t.param));
         }
         case AutomationKind::TrackEffect:
         {
             const auto type = effectTypeFor (t);
-            return "Track " + juce::String (t.index + 1) + " " + effectName (type) + " " + effectParamNameFor (type, t.param);
+            return "Track " + juce::String (t.index + 1) + " " + patcherPrefix (t.param) + effectName (type) + " " + effectParamNameFor (type, effectParamIndex (t.param));
         }
         case AutomationKind::MasterEffect:
         {
             const auto type = effectTypeFor (t);
-            return juce::String ("Master ") + effectName (type) + " " + effectParamNameFor (type, t.param);
+            return juce::String ("Master ") + patcherPrefix (t.param) + effectName (type) + " " + effectParamNameFor (type, effectParamIndex (t.param));
         }
         case AutomationKind::ChannelPlugin:
         case AutomationKind::TrackPlugin:
@@ -198,14 +207,15 @@ juce::String MainComponent::automationValueText (const AutomationTarget& t, floa
         case AutomationKind::MasterPitch:   return (v > 0.0f ? "+" : "") + juce::String (v, 2) + " st"; // 0.80.0
         case AutomationKind::ChannelSwing:  return juce::String (juce::roundToInt (v * 100.0f)) + " %";
         case AutomationKind::ChannelMute:
-        case AutomationKind::TrackMute:     return v >= 0.5f ? "Muted" : "On";
+        case AutomationKind::TrackMute:
+        case AutomationKind::AuxMute:       return v >= 0.5f ? "Muted" : "On";
         case AutomationKind::ChannelSolo:
         case AutomationKind::TrackSolo:     return v >= 0.5f ? "Solo" : "Off";
         case AutomationKind::TrackEffect:
         case AutomationKind::MasterEffect:
         case AutomationKind::AuxEffect:
         {
-            const auto info = effectParamInfo (effectTypeFor (t), t.param);
+            const auto info = effectParamInfo (effectTypeFor (t), effectParamIndex (t.param));
             const double range = static_cast<double> (info.max) - static_cast<double> (info.min);
             const int decimals = range >= 100.0 ? 0 : (range >= 10.0 ? 1 : 2);
             const juce::String unit (info.unit);

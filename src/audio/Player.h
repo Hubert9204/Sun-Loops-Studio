@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cstddef>
@@ -74,6 +75,15 @@ public:
     }
     // The free-running click (transport stopped) starts over: its first click (an accented one) after `samples` (0.47.0, count-in).
     void delayFreeClick (double samples) noexcept { pendingClickDelay = std::max (0.0, samples); }
+    // 0.86.0: ... and the count-in's own meter and tempo (those of the bar the take starts in), used by the free-running click
+    // until the song plays.
+    void delayFreeClick (double samples, int beatsPerBar, int beatTicks, double bpm) noexcept
+    {
+        pendingClickDelay = std::max (0.0, samples);
+        freeClickBeats = std::clamp (beatsPerBar, 1, 16);
+        freeClickBeatTicks = std::max (1, beatTicks);
+        freeClickBpm = std::max (1.0, bpm);
+    }
 
     // Notes played by hand (piano roll keyboard). They go through the channel's own volume, pan, pitch, mixer track
     // and effects, work with the transport stopped or running, and are not affected by the loop boundary.
@@ -498,6 +508,10 @@ private:
     double freeBeatSamples = 0.0;  // while stopped: samples since the last click (starts "due")
     int freeBeatCount = 0;
     double pendingClickDelay = -1.0; // delayFreeClick(): applied at the next chunk
+    std::uint64_t effectChunk = 0;   // 0.86.0: counts the chunks (EffectTransport::chunk)
+    int freeClickBeats = 0;          // 0.86.0: the count-in's meter (0: the song's, where it is) ...
+    int freeClickBeatTicks = kTicksPerBeat;
+    double freeClickBpm = 120.0;     // ... and tempo
     int clickPos = -1;             // samples into the current click, -1 when none
     bool clickAccent = false;
     void startClick (bool accent) noexcept { clickPos = 0; clickAccent = accent; }

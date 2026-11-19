@@ -85,6 +85,7 @@ public:
     void newProject();
     void openProject();                          // asks for a file
     bool openProjectFile (const juce::File& file); // returns false (after telling the user) if it cannot be opened
+    bool audioCacheReady = false; // 0.86.0: set while a project opens after its long audio files were decoded (no second pass)
     bool openDemoProject (const std::string& id);  // 0.65.0: a demo project, as a new untitled project named after it
 
     // Runs `proceed` straight away if there is nothing to lose; otherwise asks "Save / Don't save / Cancel" first.

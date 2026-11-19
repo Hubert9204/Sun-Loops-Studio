@@ -157,7 +157,7 @@ public:
     std::function<void()> onAddPattern;        // 0.79.0: the pattern section's + (a pattern and its track come together)
     std::function<void (int)> onDeletePattern; // 0.79.0: a pattern's own track is to be deleted: its pattern goes with it (index)
     std::function<void (int)> onTrackInserted; // 0.69.0: a track was inserted there; the ones from there on moved down one place
-    std::function<void (int, int)> onTrackMoved; // 0.82.0: track (first) was dragged to place (second); the ones between moved one place
+    std::function<void (const std::vector<int>&)> onTrackMoved; // 0.82.0: a track was dragged by its name; 0.86.0: newIndex[old track] = its new place (a group moves whole)
     void paintOverChildren (juce::Graphics&) override; // 0.82.0: where a dragged track would go
 
     // Tempo, to draw audio at its real length (an audio clip lasts a fixed time, not a fixed number of beats) and to

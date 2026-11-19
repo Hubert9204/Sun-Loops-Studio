@@ -4363,6 +4363,37 @@ void testAutomation080()
         const auto busDown = make ({ held (57, 0) }, { sls::makeFlatAutomationClip ({ K::AuxEffect, 0, 0, 0 }, 0, 0, song, -48.0f) }, tracks, console);
         check (rms (bus, 1.0, 3.5) > 0.01f && rms (busDown, 1.0, 3.5) < rms (bus, 1.0, 3.5) * 0.01f,
                "an effect on an aux bus automated (the Panomatic's volume to -48 dB) takes the bus down");
+        // 0.86.0: an aux bus's mute
+        const auto busMuted = make ({ held (57, 0) }, { sls::makeFlatAutomationClip ({ K::AuxMute, 0, 0, 0 }, 0, 0, song, 1.0f) }, tracks, console);
+        auto mutedConsole = console;
+        mutedConsole.aux[0].mute = true;
+        const auto busOn = make ({ held (57, 0) }, { sls::makeFlatAutomationClip ({ K::AuxMute, 0, 0, 0 }, 0, 0, song, 0.0f) }, tracks, mutedConsole);
+        check (rms (busMuted, 1.0, 3.5) < rms (bus, 1.0, 3.5) * 0.01f && rms (busOn, 1.0, 3.5) > rms (bus, 1.0, 3.5) * 0.9f,
+               "an aux bus's mute can be automated (on: silent; off: heard although its button is on)");
+        // 0.86.0: an effect inside a Patcher (its Panomatic's volume, the Patcher's second effect, down to -48 dB)
+        {
+            auto patched = sls::Project::defaultTracks();
+            auto patcher = sls::EffectSlot::make (sls::EffectType::Patcher);
+            std::vector<sls::EffectSlot> inner (static_cast<size_t> (sls::kPatcherSlots));
+            inner[1] = sls::EffectSlot::make (sls::EffectType::Panomatic);
+            patcher.patch = std::make_shared<const std::vector<sls::EffectSlot>> (inner);
+            patched[0].slots[2] = patcher;
+            const sls::AutomationTarget innerVolume { K::TrackEffect, 0, 2, sls::patcherParam (1, 0) };
+            const auto open = make ({ held (57, 0) }, {}, patched);
+            const auto down = make ({ held (57, 0) }, { step (innerVolume, 0.0f, 4 * kBeat, -48.0f) }, patched);
+            check (rms (open, 1.0, 3.5) > 0.01f && std::abs (rms (down, 0.5, 1.8) / rms (open, 0.5, 1.8) - 1.0f) < 0.05f
+                       && rms (down, 2.3, 3.5) < rms (open, 2.3, 3.5) * 0.01f,
+                   "a parameter of an effect inside a Patcher can be automated (the volume of its Panomatic down halfway)");
+            check (sls::automationTargetExists (innerVolume, 1, 8) && sls::effectTypeOfParam (patcher, innerVolume.param) == sls::EffectType::Panomatic
+                       && sls::effectParamIndex (innerVolume.param) == 0 && sls::automationRange (innerVolume, sls::EffectType::Panomatic).min == -48.0f
+                       && ! sls::automationTargetExists ({ K::TrackEffect, 0, 2, sls::patcherParam (sls::kPatcherSlots, 0) }, 1, 8),
+                   "it names the Patcher's effect and its parameter, with that parameter's range");
+            const auto none = make ({ held (57, 0) }, { step ({ K::TrackEffect, 0, 2, sls::patcherParam (5, 0) }, -48.0f, 0, -48.0f) }, patched);
+            check (std::abs (rms (none, 1.0, 3.5) / rms (open, 1.0, 3.5) - 1.0f) < 0.05f, "a clip for an empty place in the Patcher does nothing");
+        }
+        check (sls::isSwitchAutomation (K::AuxMute) && sls::automationTargetExists ({ K::AuxMute, 0, 7, 0 }, 0, 8)
+                   && ! sls::automationTargetExists ({ K::AuxMute, 0, 8, 0 }, 0, 8),
+               "it is a switch (held values), for each of the 8 buses");
     }
     // swing, per note at its place in the song
     {
@@ -4389,7 +4420,7 @@ void testAutomation080()
         doc.channels.push_back (doc.channels[0]);
         doc.sampleSources.resize (doc.channels.size());
         const K kinds[] = { K::ChannelPitch, K::ChannelSwing, K::ChannelMute, K::ChannelSolo, K::TrackMute, K::TrackSolo, K::MasterVolume, K::MasterPitch,
-                            K::AuxEffect };
+                            K::AuxEffect, K::AuxMute };
         int lane = 0;
         for (const auto kind : kinds)
         {
@@ -4651,7 +4682,7 @@ void testTempo083()
         player.setMetronome (true, 0.8f);
         std::vector<float> l (256), r (256), all;
         float* ch[2] = { l.data(), r.data() };
-        while (all.size() < static_cast<size_t> (6 * 24000))
+        while (all.size() < static_cast<size_t> (7 * 24000)) // (beat 6 is read too: up to 1500 samples after it starts)
         {
             std::fill (l.begin(), l.end(), 0.0f);
             std::fill (r.begin(), r.end(), 0.0f);
@@ -4665,9 +4696,35 @@ void testTempo083()
                 v = std::max (v, std::abs (all[static_cast<size_t> (i)]));
             return v;
         };
-        // (two plain clicks can start a fraction of a sample apart, so their sampled peaks differ a little from compiler to compiler)
         check (peakAt (4) > peakAt (3) * 1.2f && peakAt (4) > peakAt (5) * 1.2f && std::abs (peakAt (5) - peakAt (6)) < 0.05f * peakAt (5),
-               "after a change to 3/4 the accent comes every third beat from the change");
+               "after a change to 3/4 the accent comes every third beat from the change (peaks " + std::to_string (peakAt (3)) + " "
+                   + std::to_string (peakAt (4)) + " " + std::to_string (peakAt (5)) + " " + std::to_string (peakAt (6)) + ")");
+
+        // 0.86.0: a count-in clicks in the meter and tempo of the bar the take starts in (here 3/4 at 60 BPM, the song at 120)
+        {
+            Player counting;
+            counting.prepare (48000.0);
+            counting.setMetronome (true, 0.8f);
+            counting.delayFreeClick (0.0, 3, kTicksPerBeat, 60.0);
+            std::vector<float> heard;
+            while (heard.size() < static_cast<size_t> (5 * 48000))
+            {
+                std::fill (l.begin(), l.end(), 0.0f);
+                std::fill (r.begin(), r.end(), 0.0f);
+                counting.render (project, 120.0, false, ch, 2, 256);
+                heard.insert (heard.end(), l.begin(), l.end());
+            }
+            const auto peakNear = [&heard] (int sample)
+            {
+                float v = 0.0f;
+                for (int i = std::max (0, sample - 64); i < sample + 1500; ++i)
+                    v = std::max (v, std::abs (heard[static_cast<size_t> (i)]));
+                return v;
+            };
+            check (peakNear (0) > peakNear (48000) * 1.2f && peakNear (3 * 48000) > peakNear (48000) * 1.2f
+                       && peakNear (2 * 48000) < peakNear (3 * 48000) && peakNear (24000) < 1.0e-3f,
+                   "a count-in clicks in the meter and tempo where the take starts (an accent every third beat, a beat a second)");
+        }
 
         auto doc = ProjectDocument::blank();
         doc.arrangement.tempoMarkers = { { 4 * kBeat, 90.0, false }, { 12 * kBeat, 150.0, true } };
@@ -4769,6 +4826,26 @@ void testTempo083()
         check (level (r, expected - 0.25, expected - 0.05) > 0.1 && level (r, expected + 0.3, expected + 0.6) < 0.01,
                "through a ramp it lasts exactly its beats (" + std::to_string (expected) + " s; levels "
                    + std::to_string (level (r, expected - 0.25, expected - 0.05)) + ", " + std::to_string (level (r, expected + 0.3, expected + 0.6)) + ")");
+
+        // 0.86.0: switched to follow the tempo while it plays, it does so at once (before: only from its next start)
+        {
+            plainSong.revision = 1;
+            auto following = project;
+            following.revision = 2;
+            Player player;
+            player.prepare (48000.0);
+            std::vector<float> l (256), rr (256), all;
+            float* ch[2] = { l.data(), rr.data() };
+            while (all.size() < static_cast<size_t> (3.0 * 48000.0))
+            {
+                std::fill (l.begin(), l.end(), 0.0f);
+                std::fill (rr.begin(), rr.end(), 0.0f);
+                player.render (all.size() < 48000 ? plainSong : following, 60.0, true, ch, 2, 256);
+                all.insert (all.end(), l.begin(), l.end());
+            }
+            check (level (all, 0.2, 0.9) > 0.1 && level (all, 2.3, 2.8) > 0.1,
+                   "a clip switched to follow the tempo while it plays follows it at once (still heard after its own 2 s)");
+        }
     }
 }
 
@@ -6202,7 +6279,23 @@ void testAudioImport()
         for (int s = 0; s < 310; ++s)
             writer->writeFromAudioSampleBuffer (b, 0, 8000);
         writer.reset();
+        // 0.86.0: a project's long files not decoded yet are found from their headers (decoded behind a progress window first)
+        sls::Arrangement needing;
+        {
+            sls::AudioClip placeholder;
+            auto missing = std::make_shared<sls::SampleData>();
+            missing->source = file.getFullPathName().toStdString();
+            placeholder.data = missing;
+            needing.audioClips = { placeholder, placeholder };
+            auto shortOne = std::make_shared<sls::SampleData>();
+            shortOne->source = dir.getChildFile ("tone.wav").getFullPathName().toStdString();
+            placeholder.data = shortOne;
+            needing.audioClips.push_back (placeholder);
+        }
+        const auto toDecode = sls::clipFilesNeedingAudioCache (needing);
+        check (toDecode.size() == 1 && toDecode[0] == file, "a project's long file not decoded yet is found before it opens (once; a short one is not)");
         const auto r = sls::importAudioFile (file);
+        check (sls::clipFilesNeedingAudioCache (needing).empty(), "once decoded, it is not decoded again");
         const bool whole = r.data != nullptr && r.data->numFrames() == 8000 * 310 && r.warning.isEmpty() && r.data->isMapped();
         bool same = whole;
         for (int i = 0; same && i < r.data->numFrames(); i += 7919)
@@ -12131,6 +12224,53 @@ void testReorder082()
         r.tracks[1].firstInput = 3;
         r.moveTrack (1, 3);
         check (r.tracks[3].armed && r.tracks[3].firstInput == 3 && ! r.tracks[1].armed, "the recording settings follow the moved track");
+        r.reorderTracks ({ 2, 0, 1, 3 });
+        check (r.tracks[3].armed && ! r.tracks[2].armed, "... and a reorder (a group moved) too");
+        RecordSetup g;
+        g.tracks[0].firstInput = 5;
+        g.reorderTracks ({ 2, 0, 1 });
+        check (g.tracks[2].firstInput == 5 && g.tracks[0].firstInput != 5, "a reorder puts each track's settings at its new place");
+    }
+    {
+        // 0.86.0: groups move whole (as in FL Studio)
+        Arrangement a;
+        a.playlistTracks.resize (8); // audio tracks 0..7
+        a.playlistTracks[2].grouped = true; // group: head 1, members 2 and 3
+        a.playlistTracks[3].grouped = true;
+        a.playlistTracks[1].name = "head";
+        a.playlistTracks[3].name = "last";
+        a.clips = { { 0, 3, 0, 960, 0 }, { 0, 6, 0, 960, 0 } };
+        auto moved = a.moveTracks (1, 6);
+        check (moved.size() == 8 && moved[1] == 4 && moved[2] == 5 && moved[3] == 6 && a.playlistTracks[4].name == "head"
+                   && a.playlistTracks[6].name == "last" && a.playlistTracks[5].grouped && a.playlistTracks[6].grouped && ! a.playlistTracks[4].grouped
+                   && a.groupEnd (4) == 6 && ! a.playlistTracks[1].grouped,
+               "dragging a group's head moves the whole group");
+        check (a.clips[0].track == 6 && a.clips[1].track == 3, "the group's clips go with it, the others move up");
+        check (a.moveTracks (4, 1).size() == 8 && a.playlistTracks[1].name == "head" && a.groupEnd (1) == 3, "and back up");
+        // a group dropped inside another group goes before / after it
+        a.playlistTracks[6].grouped = true; // second group: head 5, member 6
+        moved = a.moveTracks (5, 2);
+        check (! moved.empty() && a.playlistTracks[1].grouped == false && a.groupEnd (1) == 2 && a.groupEnd (3) == 5
+                   && a.playlistTracks[3].name == "head",
+               "a group dropped inside another one goes before it, both stay whole");
+        // a single track dropped inside a group joins it; dragged out, it leaves it
+        Arrangement b;
+        b.playlistTracks.resize (6);
+        b.playlistTracks[2].grouped = true; // group 1..2
+        check (! b.moveTracks (5, 2).empty() && b.playlistTracks[2].grouped && b.groupEnd (1) == 3, "a track dropped inside a group joins it");
+        check (! b.moveTracks (2, 5).empty() && ! b.playlistTracks[5].grouped && b.groupEnd (1) == 2, "dragged out of it, it leaves it");
+        check (b.moveTracks (1, 2).empty(), "a group dropped on itself does not move");
+        // a track dropped down onto a folded group goes after it (its tracks are hidden); the Playlist's line shows where
+        Arrangement f;
+        f.playlistTracks.resize (6);
+        f.playlistTracks[2].grouped = f.playlistTracks[3].grouped = true; // group 1..3, folded
+        f.playlistTracks[1].collapsed = true;
+        f.playlistTracks[0].name = "single";
+        check (f.trackMoveLandsBefore (0, 1) == 4 && f.trackMoveLandsBefore (1, 4) == 5 && f.trackMoveLandsBefore (4, 1) == 1
+                   && f.trackMoveLandsBefore (1, 2) == -1,
+               "the line while dragging is where the tracks will really go");
+        check (! f.moveTracks (0, 1).empty() && f.playlistTracks[3].name == "single" && ! f.playlistTracks[3].grouped && f.groupEnd (0) == 2,
+               "a track dropped down onto a folded group goes after the group, not into it");
     }
     {
         std::vector<MixerTrack> tracks = Project::defaultTracks();
@@ -14474,6 +14614,32 @@ void testPlugins085()
         std::cout << "  sandbox log:\n" << sandboxLog.loadFileAsString() << std::endl;
     again.reset();
     boxed.reset();
+
+    // 0.86.0: the program itself as the sandbox (as it is installed: on macOS the executable inside the .app), when the CI names it
+    if (const auto app = juce::SystemStats::getEnvironmentVariable ("SLS_SANDBOX_APP", {}); app.isNotEmpty())
+    {
+        sls::PluginHost::sandboxExecutable() = juce::File (app);
+        auto fromApp = host.create (gainDesc, kSr, n, error, true);
+        bool sounds = false;
+        if (fromApp != nullptr)
+        {
+            if (const int g = gainIndex (*fromApp); g >= 0)
+                fromApp->setParameter (g, 0.25f);
+            for (int round = 0; round < 3; ++round)
+            {
+                std::fill (l.begin(), l.end(), 1.0f);
+                std::fill (r.begin(), r.end(), 1.0f);
+                fromApp->process (l.data(), r.data(), n, nullptr, 0);
+            }
+            sounds = std::abs (l[10] - 0.25f) < 1.0e-5f;
+        }
+        check (fromApp != nullptr && fromApp->sandboxState() == sls::JucePlugin::SandboxState::Running && sounds,
+               "the program itself (" + juce::File (app).getFileName().toStdString() + ") runs a plugin in its sandbox (" + error.toStdString() + ")");
+        if (fromApp == nullptr || ! sounds)
+            std::cout << "  sandbox log:\n" << sandboxLog.loadFileAsString() << std::endl;
+        fromApp.reset();
+        sls::PluginHost::sandboxExecutable() = juce::File::getSpecialLocation (juce::File::currentExecutableFile);
+    }
     sandboxLog.deleteFile();
     sandboxCrash.deleteRecursively();
 }

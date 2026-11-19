@@ -2,6 +2,33 @@
 
 All notable changes to Sun Loops Studio. Newest first.
 
+## 0.86.0 - 2026-11-19
+
+A review of the six blocks of 0.80.0 - 0.85.0: what they had left out is done, and what was found is fixed.
+
+### Added
+- **Automation of the effects inside a Patcher**: right-click a slider in the Patcher's window > *Create automation clip* (the clip
+  is named *Track N Patcher K > Effect parameter*); the window's sliders follow it while the song plays.
+- **Automation of an aux bus's mute** (right-click its **M**), held as the other switches.
+- **Playlist groups move whole** when dragged by their head's name, as in FL Studio; a group lands beside another group, never
+  inside it; a single track dropped inside a group joins it, dragged out leaves it, and dropped down onto a folded group goes after
+  it. The green line shows where the tracks will really go; record switches and recording settings follow.
+- **Opening a project with long audio files not decoded yet** decodes them first behind a progress window (with *Cancel*), then
+  opens the project: the window no longer stays frozen meanwhile.
+
+### Changed
+- The **count-in** clicks in the time signature and at the tempo of the bar where the take starts (it used the project's).
+- An audio clip switched to **follow the song's tempo** (or back, or given another tempo) **while it plays** changes at once.
+
+### Fixed
+- A test of the metronome read past the end of its buffer and could fail at random (it did once on Windows).
+- The user guide said the drum kit's edits could not be undone: they can (Ctrl+Z), and it says so now. It also says that the
+  sampler's modulation matrix acts at the start of each note because its sources are values of the note.
+
+### Tests
+- The continuous integration also runs a plugin in a sandbox started from the **program itself** (on macOS the executable inside
+  the `.app`), on Fedora, macOS and Windows: about 2,330 checks.
+
 ## 0.85.0 - 2026-11-19
 
 Plugins (sixth and last block of the plan).

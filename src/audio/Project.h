@@ -352,11 +352,11 @@ struct Project
                                              [&p] (const AutomationTarget& t)
                                              {
                                                  if (t.kind == AutomationKind::TrackEffect)
-                                                     return p.tracks[static_cast<size_t> (t.index)].slots[static_cast<size_t> (t.slot)].type;
+                                                     return effectTypeOfParam (p.tracks[static_cast<size_t> (t.index)].slots[static_cast<size_t> (t.slot)], t.param);
                                                  if (t.kind == AutomationKind::MasterEffect)
-                                                     return p.masterSlots[static_cast<size_t> (t.slot)].type;
+                                                     return effectTypeOfParam (p.masterSlots[static_cast<size_t> (t.slot)], t.param);
                                                  if (t.kind == AutomationKind::AuxEffect) // 0.80.0
-                                                     return p.console.aux[static_cast<size_t> (t.index)].slots[static_cast<size_t> (t.slot)].type;
+                                                     return effectTypeOfParam (p.console.aux[static_cast<size_t> (t.index)].slots[static_cast<size_t> (t.slot)], t.param);
                                                  return EffectType::None;
                                              },
                                              [&p] (const AutomationTarget& t)

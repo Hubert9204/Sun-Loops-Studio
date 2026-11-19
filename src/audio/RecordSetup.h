@@ -87,6 +87,15 @@ struct RecordSetup
         tracks[static_cast<std::size_t> (to)] = moving;
     }
 
+    // 0.86.0: the tracks were reordered (a group moved together): newIndex[old] = new place (Arrangement::moveTracks).
+    void reorderTracks (const std::vector<int>& newIndex)
+    {
+        auto before = tracks;
+        for (std::size_t t = 0; t < newIndex.size() && t < tracks.size(); ++t)
+            if (newIndex[t] >= 0 && newIndex[t] < kMaxPlaylistTracks)
+                tracks[static_cast<std::size_t> (newIndex[t])] = before[t];
+    }
+
     // Toggles one track. The last armed track cannot be disarmed: Record always has somewhere to write.
     void toggle (int track)
     {

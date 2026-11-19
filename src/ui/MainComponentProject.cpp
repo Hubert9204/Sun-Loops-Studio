@@ -35,6 +35,46 @@ namespace
 {
 constexpr int kMaxRecentProjects = 8;
 constexpr const char* kRecentKey = "recent.projects";
+
+// 0.86.0: the long audio files a project uses that are not in the audio cache yet are decoded on their own thread behind a progress
+// window before it opens (before, the window stayed frozen while they were decoded); `done` runs on the message thread (with false
+// when cancelled), and the job deletes itself.
+class AudioCacheJob : public juce::ThreadWithProgressWindow
+{
+public:
+    AudioCacheJob (std::vector<juce::File> toDecode, std::function<void (bool, juce::StringArray)> whenDone)
+        : juce::ThreadWithProgressWindow ("Opening the project: decoding long audio files...", true, true), files (std::move (toDecode)),
+          done (std::move (whenDone))
+    {
+    }
+    void run() override
+    {
+        for (size_t i = 0; i < files.size() && ! threadShouldExit(); ++i)
+        {
+            setStatusMessage (files[i].getFileName() + " (" + juce::String (static_cast<int> (i) + 1) + " of " + juce::String (static_cast<int> (files.size()))
+                              + "): decoded once, then the project opens at once");
+            setProgress (static_cast<double> (i) / static_cast<double> (files.size()));
+            juce::String error;
+            if (! decodeIntoAudioCache (files[i], error))
+                problems.add (files[i].getFileName() + ": " + error);
+        }
+        setProgress (1.0);
+    }
+    void threadComplete (bool cancelled) override
+    {
+        juce::MessageManager::callAsync ([this, cancelled]
+        {
+            if (done)
+                done (! cancelled, problems);
+            delete this;
+        });
+    }
+
+private:
+    std::vector<juce::File> files;
+    std::function<void (bool, juce::StringArray)> done;
+    juce::StringArray problems;
+};
 } // namespace
 
 juce::String MainComponent::projectName() const
@@ -443,6 +483,29 @@ bool MainComponent::openProjectFile (const juce::File& file)
                                                 "Could not open " + file.getFileName(), juce::String (parsed.error));
         return false;
     }
+
+    // 0.86.0: long audio files not decoded yet are decoded first, behind a progress window; then the project opens
+    if (! audioCacheReady)
+        if (auto pending = clipFilesNeedingAudioCache (parsed.document->arrangement); ! pending.empty())
+        {
+            statusLabel.setText ("Opening " + file.getFileName() + ": decoding " + juce::String (static_cast<int> (pending.size()))
+                                     + (pending.size() == 1 ? " long audio file..." : " long audio files..."),
+                                 juce::dontSendNotification);
+            auto* job = new AudioCacheJob (std::move (pending), [safe = juce::Component::SafePointer<MainComponent> (this), file] (bool finished, juce::StringArray)
+            {
+                if (safe == nullptr)
+                    return;
+                if (! finished)
+                {
+                    safe->statusLabel.setText ("Opening " + file.getFileName() + " was cancelled", juce::dontSendNotification);
+                    return;
+                }
+                const juce::ScopedValueSetter<bool> ready (safe->audioCacheReady, true); // (a file that failed is reported by the opening)
+                safe->openProjectFile (file);
+            });
+            job->launchThread();
+            return true;
+        }
 
     juce::StringArray problems;
     for (const auto& w : parsed.warnings)
