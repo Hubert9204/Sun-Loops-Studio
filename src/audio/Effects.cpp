@@ -308,8 +308,30 @@ void EffectUnit::process (const EffectSlot& requested, float* left, float* right
         // A plugin keeps its own state; bypass simply leaves the signal alone.
         active = EffectType::Plugin;
         if (! requested.bypass && requested.plugin != nullptr)
-            blended (requested.mix, left, right, numSamples,
-                     [&] (float* l, float* r, int count, int) noexcept { requested.plugin->process (l, r, count, nullptr, 0); });
+        {
+            // 0.85.0: a plugin with a sidechain input hears the track its slot names (params[0]: 1-based, 0 = none)
+            const float* keyL = nullptr;
+            const float* keyR = nullptr;
+            if (requested.plugin->hasSidechain() && std::isfinite (requested.params[0]))
+                if (const int key = static_cast<int> (std::lround (requested.params[0])) - 1;
+                    key >= 0 && key < transport.numKeys && transport.keyLeft != nullptr && transport.keyRight != nullptr)
+                {
+                    keyL = transport.keyLeft[key];
+                    keyR = transport.keyRight[key];
+                }
+            blended (requested.mix, left, right, numSamples, [&] (float* l, float* r, int count, int done) noexcept
+            {
+                if (keyL == nullptr)
+                {
+                    requested.plugin->process (l, r, count, nullptr, 0);
+                    return;
+                }
+                PluginIo io;
+                io.sideLeft = keyL + done;
+                io.sideRight = keyR != nullptr ? keyR + done : keyL + done;
+                requested.plugin->process (l, r, count, nullptr, 0, &io);
+            });
+        }
         return;
     }
     if (requested.type == EffectType::None) // an empty slot (most of them): no copy of the slot, nothing to do

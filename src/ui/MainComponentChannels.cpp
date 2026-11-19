@@ -36,6 +36,12 @@ void MainComponent::remapChannels (const std::vector<int>& newToOld, int newSele
             if (((c.layerMask >> newToOld[k]) & 1u) != 0)
                 moved |= 1u << k;
         c.layerMask = moved;
+        // 0.85.0: so is the channel a plugin's MIDI out plays (gone with its channel: none)
+        if (c.midiOutChannel >= 0)
+        {
+            const auto it = std::find (newToOld.begin(), newToOld.end(), c.midiOutChannel);
+            c.midiOutChannel = it != newToOld.end() ? static_cast<int> (it - newToOld.begin()) : -1;
+        }
     }
 
     remapArrangementChannels (arrangement, newToOld, oldCount);

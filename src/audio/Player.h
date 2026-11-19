@@ -337,6 +337,10 @@ private:
     std::array<std::array<PluginMidiEvent, kMaxPluginEvents>, kMaxChannels> pluginEvents {};
     std::array<int, kMaxChannels> pluginEventCount {};
     std::array<float, kChunk> pluginL {}, pluginR {};
+    // 0.85.0: a plugin instrument's outputs after its main pair (for the mixer tracks they go to), and the MIDI it sends out
+    static constexpr int kPluginExtraChannels = 16;
+    std::array<std::array<float, kChunk>, kPluginExtraChannels> pluginExtra {};
+    std::array<PluginMidiEvent, kMaxPluginEvents> pluginMidiOut {};
     int chunkSample = 0; // the sample of the current chunk being rendered (where new MIDI events go)
     // The next note of every channel and the next audio clip from `tick` on (no sound changes).
     void locate (const Project& project, double tick) noexcept;

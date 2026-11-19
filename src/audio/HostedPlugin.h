@@ -15,6 +15,18 @@ struct PluginMidiEvent
     std::uint8_t bytes[3] { 0, 0, 0 }; // a channel-voice MIDI message on MIDI channel 1
 };
 
+// 0.85.0: what a plugin hears and gives besides its main stereo pair, when it has it (all optional):
+struct PluginIo
+{
+    const float* sideLeft = nullptr;   // an effect's sidechain input (a compressor's key); null: silence
+    const float* sideRight = nullptr;
+    float* const* extraOut = nullptr;  // an instrument's outputs after its main pair (3, 4, 5...), `extraChannels` of them, written by it
+    int extraChannels = 0;
+    PluginMidiEvent* midiOut = nullptr; // the MIDI it sends out (an arpeggiator's notes), at most `maxMidiOut`; `numMidiOut` is set
+    int maxMidiOut = 0;
+    int numMidiOut = 0;
+};
+
 class HostedPlugin
 {
 public:
@@ -23,7 +35,13 @@ public:
     // Audio thread. An effect processes `left` / `right` in place; an instrument writes its output there (they hold zeros on entry).
     // `numSamples` is at most the block size it was prepared with; `events` are sorted by offset. Never allocates, locks or does I/O
     // (as far as the plugin itself keeps to that). A placeholder (see isLoaded) leaves effects alone and keeps instruments silent.
-    virtual void process (float* left, float* right, int numSamples, const PluginMidiEvent* events, int numEvents) noexcept = 0;
+    // 0.85.0: `io` carries the sidechain, the extra outputs and the MIDI out (null: none of them).
+    virtual void process (float* left, float* right, int numSamples, const PluginMidiEvent* events, int numEvents, PluginIo* io = nullptr) noexcept = 0;
+
+    // 0.85.0: what it has besides its main stereo pair (any thread, after it was prepared): a sidechain input, more outputs, MIDI out.
+    virtual bool hasSidechain() const noexcept { return false; }
+    virtual int extraOutputChannels() const noexcept { return 0; }
+    virtual bool sendsMidi() const noexcept { return false; }
 
     virtual bool isInstrument() const noexcept = 0;
 

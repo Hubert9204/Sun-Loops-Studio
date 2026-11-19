@@ -94,7 +94,7 @@ std::shared_ptr<JucePlugin> MainComponent::createPlugin (const juce::String& ide
         error = "This plugin is no longer in the list: scan again (browser > Plugin).";
         return nullptr;
     }
-    return pluginHost->create (description, engine.getSampleRate(), Player::kChunk, error);
+    return pluginHost->create (description, engine.getSampleRate(), Player::kChunk, error, newPluginsSandboxed());
 }
 
 std::shared_ptr<JucePlugin> MainComponent::duplicatePlugin (const HostedPlugin& original)
@@ -103,10 +103,13 @@ std::shared_ptr<JucePlugin> MainComponent::duplicatePlugin (const HostedPlugin& 
     if (source == nullptr)
         return nullptr;
     juce::String error;
-    auto copy = source->isLoaded() ? pluginHost->create (source->getDescription(), engine.getSampleRate(), Player::kChunk, error)
-                                                 : nullptr;
+    auto copy = source->isLoaded() ? pluginHost->create (source->getDescription(), engine.getSampleRate(), Player::kChunk, error, source->wantsSandbox())
+                                   : nullptr;
     if (copy == nullptr)
+    {
         copy = JucePlugin::placeholder (source->getDescription(), source->getState(), source->isInstrument());
+        copy->setWantsSandbox (source->wantsSandbox());
+    }
     else
         copy->setState (source->getState());
     return copy;
@@ -189,8 +192,33 @@ void MainComponent::openPluginWindow (const std::shared_ptr<HostedPlugin>& plugi
             w->toFront (true);
             return;
         }
-    auto window = std::make_unique<PluginWindow> (std::move (juce));
+    auto window = std::make_unique<PluginWindow> (juce, library.root.getChildFile ("Plugin Presets"));
     auto* raw = window.get();
+    // 0.85.0: the window's routing menu, the sandbox switch, a reload after a crash, a state it put back
+    window->onRoutingMenu = [this, weak = std::weak_ptr<JucePlugin> (juce)] (juce::Component& anchor)
+    {
+        if (auto p = weak.lock())
+            showPluginRouting (p, anchor);
+    };
+    window->onToggleSandbox = [this, weak = std::weak_ptr<JucePlugin> (juce)]
+    {
+        if (auto p = weak.lock())
+            juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<MainComponent> (this), p]
+            {
+                if (safe != nullptr)
+                    safe->swapPlugin (p, ! p->isSandboxed(), p->getState());
+            });
+    };
+    window->onRestart = [this, weak = std::weak_ptr<JucePlugin> (juce)]
+    {
+        if (auto p = weak.lock())
+            juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<MainComponent> (this), p]
+            {
+                if (safe != nullptr)
+                    safe->swapPlugin (p, true, p->getState()); // (a crashed one gives the state it had when it was last asked)
+            });
+    };
+    window->onStateRestored = [this] { markDirty(); };
     window->onClose = [this, raw]
     {
         // Deferred: the window is still running its own close handler.
@@ -265,6 +293,7 @@ void MainComponent::addPluginSpecs (ProjectDocument& doc, bool withState) const
         s.instrument = plugin.isInstrument();
         if (const auto* j = asJuce (&plugin))
         {
+            s.sandboxed = j->wantsSandbox(); // 0.85.0
             s.description = PluginHost::descriptionToText (j->getDescription()).toStdString();
             if (withState)
                 s.state = j->getState().toBase64Encoding().toStdString();
@@ -316,12 +345,19 @@ void MainComponent::loadDocumentPlugins (ProjectDocument& doc, juce::StringArray
                     break;
                 }
         juce::String error;
-        auto plugin = pluginHost->create (description, engine.getSampleRate(), Player::kChunk, error);
+        auto plugin = pluginHost->create (description, engine.getSampleRate(), Player::kChunk, error, spec.sandboxed);
+        if (plugin == nullptr && spec.sandboxed) // 0.85.0: its sandbox would not start: in this process, and said so
+        {
+            problems.add (description.name + " could not run in a sandbox (" + error + "): it runs inside the program.");
+            plugin = pluginHost->create (description, engine.getSampleRate(), Player::kChunk, error);
+        }
         if (plugin == nullptr)
         {
             problems.add ("Plugin not found: " + description.name + " (" + description.pluginFormatName
                           + "). Its settings are kept; install it and open the project again.");
-            return JucePlugin::placeholder (description, std::move (state), spec.instrument);
+            auto kept = JucePlugin::placeholder (description, std::move (state), spec.instrument);
+            kept->setWantsSandbox (spec.sandboxed);
+            return kept;
         }
         plugin->setState (state);
         return plugin;
@@ -365,6 +401,153 @@ void MainComponent::loadDocumentPlugins (ProjectDocument& doc, juce::StringArray
     for (auto& a : doc.console.aux)
         tidy (a.slots);
     tidy (doc.masterSlots);
+}
+
+// 0.85.0: a plugin moved between this process and a sandbox (or started again after a crash): a new instance with the same settings takes its
+// place everywhere the project has it; its window is opened again for it.
+void MainComponent::swapPlugin (const std::shared_ptr<JucePlugin>& from, bool sandboxed, const juce::MemoryBlock& state)
+{
+    if (from == nullptr)
+        return;
+    juce::String error;
+    juce::MouseCursor::showWaitCursor();
+    auto to = pluginHost->create (from->getDescription(), engine.getSampleRate(), Player::kChunk, error, sandboxed);
+    juce::MouseCursor::hideWaitCursor();
+    if (to == nullptr)
+    {
+        juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Plugin",
+                                                from->getDescription().name + (sandboxed ? " could not be started in a sandbox: " : " could not be loaded: ") + error,
+                                                "OK", this);
+        return;
+    }
+    if (state.getSize() > 0)
+        to->setState (state);
+    const auto replace = [&] (std::shared_ptr<HostedPlugin>& p) { if (p.get() == from.get()) p = to; };
+    for (auto& c : channels)
+        replace (c.plugin);
+    const auto inSlots = [&] (std::array<EffectSlot, kSlotsPerTrack>& slots) { for (auto& s : slots) if (s.type == EffectType::Plugin) replace (s.plugin); };
+    for (auto& t : tracks)
+        inSlots (t.slots);
+    for (auto& a : console.aux)
+        inSlots (a.slots);
+    inSlots (masterTrack.slots);
+    reportedCrashes.erase (std::remove (reportedCrashes.begin(), reportedCrashes.end(), from.get()), reportedCrashes.end());
+    pluginWindows.erase (std::remove_if (pluginWindows.begin(), pluginWindows.end(), [&] (const std::unique_ptr<PluginWindow>& w) { return w->shows() == from.get(); }),
+                         pluginWindows.end());
+    publishProject();
+    markDirty();
+    statusLabel.setText (juce::String (to->displayName()) + (sandboxed ? " runs in a sandbox (a process of its own)" : " runs inside the program"),
+                         juce::dontSendNotification);
+    openPluginWindow (to);
+}
+
+// 0.85.0: where a plugin's sidechain comes from (an effect's slot), where its other outputs go and which channel its MIDI out plays (an instrument's
+// channel). The places are found by the plugin itself.
+void MainComponent::showPluginRouting (const std::shared_ptr<JucePlugin>& plugin, juce::Component& anchor)
+{
+    int channelIndex = -1;
+    for (size_t c = 0; c < channels.size(); ++c)
+        if (channels[c].plugin.get() == plugin.get())
+            channelIndex = static_cast<int> (c);
+    EffectSlot* slot = nullptr;
+    const auto find = [&] (std::array<EffectSlot, kSlotsPerTrack>& slots) { for (auto& s : slots) if (s.type == EffectType::Plugin && s.plugin.get() == plugin.get()) slot = &s; };
+    for (auto& t : tracks)
+        find (t.slots);
+    for (auto& a : console.aux)
+        find (a.slots);
+    find (masterTrack.slots);
+
+    juce::PopupMenu menu;
+    const int trackCount = static_cast<int> (tracks.size());
+    if (slot != nullptr && plugin->hasSidechain())
+    {
+        juce::PopupMenu side;
+        const int now = static_cast<int> (std::lround (slot->params[0]));
+        side.addItem (1000, "None", true, now <= 0);
+        for (int t = 0; t < trackCount; ++t)
+            side.addItem (1001 + t, "Track " + juce::String (t + 1) + (tracks[static_cast<size_t> (t)].name.rfind ("Track", 0) == 0 ? juce::String() : " - " + juce::String (tracks[static_cast<size_t> (t)].name)),
+                          true, now == t + 1);
+        menu.addSubMenu ("Sidechain input from", side);
+    }
+    if (channelIndex >= 0)
+    {
+        const auto& ch = channels[static_cast<size_t> (channelIndex)];
+        const int pairs = std::min (Channel::kPluginOutputPairs, (plugin->extraOutputChannels() + 1) / 2);
+        for (int p = 0; p < pairs; ++p)
+        {
+            juce::PopupMenu out;
+            const int now = ch.pluginOutputs[static_cast<size_t> (p)];
+            out.addItem (2000 + p * 1000, "Not heard", true, now < 0);
+            for (int t = 0; t < trackCount; ++t)
+                out.addItem (2001 + p * 1000 + t, "Track " + juce::String (t + 1), true, now == t);
+            menu.addSubMenu ("Outputs " + juce::String (3 + 2 * p) + "-" + juce::String (4 + 2 * p) + " to", out);
+        }
+        if (plugin->sendsMidi())
+        {
+            juce::PopupMenu midi;
+            midi.addItem (900, "None", true, ch.midiOutChannel < 0);
+            for (size_t c = 0; c < channels.size(); ++c)
+                if (static_cast<int> (c) != channelIndex)
+                    midi.addItem (901 + static_cast<int> (c), juce::String (static_cast<int> (c) + 1) + ". " + juce::String (channels[c].name), true,
+                                  ch.midiOutChannel == static_cast<int> (c));
+            menu.addSubMenu ("MIDI out plays channel", midi);
+        }
+    }
+    if (menu.getNumItems() == 0)
+        menu.addItem (1, "Nothing to route: no sidechain input, no other outputs, no MIDI out here", false);
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&anchor),
+                        [safe = juce::Component::SafePointer<MainComponent> (this), weak = std::weak_ptr<JucePlugin> (plugin), channelIndex] (int result)
+    {
+        auto p = weak.lock();
+        if (safe == nullptr || p == nullptr || result <= 1)
+            return;
+        auto& self = *safe;
+        if (result >= 1000 && result < 2000)
+        {
+            const auto set = [&] (std::array<EffectSlot, kSlotsPerTrack>& slots)
+            {
+                for (auto& s : slots)
+                    if (s.type == EffectType::Plugin && s.plugin.get() == p.get())
+                        s.params[0] = static_cast<float> (result - 1000);
+            };
+            for (auto& t : self.tracks)
+                set (t.slots);
+            for (auto& a : self.console.aux)
+                set (a.slots);
+            set (self.masterTrack.slots);
+            self.statusLabel.setText (result == 1000 ? juce::String ("The plugin's sidechain input: none")
+                                                     : "The plugin's sidechain input: Track " + juce::String (result - 1000),
+                                      juce::dontSendNotification);
+        }
+        else if (result >= 900 && result < 1000 && channelIndex >= 0 && channelIndex < static_cast<int> (self.channels.size()))
+            self.channels[static_cast<size_t> (channelIndex)].midiOutChannel = result - 901;
+        else if (result >= 2000 && channelIndex >= 0 && channelIndex < static_cast<int> (self.channels.size()))
+        {
+            const int pair = (result - 2000) / 1000, track = (result - 2000) % 1000 - 1;
+            if (pair >= 0 && pair < Channel::kPluginOutputPairs)
+                self.channels[static_cast<size_t> (channelIndex)].pluginOutputs[static_cast<size_t> (pair)] = track;
+        }
+        self.publishProject();
+        self.markDirty();
+    });
+}
+
+// 0.85.0: a sandboxed plugin whose process is gone is said once (the project goes on; its window offers to start it again).
+void MainComponent::checkPluginSandboxes()
+{
+    for (const auto& p : pluginHost->livePlugins())
+    {
+        if (! p->isSandboxed() || p->checkSandbox())
+            continue;
+        if (std::find (reportedCrashes.begin(), reportedCrashes.end(), p.get()) != reportedCrashes.end() || ! projectUsesPlugin (p.get()))
+            continue;
+        reportedCrashes.push_back (p.get());
+        spdlog::warn ("Sandboxed plugin {} crashed", p->displayName());
+        statusLabel.setText (juce::String (p->displayName()) + " crashed in its sandbox: the program goes on. Open its window to reload it.",
+                             juce::dontSendNotification);
+        for (auto& w : pluginWindows)
+            w->refreshBar();
+    }
 }
 
 void MainComponent::beginPluginExport (double sampleRate)

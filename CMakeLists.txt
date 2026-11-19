@@ -202,6 +202,7 @@ set(SLS_CORE_SOURCES
     src/assistant/HeliosChat.cpp
     src/plugins/PluginScanner.cpp
     src/plugins/PluginHost.cpp
+    src/plugins/PluginSandbox.cpp
     src/support/Logging.cpp
     src/support/CrashHandler.cpp
     src/support/CrashHandlerWindows.cpp # 0.75.0 (empty elsewhere)
@@ -308,6 +309,7 @@ target_sources(SunLoopsStudio PRIVATE
     src/ui/StepGraph.cpp
     src/ui/PanelWindow.cpp
     src/ui/MixerPanel.cpp
+    src/ui/PluginWindow.cpp
     src/ui/Icons.cpp
     src/ui/PatcherWindow.cpp
     src/ui/PlaylistTimeline.cpp

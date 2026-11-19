@@ -324,6 +324,7 @@ void MainComponent::showOptionsMenu()
     menu.addItem (menuItem (5, "Typing keyboard to piano", "", true, typingButton.getToggleState()));
     menu.addSeparator();
     menu.addItem (menuItem (6, "Play a sound at start-up", "", true, settings == nullptr || settings->getBoolValue ("startup.sound", true)));
+    menu.addItem (menuItem (7, "Run new plugins in a sandbox (a process of their own)", "", true, newPluginsSandboxed())); // 0.85.0
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&optionsButton),
                         [safe = juce::Component::SafePointer<MainComponent> (this)] (int result)
                         {
@@ -339,6 +340,14 @@ void MainComponent::showOptionsMenu()
                                 case 6:
                                     if (safe->settings != nullptr)
                                         safe->settings->setValue ("startup.sound", ! safe->settings->getBoolValue ("startup.sound", true));
+                                    break;
+                                case 7:
+                                    if (safe->settings != nullptr)
+                                        safe->settings->setValue ("plugins.sandbox", ! safe->newPluginsSandboxed());
+                                    safe->statusLabel.setText (safe->newPluginsSandboxed()
+                                                                   ? "New plugins run in a sandbox: a crash takes only the plugin (each plugin's window can change it)"
+                                                                   : "New plugins run inside the program (each plugin's window can still put it in a sandbox)",
+                                                               juce::dontSendNotification);
                                     break;
                                 default: break;
                             }

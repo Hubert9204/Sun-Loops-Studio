@@ -14254,6 +14254,199 @@ void testSunBurstInHost()
     check (riffFinite && rmsWindow (riffOut, 0.05, 0.4) > 0.005f, "a chord plays through SunRiff in the Player");
 }
 
+// 0.85.0: plugins' sidechain input, other outputs and MIDI out, presets, and plugins in a sandbox (a process of their own)
+void testPlugins085()
+{
+    std::cout << "\n[0.85.0 plugins: sidechain, outputs, MIDI out, presets, sandbox]\n";
+    const juce::ScopedJuceInitialiser_GUI juceInit;
+    sls::PluginHost host;
+    const juce::File dir (SLS_TEST_PLUGIN_DIR);
+    host.scan ([&] (const juce::String& format)
+               {
+                   juce::FileSearchPath p;
+                   if (format == "VST3")
+                       for (const char* kind : { "SlsTestSynth", "SlsTestGain" })
+                           p.add (dir.getChildFile (juce::String (kind) + "_artefacts/Release/VST3"));
+                   return p;
+               },
+               juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("sls-test-scan-085.txt"));
+    const auto* synthFound = findPlugin (host, "SLS Test Synth", "VST3");
+    const auto synthDesc = synthFound != nullptr ? *synthFound : juce::PluginDescription();
+    const auto* gainFound = findPlugin (host, "SLS Test Gain", "VST3");
+    const auto gainDesc = gainFound != nullptr ? *gainFound : juce::PluginDescription();
+    check (synthFound != nullptr && gainFound != nullptr, "the VST3 test plugins are found");
+    if (synthFound == nullptr || gainFound == nullptr)
+        return;
+    constexpr int n = sls::Player::kChunk;
+    juce::String error;
+
+    // --- in this process: the sidechain, the other outputs, the MIDI out
+    auto gain = host.create (gainDesc, kSr, n, error);
+    auto synth = host.create (synthDesc, kSr, n, error);
+    check (gain != nullptr && synth != nullptr && gain->hasSidechain() && ! gain->sendsMidi() && synth->extraOutputChannels() == 2 && synth->sendsMidi(),
+           "a plugin says what it has: a sidechain input, two more outputs, MIDI out");
+    if (gain == nullptr || synth == nullptr)
+        return;
+    std::vector<float> l (n, 1.0f), r (n, 1.0f), sideL (n, 0.25f), sideR (n, 0.25f);
+    gain->process (l.data(), r.data(), n, nullptr, 0);
+    check (std::abs (l[10] - 0.5f) < 1.0e-6f, "without a sidechain the effect works as before");
+    std::fill (l.begin(), l.end(), 1.0f);
+    std::fill (r.begin(), r.end(), 1.0f);
+    sls::PluginIo sideIo;
+    sideIo.sideLeft = sideL.data();
+    sideIo.sideRight = sideR.data();
+    gain->process (l.data(), r.data(), n, nullptr, 0, &sideIo);
+    check (std::abs (l[10] - 0.75f) < 1.0e-6f && std::abs (r[10] - 0.75f) < 1.0e-6f, "the sidechain input reaches the plugin");
+    {
+        std::vector<float> out0 (n), out1 (n), aux0 (n), aux1 (n);
+        std::array<float*, 2> extra { aux0.data(), aux1.data() };
+        std::array<sls::PluginMidiEvent, 16> midiOut {};
+        sls::PluginIo io;
+        io.extraOut = extra.data();
+        io.extraChannels = 2;
+        io.midiOut = midiOut.data();
+        io.maxMidiOut = 16;
+        sls::PluginMidiEvent on;
+        on.offset = 0;
+        on.bytes[0] = 0x90;
+        on.bytes[1] = 60;
+        on.bytes[2] = 100;
+        synth->process (out0.data(), out1.data(), n, &on, 1, &io);
+        float mainPeak = 0.0f, auxPeak = 0.0f;
+        for (int i = 0; i < n; ++i)
+        {
+            mainPeak = std::max (mainPeak, std::abs (out0[static_cast<size_t> (i)]));
+            auxPeak = std::max (auxPeak, std::abs (aux0[static_cast<size_t> (i)]));
+        }
+        check (mainPeak > 0.01f && auxPeak > 0.01f, "an instrument's second output pair is read");
+        check (io.numMidiOut == 1 && (midiOut[0].bytes[0] & 0xF0) == 0x90 && midiOut[0].bytes[1] == 67, "its MIDI out is read");
+    }
+    {   // through the engine: the outputs 3-4 go to a mixer track, the MIDI out plays another channel, an effect hears another track
+        sls::Channel c;
+        c.instrument = sls::Instrument::Plugin;
+        c.plugin = synth;
+        c.volume = 1.0f;
+        c.mixerTrack = 0;
+        c.notes = { { 60, 0, 4 * kBeat, 0.8f } };
+        c.pluginOutputs[0] = 3;
+        c.midiOutChannel = 1;
+        auto other = synthChannel ({});
+        other.mixerTrack = 2;
+        auto project = sls::Project::make ({ c, other }, 8 * kBeat);
+        project.tracks[4].slots[0].type = sls::EffectType::Plugin; // track 5 has nothing playing into it, only a sidechain from track 1
+        project.tracks[4].slots[0].plugin = gain;
+        project.tracks[4].slots[0].params[0] = 1.0f;
+        sls::Player player;
+        player.prepare (kSr);
+        renderBlocks (player, project, true, 0.2);
+        check (player.getTrackPeak (3) > 0.01f, "a plugin's outputs 3-4 play into the mixer track the channel names");
+        check (player.getChannelPeak (1) > 0.01f, "its MIDI out plays the channel it names");
+        check (player.getTrackPeak (4) > 0.01f, "an effect plugin hears the track its slot names as its sidechain");
+    }
+    {   // the mixer keeps those track numbers right
+        std::vector<sls::MixerTrack> tracks = sls::Project::defaultTracks();
+        tracks.resize (10);
+        tracks[4].slots[0].type = sls::EffectType::Plugin;
+        tracks[4].slots[0].plugin = gain;
+        tracks[4].slots[0].params[0] = 1.0f;
+        std::vector<sls::Channel> channels (1);
+        channels[0].instrument = sls::Instrument::Plugin;
+        channels[0].pluginOutputs[0] = 3;
+        sls::Arrangement a;
+        auto console = sls::Console::defaults();
+        std::array<sls::EffectSlot, sls::kSlotsPerTrack> master {};
+        check (sls::mixerTrackUse (tracks, channels, a, console, master, 0).listeners == 1 && sls::mixerTrackUse (tracks, channels, a, console, master, 3).pads == 1,
+               "a plugin's sidechain source and its outputs' tracks are in use");
+        check (sls::moveMixerTrack (tracks, channels, a, console, master, 0, 6) && channels[0].pluginOutputs[0] == 2
+                   && std::lround (tracks[3].slots[0].params[0]) == 7,
+               "moving tracks moves a plugin's outputs and sidechain source with them");
+        check (sls::deleteMixerTrack (tracks, channels, a, console, master, 2, 0) && channels[0].pluginOutputs[0] == -1, "a deleted output track: not heard");
+    }
+    {   // presets
+        const auto folder = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("sls-test-plugin-presets");
+        folder.deleteRecursively();
+        gain->setParameter (0, 0.9f);
+        const auto file = sls::PluginHost::presetsFolder (folder, gainDesc).getChildFile ("Loud.slsplugin");
+        check (sls::PluginHost::savePreset (*gain, file).wasOk() && file.existsAsFile(), "a plugin preset is saved in the plugin's folder");
+        gain->setParameter (0, 0.1f);
+        check (sls::PluginHost::loadPreset (*gain, file).wasOk() && std::abs (gain->parameterValue (0) - 0.9f) < 1.0e-4f, "and loaded back");
+        check (sls::PluginHost::loadPreset (*synth, file).failed(), "a preset of another plugin is refused");
+        folder.deleteRecursively();
+    }
+
+    // --- in a sandbox
+    sls::PluginHost::sandboxExecutable() = juce::File::getSpecialLocation (juce::File::currentExecutableFile);
+    auto boxed = host.create (gainDesc, kSr, n, error, true);
+    check (boxed != nullptr && boxed->isSandboxed() && boxed->isLoaded() && boxed->sandboxState() == sls::JucePlugin::SandboxState::Running,
+           "a plugin starts in a sandbox (" + error.toStdString() + ")");
+    if (boxed == nullptr)
+        return;
+    check (boxed->displayName() == "SLS Test Gain" && boxed->parameterCount() == 1 && boxed->parameterName (0) == "Gain" && boxed->hasSidechain(),
+           "the program knows its name, its parameters and its sidechain");
+    std::fill (l.begin(), l.end(), 1.0f);
+    std::fill (r.begin(), r.end(), 1.0f);
+    boxed->process (l.data(), r.data(), n, nullptr, 0);
+    const bool plain = std::abs (l[10] - 0.5f) < 1.0e-6f;
+    std::fill (l.begin(), l.end(), 1.0f);
+    std::fill (r.begin(), r.end(), 1.0f);
+    boxed->process (l.data(), r.data(), n, nullptr, 0, &sideIo);
+    check (plain && std::abs (l[10] - 0.75f) < 1.0e-6f, "it processes the sound in its own process, sidechain included");
+    boxed->setParameter (0, 1.0f);
+    std::fill (l.begin(), l.end(), 1.0f);
+    boxed->process (l.data(), r.data(), n, nullptr, 0);
+    check (std::abs (l[10] - 1.0f) < 1.0e-6f, "automation reaches it with the next chunk");
+    const auto state = boxed->getState();
+    auto inside = host.create (gainDesc, kSr, n, error);
+    check (inside != nullptr && inside->setState (state) && std::abs (inside->parameterValue (0) - 1.0f) < 1.0e-4f, "its state comes back from the sandbox");
+    check (boxed->setState (inside != nullptr ? (inside->setParameter (0, 0.25f), inside->getState()) : state), "and goes into it");
+    std::fill (l.begin(), l.end(), 1.0f);
+    boxed->process (l.data(), r.data(), n, nullptr, 0);
+    check (std::abs (l[10] - 0.25f) < 1.0e-5f, "a state given to it is used");
+    {
+        auto boxedSynth = host.create (synthDesc, kSr, n, error, true);
+        check (boxedSynth != nullptr && boxedSynth->extraOutputChannels() == 2 && boxedSynth->sendsMidi(), "an instrument in a sandbox");
+        if (boxedSynth != nullptr)
+        {
+            std::vector<float> out0 (n), out1 (n), aux0 (n), aux1 (n);
+            std::array<float*, 2> extra { aux0.data(), aux1.data() };
+            std::array<sls::PluginMidiEvent, 16> midiOut {};
+            sls::PluginIo io;
+            io.extraOut = extra.data();
+            io.extraChannels = 2;
+            io.midiOut = midiOut.data();
+            io.maxMidiOut = 16;
+            sls::PluginMidiEvent on;
+            on.bytes[0] = 0x90;
+            on.bytes[1] = 60;
+            on.bytes[2] = 100;
+            boxedSynth->process (out0.data(), out1.data(), n, &on, 1, &io);
+            float mainPeak = 0.0f, auxPeak = 0.0f;
+            for (int i = 0; i < n; ++i)
+            {
+                mainPeak = std::max (mainPeak, std::abs (out0[static_cast<size_t> (i)]));
+                auxPeak = std::max (auxPeak, std::abs (aux0[static_cast<size_t> (i)]));
+            }
+            check (mainPeak > 0.01f && auxPeak > 0.01f && io.numMidiOut == 1 && midiOut[0].bytes[1] == 67,
+                   "it plays its notes, its other outputs and its MIDI out from its sandbox");
+        }
+    }
+    // a crash: the program goes on, an effect lets the sound through, the last state is kept, and it can be started again
+    boxed->killSandboxForTesting();
+    juce::Thread::sleep (300);
+    check (! boxed->checkSandbox() && boxed->sandboxState() == sls::JucePlugin::SandboxState::Crashed, "a crashed sandbox is noticed");
+    std::fill (l.begin(), l.end(), 1.0f);
+    boxed->process (l.data(), r.data(), n, nullptr, 0);
+    check (l[10] == 1.0f, "a crashed effect lets the sound through (the program does not wait for it)");
+    auto again = host.create (gainDesc, kSr, n, error, true);
+    check (again != nullptr && again->setState (boxed->getState()), "it starts again with the state it had");
+    if (again != nullptr)
+    {
+        std::fill (l.begin(), l.end(), 1.0f);
+        again->process (l.data(), r.data(), n, nullptr, 0);
+        check (std::abs (l[10] - 0.25f) < 1.0e-5f, "and sounds as it did");
+    }
+}
+
 void testPluginHosting()
 {
     std::cout << "Plugin hosting (VST3, LV2, LADSPA)\n";
@@ -15017,6 +15210,13 @@ int main (int argc, char** argv)
 {
     if (runCrashChild (argc, argv))
         return 0;
+    {
+        juce::StringArray arguments; // 0.85.0: the plugin tests start this program again as a plugin sandbox
+        for (int i = 1; i < argc; ++i)
+            arguments.add (juce::String::fromUTF8 (argv[i]));
+        if (sls::PluginSandboxWorker::isSandboxCommandLine (arguments))
+            return sls::runPluginSandbox (arguments);
+    }
 #if defined(_WIN32)
     // Windows (0.75.0): every line reaches the log at once (a pipe is otherwise fully buffered, and a crash would lose the last
     // lines), and a crash of the tests themselves leaves its report in %TEMP%\sls-tests-crash for the CI to show.
@@ -15153,6 +15353,7 @@ int main (int argc, char** argv)
     testPitchCorrector();
     testPluginProjectFile();
     testPluginHosting();
+    testPlugins085();
 #endif
 
     std::cout << "\n" << (failures == 0 ? "ALL TESTS PASSED" : "SOME TESTS FAILED") << " (" << failures << " failures)\n";

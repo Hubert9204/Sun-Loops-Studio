@@ -1045,6 +1045,7 @@ void MainComponent::timerCallback()
         for (const auto& p : pluginHost->livePlugins())
             if (p->takeChanged() && projectUsesPlugin (p.get()))
                 markDirty();
+        checkPluginSandboxes(); // 0.85.0
     }
 
     followAutomation();
@@ -1629,8 +1630,8 @@ void MainComponent::deleteMixerTrack (int track)
         message += "\n- The audio of playlist track " + list (use.playlistTracks, [] (int t) { return juce::String (t + 1); })
                  + " plays through it: from now on through Track " + juce::String (heirAfter + 1) + ".";
     if (use.pads > 0) // 0.84.0
-        message += "\n- " + juce::String (use.pads) + (use.pads == 1 ? " drum pad plays" : " drum pads play")
-                 + " into it: from now on through their drum channel's track.";
+        message += "\n- " + juce::String (use.pads) + (use.pads == 1 ? " drum pad or plugin output plays" : " drum pads or plugin outputs play")
+                 + " into it: a pad from now on through its drum channel's track, a plugin output is no longer heard.";
     if (use.effects > 0)
         message += "\n- Its " + juce::String (use.effects) + (use.effects == 1 ? " effect is" : " effects are") + " deleted with it.";
     if (! use.feeders.empty())

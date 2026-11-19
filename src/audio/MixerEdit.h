@@ -35,7 +35,7 @@ struct MixerTrackUse
     int automationClips = 0;          // automation clips that move it
     std::vector<int> feeders;         // other mixer tracks sending to it
     int listeners = 0;                // effects (anywhere) pointing at this track: a sidechain, a controller's target
-    int pads = 0;                     // 0.84.0: drum pads with it as their own output
+    int pads = 0;                     // 0.84.0: drum pads with it as their own output (0.85.0: and plugin outputs after the main pair)
 
     bool empty() const noexcept
     {
@@ -52,6 +52,9 @@ void renumberPadOutputs (std::vector<Channel>& channels, Renumber renumber)
 {
     for (auto& c : channels)
     {
+        for (auto& out : c.pluginOutputs) // 0.85.0: a plugin's other outputs, the same way
+            if (out >= 0)
+                out = renumber (out);
         if (c.kit == nullptr)
             continue;
         auto kit = *c.kit;
@@ -103,8 +106,12 @@ void forEachSlot (std::vector<MixerTrack>& tracks, Console& console, std::array<
 }
 
 // The parameters that name a mixer track (unit "track": 1-based, 0 = off / this track): a sidechain, a controller's targets.
+// (0.85.0: a plugin's slot has one, its sidechain source, in params[0])
+inline int trackParamCount (EffectType type) noexcept { return type == EffectType::Plugin ? 1 : effectParamCount (type); }
 inline bool isTrackParam (EffectType type, int param) noexcept
 {
+    if (type == EffectType::Plugin)
+        return param == 0;
     return param >= 0 && param < effectParamCount (type) && std::string_view (effectParamInfo (type, param).unit) == "track";
 }
 // The track (0-based) such a parameter names, or -1 (off, this track, or not a number).
@@ -117,7 +124,7 @@ inline int trackParamValue (const EffectSlot& slot, int param) noexcept
 inline int pointsAt (const EffectSlot& slot, int k) noexcept
 {
     int n = 0;
-    for (int i = 0; i < effectParamCount (slot.type); ++i)
+    for (int i = 0; i < trackParamCount (slot.type); ++i)
         n += isTrackParam (slot.type, i) && trackParamValue (slot, i) == k ? 1 : 0;
     return n;
 }
@@ -137,6 +144,8 @@ inline MixerTrackUse mixerTrackUse (const std::vector<MixerTrack>& tracks, const
         if (channels[c].kit != nullptr)
             for (const auto& p : channels[c].kit->pads)
                 use.pads += p.outputTrack == k ? 1 : 0;
+        for (const int out : channels[c].pluginOutputs)
+            use.pads += out == k ? 1 : 0;
     }
     for (int t = 0; t < arrangement.trackCount(); ++t)
         if (std::clamp (arrangement.mixerTrackOf (t), 0, count - 1) == k
@@ -173,6 +182,8 @@ inline int mixerTrackHeir (const std::vector<MixerTrack>& tracks, const std::vec
             if (c.kit != nullptr)
                 for (const auto& p : c.kit->pads)
                     used = used || p.outputTrack == t; // (0.84.0)
+            for (const int out : c.pluginOutputs)
+                used = used || out == t; // (0.85.0)
         }
         for (int p = 0; p < arrangement.trackCount() && ! used; ++p)
             used = std::clamp (arrangement.mixerTrackOf (p), 0, count - 1) == t
@@ -236,7 +247,7 @@ inline bool deleteMixerTrack (std::vector<MixerTrack>& tracks, std::vector<Chann
                          [k] (EffectSlot& slot)
                          {
                              const int target = effectControllerTarget (slot.type), target2 = effectControllerTarget2 (slot.type);
-                             for (int i = 0; i < effectParamCount (slot.type); ++i)
+                             for (int i = 0; i < detail::trackParamCount (slot.type); ++i)
                              {
                                  if (! detail::isTrackParam (slot.type, i))
                                      continue;
@@ -310,7 +321,7 @@ inline bool moveMixerTrack (std::vector<MixerTrack>& tracks, std::vector<Channel
     detail::forEachSlot (tracks, console, masterSlots,
                          [&renumber, count] (EffectSlot& slot)
                          {
-                             for (int i = 0; i < effectParamCount (slot.type); ++i)
+                             for (int i = 0; i < detail::trackParamCount (slot.type); ++i)
                                  if (detail::isTrackParam (slot.type, i))
                                      if (const int named = detail::trackParamValue (slot, i); named >= 0 && named < count)
                                          slot.params[static_cast<size_t> (i)] = static_cast<float> (renumber (named) + 1);

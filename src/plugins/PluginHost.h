@@ -11,11 +11,13 @@
 
 #include "audio/Automation.h"
 #include "audio/HostedPlugin.h"
+#include "plugins/PluginSandbox.h"
 
 namespace sls
 {
 // Hosting third-party plugins (0.17.0): VST3, LV2 and (when the LADSPA header was found at build time) LADSPA, as instruments and as
-// effects. Plugins run in this process: a plugin that crashes takes the program with it (there is no sandbox).
+// effects. Plugins run in this process; 0.85.0: or each in a process of its own (a sandbox, see PluginSandbox.h), where a crash takes only
+// the plugin.
 
 // One plugin instance. It processes in blocks of at most `maxBlock` samples on the audio thread (Player calls it once per 64-sample
 // chunk), stereo in and out (a mono plugin gets the left channel and feeds both). A placeholder (no instance) keeps the description and
@@ -24,34 +26,45 @@ class JucePlugin final : public HostedPlugin, private juce::AudioProcessorListen
 {
 public:
     JucePlugin (std::unique_ptr<juce::AudioPluginInstance> instance, const juce::PluginDescription& description);
+    JucePlugin (std::unique_ptr<SandboxClient> sandboxed, const juce::PluginDescription& description); // 0.85.0
     static std::shared_ptr<JucePlugin> placeholder (const juce::PluginDescription& description, juce::MemoryBlock savedState, bool instrument);
     ~JucePlugin() override;
 
-    void process (float* left, float* right, int numSamples, const PluginMidiEvent* events, int numEvents) noexcept override;
+    void process (float* left, float* right, int numSamples, const PluginMidiEvent* events, int numEvents, PluginIo* io = nullptr) noexcept override;
+    bool hasSidechain() const noexcept override { return bridge != nullptr ? bridge->hasSidechain() : sideChannels > 0; }
+    int extraOutputChannels() const noexcept override { return bridge != nullptr ? bridge->extraOutputs() : extraOuts; }
+    bool sendsMidi() const noexcept override { return bridge != nullptr ? bridge->makesMidi() : makesMidi; }
     bool isInstrument() const noexcept override { return instrument; }
-    int latencySamples() const noexcept override { return instance != nullptr ? instance->getLatencySamples() : 0; }
+    int latencySamples() const noexcept override
+    {
+        return bridge != nullptr ? bridge->latency() : instance != nullptr ? instance->getLatencySamples() : 0;
+    }
     void setTransport (double bpm, double quarters, bool playing) noexcept override
     {
+        if (bridge != nullptr)
+            bridge->setTransport (bpm, quarters, playing);
         head.bpm = bpm;
         head.quarters = quarters;
         head.playing = playing;
     }
     void setMeter (int numerator, int denominator, double barStartQuarters) noexcept override
     {
+        if (bridge != nullptr)
+            bridge->setMeter (numerator, denominator, barStartQuarters);
         head.numerator = numerator;
         head.denominator = denominator;
         head.barStart = barStartQuarters;
     }
-    bool isLoaded() const noexcept override { return instance != nullptr; }
+    bool isLoaded() const noexcept override { return instance != nullptr || bridge != nullptr; }
     const std::string& displayName() const noexcept override { return name; }
 
-    int parameterCount() const noexcept override { return static_cast<int> (parameters.size()); }
+    int parameterCount() const noexcept override { return bridge != nullptr ? static_cast<int> (bridge->parameters().size()) : static_cast<int> (parameters.size()); }
     void setParameter (int index, float value) noexcept override;
     float parameterValue (int index) const noexcept override;
     float parameterDefault (int index) const noexcept override;
     std::string parameterName (int index) const override;
     std::string parameterText (int index, float value) const override;
-    int lastTouchedParameter() const noexcept override { return lastTouched.load (std::memory_order_relaxed); }
+    int lastTouchedParameter() const noexcept override { return bridge != nullptr ? bridge->lastTouched() : lastTouched.load (std::memory_order_relaxed); }
     bool selectProgram (const std::string& programName) override;
 
     // Message thread, never while the audio thread may call process() (before the plugin is published, while the device is stopped, or
@@ -65,12 +78,45 @@ public:
     bool setState (const juce::MemoryBlock& state);  // message thread
 
     // True once after the plugin reported a change of its parameters or settings (any thread may set it): the project needs saving.
-    bool takeChanged() noexcept { return changed.exchange (false, std::memory_order_acq_rel); }
+    bool takeChanged() noexcept
+    {
+        if (bridge != nullptr)
+        {
+            const auto now = bridge->changeCount();
+            const bool any = now != takenChanges;
+            takenChanges = now;
+            return any;
+        }
+        return changed.exchange (false, std::memory_order_acq_rel);
+    }
+    // 0.85.0: how many changes it reported so far (its window's undo watches it), and its programs (factory presets)
+    std::uint32_t changeCount() const noexcept { return bridge != nullptr ? bridge->changeCount() : changes.load (std::memory_order_acquire); }
+
+    // 0.85.0: the sandbox. None: it runs in this process; Running; Stalled: it did not answer in time; Crashed: its process is gone.
+    enum class SandboxState { None, Running, Stalled, Crashed };
+    bool isSandboxed() const noexcept { return bridge != nullptr; }
+    bool wantsSandbox() const noexcept { return bridge != nullptr || sandboxWanted; } // (a placeholder keeps what the project said)
+    void setWantsSandbox (bool want) noexcept { sandboxWanted = want; }
+    SandboxState sandboxState() const noexcept
+    {
+        if (bridge == nullptr)
+            return SandboxState::None;
+        return bridge->crashed() ? SandboxState::Crashed : bridge->stalled() ? SandboxState::Stalled : SandboxState::Running;
+    }
+    void showSandboxEditor (bool show) { if (bridge != nullptr && ! bridge->crashed()) bridge->showEditor (show); }
+    bool checkSandbox() { return bridge == nullptr || bridge->checkAlive(); } // message thread: false once its process is gone
+    void killSandboxForTesting() { if (bridge != nullptr) bridge->kill(); }
+    juce::StringArray programNames() const;
+    int currentProgram() const;
+    bool setProgram (int index);
 
 private:
     JucePlugin() = default;
 
     std::unique_ptr<juce::AudioPluginInstance> instance;
+    std::unique_ptr<SandboxClient> bridge; // 0.85.0: the plugin runs there instead
+    std::uint32_t takenChanges = 0;
+    bool sandboxWanted = false;
     juce::PluginDescription description;
     juce::MemoryBlock keptState; // placeholders only
     std::string name;
@@ -79,7 +125,15 @@ private:
     int block = 0;
     juce::AudioBuffer<float> buffer;
     juce::MidiBuffer midi;
+    int mainIns = 2, mainOuts = 2, sideChannels = 0, extraOuts = 0; // 0.85.0: the plugin's channels, bus by bus (set by prepare)
+    bool makesMidi = false;
     std::atomic<bool> changed { false };
+    std::atomic<std::uint32_t> changes { 0 }; // 0.85.0
+    void markChanged() noexcept
+    {
+        changed.store (true, std::memory_order_release);
+        changes.fetch_add (1, std::memory_order_acq_rel);
+    }
 
     // What the plugin is told about the song (set and read on the audio thread).
     struct Head final : juce::AudioPlayHead
@@ -110,14 +164,14 @@ private:
         // A change the automation made itself (some formats report it back) is neither an edit of the project nor a touch.
         if (settingFromAutomation.load (std::memory_order_relaxed))
             return;
-        changed.store (true, std::memory_order_release);
+        markChanged();
         lastTouched.store (index, std::memory_order_relaxed);
     }
     void audioProcessorParameterChangeGestureBegin (juce::AudioProcessor*, int index) override { lastTouched.store (index, std::memory_order_relaxed); }
     void audioProcessorChanged (juce::AudioProcessor*, const ChangeDetails& d) override
     {
         if (d.parameterInfoChanged || d.programChanged || d.nonParameterStateChanged)
-            changed.store (true, std::memory_order_release);
+            markChanged();
     }
 };
 
@@ -152,8 +206,16 @@ public:
     void saveKnownList (const juce::File& file) const;
 
     // A new instance, prepared for `sampleRate` and blocks of `maxBlock` samples, and registered so prepareAll() reaches it.
-    // nullptr and a message on failure.
-    std::shared_ptr<JucePlugin> create (const juce::PluginDescription& description, double sampleRate, int maxBlock, juce::String& error);
+    // nullptr and a message on failure. 0.85.0: `sandboxed`: in a process of its own (see PluginSandbox.h).
+    std::shared_ptr<JucePlugin> create (const juce::PluginDescription& description, double sampleRate, int maxBlock, juce::String& error,
+                                        bool sandboxed = false);
+    // The program a sandbox runs (this one, started again; set by the tests to their own).
+    static juce::File& sandboxExecutable();
+
+    // 0.85.0: the user's presets of a plugin (see PluginWindow): their folder under `root`, writing one, reading one into a plugin.
+    static juce::File presetsFolder (const juce::File& root, const juce::PluginDescription& d);
+    static juce::Result savePreset (const JucePlugin& p, const juce::File& file);
+    static juce::Result loadPreset (JucePlugin& p, const juce::File& file);
     void registerPlugin (const std::shared_ptr<JucePlugin>& plugin);
 
     // The sample rate changed (a new audio device): every plugin that still exists is prepared again. Same rules as JucePlugin::prepare.
