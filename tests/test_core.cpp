@@ -4665,7 +4665,8 @@ void testTempo083()
                 v = std::max (v, std::abs (all[static_cast<size_t> (i)]));
             return v;
         };
-        check (peakAt (4) > peakAt (3) * 1.2f && peakAt (4) > peakAt (5) * 1.2f && std::abs (peakAt (5) - peakAt (6)) < 1.0e-4f,
+        // (two plain clicks can start a fraction of a sample apart, so their sampled peaks differ a little from compiler to compiler)
+        check (peakAt (4) > peakAt (3) * 1.2f && peakAt (4) > peakAt (5) * 1.2f && std::abs (peakAt (5) - peakAt (6)) < 0.05f * peakAt (5),
                "after a change to 3/4 the accent comes every third beat from the change");
 
         auto doc = ProjectDocument::blank();
@@ -14394,8 +14395,10 @@ void testPlugins085()
     auto boxed = host.create (gainDesc, kSr, n, error, true);
     check (boxed != nullptr && boxed->isSandboxed() && boxed->isLoaded() && boxed->sandboxState() == sls::JucePlugin::SandboxState::Running,
            "a plugin starts in a sandbox (" + error.toStdString() + ")");
+    const auto sandboxCrash = juce::File (sandboxLog.getFullPathName() + ".crash");
     if (boxed == nullptr)
-        std::cout << "  sandbox log:\n" << sandboxLog.loadFileAsString() << std::endl;
+        std::cout << "  sandbox log:\n" << sandboxLog.loadFileAsString() << "\n  sandbox crash:\n"
+                  << sandboxCrash.getChildFile (sls::crash::kCrashFileName).loadFileAsString() << std::endl;
     if (boxed == nullptr)
         return;
     const int boxedGain = gainIndex (*boxed);
@@ -14472,6 +14475,7 @@ void testPlugins085()
     again.reset();
     boxed.reset();
     sandboxLog.deleteFile();
+    sandboxCrash.deleteRecursively();
 }
 
 void testPluginHosting()
@@ -15242,7 +15246,12 @@ int main (int argc, char** argv)
         for (int i = 1; i < argc; ++i)
             arguments.add (juce::String::fromUTF8 (argv[i]));
         if (sls::PluginSandboxWorker::isSandboxCommandLine (arguments))
+        {
+            // a crash of the sandbox leaves its stack trace next to its log, for the test to show
+            if (const char* log = std::getenv ("SLS_SANDBOX_LOG"); log != nullptr && *log != 0)
+                sls::crash::install ({ std::filesystem::path (std::string (log) + ".crash"), "sandbox" });
             return sls::runPluginSandbox (arguments);
+        }
     }
 #if defined(_WIN32)
     // Windows (0.75.0): every line reaches the log at once (a pipe is otherwise fully buffered, and a crash would lose the last
